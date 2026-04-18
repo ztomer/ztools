@@ -1,0 +1,20 @@
+# Twitter/X Configuration
+# Extract to twitter.yaml to override
+
+# State file (auto-managed)
+state_file: ~/.twitter_summary_state.json
+
+# Output directory for summaries
+output_dir: ~/Documents/twitter_summaries
+
+# LLM endpoint
+llm_url: http://localhost:1337
+
+# Model preference (uses osaurus_lib BEST_MODELS if not set)
+model: gemma-4-26b-a4b-it-4bit
+
+# Chrome cookies location (macOS default)
+chrome_cookies_db: ~/Library/Application Support/Google/Chrome/Default/Cookies
+
+# Scroll settings
+max_scrolls: 1200

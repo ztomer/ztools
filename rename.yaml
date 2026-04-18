@@ -1,0 +1,20 @@
+# Image Renamer Configuration
+# Extract to rename.yaml to override
+
+# Tesseract OCR binary
+tesseract_cmd: /opt/homebrew/bin/tesseract
+
+# MLX models directory
+mlx_models_dir: ~/MLXModels/mlx-community
+
+# LLM endpoint
+llm_url: http://localhost:1337
+
+# Preferred models (uses osaurus_lib BEST_MODELS if not set)
+vlm_preferred:
+  - gemma-4-26b-a4b-it-4bit
+  - qwen3.5-27b-claude-4.6-opus-distilled-mlx-4bit
+
+text_preferred:
+  - gemma-4-e2b-it-8bit
+  - foundation

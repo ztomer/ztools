@@ -1,0 +1,30 @@
+# Weekend Planner Configuration
+# Specific to your family - extract to weekend.json to override
+
+location:
+  city: Vaughan
+  region: Toronto
+  timezone: America/Toronto
+
+children:
+  - age: 13
+    gender: girl
+  - age: 10
+    gender: boy
+  - age: 6
+    gender: boy
+
+visited_places:
+  - Canada's Wonderland
+  - Ontario Science Centre
+  - Toronto Zoo
+
+excluded_places:
+  - The Art of the Brick
+  - Reptilia
+  - ROM
+  - Ripley's
+  - Little Canada
+  - LEGOLAND
+  - CN Tower
+  - Museum of Illusions
