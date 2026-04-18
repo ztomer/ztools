@@ -10,17 +10,29 @@ import json
 import time
 import requests
 from pathlib import Path
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Dict, Union, Callable
+
+from .validators_lib import (
+    validate_json,
+    validate_detailed_json,
+    validate_summary,
+    validate_filename,
+    VALIDATORS,
+)
+from .content_processing import clean_model_output, remove_markdown_blocks
+from .logging_config import osaurus_logger as logger
+from .config import get_timeouts, get_max_tokens, get_best_models, init_config, is_config_loaded
 
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 1337
 DEFAULT_URL = f"http://{DEFAULT_HOST}:{DEFAULT_PORT}"
 
 # ==========================================================
-# CONFIG - Can be overridden by tools
+# CONFIG - Now loaded explicitly via init_config()
 # ==========================================================
 
-TIMEOUTS = {
+# Default values (used if config not loaded)
+DEFAULT_TIMEOUTS = {
     "think": 30,
     "json": 60,
     "summarize": 30,
@@ -28,7 +40,7 @@ TIMEOUTS = {
     "vlm": 45,
 }
 
-MAX_TOKENS = {
+DEFAULT_MAX_TOKENS = {
     "think": 2000,
     "json": 2000,
     "summarize": 2000,
@@ -36,43 +48,13 @@ MAX_TOKENS = {
     "vlm": 3000,
 }
 
-# Default models - should be overridden by config.yaml
-BEST_MODELS = {
+DEFAULT_BEST_MODELS = {
     "think": "gemma-4-26b-a4b-it-4bit",
     "json": "gemma-4-26b-a4b-it-4bit",
     "summarize": "gemma-4-26b-a4b-it-4bit",
     "filename": "gemma-4-26b-a4b-it-4bit",  # Changed from foundation
     "vlm": "gemma-4-26b-a4b-it-4bit",
 }
-
-
-# Load config from yaml if exists
-def _load_config():
-    """Load config from config.yaml."""
-    try:
-        import yaml
-
-        config_path = Path(__file__).parent / "config.yaml"
-        if config_path.exists():
-            with open(config_path) as f:
-                return yaml.safe_load(f)
-    except Exception:
-        pass
-    return {}
-
-
-# Apply config overrides
-_config = _load_config()
-if _config:
-    if "best_models" in _config:
-        BEST_MODELS.update(_config["best_models"])
-    if "timeouts" in _config:
-        TIMEOUTS.update(_config["timeouts"])
-    if "max_tokens" in _config:
-        MAX_TOKENS.update(_config["max_tokens"])
-    if "default_model" in _config:
-        # Could set global default
-        pass
 
 PROMPTS = {
     "think": {
@@ -126,7 +108,7 @@ def get_base_url(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> str:
     return f"http://{host}:{port}"
 
 
-def get_models(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> list[str]:
+def get_models(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> List[str]:
     """Get available models."""
     try:
         resp = requests.get(f"http://{host}:{port}/v1/models", timeout=10)
@@ -157,8 +139,9 @@ def is_server_running(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> boo
 
 def get_best_model(task: str = None, env_var: str = "OLLAMA_MODEL") -> str:
     """Get best model for task, checking env var first."""
-    if task and task in BEST_MODELS:
-        return os.environ.get(env_var, BEST_MODELS[task])
+    best_models = get_best_models() if is_config_loaded() else DEFAULT_BEST_MODELS
+    if task and task in best_models:
+        return os.environ.get(env_var, best_models[task])
     return os.environ.get(env_var, "foundation")
 
 
@@ -168,62 +151,43 @@ def get_best_model(task: str = None, env_var: str = "OLLAMA_MODEL") -> str:
 
 
 def clean_output(content: str) -> str:
-    """Strip thinking tokens, stats, control chars. Returns cleaned text."""
+    """Strip thinking tokens, stats, control chars. Returns cleaned text.
+
+    Wrapper for content_processing.clean_model_output() for backward compatibility.
+    """
+    return clean_model_output(content)
+
+
+def _extract_json_only(content: str) -> Optional[str]:
     if not content:
-        return ""
+        return None
 
-    # Remove Gemma internal tokens
-    content = re.sub(r"<\|channel\|[^|]*\|>", "", content)
+    # Use shared cleanup function
+    content = clean_model_output(content)
 
-    # Remove stats tokens - more aggressive pattern
-    content = re.sub(r"['\u2018\u2019\ufffe]?stats:\d+;[\d.]+", "", content)
-    content = re.sub(r"['\u2018\u2019\ufffe]?\d+;\d+\.\d+$", "", content)
+    content = content.strip()
 
-    # Remove Qwen thinking blocks - "Thinking Process:" to "</think>" or find actual JSON
-    if "</think>" in content:
-        content = content.split("</think>")[1]
-    elif "Think:" in content:
-        content = content.split("Think:")[-1]
-    elif "Thinking Process:" in content:
-        output_match = re.search(
-            r"(?:Output|Final Answer|Response):\s*", content, re.IGNORECASE
-        )
-        if output_match:
-            content = content[output_match.end() :]
-        else:
-            first_brace = content.find("{")
-            if first_brace >= 0:
-                content = content[first_brace:]
-
-    # Clean markdown FIRST - before finding braces
-    content = content.replace("```json", "").replace("```", "").strip()
-    content = content.replace("```", "").strip()
-
-    # Remove any leading text before JSON starts
-    # Find first { or [ that starts the actual JSON
+    # Find { or [ that starts actual JSON
     first_brace = content.find("{")
     first_bracket = content.find("[")
     if first_brace >= 0 or first_bracket >= 0:
         start = min(x for x in [first_brace, first_bracket] if x >= 0)
         content = content[start:]
+    else:
+        return None
 
-    # Now find last } or ] to get full JSON
+    # Find last } or ] to get full JSON
     last_brace = content.rfind("}")
     last_bracket = content.rfind("]")
     last_json = max(last_brace, last_bracket)
 
-    # Also find stats token position
-    stats_match = re.search(r"\d+;\d+\.\d+$", content)
-    if stats_match and (last_json < 0 or stats_match.start() < last_json):
-        # Stats at end - truncate before it
-        content = content[: stats_match.start()].strip()
-    elif last_json > 0:
+    if last_json > 0:
         content = content[: last_json + 1]
 
     return content
 
 
-def extract_json(content: str):
+def extract_json(content: str) -> Union[Dict[str, Any], List[Any], None]:
     """Extract JSON from content - handles plain text lists too."""
     json_result = _extract_json_only(content)
 
@@ -234,7 +198,7 @@ def extract_json(content: str):
     return json_result
 
 
-def _extract_plain_list(content: str):
+def _extract_plain_list(content: str) -> Optional[List[Dict[str, Any]]]:
     """Extract items from plain text like '1. Apple\\n2. Banana'."""
     if not content:
         return None
@@ -258,168 +222,10 @@ def _extract_plain_list(content: str):
     return items if items else None
 
 
-def _extract_json_only(content: str):
-    """Extract actual JSON from content."""
-    clean = clean_output(content)
-    if not clean:
-        return None
-
-    # Try direct parse
-    stripped = clean.strip()
-    if stripped.startswith("{") or stripped.startswith("["):
-        try:
-            return json.loads(stripped)
-        except:
-            pass
-
-    # Find first { or [ to last } or ]
-    start = clean.find("{")
-    if start < 0:
-        start = clean.find("[")
-    end = clean.rfind("}")
-    if end < 0:
-        end = clean.rfind("]")
-
-    if start >= 0 and end > start:
-        try:
-            return json.loads(clean[start : end + 1])
-        except:
-            pass
-
-    return None
-
-
 # ==========================================================
 # QUALITY VALIDATORS
 # ==========================================================
 
-
-def validate_json(data) -> int:
-    """Score 0-100 for JSON list OR numbered list."""
-    if not data:
-        return 0
-
-    # Handle various wrapper keys - extract the actual list
-    if isinstance(data, dict):
-        # Check for wrapper keys that contain the activities
-        for key in [
-            "fixed_activities",
-            "activities",
-            "items",
-            "results",
-            "data",
-            "list",
-        ]:
-            if key in data:
-                inner = data[key]
-                if isinstance(inner, list):
-                    data = inner
-                    break
-
-    # Handle actual JSON
-    if isinstance(data, list):
-        items = data
-    elif isinstance(data, dict):
-        items = data.get("items", []) or data.get("activities", [])
-    else:
-        return 0
-
-    if not items:
-        # Might be raw text - check for numbered items or line items
-        if isinstance(data, str):
-            items = []
-            for line in data.split("\n"):
-                line = line.strip()
-                if not line:
-                    continue
-                # Match "1. Item" or "- Item" or just any line
-                match = re.match(r"^\d+\.\s+(.+)$|^- (.+)$", line)
-                if match:
-                    name = match.group(1) or match.group(2)
-                    items.append({"name": name})
-                elif line and not line.startswith("#"):
-                    items.append({"name": line})
-
-    if not items:
-        return 0
-
-    score = 0
-    for item in items:
-        name = (
-            item.get("name", "").lower()
-            if isinstance(item, dict)
-            else str(item).lower()
-        )
-        if name and name not in ["activity 1", "activity 2", "todo", "tbd", "?", ""]:
-            score += 33
-    return min(100, score)
-
-
-def validate_detailed_json(data) -> int:
-    """Score for objects with details (location, weather, etc)."""
-    if not data:
-        return 0
-
-    # Handle wrapper keys
-    if isinstance(data, dict):
-        for key in ["fixed_activities", "activities", "items", "results", "data"]:
-            if key in data:
-                inner = data[key]
-                if isinstance(inner, list):
-                    data = inner
-                    break
-
-    items = data if isinstance(data, list) else []
-    if not items:
-        return 0
-
-    score = 0
-    for item in items:
-        if isinstance(item, dict):
-            name = item.get("name") or item.get("activity", "")
-            has_detail = (
-                item.get("location") or item.get("weather") or item.get("description")
-            )
-            if name and has_detail:
-                score += 33
-    return min(100, score)
-
-
-def validate_summary(data) -> int:
-    """Score for summaries."""
-    if not data:
-        return 0
-    if isinstance(data, dict):
-        data = str(data)
-
-    score = 0
-    if "##" in data or "**" in data:
-        score += 50
-    if len(data) > 50:
-        score += 50
-    return score
-
-
-def validate_filename(data) -> int:
-    """Score for filenames."""
-    if not data:
-        return 0
-    clean = str(data).strip()
-
-    score = 0
-    if 3 < len(clean) < 60:
-        score += 50
-    if all(c.isalnum() or c in "_-." for c in clean):
-        score += 50
-    return score
-
-
-VALIDATORS = {
-    "json": validate_json,
-    "detailed_json": validate_detailed_json,
-    "summarize": validate_summary,
-    "filename": validate_filename,
-}
 
 # ==========================================================
 # CORE API CALL
@@ -428,20 +234,71 @@ VALIDATORS = {
 
 def call(
     model: str,
-    messages: list,
+    messages: List[Dict[str, Any]],
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
     temperature: float = 0.1,
-    max_tokens: int = None,
-    timeout: int = None,
+    max_tokens: Optional[int] = None,
+    timeout: Optional[int] = None,
     task: str = "think",
     parse_json: bool = False,
-    validator: callable = None,
+    validator: Optional[Callable] = None,
+    max_retries: int = 1,
+) -> dict:
+    """Call LLM API with automatic retry on low quality scores or failures."""
+    
+    last_result = None
+    for attempt in range(max_retries + 1):
+        if attempt > 0:
+            logger.warning(f"Retrying task '{task}' with model {model} (Attempt {attempt+1}/{max_retries+1})...")
+            
+        result = _call_impl(
+            model=model,
+            messages=messages,
+            host=host,
+            port=port,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=timeout,
+            task=task,
+            parse_json=parse_json,
+            validator=validator,
+        )
+        
+        last_result = result
+        
+        # If there's an error, we might want to retry
+        if result.get("error"):
+            continue
+            
+        # If there's a validator and the score is less than 90, retry
+        if validator and result.get("quality_score", 0) < 90:
+            continue
+            
+        # If everything is ok, break and return
+        break
+        
+    return last_result
+
+def _call_impl(
+    model: str,
+    messages: List[Dict[str, Any]],
+    host: str = DEFAULT_HOST,
+    port: int = DEFAULT_PORT,
+    temperature: float = 0.1,
+    max_tokens: Optional[int] = None,
+    timeout: Optional[int] = None,
+    task: str = "think",
+    parse_json: bool = False,
+    validator: Optional[Callable] = None,
 ) -> dict:
     """Call LLM API. Returns dict with content, parsed, quality, time, error."""
 
+    logger.debug(f"Calling {model} for task '{task}' at {host}:{port}")
+
     # Get defaults from config
-    max_tokens = max_tokens or MAX_TOKENS.get(task, 2000)
+    max_tokens_config = get_max_tokens() if is_config_loaded() else DEFAULT_MAX_TOKENS
+    max_tokens = max_tokens or max_tokens_config.get(task, 2000)
 
     url = get_api_url(host, port)
     payload = {
@@ -463,7 +320,11 @@ def call(
     start = time.time()
 
     try:
-        timeout = timeout or TIMEOUTS.get(task, TIMEOUTS.get("think", 30))
+        timeouts_config = get_timeouts() if is_config_loaded() else DEFAULT_TIMEOUTS
+        timeout = timeout or timeouts_config.get(
+            task, timeouts_config.get("think", 30))
+        logger.debug(
+            f"Sending request with {len(messages)} messages, timeout={timeout}s")
         resp = requests.post(
             url,
             json=payload,
@@ -471,20 +332,24 @@ def call(
             timeout=timeout,
         )
         result["time"] = round(time.time() - start, 1)
+        logger.debug(f"Response received in {result['time']}s")
 
         if resp.status_code != 200:
             result["error"] = f"HTTP {resp.status_code}: {resp.text[:200]}"
+            logger.error(f"HTTP error: {result['error']}")
             return result
 
         # Safely extract content
         resp_data = resp.json()
         if "choices" not in resp_data or not resp_data["choices"]:
             result["error"] = "Empty response from API"
+            logger.error(result["error"])
             return result
 
         message = resp_data["choices"][0].get("message", {})
         content = message.get("content", "")
         result["content"] = content
+        logger.debug(f"Extracted {len(content)} chars of content")
 
         # Quality validation - run for ALL tasks (JSON and text)
         if validator and content:
@@ -493,21 +358,38 @@ def call(
             if parse_json:
                 result["parsed"] = extract_json(content)
                 if result["parsed"]:
-                    result["quality_score"] = validator(result["parsed"])
+                    logger.debug("JSON parsed successfully")
+                    validated = validator(result["parsed"])
+                    if isinstance(validated, tuple):
+                        result["quality_score"], result["failure_reason"] = validated
+                    else:
+                        result["quality_score"] = validated
+                    logger.info(
+                        f"Quality score: {result['quality_score']}/100")
             else:
                 # Text tasks - validate cleaned content
-                result["quality_score"] = validator(cleaned if cleaned else content)
+                validated = validator(cleaned if cleaned else content)
+                if isinstance(validated, tuple):
+                    result["quality_score"], result["failure_reason"] = validated
+                else:
+                    result["quality_score"] = validated
+                logger.info(f"Quality score: {result['quality_score']}/100")
 
     except requests.exceptions.Timeout:
         result["error"] = "Timeout"
+        logger.warning(f"Request timed out after {timeout}s")
     except requests.exceptions.ConnectionError:
         result["error"] = "Connection failed - is server running?"
+        logger.warning(f"Connection error to {url}")
     except json.JSONDecodeError as e:
         result["error"] = f"Invalid JSON response: {e}"
+        logger.error(f"JSON decode error: {e}")
     except KeyError as e:
         result["error"] = f"Unexpected response format: {e}"
+        logger.error(f"Key error in response: {e}")
     except Exception as e:
         result["error"] = f"Error: {type(e).__name__}: {e}"
+        logger.exception(f"Unexpected error: {e}")
 
     return result
 
@@ -610,7 +492,8 @@ def select_best_model(
     Select best model from available list based on preferred order.
     """
     if preferred is None:
-        preferred = list(BEST_MODELS.values())
+        best_models = get_best_models() if is_config_loaded() else DEFAULT_BEST_MODELS
+        preferred = list(best_models.values())
 
     for pref in preferred:
         for model in available_models:

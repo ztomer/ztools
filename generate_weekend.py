@@ -4,21 +4,20 @@ import sys
 import datetime
 import time
 import json
+import yaml
 import re
 import concurrent.futures
-import subprocess
 import requests
 from ddgs import DDGS
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
-from osaurus_lib import (
-    call,
-    call_with_prompt,
+from lib import init_config
+from lib.osaurus_lib import (
+    restart_server,
     get_best_model,
     is_server_running,
-    get_base_url,
     call_llm_api,
     strip_thinking,
     panic_dump,
@@ -27,13 +26,10 @@ from osaurus_lib import (
 )
 
 # MLX support
-from mlx_lib import (
-    find_mlx_model,
-    find_best_mlx_model,
+from lib.mlx_lib import (
+    find_text_mlx_model,
     call_mlx_text,
     process_mlx_content,
-    list_mlx_models,
-    get_mlx_context_length,
 )
 
 # ==========================================
@@ -42,11 +38,25 @@ from mlx_lib import (
 
 console = Console(force_terminal=True, force_interactive=True)
 
-VISITED_PLACES = [
-    "Canada's Wonderland",
-    "Ontario Science Centre",
-    "Toronto Zoo",
-]
+
+def load_weekend_config():
+    from pathlib import Path
+    config_path = Path(__file__).parent / "conf" / "weekend.yaml"
+    try:
+        with open(config_path) as f:
+            return yaml.safe_load(f)
+    except Exception as e:
+        print(f"Failed to load weekend.yaml: {e}")
+        return {}
+
+WEEKEND_CONFIG = load_weekend_config()
+VISITED_PLACES = WEEKEND_CONFIG.get("visited_places", [])
+EXCLUDED_PLACES = WEEKEND_CONFIG.get("excluded_places", [])
+CHILDREN = WEEKEND_CONFIG.get("children", [])
+CHILDREN_STR = ", ".join([f"{c['age']}yo {c['gender']}" for c in CHILDREN]) if CHILDREN else "{CHILDREN_STR}"
+CITY = WEEKEND_CONFIG.get("location", {}).get("city", "Vaughan")
+REGION = WEEKEND_CONFIG.get("location", {}).get("region", "Toronto")
+
 
 MODEL_CONFIG = os.path.expanduser("~/.config/model_eval.json")
 
@@ -76,7 +86,9 @@ def restart_osaurus(wait=20):
 
 def ensure_server(max_retries=3, wait=20):
     """Ensure server is running (wrapper for compatibility)."""
-    return ensure_server(max_retries=max_retries, wait=wait)
+    # Import here to avoid circular dependency
+    from lib.osaurus_lib import ensure_server as osaurus_ensure_server
+    return osaurus_ensure_server(max_retries=max_retries, wait=wait)
 
 
 # ==========================================
@@ -119,8 +131,10 @@ def fetch_weather(friday, sunday):
             precip = precip_array[i] if i < len(precip_array) else 0
             temp = temp_array[i] if i < len(temp_array) else 0
             condition = "Precipitation" if precip > 0.5 else "Clear"
-            day_name = datetime.datetime.strptime(date_str, "%Y-%m-%d").strftime("%A")
-            forecasts.append(f"{day_name}: {temp:.1f}°C, {condition} ({precip}mm)")
+            day_name = datetime.datetime.strptime(
+                date_str, "%Y-%m-%d").strftime("%A")
+            forecasts.append(
+                f"{day_name}: {temp:.1f}°C, {condition} ({precip}mm)")
 
         return "Daily Forecast:\n" + "\n".join(forecasts)
     except Exception as e:
@@ -229,25 +243,15 @@ def scrape_review_score(place_name):
 
 def build_fixed_system_prompt():
     exclusion_string = ", ".join(
-        [
-            "The Art of the Brick",
-            "Reptilia",
-            "ROM",
-            "Ripley's",
-            "Little Canada",
-            "LEGOLAND",
-            "CN Tower",
-            "Museum of Illusions",
-        ]
-        + VISITED_PLACES
+        EXCLUDED_PLACES + VISITED_PLACES
     )
 
     return f"""
-    Act as a creative planning agent for family activities in Vaughan/Toronto.
+    Act as a creative planning agent for family activities in {CITY}/{REGION}.
     You must output ONLY valid JSON. Do not include markdown formatting or conversational text.
 
     Constraints:
-    - Target: 13yo girl, 10yo boy, 6yo boy. Must accommodate all simultaneously.
+    - Target: {CHILDREN_STR}. Must accommodate all simultaneously.
     - Exclude: {exclusion_string}.
     - Weather Logic: Check the daily forecast. Only recommend outdoor activities on days where the weather is 'Clear'. If a day has precipitation, activities for that day MUST be indoor.
     - Diversity: Provide a random, diverse mix of 10 year-round places to visit to ensure randomization and discovery of new places.
@@ -267,7 +271,7 @@ def build_fixed_user_prompt(dates_str, weather_str, venues_str):
     Current Context for the upcoming weekend:
     Dates: {dates_str}
     {weather_str}
-    
+
     Potential Venues and Current Exhibits:
     {venues_str}
 
@@ -277,11 +281,11 @@ def build_fixed_user_prompt(dates_str, weather_str, venues_str):
 
 def build_transient_system_prompt():
     return f"""
-    Act as a data-extraction agent for family events in Vaughan/Toronto.
+    Act as a data-extraction agent for family events in {CITY}/{REGION}.
     You must output ONLY valid JSON. Do not include markdown formatting or conversational text.
 
     Constraints:
-    - Target: 13yo girl, 10yo boy, 6yo boy. Must accommodate all simultaneously or in parallel zones.
+    - Target: {CHILDREN_STR}. Must accommodate all simultaneously or in parallel zones.
     - Weather Logic: Check the daily forecast. Only recommend outdoor events on days where the weather is 'Clear'. If a day has precipitation, events for that day MUST be indoor.
     - Temporal Logic: Verify the temporal logic of the events provided. Reject events tied to holidays or seasons that do not occur during the provided dates.
 
@@ -319,7 +323,6 @@ def get_llm_json(system_prompt, user_prompt, max_retries=3):
     Tries MLX first, then falls back to server.
     Uses consolidated functions from osaurus_lib and mlx_lib.
     """
-    import json
 
     # Try MLX first
     mlx_model = find_text_mlx_model(["qwen", "llama", "phi"])
@@ -331,7 +334,7 @@ def get_llm_json(system_prompt, user_prompt, max_retries=3):
             )
             if raw:
                 return json.loads(process_mlx_content(raw))
-        except:
+        except Exception:
             pass
 
     # Fall back to server
@@ -355,8 +358,8 @@ def get_llm_json(system_prompt, user_prompt, max_retries=3):
                 json_start = cleaned.find("{")
                 json_end = cleaned.rfind("}")
                 if json_start >= 0:
-                    return json_module.loads(cleaned[json_start : json_end + 1])
-            except:
+                    return json_module.loads(cleaned[json_start: json_end + 1])
+            except Exception:
                 if attempt == max_retries:
                     panic_dump(result["content"])
 
@@ -367,7 +370,8 @@ def get_llm_json(system_prompt, user_prompt, max_retries=3):
 
 def fetch_scores_for_items(items):
     def fetch_score(item):
-        item["score"] = scrape_review_score(f"{item['name']} {item['location']}")
+        item["score"] = scrape_review_score(
+            f"{item['name']} {item['location']}")
         return item
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -429,6 +433,7 @@ def print_to_cli(markdown_content):
 
 
 def main():
+    init_config()
     start_time = time.time()
     console.print("[bold green]=== Weekend Generator Started ===[/bold green]")
     ensure_server()
@@ -438,7 +443,7 @@ def main():
 
     weather_str = fetch_weather(fri, sun)
     console.print(
-        f"  [cyan]Weather Forecast:[/cyan]\n  {weather_str.replace('Daily Forecast:', '').strip().replace('\n', '\n  ')}\n"
+        f"  [cyan]Weather Forecast:[/cyan]\n  {weather_str.replace('Daily Forecast:', '').strip().replace(chr(10), chr(10) + '  ')}\n"
     )
 
     with Progress(
@@ -476,7 +481,8 @@ def main():
         print("[INFO] Starting event fetch...", flush=True)
 
         # 1. Fetch data sequentially
-        progress.update(task_events, description="[dim]Fetching events...[/dim]")
+        progress.update(
+            task_events, description="[dim]Fetching events...[/dim]")
         events_str = fetch_transient_events(dates_str, year, month_name)
         print(f"[INFO] Events fetched: {len(events_str)} chars")
         progress.update(
@@ -484,7 +490,8 @@ def main():
         )
 
         print("[INFO] Starting venue fetch...")
-        progress.update(task_venues, description="[dim]Fetching venues...[/dim]")
+        progress.update(
+            task_venues, description="[dim]Fetching venues...[/dim]")
         venues_str = fetch_fixed_venues(year, month_name)
         print(f"[INFO] Venues fetched: {len(venues_str)} chars")
         progress.update(
@@ -496,7 +503,8 @@ def main():
         # 2. Generate activities via LLM (in main thread to avoid hangs)
         progress.start_task(task_transient)
         sys_transient = build_transient_system_prompt()
-        usr_transient = build_transient_user_prompt(dates_str, weather_str, events_str)
+        usr_transient = build_transient_user_prompt(
+            dates_str, weather_str, events_str)
         print(
             f"[DEBUG] user_prompt length: {len(usr_transient)}, venues preview: {venues_str[:100]}..."
         )
@@ -540,7 +548,8 @@ def main():
         f.write(final_markdown)
 
     elapsed_time = time.time() - start_time
-    console.print(f"\n[bold green]Success! Output saved to:[/bold green] {filepath}")
+    console.print(
+        f"\n[bold green]Success! Output saved to:[/bold green] {filepath}")
     console.print(
         f"[bold dim]Total Execution Time: {elapsed_time / 60:.2f} minutes[/bold dim]"
     )

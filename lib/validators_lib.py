@@ -1,0 +1,284 @@
+"""Validators for model evaluation tasks."""
+
+from typing import Tuple, List, Dict, Any
+
+# ==========================================================
+# SCORING CONSTANTS
+# ==========================================================
+
+# JSON Validator scoring weights
+JSON_STRUCTURE_WEIGHT = 30      # Points for valid JSON structure
+JSON_COUNT_GOOD = 30            # Points for 3+ items
+JSON_COUNT_OK = 15              # Points for 2 items
+JSON_VALIDITY_WEIGHT = 40       # Points for valid item content
+JSON_VALIDITY_THRESHOLD = 0.7   # % of items must be valid
+
+# Detailed JSON validator scoring weights
+DETAILED_STRUCTURE_WEIGHT = 20  # Points for valid JSON structure
+DETAILED_COUNT_GOOD = 20        # Points for 3+ items
+DETAILED_COUNT_OK = 10          # Points for 2 items
+# Points for detail quality (name + location/weather/description)
+DETAILED_QUALITY_WEIGHT = 60
+DETAIL_REQUIRED_FIELDS = 3      # Score 100% with all items having details
+DETAIL_THRESHOLD_HIGH = 0.8     # 80%+ items have details = 45pts
+DETAIL_THRESHOLD_MID = 0.5      # 50%+ items have details = 25pts
+
+# Summary validator scoring weights
+SUMMARY_HEADERS_WEIGHT = 40     # Points for having headers (## or **)
+SUMMARY_LENGTH_GOOD = 30        # Points for 100+ chars
+SUMMARY_LENGTH_OK = 15          # Points for 50-99 chars
+SUMMARY_CONTENT_WEIGHT = 30     # Points for 3+ content lines
+SUMMARY_LENGTH_THRESHOLD = 100  # Minimum chars for good score
+SUMMARY_LENGTH_THRESHOLD_OK = 50  # Minimum chars for ok score
+SUMMARY_LINES_GOOD = 3          # Required content lines for full score
+SUMMARY_LINES_OK = 2            # Content lines for partial score
+
+# Filename validator scoring weights
+FILENAME_LENGTH_WEIGHT = 40     # Points for valid length
+FILENAME_CHARS_WEIGHT = 30      # Points for valid characters
+FILENAME_FORMAT_WEIGHT = 30     # Points for good format (separators/extension)
+FILENAME_LENGTH_MIN = 4         # Minimum length
+FILENAME_LENGTH_MAX = 59        # Maximum length
+FILENAME_VALID_CHARS = "_-."    # Additional valid characters beyond alphanumeric
+
+# General scoring
+MAX_SCORE = 100                 # Maximum score value
+MIN_ITEMS_GOOD = 3              # Good item count
+MIN_ITEMS_OK = 2                # Acceptable item count
+
+
+# ==========================================================
+# HELPER FUNCTIONS (Single Responsibility Principle)
+# ==========================================================
+
+
+def extract_list_from_dict(data: Dict[str, Any], keys: List[str] = None) -> List[Any]:
+    """Extract list from nested dict, trying multiple key options."""
+    if keys is None:
+        keys = ["activities", "items", "results", "data", "fixed_activities", "transient_events"]
+
+    if not isinstance(data, dict):
+        return []
+
+    for key in keys:
+        if key in data:
+            inner = data[key]
+            if isinstance(inner, list):
+                return inner
+    return []
+
+
+def is_valid_list_item(item: Any, required_fields: List[str] = None) -> bool:
+    """Check if an item is valid (string or dict with required fields)."""
+    if required_fields is None:
+        required_fields = ["name", "activity"]
+
+    if isinstance(item, str):
+        return bool(item.strip())
+    elif isinstance(item, dict):
+        return any(item.get(field) for field in required_fields)
+    return False
+
+
+def has_item_details(item: Dict[str, Any], detail_fields: List[str] = None) -> bool:
+    """Check if dict item has required detail fields."""
+    if detail_fields is None:
+        detail_fields = ["location", "weather", "description"]
+
+    if not isinstance(item, dict):
+        return False
+
+    # Must have name first
+    if not (item.get("name") or item.get("activity")):
+        return False
+
+    # Must have at least one detail
+    return any(item.get(field) for field in detail_fields)
+
+
+def has_text_headers(text: str, header_markers: List[str] = None) -> bool:
+    """Check if text has proper headers."""
+    if header_markers is None:
+        header_markers = ["##", "**"]
+
+    return any(marker in text for marker in header_markers)
+
+
+def count_content_lines(text: str) -> int:
+    """Count non-header content lines."""
+    lines = text.split("\n")
+    return len([l.strip() for l in lines if l.strip() and not l.strip().startswith("#")])
+
+
+def is_valid_filename_char(char: str) -> bool:
+    """Check if character is valid for filename."""
+    return char.isalnum() or char in FILENAME_VALID_CHARS
+
+
+def has_filename_format(filename: str) -> bool:
+    """Check if filename has good format (separators or extension)."""
+    return any(char in filename for char in ["_", "-", "."])
+
+
+def validate_json(data: Any) -> Tuple[int, str]:
+    """Score simple JSON lists based on validity and structure."""
+    if not data:
+        return 0, "empty response"
+
+    # Extract list from potentially nested dict
+    if isinstance(data, dict):
+        data = extract_list_from_dict(data)
+
+    items = data if isinstance(data, list) else []
+    if not items:
+        return 0, "no items found"
+
+    # Quality-based scoring: check if items have valid structure
+    score = 0
+    failures = []
+
+    # Valid JSON structure
+    score += JSON_STRUCTURE_WEIGHT
+
+    # Proper count of items (3+ is good)
+    if len(items) >= MIN_ITEMS_GOOD:
+        score += JSON_COUNT_GOOD
+    elif len(items) >= MIN_ITEMS_OK:
+        score += JSON_COUNT_OK
+    else:
+        failures.append(f"only {len(items)} items (need {MIN_ITEMS_GOOD}+)")
+
+    # Each item should be valid
+    valid_items = sum(1 for item in items if is_valid_list_item(item))
+
+    if valid_items == len(items):
+        score += JSON_VALIDITY_WEIGHT
+    elif valid_items >= len(items) * JSON_VALIDITY_THRESHOLD:
+        score += JSON_COUNT_OK
+        failures.append(f"only {valid_items}/{len(items)} items are valid")
+    else:
+        failures.append(f"only {valid_items}/{len(items)} items are valid")
+
+    return min(MAX_SCORE, score), "; ".join(failures)
+
+
+def validate_detailed_json(data: Any) -> Tuple[int, str]:
+    """Score objects with details based on quality, not count."""
+    if not data:
+        return 0, "empty response"
+
+    # Extract list from potentially nested dict
+    if isinstance(data, dict):
+        data = extract_list_from_dict(data)
+
+    items = data if isinstance(data, list) else []
+    if not items:
+        return 0, "no items found"
+
+    score = 0
+    failures = []
+
+    # Valid JSON structure with items
+    score += DETAILED_STRUCTURE_WEIGHT
+
+    # Count: good if 3+ items
+    if len(items) >= MIN_ITEMS_GOOD:
+        score += DETAILED_COUNT_GOOD
+    elif len(items) >= MIN_ITEMS_OK:
+        score += DETAILED_COUNT_OK
+    else:
+        failures.append(f"only {len(items)} items")
+
+    # Check each item quality
+    valid_with_details = sum(1 for item in items if has_item_details(item))
+
+    # Award points based on proportion with full details
+    if valid_with_details == len(items):
+        score += DETAILED_QUALITY_WEIGHT  # Perfect: all items have name AND details
+    elif valid_with_details >= len(items) * DETAIL_THRESHOLD_HIGH:
+        score += 45
+    elif valid_with_details >= len(items) * DETAIL_THRESHOLD_MID:
+        score += 25
+    elif valid_with_details > 0:
+        score += 10
+    else:
+        failures.append("no items with details")
+
+    return min(MAX_SCORE, score), "; ".join(failures[:DETAIL_REQUIRED_FIELDS])
+
+
+def validate_summary(data: Any) -> Tuple[int, str]:
+    """Score summaries based on structure and content quality."""
+    if not data:
+        return 0, "empty response"
+    if isinstance(data, dict):
+        data = str(data)
+
+    data_str = str(data).strip()
+    failures = []
+    score = 0
+
+    # Check for proper headers
+    if has_text_headers(data_str):
+        score += SUMMARY_HEADERS_WEIGHT
+    else:
+        failures.append("no headers")
+
+    # Check for adequate length
+    if len(data_str) >= SUMMARY_LENGTH_THRESHOLD:
+        score += SUMMARY_LENGTH_GOOD
+    elif len(data_str) >= SUMMARY_LENGTH_THRESHOLD_OK:
+        score += SUMMARY_LENGTH_OK
+        failures.append(f"short ({len(data_str)} chars)")
+    else:
+        failures.append(f"too short ({len(data_str)} chars)")
+
+    # Check for multiple sections/bullet points
+    content_line_count = count_content_lines(data_str)
+    if content_line_count >= SUMMARY_LINES_GOOD:
+        score += SUMMARY_CONTENT_WEIGHT
+    elif content_line_count >= SUMMARY_LINES_OK:
+        score += SUMMARY_LENGTH_OK
+    else:
+        failures.append(f"only {content_line_count} content line(s)")
+
+    return min(MAX_SCORE, score), "; ".join(failures)
+
+
+def validate_filename(data: Any) -> Tuple[int, str]:
+    """Score filenames based on validity and format quality."""
+    if not data:
+        return 0, "empty response"
+    clean = str(data).strip()
+
+    failures = []
+    score = 0
+
+    # Valid length - points
+    if FILENAME_LENGTH_MIN < len(clean) < FILENAME_LENGTH_MAX:
+        score += FILENAME_LENGTH_WEIGHT
+    else:
+        failures.append(
+            f"length {len(clean)} not in {FILENAME_LENGTH_MIN}-{FILENAME_LENGTH_MAX - 1}")
+
+    # Valid characters only - points
+    if all(is_valid_filename_char(c) for c in clean):
+        score += FILENAME_CHARS_WEIGHT
+    else:
+        failures.append("invalid chars")
+
+    # Good format - points
+    if has_filename_format(clean):
+        score += FILENAME_FORMAT_WEIGHT
+    else:
+        failures.append("no separators/extension")
+
+    return min(MAX_SCORE, score), "; ".join(failures)
+
+
+VALIDATORS = {
+    "json": validate_json,
+    "detailed_json": validate_detailed_json,
+    "summarize": validate_summary,
+    "filename": validate_filename,
+}

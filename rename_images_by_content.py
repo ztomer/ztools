@@ -11,33 +11,28 @@ import os
 import re
 import sys
 import json
-import base64
 import argparse
 from pathlib import Path
-from typing import List, Tuple, Optional, Dict, Any
+from typing import List, Tuple, Optional
 
 from PIL import Image
 import pytesseract
 import requests
 
 # Use consolidated functions
-from osaurus_lib import (
+from lib.osaurus_lib import (
+    get_available_models,
     check_llm_availability,
-    get_available_models as _get_models,
     select_best_model,
     select_best_vlm_model,
     call_llm_api as _call_api,
     strip_thinking,
 )
-from mlx_lib import (
+from lib.mlx_lib import (
+    find_best_mlx_model,
     find_mlx_model,
-    list_mlx_models,
-    call_mlx_text,
-    call_mlx_vlm,
     process_mlx_content,
 )
-import requests
-from osaurus_lib import call as call_model, get_best_model
 
 # Point pytesseract at Homebrew's tesseract binary if not on PATH
 _TESSERACT_BREW = "/opt/homebrew/bin/tesseract"
@@ -127,16 +122,13 @@ def extract_full_text(image_path: Path) -> Optional[str]:
         return None
 
 
-# Use consolidated functions from osaurus_lib and mlx_lib
-from osaurus_lib import check_llm_availability as _check_avail
+# Use consolidated functions from lib.osaurus_lib and mlx_lib
 
 
 def process_llm_content(content: str) -> Optional[str]:
     """
     Process raw LLM output - delegates to consolidated functions.
     """
-    from osaurus_lib import strip_thinking
-    from mlx_lib import process_mlx_content
 
     # Try both processing functions
     content = strip_thinking(content)
@@ -181,7 +173,7 @@ def parse_response_content(
                 else:  # generate
                     if "response" in obj:
                         full_content += obj.get("response", "")
-            except:
+            except Exception:
                 pass
         return full_content
 
@@ -196,10 +188,9 @@ def call_llm_api(
 ) -> Optional[str]:
     """
     Generic function to call LLM/VLM APIs (Chat or Generate).
-    Uses consolidated functions from osaurus_lib.
+    Uses consolidated functions from lib.osaurus_lib.
     """
     # Try server API first
-    from osaurus_lib import call_llm_api as _call_api
 
     messages = [{"role": "user", "content": prompt}]
     if images:
@@ -212,7 +203,7 @@ def call_llm_api(
         return result["content"]
 
     # Fall back to mlx_lib
-    from mlx_lib import call_mlx, process_mlx_content
+    from lib.mlx_lib import call_mlx
 
     model_path = find_mlx_model(model)
     if model_path and not images:
@@ -305,6 +296,50 @@ def get_default_llm_model():
             pass
     return os.environ.get("OLLAMA_MODEL", TEXT_PREFERRED_MODELS[0])
 
+
+
+def rename_image(
+    image_path: Path,
+    dry_run: bool,
+    force: bool,
+    llm_host: Optional[str],
+    llm_model: Optional[str],
+    vlm_model: Optional[str],
+    api_key: str,
+    mlx_model_path: Optional[Path],
+    mlx_vlm_path: Optional[Path],
+) -> Tuple[bool, str]:
+    if not image_path.exists():
+        return False, f"File not found: {image_path.name}"
+        
+    text = extract_full_text(image_path) or extract_first_line(image_path)
+    if not text:
+        return False, f"Skipped (No text): {image_path.name}"
+        
+    new_name = None
+    if llm_host and llm_model:
+        new_name = query_llm_for_filename(text, llm_host, llm_model, api_key)
+    elif mlx_model_path:
+        new_name = query_llm_for_filename(text, "localhost", mlx_model_path.name, api_key)
+        
+    if not new_name:
+        new_name = clean_filename(text)
+        
+    if not new_name:
+        return False, f"Could not generate name: {image_path.name}"
+        
+    new_path = image_path.with_name(f"{new_name}{image_path.suffix}")
+    
+    if new_path.exists() and not force:
+        return False, f"Skipped (Exists): {new_path.name}"
+        
+    if not dry_run:
+        try:
+            image_path.rename(new_path)
+        except Exception as e:
+            return False, f"Error renaming: {e}"
+            
+    return True, f"Renamed: {image_path.name} -> {new_path.name}"
 
 def main():
     parser = argparse.ArgumentParser(
@@ -417,13 +452,7 @@ Examples:
     image_files = []
 
     # Simple glob handling
-    patterns = (
-        [args.pattern]
-        if "*" in args.pattern
-        else [f"*{ext}" for ext in image_extensions]
-        if args.pattern == "*"
-        else [args.pattern]
-    )
+    
     # If user provided specific pattern like "*.jpg", use it. If "*", use all extensions.
 
     # Actually, previous logic was: if pattern is "*", check all ext. If pattern is specific, check it.

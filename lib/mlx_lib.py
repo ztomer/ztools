@@ -7,11 +7,16 @@ Parallel to osaurus_lib for server-based LLM calls.
 import os
 import re
 import subprocess
+import json
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
+
+from .content_processing import clean_model_output, extract_content_from_code_blocks
+from .logging_config import mlx_logger as logger
 
 # MLX models directory
-MLX_MODELS_DIR = Path(os.environ.get("MLX_MODELS_DIR", Path.home() / "MLXModels"))
+MLX_MODELS_DIR = Path(os.environ.get(
+    "MLX_MODELS_DIR", Path.home() / "MLXModels"))
 
 
 # ==========================================================
@@ -101,8 +106,10 @@ def list_mlx_models(mlx_dir: Path = MLX_MODELS_DIR) -> List[str]:
 def call_mlx(model_path: Path, prompt: str) -> Optional[str]:
     """Call MLX model for text generation."""
     if not model_path.exists():
+        logger.warning(f"Model path does not exist: {model_path}")
         return None
 
+    logger.debug(f"Calling MLX model at {model_path}")
     cmd = [
         "python3",
         "-m",
@@ -115,6 +122,7 @@ def call_mlx(model_path: Path, prompt: str) -> Optional[str]:
     ]
 
     try:
+        logger.debug(f"Running command: {' '.join(cmd[:6])}...")
         result = subprocess.run(
             cmd,
             capture_output=True,
@@ -123,13 +131,20 @@ def call_mlx(model_path: Path, prompt: str) -> Optional[str]:
             cwd=str(model_path.parent),
         )
         if result.returncode == 0:
+            logger.info(f"MLX call successful, got {len(result.stdout)} chars")
             return result.stdout.strip()
-    except Exception:
-        pass
+        else:
+            logger.warning(
+                f"MLX command failed with return code {result.returncode}")
+    except subprocess.TimeoutExpired:
+        logger.error("MLX call timed out after 120s")
+    except Exception as e:
+        logger.debug(f"MLX call failed: {e}")
 
     # Fallback: main.py
     main_py = model_path / "main.py"
     if main_py.exists():
+        logger.debug("Trying fallback main.py")
         try:
             result = subprocess.run(
                 ["python3", str(main_py), prompt],
@@ -138,10 +153,13 @@ def call_mlx(model_path: Path, prompt: str) -> Optional[str]:
                 timeout=120,
             )
             if result.returncode == 0:
+                logger.info(
+                    f"Fallback successful, got {len(result.stdout)} chars")
                 return result.stdout.strip()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Fallback failed: {e}")
 
+    logger.error(f"Failed to call MLX model at {model_path}")
     return None
 
 
@@ -168,16 +186,17 @@ def run_mlx_vlm(model_path: Path, image_path: Path) -> Optional[str]:
             timeout=180,
         )
         if result.returncode == 0:
+            logger.info(f"VLM call successful, got {len(result.stdout)} chars")
             return result.stdout.strip()
-    except Exception:
-        pass
+        else:
+            logger.warning(
+                f"VLM command failed with return code {result.returncode}")
+    except subprocess.TimeoutExpired:
+        logger.error("VLM call timed out after 180s")
+    except Exception as e:
+        logger.error(f"VLM call failed: {type(e).__name__}: {e}")
 
     return None
-
-
-# Aliases
-call_mlx_text = call_mlx
-call_mlx_vlm = run_mlx_vlm
 
 
 # ==========================================================
@@ -186,17 +205,75 @@ call_mlx_vlm = run_mlx_vlm
 
 
 def process_mlx_content(content: str) -> str:
-    """Process MLX output: remove thinking, extract content."""
+    """Process MLX output: remove thinking, extract content.
+
+    Uses shared content_processing utilities for consistency with osaurus_lib.
+    """
     if not content:
         return ""
 
-    # Remove thinking blocks
-    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
-    content = re.sub(r"<\|.*?\|>", "", content)
+    # Try to extract from code blocks first
+    extracted = extract_content_from_code_blocks(content)
+    if extracted:
+        content = extracted
 
-    # Extract from code blocks
-    code_blocks = re.findall(r"```(?:\w+)?\s*(.*?)```", content, re.DOTALL)
-    if code_blocks:
-        content = code_blocks[-1]
+    # Clean all artifacts
+    content = clean_model_output(content)
 
     return content.strip()
+
+
+# ==========================================================
+# UNIFIED API (matches osaurus_lib interface)
+# ==========================================================
+
+
+def call(
+    model: str,
+    messages: List[Dict[str, Any]],
+    temperature: float = 0.1,
+    max_tokens: int = 2000,
+    timeout: int = 120,
+) -> dict:
+    """
+    Unified MLX API - matches osaurus_lib.call() interface.
+    Returns dict with content, quality_score, time, error.
+    """
+    import json
+    import time
+
+    result = {
+        "model": model,
+        "time": None,
+        "content": None,
+        "quality_score": 0,
+        "error": None,
+    }
+
+    # Find the model
+    model_path = find_text_mlx_model([model]) or find_mlx_model(model)
+    if not model_path:
+        result["error"] = f"Model not found: {model}"
+        return result
+
+    # Extract prompt from messages
+    prompt = messages[-1].get("content", "") if messages else ""
+
+    start = time.time()
+    try:
+        content = call_mlx(model_path, prompt)
+        result["time"] = round(time.time() - start, 1)
+
+        if content:
+            result["content"] = process_mlx_content(content)
+        else:
+            result["error"] = "Empty response from model"
+    except Exception as e:
+        result["error"] = f"Error: {type(e).__name__}: {e}"
+
+    return result
+
+
+# Aliases for better API clarity
+call_mlx_text = call_mlx  # Call MLX model for text generation
+call_mlx_vlm = run_mlx_vlm  # Call MLX model for vision/image analysis

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # /// script
-# dependencies = ["playwright", "requests", "cryptography", "mlx-lm @ git+https://github.com/ml-explore/mlx-lm.git", "transformers"]
+# dependencies = ["playwright", "requests", "cryptography", "mlx-lm @ git+https://github.com/ml-explore/mlx-lm.git", "transformers", "pyyaml"]
 # ///
 """
 twitter_summary.py — Fetch your X/Twitter home timeline via browser automation,
@@ -32,13 +32,11 @@ try:
 except ImportError:
     sync_playwright = PWTimeout = None
 
-import requests
-from osaurus_lib import call_with_prompt as call_model, get_best_model
-from mlx_lib import (
+from lib import init_config
+from lib.osaurus_lib import get_best_model
+from lib.mlx_lib import (
     find_mlx_model,
     find_best_mlx_model,
-    call_mlx_text,
-    process_mlx_content,
 )
 
 # MLX model preferences (prefer smaller, faster models)
@@ -152,6 +150,11 @@ def get_chrome_cookies(
 # ---------------------------------------------------------------------------
 
 
+_PROMPT_RULES = """
+- Use headers starting with ##
+- Use bullet points for facts
+- Keep it concise and factual
+"""
 def load_state() -> dict:
     if STATE_FILE.exists():
         try:
@@ -219,7 +222,8 @@ def resolve_since_time(args_since: str | None, state: dict) -> datetime:
                 dt = dt.replace(tzinfo=timezone.utc)
             return dt
         except ValueError:
-            print(f"[!] Cannot parse --since '{args_since}'. Using last run or 24h.")
+            print(
+                f"[!] Cannot parse --since '{args_since}'. Using last run or 24h.")
     if "last_run" in state:
         return datetime.fromisoformat(state["last_run"])
     return datetime.now(timezone.utc) - timedelta(hours=24)
@@ -247,7 +251,8 @@ def parse_tweets_from_response(data: dict) -> list[dict]:
                 item_content = content.get("itemContent", {})
                 if item_content.get("itemType") != "TimelineTweet":
                     continue
-                tweet_result = item_content.get("tweet_results", {}).get("result", {})
+                tweet_result = item_content.get(
+                    "tweet_results", {}).get("result", {})
                 if tweet_result.get("__typename") == "TweetWithVisibilityResults":
                     tweet_result = tweet_result.get("tweet", tweet_result)
 
@@ -351,7 +356,8 @@ def collect_tweets_via_browser(since_time: datetime, debug: bool) -> list[dict]:
             sys.exit(1)
 
         try:
-            following_tab = page.locator('[role="tab"]', has_text="Following").first
+            following_tab = page.locator(
+                '[role="tab"]', has_text="Following").first
             following_tab.click(timeout=5000)
             time.sleep(2)
         except Exception:
@@ -443,11 +449,12 @@ def summarize_with_llm(
     mlx_path = find_mlx_model(model) or find_best_mlx_model(MLX_PREFERRED)
 
     if mlx_path:
-        from mlx_lib import get_mlx_context_length, call_mlx_text, process_mlx_content
+        from lib.mlx_lib import get_mlx_context_length, call_mlx_text, process_mlx_content
 
         mlx_ctx = get_mlx_context_length(mlx_path)
         mlx_prompt_chars = (mlx_ctx - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN
-        prompt, n = _build_prompt(tweets, max_chars=mlx_prompt_chars, for_mlx=True)
+        prompt, n = _build_prompt(
+            tweets, max_chars=mlx_prompt_chars, for_mlx=True)
         print(
             f"[llm] Sending {n}/{len(tweets)} tweets to local MLX model {mlx_path.name} ..."
         )
@@ -457,7 +464,7 @@ def summarize_with_llm(
         print(f"[llm] MLX error: {raw}")
 
     # Fall back to server
-    from osaurus_lib import (
+    from lib.osaurus_lib import (
         call_llm_api,
         strip_thinking,
         get_available_models,
@@ -482,6 +489,8 @@ def summarize_with_llm(
         )
         if result and "content" in result:
             return strip_thinking(result["content"])
+        else:
+            print(f"[llm] call_llm_api returned error: {result.get('error', 'unknown')}")
     except Exception as e:
         print(f"[llm] Server error: {e}")
 
@@ -586,4 +595,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    init_config()
     main()

@@ -1,81 +1,65 @@
-# ZTools - Local LLM Tools
+# ZTools - Local LLM Utilities for Osaurus
 
-Local LLM utilities for Osaurus server (localhost:1337).
+ZTools is a collection of pragmatic, real-world Python scripts powered by local Large Language Models (LLMs) via the Osaurus server or local MLX inference. These tools are built to run entirely locally, preserving privacy while automating daily workflows.
 
-## Location
+## The Tools
 
-`~/Projects/ztools/`
+### 1. Weekend Planner (`generate_weekend.py`)
+Autonomously generates a weekend itinerary for your family.
+- **How it works:** Fetches the weekend weather forecast from Open-Meteo and uses DuckDuckGo search to find current local events and venues. It then uses a local LLM to filter these activities based on your family's constraints (e.g., ages, weather logic, previously visited places).
+- **Configuration:** Personalize your family's details, location, and excluded places in `conf/weekend.yaml`.
+- **Usage:**
+  ```bash
+  python3 generate_weekend.py
+  ```
 
-## Quick Start
+### 2. Twitter Summarizer (`twitter_summary.py`)
+Fetches your X/Twitter home timeline via browser automation and summarizes it with a local LLM.
+- **How it works:** Uses `playwright` and your local Chrome session cookies (macOS Keychain) to scroll and extract tweets from your home timeline. It then feeds the timeline to an LLM to generate a distilled, factual markdown summary.
+- **Usage:**
+  ```bash
+  uv run twitter_summary.py
+  ```
 
-```bash
-# Weekend planner - generate family activities
-weekend
+### 3. Image Renamer (`rename_images_by_content.py`)
+Renames images based on their actual text content or visual description.
+- **How it works:** Uses `pytesseract` (OCR) to extract text from images (like screenshots) or local Vision Language Models (VLMs) to describe the image. An LLM then generates a concise, snake_case filename under 50 characters.
+- **Usage:**
+  ```bash
+  uv run rename_images_by_content.py /path/to/images
+  ```
 
-# Twitter/X summarizer - fetch timeline and summarize  
-twitter
+### 4. Model Evaluator (`model_eval.py`)
+Tests and scores your locally installed models against the *actual real-world prompts* used by the tools above.
+- **How it works:** Evaluates models on their ability to strictly follow instructions, generate valid JSON, and extract concise filenames. Includes automated retries for resilience.
+- **Usage:**
+  ```bash
+  python3 model_eval.py
+  ```
 
-# Rename images by OCR text content
-rename_images /path/to/images
+## Architecture & Libraries
 
-# Model evaluator - test models on standard tasks
-oeval
-```
+All tools share a common, robust library architecture found in `lib/`:
+- **`osaurus_lib.py`**: Handles API communication with the Osaurus server, including self-healing automated retries (`max_retries`) and fallback logic.
+- **`mlx_lib.py`**: Executes local Apple Silicon MLX models via subprocesses when the server is unavailable or when specialized small models are preferred.
+- **`content_processing.py`**: Sanitizes raw LLM outputs by aggressively stripping markdown blocks and `<think>` reasoning tags.
+- **`validators_lib.py`**: Contains strict evaluation logic for `model_eval.py`, heavily unit-tested via `pytest`.
+- **`logging_config.py`**: Provides comprehensive debug logging.
 
-## Environment
+## Installation & Setup
 
-Requires Osaurus server running on `localhost:1337`.
+ZTools requires Python 3.11+. Dependencies are managed via `pyproject.toml` or dynamically injected using `uv run`.
 
-Models are configured in `osaurus_lib.py`:
-- `BEST_MODELS` - recommended per task type
-- `TIMEOUTS` - timeout seconds per task
+1. Ensure the Osaurus server is running (`localhost:1337`) or you have local MLX models downloaded.
+2. Install project dependencies:
+   ```bash
+   pip install -e .
+   # or use uv for standalone scripts:
+   uv run <script_name.py>
+   ```
 
-## Dependencies
+## Development & Testing
 
-Each command uses `uv run --with` for on-demand deps:
-
-| Alias | Dependencies |
-|-------|-------------|
-| weekend | ddgs, beautifulsoup4, rich |
-| twitter | playwright, cryptography, requests, rich |
-| rename_images | pillow, pytesseract, requests |
-| oeval | rich, requests |
-
-## Library Usage
-
-```python
-from osaurus_lib import call, call_with_prompt, get_best_model
-
-# Simple call
-result = call_with_prompt("gemma-4-26b-a4b-it-4bit", "Hello", "think")
-
-# With JSON extraction
-result = call_with_prompt("gemma-4-26b-a4b-it-4bit", "List 3 items", "json")
-print(result["parsed"])      # parsed JSON
-print(result["quality_score"])  # 0-100 score
-
-# Check server
-from osaurus_lib import is_server_running, get_models
-print(get_models())  # available models
-```
-
-## Files
-
-| File | Purpose |
-|------|----------|
-| osaurus_lib.py | Generic LLM utilities |
-| model_eval.py | Model evaluator |
-| generate_weekend.py | Weekend planner |
-| twitter_summary.py | Twitter summarizer |
-| rename_images_by_content.py | Image renamer |
-
-## Configuration (YAML)
-
-Each tool has a config file. Extract to override defaults:
-
-| Config | Purpose |
-|--------|----------|
-| config.yaml | Shared config (llm_url, default_model) |
-| weekend.yaml | Family info (children ages, visited places) |
-| twitter.yaml | Twitter settings (output_dir, max_scrolls) |
-| rename.yaml | OCR/VLM paths and model preferences |
+ZTools adheres to strict code quality standards:
+- **Linting:** 100% compliant with `ruff check .`
+- **Testing:** 100% unit test coverage for validators (`pytest tests/`)
