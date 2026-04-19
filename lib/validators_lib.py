@@ -110,7 +110,8 @@ def is_valid_list_item(item: Any, required_fields: List[str] = None) -> bool:
 def has_item_details(item: Dict[str, Any], detail_fields: List[str] = None) -> bool:
     """Check if dict item has required detail fields."""
     if detail_fields is None:
-        detail_fields = ["location", "weather", "description"]
+        # Check for common detail fields used in our prompts
+        detail_fields = ["location", "weather", "price", "target_ages", "duration", "day"]
 
     if not isinstance(item, dict):
         return False
@@ -119,7 +120,7 @@ def has_item_details(item: Dict[str, Any], detail_fields: List[str] = None) -> b
     if not (item.get("name") or item.get("activity")):
         return False
 
-    # Must have at least one detail
+    # Must have at least one detail field
     return any(item.get(field) for field in detail_fields)
 
 

@@ -29,20 +29,24 @@ console = Console()
 # ==========================================================
 
 WEEKEND_SYS_TRANSIENT = """
+Output JSON now.
+
 Act as a data-extraction agent for family events in Vaughan/Toronto.
 Output ONLY valid JSON. No markdown, no conversational text.
 
-Schema - you MUST follow this EXACT structure:
+Schema - MANDATORY (every event must have ALL of these fields):
 {
     "transient_events": [
-    {"name": "Spring Festival", "location": "Downsview Park", "target_ages": "6-13", "price": "free", "duration": "3 hours", "weather": "outdoor/Clear", "day": "Friday"}
+    {"name": "Spring Festival", "location": "Downsview Park", "target_ages": "6-13", "price": "free", "duration": "3 hours", "weather": "outdoor", "day": "Friday"}
     ]
 }
 
+CRITICAL: Each event object MUST contain ALL 7 fields. Missing any field will result in failure.
+
 Rules:
 - Output ONLY JSON - no explanation before or after
-- Include all fields for each event: name, location, target_ages, price, duration, weather, day
-- Weather "outdoor" activities ONLY on Clear days; indoor otherwise
+- Weather: use "outdoor" or "indoor"
+- Day: Friday, Saturday, or Sunday
 - Filter by dates April 20-22, 2026 only
 """
 WEEKEND_USR_TRANSIENT = """
@@ -70,20 +74,24 @@ Execute the task based on the system instructions and the provided context. Outp
 """
 
 WEEKEND_SYS_FIXED = """
+Output JSON now.
+
 Act as a creative planning agent for family activities in Vaughan/Toronto.
 Output ONLY valid JSON. No markdown, no conversational text.
 
-Schema - you MUST follow this EXACT structure:
+Schema - MANDATORY (every activity must have ALL of these fields):
 {
     "fixed_activities": [
     {"name": "Vaughan Sports Arena", "location": "Vaughan", "target_ages": "6-13", "price": "$$", "weather": "indoor"}
     ]
 }
 
+CRITICAL: Each activity object MUST contain ALL 5 fields. Missing any field will result in failure.
+
 Rules:
 - Output ONLY JSON - no explanation before or after
-- Include all fields: name, location, target_ages, price, weather
 - Exactly 10 items required
+- Weather: use "outdoor" or "indoor"
 - EXCLUDE: Art of the Brick, Reptilia, ROM, Ripley's, Little Canada, LEGOLAND, CN Tower, Museum of Illusions, Canada's Wonderland, Ontario Science Centre, Toronto Zoo
 - Outdoor ONLY on Clear days; indoor otherwise
 """
@@ -514,6 +522,8 @@ def main():
     init_config()
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", help="Run evaluation for a specific model")
+    parser.add_argument("--task", help="Run a specific task only (json, detailed_json, filename, summarize)")
+    parser.add_argument("--quick", action="store_true", help="Quick mode: run single task with one retry (faster iteration)")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging to console")
     args = parser.parse_args()
 
@@ -547,15 +557,50 @@ def main():
 
     console.print(f"[green]Found {len(models_to_test)} models to test[/green]")
 
+    # Filter to specific task if requested
+    tasks_to_run = TASKS
+    if args.task:
+        if args.task not in TASKS:
+            console.print(f"[red]Unknown task: {args.task}. Available: {list(TASKS.keys())}[/red]")
+            sys.exit(1)
+        tasks_to_run = {args.task: TASKS[args.task]}
+        console.print(f"[yellow]Running only task: {args.task}[/yellow]")
+    
+    # In quick mode, only run first task once (no retries)
+    if args.quick:
+        console.print(f"[yellow]Quick mode: single run, no retries[/yellow]")
+        import model_eval as me
+        original_run_eval = me.run_eval
+        
+        def quick_run_eval(model, backend="osaurus"):
+            # Monkey-patch MAX_RETRIES temporarily
+            import model_eval
+            original_retries = model_eval.MAX_RETRIES
+            model_eval.MAX_RETRIES = 0
+            try:
+                return original_run_eval(model, backend=backend)
+            finally:
+                model_eval.MAX_RETRIES = original_retries
+        
+        me.run_eval = quick_run_eval
+
     all_results = []
-    best_scores = {task: -1 for task in TASKS.keys()}
-    best_models = {task: None for task in TASKS.keys()}
+    best_scores = {task: -1 for task in tasks_to_run.keys()}
+    best_models = {task: None for task in tasks_to_run.keys()}
 
     for model, backend in models_to_test:
-        results = run_eval(model, backend=backend)
+        results = run_eval(model, tasks=tasks_to_run, backend=backend)
         scores = [r["quality_score"] for r in results]
         avg = sum(scores) / len(scores) if scores else 0
-        console.print(f"[bold]{model} ({backend}): {avg:.0f}%[/bold]\n")
+        console.print(f"[bold]{model} ({backend}): {avg:.0f}%[/bold]")
+        
+        # Print per-task scores
+        for r in results:
+            task = r["task"]
+            score = r["quality_score"]
+            status = "✅" if score >= 90 else ("⚠️" if score >= 50 else "❌")
+            failure_info = f" ({r.get('failure_reason', '')})" if score < 90 else ""
+            print(f"  {status} {task}: {score}{failure_info}")
         
         all_results.append({'model': model, 'backend': backend, 'results': results})
         for r in results:

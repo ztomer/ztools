@@ -18,6 +18,61 @@ from .config import get_timeouts, get_max_tokens, get_best_models, get_timeout, 
 
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 1337
+
+# ==========================================================
+# MODEL FAMILY DETECTION & QUIRKS
+# ==========================================================
+
+def get_model_family(model: str) -> str:
+    """Detect model family for applying family-specific quirks."""
+    model_lower = model.lower()
+    if "qwen3.6" in model_lower or "qwen3.5" in model_lower:
+        return "qwen"
+    elif "gemma-4" in model_lower or "gemma4" in model_lower:
+        return "gemma4"
+    elif "gemma" in model_lower:
+        return "gemma"
+    elif "foundation" in model_lower:
+        return "foundation"
+    return "unknown"
+
+
+def apply_model_quirks(messages: List[Dict[str, Any]], model: str) -> List[Dict[str, Any]]:
+    """Apply model-specific prompt modifications.
+    
+    This ensures consistent behavior across all scripts calling the LLM.
+    """
+    family = get_model_family(model)
+    
+    # Build updated messages
+    updated = []
+    for msg in messages:
+        content = msg.get("content", "")
+        role = msg.get("role", "user")
+        
+        if family == "qwen" and role == "system":
+            # Prepend JSON trigger for qwen models to prevent thinking output
+            if content and not content.startswith("Output JSON now"):
+                content = "Output JSON now.\n\n" + content
+                logger.debug(f"Applied qwen JSON trigger for {model}")
+        
+        elif family == "gemma4":
+            if role == "system":
+                # Gemma4 needs extraction framing
+                if "JSON" in content.upper() and not content.startswith("IMPORTANT"):
+                    content = "IMPORTANT: This is DATA EXTRACTION. Output JSON only. " + content
+                    logger.debug(f"Applied gemma4 system quirk for {model}")
+            elif role == "user":
+                # Gemma4 responds badly to "Execute", "Context", "Task" - use "Data" / "Extract"
+                if "execute" in content.lower() or "context" in content.lower():
+                    content = content.replace("Current Context", "Data")
+                    content = content.replace("Execute the task", "Extract to JSON")
+                    content = content.replace("Execute the task based on", "Extract")
+                    logger.debug(f"Applied gemma4 user quirk for {model}")
+        
+        updated.append({**msg, "content": content})
+    
+    return updated
 DEFAULT_URL = f"http://{DEFAULT_HOST}:{DEFAULT_PORT}"
 
 PROMPTS = {
@@ -215,6 +270,9 @@ def call(
     """
 
     logger.debug(f"Calling {model} for task '{task}' at {host}:{port}")
+
+    # Apply model-specific quirks (e.g., JSON trigger for qwen)
+    messages = apply_model_quirks(messages, model)
 
     # Get defaults from config.yaml (single source of truth)
     max_tokens = max_tokens or get_max_tokens_for_task(task)

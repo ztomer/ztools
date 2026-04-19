@@ -21,5 +21,5 @@ all = [
     "mlx-vlm",
 ]
 
-[dependency-groups]
-test = ["pytest"]
+[tool.rtk]
+python = "3.14"

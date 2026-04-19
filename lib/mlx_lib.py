@@ -8,8 +8,13 @@ import os
 import re
 import subprocess
 import json
+import sys
 from pathlib import Path
 from typing import Optional, List, Dict, Any
+
+# Get the venv Python with mlx_lm
+# For MLX, use uv run to get the right Python environment
+UV_RUN = ["rtk", "uv", "run", "--with", "mlx", "--with", "mlx-lm"]
 
 from .content_processing import clean_model_output, extract_content_from_code_blocks
 from .logging_config import mlx_logger as logger
@@ -96,46 +101,87 @@ def list_mlx_models(mlx_dir: Path = MLX_MODELS_DIR) -> List[str]:
 
 
 def call_mlx(model_path: Path, prompt: str) -> Optional[str]:
-    """Call MLX model for text generation."""
+    """Call MLX model for text generation using mlx_lm.generate."""
     if not model_path.exists():
         logger.warning(f"Model path does not exist: {model_path}")
         return None
 
     logger.debug(f"Calling MLX model at {model_path}")
-    cmd = [
-        "python3",
-        "-m",
-        "mlx.lm",
-        "text",
-        "--model",
-        str(model_path),
-        "--prompt",
-        prompt,
-    ]
+    
+    import tempfile
+    import base64
+    
+    model_path_str = str(model_path)
+    model_parent = str(model_path.parent)
+    
+    # Write prompt to separate temp file to avoid escaping
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as pf:
+        pf.write(prompt)
+        prompt_file = pf.name
+    
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as sf:
+        sf.write(f'''
+import os
+os.chdir("{model_parent}")
+from mlx_lm import load, stream_generate
 
+model, tokenizer = load("{model_path_str}")
+
+with open("{prompt_file}", "r") as f:
+    prompt = f.read()
+
+# Prepend JSON trigger to avoid thinking
+prompt = "Output JSON:\\n" + prompt
+text_parts = []
+for r in stream_generate(model, tokenizer, prompt, max_tokens=2048):
+    if hasattr(r, "text"):
+        text_parts.append(r.text)
+    elif isinstance(r, str):
+        text_parts.append(r)
+response = "".join(text_parts)
+# Strip the trigger from response
+if response.startswith("Output JSON:\\n"):
+    response = response[13:]
+print(response, flush=True)
+''')
+        script_path = sf.name
+    
+    # Write prompt file
+    with open(prompt_file, 'w') as f:
+        f.write(prompt)
+    
     try:
-        logger.debug(f"Running command: {' '.join(cmd[:6])}...")
         result = subprocess.run(
-            cmd,
+            UV_RUN + [str(VENV_PYTHON), script_path],
             capture_output=True,
             text=True,
             timeout=600,
-            cwd=str(model_path.parent),
         )
-        if result.returncode == 0:
-            logger.info(f"MLX call successful, got {len(result.stdout)} chars")
-            if not result.stdout.strip():
-                logger.warning("MLX returned empty stdout")
-            return result.stdout.strip()
+        stdout = result.stdout
+        stderr = result.stderr
+        
+        # Debug
+        stdout_repr = repr(stdout[:100]) if stdout else "EMPTY"
+        logger.debug(f"MLX result: rc={result.returncode}, stdout={stdout_repr}")
+        
+        if result.returncode == 0 and stdout.strip():
+            logger.info(f"MLX generate successful, got {len(stdout.strip())} chars")
+            return stdout.strip()
+        elif stdout.strip():
+            logger.info(f"MLX generated despite rc={result.returncode}, got {len(stdout.strip())} chars")
+            return stdout.strip()
         else:
-            logger.warning(
-                f"MLX command failed with return code {result.returncode}")
-            if result.stderr:
-                logger.warning(f"MLX stderr: {result.stderr[:500]}")
-    except subprocess.TimeoutExpired:
-        logger.error("MLX call timed out after 600s")
+            logger.warning(f"MLX failed (rc={result.returncode}): {stderr[:300] if stderr else 'no output'}")
+            return None
     except Exception as e:
-        logger.debug(f"MLX call failed: {e}")
+        logger.error(f"MLX generate failed: {type(e).__name__}: {e}")
+        return None
+    finally:
+        try:
+            os.unlink(script_path)
+            os.unlink(prompt_file)
+        except:
+            pass
 
     # Fallback: main.py
     main_py = model_path / "main.py"
@@ -241,7 +287,10 @@ def call(
     should be handled by the caller (e.g. model_eval.py).
     """
     import time
-    from .osaurus_lib import extract_json
+    from .osaurus_lib import extract_json, apply_model_quirks
+
+    # Apply model-specific quirks
+    messages = apply_model_quirks(messages, model)
 
     result = {
         "model": model,

@@ -247,22 +247,25 @@ def build_fixed_system_prompt():
     )
 
     return f"""
+    Output JSON now.
+
     Act as a creative planning agent for family activities in {CITY}/{REGION}.
-    You must output ONLY valid JSON. Do not include markdown formatting or conversational text.
+    Output ONLY valid JSON. No markdown, no conversational text.
 
-    Constraints:
-    - Target: {CHILDREN_STR}. Must accommodate all simultaneously.
-    - Exclude: {exclusion_string}.
-    - Weather Logic: Check the daily forecast. Only recommend outdoor activities on days where the weather is 'Clear'. If a day has precipitation, activities for that day MUST be indoor.
-    - Diversity: Provide a random, diverse mix of 10 year-round places to visit to ensure randomization and discovery of new places.
-
-    Expected JSON Schema:
+    Schema - MANDATORY (every activity must have ALL 5 fields):
     {{
       "fixed_activities": [
         {{"name": "...", "location": "...", "target_ages": "...", "price": "...", "weather": "..."}}
       ]
     }}
-    Extract exactly 10 valid activities.
+
+    CRITICAL: Each activity object MUST contain ALL 5 fields: name, location, target_ages, price, weather.
+
+    Constraints:
+    - Target: {CHILDREN_STR}. Must accommodate all simultaneously.
+    - Exclude: {exclusion_string}.
+    - Weather: use "outdoor" or "indoor" (not "outdoor/Clear")
+    - Exactly 10 items required
     """
 
 
@@ -281,21 +284,24 @@ def build_fixed_user_prompt(dates_str, weather_str, venues_str):
 
 def build_transient_system_prompt():
     return f"""
+    Output JSON now.
+
     Act as a data-extraction agent for family events in {CITY}/{REGION}.
-    You must output ONLY valid JSON. Do not include markdown formatting or conversational text.
+    Output ONLY valid JSON. No markdown, no conversational text.
 
-    Constraints:
-    - Target: {CHILDREN_STR}. Must accommodate all simultaneously or in parallel zones.
-    - Weather Logic: Check the daily forecast. Only recommend outdoor events on days where the weather is 'Clear'. If a day has precipitation, events for that day MUST be indoor.
-    - Temporal Logic: Verify the temporal logic of the events provided. Reject events tied to holidays or seasons that do not occur during the provided dates.
-
-    Expected JSON Schema:
+    Schema - MANDATORY (every event must have ALL 7 fields):
     {{
       "transient_events": [
         {{"name": "...", "location": "...", "target_ages": "...", "price": "...", "duration": "...", "weather": "...", "day": "..."}}
       ]
     }}
-    Extract up to 10 valid events from the provided context.
+
+    CRITICAL: Each event object MUST contain ALL 7 fields: name, location, target_ages, price, duration, weather, day.
+
+    Constraints:
+    - Target: {CHILDREN_STR}. Must accommodate all simultaneously or in parallel zones.
+    - Weather: use "outdoor" or "indoor" (not "outdoor/Clear")
+    - Day: Friday, Saturday, or Sunday
     """
 
 
