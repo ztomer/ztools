@@ -247,26 +247,24 @@ def fetch_fixed_venues(year, month_name):
 
 def scrape_review_score(place_name):
     try:
-        query = f'"{place_name}" Vaughan Toronto Google reviews rating'
-        results = DDGS().text(query, max_results=3)
-        combined_text = " ".join([r.get("body", "") for r in results])
+        query = f'"{place_name}" Toronto reviews rating'
+        results = list(DDGS().text(query, max_results=5))
+        combined_text = " ".join([r.get("title", "") + " " + r.get("body", "") for r in results])
 
-        match = re.search(
-            r"([1-4]\.\d|5\.0)(?:\/5|\s*stars?|\s*out of 5)",
-            combined_text,
-            re.IGNORECASE,
-        )
+        match = re.search(r"([1-4]\.\d|5\.0)(?:\/5|\s*stars?)", combined_text, re.IGNORECASE)
         if match:
             return float(match.group(1))
 
-        match_fallback = re.search(
-            r"rating[^\d]*([1-4]\.\d|5\.0)", combined_text, re.IGNORECASE
-        )
+        match_fallback = re.search(r"rating[^\d]*([1-4]\.\d|5\.0)", combined_text, re.IGNORECASE)
         if match_fallback:
             return float(match_fallback.group(1))
 
-    except Exception:
-        pass
+        match_yelp = re.search(r"(\d\.\d)\s*stars?", combined_text, re.IGNORECASE)
+        if match_yelp:
+            return float(match_yelp.group(1))
+
+    except Exception as e:
+        print(f"[WARN] scrape failed for {place_name[:20]}: {e}")
     return 0.0
 
 
