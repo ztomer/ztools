@@ -254,19 +254,28 @@ def fetch_fixed_venues(year, month_name):
 
 
 def scrape_review_score(place_name):
-    try:
-        query = f'"{place_name}" rating review 5 stars'
-        results = list(DDGS().text(query, max_results=5))
-        combined = " ".join([r.get("title", "") + " " + r.get("body", "") for r in results])
+    """Scrape review score with rate limiting."""
+    import time
+    for attempt in range(3):
+        try:
+            time.sleep(0.5)  # Rate limit: max 2 queries/second
+            query = f'"{place_name}" rating review 5 stars'
+            results = list(DDGS().text(query, max_results=5))
+            combined = " ".join([r.get("title", "") + " " + r.get("body", "") for r in results])
 
-        match = re.search(r"([0-4]\.\d)\s*/?\s*5", combined, re.IGNORECASE)
-        if match:
-            return float(match.group(1))
-        match2 = re.search(r"rating[:\s]*([0-4]\.\d)", combined, re.IGNORECASE)
-        if match2:
-            return float(match2.group(1))
-    except Exception:
-        pass
+            match = re.search(r"([0-4]\.\d)\s*/?\s*5", combined, re.IGNORECASE)
+            if match:
+                return float(match.group(1))
+            match2 = re.search(r"rating[:\s]*([0-4]\.\d)", combined, re.IGNORECASE)
+            if match2:
+                return float(match2.group(1))
+            break  # Success or empty, don't retry
+        except Exception as e:
+            if "429" in str(e) or "rate" in str(e).lower():
+                time.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                break
+    return 0.0
     return 0.0
 
 

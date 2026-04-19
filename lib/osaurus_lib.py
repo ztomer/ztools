@@ -215,22 +215,33 @@ def _extract_json_only(content: str) -> Optional[str]:
 
 
 def extract_json(content: str) -> Union[Dict[str, Any], List[Any], None]:
-    """Extract JSON from content - handles plain text lists too."""
+    """Extract JSON from content - handles plain text lists, normalizes keys."""
     import json
-    json_str = _extract_json_only(content)
 
+    # Try JSON first
+    json_str = _extract_json_only(content)
     if json_str:
         try:
-            return json.loads(json_str)
+            data = json.loads(json_str)
+            return normalize_keys(data)
         except json.JSONDecodeError:
             pass
 
-    # If no JSON found or parsing fails, try to parse plain text numbered list
-    return _extract_plain_list(content)
+    # Try plain text list
+    data = _extract_plain_list(content)
+    if data:
+        return normalize_keys(data)
+
+    # Try text normalization
+    data = normalize_text_output(content)
+    if data:
+        return normalize_keys(data)
+
+    return None
 
 
 def _extract_plain_list(content: str) -> Optional[List[Dict[str, Any]]]:
-    """Extract items from plain text like '1. Apple\\n2. Banana'."""
+    """Extract items from plain text like '1. Apple\n2. Banana'."""
     if not content:
         return None
 
@@ -251,6 +262,108 @@ def _extract_plain_list(content: str) -> Optional[List[Dict[str, Any]]]:
             items.append({"name": line})
 
     return items if items else None
+
+
+# ==========================================================
+# POST-PROCESSING: Model-specific normalizations
+# ==========================================================
+
+# Key normalizations for alternate model schemas
+KEY_NORMALIZATIONS = {
+    # Alternate identity keys
+    "event": "name",
+    "title": "activity",
+    "place": "name",
+    # Alternate location keys
+    "venue": "location",
+    "address": "location",
+    "where": "location",
+    # Alternate time keys
+    "date": "day",
+    "when": "day",
+    "time": "duration",
+    # Alternate audience keys
+    "age_group": "target_ages",
+    "ages": "target_ages",
+    "audience": "target_ages",
+    "who": "target_ages",
+    # Alternate price keys
+    "cost": "price",
+    "pricing": "price",
+    # Alternate weather keys
+    "type": "weather",
+    "setting": "weather",
+    "indoor_outdoor": "weather",
+    # Alternate activity keys
+    "year_round_activities": "fixed_activities",
+    "activities": "fixed_activities",
+    "limited_time_events": "transient_events",
+}
+
+
+def normalize_keys(data: Any) -> Any:
+    """Normalize alternate key names to standard schema."""
+    if not data:
+        return data
+
+    if isinstance(data, list):
+        return [normalize_keys(item) for item in data]
+
+    if isinstance(data, dict):
+        result = {}
+        for key, value in data.items():
+            new_key = KEY_NORMALIZATIONS.get(key, key)
+            result[new_key] = normalize_keys(value)
+        return result
+
+    return data
+
+
+def normalize_text_output(text_output: str) -> List[Dict[str, Any]]:
+    """Convert formatted text output to JSON objects.
+
+    Handles outputs like:
+    - "1. Item - Location - Ages - Price"
+    - Markdown tables
+    - "Name (Location): details"
+    """
+    if not text_output:
+        return []
+
+    items = []
+
+    # Pattern: Numbered/bulleted items "1. Name: details" or "1. Name - details"
+    for line in text_output.split("\n"):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        # Extract name and details
+        match = re.match(r"^\d+[\.\)]\s*([^\-:?]+)(?:\s*[-:]\s*(.+))?$", line)
+        if not match:
+            match = re.match(r"^-\s*([^\-:?]+)(?:\s*[-:]\s*(.+))?$", line)
+
+        if match:
+            name = (match.group(1) or "").strip()
+            details = (match.group(2) or "").strip() if match.lastindex and match.group(2) else ""
+
+            if name and not name.startswith("*"):
+                item = {"name": name}
+                parts = [p.strip() for p in re.split(r"[-:,]", details) if p.strip()] if details else []
+
+                # Map: location, target_ages, price, weather
+                if len(parts) > 0 and parts[0]:
+                    item["location"] = parts[0]
+                if len(parts) > 1 and parts[1]:
+                    item["target_ages"] = parts[1]
+                if len(parts) > 2 and parts[2]:
+                    item["price"] = parts[2]
+                if len(parts) > 3 and parts[3]:
+                    item["weather"] = parts[3]
+
+                items.append(item)
+
+    return items
 
 
 

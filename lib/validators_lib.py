@@ -1,5 +1,6 @@
 """Validators for model evaluation tasks."""
 
+import re
 from typing import Tuple, List, Dict, Any
 from .content_processing import strip_backtick_value
 
