@@ -167,24 +167,32 @@ def fetch_weather(friday, sunday):
 
 
 def fetch_transient_events(dates_str, year, month_name):
+    def safe_search(q, retries=3):
+        for attempt in range(retries):
+            try:
+                results = list(DDGS().text(q, max_results=8))
+                return results
+            except Exception as e:
+                if "429" in str(e) or "rate" in str(e).lower():
+                    import time
+                    time.sleep(2 ** attempt)
+                else:
+                    break
+        return []
+
     try:
-        # Focused searches: specific venues + event listing pages
-        # Each result should have dates/prices embedded
         queries = [
-            "Ontario Science Centre family workshops April 26 2026",
+            "Ontario Science Centre family workshops April 2026",
             "Toronto Zoo special events April 2026",
-            "LEGOLAND Discovery Centre Toronto April May 2026 events",
+            "LEGOLAND Discovery Centre Toronto April May 2026",
             "Royal Ontario Museum ROM family programs April 2026",
             "Vaughan community centres kids April 2026",
         ]
 
         all_results = []
         for q in queries:
-            try:
-                results = list(DDGS().text(q, max_results=8))
-                all_results.extend(results)
-            except Exception as e:
-                print(f"[WARN] Query failed: {q[:30]}... - {e}")
+            results = safe_search(q)
+            all_results.extend(results)
 
         seen = set()
         unique_results = []
@@ -247,24 +255,18 @@ def fetch_fixed_venues(year, month_name):
 
 def scrape_review_score(place_name):
     try:
-        query = f'"{place_name}" Toronto reviews rating'
+        query = f'"{place_name}" rating review 5 stars'
         results = list(DDGS().text(query, max_results=5))
-        combined_text = " ".join([r.get("title", "") + " " + r.get("body", "") for r in results])
+        combined = " ".join([r.get("title", "") + " " + r.get("body", "") for r in results])
 
-        match = re.search(r"([1-4]\.\d|5\.0)(?:\/5|\s*stars?)", combined_text, re.IGNORECASE)
+        match = re.search(r"([0-4]\.\d)\s*/?\s*5", combined, re.IGNORECASE)
         if match:
             return float(match.group(1))
-
-        match_fallback = re.search(r"rating[^\d]*([1-4]\.\d|5\.0)", combined_text, re.IGNORECASE)
-        if match_fallback:
-            return float(match_fallback.group(1))
-
-        match_yelp = re.search(r"(\d\.\d)\s*stars?", combined_text, re.IGNORECASE)
-        if match_yelp:
-            return float(match_yelp.group(1))
-
-    except Exception as e:
-        print(f"[WARN] scrape failed for {place_name[:20]}: {e}")
+        match2 = re.search(r"rating[:\s]*([0-4]\.\d)", combined, re.IGNORECASE)
+        if match2:
+            return float(match2.group(1))
+    except Exception:
+        pass
     return 0.0
 
 
@@ -279,31 +281,17 @@ def build_fixed_system_prompt():
     )
 
     return f"""
-    Output JSON now.
+    Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
 
-    Act as a creative planning agent for family activities in {CITY}/{REGION}.
-    Output ONLY valid JSON. No markdown, no conversational text.
+    Extract 10 popular Toronto/Vaughan venues for families with kids ages 4-12.
+    Include location (city only, e.g. "Vaughan, ON"), target_ages, price in CAD, weather.
 
-    Schema - MANDATORY (every activity must have ALL 5 fields):
-    {{
-      "fixed_activities": [
-        {{"name": "...", "location": "...", "target_ages": "...", "price": "...", "weather": "..."}}
-      ]
-    }}
+    MANDATORY default values:
+    - target_ages: "6-13 years" (default for kids venues)
+    - price: $18-35 per child for indoor play, free-$25 for museums/parks
+    - weather: "indoor" (default for April in Toronto)
 
-    CRITICAL: Use EXACT key "fixed_activities" - NO other keys. Each object MUST have: name, location, target_ages, price, weather.
-
-    EXTRACTION RULE:
-    - "at X" → location = X
-    - Prices like "$25" → use as price
-    - If no price → estimate based on typical costs
-    - If no target_ages → use "6-13" as default for kids activities
-
-    Constraints:
-    - Target: {CHILDREN_STR}. Must accommodate all simultaneously.
-    - Exclude: {exclusion_string}.
-    - Weather: use "outdoor" or "indoor"
-    - Output ONLY the JSON - no explanation
+    Never leave any field empty. Use defaults if not found.
     """
 
 
@@ -322,30 +310,19 @@ def build_fixed_user_prompt(dates_str, weather_str, venues_str):
 
 def build_transient_system_prompt():
     return f"""
-    Output JSON now.
+    Output JSON now. Use EXACT schema: {{"transient_events": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}}]}}
 
-    Act as a data-extraction agent for family events in {CITY}/{REGION}.
-    Output ONLY valid JSON. No markdown, no conversational text.
+    Based on your knowledge of Toronto/Vaughan family events and the provided context, extract 5+ events for April 24-26, 2026.
 
-    Schema - MANDATORY (every event must have ALL 7 fields):
-    {{
-      "transient_events": [
-        {{"name": "...", "location": "...", "target_ages": "...", "price": "...", "duration": "...", "weather": "...", "day": "..."}}
-      ]
-    }}
+    MANDATORY default values if not in context:
+    - target_ages: "6-13 years" (default for kids activities)
+    - price: use typical family pricing (adults ~$25-40, kids ~$15-25, family packages ~$80-120)
+    - duration: "2-3 hours" is standard for workshops/events
+    - weather: "indoor" (most venues are indoors in April)
+    - day: infer from the event description or use random for Fri/Sat/Sun
 
-    CRITICAL: Use EXACT key "transient_events" - NO other keys. Output that exact schema.
-
-    EXTRACTION RULE: Extract ANY event that mentions dates in April 2026:
-    - Event name → use "name"
-    - Location info → use "location"
-    - Date info → use "day" (Friday/Saturday/Sunday only for April 24-26)
-    - Duration/Price → fabricate reasonable estimates if not in data
-
-    Constraints:
-    - Target: {CHILDREN_STR}. Must accommodate all simultaneously.
-    - Weather: use "outdoor" or "indoor"
-    - Output ONLY the JSON - no explanation
+    Examples:
+    {{"name": "Science Workshop", "location": "Ontario Science Centre, Toronto", "target_ages": "6-12 years", "price": "$25 per child", "duration": "2 hours", "weather": "indoor", "day": "Saturday"}}
     """
 
 
