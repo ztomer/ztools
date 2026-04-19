@@ -107,19 +107,25 @@ def call_mlx(model_path: Path, prompt: str) -> Optional[str]:
         return None
 
     logger.debug(f"Calling MLX model at {model_path}")
-    
+
     import tempfile
     import base64
-    
+    import uuid
+
     model_path_str = str(model_path)
     model_parent = str(model_path.parent)
-    
-    # Write prompt to separate temp file to avoid escaping
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as pf:
+
+    # Use unique persistent files for debugging
+    debug_dir = Path("/Users/ztomer/Projects/ztools/.mlx_debug")
+    debug_dir.mkdir(exist_ok=True)
+    uid = uuid.uuid4().hex[:8]
+    prompt_file = str(debug_dir / f"prompt_{uid}.txt")
+    script_path = str(debug_dir / f"script_{uid}.py")
+
+    with open(prompt_file, 'w') as pf:
         pf.write(prompt)
-        prompt_file = pf.name
-    
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as sf:
+
+    with open(script_path, 'w') as sf:
         sf.write(f'''
 import os
 os.chdir("{model_parent}")
@@ -144,31 +150,21 @@ if response.startswith("Output JSON:\\n"):
     response = response[13:]
 print(response, flush=True)
 ''')
-        script_path = sf.name
-    
-    # Write prompt file
-    with open(prompt_file, 'w') as f:
-        f.write(prompt)
     
     try:
+        cmd = UV_RUN + [script_path]
         result = subprocess.run(
-            UV_RUN + [str(VENV_PYTHON), script_path],
+            cmd,
             capture_output=True,
             text=True,
             timeout=600,
         )
         stdout = result.stdout
         stderr = result.stderr
-        
-        # Debug
-        stdout_repr = repr(stdout[:100]) if stdout else "EMPTY"
-        logger.debug(f"MLX result: rc={result.returncode}, stdout={stdout_repr}")
-        
+
         if result.returncode == 0 and stdout.strip():
-            logger.info(f"MLX generate successful, got {len(stdout.strip())} chars")
             return stdout.strip()
         elif stdout.strip():
-            logger.info(f"MLX generated despite rc={result.returncode}, got {len(stdout.strip())} chars")
             return stdout.strip()
         else:
             logger.warning(f"MLX failed (rc={result.returncode}): {stderr[:300] if stderr else 'no output'}")
@@ -176,12 +172,6 @@ print(response, flush=True)
     except Exception as e:
         logger.error(f"MLX generate failed: {type(e).__name__}: {e}")
         return None
-    finally:
-        try:
-            os.unlink(script_path)
-            os.unlink(prompt_file)
-        except:
-            pass
 
     # Fallback: main.py
     main_py = model_path / "main.py"

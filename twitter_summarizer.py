@@ -52,6 +52,7 @@ MLX_PREFERRED = [
 # ---------------------------------------------------------------------------
 
 STATE_FILE = Path.home() / ".twitter_summary_state.json"
+DEBUG_CACHE_FILE = Path.home() / ".twitter_summary_debug_cache.json"
 DEFAULT_OUTPUT_DIR = Path.home() / "Documents" / "twitter_summaries"
 DEFAULT_OLLAMA_URL = "http://localhost:1337"
 
@@ -90,17 +91,22 @@ def _get_chrome_keychain_key() -> bytes:
 
 
 def _decrypt_cookie(encrypted_value: bytes, key: bytes) -> str:
-
     if not encrypted_value or encrypted_value[:3] != b"v10":
         return encrypted_value.decode("utf-8", errors="replace")
 
-    iv = encrypted_value[3:19]
-    ciphertext = encrypted_value[19:]
-    cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
-    decryptor = cipher.decryptor()
-    raw = decryptor.update(ciphertext) + decryptor.finalize()
-    pad = raw[-1]
-    return raw[16:-pad].decode("utf-8", errors="replace")
+    if not all((Cipher, algorithms, modes)):
+        return encrypted_value.decode("utf-8", errors="replace")
+
+    try:
+        iv = encrypted_value[3:19]
+        ciphertext = encrypted_value[19:]
+        cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+        decryptor = cipher.decryptor()
+        raw = decryptor.update(ciphertext) + decryptor.finalize()
+        pad = raw[-1]
+        return raw[16:-pad].decode("utf-8", errors="replace")
+    except Exception:
+        return encrypted_value.decode("utf-8", errors="replace")
 
 
 def get_chrome_cookies(
@@ -168,6 +174,27 @@ def save_state(state: dict) -> None:
     STATE_FILE.write_text(json.dumps(state, indent=2))
 
 
+def load_debug_cache() -> list[dict]:
+    if DEBUG_CACHE_FILE.exists():
+        try:
+            tweets = json.loads(DEBUG_CACHE_FILE.read_text())
+            for tweet in tweets:
+                if "created_at" in tweet and isinstance(tweet["created_at"], str):
+                    tweet["created_at"] = datetime.fromisoformat(tweet["created_at"])
+            return tweets
+        except (json.JSONDecodeError, OSError):
+            pass
+    return []
+
+
+def save_debug_cache(tweets: list[dict]) -> None:
+    def serialize(obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+    DEBUG_CACHE_FILE.write_text(json.dumps(tweets, indent=2, default=serialize))
+
+
 # ---------------------------------------------------------------------------
 # Argument parsing
 # ---------------------------------------------------------------------------
@@ -207,6 +234,11 @@ def parse_args() -> argparse.Namespace:
         "--clean",
         action="store_true",
         help="Delete all .md files in the target output and exit",
+    )
+    p.add_argument(
+        "--use-cache",
+        action="store_true",
+        help="Use cached tweets from last run instead of fetching new ones",
     )
     return p.parse_args()
 
@@ -455,7 +487,7 @@ def summarize_with_llm(
     )
 
     models = get_available_models()
-    target_model = get_best_model("summarize") or model
+    target_model = model if model else get_best_model("summarize")
     if models and target_model not in models:
         target_model = select_best_model(models) or target_model
 
@@ -574,10 +606,20 @@ def main() -> None:
     since_time = resolve_since_time(args.since, state)
     until_time = datetime.now(timezone.utc)
 
-    tweets = collect_tweets_via_browser(since_time, debug=args.debug)
-    if not tweets:
-        print("[!] No tweets found.")
-        sys.exit(0)
+    if args.use_cache:
+        tweets = load_debug_cache()
+        if tweets:
+            print(f"[cache] Using {len(tweets)} cached tweets")
+        else:
+            print("[!] No cached tweets found. Run without --use-cache first.")
+            sys.exit(1)
+    else:
+        tweets = collect_tweets_via_browser(since_time, debug=args.debug)
+        if not tweets:
+            print("[!] No tweets found.")
+            sys.exit(0)
+        save_debug_cache(tweets)
+        print(f"[cache] Cached {len(tweets)} tweets")
 
     summary = summarize_with_llm(
         tweets, args.base_url, args.model, api_key=args.api_key

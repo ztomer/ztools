@@ -108,16 +108,34 @@ def is_valid_list_item(item: Any, required_fields: List[str] = None) -> bool:
 
 
 def has_item_details(item: Dict[str, Any], detail_fields: List[str] = None) -> bool:
-    """Check if dict item has required detail fields."""
+    """Check if dict item has required detail fields.
+    
+    Uses flexible key matching - accepts alternate key names from different models.
+    """
     if detail_fields is None:
-        # Check for common detail fields used in our prompts
-        detail_fields = ["location", "weather", "price", "target_ages", "duration", "day"]
+        # Main detail fields from our schema + alternates Gemma uses
+        detail_fields = [
+            # Core identity
+            "name", "event", "title", "activity", "place",
+            # Location variants  
+            "location", "venue", "address", "where",
+            # Time variants
+            "day", "date", "when", "time", "duration",
+            # Audience variants
+            "target_ages", "age_group", "ages", "audience", "who",
+            # Price variants
+            "price", "cost", "pricing",
+            # Weather variants
+            "weather", "type", "indoor_outdoor",
+        ]
 
     if not isinstance(item, dict):
         return False
 
-    # Must have name first
-    if not (item.get("name") or item.get("activity")):
+    # Must have any identity field
+    name_fields = ["name", "event", "title", "activity", "place"]
+    has_name = any(item.get(f) for f in name_fields)
+    if not has_name:
         return False
 
     # Must have at least one detail field

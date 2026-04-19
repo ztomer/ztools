@@ -26,6 +26,8 @@ from .osaurus_lib import (
     clean_output,
     get_best_model,
     ensure_server,
+    panic_dump,
+    select_best_model,
 )
 from .mlx_lib import (
     find_mlx_model,

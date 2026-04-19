@@ -127,10 +127,15 @@ def get_base_url(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> str:
     return f"http://{host}:{port}"
 
 
-def get_models(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> List[str]:
+def get_models(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, api_key: str = "") -> List[str]:
     """Get available models."""
     try:
-        resp = requests.get(f"http://{host}:{port}/v1/models", timeout=10)
+        if host.startswith("http"):
+            url = f"{host}/v1/models"
+        else:
+            url = f"http://{host}:{port}/v1/models"
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        resp = requests.get(url, timeout=10, headers=headers)
         if resp.status_code == 200:
             return [m["id"] for m in resp.json().get("data", [])]
     except requests.exceptions.Timeout:
@@ -145,8 +150,12 @@ def get_models(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> List[str]:
 def is_server_running(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> bool:
     """Check if server is available."""
     try:
-        resp = requests.get(f"http://{host}:{port}/v1/models", timeout=3)
-        return resp.status_code == 200
+        if host.startswith("http"):
+            url = f"{host}/v1/models"
+        else:
+            url = f"http://{host}:{port}/v1/models"
+        resp = requests.get(url, timeout=3)
+        return resp.status_code in (200, 404)
     except requests.exceptions.Timeout:
         return False
     except requests.exceptions.ConnectionError:
@@ -462,15 +471,18 @@ def call_llm_api(
         payload["response_format"] = {"type": "json_object"}
 
     try:
+        if host.startswith("http"):
+            url = f"{host}/v1/chat/completions"
+        else:
+            url = f"http://{host}/v1/chat/completions"
         response = requests.post(
-            f"{host}/v1/chat/completions",
+            url,
             headers=headers,
             json=payload,
             timeout=timeout,
         )
         response.raise_for_status()
         data = response.json()
-
         return {
             "content": data["choices"][0]["message"]["content"],
             "usage": data.get("usage", {}),
@@ -580,3 +592,27 @@ def test_connection(
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+def panic_dump(content: str) -> None:
+    """Dump problematic content to a file for debugging."""
+    import tempfile
+    from pathlib import Path
+    dump_dir = Path.home() / "llm_dumps"
+    dump_dir.mkdir(exist_ok=True)
+    dump_file = dump_dir / f"panic_{int(time.time())}.txt"
+    dump_file.write_text(content or "(empty)")
+    logger.warning(f"Dumped problematic output to {dump_file}")
+
+
+def select_best_model(models: list, preferred: list = None) -> str:
+    """Select best model from available models based on preferred list."""
+    if not models:
+        return None
+    if preferred is None:
+        preferred = ["foundation", "qwen", "gemma"]
+    for pref in preferred:
+        for model in models:
+            if pref.lower() in model.lower():
+                return model
+    return models[0] if models else None

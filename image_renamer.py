@@ -219,7 +219,10 @@ def query_llm_for_filename(
 ) -> Optional[str]:
     """Query the LLM to generate a filename based on the OCR text."""
     prompt = PROMPT_TEXT_TO_FILENAME.format(text=text)
-    return call_llm_api(host, model, prompt, timeout=30, api_key=api_key)
+    messages = [{"role": "user", "content": prompt}]
+    from lib.osaurus_lib import call_llm_api as _call
+    result = _call(host, model, messages, timeout=30, api_key=api_key)
+    return result.get("content") if result else None
 
 
 def query_vlm_for_filename(

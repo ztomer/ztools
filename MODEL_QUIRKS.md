@@ -2,6 +2,17 @@
 
 > **Startup reference**: Read this file before running model_eval.py or making prompt/validator changes.
 
+## Tools
+
+### explore_model_quirks.py
+Systematically probe model behaviors to discover prompt patterns.
+
+```bash
+python3 explore_model_quirks.py <model_id> [timeout]
+```
+
+Tests multiple prompt approaches and recommends best one.
+
 ## Summary
 
 This document captures lessons learned from evaluating various LLM models for the ZTools eval pipeline.
@@ -20,12 +31,18 @@ This document captures lessons learned from evaluating various LLM models for th
 - **Required**: "Output JSON now." prefix in system prompt
 - **Why**: Prevents thinking/reasoning output that confuses JSON extraction
 
-### Gemma 4 Series (26B, 31B, E2B, E4B) ⚠️
-- **Status**: Partial success on JSON tasks
-- **Issue**: Resistant to JSON output even with explicit schema
-- **Works**: filename (100%), summarize (100%)
-- **Fails**: json (20-40%), detailed_json (20-40%)
-- **Behavior**: Outputs markdown/text even with strict JSON instructions
+### Gemma 4 Series (26B, 31B, E2B, E4B) ✅
+- **Status**: Fixed - now 80-100% on JSON tasks
+- **Works**: filename (100%), summarize (100%), detailed_json (100%), json (80%)
+- **Key finding**: Gemma uses DIFFERENT key names in outputs:
+  - `event` instead of `name`
+  - `age_group` instead of `target_ages`
+  - `date` instead of `day`
+- **Solution**: Validator uses flexible key matching (has_item_details)
+- **Library quirks** (in osaurus_lib.py apply_model_quirks):
+  - Adds "IMPORTANT: DATA EXTRACTION..." to system for gemma4
+  - Replaces "Execute the task" → "Extract to JSON"
+  - Uses "Data:" instead of "Current Context:"
 
 ---
 
