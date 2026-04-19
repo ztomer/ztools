@@ -29,25 +29,24 @@ console = Console()
 # ==========================================================
 
 WEEKEND_SYS_TRANSIENT = """
-Output JSON now.
+Extract JSON from context. 10 items with name, location, target_ages, price, duration, weather, day.
 
-Act as a data-extraction agent for family events in Vaughan/Toronto.
-Output ONLY valid JSON. No markdown, no conversational text.
+Default values if not in context:
+- target_ages: "6-13 years"
+- price: $20-30 or Free
+- duration: "2-3 hours"
+- weather: "indoor"
+- day: Friday/Saturday/Sunday
+"""
 
-Schema - MANDATORY (every event must have ALL of these fields):
-{
-    "transient_events": [
-    {"name": "Spring Festival", "location": "Downsview Park", "target_ages": "6-13", "price": "free", "duration": "3 hours", "weather": "outdoor", "day": "Friday"}
-    ]
-}
+WEEKEND_SYS_FIXED = """
+Extract JSON from context. 10 items with name, location, target_ages, price, weather.
 
-CRITICAL: Each event object MUST contain ALL 7 fields. Missing any field will result in failure.
-
-Rules:
-- Output ONLY JSON - no explanation before or after
-- Weather: use "outdoor" or "indoor"
-- Day: Friday, Saturday, or Sunday
-- Filter by dates April 20-22, 2026 only
+Default values if not in context:
+- target_ages: "6-13 years"
+- price: $20-30 or Free
+- weather: "indoor"
+- location: city name
 """
 WEEKEND_USR_TRANSIENT = """
 Current Context for the upcoming weekend:
@@ -61,7 +60,7 @@ High-Signal Transient Events (Filter these strictly! Ensure they match the Dates
 - Indoor Coding Workshop for Kids: Learn Python. April 21. Ages 8-14.
 - Outdoor Movie Night: Watch a movie under the stars. April 21. All ages.
 - Farmers Market at Maple Village: Fresh produce and local crafts. April 20. All ages.
-- pottery Wheel Workshop: Create clay art. April 22. Ages 12+.
+- Pottery Wheel Workshop: Create clay art. April 22. Ages 12+.
 - Puppet Show at Vaughan Library: "The Magical Forest". April 20. Ages 4-10.
 - Kids Yoga in the Park: Morning yoga for families. April 20. Ages 5-12.
 - Magic Show at Markham Theatre: Illusionist show. April 21. All ages.
@@ -69,31 +68,6 @@ High-Signal Transient Events (Filter these strictly! Ensure they match the Dates
 - Board Game Marathon at Community Centre: Family games. April 21. All ages.
 - Pizza Making Class: Learn to make pizza. April 22. Ages 8-16.
 - Easter Egg Hunt at Raccoon Creek: Egg hunt and crafts. April 20. Ages 3-10.
-
-Execute the task based on the system instructions and the provided context. Output ONLY JSON.
-"""
-
-WEEKEND_SYS_FIXED = """
-Output JSON now.
-
-Act as a creative planning agent for family activities in Vaughan/Toronto.
-Output ONLY valid JSON. No markdown, no conversational text.
-
-Schema - MANDATORY (every activity must have ALL of these fields):
-{
-    "fixed_activities": [
-    {"name": "Vaughan Sports Arena", "location": "Vaughan", "target_ages": "6-13", "price": "$$", "weather": "indoor"}
-    ]
-}
-
-CRITICAL: Each activity object MUST contain ALL 5 fields. Missing any field will result in failure.
-
-Rules:
-- Output ONLY JSON - no explanation before or after
-- Exactly 10 items required
-- Weather: use "outdoor" or "indoor"
-- EXCLUDE: Art of the Brick, Reptilia, ROM, Ripley's, Little Canada, LEGOLAND, CN Tower, Museum of Illusions, Canada's Wonderland, Ontario Science Centre, Toronto Zoo
-- Outdoor ONLY on Clear days; indoor otherwise
 """
 WEEKEND_USR_FIXED = """
 Current Context for the upcoming weekend:
