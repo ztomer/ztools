@@ -618,8 +618,6 @@ def main() -> None:
         if not tweets:
             print("[!] No tweets found.")
             sys.exit(0)
-        save_debug_cache(tweets)
-        print(f"[cache] Cached {len(tweets)} tweets")
 
     summary = summarize_with_llm(
         tweets, args.base_url, args.model, api_key=args.api_key

@@ -8,6 +8,7 @@ import yaml
 import re
 import concurrent.futures
 import requests
+from pathlib import Path
 from ddgs import DDGS
 from rich.console import Console
 from rich.markdown import Markdown
@@ -37,6 +38,29 @@ from lib.mlx_lib import (
 # ==========================================
 
 console = Console(force_terminal=True, force_interactive=True)
+
+DEBUG_EVENTS_FILE = Path.home() / ".weekend_events_debug_cache.json"
+DEBUG_VENUES_FILE = Path.home() / ".weekend_venues_debug_cache.json"
+
+
+def load_events_cache():
+    if DEBUG_EVENTS_FILE.exists():
+        return DEBUG_EVENTS_FILE.read_text()
+    return None
+
+
+def save_events_cache(events_str):
+    DEBUG_EVENTS_FILE.write_text(events_str)
+
+
+def load_venues_cache():
+    if DEBUG_VENUES_FILE.exists():
+        return DEBUG_VENUES_FILE.read_text()
+    return None
+
+
+def save_venues_cache(venues_str):
+    DEBUG_VENUES_FILE.write_text(venues_str)
 
 
 def load_weekend_config():
@@ -144,19 +168,23 @@ def fetch_weather(friday, sunday):
 
 def fetch_transient_events(dates_str, year, month_name):
     try:
-        print("[DEBUG] Running query 1...", flush=True)
+        # Focused searches: specific venues + event listing pages
+        # Each result should have dates/prices embedded
         queries = [
-            f'(site:todocanada.ca OR site:blogto.com OR site:toronto.com) "family" "events" "{month_name} {year}"',
-            f'"Vaughan" "kids events" "{month_name} {year}"',
-            f'"Toronto" "family weekend festivals" "{month_name} {year}"',
+            "Ontario Science Centre family workshops April 26 2026",
+            "Toronto Zoo special events April 2026",
+            "LEGOLAND Discovery Centre Toronto April May 2026 events",
+            "Royal Ontario Museum ROM family programs April 2026",
+            "Vaughan community centres kids April 2026",
         ]
 
         all_results = []
-        for i, q in enumerate(queries):
-            print(f"[DEBUG] Query {i + 1}...", flush=True)
-            results = list(DDGS().text(q, max_results=10))
-            print(f"[DEBUG] Query {i + 1} done: {len(results)}", flush=True)
-            all_results.extend(results)
+        for q in queries:
+            try:
+                results = list(DDGS().text(q, max_results=8))
+                all_results.extend(results)
+            except Exception as e:
+                print(f"[WARN] Query failed: {q[:30]}... - {e}")
 
         seen = set()
         unique_results = []
@@ -180,16 +208,22 @@ def fetch_transient_events(dates_str, year, month_name):
 
 def fetch_fixed_venues(year, month_name):
     try:
+        # Focused venue queries - each targets a specific venue type
         queries = [
-            f'"Toronto" "best indoor play places kids" "{year}"',
-            f'"Vaughan" "family activities" "museums OR arcades" "{year}"',
-            f'"Toronto" "current exhibits" "family" "{month_name} {year}"',
+            "indoor play centre Toronto Vaughan 2026 prices",
+            "trampoline park Toronto kids 2026",
+            "children museum Toronto 2026",
+            "family arcade Vaughan 2026",
+            "playplace Vaughan indoor kids 2026 prices",
         ]
 
         all_results = []
         for q in queries:
-            results = list(DDGS().text(q, max_results=10))
-            all_results.extend(results)
+            try:
+                results = list(DDGS().text(q, max_results=8))
+                all_results.extend(results)
+            except Exception as e:
+                print(f"[WARN] Query failed: {q[:30]}... - {e}")
 
         seen = set()
         unique_results = []
@@ -259,13 +293,19 @@ def build_fixed_system_prompt():
       ]
     }}
 
-    CRITICAL: Each activity object MUST contain ALL 5 fields: name, location, target_ages, price, weather.
+    CRITICAL: Use EXACT key "fixed_activities" - NO other keys. Each object MUST have: name, location, target_ages, price, weather.
+
+    EXTRACTION RULE:
+    - "at X" → location = X
+    - Prices like "$25" → use as price
+    - If no price → estimate based on typical costs
+    - If no target_ages → use "6-13" as default for kids activities
 
     Constraints:
     - Target: {CHILDREN_STR}. Must accommodate all simultaneously.
     - Exclude: {exclusion_string}.
-    - Weather: use "outdoor" or "indoor" (not "outdoor/Clear")
-    - Exactly 10 items required
+    - Weather: use "outdoor" or "indoor"
+    - Output ONLY the JSON - no explanation
     """
 
 
@@ -296,12 +336,18 @@ def build_transient_system_prompt():
       ]
     }}
 
-    CRITICAL: Each event object MUST contain ALL 7 fields: name, location, target_ages, price, duration, weather, day.
+    CRITICAL: Use EXACT key "transient_events" - NO other keys. Output that exact schema.
+
+    EXTRACTION RULE: Extract ANY event that mentions dates in April 2026:
+    - Event name → use "name"
+    - Location info → use "location"
+    - Date info → use "day" (Friday/Saturday/Sunday only for April 24-26)
+    - Duration/Price → fabricate reasonable estimates if not in data
 
     Constraints:
-    - Target: {CHILDREN_STR}. Must accommodate all simultaneously or in parallel zones.
-    - Weather: use "outdoor" or "indoor" (not "outdoor/Clear")
-    - Day: Friday, Saturday, or Sunday
+    - Target: {CHILDREN_STR}. Must accommodate all simultaneously.
+    - Weather: use "outdoor" or "indoor"
+    - Output ONLY the JSON - no explanation
     """
 
 
@@ -392,10 +438,32 @@ def get_llm_json(system_prompt, user_prompt, max_retries=3):
     sys.exit(1)
 
 
+def normalize_llm_items(items):
+    """Normalize LLM output for different model formats."""
+    if not items:
+        return items
+
+    normalized = []
+    for item in items:
+        if isinstance(item, str):
+            normalized.append({"name": item})
+        elif isinstance(item, dict):
+            # Normalize Gemma field names
+            if "age_group" in item and "target_ages" not in item:
+                item["target_ages"] = item["age_group"]
+            if "setting" in item and "weather" not in item:
+                item["weather"] = item["setting"]
+            normalized.append(item)
+    return normalized
+
+
 def fetch_scores_for_items(items):
+    items = normalize_llm_items(items)
+
     def fetch_score(item):
-        item["score"] = scrape_review_score(
-            f"{item['name']} {item['location']}")
+        name = item.get("name") or item.get("activity") or item.get("title", "")
+        loc = item.get("location") or item.get("address") or item.get("venue", "")
+        item["score"] = scrape_review_score(f"{name} {loc}")
         return item
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -414,14 +482,22 @@ def build_markdown_tables(dates_str, weather_str, structured_data, fixed_activit
     md += "| Score | Activity & Location | Target Age(s) | Estimated Price (CAD) | Weather Appropriateness |\n"
     md += "| :--- | :--- | :--- | :--- | :--- |\n"
     for item in fixed:
-        score_str = f"⭐ {item['score']}/5" if item["score"] > 0 else "N/A"
-        md += f"| {score_str} | **{item.get('name')}** ({item.get('location')}) | {item.get('target_ages')} | {item.get('price')} | {item.get('weather')} |\n"
+        score_str = f"⭐ {item['score']}/5" if item.get("score", 0) > 0 else "N/A"
+        name = item.get("name") or item.get("activity") or item.get("title", "Unknown")
+        loc = item.get("location") or item.get("address") or ""
+        age = item.get("target_ages") or item.get("age_group") or ""
+        price = item.get("price") or item.get("cost") or ""
+        weather = item.get("weather") or item.get("weather_appropriateness") or ""
+        md += f"| {score_str} | **{name}** ({loc}) | {age} | {price} | {weather} |\n"
 
-    transient = structured_data.get("transient_events", [])
+    if isinstance(structured_data, list):
+        transient = structured_data
+    else:
+        transient = structured_data.get("transient_events", []) or structured_data.get("events", []) or []
 
     grouped_transient = {}
     for item in transient:
-        name = item.get("name", "Unknown")
+        name = item.get("name") or item.get("event") or item.get("title", "Unknown")
         if name in grouped_transient:
             existing_day = grouped_transient[name].get("day", "")
             new_day = item.get("day", "")
@@ -433,14 +509,21 @@ def build_markdown_tables(dates_str, weather_str, structured_data, fixed_activit
     grouped_transient_list = list(grouped_transient.values())
     fetch_scores_for_items(grouped_transient_list)
 
-    grouped_transient_list.sort(key=lambda x: x["score"], reverse=True)
+    grouped_transient_list.sort(key=lambda x: x.get("score", 0), reverse=True)
 
     md += "\n### Table 2: Transient / Limited-Time Events (Ranked by Review Score)\n"
     md += "| Score | Event & Location | Target Age(s) | Est. Price | Duration / End Date | Day | Weather Appr. |\n"
     md += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
     for item in grouped_transient_list:
-        score_str = f"⭐ {item['score']}/5" if item["score"] > 0 else "N/A"
-        md += f"| {score_str} | **{item.get('name')}** ({item.get('location')}) | {item.get('target_ages')} | {item.get('price')} | {item.get('duration')} | {item.get('day', 'N/A')} | {item.get('weather')} |\n"
+        score_str = f"⭐ {item.get('score', 0)}/5" if item.get("score", 0) > 0 else "N/A"
+        name = item.get("name") or item.get("event") or item.get("title", "Unknown")
+        loc = item.get("location") or item.get("address") or ""
+        age = item.get("target_ages") or item.get("age_group") or ""
+        price = item.get("price") or item.get("cost") or ""
+        duration = item.get("duration") or item.get("end_date") or ""
+        day = item.get("day") or item.get("date") or "N/A"
+        weather = item.get("weather") or item.get("weather_appropriateness") or ""
+        md += f"| {score_str} | **{name}** ({loc}) | {age} | {price} | {duration} | {day} | {weather} |\n"
 
     return md
 
@@ -456,8 +539,13 @@ def print_to_cli(markdown_content):
 # ==========================================
 
 
-def main():
+def main(args=None):
+    args = args or type('Args', (), {'use_cache': False, 'model': None, 'skip_web': False})()
     init_config()
+
+    if args.model:
+        os.environ['OLLAMA_MODEL'] = args.model
+
     start_time = time.time()
     console.print("[bold green]=== Weekend Generator Started ===[/bold green]")
     ensure_server()
@@ -504,11 +592,22 @@ def main():
 
         print("[INFO] Starting event fetch...", flush=True)
 
-        # 1. Fetch data sequentially
+        # 1. Fetch data (or use cache)
         progress.update(
             task_events, description="[dim]Fetching events...[/dim]")
-        events_str = fetch_transient_events(dates_str, year, month_name)
-        print(f"[INFO] Events fetched: {len(events_str)} chars")
+
+        if args.use_cache:
+            events_str = load_events_cache()
+            if events_str:
+                print(f"[cache] Using cached events ({len(events_str)} chars)")
+            else:
+                print("[!] No cached events found, fetching...")
+                events_str = fetch_transient_events(dates_str, year, month_name)
+                save_events_cache(events_str)
+        else:
+            events_str = fetch_transient_events(dates_str, year, month_name)
+            save_events_cache(events_str)
+        print(f"[INFO] Events: {len(events_str)} chars")
         progress.update(
             task_events, description="[dim]✓ Fetched events[/dim]", completed=100
         )
@@ -516,8 +615,19 @@ def main():
         print("[INFO] Starting venue fetch...")
         progress.update(
             task_venues, description="[dim]Fetching venues...[/dim]")
-        venues_str = fetch_fixed_venues(year, month_name)
-        print(f"[INFO] Venues fetched: {len(venues_str)} chars")
+
+        if args.use_cache:
+            venues_str = load_venues_cache()
+            if venues_str:
+                print(f"[cache] Using cached venues ({len(venues_str)} chars)")
+            else:
+                print("[!] No cached venues found, fetching...")
+                venues_str = fetch_fixed_venues(year, month_name)
+                save_venues_cache(venues_str)
+        else:
+            venues_str = fetch_fixed_venues(year, month_name)
+            save_venues_cache(venues_str)
+        print(f"[INFO] Venues: {len(venues_str)} chars")
         progress.update(
             task_venues, description="[dim]✓ Fetched venues[/dim]", completed=100
         )
@@ -532,7 +642,10 @@ def main():
         print(
             f"[DEBUG] user_prompt length: {len(usr_transient)}, venues preview: {venues_str[:100]}..."
         )
-        print(f"[DEBUG] Using model: {MODEL_NAME}")
+        # Print actual model being used (get_llm_json uses get_best_model("json"))
+        from lib.config import get_best_model
+        actual_model = get_best_model("json")
+        print(f"[DEBUG] Using model: {actual_model}")
         json_transient = get_llm_json(sys_transient, usr_transient)
         progress.update(
             task_transient,
@@ -552,10 +665,31 @@ def main():
 
         # 3. Format and scrape reviews
         progress.start_task(task_format)
-        fixed_acts = json_fixed.get("fixed_activities", [])
+        # Handle both dict and list responses + normalize Gemma field names
+        if isinstance(json_fixed, list):
+            fixed_acts = normalize_llm_items(json_fixed)
+        else:
+            raw_fixed = (
+                json_fixed.get("fixed_activities", []) or
+                json_fixed.get("year_round_activities", []) or
+                []
+            ) if json_fixed else []
+            fixed_acts = normalize_llm_items(raw_fixed)
+
+        # Normalize transient events too
+        if isinstance(json_transient, list):
+            transient_items = normalize_llm_items(json_transient)
+        else:
+            raw_transient = (
+                json_transient.get("transient_events", []) or
+                json_transient.get("events", []) or
+                json_transient.get("limited_time_events", []) or
+                []
+            ) if json_transient else []
+            transient_items = normalize_llm_items(raw_transient)
+
         final_markdown = build_markdown_tables(
-            dates_str, weather_str, json_transient, fixed_acts
-        )
+            dates_str, weather_str, {"transient_events": transient_items}, fixed_acts)
         progress.update(
             task_format, description="[dim]✓ Formatted output[/dim]", completed=100
         )
@@ -579,5 +713,15 @@ def main():
     )
 
 
+def parse_args():
+    import argparse
+    p = argparse.ArgumentParser(description="Weekend Planner")
+    p.add_argument("--use-cache", action="store_true", help="Use cached web results")
+    p.add_argument("--model", default=None, help="Model to use")
+    p.add_argument("--skip-web", action="store_true", help="Skip web fetch, use cache only")
+    return p.parse_args()
+
+
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    main(args)

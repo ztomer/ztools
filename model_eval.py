@@ -193,6 +193,7 @@ TASKS = {
         ],
         "validator": validate_detailed_json,
         "parse_json": True,
+        "source": WEEKEND_USR_TRANSIENT,
     },
     "detailed_json": {
         "messages": [
@@ -201,6 +202,7 @@ TASKS = {
         ],
         "validator": validate_detailed_json,
         "parse_json": True,
+        "source": WEEKEND_USR_FIXED,
     },
     "filename": {
         "messages": [
@@ -379,7 +381,10 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str) -> tuple[int,
             failure = "Could not parse JSON from output"
             diagnosis = _classify_failure(result, task_cfg, 0, failure)
             return 0, failure, diagnosis
-        validated = validator(parsed)
+
+        # Run validator with source check for quality
+        source = task_cfg.get("source", "")
+        validated = validator(parsed, source_text=source)
     else:
         content = result.get("content") or ""
         if not content:

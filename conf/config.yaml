@@ -1,12 +1,15 @@
 llm_url: http://localhost:1337
-default_model: gemma-4-31b-it-jang_4m
+default_model: qwen3.6-35b-a3b-mxfp4
 
 best_models:
-  think: gemma-4-31b-it-jang_4m
-  json: gemma-4-31b-it-jang_4m
-  detailed_json: gemma-4-31b-it-jang_4m
-  summarize: gemma-4-31b-it-jang_4m
-  filename: gemma-4-31b-it-jang_4m
+  # weekend_planner: qwen3.6 (best - real venue extraction in 2.5min)
+  # twitter_summarizer: gemma-4-31b (best summarization)
+  # Priority: quality 95%, speed 5% (speed as tie-breaker)
+  think: qwen3.6-35b-a3b-mxfp4
+  json: qwen3.6-35b-a3b-mxfp4
+  detailed_json: qwen3.6-35b-a3b-mxfp4
+  summarize: qwen3.6-35b-a3b-mxfp4
+  filename: foundation
   vlm: gemma-4-26b-a4b-it-4bit
 
 timeouts:

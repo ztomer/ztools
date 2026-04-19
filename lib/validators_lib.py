@@ -8,21 +8,27 @@ from .content_processing import strip_backtick_value
 # ==========================================================
 
 # JSON Validator scoring weights
-JSON_STRUCTURE_WEIGHT = 30      # Points for valid JSON structure
-JSON_COUNT_GOOD = 30            # Points for 10+ items
+JSON_STRUCTURE_WEIGHT = 20      # Points for valid JSON structure
+JSON_COUNT_GOOD = 25            # Points for 10+ items
 JSON_COUNT_OK = 15              # Points for 5+ items
-JSON_VALIDITY_WEIGHT = 40       # Points for valid item content
+JSON_VALIDITY_WEIGHT = 30        # Points for valid item content
 JSON_VALIDITY_THRESHOLD = 0.7   # % of items must be valid
+JSON_SOURCE_WEIGHT = 25         # Points for extracting from INPUT (not hallucinating)
 
 # Detailed JSON validator scoring weights
-DETAILED_STRUCTURE_WEIGHT = 20  # Points for valid JSON structure
-DETAILED_COUNT_GOOD = 20        # Points for 10+ items
+DETAILED_STRUCTURE_WEIGHT = 15  # Points for valid JSON structure
+DETAILED_COUNT_GOOD = 15        # Points for 10+ items
 DETAILED_COUNT_OK = 10          # Points for 5+ items
 # Points for detail quality (name + location/weather/description)
-DETAILED_QUALITY_WEIGHT = 60
+DETAILED_QUALITY_WEIGHT = 40
 DETAIL_REQUIRED_FIELDS = 3      # Score 100% with all items having details
-DETAIL_THRESHOLD_HIGH = 0.8     # 80%+ items have details = 45pts
-DETAIL_THRESHOLD_MID = 0.5      # 50%+ items have details = 25pts
+DETAIL_THRESHOLD_HIGH = 0.8     # 80%+ items have details = full*0.8
+DETAIL_THRESHOLD_MID = 0.5      # 50%+ items have details = full*0.5
+DETAILED_SOURCE_WEIGHT = 30   # Points for extracting from INPUT
+# Partial scoring (computed as fraction of weight)
+DETAIL_PARTIAL_HIGH = DETAILED_QUALITY_WEIGHT * 8 // 10
+DETAIL_PARTIAL_MID = DETAILED_QUALITY_WEIGHT * 5 // 10
+DETAIL_PARTIAL_LOW = DETAILED_QUALITY_WEIGHT * 2 // 10
 
 # Summary validator scoring weights
 SUMMARY_HEADERS_WEIGHT = 40     # Points for having headers (## or **)
@@ -109,7 +115,7 @@ def is_valid_list_item(item: Any, required_fields: List[str] = None) -> bool:
 
 def has_item_details(item: Dict[str, Any], detail_fields: List[str] = None) -> bool:
     """Check if dict item has required detail fields.
-    
+
     Uses flexible key matching - accepts alternate key names from different models.
     """
     if detail_fields is None:
@@ -117,7 +123,7 @@ def has_item_details(item: Dict[str, Any], detail_fields: List[str] = None) -> b
         detail_fields = [
             # Core identity
             "name", "event", "title", "activity", "place",
-            # Location variants  
+            # Location variants
             "location", "venue", "address", "where",
             # Time variants
             "day", "date", "when", "time", "duration",
@@ -126,7 +132,9 @@ def has_item_details(item: Dict[str, Any], detail_fields: List[str] = None) -> b
             # Price variants
             "price", "cost", "pricing",
             # Weather variants
-            "weather", "type", "indoor_outdoor",
+            "weather", "type", "indoor_outdoor", "setting",
+            # Additional Gemma variants
+            "price", "cost", "pricing", "target_ages", "age_group",
         ]
 
     if not isinstance(item, dict):
@@ -138,8 +146,54 @@ def has_item_details(item: Dict[str, Any], detail_fields: List[str] = None) -> b
     if not has_name:
         return False
 
-    # Must have at least one detail field
-    return any(item.get(field) for field in detail_fields)
+    # Must have at least one detail field (location/weather/price/etc)
+    detail_fields = ["location", "venue", "address", "where", "day", "date", "when", "time",
+                    "duration", "target_ages", "age_group", "ages", "audience", "price",
+                    "cost", "pricing", "weather", "type", "indoor_outdoor", "setting"]
+    return any(item.get(f) for f in detail_fields)
+
+
+def check_source_extraction(items: List[Dict], source_text: str) -> float:
+    """Check if items use data from the INPUT source text.
+
+    Returns ratio of items that contain text from source (not hallucinated).
+    This is the KEY quality signal - model should extract from provided data, not invent.
+    """
+    if not items or not source_text:
+        return 0.0
+
+    # Filter out common stopwords that would cause false positives
+    stopwords = {"the", "and", "for", "with", "this", "that", "from", "are", "was", "has", "have", "but", "not", "you", "all", "can", "her", "his", "had", "they", "been", "will", "would", "could", "what", "when", "where", "who", "which", "why", "how"}
+
+    source_lower = source_text.lower()
+    source_terms = set(t for t in source_lower.split() if len(t) >= 3 and t not in stopwords)
+
+    if not source_terms:
+        return 0.0
+
+    matches = 0
+
+    for item in items:
+        # Handle both dict items and string items
+        if isinstance(item, dict):
+            item_text = " ".join(str(v).lower() for v in item.values() if v)
+        elif isinstance(item, str):
+            item_text = item.lower()
+        else:
+            item_text = str(item).lower()
+
+        if not item_text:
+            continue
+
+        # Extract meaningful terms from item
+        item_terms = set(t for t in item_text.split() if len(t) >= 3 and t not in stopwords)
+
+        # Match if item has terms present in source (need 2+ matches to count as extraction)
+        common = item_terms & source_terms
+        if len(common) >= 2:
+            matches += 1
+
+    return matches / len(items) if items else 0.0
 
 
 def has_text_headers(text: str, header_markers: List[str] = None) -> bool:
@@ -166,8 +220,13 @@ def has_filename_format(filename: str) -> bool:
     return any(char in filename for char in ["_", "-", "."])
 
 
-def validate_json(data: Any) -> Tuple[int, str]:
-    """Score simple JSON lists based on validity and structure."""
+def validate_json(data: Any, source_text: str = "") -> Tuple[int, str]:
+    """Score simple JSON lists based on validity and structure.
+
+    Args:
+        data: Parsed JSON data (list or dict)
+        source_text: Original input text - used to check if model extracts from input
+    """
     if not data:
         return 0, "empty response"
 
@@ -205,11 +264,28 @@ def validate_json(data: Any) -> Tuple[int, str]:
     else:
         failures.append(f"only {valid_items}/{len(items)} items are valid")
 
+    # KEY QUALITY SIGNAL: Check if items use input data (not hallucinated)
+    if source_text and items:
+        source_ratio = check_source_extraction(items, source_text)
+        if source_ratio >= 0.8:
+            score += JSON_SOURCE_WEIGHT
+        elif source_ratio >= 0.5:
+            score += JSON_SOURCE_WEIGHT // 2
+        elif source_ratio > 0:
+            score += JSON_SOURCE_WEIGHT // 4
+        else:
+            failures.append("not from input (hallucinated)")
+
     return min(MAX_SCORE, score), "; ".join(failures)
 
 
-def validate_detailed_json(data: Any) -> Tuple[int, str]:
-    """Score objects with details based on quality, not count."""
+def validate_detailed_json(data: Any, source_text: str = "") -> Tuple[int, str]:
+    """Score objects with details based on quality, not count.
+
+    Args:
+        data: Parsed JSON data (list or dict)
+        source_text: Original input text - used to check if model extracts from input
+    """
     if not data:
         return 0, "empty response"
 
@@ -220,6 +296,17 @@ def validate_detailed_json(data: Any) -> Tuple[int, str]:
     items = data if isinstance(data, list) else []
     if not items:
         return 0, "no items found"
+
+    # Convert string arrays to objects (Gemma returns strings like ["item1", "item2"])
+    converted_items = []
+    for item in items:
+        if isinstance(item, str):
+            converted_items.append({"name": item.strip()})
+        elif isinstance(item, dict):
+            converted_items.append(item)
+        else:
+            converted_items.append({"name": str(item)})
+    items = converted_items
 
     score = 0
     failures = []
@@ -242,13 +329,26 @@ def validate_detailed_json(data: Any) -> Tuple[int, str]:
     if valid_with_details == len(items):
         score += DETAILED_QUALITY_WEIGHT  # Perfect: all items have name AND details
     elif valid_with_details >= len(items) * DETAIL_THRESHOLD_HIGH:
-        score += 45
+        score += DETAIL_PARTIAL_HIGH
     elif valid_with_details >= len(items) * DETAIL_THRESHOLD_MID:
-        score += 25
+        score += DETAIL_PARTIAL_MID
     elif valid_with_details > 0:
-        score += 10
+        score += DETAIL_PARTIAL_LOW
     else:
         failures.append("no items with details")
+
+    # KEY QUALITY SIGNAL: Check if items use input data (not hallucinated)
+    source_ratio = 0.0
+    if source_text and items:
+        source_ratio = check_source_extraction(items, source_text)
+        if source_ratio >= 0.8:
+            score += DETAILED_SOURCE_WEIGHT
+        elif source_ratio >= 0.5:
+            score += DETAILED_SOURCE_WEIGHT // 2
+        elif source_ratio > 0:
+            score += DETAILED_SOURCE_WEIGHT // 4
+        else:
+            failures.append("not from input (hallucinated)")
 
     return min(MAX_SCORE, score), "; ".join(failures[:DETAIL_REQUIRED_FIELDS])
 

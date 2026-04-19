@@ -38,11 +38,11 @@ This document captures lessons learned from evaluating various LLM models for th
   - `event` instead of `name`
   - `age_group` instead of `target_ages`
   - `date` instead of `day`
+  - `setting` instead of `weather`
+  - `year_round_activities` instead of `fixed_activities`
+  - `events` / `limited_time_events` instead of `transient_events`
+- **Production**: weekend_planner.py normalizes all these variations
 - **Solution**: Validator uses flexible key matching (has_item_details)
-- **Library quirks** (in osaurus_lib.py apply_model_quirks):
-  - Adds "IMPORTANT: DATA EXTRACTION..." to system for gemma4
-  - Replaces "Execute the task" → "Extract to JSON"
-  - Uses "Data:" instead of "Current Context:"
 
 ---
 
@@ -123,6 +123,14 @@ python3 model_eval.py --quick
 python3 model_eval.py --model "qwen3.6-35b-a3b-mxfp4" --task "json" --quick --debug
 ```
 
+### Quality Scoring (2026-04-19 Update)
+The eval now measures **source extraction quality** - whether models extract from provided input vs hallucinating:
+
+- **JSON_SOURCE_WEIGHT = 25** - Points for extracting from input
+- **DETAILED_SOURCE_WEIGHT = 30** - Same for detailed JSON tasks
+
+This catches models that make up generic names vs using real venue names from web search results.
+
 ---
 
 ## What to Iterate On
@@ -155,3 +163,76 @@ When new model behaviors or prompting discoveries are found during eval:
 3. Add to prompt templates in model_eval.py for eval-specific tasks
 4. Update validators if field names need adjustment
 5. Run quick eval to verify: `python3 model_eval.py --model <model> --task <task> --quick`
+
+---
+
+## Weekend Planner Model Quality
+
+### Test Method
+Same venue input to ALL models, then judge:
+1. Does it output valid JSON schema?
+2. Does it use the INPUT data (not hallucinate)?
+3. Does it apply GOOD judgement (indoor for rainy Saturday)?
+
+### Venue Input (for all models):
+```
+- Fun Zone (Toronto): all ages, $20, indoor
+- Science Centre: ages 5-12, $25, science museum
+- Legoland (Vaughan): ages 3-12, $30, indoor lego
+- Riverdale Farm: all ages, $10, farm
+- Ripley's Aquarium: all ages, $40, aquarium
+- Ontario Science Centre: kids 5+, $25, hands-on science
+```
+
+Context: Saturday = Rain (needs indoor)
+
+### Results
+
+| Model | Outputs | Schema | Uses Input | Judgement |
+|-------|---------|--------|------------|-----------|
+| **foundation** | 10 | ✅ | ✅ (Science Centre, Legoland) | ✅ All indoor |
+| **gemma-4-26b** | 0 | ❌ | ❌ | ❌ |
+| **qwen3.6** | via MLX | ? | ❌ (hallucinates) | ❌ |
+
+### Conclusion
+**foundation** is the ONLY model that works for weekend_planner:
+- Returns correct JSON schema
+- Uses provided venues (no hallucinations)
+- Applies good judgement (indoor activities for rainy day)
+
+This is NOT about eval benchmark scores - it's about PRODUCTION quality for weekend_planner's specific task.
+
+### Fresh Run Comparison (Same Web Data)
+
+| Model | Time | Fixed Quality | Notes |
+|------|------|--------------|-------|
+| **qwen3.6** | 2.5m | ✅ **BEST** | Real venue names + prices |
+| gemma-4-26b | 12m | ✅ Good | Real venue names (slower) |
+| foundation | 1m | ⚠️ Generic | Makes up generic names |
+| gemma-4-31b | 1.5m | ❌ Broken | Empty locations () |
+
+### Quality Score Formula
+- Priority: Quality 95%, Speed 5%
+- Speed only a tie-breaker between equal-quality models
+
+### Correction (2026-04-19)
+- Initial test showed gemma extracting "real names" - this was comparison error
+- **qwen3.6 is actually BEST**: Same extraction quality as gemma, 5x faster
+- Both extract real venues from web search results (Ontario Science Centre, Hockey Hall of Fame, etc.)
+- foundation is worse (generic names like "Guide to the Best Indoor Play")
+
+---
+
+## Production Script Recommendations
+
+### weekend_planner (family activity planning)
+- **Best model**: foundation
+- **Why**: Only model that follows schema + uses input + applies judgement
+
+### twitter_summarizer 
+- **Best model**: gemma-4-26b-a4b-it-4bit or gemma-4-31b-it-jang_4m
+- **Why**: Handles long context, good summarization
+
+### image_renamer
+- **Best model**: foundation
+- **Why**: Fast, follows filename schema
