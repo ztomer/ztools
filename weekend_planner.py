@@ -28,7 +28,7 @@ from lib.osaurus_lib import (
 # MLX support
 from lib.mlx_lib import (
     find_text_mlx_model,
-    call_mlx_text,
+    call_mlx,
     process_mlx_content,
 )
 
@@ -320,34 +320,24 @@ def build_transient_user_prompt(dates_str, weather_str, events_str):
 def get_llm_json(system_prompt, user_prompt, max_retries=3):
     """
     Get JSON from LLM with robust parsing.
-    Tries MLX first, then falls back to server.
-    Uses consolidated functions from osaurus_lib and mlx_lib.
+    Tries Osaurus server first, then falls back to MLX.
     """
+    from lib.osaurus_lib import extract_json
 
-    # Try MLX first
-    mlx_model = find_text_mlx_model(["qwen", "llama", "phi"])
-    if mlx_model:
-        print(f"[llm] Trying MLX: {mlx_model.name}")
-        try:
-            raw = call_mlx_text(
-                mlx_model, f"System: {system_prompt}\n\nUser: {user_prompt}"
-            )
-            if raw:
-                return json.loads(process_mlx_content(raw))
-        except Exception:
-            pass
-
-    # Fall back to server
+    # Try Osaurus server first
     for attempt in range(1, max_retries + 1):
+        target_model = get_best_model("json")
+        print(f"[llm] Trying Osaurus model: {target_model}")
         result = call_llm_api(
             OSAURUS_BASE_URL.rstrip("/"),
-            select_best_model(get_available_models()) or MODEL_NAME,
+            target_model,
             [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.1,
             timeout=600,
+            parse_json=True,
         )
 
         if result and "content" in result:
@@ -356,14 +346,42 @@ def get_llm_json(system_prompt, user_prompt, max_retries=3):
 
                 cleaned = strip_thinking(result["content"])
                 json_start = cleaned.find("{")
+                json_bracket = cleaned.find("[")
+                start_idx = min(x for x in [json_start, json_bracket] if x >= 0) if (json_start >= 0 or json_bracket >= 0) else -1
                 json_end = cleaned.rfind("}")
-                if json_start >= 0:
-                    return json_module.loads(cleaned[json_start: json_end + 1])
+                json_end_bracket = cleaned.rfind("]")
+                end_idx = max(json_end, json_end_bracket)
+
+                if start_idx >= 0 and end_idx >= 0:
+                    return json_module.loads(cleaned[start_idx: end_idx + 1])
             except Exception:
                 if attempt == max_retries:
                     panic_dump(result["content"])
 
         ensure_server()
+
+    # Fall back to MLX
+    mlx_model = find_text_mlx_model(["qwen", "llama", "phi"])
+    if mlx_model:
+        print(f"[llm] Falling back to MLX: {mlx_model.name}")
+        try:
+            raw = call_mlx(
+                mlx_model, f"System: {system_prompt}\n\nUser: {user_prompt}"
+            )
+            if raw:
+                import json as json_module
+                cleaned = process_mlx_content(raw)
+                json_start = cleaned.find("{")
+                json_bracket = cleaned.find("[")
+                start_idx = min(x for x in [json_start, json_bracket] if x >= 0) if (json_start >= 0 or json_bracket >= 0) else -1
+                json_end = cleaned.rfind("}")
+                json_end_bracket = cleaned.rfind("]")
+                end_idx = max(json_end, json_end_bracket)
+                
+                if start_idx >= 0 and end_idx >= 0:
+                    return json_module.loads(cleaned[start_idx: end_idx + 1])
+        except Exception as e:
+            print(f"[llm] MLX failed: {e}")
 
     sys.exit(1)
 

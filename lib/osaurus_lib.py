@@ -10,51 +10,15 @@ import json
 import time
 import requests
 from pathlib import Path
-from typing import Any, Optional, List, Dict, Union, Callable
+from typing import Any, Optional, List, Dict, Union
 
-from .validators_lib import (
-    validate_json,
-    validate_detailed_json,
-    validate_summary,
-    validate_filename,
-    VALIDATORS,
-)
-from .content_processing import clean_model_output, remove_markdown_blocks
+from .content_processing import clean_model_output, remove_markdown_blocks, remove_inline_thinking
 from .logging_config import osaurus_logger as logger
-from .config import get_timeouts, get_max_tokens, get_best_models, init_config, is_config_loaded
+from .config import get_timeouts, get_max_tokens, get_best_models, get_timeout, get_max_tokens_for_task, get_best_model
 
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 1337
 DEFAULT_URL = f"http://{DEFAULT_HOST}:{DEFAULT_PORT}"
-
-# ==========================================================
-# CONFIG - Now loaded explicitly via init_config()
-# ==========================================================
-
-# Default values (used if config not loaded)
-DEFAULT_TIMEOUTS = {
-    "think": 30,
-    "json": 60,
-    "summarize": 30,
-    "filename": 15,
-    "vlm": 45,
-}
-
-DEFAULT_MAX_TOKENS = {
-    "think": 2000,
-    "json": 2000,
-    "summarize": 2000,
-    "filename": 500,
-    "vlm": 3000,
-}
-
-DEFAULT_BEST_MODELS = {
-    "think": "gemma-4-26b-a4b-it-4bit",
-    "json": "gemma-4-26b-a4b-it-4bit",
-    "summarize": "gemma-4-26b-a4b-it-4bit",
-    "filename": "gemma-4-26b-a4b-it-4bit",  # Changed from foundation
-    "vlm": "gemma-4-26b-a4b-it-4bit",
-}
 
 PROMPTS = {
     "think": {
@@ -139,10 +103,11 @@ def is_server_running(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> boo
 
 def get_best_model(task: str = None, env_var: str = "OLLAMA_MODEL") -> str:
     """Get best model for task, checking env var first."""
-    best_models = get_best_models() if is_config_loaded() else DEFAULT_BEST_MODELS
-    if task and task in best_models:
-        return os.environ.get(env_var, best_models[task])
+    from .config import get_best_model as _get_best
+    if task:
+        return os.environ.get(env_var, _get_best(task))
     return os.environ.get(env_var, "foundation")
+
 
 
 # ==========================================================
@@ -150,12 +115,8 @@ def get_best_model(task: str = None, env_var: str = "OLLAMA_MODEL") -> str:
 # ==========================================================
 
 
-def clean_output(content: str) -> str:
-    """Strip thinking tokens, stats, control chars. Returns cleaned text.
-
-    Wrapper for content_processing.clean_model_output() for backward compatibility.
-    """
-    return clean_model_output(content)
+# Re-export for backward compatibility
+clean_output = clean_model_output
 
 
 def _extract_json_only(content: str) -> Optional[str]:
@@ -164,6 +125,8 @@ def _extract_json_only(content: str) -> Optional[str]:
 
     # Use shared cleanup function
     content = clean_model_output(content)
+    # Extra pass: strip verbose inline reasoning (Qwen/Gemma)
+    content = remove_inline_thinking(content)
 
     content = content.strip()
 
@@ -189,13 +152,17 @@ def _extract_json_only(content: str) -> Optional[str]:
 
 def extract_json(content: str) -> Union[Dict[str, Any], List[Any], None]:
     """Extract JSON from content - handles plain text lists too."""
-    json_result = _extract_json_only(content)
+    import json
+    json_str = _extract_json_only(content)
 
-    # If no JSON found, try to parse plain text numbered list
-    if json_result is None:
-        json_result = _extract_plain_list(content)
+    if json_str:
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            pass
 
-    return json_result
+    # If no JSON found or parsing fails, try to parse plain text numbered list
+    return _extract_plain_list(content)
 
 
 def _extract_plain_list(content: str) -> Optional[List[Dict[str, Any]]]:
@@ -222,9 +189,7 @@ def _extract_plain_list(content: str) -> Optional[List[Dict[str, Any]]]:
     return items if items else None
 
 
-# ==========================================================
-# QUALITY VALIDATORS
-# ==========================================================
+
 
 
 # ==========================================================
@@ -242,63 +207,17 @@ def call(
     timeout: Optional[int] = None,
     task: str = "think",
     parse_json: bool = False,
-    validator: Optional[Callable] = None,
-    max_retries: int = 1,
 ) -> dict:
-    """Call LLM API with automatic retry on low quality scores or failures."""
+    """Call LLM API. Returns dict with content, parsed, time, error.
     
-    last_result = None
-    for attempt in range(max_retries + 1):
-        if attempt > 0:
-            logger.warning(f"Retrying task '{task}' with model {model} (Attempt {attempt+1}/{max_retries+1})...")
-            
-        result = _call_impl(
-            model=model,
-            messages=messages,
-            host=host,
-            port=port,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            timeout=timeout,
-            task=task,
-            parse_json=parse_json,
-            validator=validator,
-        )
-        
-        last_result = result
-        
-        # If there's an error, we might want to retry
-        if result.get("error"):
-            continue
-            
-        # If there's a validator and the score is less than 90, retry
-        if validator and result.get("quality_score", 0) < 90:
-            continue
-            
-        # If everything is ok, break and return
-        break
-        
-    return last_result
-
-def _call_impl(
-    model: str,
-    messages: List[Dict[str, Any]],
-    host: str = DEFAULT_HOST,
-    port: int = DEFAULT_PORT,
-    temperature: float = 0.1,
-    max_tokens: Optional[int] = None,
-    timeout: Optional[int] = None,
-    task: str = "think",
-    parse_json: bool = False,
-    validator: Optional[Callable] = None,
-) -> dict:
-    """Call LLM API. Returns dict with content, parsed, quality, time, error."""
+    This is a pure transport/parsing layer. Validation and retry logic
+    should be handled by the caller (e.g. model_eval.py).
+    """
 
     logger.debug(f"Calling {model} for task '{task}' at {host}:{port}")
 
-    # Get defaults from config
-    max_tokens_config = get_max_tokens() if is_config_loaded() else DEFAULT_MAX_TOKENS
-    max_tokens = max_tokens or max_tokens_config.get(task, 2000)
+    # Get defaults from config.yaml (single source of truth)
+    max_tokens = max_tokens or get_max_tokens_for_task(task)
 
     url = get_api_url(host, port)
     payload = {
@@ -307,22 +226,22 @@ def _call_impl(
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
+    
+    if parse_json:
+        payload["response_format"] = {"type": "json_object"}
 
     result = {
         "model": model,
         "time": None,
         "content": None,
         "parsed": None,
-        "quality_score": 0,
         "error": None,
     }
 
     start = time.time()
 
     try:
-        timeouts_config = get_timeouts() if is_config_loaded() else DEFAULT_TIMEOUTS
-        timeout = timeout or timeouts_config.get(
-            task, timeouts_config.get("think", 30))
+        timeout = timeout or get_timeout(task)
         logger.debug(
             f"Sending request with {len(messages)} messages, timeout={timeout}s")
         resp = requests.post(
@@ -348,32 +267,16 @@ def _call_impl(
 
         message = resp_data["choices"][0].get("message", {})
         content = message.get("content", "")
-        result["content"] = content
+        result["content"] = clean_output(content)
         logger.debug(f"Extracted {len(content)} chars of content")
 
-        # Quality validation - run for ALL tasks (JSON and text)
-        if validator and content:
-            cleaned = clean_output(content)
-            # For JSON tasks: extract JSON from raw content
-            if parse_json:
-                result["parsed"] = extract_json(content)
-                if result["parsed"]:
-                    logger.debug("JSON parsed successfully")
-                    validated = validator(result["parsed"])
-                    if isinstance(validated, tuple):
-                        result["quality_score"], result["failure_reason"] = validated
-                    else:
-                        result["quality_score"] = validated
-                    logger.info(
-                        f"Quality score: {result['quality_score']}/100")
+        # For JSON tasks: extract and parse JSON from raw content
+        if parse_json and content:
+            result["parsed"] = extract_json(content)
+            if result["parsed"]:
+                logger.debug("JSON parsed successfully")
             else:
-                # Text tasks - validate cleaned content
-                validated = validator(cleaned if cleaned else content)
-                if isinstance(validated, tuple):
-                    result["quality_score"], result["failure_reason"] = validated
-                else:
-                    result["quality_score"] = validated
-                logger.info(f"Quality score: {result['quality_score']}/100")
+                logger.warning(f"Could not parse JSON from output")
 
     except requests.exceptions.Timeout:
         result["error"] = "Timeout"
@@ -401,7 +304,7 @@ def call_with_prompt(
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
     temperature: float = 0.1,
-    max_tokens: int = 2000,
+    max_tokens: int = 16000,
 ) -> dict:
     """Call model with prompt template."""
 
@@ -418,9 +321,8 @@ def call_with_prompt(
     else:
         messages = [{"role": "user", "content": prompt}]
 
-    # Determine if we should parse JSON
-    parse_json = task in VALIDATORS
-    validator = VALIDATORS.get(task) if parse_json else None
+    # Determine if we should parse JSON based on task type
+    parse_json = task in ("json", "detailed_json")
 
     return call(
         model,
@@ -429,9 +331,8 @@ def call_with_prompt(
         port,
         temperature,
         max_tokens,
-        timeout=TIMEOUTS.get(task),
+        timeout=get_timeout(task),
         parse_json=parse_json,
-        validator=validator,
     )
 
 
@@ -454,53 +355,12 @@ def test_model(
 def check_llm_availability(
     host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, api_key: str = ""
 ) -> bool:
-    """
-    Check if LLM server is available.
-    """
-    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
-    for path in ["/api/tags", "/v1/models"]:
-        try:
-            response = requests.get(
-                f"http://{host}:{port}{path}", headers=headers, timeout=2
-            )
-            if response.status_code == 200:
-                return True
-        except requests.RequestException:
-            pass
-    return False
+    """Check if LLM server is available. Alias for is_server_running()."""
+    return is_server_running(host, port)
 
 
-def get_available_models(
-    host: str = DEFAULT_HOST, port: int = DEFAULT_PORT
-) -> List[str]:
-    """Get list of available models from server."""
-    try:
-        response = requests.get(f"http://{host}:{port}/v1/models", timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            return [m["id"] for m in data.get("data", [])]
-    except Exception:
-        pass
-    return []
-
-
-def select_best_model(
-    available_models: List[str],
-    preferred: List[str] = None,
-) -> Optional[str]:
-    """
-    Select best model from available list based on preferred order.
-    """
-    if preferred is None:
-        best_models = get_best_models() if is_config_loaded() else DEFAULT_BEST_MODELS
-        preferred = list(best_models.values())
-
-    for pref in preferred:
-        for model in available_models:
-            if pref.lower() in model.lower():
-                return model
-
-    return available_models[0] if available_models else None
+# Alias for backward compatibility
+get_available_models = get_models
 
 
 def select_best_vlm_model(available_models: List[str]) -> Optional[str]:
@@ -521,8 +381,9 @@ def call_llm_api(
     messages: List[dict],
     api_key: str = "",
     temperature: float = 0.1,
-    max_tokens: int = 2000,
-    timeout: int = 30,
+    max_tokens: int = 16000,
+    timeout: int = 600,
+    parse_json: bool = False,
 ) -> dict:
     """
     Generic LLM API call (Ollama/OpenAI compatible).
@@ -538,6 +399,9 @@ def call_llm_api(
         "temperature": temperature,
         "max_tokens": max_tokens,
     }
+    
+    if parse_json:
+        payload["response_format"] = {"type": "json_object"}
 
     try:
         response = requests.post(
@@ -559,53 +423,9 @@ def call_llm_api(
 
 
 def strip_thinking(text: str) -> str:
-    """Remove thinking blocks from model output."""
-    if not text:
-        return ""
-
-    # Remove <think> blocks
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-
-    # Remove XML-like thinking tags
-    text = re.sub(r"<\|.*?\|>", "", text)
-
-    # Remove "Thinking Process:" sections
-    if "Thinking Process:" in text:
-        text = text.split("Thinking Process:")[-1]
-
-    return text.strip()
-
-
-def parse_llm_response(resp_text: str) -> str:
-    """Parse LLM response - extract content from various formats."""
-    if not resp_text:
-        return ""
-
-    # Already processed by strip_thinking
-    text = resp_text.strip()
-
-    # Extract from markdown code blocks
-    code_blocks = re.findall(r"```(?:\w+)?\s*(.*?)```", text, re.DOTALL)
-    if code_blocks:
-        text = code_blocks[-1]
-
-    return text.strip()
-
-
-def panic_dump(raw_text: str) -> None:
-    """Save problematic LLM output for debugging."""
-    dump_dir = Path("/tmp/llm_panics")
-    dump_dir.mkdir(exist_ok=True)
-
-    import datetime
-
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    dump_file = dump_dir / f"panic_{timestamp}.txt"
-
-    with open(dump_file, "w") as f:
-        f.write(raw_text)
-
-    print(f"[PANIC] Dumped to {dump_file}")
+    """Remove thinking blocks. Alias for content_processing.remove_thinking_blocks."""
+    from .content_processing import remove_thinking_blocks
+    return remove_thinking_blocks(text)
 
 
 # ==========================================================

@@ -1,34 +1,26 @@
-# ZTools Configuration
-# OVERRIDE the hardcoded defaults in osaurus_lib.py
-
 llm_url: http://localhost:1337
-default_model: gemma-4-26b-a4b-it-4bit
+default_model: gemma-4-31b-it-jang_4m
 
-# Best models per task type
-# Based on eval:
-#   qwen3.6 gets 100% on 3/5 tasks with short prompts
-#   qwen3.5 gets 100% but takes longer
 best_models:
-  think: qwen3.6-35b-a3b-mxfp4
-  json: qwen3.6-35b-a3b-mxfp4
-  summarize: qwen3.6-35b-a3b-mxfp4
-  filename: qwen3.6-35b-a3b-mxfp4
-  vlm: qwen3.6-35b-a3b-mxfp4
+  think: gemma-4-31b-it-jang_4m
+  json: gemma-4-31b-it-jang_4m
+  detailed_json: gemma-4-31b-it-jang_4m
+  summarize: gemma-4-31b-it-jang_4m
+  filename: gemma-4-31b-it-jang_4m
+  vlm: gemma-4-26b-a4b-it-4bit
 
 timeouts:
   think: 600
-  json_simple: 120
-  json_medium: 300
-  json_complex: 600
+  json: 600
+  detailed_json: 600
   summarize: 300
   filename: 120
   vlm: 600
 
 max_tokens:
-  think: 15000
-  json_simple: 5000
-  json_medium: 15000
-  json_complex: 30000
-  summarize: 20000
-  filename: 5000
-  vlm: 20000
+  think: 16000
+  json: 16000
+  detailed_json: 16000
+  summarize: 16000
+  filename: 1000
+  vlm: 16000

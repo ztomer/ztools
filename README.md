@@ -4,29 +4,29 @@ ZTools is a collection of pragmatic, real-world Python scripts powered by local 
 
 ## The Tools
 
-### 1. Weekend Planner (`generate_weekend.py`)
+### 1. Weekend Planner (`weekend_planner.py`)
 Autonomously generates a weekend itinerary for your family.
 - **How it works:** Fetches the weekend weather forecast from Open-Meteo and uses DuckDuckGo search to find current local events and venues. It then uses a local LLM to filter these activities based on your family's constraints (e.g., ages, weather logic, previously visited places).
 - **Configuration:** Personalize your family's details, location, and excluded places in `conf/weekend.yaml`.
 - **Usage:**
   ```bash
-  python3 generate_weekend.py
+  python3 weekend_planner.py
   ```
 
-### 2. Twitter Summarizer (`twitter_summary.py`)
+### 2. Twitter Summarizer (`twitter_summarizer.py`)
 Fetches your X/Twitter home timeline via browser automation and summarizes it with a local LLM.
 - **How it works:** Uses `playwright` and your local Chrome session cookies (macOS Keychain) to scroll and extract tweets from your home timeline. It then feeds the timeline to an LLM to generate a distilled, factual markdown summary.
 - **Usage:**
   ```bash
-  uv run twitter_summary.py
+  uv run twitter_summarizer.py
   ```
 
-### 3. Image Renamer (`rename_images_by_content.py`)
+### 3. Image Renamer (`image_renamer.py`)
 Renames images based on their actual text content or visual description.
 - **How it works:** Uses `pytesseract` (OCR) to extract text from images (like screenshots) or local Vision Language Models (VLMs) to describe the image. An LLM then generates a concise, snake_case filename under 50 characters.
 - **Usage:**
   ```bash
-  uv run rename_images_by_content.py /path/to/images
+  uv run image_renamer.py /path/to/images
   ```
 
 ### 4. Model Evaluator (`model_eval.py`)

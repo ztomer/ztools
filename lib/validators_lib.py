@@ -1,6 +1,7 @@
 """Validators for model evaluation tasks."""
 
 from typing import Tuple, List, Dict, Any
+from .content_processing import strip_backtick_value
 
 # ==========================================================
 # SCORING CONSTANTS
@@ -8,15 +9,15 @@ from typing import Tuple, List, Dict, Any
 
 # JSON Validator scoring weights
 JSON_STRUCTURE_WEIGHT = 30      # Points for valid JSON structure
-JSON_COUNT_GOOD = 30            # Points for 3+ items
-JSON_COUNT_OK = 15              # Points for 2 items
+JSON_COUNT_GOOD = 30            # Points for 10+ items
+JSON_COUNT_OK = 15              # Points for 5+ items
 JSON_VALIDITY_WEIGHT = 40       # Points for valid item content
 JSON_VALIDITY_THRESHOLD = 0.7   # % of items must be valid
 
 # Detailed JSON validator scoring weights
 DETAILED_STRUCTURE_WEIGHT = 20  # Points for valid JSON structure
-DETAILED_COUNT_GOOD = 20        # Points for 3+ items
-DETAILED_COUNT_OK = 10          # Points for 2 items
+DETAILED_COUNT_GOOD = 20        # Points for 10+ items
+DETAILED_COUNT_OK = 10          # Points for 5+ items
 # Points for detail quality (name + location/weather/description)
 DETAILED_QUALITY_WEIGHT = 60
 DETAIL_REQUIRED_FIELDS = 3      # Score 100% with all items having details
@@ -25,13 +26,13 @@ DETAIL_THRESHOLD_MID = 0.5      # 50%+ items have details = 25pts
 
 # Summary validator scoring weights
 SUMMARY_HEADERS_WEIGHT = 40     # Points for having headers (## or **)
-SUMMARY_LENGTH_GOOD = 30        # Points for 100+ chars
-SUMMARY_LENGTH_OK = 15          # Points for 50-99 chars
-SUMMARY_CONTENT_WEIGHT = 30     # Points for 3+ content lines
-SUMMARY_LENGTH_THRESHOLD = 100  # Minimum chars for good score
-SUMMARY_LENGTH_THRESHOLD_OK = 50  # Minimum chars for ok score
-SUMMARY_LINES_GOOD = 3          # Required content lines for full score
-SUMMARY_LINES_OK = 2            # Content lines for partial score
+SUMMARY_LENGTH_GOOD = 30        # Points for 500+ chars (40 tweets = more content)
+SUMMARY_LENGTH_OK = 15          # Points for 200-499 chars
+SUMMARY_CONTENT_WEIGHT = 30     # Points for 5+ content lines (more topics)
+SUMMARY_LENGTH_THRESHOLD = 500  # Minimum chars for good score
+SUMMARY_LENGTH_THRESHOLD_OK = 200  # Minimum chars for ok score
+SUMMARY_LINES_GOOD = 5          # Required content lines for full score
+SUMMARY_LINES_OK = 3            # Content lines for partial score
 
 # Filename validator scoring weights
 FILENAME_LENGTH_WEIGHT = 40     # Points for valid length
@@ -43,8 +44,8 @@ FILENAME_VALID_CHARS = "_-."    # Additional valid characters beyond alphanumeri
 
 # General scoring
 MAX_SCORE = 100                 # Maximum score value
-MIN_ITEMS_GOOD = 3              # Good item count
-MIN_ITEMS_OK = 2                # Acceptable item count
+MIN_ITEMS_GOOD = 10             # Good item count
+MIN_ITEMS_OK = 5                 # Acceptable item count
 
 
 # ==========================================================
@@ -52,20 +53,46 @@ MIN_ITEMS_OK = 2                # Acceptable item count
 # ==========================================================
 
 
-def extract_list_from_dict(data: Dict[str, Any], keys: List[str] = None) -> List[Any]:
-    """Extract list from nested dict, trying multiple key options."""
-    if keys is None:
-        keys = ["activities", "items", "results", "data", "fixed_activities", "transient_events"]
+def extract_list_from_dict(data: Dict[str, Any], keys: List[str] = None, _depth: int = 0) -> List[Any]:
+    """Extract list from nested dict, trying multiple key options recursively.
 
-    if not isinstance(data, dict):
+    Strategy (in priority order):
+    1. Check known activity/result keys at current level.
+    2. Recurse into any nested dict values up to depth 4.
+    3. If no named list found, collect all list values from the dict and
+       return the longest one (handles models that use ad-hoc keys).
+    """
+    if keys is None:
+        keys = [
+            "activities", "items", "results", "data",
+            "fixed_activities", "transient_events",
+            "events", "places", "venues", "recommendations",
+        ]
+
+    if not isinstance(data, dict) or _depth > 4:
         return []
 
+    # Direct key match at this level
     for key in keys:
         if key in data:
             inner = data[key]
             if isinstance(inner, list):
                 return inner
-    return []
+
+    # Recurse into nested dicts (e.g. {"weekend_summary": {"events": [...]}})
+    for value in data.values():
+        if isinstance(value, dict):
+            found = extract_list_from_dict(value, keys, _depth + 1)
+            if found:
+                return found
+
+    # Fallback: return the longest list found under any key at this level
+    # This handles models that invent arbitrary wrapper keys (Gemma, etc.)
+    best: List[Any] = []
+    for value in data.values():
+        if isinstance(value, list) and len(value) > len(best):
+            best = value
+    return best
 
 
 def is_valid_list_item(item: Any, required_fields: List[str] = None) -> bool:
@@ -245,11 +272,42 @@ def validate_summary(data: Any) -> Tuple[int, str]:
     return min(MAX_SCORE, score), "; ".join(failures)
 
 
+def _extract_best_filename_candidate(raw: str) -> str:
+    """Scan raw model output for the best filename candidate.
+
+    Models like Qwen often embed the actual filename in a reasoning block.
+    We look for the first short line that:
+    - Is within valid length bounds
+    - Contains only valid filename chars (alphanumeric + _ - .)
+    - Has at least one separator (underscore, hyphen, or dot)
+    """
+    import re as _re
+    # Try backtick-wrapped first
+    m = _re.search(r"`([A-Za-z0-9_\-.]{4,58})`", raw)
+    if m:
+        return m.group(1)
+    # Try each line
+    for line in raw.splitlines():
+        candidate = line.strip().strip("`*\" '")
+        if (FILENAME_LENGTH_MIN < len(candidate) < FILENAME_LENGTH_MAX
+                and all(c.isalnum() or c in FILENAME_VALID_CHARS for c in candidate)
+                and has_filename_format(candidate)):
+            return candidate
+    return raw.strip()
+
+
 def validate_filename(data: Any) -> Tuple[int, str]:
     """Score filenames based on validity and format quality."""
     if not data:
         return 0, "empty response"
-    clean = str(data).strip()
+    raw = str(data).strip()
+    # Strip backtick wrappers (e.g. Qwen outputs `filename.txt`)
+    clean = strip_backtick_value(raw)
+    # If after stripping it's still too long or has invalid chars, try to
+    # extract a better candidate from multi-line reasoning output.
+    if (len(clean) >= FILENAME_LENGTH_MAX
+            or not all(is_valid_filename_char(c) for c in clean)):
+        clean = _extract_best_filename_candidate(raw)
 
     failures = []
     score = 0

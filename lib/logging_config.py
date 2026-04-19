@@ -69,12 +69,17 @@ def get_logger(
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
 
+    logger.propagate = False
     return logger
 
 
+# Define a central log file in the project root
+LOG_FILE = Path(__file__).parent.parent / "logs" / "debug.log"
+DEBUG_MODE = "--debug" in sys.argv
+
 # Module-level loggers for common use
-lib_logger = get_logger("lib", level="INFO")
-osaurus_logger = get_logger("lib.osaurus", level="INFO")
-mlx_logger = get_logger("lib.mlx", level="INFO")
-validators_logger = get_logger("lib.validators", level="INFO")
-content_logger = get_logger("lib.content", level="INFO")
+lib_logger = get_logger("lib", level="DEBUG" if DEBUG_MODE else "INFO", log_file=LOG_FILE, console_output=DEBUG_MODE)
+osaurus_logger = get_logger("lib.osaurus", level="DEBUG" if DEBUG_MODE else "INFO", log_file=LOG_FILE, console_output=DEBUG_MODE)
+mlx_logger = get_logger("lib.mlx", level="DEBUG" if DEBUG_MODE else "INFO", log_file=LOG_FILE, console_output=DEBUG_MODE)
+validators_logger = get_logger("lib.validators", level="DEBUG" if DEBUG_MODE else "INFO", log_file=LOG_FILE, console_output=DEBUG_MODE)
+content_logger = get_logger("lib.content", level="DEBUG" if DEBUG_MODE else "INFO", log_file=LOG_FILE, console_output=DEBUG_MODE)

@@ -32,16 +32,17 @@ from .mlx_lib import (
     find_best_mlx_model,
     find_text_mlx_model,
     call_mlx,
-    call_mlx_text,
     process_mlx_content,
     list_mlx_models,
 )
 from .content_processing import (
     remove_thinking_blocks,
+    remove_inline_thinking,
     remove_stats_tokens,
     remove_markdown_blocks,
     extract_content_from_code_blocks,
     clean_model_output,
+    strip_backtick_value,
 )
 from .config import init_config
 from .logging_config import (
@@ -76,15 +77,16 @@ __all__ = [
     "find_best_mlx_model",
     "find_text_mlx_model",
     "call_mlx",
-    "call_mlx_text",
     "process_mlx_content",
     "list_mlx_models",
     # content processing
     "remove_thinking_blocks",
+    "remove_inline_thinking",
     "remove_stats_tokens",
     "remove_markdown_blocks",
     "extract_content_from_code_blocks",
     "clean_model_output",
+    "strip_backtick_value",
     # logging
     "get_logger",
     "lib_logger",

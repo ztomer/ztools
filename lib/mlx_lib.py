@@ -30,7 +30,9 @@ def find_mlx_model(model_name: str, mlx_dir: Path = MLX_MODELS_DIR) -> Optional[
         return None
 
     for item in mlx_dir.iterdir():
-        if item.is_dir() and model_name.lower() in item.name.lower():
+        if not item.is_dir():
+            continue
+        if model_name.lower() in item.name.lower():
             return item
         # Check subdirs
         for sub in item.iterdir():
@@ -53,19 +55,7 @@ def find_text_mlx_model(preferred: List[str] = None) -> Optional[Path]:
     """Find best text generation MLX model."""
     if preferred is None:
         preferred = ["qwen", "llama", "phi", "mistral", "gemma", "airoboros"]
-
-    if not MLX_MODELS_DIR.exists():
-        return None
-
-    for keyword in preferred:
-        for item in MLX_MODELS_DIR.iterdir():
-            if item.is_dir() and keyword.lower() in item.name.lower():
-                return item
-            for sub in item.iterdir():
-                if sub.is_dir() and keyword.lower() in sub.name.lower():
-                    return sub
-
-    return None
+    return find_best_mlx_model(preferred)
 
 
 def get_mlx_context_length(model_path: Path) -> int:
@@ -90,10 +80,12 @@ def list_mlx_models(mlx_dir: Path = MLX_MODELS_DIR) -> List[str]:
     models = []
     for item in mlx_dir.iterdir():
         if item.is_dir():
-            models.append(item.name)
-            for sub in item.iterdir():
-                if sub.is_dir():
-                    models.append(f"{item.name}/{sub.name}")
+            if (item / "config.json").exists():
+                models.append(item.name)
+            else:
+                for sub in item.iterdir():
+                    if sub.is_dir() and (sub / "config.json").exists():
+                        models.append(f"{item.name}/{sub.name}")
 
     return models
 
@@ -127,17 +119,21 @@ def call_mlx(model_path: Path, prompt: str) -> Optional[str]:
             cmd,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=600,
             cwd=str(model_path.parent),
         )
         if result.returncode == 0:
             logger.info(f"MLX call successful, got {len(result.stdout)} chars")
+            if not result.stdout.strip():
+                logger.warning("MLX returned empty stdout")
             return result.stdout.strip()
         else:
             logger.warning(
                 f"MLX command failed with return code {result.returncode}")
+            if result.stderr:
+                logger.warning(f"MLX stderr: {result.stderr[:500]}")
     except subprocess.TimeoutExpired:
-        logger.error("MLX call timed out after 120s")
+        logger.error("MLX call timed out after 600s")
     except Exception as e:
         logger.debug(f"MLX call failed: {e}")
 
@@ -150,7 +146,7 @@ def call_mlx(model_path: Path, prompt: str) -> Optional[str]:
                 ["python3", str(main_py), prompt],
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=600,
             )
             if result.returncode == 0:
                 logger.info(
@@ -231,41 +227,62 @@ def process_mlx_content(content: str) -> str:
 def call(
     model: str,
     messages: List[Dict[str, Any]],
+    host: str = "localhost",
+    port: int = 1337,
     temperature: float = 0.1,
-    max_tokens: int = 2000,
-    timeout: int = 120,
+    max_tokens: Optional[int] = None,
+    timeout: Optional[int] = None,
+    task: str = "think",
+    parse_json: bool = False,
 ) -> dict:
+    """Call MLX model. Returns dict with content, parsed, time, error.
+    
+    This is a pure transport/parsing layer. Validation and retry logic
+    should be handled by the caller (e.g. model_eval.py).
     """
-    Unified MLX API - matches osaurus_lib.call() interface.
-    Returns dict with content, quality_score, time, error.
-    """
-    import json
     import time
+    from .osaurus_lib import extract_json
 
     result = {
         "model": model,
         "time": None,
         "content": None,
-        "quality_score": 0,
+        "parsed": None,
         "error": None,
     }
 
-    # Find the model
-    model_path = find_text_mlx_model([model]) or find_mlx_model(model)
+    model_name_for_lookup = model.split("/")[-1] if "/" in model else model
+    logger.debug(f"MLX lookup: original={model}, lookup_name={model_name_for_lookup}")
+    model_path = find_text_mlx_model([model_name_for_lookup]) or find_mlx_model(model_name_for_lookup)
     if not model_path:
         result["error"] = f"Model not found: {model}"
+        logger.error(f"MLX model not found: {model_name_for_lookup}")
         return result
+    logger.debug(f"MLX model found: {model_path}")
 
-    # Extract prompt from messages
-    prompt = messages[-1].get("content", "") if messages else ""
+    # Format messages to prompt
+    system_prompt = "\n".join(m["content"] for m in messages if m["role"] == "system")
+    user_prompt = "\n".join(m["content"] for m in messages if m["role"] == "user")
+    prompt = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
+    logger.debug(f"MLX prompt length: {len(prompt)}")
 
     start = time.time()
     try:
+        logger.debug(f"Calling MLX model: {model_path}")
         content = call_mlx(model_path, prompt)
+        logger.debug(f"MLX raw response length: {len(content) if content else 0}")
         result["time"] = round(time.time() - start, 1)
 
         if content:
             result["content"] = process_mlx_content(content)
+            
+            # For JSON tasks: extract and parse JSON from raw content
+            if parse_json:
+                result["parsed"] = extract_json(content)
+                if result["parsed"]:
+                    logger.debug("JSON parsed successfully")
+                else:
+                    logger.warning("Could not parse JSON from output")
         else:
             result["error"] = "Empty response from model"
     except Exception as e:
@@ -273,7 +290,3 @@ def call(
 
     return result
 
-
-# Aliases for better API clarity
-call_mlx_text = call_mlx  # Call MLX model for text generation
-call_mlx_vlm = run_mlx_vlm  # Call MLX model for vision/image analysis

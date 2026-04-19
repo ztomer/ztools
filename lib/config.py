@@ -1,60 +1,60 @@
 #!/usr/bin/env python3
 """
-Config Management - Explicit configuration loading.
-Replaces silent config loading at module import time.
+Config Management - Single source of truth from conf/config.yaml.
+Auto-loads configuration on first access.
 """
 
 import os
+import sys
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-# Default configuration values
-DEFAULT_TIMEOUTS = {
-    "think": 30,
-    "json": 60,
-    "summarize": 30,
-    "filename": 15,
-    "vlm": 45,
-}
+# Minimal hardcoded fallbacks - only used if config.yaml is completely missing
+_FALLBACK_TIMEOUT = 600
+_FALLBACK_MAX_TOKENS = 16000
+_FALLBACK_MODEL = "foundation"
 
-DEFAULT_MAX_TOKENS = {
-    "think": 2000,
-    "json": 2000,
-    "summarize": 2000,
-    "filename": 500,
-    "vlm": 3000,
-}
-
-DEFAULT_BEST_MODELS = {
-    "think": "gemma-4-26b-a4b-it-4bit",
-    "json": "gemma-4-26b-a4b-it-4bit",
-    "summarize": "gemma-4-26b-a4b-it-4bit",
-    "filename": "gemma-4-26b-a4b-it-4bit",
-    "vlm": "gemma-4-26b-a4b-it-4bit",
-}
-
-# Global config state - must be initialized explicitly
+# Global config state
 _config_loaded = False
-_timeouts = DEFAULT_TIMEOUTS.copy()
-_max_tokens = DEFAULT_MAX_TOKENS.copy()
-_best_models = DEFAULT_BEST_MODELS.copy()
+_config: Dict[str, Any] = {}
+
+
+def _auto_load():
+    """Auto-load config from conf/config.yaml if not yet loaded."""
+    global _config_loaded, _config
+
+    if _config_loaded:
+        return
+
+    config_path = Path(__file__).parent.parent / "conf" / "config.yaml"
+    if not config_path.exists():
+        print(f"[ Wrn ] Config file not found: {config_path}, using fallback defaults")
+        _config_loaded = True
+        return
+
+    try:
+        import yaml
+        with open(config_path, 'r') as f:
+            loaded = yaml.safe_load(f)
+        _config = loaded if isinstance(loaded, dict) else {}
+        _config_loaded = True
+    except Exception as e:
+        print(f"[ Err ] Failed to load config: {e}")
+        _config_loaded = True
 
 
 def init_config(config_path: Optional[str] = None) -> bool:
     """
-    Initialize configuration from YAML file.
+    Explicitly initialize configuration from a YAML file.
+    Use this to override the default conf/config.yaml path.
 
     Args:
-        config_path: Path to config.yaml file. If None, looks in conf/config.yaml
+        config_path: Path to config.yaml file. If None, uses conf/config.yaml
 
     Returns:
-        bool: True if config loaded successfully, False otherwise
-
-    Raises:
-        FileNotFoundError: If config file doesn't exist
-        ValueError: If config file is invalid YAML
+        bool: True if config loaded successfully
     """
-    global _config_loaded, _timeouts, _max_tokens, _best_models
+    global _config_loaded, _config
 
     if config_path is None:
         config_path = Path(__file__).parent.parent / "conf" / "config.yaml"
@@ -67,64 +67,72 @@ def init_config(config_path: Optional[str] = None) -> bool:
     try:
         import yaml
         with open(config_file, 'r') as f:
-            config = yaml.safe_load(f)
+            loaded = yaml.safe_load(f)
 
-        if config is None:
-            config = {}
+        if loaded is None:
+            loaded = {}
 
-        # Validate config structure
-        if not isinstance(config, dict):
+        if not isinstance(loaded, dict):
             raise ValueError("Config must be a dictionary")
 
-        # Apply overrides
-        if "best_models" in config:
-            if not isinstance(config["best_models"], dict):
-                raise ValueError("best_models must be a dictionary")
-            _best_models.update(config["best_models"])
-
-        if "timeouts" in config:
-            if not isinstance(config["timeouts"], dict):
-                raise ValueError("timeouts must be a dictionary")
-            _timeouts.update(config["timeouts"])
-
-        if "max_tokens" in config:
-            if not isinstance(config["max_tokens"], dict):
-                raise ValueError("max_tokens must be a dictionary")
-            _max_tokens.update(config["max_tokens"])
-
+        _config = loaded
         _config_loaded = True
         return True
 
-    except yaml.YAMLError as e:
-        raise ValueError(f"Invalid YAML in config file: {e}")
     except Exception as e:
         raise ValueError(f"Error loading config: {e}")
 
 
 def get_timeouts() -> Dict[str, int]:
-    """Get current timeout configuration."""
-    return _timeouts.copy()
+    """Get timeout configuration from config.yaml."""
+    _auto_load()
+    return _config.get("timeouts", {})
 
 
 def get_max_tokens() -> Dict[str, int]:
-    """Get current max tokens configuration."""
-    return _max_tokens.copy()
+    """Get max tokens configuration from config.yaml."""
+    _auto_load()
+    return _config.get("max_tokens", {})
 
 
 def get_best_models() -> Dict[str, str]:
-    """Get current best models configuration."""
-    return _best_models.copy()
+    """Get best models configuration from config.yaml."""
+    _auto_load()
+    return _config.get("best_models", {})
+
+
+def get_best_model(task: str) -> str:
+    """Get the best model for a specific task."""
+    models = get_best_models()
+    return models.get(task, _config.get("default_model", _FALLBACK_MODEL))
+
+
+def get_timeout(task: str) -> int:
+    """Get timeout for a specific task."""
+    timeouts = get_timeouts()
+    return timeouts.get(task, _FALLBACK_TIMEOUT)
+
+
+def get_max_tokens_for_task(task: str) -> int:
+    """Get max tokens for a specific task."""
+    tokens = get_max_tokens()
+    return tokens.get(task, _FALLBACK_MAX_TOKENS)
+
+
+def get_config() -> Dict[str, Any]:
+    """Get the full raw config dict."""
+    _auto_load()
+    return _config.copy()
 
 
 def is_config_loaded() -> bool:
     """Check if configuration has been loaded."""
+    _auto_load()
     return _config_loaded
 
 
 def reset_config():
-    """Reset configuration to defaults (for testing)."""
-    global _config_loaded, _timeouts, _max_tokens, _best_models
+    """Reset configuration state (for testing)."""
+    global _config_loaded, _config
     _config_loaded = False
-    _timeouts = DEFAULT_TIMEOUTS.copy()
-    _max_tokens = DEFAULT_MAX_TOKENS.copy()
-    _best_models = DEFAULT_BEST_MODELS.copy()
+    _config = {}
