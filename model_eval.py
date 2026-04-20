@@ -530,6 +530,7 @@ def main():
     parser.add_argument("--model", help="Run evaluation for a specific model")
     parser.add_argument("--task", help="Run a specific task only (json, detailed_json, filename, summarize)")
     parser.add_argument("--quick", action="store_true", help="Quick mode: run single task with one retry (faster iteration)")
+    parser.add_argument("--config-tasks", action="store_true", help="Load tasks from YAML config instead of hardcoded prompts")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging to console")
     args = parser.parse_args()
 
@@ -569,7 +570,26 @@ def main():
             sys.exit(1)
         tasks_to_run = {args.task: TASKS[args.task]}
         console.print(f"[yellow]Running only task: {args.task}[/yellow]")
-    
+
+    # Load tasks from YAML config
+    if args.config_tasks:
+        from lib.config import build_tasks_from_model
+
+        config_model = args.model if args.model else "qwen"
+        console.print(f"[yellow]Loading tasks from YAML config: {config_model}[/yellow]")
+        config_tasks = build_tasks_from_model(config_model)
+        if config_tasks:
+            if args.task:
+                if args.task in config_tasks:
+                    tasks_to_run = {args.task: config_tasks[args.task]}
+                else:
+                    console.print(f"[red]Task '{args.task}' not in config[/red]")
+            else:
+                tasks_to_run = config_tasks
+            console.print(f"[green]Loaded {len(tasks_to_run)} tasks from config[/green]")
+        else:
+            console.print("[red]No config tasks found, using default TASKS[/red]")
+
     # In quick mode, only run first task once (no retries)
     if args.quick:
         console.print(f"[yellow]Quick mode: single run, no retries[/yellow]")

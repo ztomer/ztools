@@ -1,16 +1,43 @@
 # Foundation model configuration
+# Default/fallback model
 
 name: foundation
 timeout: 60
 
-# Task-specific prompts
+# Task-specific prompts (reused from production scripts)
 prompts:
   json: |
-    Output JSON.
+    Output JSON now. Use EXACT schema.
 
-  detailed_json: |
-    Output JSON.
+  # Weekend planner prompts (from weekend_planner.py)
+  weekend_fixed: |
+    Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
 
+    Extract popular Toronto/Vaughan venues for families with kids ages 4-12.
+    Include location (city only), target_ages, price in CAD, weather.
+
+    MANDATORY default values:
+    - target_ages: "6-13 years"
+    - price: $18-35 per child or free
+    - weather: "indoor"
+
+    Never leave any field empty.
+
+  weekend_transient: |
+    Output JSON now. Use EXACT schema: {{"transient_events": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}}]}}
+
+    Extract Toronto/Vaughan family events for April 2026.
+
+    MANDATORY default values:
+    - target_ages: "6-13 years"
+    - price: $20-30 per child or free
+    - duration: "2-3 hours"
+    - weather: "indoor"
+    - day: Friday/Saturday/Sunday
+
+    Never leave any field empty.
+
+  # Twitter summarizer prompt (from twitter_summarizer.py)
   summarize: |
     Output the summary. Use ## headers for topics.
 
@@ -18,19 +45,33 @@ prompts:
     {}
     </timeline>
 
-    Summarize the timeline.
+    Summarize the timeline. Include your analysis.
 
+  # Image renamer prompt (from image_renamer.py)
   filename: |
-    Output filename.
+    You are a file naming assistant. Read the following text and suggest a short, descriptive filename (without extension).
+    Use lowercase, underscores for spaces, no special characters.
+    Keep it under 50 characters.
+    Output ONLY the filename string, nothing else.
 
-  weekend_fixed: |
-    Output JSON with name, location, target_ages, price, weather.
+    TEXT: {}
 
-  weekend_transient: |
-    Output JSON with name, location, target_ages, price, duration, weather, day.
+# Key normalizations (output -> our schema)
+key_mappings:
+  event: name
+  title: name
+  activity: name
+  venue: location
+  address: location
+  place: location
+  age_group: target_ages
+  ages: target_ages
+  age_range: target_ages
+  cost: price
+  pricing: price
+  fee: price
+  type: weather
+  category: weather
 
-# Key normalizations
-key_mappings: {}
-
-# No special quirks needed
+# Model quirks
 quirks: []
