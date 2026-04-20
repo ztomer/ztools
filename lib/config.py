@@ -136,3 +136,25 @@ def reset_config():
     global _config_loaded, _config
     _config_loaded = False
     _config = {}
+
+
+# ==========================================================
+# TASK-SPECIFIC PROMPTS
+# ==========================================================
+
+def get_summarize_prompt(model: str = None) -> str:
+    """Get model-specific summarize prompt from config."""
+    _auto_load()
+    prompts = _config.get("summarize_prompts", {})
+
+    # Try exact model match first
+    if model and model in prompts:
+        return prompts[model]
+
+    # Try base model (e.g., "qwen3.6" from "qwen3.6-35b-a3b-mxfp4")
+    if model:
+        base = model.split("-")[0].split("_")[0]
+        if base in prompts:
+            return prompts[base]
+
+    return prompts.get("default", prompts.get("qwen3.6", ""))

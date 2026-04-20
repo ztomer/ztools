@@ -446,22 +446,13 @@ MLX_MODELS_DIR = Path.home() / "MLXModels"
 
 
 def _build_prompt(
-    tweets: list[dict], max_chars: int, for_mlx: bool = False
+    tweets: list[dict], max_chars: int, for_mlx: bool = False, model: str = None
 ) -> tuple[str, int]:
-    preamble = (
-        "You are an objective news distillation system. Your task is to extract "
-        "hard facts from the provided chronological Twitter/X timeline.\n\n"
-        "<instructions>\n"
-        "1. First, analyze the timeline in your <think> block.\n"
-        "2. Identify clusters of related events and synthesize duplicates.\n"
-        "3. Output ONLY the final briefing after the </think> tag. No introductory text.\n"
-        "</instructions>\n\n"
-        "<formatting_rules>\n" + _PROMPT_RULES + "</formatting_rules>\n\n"
-        "<timeline>\n"
-    )
-    suffix = "\n</timeline>\n\nProvide the summary (start your response with <think>):"
+    from lib.config import get_summarize_prompt
+    prompt_template = get_summarize_prompt(model)
 
-    budget = max_chars - len(preamble) - len(suffix)
+    # Build timeline content
+    budget = max_chars - 200  # Reserve for template
     lines = []
     used = 0
     for t in reversed(tweets):
@@ -471,7 +462,11 @@ def _build_prompt(
         lines.append(line)
         used += len(line) + 1
     lines.reverse()
-    return preamble + "\n".join(lines) + suffix, len(lines)
+    timeline = "\n".join(lines)
+
+    # Fill template
+    prompt = prompt_template.format(timeline)
+    return prompt, len(lines)
 
 
 def summarize_with_llm(
@@ -492,7 +487,7 @@ def summarize_with_llm(
         target_model = select_best_model(models) or target_model
 
     ctx_chars = (8192 - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN
-    prompt, n = _build_prompt(tweets, max_chars=ctx_chars)
+    prompt, n = _build_prompt(tweets, max_chars=ctx_chars, model=target_model)
 
     # Try models in order of preference
     fallback_models = [target_model, "qwen3.6-35b-a3b-mxfp4", "foundation"]
@@ -503,6 +498,9 @@ def summarize_with_llm(
             tried.add(try_model)
             continue
         tried.add(try_model)
+
+        # Rebuild prompt for each model
+        prompt, n = _build_prompt(tweets, max_chars=ctx_chars, model=try_model)
 
         try:
             print(f"[llm] Trying {try_model} ({n} tweets)...")
@@ -533,7 +531,7 @@ def summarize_with_llm(
         mlx_ctx = get_mlx_context_length(mlx_path)
         mlx_prompt_chars = (mlx_ctx - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN
         prompt, n = _build_prompt(
-            tweets, max_chars=mlx_prompt_chars, for_mlx=True)
+            tweets, max_chars=mlx_prompt_chars, for_mlx=True, model=mlx_path.name)
         print(
             f"[llm] Sending {n}/{len(tweets)} tweets to local MLX model {mlx_path.name} ..."
         )

@@ -12,6 +12,17 @@ best_models:
   filename: foundation
   vlm: gemma-4-26b-a4b-it-4bit
 
+# Model-specific prompts for summarization task
+summarize_prompts:
+  # Default prompt (used if model not listed)
+  default: "Output the summary. Use ## headers for topics. No introductory text. No numbered lists.\n\n<timeline>\n{}\n</timeline>\n\nExtract facts. Organize by topic."
+  # qwen: needs simpler prompt to avoid thinking block
+  qwen3.6: "Output the summary. Use ## headers for topics. No introductory text. No numbered lists.\n\n<timeline>\n{}\n</timeline>\n\nExtract facts. Organize by topic."
+  # foundation: works with default prompt
+  foundation: "Output the summary. Use ## headers for topics. No introductory text. No numbered lists.\n\n<timeline>\n{}\n</timeline>\n\nExtract facts. Organize by topic."
+  # gemma: needs to suppress thinking
+  gemma: "Output the summary. Use ## headers for topics.\n\n<timeline>\n{}\n</timeline>"
+
 timeouts:
   think: 600
   json: 600
