@@ -18,6 +18,14 @@ parts/
 sdist/
 var/
 wheels/
+
+# MLX debug output
+.mlx_debug/
+
+# Debug caches
+*.debug_cache.json
+*~debug*
+~/.weekend*debug*.json
 *.egg-info/
 .installed.cfg
 *.egg
