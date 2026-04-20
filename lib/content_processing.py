@@ -105,6 +105,7 @@ def remove_stats_tokens(content: str) -> str:
     # Remove stats tokens: "stats:123;45.67" anywhere in the text
     content = re.sub(r"stats:\d+;[\d.]+", "", content)
     content = re.sub(r"\d+;[\d.]+$", "", content)
+    content = re.sub(r"￾stats:.*$", "", content)
 
     # Remove unicode replacement character
     content = content.replace("\ufffe", "")

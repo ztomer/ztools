@@ -12,7 +12,7 @@ import requests
 from pathlib import Path
 from typing import Any, Optional, List, Dict, Union
 
-from .content_processing import clean_model_output, remove_markdown_blocks, remove_inline_thinking
+from .content_processing import clean_model_output, remove_markdown_blocks, remove_inline_thinking, extract_content_from_code_blocks
 from .logging_config import osaurus_logger as logger
 from .config import get_timeouts, get_max_tokens, get_best_models, get_timeout, get_max_tokens_for_task, get_best_model
 
@@ -32,7 +32,7 @@ def apply_model_quirks(messages: List[Dict[str, Any]], model: str) -> List[Dict[
     
     This ensures consistent behavior across all scripts calling the LLM.
     """
-    family = get_model_family(model)
+    family = _get_model_family(model)
     
     # Build updated messages
     updated = []
@@ -52,13 +52,14 @@ def apply_model_quirks(messages: List[Dict[str, Any]], model: str) -> List[Dict[
                 if "JSON" in content.upper() and not content.startswith("IMPORTANT"):
                     content = "IMPORTANT: This is DATA EXTRACTION. Output JSON only. " + content
                     logger.debug(f"Applied gemma4 system quirk for {model}")
-            elif role == "user":
-                # Gemma4 responds badly to "Execute", "Context", "Task" - use "Data" / "Extract"
-                if "execute" in content.lower() or "context" in content.lower():
-                    content = content.replace("Current Context", "Data")
-                    content = content.replace("Execute the task", "Extract to JSON")
-                    content = content.replace("Execute the task based on", "Extract")
-                    logger.debug(f"Applied gemma4 user quirk for {model}")
+
+        if role == "user":
+            # Models respond badly to "Execute", "Context", "Task" - use "Data" / "Extract"
+            if "execute" in content.lower() or "context" in content.lower():
+                content = content.replace("Current Context", "Data")
+                content = content.replace("Execute the task", "Extract to JSON")
+                content = content.replace("Execute the task based on", "Extract")
+                logger.debug(f"Applied user quirk for {model}")
         
         updated.append({**msg, "content": content})
     
@@ -177,31 +178,48 @@ def _extract_json_only(content: str) -> Optional[str]:
     if not content:
         return None
 
-    # Use shared cleanup function
-    content = clean_model_output(content)
-    # Extra pass: strip verbose inline reasoning (Qwen/Gemma)
-    content = remove_inline_thinking(content)
+    # Try extracting from code blocks first
+    code_block = extract_content_from_code_blocks(content)
+    if code_block:
+        content = code_block
+        # Also clean code blocks for stats tokens!
+        content = clean_model_output(content)
+    else:
+        # Use shared cleanup function
+        content = clean_model_output(content)
+        # Extra pass: strip verbose inline reasoning (Qwen/Gemma)
+        content = remove_inline_thinking(content)
 
     content = content.strip()
 
-    # Find { or [ that starts actual JSON
-    first_brace = content.find("{")
-    first_bracket = content.find("[")
-    if first_brace >= 0 or first_bracket >= 0:
-        start = min(x for x in [first_brace, first_bracket] if x >= 0)
-        content = content[start:]
-    else:
+    import json
+
+    def find_json(start_char, end_char):
+        starts = [i for i, c in enumerate(content) if c == start_char]
+        ends = [i for i, c in enumerate(content) if c == end_char]
+        ends.reverse()
+        
+        # Try up to 15 starts and 15 ends (max 225 combinations)
+        for s in starts[:15]:
+            for e in ends[:15]:
+                if e > s:
+                    candidate = content[s:e+1]
+                    try:
+                        json.loads(candidate)
+                        return candidate
+                    except Exception:
+                        continue
         return None
 
-    # Find last } or ] to get full JSON
-    last_brace = content.rfind("}")
-    last_bracket = content.rfind("]")
-    last_json = max(last_brace, last_bracket)
+    # Try JSON object first { ... }
+    res = find_json('{', '}')
+    if res: return res
+    
+    # Try JSON array next [ ... ]
+    res = find_json('[', ']')
+    if res: return res
 
-    if last_json > 0:
-        content = content[: last_json + 1]
-
-    return content
+    return None
 
 
 def extract_json(content: str, model: str = None) -> Union[Dict[str, Any], List[Any], None]:

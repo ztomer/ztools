@@ -396,32 +396,32 @@ def get_llm_json(system_prompt, user_prompt, max_retries=3):
     for attempt in range(1, max_retries + 1):
         target_model = get_best_model(Task.JSON)
         print(f"[llm] Trying Osaurus model: {target_model}")
+        from lib.osaurus_lib import apply_model_quirks
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        messages = apply_model_quirks(messages, target_model)
+        
         result = call_llm_api(
             OSAURUS_BASE_URL.rstrip("/"),
             target_model,
-            [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
+            messages,
             temperature=0.1,
-            timeout=600,
+            timeout=1800,
             parse_json=True,
         )
 
         if result and "content" in result:
             try:
-                import json as json_module
-
+                from lib.osaurus_lib import _extract_json_only
+                import json
                 cleaned = strip_thinking(result["content"])
-                json_start = cleaned.find("{")
-                json_bracket = cleaned.find("[")
-                start_idx = min(x for x in [json_start, json_bracket] if x >= 0) if (json_start >= 0 or json_bracket >= 0) else -1
-                json_end = cleaned.rfind("}")
-                json_end_bracket = cleaned.rfind("]")
-                end_idx = max(json_end, json_end_bracket)
-
-                if start_idx >= 0 and end_idx >= 0:
-                    return json_module.loads(cleaned[start_idx: end_idx + 1])
+                json_str = _extract_json_only(cleaned)
+                if json_str is not None:
+                    return json.loads(json_str)
+                else:
+                    raise ValueError("No valid JSON found")
             except Exception:
                 if attempt == max_retries:
                     panic_dump(result["content"])
@@ -433,24 +433,31 @@ def get_llm_json(system_prompt, user_prompt, max_retries=3):
     if mlx_model:
         print(f"[llm] Falling back to MLX: {mlx_model.name}")
         try:
+            from lib.osaurus_lib import apply_model_quirks
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
+            messages = apply_model_quirks(messages, getattr(mlx_model, "name", str(mlx_model)))
+            mlx_sys = next((m["content"] for m in messages if m["role"] == "system"), system_prompt)
+            mlx_usr = next((m["content"] for m in messages if m["role"] == "user"), user_prompt)
+
             raw = call_mlx(
-                mlx_model, f"System: {system_prompt}\n\nUser: {user_prompt}"
+                mlx_model, f"System: {mlx_sys}\n\nUser: {mlx_usr}"
             )
             if raw:
-                import json as json_module
+                from lib.osaurus_lib import _extract_json_only
+                import json
                 cleaned = process_mlx_content(raw)
-                json_start = cleaned.find("{")
-                json_bracket = cleaned.find("[")
-                start_idx = min(x for x in [json_start, json_bracket] if x >= 0) if (json_start >= 0 or json_bracket >= 0) else -1
-                json_end = cleaned.rfind("}")
-                json_end_bracket = cleaned.rfind("]")
-                end_idx = max(json_end, json_end_bracket)
-                
-                if start_idx >= 0 and end_idx >= 0:
-                    return json_module.loads(cleaned[start_idx: end_idx + 1])
+                json_str = _extract_json_only(cleaned)
+                if json_str is not None:
+                    return json.loads(json_str)
+                else:
+                    raise ValueError("No valid JSON found")
         except Exception as e:
             print(f"[llm] MLX failed: {e}")
 
+    print("[llm] Failed to parse JSON or models exhausted. Exiting.")
     sys.exit(1)
 
 

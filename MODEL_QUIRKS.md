@@ -62,6 +62,15 @@ Model-specific prompts handle ## headers + thinking differently.
 
 ## Post-Processing
 
+### Qwen Plaintext Thinking Removal
+
+Qwen 3.6 doesn't use `<think>` XML tags - it outputs thinking in plaintext. The content_processing.py handles:
+
+1. **Markers** (start of thinking): `"Here's a thinking process:"`, `"Thinking Process:"`, `"Let me analyze"`
+2. **Output markers** (end of thinking): `"Draft:"`, `"Output Generation:"`, `"I'll now generate:"`, `"Let's draft"`
+3. **Self-correction blocks**: `*(Self-Correction during draft)*`, patterns like `(Self-[Cc]orrection...)`
+4. **Stats tokens**: `"stats:2114;97.2952"` or similar trailing tokens
+
 ### Functions (osaurus_lib.py)
 
 ```python
@@ -69,9 +78,12 @@ Model-specific prompts handle ## headers + thinking differently.
 data = extract_json(response, model)
 data = normalize_keys(data, model)
 
-# Thinking preservation
+# Thinking extraction for XML tags
 thinking, content = extract_thinking(response)
-merged = merge_thinking_with_summary(thinking, content)
+
+# Strip plaintext thinking (qwen-specific)
+cleaned = strip_thinking(content)
+merged = merge_thinking_with_summary(thinking, cleaned)
 ```
 
 ---
@@ -93,6 +105,25 @@ python3 model_eval.py --model <model> --task <task> --quick
 1. Create `conf/models/{family}.yaml`
 2. Add prompts, key_mappings, quirks
 3. Done - no code changes needed
+
+---
+
+## Runtime Constants
+
+All scripts must define these required constants at module level:
+
+| Constant | Description | Source |
+|----------|-------------|--------|
+| `AGE_RANGE` | Child age range "min-max" | Computed from `conf/weekend.yaml` children |
+| `DATES_STR` | Date range string | Computed at runtime in main() |
+| `CITY`, `REGION` | Location | From `conf/weekend.yaml` |
+| `CHILDREN` | Child list | From `conf/weekend.yaml` |
+
+Example (weekend_planner.py):
+```python
+AGE_RANGE = f"{min(c['age'] for c in CHILDREN)}-{max(c['age'] for c in CHILDREN)}" if CHILDREN else "4-12"
+DATES_STR = "April 24 to April 26"  # Placeholder - actual in main()
+```
 
 ---
 

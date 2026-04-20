@@ -156,7 +156,7 @@ with open("{prompt_file}", "r") as f:
 # Prepend JSON trigger to avoid thinking
 prompt = "Output JSON:\\n" + prompt
 text_parts = []
-for r in stream_generate(model, tokenizer, prompt, max_tokens=2048):
+for r in stream_generate(model, tokenizer, prompt, max_tokens=8192):
     if hasattr(r, "text"):
         text_parts.append(r.text)
     elif isinstance(r, str):
@@ -174,7 +174,7 @@ print(response, flush=True)
             cmd,
             capture_output=True,
             text=True,
-            timeout=600,
+            timeout=1800,
         )
         stdout = result.stdout
         stderr = result.stderr
