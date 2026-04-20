@@ -2,40 +2,79 @@
 
 ZTools is a collection of pragmatic, real-world Python scripts powered by local Large Language Models (LLMs) via the Osaurus server or local MLX inference. These tools are built to run entirely locally, preserving privacy while automating daily workflows.
 
+## Prerequisites
+
+1. **Osaurus Server** - Must be running (check at http://localhost:1337)
+2. **Python 3.12+** - Most scripts work with `python3`
+3. **uv** - Some scripts need uv for dependency management (see below)
+
 ## The Tools
 
 ### 1. Weekend Planner (`weekend_planner.py`)
 Autonomously generates a weekend itinerary for your family.
-- **How it works:** Fetches the weekend weather forecast from Open-Meteo and uses DuckDuckGo search to find current local events and venues. It then uses a local LLM to filter these activities based on your family's constraints (e.g., ages, weather logic, previously visited places).
-- **Configuration:** Personalize your family's details, location, and excluded places in `conf/weekend.yaml`.
-- **Usage:**
+- **How it works:** Fetches weather from Open-Meteo and uses DuckDuckGo search to find events/venues. Uses LLM to filter based on family constraints.
+- **Requires:** `ddgs` package for search
+- **Run:**
   ```bash
   python3 weekend_planner.py
+  # Or with specific model:
+  python3 weekend_planner.py --model qwen3.6-35b-a3b-mxfp4
   ```
+- **Options:** `--skip-web` to use cached data, `--model` to specify model
 
 ### 2. Twitter Summarizer (`twitter_summarizer.py`)
-Fetches your X/Twitter home timeline via browser automation and summarizes it with a local LLM.
-- **How it works:** Uses `playwright` and your local Chrome session cookies (macOS Keychain) to scroll and extract tweets from your home timeline. It then feeds the timeline to an LLM to generate a distilled, factual markdown summary.
-- **Usage:**
+Fetches your X/Twitter home timeline and summarizes with local LLM.
+- **How it works:** Uses playwright + Chrome cookies to scroll timeline. LLM generates distilled summary.
+- **Requires:** `uv` for playwright dependencies
+- **Run:**
   ```bash
   uv run twitter_summarizer.py
+  # Use cached tweets (faster iteration):
+  uv run twitter_summarizer.py --use-cache
+  # Specify model:
+  uv run twitter_summarizer.py --model foundation
   ```
+- **Options:** `--use-cache`, `--model`, `--since 24h`
 
 ### 3. Image Renamer (`image_renamer.py`)
-Renames images based on their actual text content or visual description.
-- **How it works:** Uses `pytesseract` (OCR) to extract text from images (like screenshots) or local Vision Language Models (VLMs) to describe the image. An LLM then generates a concise, snake_case filename under 50 characters.
-- **Usage:**
+Renames images based on OCR or visual description.
+- **How it works:** Uses pytesseract (OCR) or VLM to describe image, LLM generates filename.
+- **Requires:** `uv` for vision dependencies
+- **Run:**
   ```bash
   uv run image_renamer.py /path/to/images
   ```
 
 ### 4. Model Evaluator (`model_eval.py`)
-Tests and scores your locally installed models against the *actual real-world prompts* used by the tools above.
-- **How it works:** Evaluates models on their ability to strictly follow instructions, generate valid JSON, and extract concise filenames. Includes automated retries for resilience.
-- **Usage:**
+Tests models against real prompts from the tools above.
+- **Run:**
   ```bash
   python3 model_eval.py
+  # Quick test single model/task:
+  python3 model_eval.py --model qwen3.6 --task json --quick
   ```
+- **Options:** `--model`, `--task`, `--quick`, `--debug`
+
+## Configuration
+
+Edit `conf/config.yaml` for model selection and task-specific prompts:
+
+```yaml
+llm_url: http://localhost:1337
+default_model: qwen3.6-35b-a3b-mxfp4
+
+best_models:
+  summarize: qwen3.6-35b-a3b-mxfp4
+  json: qwen3.6-35b-a3b-mxfp4
+  # ...
+
+# Model-specific prompts (April 2026 learnings)
+summarize_prompts:
+  qwen3.6: "Output the summary... Include your analysis."
+  foundation: "Output the summary..."
+```
+
+See `MODEL_QUIRKS.md` for detailed model-specific learnings.
 
 ## Architecture & Libraries
 
