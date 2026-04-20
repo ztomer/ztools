@@ -80,6 +80,7 @@ CHILDREN_STR = ", ".join([f"{c['age']}yo {c['gender']}" for c in CHILDREN]) if C
 CITY = WEEKEND_CONFIG.get("location", {}).get("city", "Vaughan")
 REGION = WEEKEND_CONFIG.get("location", {}).get("region", "Toronto")
 AGE_RANGE = f"{min(c['age'] for c in CHILDREN)}-{max(c['age'] for c in CHILDREN)}" if CHILDREN else "4-12"
+DATES_STR = "April 24 to April 26"  # Placeholder - actual value computed in main()
 
 
 MODEL_CONFIG = os.path.expanduser("~/.config/model_eval.json")

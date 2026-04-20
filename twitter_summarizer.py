@@ -522,12 +522,13 @@ def summarize_with_llm(
                 timeout=120,
             )
             if result and "content" in result:
-                from lib.osaurus_lib import merge_thinking_with_summary, extract_thinking
+                from lib.osaurus_lib import merge_thinking_with_summary, extract_thinking, strip_thinking
                 thinking, cleaned = extract_thinking(result["content"])
                 if thinking:
                     print(f"[llm] {try_model}: included thinking block")
                     return merge_thinking_with_summary(thinking, cleaned)
-                return cleaned
+                # Also strip plaintext thinking (qwen uses "Here's a thinking process:" not XML)
+                return strip_thinking(cleaned)
             elif result and "error" in result:
                 print(f"[llm] {try_model} error: {result['error'][:50]}")
         except Exception as e:

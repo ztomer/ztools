@@ -35,11 +35,13 @@ def remove_thinking_blocks(content: str) -> str:
         if marker in content:
             # Try to find explicit output markers after thinking
             output_match = re.search(
-                r"(?:Output Generation|Output|Final Answer|Response|Proceeds)\s*[\.\:]\s*",
+                r"(?:Output Generation|Output|Final Answer|Response|Proceeds|I will now generate|I'll now generate|Let's draft|Draft)\s*[\.\:]\s*",
                 content, re.IGNORECASE
             )
             if output_match:
                 content = content[output_match.end():]
+                # Also remove any trailing self-correction/verification blocks
+                content = re.sub(r"\n?\*?\[?\(?[Ss]elf-[Cc]orrection.*", "", content, flags=re.DOTALL)
             else:
                 # Try to find JSON start after thinking
                 json_match = re.search(r'[\[{]', content[content.index(marker):])
@@ -47,11 +49,14 @@ def remove_thinking_blocks(content: str) -> str:
                     content = content[content.index(marker) + json_match.start():]
             break
 
-    # Handle </think> tag without matching <think>
+    # Handle </think> tag without matching </think>
     if "</think>" in content:
         content = content.split("</think>")[-1]
     elif "Think:" in content:
         content = content.split("Think:")[-1]
+
+    # Remove trailing stats like "stats:2114;97.2952" or "stats:1234"
+    content = re.sub(r"\n*stats:\d+([;.]\d+)?\s*$", "", content)
 
     return content.strip()
 
