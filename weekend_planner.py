@@ -656,7 +656,12 @@ def main(args=None):
 
         # 2. Generate activities via LLM (in main thread to avoid hangs)
         progress.start_task(task_transient)
-        sys_transient = build_transient_system_prompt(actual_model)
+        sys_transient = build_transient_system_prompt(
+            actual_model,
+            location=f"{CITY}/{REGION}",
+            age_range=AGE_RANGE,
+            date_range=dates_str,
+        )
         usr_transient = build_transient_user_prompt(
             dates_str, weather_str, events_str)
         print(
@@ -671,7 +676,11 @@ def main(args=None):
         )
 
         progress.start_task(task_fixed)
-        sys_fixed = build_fixed_system_prompt(actual_model)
+        sys_fixed = build_fixed_system_prompt(
+            actual_model,
+            location=f"{CITY}/{REGION}",
+            age_range=AGE_RANGE,
+        )
         usr_fixed = build_fixed_user_prompt(dates_str, weather_str, venues_str)
         json_fixed = get_llm_json(sys_fixed, usr_fixed)
         progress.update(
