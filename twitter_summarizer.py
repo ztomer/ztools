@@ -490,7 +490,7 @@ def summarize_with_llm(
     )
 
     models = get_available_models()
-    target_model = model if model else get_best_model("summarize")
+    target_model = model if model else get_best_model(Task.SUMMARIZE)
     if models and target_model not in models:
         target_model = select_best_model(models) or target_model
 

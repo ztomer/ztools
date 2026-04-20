@@ -392,7 +392,7 @@ def get_llm_json(system_prompt, user_prompt, max_retries=3):
 
     # Try Osaurus server first
     for attempt in range(1, max_retries + 1):
-        target_model = get_best_model("json")
+        target_model = get_best_model(Task.JSON)
         print(f"[llm] Trying Osaurus model: {target_model}")
         result = call_llm_api(
             OSAURUS_BASE_URL.rstrip("/"),
@@ -649,8 +649,8 @@ def main(args=None):
         print("[INFO] Starting LLM calls...")
 
         # Get model for prompts
-        from lib.config import get_best_model
-        actual_model = get_best_model("json")
+        from lib.config import get_best_model, Task
+        actual_model = get_best_model(Task.JSON)
         print(f"[DEBUG] Using model: {actual_model}")
 
         # 2. Generate activities via LLM (in main thread to avoid hangs)
