@@ -229,9 +229,37 @@ This is NOT about eval benchmark scores - it's about PRODUCTION quality for week
 - **Best model**: foundation
 - **Why**: Only model that follows schema + uses input + applies judgement
 
-### twitter_summarizer 
-- **Best model**: gemma-4-26b-a4b-it-4bit or gemma-4-31b-it-jang_4m
-- **Why**: Handles long context, good summarization
+### twitter_summarizer
+- **Best model**: qwen3.6 or foundation (tested Apr 2026)
+- **Best for**: JSON extraction, data tasks
+- **Prompts**: Model-specific prompts in config.yaml (summarize_prompts)
+- **Key learnings**:
+  - qwen3.6: Needs SHORT prompt "Output the summary. Use ## headers..." to avoid thinking block
+  - foundation: Works with same prompt, clean ## headers output
+  - gemma: Tends to produce thinking blocks unless prompted simply
+  - Pre-processing: Use model-specific prompt from config.yaml
+  - Post-processing: Handled in osaurus_lib.py (normalize_keys)
+
+### summarize prompt config (conf/config.yaml)
+```yaml
+summarize_prompts:
+  default: "Output the summary. Use ## headers..."
+  qwen3.6: "Output the summary. Use ## headers..."
+  foundation: "Output the summary. Use ## headers..."
+  gemma: "Output the summary. Use ## headers..."
+```
+
+### weekend_planner
+- **Best model**: qwen3.6 (real venue extraction)
+- **Issue**: Requires web search for accurate data
+- **Key learnings**:
+  - Use MANDATORY defaults in prompts for missing fields
+  - LLMs fabricate data if not in context - use default values
+- **Prompts from Apr 2026**:
+  - Fixed: "Output JSON now... Default: target_ages: 6-13 years, price: $18-35..."
+  - Transient: "Output JSON now... Default: target_ages: 6-13 years, price: $20-30..."
+
+### image_renamer
 
 ### image_renamer
 - **Best model**: foundation
