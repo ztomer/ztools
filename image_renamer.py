@@ -46,7 +46,6 @@ PROMPT_TEXT_TO_FILENAME = (
     "and suggest a short, descriptive filename (without extension). "
     "Use lowercase, underscores for spaces, and no special characters other than hyphens/underscores. "
     "Keep it under 50 characters. "
-    "Do NOT include any reasoning, thinking process, or introductory text. "
     "Output ONLY the final filename string, nothing else.\\n\\n"
     "TEXT:\\n{text}"
 )
@@ -55,9 +54,20 @@ PROMPT_IMAGE_TO_FILENAME = (
     "You are a file naming assistant. Look at this image and suggest a short, descriptive filename (without extension). "
     "Use lowercase, underscores for spaces, and no special characters other than hyphens/underscores. "
     "Keep it under 50 characters. "
-    "Do NOT include any reasoning, thinking process, or introductory text. "
     "Output ONLY the final filename string, nothing else."
 )
+
+
+def get_filename_prompt(for_image: bool = False, model: str = None) -> str:
+    """Get model-specific filename prompt from config."""
+    from lib.config import get_model_prompt
+
+    prompt = get_model_prompt(model, "filename") if model else ""
+    if prompt:
+        return prompt
+
+    # Fallback
+    return PROMPT_IMAGE_TO_FILENAME if for_image else PROMPT_TEXT_TO_FILENAME
 
 VLM_PREFERRED_MODELS = [
     "qwen3.5-27b-claude-4.6-opus-distilled-mlx-4bit",  # Best: 100%
@@ -218,7 +228,15 @@ def query_llm_for_filename(
     text: str, host: str, model: str = "foundation", api_key: str = ""
 ) -> Optional[str]:
     """Query the LLM to generate a filename based on the OCR text."""
-    prompt = PROMPT_TEXT_TO_FILENAME.format(text=text)
+    from lib.config import get_model_prompt
+
+    # Try config first
+    prompt_template = get_model_prompt(model, "filename")
+    if prompt_template:
+        prompt = prompt_template.format(text=text) if "{text}" in prompt_template else prompt_template
+    else:
+        prompt = PROMPT_TEXT_TO_FILENAME.format(text=text)
+
     messages = [{"role": "user", "content": prompt}]
     from lib.osaurus_lib import call_llm_api as _call
     result = _call(host, model, messages, timeout=30, api_key=api_key)
@@ -229,6 +247,13 @@ def query_vlm_for_filename(
     image_path: Path, host: str, model: str, api_key: str = ""
 ) -> Optional[str]:
     """Query a Vision Language Model to describe the image."""
+    from lib.config import get_model_prompt
+
+    # Try config first
+    prompt = get_model_prompt(model, "filename")
+    if not prompt:
+        prompt = PROMPT_IMAGE_TO_FILENAME
+
     try:
         with open(image_path, "rb") as f:
             import base64
@@ -237,7 +262,7 @@ def query_vlm_for_filename(
         return call_llm_api(
             host,
             model,
-            PROMPT_IMAGE_TO_FILENAME,
+            prompt,
             images=images,
             timeout=60,
             api_key=api_key,
