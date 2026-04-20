@@ -64,7 +64,8 @@ MODELS = [
 
 
 # Use get_best_model from consolidated osaurus_lib
-DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", get_best_model("summarize"))
+from lib.config import Task
+DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", get_best_model(Task.SUMMARIZE))
 CHROME_COOKIES_DB = (
     Path.home()
     / "Library"
@@ -448,8 +449,8 @@ MLX_MODELS_DIR = Path.home() / "MLXModels"
 def _build_prompt(
     tweets: list[dict], max_chars: int, for_mlx: bool = False, model: str = None
 ) -> tuple[str, int]:
-    from lib.config import get_model_prompt
-    prompt_template = get_model_prompt(model, "summarize")
+    from lib.config import get_model_prompt, Task
+    prompt_template = get_model_prompt(model, Task.SUMMARIZE)
 
     # Fallback if no template found
     if not prompt_template:

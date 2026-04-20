@@ -86,8 +86,9 @@ MODEL_CONFIG = os.path.expanduser("~/.config/model_eval.json")
 
 
 # Use consolidated functions from osaurus_lib
+from lib.config import Task
 MODEL_NAME = os.environ.get(
-    "OLLAMA_MODEL", get_best_model("json") or "gemma-4-26b-a4b-it-4bit"
+    "OLLAMA_MODEL", get_best_model(Task.JSON) or "gemma-4-26b-a4b-it-4bit"
 )
 OSAURUS_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
 
@@ -285,14 +286,14 @@ def scrape_review_score(place_name):
 
 
 def build_fixed_system_prompt(model: str = None):
-    from lib.config import get_model_prompt
+    from lib.config import get_model_prompt, Task
 
     exclusion_string = ", ".join(
         EXCLUDED_PLACES + VISITED_PLACES
     )
 
     # Try to get from config first
-    config_prompt = get_model_prompt(model, "weekend_fixed") if model else ""
+    config_prompt = get_model_prompt(model, Task.WEEKEND_FIXED) if model else ""
     if config_prompt:
         return config_prompt
 
@@ -326,10 +327,10 @@ def build_fixed_user_prompt(dates_str, weather_str, venues_str):
 
 
 def build_transient_system_prompt(model: str = None):
-    from lib.config import get_model_prompt
+    from lib.config import get_model_prompt, Task
 
     # Try to get from config first
-    config_prompt = get_model_prompt(model, "weekend_transient") if model else ""
+    config_prompt = get_model_prompt(model, Task.WEEKEND_TRANSIENT) if model else ""
     if config_prompt:
         return config_prompt
 

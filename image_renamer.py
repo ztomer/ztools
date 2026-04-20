@@ -60,9 +60,9 @@ PROMPT_IMAGE_TO_FILENAME = (
 
 def get_filename_prompt(for_image: bool = False, model: str = None) -> str:
     """Get model-specific filename prompt from config."""
-    from lib.config import get_model_prompt
+    from lib.config import get_model_prompt, Task
 
-    prompt = get_model_prompt(model, "filename") if model else ""
+    prompt = get_model_prompt(model, Task.FILENAME) if model else ""
     if prompt:
         return prompt
 
@@ -228,10 +228,10 @@ def query_llm_for_filename(
     text: str, host: str, model: str = "foundation", api_key: str = ""
 ) -> Optional[str]:
     """Query the LLM to generate a filename based on the OCR text."""
-    from lib.config import get_model_prompt
+    from lib.config import get_model_prompt, Task
 
     # Try config first
-    prompt_template = get_model_prompt(model, "filename")
+    prompt_template = get_model_prompt(model, Task.FILENAME)
     if prompt_template:
         prompt = prompt_template.format(text=text) if "{text}" in prompt_template else prompt_template
     else:
@@ -247,10 +247,10 @@ def query_vlm_for_filename(
     image_path: Path, host: str, model: str, api_key: str = ""
 ) -> Optional[str]:
     """Query a Vision Language Model to describe the image."""
-    from lib.config import get_model_prompt
+    from lib.config import get_model_prompt, Task
 
     # Try config first
-    prompt = get_model_prompt(model, "filename")
+    prompt = get_model_prompt(model, Task.FILENAME)
     if not prompt:
         prompt = PROMPT_IMAGE_TO_FILENAME
 

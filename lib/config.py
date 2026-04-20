@@ -12,14 +12,21 @@ from typing import Dict, Any, Optional
 # CONSTANTS - Task names used throughout the system
 # ==========================================================
 
-class TaskKeys:
-    """Known task keys for configuration."""
+import enum
+
+
+class Task(enum.Enum):
+    """Task types for configuration - use these instead of strings for type safety."""
     WEEKEND_FIXED = "weekend_fixed"
     WEEKEND_TRANSIENT = "weekend_transient"
     SUMMARIZE = "summarize"
     FILENAME = "filename"
     JSON = "json"
     DETAILED_JSON = "detailed_json"
+
+
+# Backward compatibility - use Task enum instead
+TaskKeys = Task
 
 # Minimal hardcoded fallbacks - only used if config.yaml is completely missing
 _FALLBACK_TIMEOUT = 600
@@ -107,22 +114,32 @@ def get_best_models() -> Dict[str, str]:
     return _config.get("best_models", {})
 
 
-def get_best_model(task: str) -> str:
-    """Get the best model for a specific task."""
+def get_best_model(task: Task) -> str:
+    """Get the best model for a specific task.
+    
+    Args:
+        task: Task enum value (e.g., Task.SUMMARIZE)
+        
+    Returns:
+        Model name string
+    """
     models = get_best_models()
-    return models.get(task, _config.get("default_model", _FALLBACK_MODEL))
+    task_key = task.value if isinstance(task, Task) else task
+    return models.get(task_key, _config.get("default_model", _FALLBACK_MODEL))
 
 
-def get_timeout(task: str) -> int:
+def get_timeout(task: Task) -> int:
     """Get timeout for a specific task."""
     timeouts = get_timeouts()
-    return timeouts.get(task, _FALLBACK_TIMEOUT)
+    task_key = task.value if isinstance(task, Task) else task
+    return timeouts.get(task_key, _FALLBACK_TIMEOUT)
 
 
-def get_max_tokens_for_task(task: str) -> int:
+def get_max_tokens_for_task(task: Task) -> int:
     """Get max tokens for a specific task."""
     tokens = get_max_tokens()
-    return tokens.get(task, _FALLBACK_MAX_TOKENS)
+    task_key = task.value if isinstance(task, Task) else task
+    return tokens.get(task_key, _FALLBACK_MAX_TOKENS)
 
 
 def get_config() -> Dict[str, Any]:
@@ -207,11 +224,20 @@ def get_model_config(model: str) -> Dict:
     return _model_configs_cache[family]
 
 
-def get_model_prompt(model: str, task: str) -> str:
-    """Get model-specific prompt for a task."""
+def get_model_prompt(model: str, task: Task) -> str:
+    """Get model-specific prompt for a task.
+    
+    Args:
+        model: Model name (e.g., "qwen", "gemma", "foundation")
+        task: Task enum value (e.g., Task.SUMMARIZE)
+        
+    Returns:
+        Prompt string or empty if not found
+    """
     config = get_model_config(model)
     prompts = config.get("prompts", {})
-    return prompts.get(task, "")
+    task_key = task.value if isinstance(task, Task) else task
+    return prompts.get(task_key, "")
 
 
 def get_model_prompts_all(model: str) -> Dict[str, str]:
@@ -226,10 +252,10 @@ def get_model_prompts_all(model: str) -> Dict[str, str]:
 
 # Test inputs for eval tasks - should be minimal but realistic
 _EVAL_TEST_INPUTS = {
-    TaskKeys.WEEKEND_FIXED: "Vaughan Sports Arena: indoor.",
-    TaskKeys.WEEKEND_TRANSIENT: "Spring Festival April 20.",
-    TaskKeys.FILENAME: "Screenshot of login page with error message.",
-    TaskKeys.SUMMARIZE: "[@user1 | 10:00]: Test tweet",
+    Task.WEEKEND_FIXED: "Vaughan Sports Arena: indoor.",
+    Task.WEEKEND_TRANSIENT: "Spring Festival April 20.",
+    Task.FILENAME: "Screenshot of login page with error message.",
+    Task.SUMMARIZE: "[@user1 | 10:00]: Test tweet",
 }
 
 
@@ -258,12 +284,12 @@ def build_tasks_from_model(model: str) -> Dict:
     # Import validators lazily to avoid circular imports
     from lib.validators_lib import validate_detailed_json, validate_summary, validate_filename
 
-    # Map prompt keys to task definitions using constants
-    if TaskKeys.WEEKEND_FIXED in prompts:
-        test_input = _EVAL_TEST_INPUTS[TaskKeys.WEEKEND_FIXED]
+    # Map prompt keys to task definitions using Task enum
+    if Task.WEEKEND_FIXED.value in prompts:
+        test_input = _EVAL_TEST_INPUTS[Task.WEEKEND_FIXED]
         tasks["detailed_json"] = {
             "messages": [
-                {"role": "system", "content": prompts[TaskKeys.WEEKEND_FIXED]},
+                {"role": "system", "content": prompts[Task.WEEKEND_FIXED.value]},
                 {"role": "user", "content": f"Extract venues from this context: {test_input}"},
             ],
             "validator": validate_detailed_json,
@@ -271,11 +297,11 @@ def build_tasks_from_model(model: str) -> Dict:
             "source": test_input,
         }
 
-    if TaskKeys.WEEKEND_TRANSIENT in prompts:
-        test_input = _EVAL_TEST_INPUTS[TaskKeys.WEEKEND_TRANSIENT]
+    if Task.WEEKEND_TRANSIENT.value in prompts:
+        test_input = _EVAL_TEST_INPUTS[Task.WEEKEND_TRANSIENT]
         tasks["json"] = {
             "messages": [
-                {"role": "system", "content": prompts[TaskKeys.WEEKEND_TRANSIENT]},
+                {"role": "system", "content": prompts[Task.WEEKEND_TRANSIENT.value]},
                 {"role": "user", "content": f"Extract events from this context: {test_input}"},
             ],
             "validator": validate_detailed_json,
@@ -283,9 +309,9 @@ def build_tasks_from_model(model: str) -> Dict:
             "source": test_input,
         }
 
-    if TaskKeys.FILENAME in prompts:
-        test_input = _EVAL_TEST_INPUTS[TaskKeys.FILENAME]
-        prompt = _safe_format_prompt(prompts[TaskKeys.FILENAME], test_input)
+    if Task.FILENAME.value in prompts:
+        test_input = _EVAL_TEST_INPUTS[Task.FILENAME]
+        prompt = _safe_format_prompt(prompts[Task.FILENAME.value], test_input)
         tasks["filename"] = {
             "messages": [
                 {"role": "user", "content": prompt},
@@ -294,9 +320,32 @@ def build_tasks_from_model(model: str) -> Dict:
             "parse_json": False,
         }
 
-    if TaskKeys.SUMMARIZE in prompts:
-        test_input = _EVAL_TEST_INPUTS[TaskKeys.SUMMARIZE]
-        prompt = _safe_format_prompt(prompts[TaskKeys.SUMMARIZE], test_input)
+    if Task.WEEKEND_TRANSIENT.value in prompts:
+        test_input = _EVAL_TEST_INPUTS[Task.WEEKEND_TRANSIENT]
+        tasks["json"] = {
+            "messages": [
+                {"role": "system", "content": prompts[Task.WEEKEND_TRANSIENT.value]},
+                {"role": "user", "content": f"Extract events from this context: {test_input}"},
+            ],
+            "validator": validate_detailed_json,
+            "parse_json": True,
+            "source": test_input,
+        }
+
+    if Task.FILENAME.value in prompts:
+        test_input = _EVAL_TEST_INPUTS[Task.FILENAME]
+        prompt = _safe_format_prompt(prompts[Task.FILENAME.value], test_input)
+        tasks["filename"] = {
+            "messages": [
+                {"role": "user", "content": prompt},
+            ],
+            "validator": validate_filename,
+            "parse_json": False,
+        }
+
+    if Task.SUMMARIZE.value in prompts:
+        test_input = _EVAL_TEST_INPUTS[Task.SUMMARIZE]
+        prompt = _safe_format_prompt(prompts[Task.SUMMARIZE.value], test_input)
         tasks["summarize"] = {
             "messages": [
                 {"role": "user", "content": prompt},
