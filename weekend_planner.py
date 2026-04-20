@@ -284,11 +284,19 @@ def scrape_review_score(place_name):
 # ==========================================
 
 
-def build_fixed_system_prompt():
+def build_fixed_system_prompt(model: str = None):
+    from lib.config import get_model_prompt
+
     exclusion_string = ", ".join(
         EXCLUDED_PLACES + VISITED_PLACES
     )
 
+    # Try to get from config first
+    config_prompt = get_model_prompt(model, "weekend_fixed") if model else ""
+    if config_prompt:
+        return config_prompt
+
+    # Fallback to hardcoded
     return f"""
     Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
 
@@ -317,7 +325,15 @@ def build_fixed_user_prompt(dates_str, weather_str, venues_str):
     """
 
 
-def build_transient_system_prompt():
+def build_transient_system_prompt(model: str = None):
+    from lib.config import get_model_prompt
+
+    # Try to get from config first
+    config_prompt = get_model_prompt(model, "weekend_transient") if model else ""
+    if config_prompt:
+        return config_prompt
+
+    # Fallback to hardcoded
     return f"""
     Output JSON now. Use EXACT schema: {{"transient_events": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}}]}}
 
@@ -618,17 +634,19 @@ def main(args=None):
 
         print("[INFO] Starting LLM calls...")
 
+        # Get model for prompts
+        from lib.config import get_best_model
+        actual_model = get_best_model("json")
+        print(f"[DEBUG] Using model: {actual_model}")
+
         # 2. Generate activities via LLM (in main thread to avoid hangs)
         progress.start_task(task_transient)
-        sys_transient = build_transient_system_prompt()
+        sys_transient = build_transient_system_prompt(actual_model)
         usr_transient = build_transient_user_prompt(
             dates_str, weather_str, events_str)
         print(
             f"[DEBUG] user_prompt length: {len(usr_transient)}, venues preview: {venues_str[:100]}..."
         )
-        # Print actual model being used (get_llm_json uses get_best_model("json"))
-        from lib.config import get_best_model
-        actual_model = get_best_model("json")
         print(f"[DEBUG] Using model: {actual_model}")
         json_transient = get_llm_json(sys_transient, usr_transient)
         progress.update(
@@ -638,7 +656,7 @@ def main(args=None):
         )
 
         progress.start_task(task_fixed)
-        sys_fixed = build_fixed_system_prompt()
+        sys_fixed = build_fixed_system_prompt(actual_model)
         usr_fixed = build_fixed_user_prompt(dates_str, weather_str, venues_str)
         json_fixed = get_llm_json(sys_fixed, usr_fixed)
         progress.update(

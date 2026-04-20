@@ -448,8 +448,12 @@ MLX_MODELS_DIR = Path.home() / "MLXModels"
 def _build_prompt(
     tweets: list[dict], max_chars: int, for_mlx: bool = False, model: str = None
 ) -> tuple[str, int]:
-    from lib.config import get_summarize_prompt
-    prompt_template = get_summarize_prompt(model)
+    from lib.config import get_model_prompt
+    prompt_template = get_model_prompt(model, "summarize")
+
+    # Fallback if no template found
+    if not prompt_template:
+        prompt_template = "Summarize this timeline:\n\n{}\n\nUse ## headers for topics."
 
     # Build timeline content
     budget = max_chars - 200  # Reserve for template
