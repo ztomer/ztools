@@ -517,11 +517,12 @@ def main():
 
     # MLX backend disabled - not working reliably (2026-04)
     # Uncomment to re-enable:
-    # from lib.mlx_lib import list_mlx_models
+    # from lib.mlx_lib import list_mlx_models, normalize_mlx_model_name
     # mlx_models = list_mlx_models()
+    # osaurus_base_names = {normalize_mlx_model_name(m) for m in osaurus_models}
     # for m in mlx_models:
-    #     base_name = m.split("/")[-1].lower()
-    #     if base_name in osaurus_base_names:
+    #     normalized = normalize_mlx_model_name(m)
+    #     if normalized in osaurus_base_names:
     #         models_to_test.append((m, "mlx"))
 
     if args.model:
