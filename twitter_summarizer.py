@@ -492,12 +492,14 @@ def summarize_with_llm(
     # Try models in order of preference
     fallback_models = [target_model, "qwen3.6-35b-a3b-mxfp4", "foundation"]
     tried = set()
+    failed_models = []
 
     for try_model in fallback_models:
         if try_model in tried or try_model not in models:
             tried.add(try_model)
             continue
         tried.add(try_model)
+        failed_models.append(try_model)
 
         # Rebuild prompt for each model
         prompt, n = _build_prompt(tweets, max_chars=ctx_chars, model=try_model)
@@ -545,6 +547,7 @@ def summarize_with_llm(
             return process_mlx_content(raw)
         print(f"[llm] MLX error: {raw}")
 
+    print(f"[llm] All server models failed: {failed_models}")
     return "[LLM error: both local MLX and server failed]"
 
 

@@ -1,0 +1,45 @@
+# Gemma 4 model configuration
+
+name: gemma
+timeout: 180
+
+# Task-specific prompts
+prompts:
+  json: |
+    Output JSON now.
+
+  summarize: |
+    Output the summary. Use ## headers for topics.
+
+    <timeline>
+    {}
+    </timeline>
+
+    Summarize the timeline.
+
+# Key normalizations (gemma uses different field names)
+key_mappings:
+  event: name
+  title: activity
+  place: name
+  venue: location
+  address: location
+  where: location
+  date: day
+  when: day
+  time: duration
+  age_group: target_ages
+  ages: target_ages
+  audience: target_ages
+  who: target_ages
+  cost: price
+  pricing: price
+  type: weather
+  setting: weather
+  indoor_outdoor: weather
+  year_round_activities: fixed_activities
+  activities: fixed_activities
+  limited_time_events: transient_events
+  events: transient_events
+
+quirks: []

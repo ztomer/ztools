@@ -214,7 +214,7 @@ def _extract_json_only(content: str) -> Optional[str]:
     return content
 
 
-def extract_json(content: str) -> Union[Dict[str, Any], List[Any], None]:
+def extract_json(content: str, model: str = None) -> Union[Dict[str, Any], List[Any], None]:
     """Extract JSON from content - handles plain text lists, normalizes keys."""
     import json
 
@@ -223,19 +223,19 @@ def extract_json(content: str) -> Union[Dict[str, Any], List[Any], None]:
     if json_str:
         try:
             data = json.loads(json_str)
-            return normalize_keys(data)
+            return normalize_keys(data, model)
         except json.JSONDecodeError:
             pass
 
     # Try plain text list
     data = _extract_plain_list(content)
     if data:
-        return normalize_keys(data)
+        return normalize_keys(data, model)
 
     # Try text normalization
     data = normalize_text_output(content)
     if data:
-        return normalize_keys(data)
+        return normalize_keys(data, model)
 
     return None
 
@@ -310,35 +310,47 @@ KEY_NORMALIZATIONS = {
 }
 
 
-def normalize_keys(data: Any) -> Any:
-    """Normalize alternate key names to standard schema."""
+def normalize_keys(data: Any, model: str = None) -> Any:
+    """Normalize alternate key names to standard schema.
+
+    Uses hardcoded defaults plus model-specific overrides from config.
+    """
     if not data:
         return data
+
+    # Get model-specific key mappings from config
+    from lib.config import get_model_config
+
+    model_mappings = {}
+    if model:
+        config = get_model_config(model)
+        model_mappings = config.get("key_mappings", {})
+
+    # Merge: default mappings + model-specific (model takes priority)
+    all_mappings = {**KEY_NORMALIZATIONS, **model_mappings}
 
     # Handle dict with top-level key (extract array if needed)
     if isinstance(data, dict):
         for old_key, new_key in TOP_LEVEL_KEYS.items():
             if old_key in data:
-                # Extract the array and normalize its contents
                 arr = data[old_key]
                 if isinstance(arr, list):
-                    return {new_key: [normalize_keys(item) for item in arr]}
+                    return {new_key: [normalize_keys(item, model) for item in arr]}
                 elif isinstance(arr, dict):
-                    # Sometimes it's nested like {"items": [...]}
                     for k, v in arr.items():
                         if isinstance(v, list):
-                            return {new_key: [normalize_keys(item) for item in v]}
+                            return {new_key: [normalize_keys(item, model) for item in v]}
                 return {new_key: arr}
 
         # Normalize keys within dict
         result = {}
         for key, value in data.items():
-            new_key = KEY_NORMALIZATIONS.get(key, key)
-            result[new_key] = normalize_keys(value)
+            new_key = all_mappings.get(key, key)
+            result[new_key] = normalize_keys(value, model)
         return result
 
     if isinstance(data, list):
-        return [normalize_keys(item) for item in data]
+        return [normalize_keys(item, model) for item in data]
 
     return data
 

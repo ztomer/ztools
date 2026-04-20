@@ -1,0 +1,24 @@
+# Foundation model configuration
+
+name: foundation
+timeout: 60
+
+# Task-specific prompts
+prompts:
+  json: |
+    Output JSON.
+
+  summarize: |
+    Output the summary. Use ## headers for topics.
+
+    <timeline>
+    {}
+    </timeline>
+
+    Summarize the timeline.
+
+# Key normalizations
+key_mappings: {}
+
+# No special quirks needed
+quirks: []

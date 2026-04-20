@@ -6,6 +6,7 @@ Auto-loads configuration on first access.
 
 import os
 import sys
+import yaml
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -158,3 +159,63 @@ def get_summarize_prompt(model: str = None) -> str:
             return prompts[base]
 
     return prompts.get("default", prompts.get("qwen3.6", ""))
+
+
+# ==========================================================
+# MODEL-SPECIFIC CONFIG
+# ==========================================================
+
+def get_model_family(model: str) -> str:
+    """Extract model family from full model name.
+
+    Examples:
+      qwen3.6-35b-a3b-mxfp4 -> qwen
+      gemma-4-26b-a4b-it-4bit -> gemma
+      foundation -> foundation
+    """
+    if not model:
+        return "default"
+
+    model_lower = model.lower()
+
+    if "qwen" in model_lower:
+        return "qwen"
+    elif "gemma" in model_lower:
+        return "gemma"
+    elif "foundation" in model_lower:
+        return "foundation"
+    else:
+        return "default"
+
+
+_model_configs: Dict[str, Dict] = {}
+
+
+def get_model_config(model: str) -> Dict:
+    """Load model-specific configuration from conf/models/{family}.yaml"""
+    global _model_configs
+
+    family = get_model_family(model)
+
+    if family in _model_configs:
+        return _model_configs[family]
+
+    # Load from YAML
+    config_path = Path(__file__).parent.parent / "conf" / "models" / f"{family}.yaml"
+
+    if config_path.exists():
+        import yaml
+        with open(config_path) as f:
+            _model_configs[family] = yaml.safe_load(f)
+    else:
+        # Return empty config
+        _model_configs[family] = {"name": family, "prompts": {}, "key_mappings": {}, "quirks": []}
+
+    return _model_configs[family]
+
+
+def get_model_prompt(model: str, task: str) -> str:
+    """Get model-specific prompt for a task."""
+    config = get_model_config(model)
+    prompts = config.get("prompts", {})
+    return prompts.get(task, "")

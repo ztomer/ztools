@@ -1,0 +1,37 @@
+# Qwen model configuration
+# Used for qwen3.6-35b-a3b-mxfp4 and variants
+
+name: qwen
+timeout: 120
+
+# Task-specific prompts
+prompts:
+  json: |
+    Output JSON now. Use EXACT schema.
+
+  summarize: |
+    Output the summary. Use ## headers for topics.
+
+    <timeline>
+    {}
+    </timeline>
+
+    Summarize the timeline. Include your analysis.
+
+# Key normalizations (output -> our schema)
+key_mappings:
+  event: name
+  title: activity
+  venue: location
+  address: location
+  age_group: target_ages
+  ages: target_ages
+  cost: price
+  pricing: price
+  type: weather
+
+# Model quirks
+quirks:
+  - type: prefix
+    pattern: "Output JSON now."
+    reason: Prevents thinking blocks in JSON output
