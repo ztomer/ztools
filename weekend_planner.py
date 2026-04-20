@@ -79,6 +79,7 @@ CHILDREN = WEEKEND_CONFIG.get("children", [])
 CHILDREN_STR = ", ".join([f"{c['age']}yo {c['gender']}" for c in CHILDREN]) if CHILDREN else "{CHILDREN_STR}"
 CITY = WEEKEND_CONFIG.get("location", {}).get("city", "Vaughan")
 REGION = WEEKEND_CONFIG.get("location", {}).get("region", "Toronto")
+AGE_RANGE = f"{min(c['age'] for c in CHILDREN)}-{max(c['age'] for c in CHILDREN)}" if CHILDREN else "4-12"
 
 
 MODEL_CONFIG = os.path.expanduser("~/.config/model_eval.json")
