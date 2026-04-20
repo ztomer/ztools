@@ -494,21 +494,35 @@ def summarize_with_llm(
     ctx_chars = (8192 - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN
     prompt, n = _build_prompt(tweets, max_chars=ctx_chars)
 
-    try:
-        print(f"[llm] Sending {n} tweets to {target_model} (Osaurus) ...")
-        result = call_llm_api(
-            f"{base_url.rstrip('/')}",
-            target_model,
-            [{"role": "user", "content": prompt}],
-            api_key=api_key,
-            timeout=600,
-        )
-        if result and "content" in result:
-            return strip_thinking(result["content"])
-        else:
-            print(f"[llm] call_llm_api returned error: {result.get('error', 'unknown')}")
-    except Exception as e:
-        print(f"[llm] Server error: {e}")
+    # Try models in order of preference
+    fallback_models = [target_model, "qwen3.6-35b-a3b-mxfp4", "foundation"]
+    tried = set()
+
+    for try_model in fallback_models:
+        if try_model in tried or try_model not in models:
+            tried.add(try_model)
+            continue
+        tried.add(try_model)
+
+        try:
+            print(f"[llm] Trying {try_model} ({n} tweets)...")
+            result = call_llm_api(
+                f"{base_url.rstrip('/')}",
+                try_model,
+                [{"role": "user", "content": prompt}],
+                api_key=api_key,
+                timeout=120,
+            )
+            if result and "content" in result:
+                return strip_thinking(result["content"])
+            elif result and "error" in result:
+                print(f"[llm] {try_model} error: {result['error'][:50]}")
+        except Exception as e:
+            print(f"[llm] {try_model} failed: {str(e)[:50]}")
+            continue
+
+    # All models failed, try MLX fallback
+    print("[llm] Server models failed, trying MLX...")
 
     # Fall back to MLX
     mlx_path = find_mlx_model(target_model) or find_best_mlx_model(MLX_PREFERRED)
