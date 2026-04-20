@@ -23,18 +23,8 @@ DEFAULT_PORT = 1337
 # MODEL FAMILY DETECTION & QUIRKS
 # ==========================================================
 
-def get_model_family(model: str) -> str:
-    """Detect model family for applying family-specific quirks."""
-    model_lower = model.lower()
-    if "qwen3.6" in model_lower or "qwen3.5" in model_lower:
-        return "qwen"
-    elif "gemma-4" in model_lower or "gemma4" in model_lower:
-        return "gemma4"
-    elif "gemma" in model_lower:
-        return "gemma"
-    elif "foundation" in model_lower:
-        return "foundation"
-    return "unknown"
+# Re-use get_model_family from config
+from .config import get_model_family as _get_model_family
 
 
 def apply_model_quirks(messages: List[Dict[str, Any]], model: str) -> List[Dict[str, Any]]:
