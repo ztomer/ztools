@@ -15,7 +15,7 @@ ZTools is a suite of productivity scripts powered by local LLMs. They run entire
 
 | Requirement | Notes |
 |------------|-------|
-| **Osaurus server** | Must be running at `http://localhost:1337` |
+| **[Osaurus](https://github.com/osaurus) or [Ollama](https://ollama.com)** | Server running at `http://localhost:1337` |
 | **Python 3.11+** | For most scripts |
 | **uv** | Required for scripts with browser/vision dependencies |
 
@@ -146,6 +146,6 @@ pytest tests/
 
 ## Requirements
 
-- **Osaurus server** running on port 1337
-- **Models** installed (run `osaurus pull <model>` to add more)
+- **Osaurus or Ollama** server running on port 1337
+- **Models** installed (`osaurus pull <model>`)
 - **uv** for scripts with extra dependencies (twitter, image_renamer)
