@@ -15,13 +15,13 @@ best_models:
 # Model-specific prompts for summarization task
 summarize_prompts:
   # Default prompt (used if model not listed)
-  default: "Output the summary. Use ## headers for topics. No introductory text. No numbered lists.\n\n<timeline>\n{}\n</timeline>\n\nExtract facts. Organize by topic."
-  # qwen: needs simpler prompt to avoid thinking block
-  qwen3.6: "Output the summary. Use ## headers for topics. No introductory text. No numbered lists.\n\n<timeline>\n{}\n</timeline>\n\nExtract facts. Organize by topic."
+  default: "Output the summary. Use ## headers for topics.\n\n<timeline>\n{}\n</timeline>\n\nSummarize the timeline."
+  # qwen: needs timeline structure, allows thinking
+  qwen3.6: "Output the summary. Use ## headers for topics.\n\n<timeline>\n{}\n</timeline>\n\nSummarize the timeline. Include your analysis."
   # foundation: works with default prompt
-  foundation: "Output the summary. Use ## headers for topics. No introductory text. No numbered lists.\n\n<timeline>\n{}\n</timeline>\n\nExtract facts. Organize by topic."
-  # gemma: needs to suppress thinking
-  gemma: "Output the summary. Use ## headers for topics.\n\n<timeline>\n{}\n</timeline>"
+  foundation: "Output the summary. Use ## headers for topics.\n\n<timeline>\n{}\n</timeline>\n\nSummarize the timeline."
+  # gemma: keeps thinking
+  gemma: "Output the summary. Use ## headers for topics.\n\n<timeline>\n{}\n</timeline>\n\nSummarize the timeline."
 
 timeouts:
   think: 600

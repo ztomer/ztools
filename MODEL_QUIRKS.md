@@ -234,11 +234,17 @@ This is NOT about eval benchmark scores - it's about PRODUCTION quality for week
 - **Best for**: JSON extraction, data tasks
 - **Prompts**: Model-specific prompts in config.yaml (summarize_prompts)
 - **Key learnings**:
-  - qwen3.6: Needs SHORT prompt "Output the summary. Use ## headers..." to avoid thinking block
+  - qwen3.6: Needs prompt "Include your analysis" to get thinking blocks
   - foundation: Works with same prompt, clean ## headers output
   - gemma: Tends to produce thinking blocks unless prompted simply
   - Pre-processing: Use model-specific prompt from config.yaml
-  - Post-processing: Handled in osaurus_lib.py (normalize_keys)
+  - Post-processing: Extract thinking with merge_thinking_with_summary() - preserves thinking as ## Analysis!
+  - **IMPORTANT**: Thinking contains valuable signal for grouping/synthesis - don't strip!
+
+### Post-processing (osaurus_lib.py)
+- `extract_thinking(text)` - Extract thinking block and content separately
+- `merge_thinking_with_summary(thinking, summary)` - Merge thinking as ## Analysis section
+- This preserves thinking insights while keeping clean summary structure
 
 ### summarize prompt config (conf/config.yaml)
 ```yaml

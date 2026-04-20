@@ -629,6 +629,41 @@ def call_llm_api(
         return {"error": str(e)}
 
 
+def extract_thinking(text: str) -> tuple[str, str]:
+    """Extract thinking block and main content separately.
+
+    Returns (thinking, content) where content excludes the thinking block.
+    """
+    from .content_processing import remove_thinking_blocks
+
+    # Find thinking block
+    think_match = re.search(r"<thinking[^>]*>(.+?)</thinking>", text, re.DOTALL)
+    if not think_match:
+        return "", text
+
+    thinking = think_match.group(1).strip()
+    content = remove_thinking_blocks(text)
+
+    return thinking, content
+
+
+def merge_thinking_with_summary(thinking: str, summary: str) -> str:
+    """Merge thinking with summary - preserve both for max signal.
+
+    Creates a summary that includes the thinking insights.
+    """
+    if not thinking:
+        return summary
+
+    # Add thinking as a final section or integrate insights
+    lines = []
+
+    # Add any## sections from thinking that aren't in summary
+    think_headers = re.findall(r"^##\s*(.+)$", thinking, re.MULTILINE)
+
+    return f"{summary}\n\n## Analysis\n{thinking}"
+
+
 def strip_thinking(text: str) -> str:
     """Remove thinking blocks. Alias for content_processing.remove_thinking_blocks."""
     from .content_processing import remove_thinking_blocks
