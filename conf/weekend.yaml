@@ -14,12 +14,11 @@ children:
   - age: 6
     gender: boy
 
-visited_places:
+# All places to exclude from recommendations (visited + not interested)
+exclude_places:
   - Canada's Wonderland
   - Ontario Science Centre
   - Toronto Zoo
-
-excluded_places:
   - The Art of the Brick
   - Reptilia
   - ROM

@@ -74,8 +74,7 @@ def load_weekend_config():
         return {}
 
 WEEKEND_CONFIG = load_weekend_config()
-VISITED_PLACES = WEEKEND_CONFIG.get("visited_places", [])
-EXCLUDED_PLACES = WEEKEND_CONFIG.get("excluded_places", [])
+EXCLUDE_PLACES = WEEKEND_CONFIG.get("exclude_places", [])  # Combined list
 CHILDREN = WEEKEND_CONFIG.get("children", [])
 CHILDREN_STR = ", ".join([f"{c['age']}yo {c['gender']}" for c in CHILDREN]) if CHILDREN else "{CHILDREN_STR}"
 CITY = WEEKEND_CONFIG.get("location", {}).get("city", "Vaughan")
@@ -288,9 +287,7 @@ def scrape_review_score(place_name):
 def build_fixed_system_prompt(model: str = None, location: str = None, age_range: str = None):
     from lib.config import get_model_prompt, Task
 
-    exclusion_string = ", ".join(
-        EXCLUDED_PLACES + VISITED_PLACES
-    )
+    exclusion_string = ", ".join(EXCLUDE_PLACES)
 
     # Use provided values or defaults from config
     location = location or f"{CITY}/{REGION}"
