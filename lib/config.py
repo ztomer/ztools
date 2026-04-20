@@ -225,3 +225,61 @@ def get_model_prompts_all(model: str) -> Dict[str, str]:
     """Get all prompts for a model."""
     config = get_model_config(model)
     return config.get("prompts", {})
+
+
+def build_tasks_from_model(model: str) -> Dict:
+    """Build eval TASKS dict from model config.
+
+    Maps config prompts to task format used in model_eval.py.
+    """
+    prompts = get_model_prompts_all(model)
+    if not prompts:
+        return {}
+
+    tasks = {}
+
+    # Import validators lazily to avoid circular imports
+    from lib.validators_lib import validate_detailed_json, validate_summary, validate_filename
+
+    # Map prompt keys to task definitions
+    if "weekend_fixed" in prompts:
+        tasks["detailed_json"] = {
+            "messages": [
+                {"role": "system", "content": prompts["weekend_fixed"]},
+                {"role": "user", "content": "Extract venues from this context: Vaughan Sports Arena: indoor."},
+            ],
+            "validator": validate_detailed_json,
+            "parse_json": True,
+            "source": "Vaughan Sports Arena: indoor.",
+        }
+
+    if "weekend_transient" in prompts:
+        tasks["json"] = {
+            "messages": [
+                {"role": "system", "content": prompts["weekend_transient"]},
+                {"role": "user", "content": "Extract events from this context: Spring Festival April 20."},
+            ],
+            "validator": validate_detailed_json,
+            "parse_json": True,
+            "source": "Spring Festival April 20.",
+        }
+
+    if "filename" in prompts:
+        tasks["filename"] = {
+            "messages": [
+                {"role": "user", "content": prompts["filename"] + "\n\nScreenshot of login page with error message."},
+            ],
+            "validator": validate_filename,
+            "parse_json": False,
+        }
+
+    if "summarize" in prompts:
+        tasks["summarize"] = {
+            "messages": [
+                {"role": "user", "content": prompts["summarize"].format("[@user1 | 10:00]: Test tweet")},
+            ],
+            "validator": validate_summary,
+            "parse_json": False,
+        }
+
+    return tasks
