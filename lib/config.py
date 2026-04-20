@@ -162,11 +162,6 @@ def is_config_loaded() -> bool:
 _model_configs_cache: Dict[str, Dict] = {}
 
 
-def clear_model_config_cache():
-    """Clear the model config cache. Call after modifying YAML files."""
-    _model_configs_cache.clear()
-
-
 def reset_config():
     """Reset configuration state (for testing)."""
     global _config_loaded, _config
@@ -270,7 +265,7 @@ def _safe_format_prompt(prompt_template: str, test_input: str) -> str:
     return prompt_template
 
 
-def build_tasks_from_model(model: str) -> Dict:
+def build_tasks_from_model(model: str) -> Dict[str, Any]:
     """Build eval TASKS dict from model config.
 
     Maps config prompts to task format used in model_eval.py.
@@ -295,29 +290,6 @@ def build_tasks_from_model(model: str) -> Dict:
             "validator": validate_detailed_json,
             "parse_json": True,
             "source": test_input,
-        }
-
-    if Task.WEEKEND_TRANSIENT.value in prompts:
-        test_input = _EVAL_TEST_INPUTS[Task.WEEKEND_TRANSIENT]
-        tasks["json"] = {
-            "messages": [
-                {"role": "system", "content": prompts[Task.WEEKEND_TRANSIENT.value]},
-                {"role": "user", "content": f"Extract events from this context: {test_input}"},
-            ],
-            "validator": validate_detailed_json,
-            "parse_json": True,
-            "source": test_input,
-        }
-
-    if Task.FILENAME.value in prompts:
-        test_input = _EVAL_TEST_INPUTS[Task.FILENAME]
-        prompt = _safe_format_prompt(prompts[Task.FILENAME.value], test_input)
-        tasks["filename"] = {
-            "messages": [
-                {"role": "user", "content": prompt},
-            ],
-            "validator": validate_filename,
-            "parse_json": False,
         }
 
     if Task.WEEKEND_TRANSIENT.value in prompts:
