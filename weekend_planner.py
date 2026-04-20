@@ -87,7 +87,7 @@ MODEL_CONFIG = os.path.expanduser("~/.config/model_eval.json")
 
 # Use consolidated functions from osaurus_lib
 MODEL_NAME = os.environ.get(
-    "OLLAMA_MODEL", get_best_model() or "gemma-4-26b-a4b-it-4bit"
+    "OLLAMA_MODEL", get_best_model("json") or "gemma-4-26b-a4b-it-4bit"
 )
 OSAURUS_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
 

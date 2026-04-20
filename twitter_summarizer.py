@@ -64,7 +64,7 @@ MODELS = [
 
 
 # Use get_best_model from consolidated osaurus_lib
-DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", get_best_model())
+DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", get_best_model("summarize"))
 CHROME_COOKIES_DB = (
     Path.home()
     / "Library"
