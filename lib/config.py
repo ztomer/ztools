@@ -4,9 +4,6 @@ Config Management - Single source of truth from conf/config.yaml.
 Auto-loads configuration on first access.
 """
 
-import functools
-import os
-import sys
 import yaml
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -140,6 +137,19 @@ def is_config_loaded() -> bool:
     return _config_loaded
 
 
+# ==========================================================
+# MODEL-SPECIFIC CONFIG
+# ==========================================================
+
+# Cache for model configs - defined before functions that use it
+_model_configs_cache: Dict[str, Dict] = {}
+
+
+def clear_model_config_cache():
+    """Clear the model config cache. Call after modifying YAML files."""
+    _model_configs_cache.clear()
+
+
 def reset_config():
     """Reset configuration state (for testing)."""
     global _config_loaded, _config
@@ -148,11 +158,6 @@ def reset_config():
     _model_configs_cache.clear()
 
 
-# ==========================================================
-# MODEL-SPECIFIC CONFIG
-# ==========================================================
-
-@functools.lru_cache(maxsize=16)
 def get_model_family(model: str) -> str:
     """Extract model family from full model name.
 
@@ -174,11 +179,6 @@ def get_model_family(model: str) -> str:
         return "foundation"
     else:
         return "default"
-
-
-# Use a plain dict with explicit clear method instead of lru_cache
-# since we need to store complex dicts, not just strings
-_model_configs_cache: Dict[str, Dict] = {}
 
 
 def clear_model_config_cache():
