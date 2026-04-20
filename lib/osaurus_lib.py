@@ -268,6 +268,19 @@ def _extract_plain_list(content: str) -> Optional[List[Dict[str, Any]]]:
 # POST-PROCESSING: Model-specific normalizations
 # ==========================================================
 
+# Top-level key normalizations (the array container key)
+TOP_LEVEL_KEYS = {
+    "fixed_activities": "fixed_activities",
+    "activities": "fixed_activities",
+    "year_round_activities": "fixed_activities",
+    "indoor_play_places": "fixed_activities",
+    "play_places": "fixed_activities",
+    "venues": "fixed_activities",
+    "transient_events": "transient_events",
+    "events": "transient_events",
+    "limited_time_events": "transient_events",
+}
+
 # Key normalizations for alternate model schemas
 KEY_NORMALIZATIONS = {
     # Alternate identity keys
@@ -294,10 +307,6 @@ KEY_NORMALIZATIONS = {
     "type": "weather",
     "setting": "weather",
     "indoor_outdoor": "weather",
-    # Alternate activity keys
-    "year_round_activities": "fixed_activities",
-    "activities": "fixed_activities",
-    "limited_time_events": "transient_events",
 }
 
 
@@ -306,15 +315,30 @@ def normalize_keys(data: Any) -> Any:
     if not data:
         return data
 
-    if isinstance(data, list):
-        return [normalize_keys(item) for item in data]
-
+    # Handle dict with top-level key (extract array if needed)
     if isinstance(data, dict):
+        for old_key, new_key in TOP_LEVEL_KEYS.items():
+            if old_key in data:
+                # Extract the array and normalize its contents
+                arr = data[old_key]
+                if isinstance(arr, list):
+                    return {new_key: [normalize_keys(item) for item in arr]}
+                elif isinstance(arr, dict):
+                    # Sometimes it's nested like {"items": [...]}
+                    for k, v in arr.items():
+                        if isinstance(v, list):
+                            return {new_key: [normalize_keys(item) for item in v]}
+                return {new_key: arr}
+
+        # Normalize keys within dict
         result = {}
         for key, value in data.items():
             new_key = KEY_NORMALIZATIONS.get(key, key)
             result[new_key] = normalize_keys(value)
         return result
+
+    if isinstance(data, list):
+        return [normalize_keys(item) for item in data]
 
     return data
 
