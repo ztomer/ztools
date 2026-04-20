@@ -9,7 +9,7 @@ ZTools is a suite of productivity scripts powered by local LLMs. They run entire
 - **Planning your weekend** — finds family-friendly activities based on weather and local events
 - **Summarizing your Twitter feed** — distills your timeline into a factual briefing
 - **Renaming screenshots** — generates descriptive filenames from OCR or vision models
-- **Evaluating models** — tests which local models work best for your use case
+- **Evaluating models** — tests which local models work best for your use case (NOT a full eval!)
 
 ## Prerequisites
 
