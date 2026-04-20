@@ -10,9 +10,10 @@ Reference for ZTools prompt engineering and model selection.
 |------|-----------|-------|
 | **json** | qwen3.6-35b-a3b-mxfp4 | 100% on eval |
 | **detailed_json** | qwen3.6-35b-a3b-mxfp4 | 100% on eval |
-| **summarize** | qwen3.6 or foundation | Clean ## headers + thinking |
+| **summarize** | foundation | Clean ## headers, fast |
 | **filename** | foundation | Fast, follows schema |
 | **vlm** | gemma-4-26b-a4b-it-4bit | Vision tasks |
+| **MLX backend** | Disabled | Not working reliably |
 
 ---
 

@@ -515,17 +515,14 @@ def main():
     else:
         console.print("[yellow]Warning: Osaurus server not running[/yellow]")
 
-    from lib.mlx_lib import list_mlx_models
-    mlx_models = list_mlx_models()
-    
-    # Extract base names of osaurus models for matching
-    osaurus_base_names = {m.lower() for m in (osaurus_models if is_server_running() else [])}
-    
-    for m in mlx_models:
-        # e.g., "OsaurusAI/gemma-4-26B-A4B-it-4bit" -> "gemma-4-26b-a4b-it-4bit"
-        base_name = m.split("/")[-1].lower()
-        if base_name in osaurus_base_names:
-            models_to_test.append((m, "mlx"))
+    # MLX backend disabled - not working reliably (2026-04)
+    # Uncomment to re-enable:
+    # from lib.mlx_lib import list_mlx_models
+    # mlx_models = list_mlx_models()
+    # for m in mlx_models:
+    #     base_name = m.split("/")[-1].lower()
+    #     if base_name in osaurus_base_names:
+    #         models_to_test.append((m, "mlx"))
 
     if args.model:
         models_to_test = [(m, b) for m, b in models_to_test if m == args.model]
