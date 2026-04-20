@@ -197,6 +197,33 @@ TASKS = {
 MAX_RETRIES = 1
 EVAL_TIMEOUT = 600
 
+
+# ==========================================================
+# Helper to build tasks from model configs
+# ==========================================================
+
+def load_tasks_from_config(model: str):
+    """Build task prompts from model config YAML."""
+    from lib.config import get_model_prompts_all
+
+    prompts = get_model_prompts_all(model)
+    if not prompts:
+        return None
+
+    built = {}
+
+    # Map config prompts to tasks
+    if "weekend_fixed" in prompts:
+        built["detailed_json"] = prompts["weekend_fixed"]
+    if "weekend_transient" in prompts:
+        built["json"] = prompts["weekend_transient"]
+    if "summarize" in prompts:
+        built["summarize"] = prompts["summarize"]
+    if "filename" in prompts:
+        built["filename"] = prompts["filename"]
+
+    return built
+
 # ==========================================================
 # FAILURE DIAGNOSIS
 # ==========================================================

@@ -219,3 +219,9 @@ def get_model_prompt(model: str, task: str) -> str:
     config = get_model_config(model)
     prompts = config.get("prompts", {})
     return prompts.get(task, "")
+
+
+def get_model_prompts_all(model: str) -> Dict[str, str]:
+    """Get all prompts for a model."""
+    config = get_model_config(model)
+    return config.get("prompts", {})

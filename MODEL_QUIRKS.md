@@ -17,74 +17,62 @@ Reference for ZTools prompt engineering and model selection.
 
 ---
 
-## Prompt Engineering
+## Model Configuration
 
-### JSON Tasks
-Prefix prompts with `"Output JSON now."` to prevent thinking blocks:
-
-```python
-WEEKEND_SYS_FIXED = """
-Output JSON now. Use EXACT schema: {"fixed_activities": [...]}
-
-Extract 10 venues in Toronto/Vaughan.
-Default values:
-- target_ages: "6-13 years"
-- price: $18-35 per child
-- weather: "indoor"
-- Never leave fields empty
-"""
-```
-
-### Summarize Tasks
-Use model-specific prompts in `conf/config.yaml`:
+Each model has its own config in `conf/models/{family}.yaml`:
 
 ```yaml
-summarize_prompts:
-  qwen3.6: "Output the summary. Use ## headers for topics.\n\n<timeline>\n{}\n</timeline>\n\nSummarize the timeline. Include your analysis."
-  foundation: "Output the summary. Use ## headers for topics.\n\n<timeline>\n{}\n</timeline>\n\nSummarize the timeline."
+# qwen.yaml example
+name: qwen
+timeout: 120
+prompts:
+  json: "Output JSON now. Use EXACT schema."
+  summarize: "Output the summary. Use ## headers..."
+  weekend_fixed: "Extract JSON with..."
+key_mappings:
+  event: name
+  age_group: target_ages
+quirks:
+  - type: prefix
+    pattern: "Output JSON now."
 ```
+
+### Loading
+```python
+from lib.config import get_model_config, get_model_prompt
+
+config = get_model_config("qwen3.6-35b-a3b-mxfp4")
+prompt = get_model_prompt("qwen3.6-35b-a3b-mxfp4", "json")
+```
+
+---
+
+## Prompt Engineering
+
+### Data-Driven Approach
+All prompts are stored in model YAML files, not hardcoded in scripts.
+
+### JSON Tasks
+Use `"Output JSON now."` prefix to prevent thinking blocks.
+
+### Summarize Tasks
+Model-specific prompts handle ## headers + thinking differently.
 
 ---
 
 ## Post-Processing
 
-### Key Functions (osaurus_lib.py)
+### Functions (osaurus_lib.py)
 
 ```python
-# Extract thinking block from response
+# Model-aware normalization (uses config)
+data = extract_json(response, model)
+data = normalize_keys(data, model)
+
+# Thinking preservation
 thinking, content = extract_thinking(response)
-
-# Merge thinking as ## Analysis section
 merged = merge_thinking_with_summary(thinking, content)
-
-# Normalize alternate key names
-normalized = normalize_keys(data)
 ```
-
-### Thinking Blocks
-**Preserve thinking** - it contains valuable signal for synthesis and grouping. Use `merge_thinking_with_summary()` to add as ## Analysis section.
-
----
-
-## Model-Specific Quirks
-
-### Gemma 4 Series
-Uses different key names in output:
-- `event` → `name`
-- `age_group` → `target_ages`
-- `date` → `day`
-- `setting` → `weather`
-- `year_round_activities` → `fixed_activities`
-
-Handled by `normalize_keys()` in osaurus_lib.py.
-
-### Qwen3.6
-Needs `"Output JSON now."` prefix for JSON tasks.
-Produces thinking blocks in summarize - preserve with post-processing.
-
-### Foundation
-Fast, clean output, no thinking blocks.
-Good for simple structured tasks.
 
 ---
 
@@ -98,29 +86,28 @@ python3 model_eval.py --model <model> --task <task> --quick
 ### Tasks
 `json`, `detailed_json`, `summarize`, `filename`
 
-### Scoring
-Measures:
-- Valid JSON structure
-- Field completeness
-- Source extraction (uses input vs hallucinating)
-- Content quality
+---
+
+## Adding New Models
+
+1. Create `conf/models/{family}.yaml`
+2. Add prompts, key_mappings, quirks
+3. Done - no code changes needed
 
 ---
 
 ## Library Architecture
 
 ```
-lib/
-├── osaurus_lib.py      # API calls, post-processing
-├── config.py           # Model prompts, task config
-├── validators_lib.py    # Evaluation scoring
-├── content_processing.py  # Clean output
-└── mlx_lib.py         # Local MLX models
-```
+conf/models/
+├── qwen.yaml
+├── gemma.yaml
+├── foundation.yaml
 
-### Flow
-1. Script builds raw prompt
-2. Library applies model quirks if needed
-3. API returns response
-4. Post-processing cleans output
-5. Validators score result
+lib/
+├── osaurus_lib.py      # API calls, normalize_keys(model=)
+├── config.py            # get_model_config(), get_model_prompt()
+├── validators_lib.py
+├── content_processing.py
+└── mlx_lib.py
+```

@@ -8,6 +8,9 @@ prompts:
   json: |
     Output JSON now.
 
+  detailed_json: |
+    Output JSON.
+
   summarize: |
     Output the summary. Use ## headers for topics.
 
@@ -16,6 +19,15 @@ prompts:
     </timeline>
 
     Summarize the timeline.
+
+  filename: |
+    Generate a filename.
+
+  weekend_fixed: |
+    Output JSON with name, location, target_ages, price, weather.
+
+  weekend_transient: |
+    Output JSON with name, location, target_ages, price, duration, weather, day.
 
 # Key normalizations (gemma uses different field names)
 key_mappings:
