@@ -131,8 +131,9 @@ def call_mlx(model_path: Path, prompt: str) -> Optional[str]:
     model_path_str = str(model_path)
     model_parent = str(model_path.parent)
 
-    # Use unique persistent files for debugging
-    debug_dir = Path("/Users/ztomer/Projects/ztools/.mlx_debug")
+    # Use temp directory for debugging (no hardcoded paths)
+    import tempfile
+    debug_dir = Path(tempfile.gettempdir()) / "mlx_debug"
     debug_dir.mkdir(exist_ok=True)
     uid = uuid.uuid4().hex[:8]
     prompt_file = str(debug_dir / f"prompt_{uid}.txt")
