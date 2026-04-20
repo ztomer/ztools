@@ -650,16 +650,10 @@ def extract_thinking(text: str) -> tuple[str, str]:
 def merge_thinking_with_summary(thinking: str, summary: str) -> str:
     """Merge thinking with summary - preserve both for max signal.
 
-    Creates a summary that includes the thinking insights.
+    Creates a summary that includes the thinking insights as ## Analysis.
     """
     if not thinking:
         return summary
-
-    # Add thinking as a final section or integrate insights
-    lines = []
-
-    # Add any## sections from thinking that aren't in summary
-    think_headers = re.findall(r"^##\s*(.+)$", thinking, re.MULTILINE)
 
     return f"{summary}\n\n## Analysis\n{thinking}"
 
