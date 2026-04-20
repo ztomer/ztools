@@ -4,11 +4,25 @@ Config Management - Single source of truth from conf/config.yaml.
 Auto-loads configuration on first access.
 """
 
+import functools
 import os
 import sys
 import yaml
 from pathlib import Path
 from typing import Dict, Any, Optional
+
+# ==========================================================
+# CONSTANTS - Task names used throughout the system
+# ==========================================================
+
+class TaskKeys:
+    """Known task keys for configuration."""
+    WEEKEND_FIXED = "weekend_fixed"
+    WEEKEND_TRANSIENT = "weekend_transient"
+    SUMMARIZE = "summarize"
+    FILENAME = "filename"
+    JSON = "json"
+    DETAILED_JSON = "detailed_json"
 
 # Minimal hardcoded fallbacks - only used if config.yaml is completely missing
 _FALLBACK_TIMEOUT = 600
@@ -33,15 +47,10 @@ def _auto_load():
         _config_loaded = True
         return
 
-    try:
-        import yaml
-        with open(config_path, 'r') as f:
-            loaded = yaml.safe_load(f)
-        _config = loaded if isinstance(loaded, dict) else {}
-        _config_loaded = True
-    except Exception as e:
-        print(f"[ Err ] Failed to load config: {e}")
-        _config_loaded = True
+    with open(config_path, 'r') as f:
+        loaded = yaml.safe_load(f)
+    _config = loaded if isinstance(loaded, dict) else {}
+    _config_loaded = True
 
 
 def init_config(config_path: Optional[str] = None) -> bool:
@@ -54,6 +63,10 @@ def init_config(config_path: Optional[str] = None) -> bool:
 
     Returns:
         bool: True if config loaded successfully
+
+    Raises:
+        FileNotFoundError: If config file doesn't exist
+        ValueError: If config is invalid
     """
     global _config_loaded, _config
 
@@ -65,23 +78,18 @@ def init_config(config_path: Optional[str] = None) -> bool:
     if not config_file.exists():
         raise FileNotFoundError(f"Config file not found: {config_file}")
 
-    try:
-        import yaml
-        with open(config_file, 'r') as f:
-            loaded = yaml.safe_load(f)
+    with open(config_file, 'r') as f:
+        loaded = yaml.safe_load(f)
 
-        if loaded is None:
-            loaded = {}
+    if loaded is None:
+        loaded = {}
 
-        if not isinstance(loaded, dict):
-            raise ValueError("Config must be a dictionary")
+    if not isinstance(loaded, dict):
+        raise ValueError("Config must be a dictionary")
 
-        _config = loaded
-        _config_loaded = True
-        return True
-
-    except Exception as e:
-        raise ValueError(f"Error loading config: {e}")
+    _config = loaded
+    _config_loaded = True
+    return True
 
 
 def get_timeouts() -> Dict[str, int]:
@@ -137,16 +145,14 @@ def reset_config():
     global _config_loaded, _config
     _config_loaded = False
     _config = {}
+    _model_configs_cache.clear()
 
-
-# ==========================================================
-# TASK-SPECIFIC PROMPTS
-# ==========================================================
 
 # ==========================================================
 # MODEL-SPECIFIC CONFIG
 # ==========================================================
 
+@functools.lru_cache(maxsize=16)
 def get_model_family(model: str) -> str:
     """Extract model family from full model name.
 
@@ -170,30 +176,35 @@ def get_model_family(model: str) -> str:
         return "default"
 
 
-_model_configs: Dict[str, Dict] = {}
+# Use a plain dict with explicit clear method instead of lru_cache
+# since we need to store complex dicts, not just strings
+_model_configs_cache: Dict[str, Dict] = {}
+
+
+def clear_model_config_cache():
+    """Clear the model config cache. Call after modifying YAML files."""
+    global _model_configs_cache
+    _model_configs_cache.clear()
 
 
 def get_model_config(model: str) -> Dict:
     """Load model-specific configuration from conf/models/{family}.yaml"""
-    global _model_configs
-
     family = get_model_family(model)
 
-    if family in _model_configs:
-        return _model_configs[family]
+    if family in _model_configs_cache:
+        return _model_configs_cache[family]
 
     # Load from YAML
     config_path = Path(__file__).parent.parent / "conf" / "models" / f"{family}.yaml"
 
     if config_path.exists():
-        import yaml
         with open(config_path) as f:
-            _model_configs[family] = yaml.safe_load(f)
+            _model_configs_cache[family] = yaml.safe_load(f) or {}
     else:
         # Return empty config
-        _model_configs[family] = {"name": family, "prompts": {}, "key_mappings": {}, "quirks": []}
+        _model_configs_cache[family] = {"name": family, "prompts": {}, "key_mappings": {}, "quirks": []}
 
-    return _model_configs[family]
+    return _model_configs_cache[family]
 
 
 def get_model_prompt(model: str, task: str) -> str:
@@ -207,6 +218,30 @@ def get_model_prompts_all(model: str) -> Dict[str, str]:
     """Get all prompts for a model."""
     config = get_model_config(model)
     return config.get("prompts", {})
+
+
+# ==========================================================
+# TASK BUILDER - Creates eval tasks from model config
+# ==========================================================
+
+# Test inputs for eval tasks - should be minimal but realistic
+_EVAL_TEST_INPUTS = {
+    TaskKeys.WEEKEND_FIXED: "Vaughan Sports Arena: indoor.",
+    TaskKeys.WEEKEND_TRANSIENT: "Spring Festival April 20.",
+    TaskKeys.FILENAME: "Screenshot of login page with error message.",
+    TaskKeys.SUMMARIZE: "[@user1 | 10:00]: Test tweet",
+}
+
+
+def _safe_format_prompt(prompt_template: str, test_input: str) -> str:
+    """Safely format a prompt template with test input.
+
+    Only formats if the template contains {} placeholder.
+    Returns the template as-is if no placeholder found.
+    """
+    if "{}" in prompt_template:
+        return prompt_template.format(test_input)
+    return prompt_template
 
 
 def build_tasks_from_model(model: str) -> Dict:
@@ -223,42 +258,48 @@ def build_tasks_from_model(model: str) -> Dict:
     # Import validators lazily to avoid circular imports
     from lib.validators_lib import validate_detailed_json, validate_summary, validate_filename
 
-    # Map prompt keys to task definitions
-    if "weekend_fixed" in prompts:
+    # Map prompt keys to task definitions using constants
+    if TaskKeys.WEEKEND_FIXED in prompts:
+        test_input = _EVAL_TEST_INPUTS[TaskKeys.WEEKEND_FIXED]
         tasks["detailed_json"] = {
             "messages": [
-                {"role": "system", "content": prompts["weekend_fixed"]},
-                {"role": "user", "content": "Extract venues from this context: Vaughan Sports Arena: indoor."},
+                {"role": "system", "content": prompts[TaskKeys.WEEKEND_FIXED]},
+                {"role": "user", "content": f"Extract venues from this context: {test_input}"},
             ],
             "validator": validate_detailed_json,
             "parse_json": True,
-            "source": "Vaughan Sports Arena: indoor.",
+            "source": test_input,
         }
 
-    if "weekend_transient" in prompts:
+    if TaskKeys.WEEKEND_TRANSIENT in prompts:
+        test_input = _EVAL_TEST_INPUTS[TaskKeys.WEEKEND_TRANSIENT]
         tasks["json"] = {
             "messages": [
-                {"role": "system", "content": prompts["weekend_transient"]},
-                {"role": "user", "content": "Extract events from this context: Spring Festival April 20."},
+                {"role": "system", "content": prompts[TaskKeys.WEEKEND_TRANSIENT]},
+                {"role": "user", "content": f"Extract events from this context: {test_input}"},
             ],
             "validator": validate_detailed_json,
             "parse_json": True,
-            "source": "Spring Festival April 20.",
+            "source": test_input,
         }
 
-    if "filename" in prompts:
+    if TaskKeys.FILENAME in prompts:
+        test_input = _EVAL_TEST_INPUTS[TaskKeys.FILENAME]
+        prompt = _safe_format_prompt(prompts[TaskKeys.FILENAME], test_input)
         tasks["filename"] = {
             "messages": [
-                {"role": "user", "content": prompts["filename"] + "\n\nScreenshot of login page with error message."},
+                {"role": "user", "content": prompt},
             ],
             "validator": validate_filename,
             "parse_json": False,
         }
 
-    if "summarize" in prompts:
+    if TaskKeys.SUMMARIZE in prompts:
+        test_input = _EVAL_TEST_INPUTS[TaskKeys.SUMMARIZE]
+        prompt = _safe_format_prompt(prompts[TaskKeys.SUMMARIZE], test_input)
         tasks["summarize"] = {
             "messages": [
-                {"role": "user", "content": prompts["summarize"].format("[@user1 | 10:00]: Test tweet")},
+                {"role": "user", "content": prompt},
             ],
             "validator": validate_summary,
             "parse_json": False,
