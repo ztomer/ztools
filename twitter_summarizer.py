@@ -450,14 +450,9 @@ def _build_prompt(
     tweets: list[dict], max_chars: int, for_mlx: bool = False, model: str = None
 ) -> tuple[str, int]:
     from lib.config import get_model_prompt, Task
-    prompt_template = get_model_prompt(model, Task.SUMMARIZE)
 
-    # Fallback if no template found
-    if not prompt_template:
-        prompt_template = "Summarize this timeline:\n\n{}\n\nUse ## headers for topics."
-
-    # Build timeline content
-    budget = max_chars - 200  # Reserve for template
+    # Build timeline content first
+    budget = max_chars - 200
     lines = []
     used = 0
     for t in reversed(tweets):
@@ -469,8 +464,16 @@ def _build_prompt(
     lines.reverse()
     timeline = "\n".join(lines)
 
-    # Fill template
-    prompt = prompt_template.format(timeline)
+    # Get prompt from config and inject timeline
+    prompt_template = get_model_prompt(model, Task.SUMMARIZE)
+    if not prompt_template:
+        prompt_template = "Summarize this timeline:\n\n{}\n\nUse ## headers for topics."
+
+    if "{}" in prompt_template:
+        prompt = prompt_template.format(timeline)
+    else:
+        prompt = prompt_template
+
     return prompt, len(lines)
 
 

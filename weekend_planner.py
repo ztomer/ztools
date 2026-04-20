@@ -311,14 +311,14 @@ def build_fixed_system_prompt(model: str = None, location: str = None, age_range
     Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
 
     Extract 10 popular {location} venues for families with kids ages {age_range}.
-    Include location (city only, e.g. "Vaughan, ON"), target_ages, price in CAD, weather.
+    Include location (city only), target_ages, price in CAD, weather.
 
     MANDATORY default values:
-    - target_ages: "{age_range}" (default for kids venues)
-    - price: $18-35 per child for indoor play, free-$25 for museums/parks
-    - weather: "indoor" (default for April in Toronto)
+    - target_ages: "{age_range}"
+    - price: $18-35 per child or free
+    - weather: "indoor"
 
-    Never leave any field empty. Use defaults if not found.
+    Never leave any field empty.
     """
 
 
@@ -357,17 +357,14 @@ def build_transient_system_prompt(model: str = None, location: str = None, age_r
     return f"""
     Output JSON now. Use EXACT schema: {{"transient_events": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}}]}}
 
-    Based on your knowledge of {location} family events and the provided context, extract 5+ events for {date_range}.
+    Extract {location} family events for {date_range}.
 
-    MANDATORY default values if not in context:
-    - target_ages: "{age_range}" (default for kids activities)
-    - price: use typical family pricing (adults ~$25-40, kids ~$15-25, family packages ~$80-120)
-    - duration: "2-3 hours" is standard for workshops/events
-    - weather: "indoor" (most venues are indoors in April)
-    - day: infer from the event description or use random for Fri/Sat/Sun
-
-    Examples:
-    {{"name": "Science Workshop", "location": "Ontario Science Centre, Toronto", "target_ages": "6-12 years", "price": "$25 per child", "duration": "2 hours", "weather": "indoor", "day": "Saturday"}}
+    MANDATORY default values:
+    - target_ages: "{age_range}"
+    - price: $20-30 per child or free
+    - duration: "2-3 hours"
+    - weather: "indoor"
+    - day: Friday/Saturday/Sunday
     """
 
 
