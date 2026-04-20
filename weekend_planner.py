@@ -285,27 +285,36 @@ def scrape_review_score(place_name):
 # ==========================================
 
 
-def build_fixed_system_prompt(model: str = None):
+def build_fixed_system_prompt(model: str = None, location: str = None, age_range: str = None):
     from lib.config import get_model_prompt, Task
 
     exclusion_string = ", ".join(
         EXCLUDED_PLACES + VISITED_PLACES
     )
 
+    # Use provided values or defaults from config
+    location = location or f"{CITY}/{REGION}"
+    age_range = age_range or AGE_RANGE
+
     # Try to get from config first
     config_prompt = get_model_prompt(model, Task.WEEKEND_FIXED) if model else ""
     if config_prompt:
-        return config_prompt
+        # Inject runtime variables
+        return config_prompt.format(
+            location=location,
+            age_range=age_range,
+            date_range=DATES_STR,
+        )
 
     # Fallback to hardcoded
     return f"""
     Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
 
-    Extract 10 popular Toronto/Vaughan venues for families with kids ages 4-12.
+    Extract 10 popular {location} venues for families with kids ages {age_range}.
     Include location (city only, e.g. "Vaughan, ON"), target_ages, price in CAD, weather.
 
     MANDATORY default values:
-    - target_ages: "6-13 years" (default for kids venues)
+    - target_ages: "{age_range}" (default for kids venues)
     - price: $18-35 per child for indoor play, free-$25 for museums/parks
     - weather: "indoor" (default for April in Toronto)
 
@@ -326,22 +335,32 @@ def build_fixed_user_prompt(dates_str, weather_str, venues_str):
     """
 
 
-def build_transient_system_prompt(model: str = None):
+def build_transient_system_prompt(model: str = None, location: str = None, age_range: str = None, date_range: str = None):
     from lib.config import get_model_prompt, Task
+
+    # Use provided values or defaults from config
+    location = location or f"{CITY}/{REGION}"
+    age_range = age_range or AGE_RANGE
+    date_range = date_range or DATES_STR
 
     # Try to get from config first
     config_prompt = get_model_prompt(model, Task.WEEKEND_TRANSIENT) if model else ""
     if config_prompt:
-        return config_prompt
+        # Inject runtime variables
+        return config_prompt.format(
+            location=location,
+            age_range=age_range,
+            date_range=date_range,
+        )
 
     # Fallback to hardcoded
     return f"""
     Output JSON now. Use EXACT schema: {{"transient_events": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}}]}}
 
-    Based on your knowledge of Toronto/Vaughan family events and the provided context, extract 5+ events for April 24-26, 2026.
+    Based on your knowledge of {location} family events and the provided context, extract 5+ events for {date_range}.
 
     MANDATORY default values if not in context:
-    - target_ages: "6-13 years" (default for kids activities)
+    - target_ages: "{age_range}" (default for kids activities)
     - price: use typical family pricing (adults ~$25-40, kids ~$15-25, family packages ~$80-120)
     - duration: "2-3 hours" is standard for workshops/events
     - weather: "indoor" (most venues are indoors in April)
