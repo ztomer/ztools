@@ -527,7 +527,7 @@ def summarize_with_llm(
                 if thinking:
                     print(f"[llm] {try_model}: included thinking block")
                     return merge_thinking_with_summary(thinking, cleaned)
-                # Also strip plaintext thinking (qwen uses "Here's a thinking process:" not XML)
+                # No XML thinking - strip plaintext thinking
                 return strip_thinking(cleaned)
             elif result and "error" in result:
                 print(f"[llm] {try_model} error: {result['error'][:50]}")

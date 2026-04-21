@@ -140,9 +140,17 @@ pip install -e .
 # Lint
 ruff check .
 
-# Test
+# Test (run after any code changes to catch regressions)
 pytest tests/
+pytest tests/ -v          # verbose output
+pytest tests/ -k weekend  # run specific test file
 ```
+
+The test suite covers:
+- `test_content_processing.py` — thinking block removal (qwen/gemma)
+- `test_weekend.py` — JSON extraction and normalization
+- `test_twitter.py` — twitter summarizer output cleaning
+- `test_validators.py` — scoring logic validation
 
 ## Requirements
 

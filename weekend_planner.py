@@ -297,13 +297,16 @@ def build_fixed_system_prompt(model: str = None, location: str = None, age_range
 
     # Try to get from config first
     config_prompt = get_model_prompt(model, Task.WEEKEND_FIXED) if model else ""
+    print(f"[DEBUG] build_fixed_system_prompt: model={model}, location={location}, age_range={age_range}", flush=True)
     if config_prompt:
         # Inject runtime variables
-        return config_prompt.format(
+        formatted = config_prompt.format(
             location=location,
             age_range=age_range,
             date_range=DATES_STR,
         )
+        print(f"[DEBUG] prompt after format (first 200): {formatted[:200]}", flush=True)
+        return formatted
 
     # Fallback to hardcoded
     return f"""
@@ -408,7 +411,7 @@ def get_llm_json(system_prompt, user_prompt, max_retries=3):
             target_model,
             messages,
             temperature=0.1,
-            timeout=1800,
+            timeout=1800,  # 30 min
             parse_json=True,
         )
 
@@ -497,7 +500,10 @@ def build_markdown_tables(dates_str, weather_str, structured_data, fixed_activit
     md = f"# Weekend Plan: {dates_str}\n\n{weather_str}\n\n"
 
     fixed = fixed_activities
-    fetch_scores_for_items(fixed)
+    # Only fetch scores if we have actual items to avoid hanging on empty lists
+    if fixed:
+        print(f"[DEBUG] Fetching scores for {len(fixed)} items...", flush=True)
+        fetch_scores_for_items(fixed)
 
     fixed.sort(key=lambda x: x["score"], reverse=True)
 
@@ -698,29 +704,42 @@ def main(args=None):
         )
 
         # 3. Format and scrape reviews
+        print(f"[DEBUG] About to start task_format...", flush=True)
         progress.start_task(task_format)
+        print(f"[DEBUG] Step 1: Processing json_fixed...", flush=True)
         # Handle both dict and list responses + normalize Gemma field names
+        print(f"[DEBUG] json_fixed keys: {list(json_fixed.keys()) if isinstance(json_fixed, dict) else 'N/A'}", flush=True)
+        # Robust extraction: find ANY key with a non-empty list value
+        fixed_acts = []
         if isinstance(json_fixed, list):
             fixed_acts = normalize_llm_items(json_fixed)
-        else:
-            raw_fixed = (
-                json_fixed.get("fixed_activities", []) or
-                json_fixed.get("year_round_activities", []) or
-                []
-            ) if json_fixed else []
-            fixed_acts = normalize_llm_items(raw_fixed)
+        elif isinstance(json_fixed, dict):
+            for k, v in json_fixed.items():
+                if isinstance(v, list) and len(v) > 0:
+                    fixed_acts = normalize_llm_items(v)
+                    print(f"[DEBUG] Found fixed_acts in key '{k}': {len(fixed_acts)} items", flush=True)
+                    break
+        print(f"[DEBUG] fixed_acts: {len(fixed_acts)} items", flush=True)
 
-        # Normalize transient events too
+        # Normalize transient events too - robust extraction
+        print(f"[DEBUG] json_transient keys: {list(json_transient.keys()) if isinstance(json_transient, dict) else 'N/A'}", flush=True)
+        transient_items = []
         if isinstance(json_transient, list):
             transient_items = normalize_llm_items(json_transient)
-        else:
-            raw_transient = (
-                json_transient.get("transient_events", []) or
-                json_transient.get("events", []) or
-                json_transient.get("limited_time_events", []) or
-                []
-            ) if json_transient else []
-            transient_items = normalize_llm_items(raw_transient)
+        elif isinstance(json_transient, dict):
+            # Check for error wrapper - look in 'data' key first
+            if json_transient.get("data") and isinstance(json_transient.get("data"), list):
+                raw = json_transient.get("data", [])
+                print(f"[DEBUG] Found transient in 'data' key: {len(raw)} items", flush=True)
+                transient_items = normalize_llm_items(raw)
+            else:
+                # Check any list value
+                for k, v in json_transient.items():
+                    if isinstance(v, list) and len(v) > 0:
+                        transient_items = normalize_llm_items(v)
+                        print(f"[DEBUG] Found transient in key '{k}': {len(transient_items)} items", flush=True)
+                        break
+        print(f"[DEBUG] transient_items: {len(transient_items)} items", flush=True)
 
         final_markdown = build_markdown_tables(
             dates_str, weather_str, {"transient_events": transient_items}, fixed_acts)

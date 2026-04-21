@@ -10,8 +10,9 @@ from lib.validators_lib import (
 )
 
 def test_validate_json_valid_data():
-    data = ["Item 1", "Item 2", "Item 3"]
-    score, msg = validate_json(data)
+    data = ["Toronto Event", "Vaughan Festival", "Markham Fair", "Richmond Hill Celebration", "Scarborough Day", "North York Festival", "Etobicoke Event", "East York Fair", "York Celebration", "Downtown Festival"]
+    source_text = "Toronto Event and Vaughan Festival, Markham Fair plus Richmond Hill Celebration, Scarborough Day with North York Festival, Etobicoke Event also East York Fair and York Celebration, plus Downtown Festival"
+    score, msg = validate_json(data, source_text)
     assert score == 100
     assert msg == ""
 
@@ -23,11 +24,19 @@ def test_validate_json_invalid_structure():
 
 def test_validate_detailed_json_valid_data():
     data = [
-        {"name": "Place 1", "location": "Loc 1", "weather": "Clear"},
-        {"name": "Place 2", "location": "Loc 2", "price": "Free"},
-        {"name": "Place 3", "weather": "Rainy", "description": "Good place"}
+        {"name": "Place 1", "location": "Loc 1"},
+        {"name": "Place 2", "location": "Loc 2"},
+        {"name": "Place 3", "location": "Loc 3"},
+        {"name": "Place 4", "location": "Loc 4"},
+        {"name": "Place 5", "location": "Loc 5"},
+        {"name": "Place 6", "location": "Loc 6"},
+        {"name": "Place 7", "location": "Loc 7"},
+        {"name": "Place 8", "location": "Loc 8"},
+        {"name": "Place 9", "location": "Loc 9"},
+        {"name": "Place 10", "location": "Loc 10"},
     ]
-    score, msg = validate_detailed_json(data)
+    source_text = "Place 1 at Loc 1, Place 2 at Loc 2, Place 3 at Loc 3, Place 4 at Loc 4, Place 5 at Loc 5, Place 6 at Loc 6, Place 7 at Loc 7, Place 8 at Loc 8, Place 9 at Loc 9, Place 10 at Loc 10"
+    score, msg = validate_detailed_json(data, source_text)
     assert score == 100
     assert msg == ""
 
