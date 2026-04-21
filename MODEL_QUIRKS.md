@@ -110,6 +110,10 @@ python3 model_eval.py --model <model> --task <task> --quick
 
 ## Runtime Constants
 
+| Constant | Value | Notes |
+|----------|-------|-------|
+| **Osaurs port** | **1337** | Check: `osaurus status` |
+
 All scripts must define these required constants at module level:
 
 | Constant | Description | Source |

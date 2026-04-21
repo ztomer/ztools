@@ -297,15 +297,16 @@ def build_fixed_system_prompt(model: str = None, location: str = None, age_range
 
     # Try to get from config first
     config_prompt = get_model_prompt(model, Task.WEEKEND_FIXED) if model else ""
-    print(f"[DEBUG] build_fixed_system_prompt: model={model}, location={location}, age_range={age_range}", flush=True)
+    debug_print(f"[DEBUG] build_fixed_system_prompt: model={model}, location={location}, age_range={age_range}", flush=True)
     if config_prompt:
         # Inject runtime variables
         formatted = config_prompt.format(
             location=location,
             age_range=age_range,
             date_range=DATES_STR,
+            exclusions=exclusion_string,
         )
-        print(f"[DEBUG] prompt after format (first 200): {formatted[:200]}", flush=True)
+        debug_print(f"[DEBUG] prompt after format (first 200): {formatted[:200]}", flush=True)
         return formatted
 
     # Fallback to hardcoded
@@ -388,7 +389,7 @@ def build_transient_user_prompt(dates_str, weather_str, events_str):
 # ==========================================
 
 
-def get_llm_json(system_prompt, user_prompt, max_retries=3):
+def get_llm_json(system_prompt, user_prompt, max_retries=5):
     """
     Get JSON from LLM with robust parsing.
     Tries Osaurus server first, then falls back to MLX.
@@ -398,14 +399,16 @@ def get_llm_json(system_prompt, user_prompt, max_retries=3):
     # Try Osaurus server first
     for attempt in range(1, max_retries + 1):
         target_model = get_best_model(Task.JSON)
-        print(f"[llm] Trying Osaurus model: {target_model}")
+        debug_print(f"[llm] Trying Osaurus model: {target_model}")
         from lib.osaurus_lib import apply_model_quirks
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
         messages = apply_model_quirks(messages, target_model)
-        
+
+        debug_print(f"[llm] Calling API with {len(messages)} messages, system={len(messages[0]['content'])}, user={len(messages[1]['content'])}", flush=True)
+
         result = call_llm_api(
             OSAURUS_BASE_URL.rstrip("/"),
             target_model,
@@ -415,21 +418,43 @@ def get_llm_json(system_prompt, user_prompt, max_retries=3):
             parse_json=True,
         )
 
+        debug_print(f"[llm] API response keys: {result.keys() if isinstance(result, dict) else type(result)}", flush=True)
+        debug_print(f"[llm] API response preview: {str(result)[:200]}", flush=True)
+
         if result and "content" in result:
             try:
                 from lib.osaurus_lib import _extract_json_only
                 import json
-                cleaned = strip_thinking(result["content"])
+                raw_content = result["content"]
+                debug_print(f"[llm] Raw content length: {len(raw_content)}", flush=True)
+                debug_print(f"[llm] Raw content preview: {raw_content[:300]}", flush=True)
+
+                cleaned = strip_thinking(raw_content)
+                debug_print(f"[llm] After strip_thinking length: {len(cleaned)}", flush=True)
+                debug_print(f"[llm] After strip_thinking preview: {cleaned[:300]}", flush=True)
+
                 json_str = _extract_json_only(cleaned)
                 if json_str is not None:
+                    debug_print(f"[llm] JSON extracted successfully, length: {len(json_str)}", flush=True)
                     return json.loads(json_str)
                 else:
+                    debug_print(f"[llm] WARNING: _extract_json_only returned None", flush=True)
                     raise ValueError("No valid JSON found")
-            except Exception:
+            except Exception as e:
+                debug_print(f"[llm] JSON parse error: {e}", flush=True)
                 if attempt == max_retries:
+                    debug_print(f"[llm] All retries failed, dumping content", flush=True)
                     panic_dump(result["content"])
+        else:
+            debug_print(f"[llm] WARNING: No content in result: {result}", flush=True)
 
-        ensure_server()
+        # Wait and restart server between retries
+        if attempt < max_retries:
+            debug_print(f"[llm] Waiting before retry {attempt + 1}/{max_retries}...", flush=True)
+            time.sleep(3)
+            debug_print(f"[llm] Restarting server before retry...", flush=True)
+            ensure_server()
+            time.sleep(2)
 
     # Fall back to MLX
     mlx_model = find_text_mlx_model(["qwen", "llama", "phi"])
@@ -460,12 +485,17 @@ def get_llm_json(system_prompt, user_prompt, max_retries=3):
         except Exception as e:
             print(f"[llm] MLX failed: {e}")
 
-    print("[llm] Failed to parse JSON or models exhausted. Exiting.")
-    sys.exit(1)
+    print("[llm] WARNING: Failed to parse JSON, returning empty result")
+    return None
 
 
-def normalize_llm_items(items):
-    """Normalize LLM output for different model formats."""
+def normalize_llm_items(items, field_mapping=None):
+    """Normalize LLM output for different model formats.
+
+    Args:
+        items: List of items from LLM
+        field_mapping: Optional dict mapping model fields to standard fields
+    """
     if not items:
         return items
 
@@ -474,6 +504,11 @@ def normalize_llm_items(items):
         if isinstance(item, str):
             normalized.append({"name": item})
         elif isinstance(item, dict):
+            # Apply model-specific field mapping
+            if field_mapping:
+                for model_field, standard_field in field_mapping.items():
+                    if model_field in item and standard_field not in item:
+                        item[standard_field] = item[model_field]
             # Normalize Gemma field names
             if "age_group" in item and "target_ages" not in item:
                 item["target_ages"] = item["age_group"]
@@ -502,7 +537,7 @@ def build_markdown_tables(dates_str, weather_str, structured_data, fixed_activit
     fixed = fixed_activities
     # Only fetch scores if we have actual items to avoid hanging on empty lists
     if fixed:
-        print(f"[DEBUG] Fetching scores for {len(fixed)} items...", flush=True)
+        debug_print(f"[DEBUG] Fetching scores for {len(fixed)} items...", flush=True)
         fetch_scores_for_items(fixed)
 
     fixed.sort(key=lambda x: x["score"], reverse=True)
@@ -567,9 +602,20 @@ def print_to_cli(markdown_content):
 # ORCHESTRATOR
 # ==========================================
 
+# Debug flag - controlled by --debug argument
+DEBUG = False
+
+
+def debug_print(*args, **kwargs):
+    """Debug print - only outputs when DEBUG is True."""
+    if DEBUG:
+        print(*args, **kwargs)
+
 
 def main(args=None):
-    args = args or type('Args', (), {'use_cache': False, 'model': None, 'skip_web': False})()
+    global DEBUG
+    args = args or type('Args', (), {'use_cache': False, 'model': None, 'skip_web': False, 'debug': False})()
+    DEBUG = getattr(args, 'debug', False)
     init_config()
 
     if args.model:
@@ -664,9 +710,10 @@ def main(args=None):
         print("[INFO] Starting LLM calls...")
 
         # Get model for prompts
-        from lib.config import get_best_model, Task
+        from lib.config import get_best_model, get_model_field_mapping, Task
         actual_model = get_best_model(Task.JSON)
-        print(f"[DEBUG] Using model: {actual_model}")
+        field_mapping = get_model_field_mapping(actual_model)
+        debug_print(f"[DEBUG] Using model: {actual_model}, field_mapping: {field_mapping}")
 
         # 2. Generate activities via LLM (in main thread to avoid hangs)
         progress.start_task(task_transient)
@@ -678,11 +725,12 @@ def main(args=None):
         )
         usr_transient = build_transient_user_prompt(
             dates_str, weather_str, events_str)
-        print(
-            f"[DEBUG] user_prompt length: {len(usr_transient)}, venues preview: {venues_str[:100]}..."
-        )
-        print(f"[DEBUG] Using model: {actual_model}")
-        json_transient = get_llm_json(sys_transient, usr_transient)
+        debug_print(f"[DEBUG] TRANSIENT user_prompt length: {len(usr_transient)}")
+        debug_print(f"[DEBUG] TRANSIENT events preview (first 500):\n{events_str[:500]}", flush=True)
+        debug_print(f"[DEBUG] TRANSIENT Using model: {actual_model}")
+        debug_print(f"[DEBUG] TRANSIENT system prompt (first 300): {sys_transient[:300]}", flush=True)
+        json_transient = get_llm_json(sys_transient, usr_transient) or {}
+        debug_print(f"[DEBUG] TRANSIENT raw LLM response: {str(json_transient)[:500]}", flush=True)
         progress.update(
             task_transient,
             description="[dim]✓ Generated Transient Events[/dim]",
@@ -696,7 +744,7 @@ def main(args=None):
             age_range=AGE_RANGE,
         )
         usr_fixed = build_fixed_user_prompt(dates_str, weather_str, venues_str)
-        json_fixed = get_llm_json(sys_fixed, usr_fixed)
+        json_fixed = get_llm_json(sys_fixed, usr_fixed) or {}
         progress.update(
             task_fixed,
             description="[dim]✓ Generated Fixed Activities[/dim]",
@@ -704,42 +752,106 @@ def main(args=None):
         )
 
         # 3. Format and scrape reviews
-        print(f"[DEBUG] About to start task_format...", flush=True)
+        debug_print(f"[DEBUG] About to start task_format...", flush=True)
         progress.start_task(task_format)
-        print(f"[DEBUG] Step 1: Processing json_fixed...", flush=True)
-        # Handle both dict and list responses + normalize Gemma field names
-        print(f"[DEBUG] json_fixed keys: {list(json_fixed.keys()) if isinstance(json_fixed, dict) else 'N/A'}", flush=True)
-        # Robust extraction: find ANY key with a non-empty list value
-        fixed_acts = []
-        if isinstance(json_fixed, list):
-            fixed_acts = normalize_llm_items(json_fixed)
-        elif isinstance(json_fixed, dict):
-            for k, v in json_fixed.items():
-                if isinstance(v, list) and len(v) > 0:
-                    fixed_acts = normalize_llm_items(v)
-                    print(f"[DEBUG] Found fixed_acts in key '{k}': {len(fixed_acts)} items", flush=True)
-                    break
-        print(f"[DEBUG] fixed_acts: {len(fixed_acts)} items", flush=True)
+        debug_print(f"[DEBUG] Step 1: Processing json_fixed...", flush=True)
+        debug_print(f"[DEBUG] json_fixed preview: {str(json_fixed)[:200]}", flush=True)
 
-        # Normalize transient events too - robust extraction
-        print(f"[DEBUG] json_transient keys: {list(json_transient.keys()) if isinstance(json_transient, dict) else 'N/A'}", flush=True)
-        transient_items = []
-        if isinstance(json_transient, list):
-            transient_items = normalize_llm_items(json_transient)
-        elif isinstance(json_transient, dict):
-            # Check for error wrapper - look in 'data' key first
-            if json_transient.get("data") and isinstance(json_transient.get("data"), list):
-                raw = json_transient.get("data", [])
-                print(f"[DEBUG] Found transient in 'data' key: {len(raw)} items", flush=True)
-                transient_items = normalize_llm_items(raw)
-            else:
-                # Check any list value
-                for k, v in json_transient.items():
-                    if isinstance(v, list) and len(v) > 0:
-                        transient_items = normalize_llm_items(v)
-                        print(f"[DEBUG] Found transient in key '{k}': {len(transient_items)} items", flush=True)
+        # Extraction for fixed activities - more permissive
+        debug_print(f"[DEBUG] json_fixed preview: {str(json_fixed)[:200]}", flush=True)
+        fixed_acts = []
+
+        # Direct list
+        if isinstance(json_fixed, list) and len(json_fixed) >= 1:
+            valid_items = [i for i in json_fixed if isinstance(i, dict) and i.get("name")]
+            if valid_items:
+                debug_print(f"[DEBUG] Direct list: {len(valid_items)} items", flush=True)
+                fixed_acts = normalize_llm_items(valid_items, field_mapping=field_mapping)
+
+        # Dict keys
+        if not fixed_acts and isinstance(json_fixed, dict):
+            # Priority keys - include variations
+            for key in ["fixed_activities", "year_round_fixed_activities", "venues", "places", "activities", "items"]:
+                if json_fixed.get(key) and isinstance(json_fixed.get(key), list) and len(json_fixed.get(key)) > 0:
+                    raw = json_fixed[key]
+                    debug_print(f"[DEBUG] Checking key '{key}': {len(raw)} items", flush=True)
+                    valid_items = [i for i in raw if isinstance(i, dict) and i.get("name")]
+                    if valid_items:
+                        debug_print(f"[DEBUG] Found valid in key '{key}': {len(valid_items)} items", flush=True)
+                        fixed_acts = normalize_llm_items(valid_items, field_mapping=field_mapping)
                         break
-        print(f"[DEBUG] transient_items: {len(transient_items)} items", flush=True)
+
+            # Single object
+            if not fixed_acts and json_fixed.get("name"):
+                debug_print(f"[DEBUG] Single object, wrapping in list", flush=True)
+                fixed_acts = normalize_llm_items([json_fixed], field_mapping=field_mapping)
+
+            # Any list
+            if not fixed_acts:
+                for k, v in json_fixed.items():
+                    if isinstance(v, list) and len(v) >= 1:
+                        valid_items = [i for i in v if isinstance(i, dict) and i.get("name")]
+                        if valid_items:
+                            debug_print(f"[DEBUG] Fallback key '{k}': {len(valid_items)} items", flush=True)
+                            fixed_acts = normalize_llm_items(valid_items, field_mapping=field_mapping)
+                            break
+        debug_print(f"[DEBUG] fixed_acts: {len(fixed_acts)} items", flush=True)
+
+        # STRICT extraction for transient events
+        debug_print(f"[DEBUG] json_transient preview: {str(json_transient)[:300]}", flush=True)
+        transient_items = []
+
+        # First, check if the entire response IS the list (no wrapper)
+        if isinstance(json_transient, list) and len(json_transient) >= 2:
+            valid_items = [i for i in json_transient if isinstance(i, dict) and i.get("name")]
+            if valid_items:
+                debug_print(f"[DEBUG] Direct list response: {len(valid_items)} items", flush=True)
+                transient_items = normalize_llm_items(valid_items, field_mapping=field_mapping)
+
+        # If not, try dict keys
+        if not transient_items and isinstance(json_transient, dict):
+            # Priority keys
+            for key in ["transient_events", "events", "activities", "recommendations"]:
+                if json_transient.get(key) and isinstance(json_transient.get(key), list):
+                    raw = json_transient[key]
+                    valid_items = [i for i in raw if isinstance(i, dict) and i.get("name")]
+                    if valid_items:
+                        debug_print(f"[DEBUG] Found in key '{key}': {len(valid_items)} items", flush=True)
+                        transient_items = normalize_llm_items(valid_items, field_mapping=field_mapping)
+                        break
+
+            # Single object
+            if not transient_items and json_transient.get("name"):
+                debug_print(f"[DEBUG] Single object, wrapping in list", flush=True)
+                transient_items = normalize_llm_items([json_transient], field_mapping=field_mapping)
+
+            # ANY list with 3+ valid items
+            if not transient_items:
+                for k, v in json_transient.items():
+                    if isinstance(v, list) and len(v) >= 3:
+                        valid_items = [i for i in v if isinstance(i, dict) and i.get("name")]
+                        if valid_items:
+                            debug_print(f"[DEBUG] Fallback key '{k}': {len(valid_items)} items", flush=True)
+                            transient_items = normalize_llm_items(valid_items, field_mapping=field_mapping)
+                            break
+
+            # ANY list with any items
+            if not transient_items:
+                for k, v in json_transient.items():
+                    if isinstance(v, list) and len(v) >= 2:
+                        debug_print(f"[DEBUG] Loose fallback key '{k}': {len(v)} items", flush=True)
+                        transient_items = normalize_llm_items(v, field_mapping=field_mapping)
+                        break
+
+        debug_print(f"[DEBUG] transient_items: {len(transient_items)} items", flush=True)
+
+        # Validate we have minimum items
+        MIN_ITEMS = 5
+        has_fixed = len(fixed_acts) >= MIN_ITEMS
+        has_transient = len(transient_items) >= MIN_ITEMS
+
+        if not has_fixed or not has_transient:
+            print(f"[WARNING] Low item count - Fixed: {len(fixed_acts)}, Transient: {len(transient_items)}")
 
         final_markdown = build_markdown_tables(
             dates_str, weather_str, {"transient_events": transient_items}, fixed_acts)
@@ -748,6 +860,10 @@ def main(args=None):
         )
 
     print_to_cli(final_markdown)
+
+    # Count items in output
+    fixed_count = len(fixed_acts) if fixed_acts else 0
+    transient_count = len(transient_items) if transient_items else 0
 
     output_dir = os.path.expanduser("~/Documents/")
     os.makedirs(output_dir, exist_ok=True)
@@ -759,22 +875,28 @@ def main(args=None):
         f.write(final_markdown)
 
     elapsed_time = time.time() - start_time
-    console.print(
-        f"\n[bold green]Success! Output saved to:[/bold green] {filepath}")
+
+    # Report results - require BOTH tables to have minimum items for success
+    if has_fixed and has_transient:
+        console.print(
+            f"\n[bold green]Success![/bold green] Fixed: {fixed_count}, Transient: {transient_count}")
+        console.print(f"Output saved to: {filepath}")
+    else:
+        console.print(
+            f"\n[bold yellow]Partial results:[/bold yellow] Fixed: {fixed_count}/{MIN_ITEMS}, Transient: {transient_count}/{MIN_ITEMS}")
+        console.print(f"Output saved to: {filepath}")
+
     console.print(
         f"[bold dim]Total Execution Time: {elapsed_time / 60:.2f} minutes[/bold dim]"
     )
 
 
-def parse_args():
+if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser(description="Weekend Planner")
     p.add_argument("--use-cache", action="store_true", help="Use cached web results")
     p.add_argument("--model", default=None, help="Model to use")
     p.add_argument("--skip-web", action="store_true", help="Skip web fetch, use cache only")
-    return p.parse_args()
-
-
-if __name__ == "__main__":
-    args = parse_args()
+    p.add_argument("--debug", action="store_true", help="Enable debug logging")
+    args = p.parse_args()
     main(args)

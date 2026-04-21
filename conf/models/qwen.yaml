@@ -4,6 +4,17 @@
 name: qwen
 timeout: 120
 
+# Model-specific field mappings (normalize LLM output to our schema)
+# Key = what model outputs, Value = what we expect
+field_mapping:
+  # Fixed activities
+  category: target_ages
+  context_highlight: price
+  type: weather
+  # Transient events
+  event_date: day
+  end_date: end_date
+
 # Task-specific prompts (reused from production scripts)
 # Use {location}, {age_range}, {date_range} placeholders for runtime injection
 prompts:
@@ -15,30 +26,33 @@ prompts:
   weekend_fixed: |
     Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
 
-    Extract popular {location} venues for families with kids ages {age_range}.
-    Include location (city only), target_ages, price in CAD, weather.
+    Extract 8-10 popular {location} venues for families with kids ages {age_range}.
 
-    MANDATORY default values:
-    - target_ages: "{age_range}"
-    - price: $18-35 per child or free
-    - weather: "indoor"
+    CRITICAL: Each item MUST have these exact fields:
+    - target_ages: "{age_range}" (NOT category, NOT type)
+    - price: "$18-35 per child" or "$25-35 per family" (NOT context_highlight, NOT description)
+    - weather: "indoor" or "outdoor" (NOT setting, NOT category)
+    - name: official name (NOT description)
+    - location: city/neighborhood only (NOT full address)
 
-    Never leave any field empty.
+    EXCLUDE these places: {exclusions}
+
+    Output ONLY JSON. No extra text.
 
   # Variables: {location}, {age_range}, {date_range}
   weekend_transient: |
-    Output JSON now. Use EXACT schema: {{"transient_events": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}}]}}
+    Output JSON now. Schema: {{"transient_events": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}}]}}
 
-    Extract {location} family events for {date_range}.
+    Find 5-10 events for {date_range} in {location}. Kids ages {age_range}.
 
-    MANDATORY default values:
+    Use ONLY these values:
+    - day: Friday, Saturday, or Sunday
     - target_ages: "{age_range}"
-    - price: $20-30 per child or free
-    - duration: "2-3 hours"
-    - weather: "indoor"
-    - day: Friday/Saturday/Sunday
+    - price: "$20-30 per child" or "free"
+    - duration: "2-3 hours" or "all day"
+    - weather: "indoor" or "outdoor"
 
-    Never leave any field empty.
+    Output ONLY JSON array inside the object. No thinking.
 
   # Twitter summarizer prompt (from twitter_summarizer.py)
   # Variables: {} for timeline

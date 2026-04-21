@@ -219,13 +219,26 @@ def get_model_config(model: str) -> Dict:
     return _model_configs_cache[family]
 
 
+def get_model_field_mapping(model: str) -> Dict[str, str]:
+    """Get model-specific field mapping (e.g., category -> target_ages).
+
+    Args:
+        model: Model name (e.g., "qwen3.6-35b-a3b-mxfp4")
+
+    Returns:
+        Dict mapping model field names to standard field names
+    """
+    config = get_model_config(model)
+    return config.get("field_mapping", {})
+
+
 def get_model_prompt(model: str, task: Task) -> str:
     """Get model-specific prompt for a task.
-    
+
     Args:
         model: Model name (e.g., "qwen", "gemma", "foundation")
         task: Task enum value (e.g., Task.SUMMARIZE)
-        
+
     Returns:
         Prompt string or empty if not found
     """
