@@ -15,6 +15,7 @@ from rich.markdown import Markdown
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 from lib import init_config
+from lib.config import get_model_top_keys, get_model_field_mapping, get_model_quirks
 from lib.osaurus_lib import (
     restart_server,
     get_best_model,
@@ -547,7 +548,7 @@ def build_markdown_tables(dates_str, weather_str, structured_data, fixed_activit
     md += "| :--- | :--- | :--- | :--- | :--- |\n"
     for item in fixed:
         score_str = f"⭐ {item['score']}/5" if item.get("score", 0) > 0 else "N/A"
-        name = item.get("name") or item.get("activity") or item.get("title", "Unknown")
+        name = (item.get("name") or item.get("activity") or item.get("title", "Unknown")).replace("**", "")
         loc = item.get("location") or item.get("address") or ""
         age = item.get("target_ages") or item.get("age_group") or ""
         price = item.get("price") or item.get("cost") or ""
@@ -580,7 +581,7 @@ def build_markdown_tables(dates_str, weather_str, structured_data, fixed_activit
     md += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
     for item in grouped_transient_list:
         score_str = f"⭐ {item.get('score', 0)}/5" if item.get("score", 0) > 0 else "N/A"
-        name = item.get("name") or item.get("event") or item.get("title", "Unknown")
+        name = (item.get("name") or item.get("event") or item.get("title", "Unknown")).replace("**", "")
         loc = item.get("location") or item.get("address") or ""
         age = item.get("target_ages") or item.get("age_group") or ""
         price = item.get("price") or item.get("cost") or ""
@@ -709,9 +710,9 @@ def main(args=None):
 
         print("[INFO] Starting LLM calls...")
 
-        # Get model for prompts
+        # Get model for prompts - use OLLAMA_MODEL env var if set, otherwise use best model
         from lib.config import get_best_model, get_model_field_mapping, Task
-        actual_model = get_best_model(Task.JSON)
+        actual_model = os.environ.get("OLLAMA_MODEL") or get_best_model(Task.JSON)
         field_mapping = get_model_field_mapping(actual_model)
         debug_print(f"[DEBUG] Using model: {actual_model}, field_mapping: {field_mapping}")
 
@@ -760,6 +761,7 @@ def main(args=None):
         # Extraction for fixed activities - more permissive
         debug_print(f"[DEBUG] json_fixed preview: {str(json_fixed)[:200]}", flush=True)
         fixed_acts = []
+        fixed_keys = get_model_top_keys(actual_model).get("fixed", ["fixed_activities", "year_round_fixed_activities", "venues", "places", "activities", "items"])
 
         # Direct list
         if isinstance(json_fixed, list) and len(json_fixed) >= 1:
@@ -768,21 +770,24 @@ def main(args=None):
                 debug_print(f"[DEBUG] Direct list: {len(valid_items)} items", flush=True)
                 fixed_acts = normalize_llm_items(valid_items, field_mapping=field_mapping)
 
-        # Dict keys
+        # Dict keys - use model config keys
         if not fixed_acts and isinstance(json_fixed, dict):
-            # Priority keys - include variations
-            for key in ["fixed_activities", "year_round_fixed_activities", "venues", "places", "activities", "items"]:
+            # Also accept field_mapping keys (activity -> name, etc.)
+            name_keys = ["name"] + [k for k, v in field_mapping.items() if v == "name"]
+            debug_print(f"[DEBUG] name_keys: {name_keys}", flush=True)
+            
+            for key in fixed_keys:
                 if json_fixed.get(key) and isinstance(json_fixed.get(key), list) and len(json_fixed.get(key)) > 0:
                     raw = json_fixed[key]
                     debug_print(f"[DEBUG] Checking key '{key}': {len(raw)} items", flush=True)
-                    valid_items = [i for i in raw if isinstance(i, dict) and i.get("name")]
+                    valid_items = [i for i in raw if isinstance(i, dict) and any(i.get(nk) for nk in name_keys)]
                     if valid_items:
                         debug_print(f"[DEBUG] Found valid in key '{key}': {len(valid_items)} items", flush=True)
                         fixed_acts = normalize_llm_items(valid_items, field_mapping=field_mapping)
                         break
 
-            # Single object
-            if not fixed_acts and json_fixed.get("name"):
+            # Single object - check for any name key
+            if not fixed_acts and any(json_fixed.get(nk) for nk in name_keys):
                 debug_print(f"[DEBUG] Single object, wrapping in list", flush=True)
                 fixed_acts = normalize_llm_items([json_fixed], field_mapping=field_mapping)
 
@@ -800,6 +805,7 @@ def main(args=None):
         # STRICT extraction for transient events
         debug_print(f"[DEBUG] json_transient preview: {str(json_transient)[:300]}", flush=True)
         transient_items = []
+        transient_keys = get_model_top_keys(actual_model).get("transient", ["transient_events", "events", "activities", "recommendations"])
 
         # First, check if the entire response IS the list (no wrapper)
         if isinstance(json_transient, list) and len(json_transient) >= 2:
@@ -808,10 +814,9 @@ def main(args=None):
                 debug_print(f"[DEBUG] Direct list response: {len(valid_items)} items", flush=True)
                 transient_items = normalize_llm_items(valid_items, field_mapping=field_mapping)
 
-        # If not, try dict keys
+        # If not, try dict keys - use model config keys
         if not transient_items and isinstance(json_transient, dict):
-            # Priority keys
-            for key in ["transient_events", "events", "activities", "recommendations"]:
+            for key in transient_keys:
                 if json_transient.get(key) and isinstance(json_transient.get(key), list):
                     raw = json_transient[key]
                     valid_items = [i for i in raw if isinstance(i, dict) and i.get("name")]
@@ -819,6 +824,21 @@ def main(args=None):
                         debug_print(f"[DEBUG] Found in key '{key}': {len(valid_items)} items", flush=True)
                         transient_items = normalize_llm_items(valid_items, field_mapping=field_mapping)
                         break
+
+            # Check for gemma-style weekend_forecast transform
+            if not transient_items and json_transient.get("weekend_forecast"):
+                debug_print(f"[DEBUG] Trying gemma weekend_forecast transform", flush=True)
+                forecast = json_transient["weekend_forecast"]
+                if isinstance(forecast, dict):
+                    all_events = []
+                    for day_key, day_data in forecast.items():
+                        if isinstance(day_data, dict) and isinstance(day_data.get("events"), list):
+                            all_events.extend(day_data["events"])
+                    if all_events:
+                        valid_items = [i for i in all_events if isinstance(i, dict) and i.get("name")]
+                        if valid_items:
+                            debug_print(f"[DEBUG] Found in weekend_forecast: {len(valid_items)} items", flush=True)
+                            transient_items = normalize_llm_items(valid_items, field_mapping=field_mapping)
 
             # Single object
             if not transient_items and json_transient.get("name"):

@@ -232,6 +232,35 @@ def get_model_field_mapping(model: str) -> Dict[str, str]:
     return config.get("field_mapping", {})
 
 
+def get_model_top_keys(model: str) -> Dict[str, List[str]]:
+    """Get model-specific top-level JSON keys for extraction.
+
+    Args:
+        model: Model name (e.g., "qwen3.6-35b-a3b-mxfp4")
+
+    Returns:
+        Dict with 'fixed' and 'transient' keys lists, in priority order
+    """
+    config = get_model_config(model)
+    return config.get("top_keys", {
+        "fixed": ["fixed_activities", "year_round_fixed_activities", "venues", "places", "activities", "items"],
+        "transient": ["transient_events", "events", "activities", "recommendations"],
+    })
+
+
+def get_model_quirks(model: str) -> List[Dict]:
+    """Get model-specific quirks for processing.
+
+    Args:
+        model: Model name (e.g., "qwen3.6-35b-a3b-mxfp4")
+
+    Returns:
+        List of quirk dicts with type, name, description, etc.
+    """
+    config = get_model_config(model)
+    return config.get("quirks", [])
+
+
 def get_model_prompt(model: str, task: Task) -> str:
     """Get model-specific prompt for a task.
 

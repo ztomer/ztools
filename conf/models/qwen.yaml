@@ -97,3 +97,18 @@ quirks:
   - type: prefix
     pattern: "Output JSON now."
     reason: Prevents thinking blocks in JSON output
+
+# Top-level keys for extraction (in priority order)
+top_keys:
+  fixed:
+    - fixed_activities
+    - year_round_fixed_activities
+    - venues
+    - places
+    - activities
+    - items
+  transient:
+    - transient_events
+    - events
+    - activities
+    - recommendations

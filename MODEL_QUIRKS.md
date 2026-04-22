@@ -13,6 +13,8 @@ Reference for ZTools prompt engineering and model selection.
 | **summarize** | foundation | Clean ## headers, fast |
 | **filename** | foundation | Fast, follows schema |
 | **vlm** | gemma-4-26b-a4b-it-4bit | Vision tasks |
+| **weekend_planner** | qwen3.6-35b-a3b-mxfp4 | Reliable (9-10 fixed, 5-6 transient) |
+| **gemma4-31b** | Avoid | Wrong JSON structure, returns forecast instead of events |
 | **MLX backend** | Disabled | Not working reliably |
 
 ---
@@ -113,6 +115,27 @@ python3 model_eval.py --model <model> --task <task> --quick
 | Constant | Value | Notes |
 |----------|-------|-------|
 | **Osaurs port** | **1337** | Check: `osaurus status` |
+
+---
+
+## Model Quirks Detected
+
+### Qwen 3.6 (qwen3.6-35b-a3b-mxfp4)
+- **Thinking**: Plaintext thinking with "Here's a thinking process:" markers
+- **Stats tokens**: Trailing "stats:2114;97.2952" in output
+- **Required prefix**: "Output JSON now." to prevent thinking blocks
+- **Key quirks**: Uses `category` → `target_ages`, `context_highlight` → `price`
+- **Extraction keys**: fixed_activities, venues, activities, items
+
+### Gemma 4-31b (gemma-4-31b-it-jang_4m)
+- **Key name**: Returns `activity` instead of `name`
+- **Location**: Returns `venue` instead of `location`
+- **Output structure**: Generates weather forecast `{"weekend_forecast": {...}}` instead of events list
+- **Items count**: Only generates 1-3 items vs expected 5-10
+- **Requires transformation**: weekend_forecast nested structure extraction
+- **Not suitable**: Model doesn't follow prompt to generate enough items
+
+---
 
 All scripts must define these required constants at module level:
 
