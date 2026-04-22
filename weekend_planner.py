@@ -765,7 +765,9 @@ def main(args=None):
 
         # Direct list
         if isinstance(json_fixed, list) and len(json_fixed) >= 1:
-            valid_items = [i for i in json_fixed if isinstance(i, dict) and i.get("name")]
+            name_keys = ["name"] + [k for k, v in field_mapping.items() if v == "name"]
+            debug_print(f"[DEBUG] Direct list check with name_keys: {name_keys}", flush=True)
+            valid_items = [i for i in json_fixed if isinstance(i, dict) and any(i.get(nk) for nk in name_keys)]
             if valid_items:
                 debug_print(f"[DEBUG] Direct list: {len(valid_items)} items", flush=True)
                 fixed_acts = normalize_llm_items(valid_items, field_mapping=field_mapping)
@@ -809,7 +811,9 @@ def main(args=None):
 
         # First, check if the entire response IS the list (no wrapper)
         if isinstance(json_transient, list) and len(json_transient) >= 2:
-            valid_items = [i for i in json_transient if isinstance(i, dict) and i.get("name")]
+            name_keys = ["name"] + [k for k, v in field_mapping.items() if v == "name"]
+            debug_print(f"[DEBUG] Transient direct list check with name_keys: {name_keys}", flush=True)
+            valid_items = [i for i in json_transient if isinstance(i, dict) and any(i.get(nk) for nk in name_keys)]
             if valid_items:
                 debug_print(f"[DEBUG] Direct list response: {len(valid_items)} items", flush=True)
                 transient_items = normalize_llm_items(valid_items, field_mapping=field_mapping)

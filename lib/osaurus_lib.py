@@ -211,12 +211,12 @@ def _extract_json_only(content: str) -> Optional[str]:
                         continue
         return None
 
-    # Try JSON object first { ... }
-    res = find_json('{', '}')
+    # Try JSON array first [ ... ] (objects found later get truncated)
+    res = find_json('[', ']')
     if res: return res
     
-    # Try JSON array next [ ... ]
-    res = find_json('[', ']')
+    # Try JSON object { ... }
+    res = find_json('{', '}')
     if res: return res
 
     return None

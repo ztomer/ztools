@@ -7,6 +7,7 @@ timeout: 120
 # Model-specific field mappings (normalize LLM output to our schema)
 field_mapping:
   activity: name
+  event_name: name
   venue: location
 
 # Task-specific prompts (reused from production scripts)
@@ -20,7 +21,9 @@ prompts:
   weekend_fixed: |
     Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
 
-    Extract popular {location} venues for families with kids ages {age_range}.
+    Extract EXACTLY 8-10 popular {location} venues for families with kids ages {age_range}.
+    You MUST output a JSON ARRAY with 8-10 items, not a single object.
+    
     Include location (city only), target_ages, price in CAD, weather.
 
     MANDATORY default values:
@@ -28,24 +31,26 @@ prompts:
     - price: $18-35 per child or free
     - weather: "indoor"
 
-    Never leave any field empty.
+    CRITICAL: Output an ARRAY of 8-10 items. Do not output a single object.
 
   # Variables: {location}, {age_range}, {date_range}
   weekend_transient: |
     Output JSON now. Use EXACT schema: {{"transient_events": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}}]}}
 
-    Extract {location} family events for {date_range}.
-
+    Extract EXACTLY 5-10 family events for {date_range} in {location}.
+    You MUST output a JSON ARRAY with 5-10 event items, not weather data.
+    
     IMPORTANT: List SPECIFIC FAMILY EVENTS with names like "Spring Festival", "Science Fair", etc. Do NOT generate weather data or forecast.
 
     MANDATORY default values:
+    - name: "Event Name at Location" format
     - target_ages: "{age_range}"
     - price: $20-30 per child or free
-    - duration: "2-3 hours"
+    - duration: "2-3 hours" or "all day"
     - weather: "indoor" or "outdoor"
     - day: Friday, Saturday, or Sunday
 
-    Never leave any field empty.
+    CRITICAL: Output an ARRAY of 5-10 events. Do not output weather or forecast.
 
   # Twitter summarizer prompt (from twitter_summarizer.py)
   # Variables: {} for timeline
