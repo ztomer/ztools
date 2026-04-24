@@ -536,7 +536,7 @@ def build_markdown_tables(dates_str, weather_str, structured_data, fixed_activit
     md = f"# Weekend Plan: {dates_str}\n\n{weather_str}\n\n"
 
     fixed = fixed_activities
-    # Only fetch scores if we have actual items to avoid hanging on empty lists
+    # Fetch scores - this is slow (~5s per item) but needed for ranking
     if fixed:
         debug_print(f"[DEBUG] Fetching scores for {len(fixed)} items...", flush=True)
         fetch_scores_for_items(fixed)
@@ -647,12 +647,12 @@ def main(args=None):
             "[bold blue]Fetching fixed venues/exhibits...[/bold blue]", total=None
         )
         task_fixed = progress.add_task(
-            "[bold blue]Generating Fixed Activities (LLM Pass 2)...[/bold blue]",
+            "[bold blue]Generating Fixed Activities...[/bold blue]",
             start=False,
             total=None,
         )
         task_transient = progress.add_task(
-            "[bold blue]Generating Transient Events (LLM Pass 1)...[/bold blue]",
+            "[bold blue]Generating Transient Events...[/bold blue]",
             start=False,
             total=None,
         )
@@ -812,21 +812,30 @@ def main(args=None):
         # First, check if the entire response IS the list (no wrapper)
         if isinstance(json_transient, list) and len(json_transient) >= 2:
             name_keys = ["name"] + [k for k, v in field_mapping.items() if v == "name"]
+            alt_name_keys = ["description", "title", "event", "summary"]  # Gemma fallback
             debug_print(f"[DEBUG] Transient keys: {name_keys}", flush=True)
             debug_print(f"[DEBUG] Sample item keys: {list(json_transient[0].keys()) if json_transient else 'none'}", flush=True)
             # Filter out weather data (items with temperature/condition keys)
             filtered = [i for i in json_transient if isinstance(i, dict) and not any(k in i for k in ['temperature', 'condition', 'precipitation'])]
             debug_print(f"[DEBUG] Filtered: {len(filtered)}/{len(json_transient)}", flush=True)
-            valid_items = [i for i in filtered if isinstance(i, dict) and any(i.get(nk) for nk in name_keys)]
+            valid_items = [i for i in filtered if isinstance(i, dict) and (any(i.get(nk) for nk in name_keys) or any(i.get(ank) for ank in alt_name_keys))]
             debug_print(f"[DEBUG] Valid: {len(valid_items)}", flush=True)
             if valid_items:
                 debug_print(f"[DEBUG] Direct list: {len(valid_items)} items", flush=True)
+                # Normalize: move description->name if missing name
+                for item in valid_items:
+                    if not item.get("name") and item.get("description"):
+                        item["name"] = item.pop("description")
                 transient_items = normalize_llm_items(valid_items, field_mapping=field_mapping)
-            elif not valid_items:
-                # Try different keys (gemma uses 'event' not 'event_name')
-                alt_keys = ["event", "title", "summary"]
+            else:
+                # Try different keys (gemma uses 'description' as name)
+                alt_keys = ["description", "title", "event", "summary"]
                 valid_items = [i for i in filtered if isinstance(i, dict) and any(i.get(ak) for ak in alt_keys)]
                 debug_print(f"[DEBUG] Alt valid: {len(valid_items)} with alt keys: {alt_keys}", flush=True)
+                # Normalize: move description->name
+                for item in valid_items:
+                    if not item.get("name") and item.get("description"):
+                        item["name"] = item.pop("description")
                 if valid_items:
                     transient_items = normalize_llm_items(valid_items, field_mapping=field_mapping)
 

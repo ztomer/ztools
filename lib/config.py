@@ -6,7 +6,7 @@ Auto-loads configuration on first access.
 
 import yaml
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 # ==========================================================
 # CONSTANTS - Task names used throughout the system
@@ -200,23 +200,47 @@ def clear_model_config_cache():
 
 
 def get_model_config(model: str) -> Dict:
-    """Load model-specific configuration from conf/models/{family}.yaml"""
+    """Load model-specific configuration from conf/models/{family}.yaml or version configs"""
     family = get_model_family(model)
+    version = model.replace(family + "-", "") if family in model else ""
 
+    # Check cache first
     if family in _model_configs_cache:
-        return _model_configs_cache[family]
+        family_config = _model_configs_cache[family]
+        # Check if we have version-specific override
+        if version and "models" in family_config:
+            version_config = family_config["models"].get(model, {})
+            if version_config:
+                # Merge family config with version-specific overrides
+                merged = {k: v for k, v in family_config.items() if k != "models"}
+                merged.update(version_config)
+                merged["version"] = version
+                return merged
+        return family_config
 
-    # Load from YAML
+    # Load from YAML - check for version configs first
+    version_config_path = Path(__file__).parent.parent / "conf" / "models" / f"{family}_versions.yaml"
     config_path = Path(__file__).parent.parent / "conf" / "models" / f"{family}.yaml"
 
-    if config_path.exists():
+    if version_config_path.exists():
+        with open(version_config_path) as f:
+            loaded = yaml.safe_load(f) or {}
+            _model_configs_cache[family] = loaded
+            if "models" in loaded:
+                version_specific = loaded["models"].get(model, {})
+                if version_specific:
+                    merged = {k: v for k, v in loaded.items() if k != "models"}
+                    merged.update(version_specific)
+                    merged["version"] = version
+                    return merged
+            return loaded
+    elif config_path.exists():
         with open(config_path) as f:
             _model_configs_cache[family] = yaml.safe_load(f) or {}
     else:
-        # Return empty config
         _model_configs_cache[family] = {"name": family, "prompts": {}, "key_mappings": {}, "quirks": []}
 
-    return _model_configs_cache[family]
+    return _model_configs_cache.get(family, {"name": family, "prompts": {}, "key_mappings": {}, "quirks": []})
 
 
 def get_model_field_mapping(model: str) -> Dict[str, str]:

@@ -1,0 +1,96 @@
+# Gemma model configurations - version-specific
+# gemma-4-26b-a4b-it-mxfp4: Largest model, returns structured data
+# gemma-4-31b-it-jang_4m: Medium model  
+# gemma-4-e2b-it-8bit: Smallest, fastest model
+
+name: gemma
+timeout: 120
+
+field_mapping:
+  activity: name
+  event_name: name
+  venue: location
+
+models:
+  gemma-4-26b-a4b-it-mxfp4:
+    name: gemma_26b
+    timeout: 120
+    field_mapping:
+      activity: name
+      event_name: name
+      venue: location
+    prompts:
+      weekend_fixed: |
+        Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
+        Extract EXACTLY 8-10 popular {location} venues for families with kids ages {age_range}.
+        You MUST output a JSON ARRAY with 8-10 items, not a single object.
+        Include location (city only), target_ages, price in CAD, weather.
+        MANDATORY defaults: target_ages="{age_range}", price=$18-35, weather="indoor"
+      weekend_transient: |
+        Output JSON now. Schema: {{"transient_events": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}}]}}
+        Find 5-10 events for {date_range} in {location}. Kids ages {age_range}.
+        Use only: day=Friday/Saturday/Sunday, target_ages="{age_range}", price=$20-30/free, duration="2-3 hours"/"all day"
+    top_keys:
+      fixed: [fixed_activities, year_round_fixed_activities, target_weekend, venues, places, activities, items]
+      transient: [transient_events, events, target_weekend, activities, recommendations]
+    quirks:
+      - type: prefix
+        pattern: "Output JSON now."
+
+  gemma-4-31b-it-jang_4m:
+    name: gemma_31b
+    timeout: 90
+    field_mapping:
+      activity: name
+      venue: location
+    prompts:
+      weekend_fixed: |
+        Output JSON now. JSON array of 8-10 {location} venues for kids {age_range}.
+        [{"name": "", "location": "", "target_ages": "", "price": "", "weather": ""}]
+      weekend_transient: |
+        Output JSON now. List 5-10 {date_range} events for kids {age_range}.
+        [{"name": "", "location": "", "target_ages": "", "price": "", "day": ""}]
+    top_keys:
+      fixed: [fixed_activities, venues, places, activities, items]
+      transient: [transient_events, events, activities, recommendations]
+    quirks:
+      - type: prefix
+        pattern: "Output JSON now."
+
+  gemma-4-e2b-it-8bit:
+    name: gemma_2b
+    timeout: 60
+    field_mapping:
+      activity: name
+      venue: location
+    prompts:
+      weekend_fixed: |
+        Output JSON now. 8-10 {location} places for kids {age_range}.
+        JSON: [{{"name": "Name", "location": "City", "target_ages": "{age_range}", "price": "$25", "weather": "indoor"}}]
+      weekend_transient: |
+        Output JSON now. 5-10 {location} activities {date_range} for kids {age_range}.
+        JSON: [{{"name": "Name", "location": "City", "target_ages": "{age_range}", "price": "$20", "day": "Sat"}}]
+    top_keys:
+      fixed: [venues, places, activities, items]
+      transient: [events, activities, recommendations]
+    quirks:
+      - type: prefix
+        pattern: "Output JSON now."
+
+# Default prompts (used if version-specific not found)
+prompts:
+  json: |
+    Output JSON now. Use EXACT schema.
+  weekend_fixed: |
+    Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
+    Extract EXACTLY 8-10 popular {location} venues for families with kids ages {age_range}.
+    MANDATORY default values: target_ages="{age_range}", price=$18-35, weather="indoor"
+  weekend_transient: |
+    Output JSON now. JSON array of events: [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "day": "str"}}]
+    Find 5-10 events for {date_range} in {location}. Kids ages {age_range}.
+  summarize: |
+    Output the summary. Use ## headers for topics.
+    <timeline>{}</timeline>
+  filename: |
+    You are a file naming assistant. Output ONLY filename string (no extension).
+    TEXT: {}

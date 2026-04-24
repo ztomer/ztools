@@ -16,14 +16,28 @@ Reference for ZTools prompt engineering and model selection.
 
 | Task | Best Model | Notes |
 |------|-----------|-------|
-| **json** | qwen3.6-35b-a3b-mxfp4 | 100% on eval |
-| **detailed_json** | qwen3.6-35b-a3b-mxfp4 | 100% on eval |
+| **weekend_transient** | qwen3.6-35b-a3b-mxfp4 | WORKS (7-8 items) |
+| **weekend_fixed** | qwen3.6-35b-a3b-mxfp4 | Works (10 items) |
 | **summarize** | foundation | Clean ## headers, fast |
 | **filename** | foundation | Fast, follows schema |
-| **vlm** | gemma-4-26b-a4b-it-4bit | Vision tasks |
-| **weekend_fixed** | qwen3.6-35b-a3b-mxfp4 | Works (10 items) |
-| **weekend_transient** | qwen3.6-35b-a3b-mxfp4 | WORKS (6-8 items) |
+| **vlm** | gemma-4-26b-a4b-it-mxfp4 | Vision tasks |
 | **MLX backend** | Disabled | Not working reliably |
+
+---
+
+## Known Issues
+
+### Gemma Weather Bug
+All gemma models output weather data instead of events for transient tasks:
+- gemma-4-26b-a4b-it-mxfp4: Returns `{"date": "April 25", "temperature": "12°C"}` instead of events
+- gemma-4-31b-it-jang_4m: Same issue
+- gemma-4-e2b-it-8bit: Same issue
+- **Not fixable via prompts** - model behavior issue
+
+### Performance Notes
+- Oosaurus server should run on port 1337 (not 8080)
+- gemma models return different JSON structures per version
+- Use qwen for weekend tasks only
 
 ---
 

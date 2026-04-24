@@ -35,12 +35,12 @@ prompts:
 
   # Variables: {location}, {age_range}, {date_range}
   weekend_transient: |
-    Convert web search results into JSON events.
+    Output JSON now. List 5-10 activities happening {date_range} in {location} for kids {age_range}.
     
-    Output ONLY this exact JSON (no extra text):
-    {{"transient_events": [{{"name": "Event name", "location": "Location", "target_ages": "{age_range}", "price": "$20-30 or free", "duration": "2-3 hours", "weather": "indoor", "day": "Friday"}}]}}
+    JSON: [{{"name": "Activity Name", "location": "City", "target_ages": "{age_range}", "price": "$25", "day": "Saturday"}}]
     
-    Extract events from the provided web search results. Do NOT invent events.
+    Include specific venues, real events, workshops, drop-in programs.
+    Output ONLY a JSON array, no wrapper object.
 
   # Twitter summarizer prompt (from twitter_summarizer.py)
   # Variables: {} for timeline
@@ -85,6 +85,8 @@ top_keys:
   fixed:
     - fixed_activities
     - year_round_fixed_activities
+    - weekend_data
+    - target_weekend
     - venues
     - places
     - activities
@@ -92,25 +94,10 @@ top_keys:
   transient:
     - transient_events
     - events
+    - weekend_data
+    - target_weekend
     - activities
     - recommendations
-    - weather  # Gemma returns weather forecast instead of events - need special handling
-
-# Top-level keys for extraction (in priority order)
-top_keys:
-  fixed:
-    - fixed_activities
-    - year_round_fixed_activities
-    - venues
-    - places
-    - activities
-    - items
-  transient:
-    - transient_events
-    - events
-    - activities
-    - recommendations
-    - weekend_forecast  # Gemma returns forecast object instead of events list
 
 # Model quirks
 quirks:

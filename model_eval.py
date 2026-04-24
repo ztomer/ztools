@@ -160,7 +160,7 @@ TWITTER_PROMPT = """You are an objective news distillation system. Your task is 
 Provide the summary (start your response with <think>):"""
 
 TASKS = {
-    "json": {
+    "weekend_transient": {
         "messages": [
             {"role": "system", "content": WEEKEND_SYS_TRANSIENT},
             {"role": "user", "content": WEEKEND_USR_TRANSIENT},
@@ -169,7 +169,7 @@ TASKS = {
         "parse_json": True,
         "source": WEEKEND_USR_TRANSIENT,
     },
-    "detailed_json": {
+    "weekend_fixed": {
         "messages": [
             {"role": "system", "content": WEEKEND_SYS_FIXED},
             {"role": "user", "content": WEEKEND_USR_FIXED},
