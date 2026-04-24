@@ -4,6 +4,9 @@ import re
 from typing import Tuple, List, Dict, Any
 from .content_processing import strip_backtick_value
 
+# Stopwords for source matching
+STOPWORDS = {"the", "and", "for", "with", "this", "that", "from", "are", "was", "has", "have", "but", "not", "you", "all", "can", "her", "his", "had", "they", "been", "will", "would", "could", "what", "when", "where", "who", "which", "why", "how"}
+
 # ==========================================================
 # SCORING CONSTANTS
 # ==========================================================
@@ -163,38 +166,82 @@ def check_source_extraction(items: List[Dict], source_text: str) -> float:
     if not items or not source_text:
         return 0.0
 
-    # Filter out common stopwords that would cause false positives
-    stopwords = {"the", "and", "for", "with", "this", "that", "from", "are", "was", "has", "have", "but", "not", "you", "all", "can", "her", "his", "had", "they", "been", "will", "would", "could", "what", "when", "where", "who", "which", "why", "how"}
-
     source_lower = source_text.lower()
-    source_terms = set(t for t in source_lower.split() if len(t) >= 3 and t not in stopwords)
+    source_terms = set(t for t in source_lower.split() if len(t) >= 3 and t not in STOPWORDS)
 
     if not source_terms:
         return 0.0
 
     matches = 0
+    matched_items = []
+    unmatched_items = []
 
     for item in items:
-        # Handle both dict items and string items
         if isinstance(item, dict):
             item_text = " ".join(str(v).lower() for v in item.values() if v)
+            item_name = item.get("name", item.get("event", item.get("title", "")))
         elif isinstance(item, str):
             item_text = item.lower()
+            item_name = item
         else:
             item_text = str(item).lower()
+            item_name = item_text
 
         if not item_text:
             continue
 
-        # Extract meaningful terms from item
-        item_terms = set(t for t in item_text.split() if len(t) >= 3 and t not in stopwords)
-
-        # Match if item has terms present in source (need 2+ matches to count as extraction)
+        item_terms = set(t for t in item_text.split() if len(t) >= 3 and t not in STOPWORDS)
         common = item_terms & source_terms
+
         if len(common) >= 2:
             matches += 1
+            matched_items.append(item_name if item_name else "unnamed")
+        else:
+            unmatched_items.append(item_name if item_name else "unnamed")
 
-    return matches / len(items) if items else 0.0
+    ratio = matches / len(items) if items else 0.0
+    return ratio
+
+
+def get_source_matching_details(items: List[Dict], source_text: str) -> Dict[str, Any]:
+    """Return detailed info about source matching for diagnostics."""
+    if not items or not source_text:
+        return {"matched": [], "unmatched": [], "ratio": 0.0, "source_preview": ""}
+
+    source_lower = source_text.lower()
+    source_terms = set(t for t in source_lower.split() if len(t) >= 3 and t not in STOPWORDS)
+
+    matched = []
+    unmatched = []
+
+    for item in items:
+        if isinstance(item, dict):
+            item_text = " ".join(str(v).lower() for v in item.values() if v)
+            item_name = item.get("name", item.get("event", item.get("title", "")))
+        elif isinstance(item, str):
+            item_text = item.lower()
+            item_name = item
+        else:
+            item_text = str(item).lower()
+            item_name = item_text
+
+        if not item_text:
+            continue
+
+        item_terms = set(t for t in item_text.split() if len(t) >= 3 and t not in STOPWORDS)
+        common = item_terms & source_terms
+
+        if len(common) >= 2:
+            matched.append({"name": item_name, "matched_terms": list(common)[:5]})
+        else:
+            unmatched.append({"name": item_name, "terms": list(item_terms)[:5], "in_source": list(common)})
+
+    return {
+        "matched": matched,
+        "unmatched": unmatched,
+        "ratio": len(matched) / len(items) if items else 0.0,
+        "source_preview": source_text[:500] if source_text else ""
+    }
 
 
 def has_text_headers(text: str, header_markers: List[str] = None) -> bool:

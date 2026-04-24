@@ -368,7 +368,7 @@ def _describe_content_failure(parsed, failure_reason: str) -> str:
     return failure_reason
 
 
-def _validate_result(result: dict, task_cfg: dict, task_name: str) -> tuple[int, str, dict]:
+def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool = False) -> tuple[int, str, dict]:
     """Run validation on a library result. Returns (score, failure_reason, diagnosis)."""
     validator = task_cfg["validator"]
 
@@ -386,6 +386,17 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str) -> tuple[int,
         # Run validator with source check for quality
         source = task_cfg.get("source", "")
         validated = validator(parsed, source_text=source)
+
+        # Show source matching details if debug
+        if debug and source and "weekend" in task_name:
+            from lib.validators_lib import get_source_matching_details
+            details = get_source_matching_details(parsed, source)
+            console.print(f"[dim]Source matching for {task_name}:[/dim]")
+            console.print(f"[dim]  Matched: {len(details['matched'])}/{len(details['matched']) + len(details['unmatched'])} ({details['ratio']*100:.0f}%)[/dim]")
+            if details['unmatched']:
+                console.print(f"[dim]  Unmatched items:[/dim]")
+                for item in details['unmatched'][:3]:
+                    console.print(f"[dim]    - {item['name']} (terms: {item.get('terms', [])[:3]})[/dim]")
     else:
         content = result.get("content") or ""
         if not content:
@@ -407,12 +418,14 @@ def _call_model(model: str, task_cfg: dict, task_name: str, host: str, port: int
     if backend == "mlx":
         from lib.mlx_lib import call as mlx_call
         return mlx_call(
-            model=model,
+            model,
             messages=task_cfg["messages"],
-            task=task_name,
-            parse_json=task_cfg["parse_json"],
-        )
+            host=host,
+            port=port,
+            timeout=EVAL_TIMEOUT,
+)
     else:
+        console.print(f"[dim]  → calling {model}...[/dim]")
         return call(
             model=model,
             messages=task_cfg["messages"],
@@ -422,6 +435,7 @@ def _call_model(model: str, task_cfg: dict, task_name: str, host: str, port: int
             parse_json=task_cfg["parse_json"],
             timeout=EVAL_TIMEOUT,
         )
+
 
 def run_eval(
     model: str, tasks: dict = None, host: str = "localhost", port: int = 1337, backend: str = "osaurus"
@@ -436,7 +450,10 @@ def run_eval(
     tasks = tasks or TASKS
     results = []
 
-    console.print(f"[cyan]Testing {model} ({backend})...[/cyan]")
+    console.print("")
+    console.print(f"[bold cyan]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold cyan]")
+    console.print(f"[bold cyan]Testing {model} ({backend})[bold cyan]")
+    console.print(f"[bold cyan]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold cyan]")
 
     for task_name, task_cfg in tasks.items():
         best_score = -1
@@ -449,7 +466,7 @@ def run_eval(
                 eval_logger.warning(f"Retrying task '{task_name}' with model {model} (Attempt {attempt+1}/{MAX_RETRIES+1})...")
             
             result = _call_model(model, task_cfg, task_name, host, port, backend)
-            score, failure_reason, diagnosis = _validate_result(result, task_cfg, task_name)
+            score, failure_reason, diagnosis = _validate_result(result, task_cfg, task_name, debug=True)
             
             eval_logger.info(f"Quality score: {score}/100")
             
@@ -484,10 +501,11 @@ def run_eval(
                 "failure_reason": best_failure,
                 "failure_category": category,
                 "failure_evidence": best_diagnosis.get("evidence", ""),
+                "result": best_result,
             }
         )
 
-        status_symbol = "✅" if status == "ok" else ("⚠️" if status == "partial" else "❌")
+        status_symbol = "[PASS]" if status == "ok" else ("[WARN]" if status == "partial" else "[FAIL]")
         category_tag = f" [{category}]" if category else ""
         fail_info = f" - {best_failure}" if best_failure else ""
         evidence_info = f"\n    ↳ {best_diagnosis['evidence']}" if best_diagnosis.get("evidence") else ""
@@ -496,6 +514,32 @@ def run_eval(
         console.print(
             f"  {status_symbol} {task_name}: {best_score}% ({time_taken_str}){category_tag}{fail_info}{evidence_info}"
         )
+
+    # Print source matching summary for weekend tasks
+    weekend_tasks = [k for k in tasks.keys() if "weekend" in k]
+    if weekend_tasks:
+        from lib.validators_lib import get_source_matching_details
+        console.print("")
+        console.print("[bold]Quality Check Summary:[/bold]")
+        for r in results:
+            task_name = r["task"]
+            if task_name not in weekend_tasks:
+                continue
+            task_cfg = tasks[task_name]
+            source = task_cfg.get("source", "")
+            if not source:
+                continue
+            parsed = r.get("result", {}).get("parsed", [])
+            if not parsed:
+                continue
+            details = get_source_matching_details(parsed, source)
+            matched = len(details["matched"])
+            total = matched + len(details["unmatched"])
+            ratio = details["ratio"] * 100
+            console.print(f"  {task_name}: {matched}/{total} items from source ({ratio:.0f}%)")
+            if details["unmatched"]:
+                names = [u["name"] for u in details["unmatched"][:2]]
+                console.print(f"    [WARN] Not from source: {names}")
 
     return results
 
@@ -613,18 +657,20 @@ def main():
     best_models = {task: None for task in tasks_to_run.keys()}
 
     for model, backend in models_to_test:
+        console.print("")
         results = run_eval(model, tasks=tasks_to_run, backend=backend)
         scores = [r["quality_score"] for r in results]
         avg = sum(scores) / len(scores) if scores else 0
-        console.print(f"[bold]{model} ({backend}): {avg:.0f}%[/bold]")
         
-        # Print per-task scores
+        status = "[PASS]" if all(s >= 90 for s in scores) else ("[WARN]" if any(s >= 50 for s in scores) else "[FAIL]")
+        console.print(f"[bold]{status} {model} ({backend}):[/bold] {avg:.0f}% avg")
+        
         for r in results:
             task = r["task"]
             score = r["quality_score"]
-            status = "✅" if score >= 90 else ("⚠️" if score >= 50 else "❌")
-            failure_info = f" ({r.get('failure_reason', '')})" if score < 90 else ""
-            print(f"  {status} {task}: {score}{failure_info}")
+            task_status = "[PASS]" if score >= 90 else ("[WARN]" if score >= 50 else "[FAIL]")
+            failure_info = f" - {r.get('failure_reason', '')}" if score < 90 else ""
+            console.print(f"  {task_status} {task}: {score}%{failure_info}")
         
         all_results.append({'model': model, 'backend': backend, 'results': results})
         for r in results:

@@ -666,49 +666,41 @@ def main(args=None):
         year = fri.strftime("%Y")
         month_name = fri.strftime("%B")
 
-        print("[INFO] Starting event fetch...", flush=True)
-
-        # 1. Fetch data (or use cache)
+        # 1. Fetch data (or use cache) - normally quiet
         progress.update(
             task_events, description="[dim]Fetching events...[/dim]")
 
         if args.use_cache:
             events_str = load_events_cache()
             if events_str:
-                print(f"[cache] Using cached events ({len(events_str)} chars)")
+                pass  # quiet
             else:
-                print("[!] No cached events found, fetching...")
+                pass  # quiet
                 events_str = fetch_transient_events(dates_str, year, month_name)
                 save_events_cache(events_str)
         else:
             events_str = fetch_transient_events(dates_str, year, month_name)
             save_events_cache(events_str)
-        print(f"[INFO] Events: {len(events_str)} chars")
         progress.update(
             task_events, description="[dim]✓ Fetched events[/dim]", completed=100
         )
 
-        print("[INFO] Starting venue fetch...")
         progress.update(
             task_venues, description="[dim]Fetching venues...[/dim]")
 
         if args.use_cache:
             venues_str = load_venues_cache()
             if venues_str:
-                print(f"[cache] Using cached venues ({len(venues_str)} chars)")
+                pass  # quiet
             else:
-                print("[!] No cached venues found, fetching...")
                 venues_str = fetch_fixed_venues(year, month_name)
                 save_venues_cache(venues_str)
         else:
             venues_str = fetch_fixed_venues(year, month_name)
             save_venues_cache(venues_str)
-        print(f"[INFO] Venues: {len(venues_str)} chars")
         progress.update(
             task_venues, description="[dim]✓ Fetched venues[/dim]", completed=100
         )
-
-        print("[INFO] Starting LLM calls...")
 
         # Get model for prompts - use OLLAMA_MODEL env var if set, otherwise use best model
         from lib.config import get_best_model, get_model_field_mapping, Task
@@ -766,10 +758,8 @@ def main(args=None):
         # Direct list
         if isinstance(json_fixed, list) and len(json_fixed) >= 1:
             name_keys = ["name"] + [k for k, v in field_mapping.items() if v == "name"]
-            debug_print(f"[DEBUG] Direct list check with name_keys: {name_keys}", flush=True)
             valid_items = [i for i in json_fixed if isinstance(i, dict) and any(i.get(nk) for nk in name_keys)]
             if valid_items:
-                debug_print(f"[DEBUG] Direct list: {len(valid_items)} items", flush=True)
                 fixed_acts = normalize_llm_items(valid_items, field_mapping=field_mapping)
 
         # Dict keys - use model config keys
