@@ -50,7 +50,9 @@ All gemma models output weather data instead of events for transient tasks:
 - **Key quirks**: Uses `category` → `target_ages`, `context_highlight` → `price`
 - **Extraction keys**: fixed_activities, venues, activities, items
 - **SUCCESS**: Both fixed and transient work reliably
-- **Markdown**: Adds `**` to names (e.g., `**Friday, April 20**`) - cosmetic, doesn't affect quality
+- **Markdown**: Adds `**` to names (e.g., `**Friday, April 20**`) - cosmetic, handled by libs
+- **27b**: Slower (200s+) but same quality - use if you have time
+- **Schema helps**: `schema_strict` prompts improve detail extraction
 
 ### Gemma 4 Family ❌ NOT SUITABLE FOR WEEKEND TASKS
 - **Key name**: Returns `activity` instead of `name`
@@ -58,7 +60,17 @@ All gemma models output weather data instead of events for transient tasks:
 - **Output structure**: Generates weather forecast instead of events
 - **Not suitable**: Generates weather data instead of events
 - **Fixed activities work**: Uses `activity` key via field_mapping
-- **Flat dicts**: Outputs `[{"Location": "Park"}, {"Ages": "All"}]` instead of `[{"name": "Event", "location": "Park", "target_ages": "All"}]` - won't pass detail validation
+- **Flat dicts**: Outputs `[{"Location": "Park"}, {"Ages": "All"}]` instead of proper nested structure
+- **Many items**: Returns 19-35 garbage items but 0 with real details
+- **Explorer test**: `no_preamble` → 19 items/0 details, `schema_strict` → 35 items/0 details
+- **Root cause**: Model doesn't follow JSON schema instructions - returns conversational text as items
+- **ALL variants broken**: 26b, 31b, 8bit all fail same way
+
+### Foundation ✅ WORKS RELIABLY
+- **Fast**: 8-15s for tasks
+- **Clean JSON**: No markdown, no thinking blocks  
+- **Source matching**: 100% match ratio
+- **Perfect**: all 3 items with details in tests
 
 ---
 

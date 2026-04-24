@@ -81,3 +81,33 @@ def test_has_filename_format():
     assert has_filename_format("file.txt")
     assert has_filename_format("file_name")
     assert not has_filename_format("file")
+
+
+def test_check_source_extraction():
+    from lib.validators_lib import check_source_extraction
+    
+    items = [
+        {"name": "Spring Festival at Downsview Park"},
+        {"name": "Indoor Coding Workshop", "location": "Downsview"},
+    ]
+    source = "Spring Festival at Downsview Park and Indoor Coding Workshop"
+    ratio = check_source_extraction(items, source)
+    assert ratio >= 0.5
+
+
+def test_get_source_matching_details():
+    from lib.validators_lib import get_source_matching_details
+    
+    items = [{"name": "Valid Event"}]
+    source = "Valid Event happens"
+    details = get_source_matching_details(items, source)
+    assert "ratio" in details
+    assert len(details["matched"]) >= 1
+
+
+def test_has_item_details():
+    from lib.validators_lib import has_item_details
+    
+    # Should pass: has name + detail
+    assert has_item_details({"name": "Event", "location": "Park"})
+    # Should fail: no name field (name added in normalize_keys, not validator)

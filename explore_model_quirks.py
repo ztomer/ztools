@@ -2,46 +2,43 @@
 """
 Model Quirks Explorer - Systematically probe model behaviors.
 Used to discover prompt/response patterns for different models.
+
+Run: python3 explore_model_quirks.py <model>
 """
 
 import sys
 import json
-from lib.osaurus_lib import call, get_model_family
-from lib.logging_config import osaurus_logger as logger
+import argparse
+from lib.osaurus_lib import call, extract_json, filter_json_items, fix_json_years
+from lib.validators_lib import check_source_extraction, has_item_details
 
 TEST_PROMPTS = {
     "simple_json": {
         "system": "Output JSON with name and age.",
         "user": "My name is John, I am 25 years old",
     },
-    "output_json_now": {
-        "system": "Output JSON now. Give name and age.",
-        "user": "John is 25",
+    "no_preamble": {
+        "system": "Output JSON now. No explanations. No markdown.",
+        "user": "Events: Spring Festival, Indoor Coding, Farmers Market",
     },
-    "extraction_framing": {
-        "system": "IMPORTANT: This is DATA EXTRACTION. Output JSON only.",
-        "user": "Extract: John, 25 years old",
+    "schema_strict": {
+        "system": "Output JSON: [{\"name\": \"...\", \"location\": \"...\"}]",
+        "user": "Spring Festival at Parks, Indoor Coding at Library, Farmers Market",
     },
-    "execute_task": {
-        "system": "Execute the task to output JSON with name and age.",
-        "user": "John is 25",
+    "structured": {
+        "system": "Output ONLY valid JSON array. Required: [{\"name\": \"str\", \"location\": \"str\", \"target_ages\": \"str\", \"price\": \"str\"}]",
+        "user": "Spring Festival: Downsview Park, all ages, free. Coding: Library, 8-14, $20.",
     },
-    "data_context": {
-        "system": "Given the data, output JSON.",
-        "user": "Data: John is 25 years old. Extract to JSON.",
-    },
-    "schema_example": {
-        "system": "Output JSON: {\"name\": \"value\", \"age\": number}. Example: John is 25.",
-        "user": "Process: John, 25",
-    },
-    "no_thinking": {
-        "system": "Answer immediately in JSON only. No thinking. {\"name\": \"John\", \"age\": 25}",
-        "user": "What's 2+2?",
+    "with_context": {
+        "system": "Extract from context. Output JSON with all fields.",
+        "user": """Context: Spring Festival at Downsview Park, April 20-22. All ages.
+Indoor Coding Workshop at Library, April 21. Ages 8-14. $25.
+Farmers Market at Maple Village, April 20. All ages. Free.""",
     },
 }
 
 
-def test_model(model: str, test_name: str, timeout: int = 30) -> dict:
+def run_test(model: str, test_name: str, timeout: int = 30) -> dict:
     """Run a single test and return result."""
     prompts = TEST_PROMPTS.get(test_name, {})
     if not prompts:
@@ -55,26 +52,23 @@ def test_model(model: str, test_name: str, timeout: int = 30) -> dict:
                 {"role": "user", "content": prompts.get("user", "")},
             ],
             task="json",
-            parse_json=True,  # Request JSON format from server
+            parse_json=True,
             timeout=timeout,
         )
         
-        # Analyze result
         content = result.get("content", "")
         parsed = result.get("parsed")
         
         analysis = {
             "has_json": bool(parsed),
-            "has_json_chars": "{" in content or "[" in content,
-            "is_list": isinstance(parsed, list),
-            "is_dict": isinstance(parsed, dict),
-            "first_keys": list(parsed[0].keys()) if isinstance(parsed, list) and parsed else list(parsed.keys()) if isinstance(parsed, dict) else [],
-            "content_first_50": content[:50] if content else "",
-            "error": result.get("error"),
+            "has_markdown": "**" in content or "```" in content,
+            "has_table": "|" in content,
+            "item_count": len(parsed) if isinstance(parsed, list) else 0,
+            "has_details": sum(1 for p in (parsed or []) if has_item_details(p)) if isinstance(parsed, list) else 0,
         }
         
         return {
-            "raw_content": content[:200],
+            "content": content[:500],
             "parsed": parsed,
             "analysis": analysis,
             "time": result.get("time"),
@@ -84,18 +78,54 @@ def test_model(model: str, test_name: str, timeout: int = 30) -> dict:
         return {"error": str(e)}
 
 
+def test_source_matching(model: str, timeout: int = 60) -> dict:
+    """Test if model extracts from input (not hallucinated)."""
+    system = "Output JSON now. Extract from the context provided."
+    user = """High-Signal Transient Events:
+- Spring Festival at Downsview Park: Outdoor rides. April 20-22. All ages.
+- Indoor Coding Workshop: Learn Python. April 21. Ages 8-14.
+- Farmers Market: Fresh produce. April 20. All ages."""
+    
+    try:
+        result = call(model=model, messages=[{"role": "system", "content": system}, {"role": "user", "content": user}], task="json", parse_json=True, timeout=timeout)
+        parsed = result.get("parsed", [])
+        
+        if not parsed:
+            return {"status": "FAIL", "reason": "no parsed items"}
+        
+        ratio = check_source_extraction(parsed, user)
+        
+        # Test our fixes
+        filtered = filter_json_items(parsed)
+        fixed_years = fix_json_years(parsed)
+        
+        # Check details
+        with_details = sum(1 for p in parsed if has_item_details(p)) if isinstance(parsed, list) else 0
+        
+        return {
+            "status": "PASS" if ratio >= 0.5 else "FAIL",
+            "source_match_ratio": ratio,
+            "items": len(parsed),
+            "with_details": with_details,
+            "filtered_count": len(filtered),
+            "raw_sample": str(parsed[:2])[:200],
+        }
+        
+    except Exception as e:
+        return {"status": "ERROR", "reason": str(e)}
+
+
 def explore_model(model: str, timeout: int = 30):
-    """Run all tests on a model and report results."""
-    family = get_model_family(model)
+    """Run tests on a model and report results."""
     print(f"\n{'='*60}")
-    print(f"Exploring model: {model} (family: {family})")
+    print(f"Exploring model: {model}")
     print(f"{'='*60}")
     
     results = {}
     
     for test_name in TEST_PROMPTS:
         print(f"\n--- Test: {test_name} ---")
-        result = test_model(model, test_name, timeout=timeout)
+        result = run_test(model, test_name, timeout=timeout)
         
         analysis = result.get("analysis", {})
         
@@ -103,46 +133,41 @@ def explore_model(model: str, timeout: int = 30):
             print(f"  ERROR: {result['error']}")
             status = "ERROR"
         elif analysis.get("has_json"):
-            print(f"  ✅ JSON parsed: {analysis.get('first_keys', [])[:3]}")
-            status = "PASS"
-        elif analysis.get("has_json_chars"):
-            print(f"  ⚠️ Has JSON but not parsed: {analysis.get('content_first_50', '')[:40]}")
+            details = analysis.get("has_details", 0)
+            items = analysis.get("item_count", 0)
+            print(f"  PASS: {items} items, {details} with details")
+            status = "PASS" if details > 0 else "PARTIAL"
+        elif analysis.get("has_markdown"):
+            print(f"  WARN: Has markdown in output")
             status = "PARTIAL"
         else:
-            print(f"  ❌ No JSON: {analysis.get('content_first_50', '')[:40]}")
+            print(f"  FAIL: No JSON parsed")
             status = "FAIL"
             
-        results[test_name] = {
-            "status": status,
-            "result": result,
-        }
+        results[test_name] = {"status": status, "result": result}
+    
+    # Source matching test
+    print(f"\n--- Source Matching Test ---")
+    src_result = test_source_matching(model, timeout=90)
+    print(f"  Status: {src_result.get('status')}")
+    print(f"  Match ratio: {src_result.get('source_match_ratio', 0):.0%}")
+    print(f"  Items: {src_result.get('items', 0)}, with details: {src_result.get('with_details', 0)}")
     
     # Summary
     print(f"\n{'='*60}")
-    print(f"Summary for {model}:")
-    print(f"{'='*60}")
-    
+    print(f"Results for {model}:")
     for test_name, data in results.items():
         status = data.get("status", "ERROR")
-        print(f"  {status:8} - {test_name}")
+        print(f"  [{status}] {test_name}")
+    print(f"  [SOURCE] {src_result.get('status')} (match: {src_result.get('source_match_ratio', 0):.0%})")
     
-    # Recommend best approach
-    passed = [t for t, r in results.items() if r.get("status") == "PASS"]
-    if passed:
-        print(f"\n✅ Best approach: {passed[0]}")
-        return passed[0]
-    else:
-        partial = [t for t, r in results.items() if r.get("status") == "PARTIAL"]
-        if partial:
-            print(f"\n⚠️ Try: {partial[0]}")
-            return partial[0]
-    
-    return None
+    return results
 
 
 if __name__ == "__main__":
-    model = sys.argv[1] if len(sys.argv) > 1 else "foundation"
-    timeout = int(sys.argv[2]) if len(sys.argv) > 2 else 30
+    parser = argparse.ArgumentParser(description="Explore model quirks")
+    parser.add_argument("model", nargs="?", default="foundation", help="Model to test")
+    parser.add_argument("--timeout", type=int, default=30, help="Timeout per test")
+    args = parser.parse_args()
     
-    best = explore_model(model, timeout)
-    print(f"\n🎯 Recommended approach: {best}")
+    explore_model(args.model, args.timeout)

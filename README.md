@@ -9,7 +9,7 @@ ZTools is a suite of productivity scripts powered by local LLMs. They run entire
 - **Planning your weekend** — finds family-friendly activities based on weather and local events
 - **Summarizing your Twitter feed** — distills your timeline into a factual briefing
 - **Renaming screenshots** — generates descriptive filenames from OCR or vision models
-- **Evaluating models** — tests which local models work best for your use case (NOT a full eval!)
+- **Evaluating models** — tests which local models work best for your use case
 
 ## Prerequisites
 
@@ -85,72 +85,93 @@ Tests which local models perform best on your actual prompts.
 ```bash
 python3 model_eval.py                    # full benchmark
 python3 model_eval.py --quick             # single run, no retries
-python3 model_eval.py --task json        # test specific task
-python3 model_eval.py --model gemma-4    # test specific model
+python3 model_eval.py --task weekend_fixed  # test specific task
+python3 model_eval.py --model qwen3.6-35b-a3b-mxfp4  # test specific model
 ```
 
-**Tasks:** `json`, `detailed_json`, `summarize`, `filename`
+**Tasks:** `weekend_transient`, `weekend_fixed`, `summarize`, `filename`
+
+**Quality Checks:**
+- Source matching (detects hallucination)
+- Item details validation
+- JSON structure validation
 
 ---
 
 ## Configuration
 
-All settings live in `conf/config.yaml`.
+Model-specific prompts in `conf/models/<model>.yaml`:
 
 ```yaml
-# Default LLM
-llm_url: http://localhost:1337
-default_model: qwen3.6-35b-a3b-mxfp4
-
-# Task-specific models
-best_models:
-  summarize: qwen3.6-35b-a3b-mxfp4
-  json: qwen3.6-35b-a3b-mxfp4
-  detailed_json: qwen3.6-35b-a3b-mxfp4
-  filename: foundation
-  vlm: gemma-4-26b-a4b-it-4bit
-
-# Model-specific prompts (for fine-tuning output)
-summarize_prompts:
-  qwen3.6: "Output the summary. Use ## headers for topics.\n\n<timeline>\n{}\n</timeline>\n\nSummarize the timeline. Include your analysis."
-  foundation: "Output the summary. Use ## headers for topics.\n\n<timeline>\n{}\n</timeline>\n\nSummarize the timeline."
+# conf/models/gemma.yaml
+prompts:
+  weekend_transient: |
+    Output JSON now. NO preamble, NO markdown.
+    Required schema: [{"name": "...", "location": "...", ...}]
 ```
 
-### Model-Specific Tuning
+Default settings in `conf/config.yaml`:
 
-Different models need different prompts. See `MODEL_QUIRKS.md` for detailed learnings — it covers which models work best for each task and why.
+```yaml
+llm_url: http://localhost:1337
+default_model: qwen3.6-35b-a3b-mxfp4
+```
+
+## Best Models by Task
+
+| Task | Best Model | Notes |
+|------|-----------|-------|
+| weekend_transient | qwen3.6-35b-a3b-mxfp4 | Works reliably |
+| weekend_fixed | foundation | Fast (8s), clean JSON |
+| summarize | foundation | Fast, clean ## headers |
+| filename | foundation | Fast, follows schema |
+| vlm | gemma-4-26b-a4b-it-mxfp4 | Vision tasks |
+
+See `docs/MODEL_QUIRKS.md` for detailed model-specific quirks and known issues.
 
 ## Architecture
 
 ```
 lib/
-├── osaurus_lib.py      # Server API, retries, fallback logic
-├── mlx_lib.py          # Local Apple Silicon MLX models
-├── content_processing.py # Clean LLM output (markdown, thinking blocks)
-├── validators_lib.py    # Evaluation scoring logic
-└── config.py           # Centralized config from config.yaml
+├── osaurus_lib.py        # Server API, JSON extraction, normalization
+├── mlx_lib.py           # Local Apple Silicon MLX models
+├── content_processing.py  # Clean LLM output (markdown, thinking)
+├── validators_lib.py     # Quality scoring (source matching)
+├── config.py            # Centralized config
+└── logging_config.py   # Structured logging
 ```
 
-## Development
+## Development Tools
+
+### Model Quirks Explorer
+
+Discover which prompts work best for a model:
 
 ```bash
-# Install
-pip install -e .
-
-# Lint
-ruff check .
-
-# Test (run after any code changes to catch regressions)
-pytest tests/
-pytest tests/ -v          # verbose output
-pytest tests/ -k weekend  # run specific test file
+python3 explore_model_quirks.py foundation
+python3 explore_model_quirks.py qwen3.6-35b-a3b-mxfp4
 ```
 
-The test suite covers:
-- `test_content_processing.py` — thinking block removal (qwen/gemma)
-- `test_weekend.py` — JSON extraction and normalization
-- `test_twitter.py` — twitter summarizer output cleaning
-- `test_validators.py` — scoring logic validation
+Tests:
+- Simple JSON extraction
+- No preamble/markdown prompts
+- Schema-strict prompts
+- Source matching (detects hallucination)
+
+### Run Tests
+
+```bash
+pytest tests/
+pytest tests/ -v           # verbose
+pytest tests/ -k weekend   # run specific test file
+```
+
+**Test Coverage:**
+- `test_validators.py` — scoring logic, source matching
+- `test_parse.py` — JSON extraction, markdown stripping, year fixes
+- `test_weekend.py` — weekend planner output
+- `test_content_processing.py` — thinking block removal
+- `test_twitter.py` — twitter output cleaning
 
 ## Requirements
 

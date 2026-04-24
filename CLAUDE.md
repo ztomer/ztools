@@ -1,15 +1,13 @@
-@MODEL_QUIRKS.md
+@docs/MODEL_QUIRKS.md
+@docs/PROJECT_MEMORY.md
 
 # Project-Specific Instructions
-
-## Mandatory Startup Read
-- **Read MODEL_QUIRKS.md before any model eval work**
 
 ## Key Rules
 
 ### Model Evals
 - Use quick mode for iteration: `--quick --task <task>`
-- Add discovered learnings to MODEL_QUIRKS.md immediately when found
+- Add discovered learnings to docs/MODEL_QUIRKS.md immediately when found
 - Run: `python3 model_eval.py --model <model> --task <task> --quick`
 
 ### Prompt Engineering
@@ -18,4 +16,4 @@
 
 ### MLX Backend
 - Currently not working - subprocess returns empty
-- Document in MODEL_QUIRKS.md when debugging
+- Document in docs/MODEL_QUIRKS.md when debugging
