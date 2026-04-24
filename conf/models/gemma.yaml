@@ -35,12 +35,15 @@ prompts:
 
   # Variables: {location}, {age_range}, {date_range}
   weekend_transient: |
-    Output JSON now. List 5-10 activities happening {date_range} in {location} for kids {age_range}.
+    Output JSON now. NO explanations, NO preamble, NO markdown. ONLY valid JSON array.
     
-    JSON: [{{"name": "Activity Name", "location": "City", "target_ages": "{age_range}", "price": "$25", "day": "Saturday"}}]
+    CRITICAL: Use EXACT year 2026. NOT 2626 or 26.
     
-    Include specific venues, real events, workshops, drop-in programs.
-    Output ONLY a JSON array, no wrapper object.
+    Required schema: [{"name": "...", "location": "...", "target_ages": "...", "price": "...", "weather": "...", "day": "..."}]
+    
+    Extract 8-10 {date_range} events in {location} for kids {age_range}.
+    Output ONLY array with 8-10 items. No wrapper object.
+    No markdown, no text before or after JSON. No "Based on" or "Note:" text.
 
   # Twitter summarizer prompt (from twitter_summarizer.py)
   # Variables: {} for timeline

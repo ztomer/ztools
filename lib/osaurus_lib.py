@@ -226,24 +226,38 @@ def extract_json(content: str, model: str = None) -> Union[Dict[str, Any], List[
     """Extract JSON from content - handles plain text lists, normalizes keys."""
     import json
 
+    # Strip markdown formatting before extraction (e.g., **bold** from qwen)
+    if content:
+        content = re.sub(r'\*\*([^*]+)\*\*', r'\1', content)
+        # Also strip table separators and headers (|---|---|)
+        content = re.sub(r'\|[:\-]+\|', '', content)
+
     # Try JSON first
     json_str = _extract_json_only(content)
     if json_str:
         try:
             data = json.loads(json_str)
-            return normalize_keys(data, model)
+            data = normalize_keys(data, model)
+            # Fix year errors (2626 -> 2026)
+            data = fix_json_years(data)
+            # Filter garbage items
+            return filter_json_items(data)
         except json.JSONDecodeError:
             pass
 
     # Try plain text list
     data = _extract_plain_list(content)
     if data:
-        return normalize_keys(data, model)
+        data = normalize_keys(data, model)
+        data = fix_json_years(data)
+        return filter_json_items(data)
+        return filter_json_items(data)
 
     # Try text normalization
     data = normalize_text_output(content)
     if data:
-        return normalize_keys(data, model)
+        data = normalize_keys(data, model)
+        return filter_json_items(data)
 
     return None
 
@@ -355,12 +369,109 @@ def normalize_keys(data: Any, model: str = None) -> Any:
         for key, value in data.items():
             new_key = all_mappings.get(key, key)
             result[new_key] = normalize_keys(value, model)
+        
+        # Fix single-field dicts - add "name" field from value (for Gemma)
+        if len(result) == 1:
+            only_key = list(result.keys())[0]
+            only_value = result[only_key]
+            if isinstance(only_value, str) and only_value:
+                result["name"] = only_value
+        
         return result
 
     if isinstance(data, list):
-        return [normalize_keys(item, model) for item in data]
+        # Post-process: fix single-field dicts (add name field from value)
+        fixed = []
+        for item in data:
+            if isinstance(item, dict) and len(item) == 1:
+                key = list(item.keys())[0]
+                value = item[key]
+                if isinstance(value, str) and value:
+                    item["name"] = value
+            fixed.append(item)
+        merged = merge_flat_dicts(fixed)
+        return [normalize_keys(item, model) for item in merged]
 
     return data
+
+
+def merge_flat_dicts(items: List[Any]) -> List[Dict[str, Any]]:
+    """Merge consecutive single-key dicts into combined items.
+    
+    Gemma outputs: [{"Location": "A"}, {"Ages": "B"}, {"Price": "C"}]
+    This should merge into: [{"name": "A", "location": "A", "target_ages": "B", "price": "C"}]
+    
+    Currently disabled - this is complex to get right and can cause worse output.
+    """
+    if not items:
+        return items
+    
+    # Simple pass-through for now
+    return items
+
+
+def filter_json_items(items: List[Any]) -> List[Any]:
+    """Filter out garbage items like table rows, summary text, etc."""
+    if not items:
+        return items
+
+    filtered = []
+
+    for item in items:
+        if isinstance(item, dict):
+            keys = [str(k) for k in item.keys()]
+            # Skip table rows (keys like | Day |)
+            if any(k.strip().startswith("|") for k in keys):
+                continue
+            vals = [str(v) for v in item.values() if v]
+            text = " ".join(vals).lower()
+            # Skip summary text ("Based on...", "Note:...")
+            if text.startswith("based on") or text.startswith("note:"):
+                continue
+            # Skip weather rows
+            if "temperature" in text and "conditions" in text:
+                continue
+            # Skip separator lines
+            if all(v in ("", "-", ":", None, " | ", "|", "---") for v in item.values()):
+                continue
+            filtered.append(item)
+        elif isinstance(item, str):
+            text = item.strip().lower()
+            # Skip table parts, summaries
+            if text.startswith("|") or text.startswith(":") or text.startswith("based on"):
+                continue
+            if text in ("---", "----"):
+                continue
+            if text:
+                filtered.append(item)
+        else:
+            filtered.append(item)
+
+    return filtered
+
+
+def fix_json_years(items: List[Any]) -> List[Any]:
+    """Fix common OCR/LLM errors in years (2626 -> 2026)."""
+    if not items:
+        return items
+
+    import re
+    fixed = []
+
+    for item in items:
+        if isinstance(item, dict):
+            fixed_item = {}
+            for k, v in item.items():
+                if isinstance(v, str):
+                    # Fix 2626 -> 2026, 20->2020, etc
+                    v = re.sub(r'\b2626\b', '2026', v)
+                    v = re.sub(r'\b26(?!\d)', '2026', v)  # 26 not followed by digit
+                fixed_item[k] = v
+            fixed.append(fixed_item)
+        else:
+            fixed.append(item)
+
+    return fixed
 
 
 def normalize_text_output(text_output: str) -> List[Dict[str, Any]]:

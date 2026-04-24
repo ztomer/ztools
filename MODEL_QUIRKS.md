@@ -50,6 +50,7 @@ All gemma models output weather data instead of events for transient tasks:
 - **Key quirks**: Uses `category` → `target_ages`, `context_highlight` → `price`
 - **Extraction keys**: fixed_activities, venues, activities, items
 - **SUCCESS**: Both fixed and transient work reliably
+- **Markdown**: Adds `**` to names (e.g., `**Friday, April 20**`) - cosmetic, doesn't affect quality
 
 ### Gemma 4 Family ❌ NOT SUITABLE FOR WEEKEND TASKS
 - **Key name**: Returns `activity` instead of `name`
@@ -57,6 +58,7 @@ All gemma models output weather data instead of events for transient tasks:
 - **Output structure**: Generates weather forecast instead of events
 - **Not suitable**: Generates weather data instead of events
 - **Fixed activities work**: Uses `activity` key via field_mapping
+- **Flat dicts**: Outputs `[{"Location": "Park"}, {"Ages": "All"}]` instead of `[{"name": "Event", "location": "Park", "target_ages": "All"}]` - won't pass detail validation
 
 ---
 

@@ -29,7 +29,9 @@ console = Console()
 # ==========================================================
 
 WEEKEND_SYS_TRANSIENT = """
-Extract JSON from context. 10 items with name, location, target_ages, price, duration, weather, day.
+Output ONLY valid JSON array. No explanations, no preamble, no markdown.
+
+Required format: [{"name": "...", "location": "...", "target_ages": "...", "price": "...", "weather": "...", "day": "..."}]
 
 Default values if not in context:
 - target_ages: "6-13 years"
@@ -40,7 +42,9 @@ Default values if not in context:
 """
 
 WEEKEND_SYS_FIXED = """
-Extract JSON from context. 10 items with name, location, target_ages, price, weather.
+Output ONLY valid JSON array. No explanations, no preamble, no markdown.
+
+Required format: [{"name": "...", "location": "...", "target_ages": "...", "price": "...", "weather": "..."}]
 
 Default values if not in context:
 - target_ages: "6-13 years"
