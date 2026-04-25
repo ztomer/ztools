@@ -33,6 +33,7 @@ uv run image_renamer.py /path/to/images
 
 # Evaluate models
 python3 model_eval.py --quick
+python3 model_eval.py --task file_summary --quick  # test file reading quality
 ```
 
 ## The Tools
@@ -89,42 +90,42 @@ python3 model_eval.py --task weekend_fixed  # test specific task
 python3 model_eval.py --model qwen3.6-35b-a3b-mxfp4  # test specific model
 ```
 
-**Tasks:** `weekend_transient`, `weekend_fixed`, `summarize`, `filename`
+**Tasks:** `weekend_transient`, `weekend_fixed`, `summarize`, `filename`, `file_summary`
 
 **Quality Checks:**
 - Source matching (detects hallucination)
 - Item details validation
 - JSON structure validation
+- Code-pattern detection (file_summary: detects filename inference vs actual file reading)
 
 ---
 
-## Configuration
+## File Summary Validation
 
-Model-specific prompts in `conf/models/<model>.yaml`:
+The `file_summary` task tests if models actually read file content vs inferring from filenames.
 
-```yaml
-# conf/models/gemma.yaml
-prompts:
-  weekend_transient: |
-    Output JSON now. NO preamble, NO markdown.
-    Required schema: [{"name": "...", "location": "...", ...}]
-```
+| Check | Points | Detection |
+|-------|--------|-----------|
+| `##` headers | 20 | Structure compliance |
+| Length >= 500 | 20 | Effort indicator |
+| Python code patterns | 20 | `.py` files: `def `, `class `, `import ` |
+| Markdown patterns | 12 | `.md` files: lists, links, headers |
+| YAML patterns | 3 | `.yaml` files: key-value syntax |
+| Line variance | 8 | Variety in summary lengths |
 
-Default settings in `conf/config.yaml`:
+**Why?** Models that output "A Python script for..." instead of "def plan_weekend(), validate_json(), async call()" score low.
 
-```yaml
-llm_url: http://localhost:1337
-default_model: qwen3.6-35b-a3b-mxfp4
-```
+---
 
 ## Best Models by Task
 
 | Task | Best Model | Notes |
 |------|-----------|-------|
-| weekend_transient | qwen3.6-35b-a3b-mxfp4 | Works reliably |
-| weekend_fixed | foundation | Fast (8s), clean JSON |
+| weekend_transient | foundation | Fast (8s), clean JSON |
+| weekend_fixed | foundation | 100%, reliable |
 | summarize | foundation | Fast, clean ## headers |
 | filename | foundation | Fast, follows schema |
+| file_summary | foundation | Code-pattern validation (44%) |
 | vlm | gemma-4-26b-a4b-it-mxfp4 | Vision tasks |
 
 See `docs/MODEL_QUIRKS.md` for detailed model-specific quirks and known issues.

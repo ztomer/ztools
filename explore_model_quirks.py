@@ -26,14 +26,12 @@ TEST_PROMPTS = {
         "user": "Spring Festival at Parks, Indoor Coding at Library, Farmers Market",
     },
     "structured": {
-        "system": "Output ONLY valid JSON array. Required: [{\"name\": \"str\", \"location\": \"str\", \"target_ages\": \"str\", \"price\": \"str\"}]",
-        "user": "Spring Festival: Downsview Park, all ages, free. Coding: Library, 8-14, $20.",
+        "system": "Output ONLY valid JSON array. Each item must have: name, location, target_ages, price, weather, day. No text before or after.",
+        "user": "Spring Festival: Downsview Park, all ages, free. Coding: Library, 8-14, $20. Farmers Market: Maple Village, all ages, free.",
     },
-    "with_context": {
-        "system": "Extract from context. Output JSON with all fields.",
-        "user": """Context: Spring Festival at Downsview Park, April 20-22. All ages.
-Indoor Coding Workshop at Library, April 21. Ages 8-14. $25.
-Farmers Market at Maple Village, April 20. All ages. Free.""",
+    "ultra_strict": {
+        "system": "CRITICAL: Output ONLY a JSON array. Nothing else. No intro text. No markdown. Format: [{\"name\":\"value\",\"location\":\"value\"}]",
+        "user": "Extract to JSON: Spring Festival at Downsview Park, Indoor Coding at Library, Farmers Market at Maple Village",
     },
 }
 

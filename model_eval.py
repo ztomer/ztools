@@ -5,7 +5,9 @@ Evaluates local models against the actual prompts used in the tools.
 """
 
 import sys
+import re
 import argparse
+from typing import Tuple, Any
 from rich.console import Console
 
 from lib import init_config
@@ -20,13 +22,139 @@ from lib.validators_lib import (
     validate_summary,
     validate_filename,
     has_item_details,
+    has_text_headers,
+    count_content_lines,
 )
 
 console = Console()
 
+
+def safe_content(result: dict) -> str:
+    """Safely extract content from a result dict, handling None values."""
+    content = result.get("content")
+    if content is None:
+        return ""
+    if not isinstance(content, str):
+        return str(content)
+    return content
+
+
 # ==========================================================
-# REAL-WORLD PROMPTS FROM ZTOOLS
+# File Summary Validator
 # ==========================================================
+
+def validate_file_summary(data: Any) -> Tuple[int, str]:
+    """Validate file summary quality - checks content accuracy, not just structure."""
+    if not data:
+        return 0, "empty response"
+    
+    data_str = str(data).strip()
+    failures = []
+    score = 0
+    
+    # Structure checks (40 points)
+    if has_text_headers(data_str):
+        score += 20
+    else:
+        failures.append("no headers")
+    
+    # Length check (20 points)
+    if len(data_str) >= 500:
+        score += 20
+    elif len(data_str) >= 200:
+        score += 10
+    else:
+        failures.append(f"too short ({len(data_str)} chars)")
+    
+# Quality checks: evidence of ACTUAL file reading, not filename inference
+    # Detect file type and check for appropriate patterns
+    content_lines = [l.strip() for l in data_str.split('\n') if l.strip() and not l.startswith('#')]
+    
+    # Extract file types mentioned in summaries
+    file_types_found = {}
+    for line in content_lines:
+        for ft in ['py', 'md', 'yaml']:
+            if f'.{ft}' in line.lower():
+                file_types_found[ft] = file_types_found.get(ft, 0) + 1
+    
+    # File-type specific patterns
+    py_patterns = [
+        r'\bdef\s+\w+', r'\basync\s+def', r'\bclass\s+\w+',
+        r'\bimport\s+\w+', r'\bfrom\s+\w+', r'\breturn\s+',
+        r'\basync\s+', r'\bawait\s+', r'\bif\s+__name__',
+    ]
+    
+    md_patterns = [
+        r'^##?\s', r'^\*\s', r'^\-\s', r'^\d+\.',
+        r'\[.*\]\(.*\)', r'!\[.*\]\(.*\)',
+        r'\bREADME\b', r'\busage\b', r'\bexample\b',
+    ]
+    
+    yaml_patterns = [
+        r'^\w+:\s*$', r'^\s+\w+:\s*\S', r'^\s+\-\s+\w+',
+        r'\bmodel\b.*:.*\w', r'\btemperature\b.*:.*\d',
+    ]
+    
+    # Check for file-type-specific content
+    code_matches = 0
+    md_matches = 0
+    yaml_matches = 0
+    
+    for line in content_lines:
+        # Python patterns
+        for pattern in py_patterns:
+            if re.search(pattern, line, re.IGNORECASE):
+                code_matches += 1
+                break
+        # Markdown patterns
+        for pattern in md_patterns:
+            if re.search(pattern, line, re.IGNORECASE | re.MULTILINE):
+                md_matches += 1
+                break
+        # YAML patterns
+        for pattern in yaml_patterns:
+            if re.search(pattern, line, re.MULTILINE):
+                yaml_matches += 1
+                break
+    
+    # Score based on what file types were in the list
+    total_file_type_score = 0
+    has_py = file_types_found.get('py', 0) > 0
+    has_md = file_types_found.get('md', 0) > 0
+    has_yaml = file_types_found.get('yaml', 0) > 0
+    
+    # Python files: check code patterns (lenient: 1 match = partial credit)
+    if has_py:
+        if code_matches >= 2:
+            total_file_type_score += 20
+        elif code_matches >= 1:
+            total_file_type_score += 12
+        elif code_matches == 0:
+            failures.append("no code details for .py files")
+    
+    # Markdown files: check doc patterns
+    if has_md:
+        if md_matches >= 2:
+            total_file_type_score += 12
+        elif md_matches >= 1:
+            total_file_type_score += 6
+        else:
+            failures.append("no content detail for .md files")
+    
+    # YAML files: check config patterns (small weight since only 2 files)
+    if has_yaml:
+        if yaml_matches >= 1:
+            total_file_type_score += 3
+    
+    # Variance check (indicates effort beyond template)
+    line_lengths = [len(l) for l in content_lines if l.strip()]
+    variance = max(line_lengths) - min(line_lengths) if len(line_lengths) > 1 else 0
+    if variance > 40:
+        score += 8
+    elif variance > 15:
+        score += 4
+    
+    return min(100, score), "; ".join(failures) if failures else ""
 
 WEEKEND_SYS_TRANSIENT = """
 Output ONLY valid JSON array. No explanations, no preamble, no markdown.
@@ -101,6 +229,43 @@ RENAME_PROMPT = """You are a file naming assistant. Read the following text extr
 
 TEXT:
 CONFIDENTIAL - Q3 2025 Financial Results & Board Meeting Minutes"""
+
+FILE_SUMMARY_PROMPT = """Read the file list below and give one-line summary for each file.
+
+Use ## headers for each file (e.g., ## filename: summary).
+
+/Users/ztomer/Projects/ztools/README.md
+/Users/ztomer/Projects/ztools/CLAUDE.md
+/Users/ztomer/Projects/ztools/model_eval.py
+/Users/ztomer/Projects/ztools/weekend_planner.py
+/Users/ztomer/Projects/ztools/twitter_summarizer.py
+/Users/ztomer/Projects/ztools/image_renamer.py
+/Users/ztomer/Projects/ztools/explore_model_quirks.py
+/Users/ztomer/Projects/ztools/lib/__init__.py
+/Users/ztomer/Projects/ztools/lib/osaurus_lib.py
+/Users/ztomer/Projects/ztools/lib/validators_lib.py
+/Users/ztomer/Projects/ztools/lib/config.py
+/Users/ztomer/Projects/ztools/lib/content_processing.py
+/Users/ztomer/Projects/ztools/lib/mlx_lib.py
+/Users/ztomer/Projects/ztools/lib/logging_config.py
+/Users/ztomer/Projects/ztools/conf/config.yaml
+/Users/ztomer/Projects/ztools/conf/weekend.yaml
+/Users/ztomer/Projects/ztools/conf/twitter.yaml
+/Users/ztomer/Projects/ztools/conf/rename.yaml
+/Users/ztomer/Projects/ztools/conf/models/foundation.yaml
+/Users/ztomer/Projects/ztools/conf/models/gemma.yaml
+/Users/ztomer/Projects/ztools/conf/models/qwen.yaml
+/Users/ztomer/Projects/ztools/docs/MODEL_QUIRKS.md
+/Users/ztomer/Projects/ztools/docs/PROJECT_MEMORY.md
+/Users/ztomer/Projects/ztools/tests/test_validators.py
+/Users/ztomer/Projects/ztools/tests/test_parse.py
+/Users/ztomer/Projects/ztools/tests/test_config.py
+/Users/ztomer/Projects/ztools/tests/test_weekend.py
+/Users/ztomer/Projects/ztools/tests/test_content_processing.py
+/Users/ztomer/Projects/ztools/tests/test_twitter.py
+/Users/ztomer/Projects/ztools/pyproject.toml
+
+Skip .git, __pycache__, benchmarks/, and pycache directories."""
 
 TWITTER_PROMPT = """You are an objective news distillation system. Your task is to extract hard facts from the provided chronological Twitter/X timeline.
 
@@ -196,6 +361,14 @@ TASKS = {
         "validator": validate_summary,
         "parse_json": False,
     },
+    "file_summary": {
+        "messages": [
+            {"role": "system", "content": "You are a file summary assistant. Give one-line summaries."},
+            {"role": "user", "content": FILE_SUMMARY_PROMPT},
+        ],
+        "validator": validate_file_summary,
+        "parse_json": False,
+    },
 }
 
 MAX_RETRIES = 1
@@ -252,7 +425,7 @@ def _classify_failure(result: dict, task_cfg: dict, score: int, failure_reason: 
         }
     """
     error = result.get("error") or ""
-    content = result.get("content") or ""
+    content = safe_content(result)
     parsed = result.get("parsed")
     raw_len = len(content)
 
@@ -402,7 +575,7 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
                 for item in details['unmatched'][:3]:
                     console.print(f"[dim]    - {item['name']} (terms: {item.get('terms', [])[:3]})[/dim]")
     else:
-        content = result.get("content") or ""
+        content = safe_content(result)
         if not content:
             failure = "Empty content"
             diagnosis = _classify_failure(result, task_cfg, 0, failure)
@@ -442,7 +615,8 @@ def _call_model(model: str, task_cfg: dict, task_name: str, host: str, port: int
 
 
 def run_eval(
-    model: str, tasks: dict = None, host: str = "localhost", port: int = 1337, backend: str = "osaurus"
+    model: str, tasks: dict = None, host: str = "localhost", port: int = 1337, backend: str = "osaurus",
+    verbose: bool = False
 ) -> dict:
     """Run evaluation on model using real-world tasks.
     
@@ -469,8 +643,17 @@ def run_eval(
             if attempt > 0:
                 eval_logger.warning(f"Retrying task '{task_name}' with model {model} (Attempt {attempt+1}/{MAX_RETRIES+1})...")
             
-            result = _call_model(model, task_cfg, task_name, host, port, backend)
-            score, failure_reason, diagnosis = _validate_result(result, task_cfg, task_name, debug=True)
+            try:
+                result = _call_model(model, task_cfg, task_name, host, port, backend)
+            except Exception as e:
+                eval_logger.error(f"Model call failed with exception: {e}")
+                result = {"content": None, "error": str(e), "time": None, "model": model}
+            
+            try:
+                score, failure_reason, diagnosis = _validate_result(result, task_cfg, task_name, debug=True)
+            except Exception as e:
+                eval_logger.error(f"Validation failed with exception: {e}")
+                score, failure_reason, diagnosis = 0, f"Validation error: {e}", {"category": FAIL_INFRA, "reason": str(e), "evidence": ""}
             
             eval_logger.info(f"Quality score: {score}/100")
             
@@ -518,6 +701,12 @@ def run_eval(
         console.print(
             f"  {status_symbol} {task_name}: {best_score}% ({time_taken_str}){category_tag}{fail_info}{evidence_info}"
         )
+
+        # Print raw output in verbose mode
+        if verbose and best_result:
+            content = safe_content(best_result)[:500]
+            if content:
+                console.print(f"[dim]  Raw output: {content}[/dim]")
 
     # Print source matching summary for weekend tasks
     weekend_tasks = [k for k in tasks.keys() if "weekend" in k]
@@ -576,10 +765,11 @@ def main():
     init_config()
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", help="Run evaluation for a specific model")
-    parser.add_argument("--task", help="Run a specific task only (json, detailed_json, filename, summarize)")
+    parser.add_argument("--task", help="Run a specific task (weekend_transient, weekend_fixed, filename, summarize, file_summary)")
     parser.add_argument("--quick", action="store_true", help="Quick mode: run single task with one retry (faster iteration)")
     parser.add_argument("--config-tasks", action="store_true", help="Load tasks from YAML config instead of hardcoded prompts")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging to console")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Show raw model output for debugging quality")
     args = parser.parse_args()
 
     models_to_test = []
@@ -662,7 +852,7 @@ def main():
 
     for model, backend in models_to_test:
         console.print("")
-        results = run_eval(model, tasks=tasks_to_run, backend=backend)
+        results = run_eval(model, tasks=tasks_to_run, backend=backend, verbose=args.verbose)
         scores = [r["quality_score"] for r in results]
         avg = sum(scores) / len(scores) if scores else 0
         

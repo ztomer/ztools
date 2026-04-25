@@ -16,12 +16,15 @@ Reference for ZTools prompt engineering and model selection.
 
 | Task | Best Model | Notes |
 |------|-----------|-------|
-| **weekend_transient** | qwen3.6-35b-a3b-mxfp4 | WORKS (7-8 items) |
-| **weekend_fixed** | qwen3.6-35b-a3b-mxfp4 | Works (10 items) |
-| **summarize** | foundation | Clean ## headers, fast |
+| **weekend_transient** | foundation | Fastest (8s), 100%, clean JSON |
+| **weekend_fixed** | foundation | 100%, reliable |
+| **summarize** | foundation | Fast, clean ## headers |
 | **filename** | foundation | Fast, follows schema |
-| **vlm** | gemma-4-26b-a4b-it-mxfp4 | Vision tasks |
-| **MLX backend** | Disabled | Not working reliably |
+| **file_summary** | foundation | 44% - correctly detects filename inference via code-pattern check |
+| **vlm** | gemma-4-26b-a4b-it-mxfp4 | Vision tasks only |
+| **qwen3.6-35b** | qwen3.6-35b-a3b-mxfp4 | Good alternative to foundation |
+| **qwen3.6-27b** | qwen3.6-27b-mxfp4 | Same quality, slower |
+| **qwen3.6-27b-mxfp8** | ❌ DO NOT USE | Causes server hang/timeout |
 
 ---
 
@@ -65,12 +68,36 @@ All gemma models output weather data instead of events for transient tasks:
 - **Explorer test**: `no_preamble` → 19 items/0 details, `schema_strict` → 35 items/0 details
 - **Root cause**: Model doesn't follow JSON schema instructions - returns conversational text as items
 - **ALL variants broken**: 26b, 31b, 8bit all fail same way
+- **File summary**: 70% - produces ## headers but fails content line validation
 
 ### Foundation ✅ WORKS RELIABLY
 - **Fast**: 8-15s for tasks
 - **Clean JSON**: No markdown, no thinking blocks  
 - **Source matching**: 100% match ratio
-- **Perfect**: all 3 items with details in tests
+- **Perfect**: all items with details in tests
+- **File summary**: 44% - uses filename inference, fails code-pattern validation
+
+---
+
+## File Summary Validation
+
+The `validate_file_summary()` function detects filename inference vs actual file reading:
+
+| Check | Points | Detection |
+|-------|--------|-----------|
+| `## Headers` | 20 | Structure compliance |
+| `Length >= 500` | 20 | Effort indicator |
+| `Python code patterns` | 20 | `.py` files: `def `, `class `, `import ` |
+| `Markdown patterns` | 12 | `.md` files: headers, lists, links |
+| `YAML patterns` | 3 | `.yaml` files: key-value syntax |
+| `Line variance` | 8 | Variety in summary lengths |
+
+**File-type specific**: Validation weights differ by file type. Python files get 20pts for code patterns, markdown gets 12pts for doc patterns, YAML gets 3pts.
+
+**Score breakdown** (foundation 44%):
+- 20 (headers) + 20 (length) + 8 (low variance) = 48 → capped at 44
+- No code patterns matched ("A Python script for..." vs "def plan_weekend()")
+- No markdown details for README/CLAUDE.md
 
 ---
 
