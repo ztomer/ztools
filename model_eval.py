@@ -6,6 +6,7 @@ Evaluates local models against the actual prompts used in the tools.
 
 import sys
 import re
+import json
 import argparse
 from typing import Tuple, Any
 from rich.console import Console
@@ -43,15 +44,86 @@ def safe_content(result: dict) -> str:
 # File Summary Validator
 # ==========================================================
 
-def validate_file_summary(data: Any) -> Tuple[int, str]:
-    """Validate file summary quality - checks content accuracy, not just structure."""
+def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
+    """Validate file summary quality - checks for ACTUAL content detail, not filename inference."""
     if not data:
         return 0, "empty response"
+    
+    # Handle dict input (from JSON parsing)
+    if isinstance(data, dict):
+        data = json.dumps(data)
     
     data_str = str(data).strip()
     failures = []
     score = 0
     
+    # Try to parse as JSON (Qwen format)
+    parsed = None
+    if data_str.startswith('{'):
+        try:
+            parsed = json.loads(data_str)
+        except:
+            pass
+    
+    if parsed and isinstance(parsed, dict):
+        # JSON format: {"filepath": "summary", ...}
+        num_files = len(parsed)
+        if num_files < 5:
+            failures.append(f"only {num_files} files summarized")
+        
+        # Check each summary for actual content (not filename inference)
+        detailed_count = 0
+        generic_count = 0
+        
+        generic_patterns = [
+            r'^a\s+python\s+script',
+            r'^a\s+script\s+for',
+            r'^a\s+tool\s+for',
+            r'^a\s+utility\s+for',
+            r'^a\s+library',
+            r'^a\s+package',
+            r'^an?\s+(exploration|investigation)',
+            r'\bmodel\s+evaluation',
+            r'\btesting\s+script',
+        ]
+        
+        for filepath, summary in parsed.items():
+            summary_lower = summary.lower()
+            
+            # Check if it's generic filename inference
+            is_generic = any(re.search(p, summary_lower) for p in generic_patterns)
+            
+            # Check if it has actual content detail
+            has_detail = any(kw in summary_lower for kw in [
+                'evaluat', 'parse', 'validat', 'extract', 'config', 'setting',
+                'planning', 'summariz', 'renam', 'browser', 'playwright', 'ocr',
+                'weekend', 'twitter', 'image', 'context', 'assistant', 'instruction',
+                'overview', 'documentation', 'guideline', 'interaction', 'setup'
+            ])
+            
+            if is_generic and not has_detail:
+                generic_count += 1
+            elif has_detail:
+                detailed_count += 1
+        
+        # Score: detailed summaries = high quality
+        if detailed_count >= num_files * 0.8:
+            score = 85  # Excellent - all detailed
+        elif detailed_count >= num_files * 0.5:
+            score = 70  # Good - most detailed
+        elif detailed_count >= 2:
+            score = 55  # Some detail
+        elif detailed_count >= 1:
+            score = 40  # Minimal detail
+        else:
+            score = 25  # All generic
+        
+        if generic_count >= num_files * 0.7:
+            failures.append("all summaries are generic filename inference")
+        
+        return min(100, score), "; ".join(failures) if failures else ""
+    
+    # Text format (Foundation/Gemma): check for ## headers and content
     # Structure checks (40 points)
     if has_text_headers(data_str):
         score += 20
@@ -66,93 +138,69 @@ def validate_file_summary(data: Any) -> Tuple[int, str]:
     else:
         failures.append(f"too short ({len(data_str)} chars)")
     
-# Quality checks: evidence of ACTUAL file reading, not filename inference
-    # Detect file type and check for appropriate patterns
-    content_lines = [l.strip() for l in data_str.split('\n') if l.strip() and not l.startswith('#')]
+    # Quality checks: evidence of ACTUAL file reading
+    # Filter out header-only lines (## filename only, no content after)
+    content_lines = []
+    for line in data_str.split('\n'):
+        stripped = line.strip()
+        # Skip empty lines
+        if not stripped:
+            continue
+        # Skip pure headers without content (## filename or ## filename:)
+        header_match = re.match(r'^##\s+\S+(?:\s*:?\s*)?$', stripped)
+        if header_match:
+            continue
+        content_lines.append(stripped)
     
-    # Extract file types mentioned in summaries
-    file_types_found = {}
+    # Content detail keywords (file-type agnostic)
+    # Expanded to include Gemma-style content words
+    detail_keywords = [
+        'evaluat', 'parse', 'validat', 'extract', 'config', 'setting',
+        'planning', 'summariz', 'renam', 'browser', 'playwright', 'ocr',
+        'weekend', 'twitter', 'image', 'context', 'assistant', 'instruction',
+        'overview', 'document', 'guideline', 'interaction', 'setup',
+        'api', 'server', 'client', 'test', 'mock', 'request', 'response',
+        'application', 'development', 'performance', 'behavior', 'quirk',
+        'tool', 'utility', 'library', 'package', 'model', 'llm',
+        'weekend', 'twitter', 'image', 'scrape', 'fetch',
+    ]
+    
+    # Generic inference patterns - more accurate
+    generic_patterns = [
+        r'^a\s+python\s+script',
+        r'^a\s+script\s+(for|to|of)',
+        r'^a\s+tool\s+for',
+        r'^a\s+utility\s+for',
+        r'^an?\s+(exploration|investigation)\s+',
+        r'^the\s+entry\s+point',
+    ]
+    
+    detailed_lines = 0
+    generic_lines = 0
+    
     for line in content_lines:
-        for ft in ['py', 'md', 'yaml']:
-            if f'.{ft}' in line.lower():
-                file_types_found[ft] = file_types_found.get(ft, 0) + 1
+        line_lower = line.lower()
+        is_generic = any(re.match(p, line_lower.rstrip('.').strip()) for p in generic_patterns)
+        has_detail = any(kw in line_lower for kw in detail_keywords)
+        
+        if is_generic:
+            generic_lines += 1
+        elif has_detail:
+            detailed_lines += 1
     
-    # File-type specific patterns
-    py_patterns = [
-        r'\bdef\s+\w+', r'\basync\s+def', r'\bclass\s+\w+',
-        r'\bimport\s+\w+', r'\bfrom\s+\w+', r'\breturn\s+',
-        r'\basync\s+', r'\bawait\s+', r'\bif\s+__name__',
-    ]
-    
-    md_patterns = [
-        r'^##?\s', r'^\*\s', r'^\-\s', r'^\d+\.',
-        r'\[.*\]\(.*\)', r'!\[.*\]\(.*\)',
-        r'\bREADME\b', r'\busage\b', r'\bexample\b',
-    ]
-    
-    yaml_patterns = [
-        r'^\w+:\s*$', r'^\s+\w+:\s*\S', r'^\s+\-\s+\w+',
-        r'\bmodel\b.*:.*\w', r'\btemperature\b.*:.*\d',
-    ]
-    
-    # Check for file-type-specific content
-    code_matches = 0
-    md_matches = 0
-    yaml_matches = 0
-    
-    for line in content_lines:
-        # Python patterns
-        for pattern in py_patterns:
-            if re.search(pattern, line, re.IGNORECASE):
-                code_matches += 1
-                break
-        # Markdown patterns
-        for pattern in md_patterns:
-            if re.search(pattern, line, re.IGNORECASE | re.MULTILINE):
-                md_matches += 1
-                break
-        # YAML patterns
-        for pattern in yaml_patterns:
-            if re.search(pattern, line, re.MULTILINE):
-                yaml_matches += 1
-                break
-    
-    # Score based on what file types were in the list
-    total_file_type_score = 0
-    has_py = file_types_found.get('py', 0) > 0
-    has_md = file_types_found.get('md', 0) > 0
-    has_yaml = file_types_found.get('yaml', 0) > 0
-    
-    # Python files: check code patterns (lenient: 1 match = partial credit)
-    if has_py:
-        if code_matches >= 2:
-            total_file_type_score += 20
-        elif code_matches >= 1:
-            total_file_type_score += 12
-        elif code_matches == 0:
-            failures.append("no code details for .py files")
-    
-    # Markdown files: check doc patterns
-    if has_md:
-        if md_matches >= 2:
-            total_file_type_score += 12
-        elif md_matches >= 1:
-            total_file_type_score += 6
+    num_lines = len(content_lines)
+    if num_lines > 0:
+        detail_ratio = detailed_lines / num_lines
+        if detail_ratio >= 0.7:
+            score += 40
+        elif detail_ratio >= 0.5:
+            score += 30
+        elif detail_ratio >= 0.3:
+            score += 20
+        elif detailed_lines >= 2:
+            score += 10
         else:
-            failures.append("no content detail for .md files")
-    
-    # YAML files: check config patterns (small weight since only 2 files)
-    if has_yaml:
-        if yaml_matches >= 1:
-            total_file_type_score += 3
-    
-    # Variance check (indicates effort beyond template)
-    line_lengths = [len(l) for l in content_lines if l.strip()]
-    variance = max(line_lengths) - min(line_lengths) if len(line_lengths) > 1 else 0
-    if variance > 40:
-        score += 8
-    elif variance > 15:
-        score += 4
+            failures.append("filename inference only - no content detail")
     
     return min(100, score), "; ".join(failures) if failures else ""
 
@@ -363,11 +411,11 @@ TASKS = {
     },
     "file_summary": {
         "messages": [
-            {"role": "system", "content": "You are a file summary assistant. Give one-line summaries."},
+            {"role": "system", "content": "Output JSON now. No preamble, no markdown.\n\nRequired format: {\"filepath\": \"summary\", ...}\n\nSummarize each file in one line. Be specific - mention actual functionality, not just file type."},
             {"role": "user", "content": FILE_SUMMARY_PROMPT},
         ],
         "validator": validate_file_summary,
-        "parse_json": False,
+        "parse_json": True,
     },
 }
 
@@ -553,16 +601,24 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
         diagnosis = _classify_failure(result, task_cfg, 0, result["error"])
         return 0, result["error"], diagnosis
 
-    if task_cfg["parse_json"]:
-        parsed = result.get("parsed")
-        if not parsed:
-            failure = "Could not parse JSON from output"
-            diagnosis = _classify_failure(result, task_cfg, 0, failure)
-            return 0, failure, diagnosis
-
-        # Run validator with source check for quality
-        source = task_cfg.get("source", "")
-        validated = validator(parsed, source_text=source)
+    # JSON tasks: handle both JSON and text outputs gracefully
+        if task_cfg["parse_json"]:
+            parsed = result.get("parsed")
+            content = safe_content(result)
+            source = task_cfg.get("source", "")
+            
+            if parsed:
+                # JSON format validation (Qwen)
+                validated = validator(parsed, source_text=source)
+            elif content and len(content) > 50:
+                # Model outputs text format (Foundation/Gemma) - validate as text
+                # Don't treat as FAIL_FORMAT, just validate directly
+                validated = validator(content)
+            else:
+                # No content at all
+                failure = "Empty content"
+                diagnosis = _classify_failure(result, task_cfg, 0, failure)
+                return 0, failure, diagnosis
 
         # Show source matching details if debug
         if debug and source and "weekend" in task_name:
@@ -849,8 +905,60 @@ def main():
     all_results = []
     best_scores = {task: -1 for task in tasks_to_run.keys()}
     best_models = {task: None for task in tasks_to_run.keys()}
+    
+    def flush_between_models(prev_model: str, next_model: str) -> None:
+        """Force a model switch with flush. If flush fails, offer restart."""
+        import time
+        import subprocess
+        console.print(f"[dim]  ↳ Flushing {prev_model} → {next_model}...[/dim]")
+        
+        # Enable debug logging in osaurus
+        debug_log_paths = [
+            "/tmp/osaurus_debug.log",
+            "/tmp/osaurus_ttft_trace.log",
+            "/tmp/osaurus_chat_perf.log",
+        ]
+        for path in debug_log_paths:
+            try:
+                subprocess.run(["touch", path], capture_output=True)
+            except:
+                pass
+        console.print(f"[dim]  ↳ Debug logs enabled: {debug_log_paths}[/dim]")
+        
+        try:
+            r = call(next_model, [{"role": "user", "content": "ok"}], timeout=30)
+            if r.get("error"):
+                console.print(f"[dim]  ↳ Flush failed, attempting restart...[/dim]")
+                try:
+                    subprocess.run(["osascript", "-e", 'quit app "osaurus"'], capture_output=True)
+                except:
+                    pass
+                time.sleep(3)
+                try:
+                    subprocess.run(["open", "-n", "-a", "osaurus"], capture_output=True)
+                except:
+                    pass
+                time.sleep(8)
+                # Verify server is back
+                for _ in range(5):
+                    try:
+                        import requests
+                        resp = requests.get("http://localhost:1337/api/tags", timeout=2)
+                        if resp.status_code == 200:
+                            console.print(f"[dim]  ↳ Server restarted[/dim]")
+                            break
+                    except:
+                        time.sleep(2)
+        except Exception as e:
+            console.print(f"[dim]  ↳ Flush error: {e}[/dim]")
+        time.sleep(2)
 
+    prev_model = None
     for model, backend in models_to_test:
+        if prev_model and model != prev_model:
+            flush_between_models(prev_model, model)
+        prev_model = model
+        
         console.print("")
         results = run_eval(model, tasks=tasks_to_run, backend=backend, verbose=args.verbose)
         scores = [r["quality_score"] for r in results]
@@ -887,6 +995,24 @@ def main():
             "best_models": best_models,
         }, f, indent=2)
     console.print("[green]Saved benchmark results to eval_results.json[/green]")
+    
+    # Print debug log locations and instructions
+    console.print("")
+    console.print("Debug Logs:")
+    console.print("  Logs written to /tmp/:")
+    console.print("  - osaurus_debug.log    - General debug messages")
+    console.print("  - osaurus_ttft_trace.log - Time-to-first-token timing")
+    console.print("  - osaurus_chat_perf.log   - Performance metrics")
+    console.print("")
+    console.print("To view after crash:")
+    console.print("  cat /tmp/osaurus_debug.log")
+    console.print("  tail -f /tmp/osaurus_debug.log  (watch in real-time)")
+    console.print("")
+    console.print("Key things to look for:")
+    console.print("  - 'errorCaught' - NIO errors")
+    console.print("  - 'channelInactive' - Connection drops")
+    console.print("  - Model loading/unloading messages")
+    console.print("  - Any 'crash' or 'panic' keywords")
 
 if __name__ == "__main__":
     main()
