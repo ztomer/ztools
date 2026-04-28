@@ -57,13 +57,13 @@ prompts:
   # Twitter summarizer prompt (from twitter_summarizer.py)
   # Variables: {} for timeline
   summarize: |
-    Output the summary. Use ## headers for topics.
+    Output the summary in bullet points. Use ## headers for topics.
 
     <timeline>
     {}
     </timeline>
 
-    Summarize the timeline. Include your analysis.
+    Summarize the timeline. Use bullet points for facts.
 
   # Image renamer prompt (from image_renamer.py)
   # Variables: {} for text input

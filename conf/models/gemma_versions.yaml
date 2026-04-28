@@ -89,8 +89,9 @@ prompts:
     Output JSON now. JSON array of events: [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "day": "str"}}]
     Find 5-10 events for {date_range} in {location}. Kids ages {age_range}.
   summarize: |
-    Output the summary. Use ## headers for topics.
+    Output the summary in bullet points. Use ## headers for topics.
     <timeline>{}</timeline>
+    Summarize the timeline. Use bullet points for facts.
   filename: |
     You are a file naming assistant. Output ONLY filename string (no extension).
     TEXT: {}
