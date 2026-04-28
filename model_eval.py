@@ -8,7 +8,7 @@ import sys
 import re
 import json
 import argparse
-from typing import Tuple, Any
+from typing import Tuple, Any, List, Dict
 from rich.console import Console
 
 from lib import init_config
@@ -38,6 +38,86 @@ def safe_content(result: dict) -> str:
     if not isinstance(content, str):
         return str(content)
     return content
+
+
+def _extract_items_from_text(text: str) -> List[Dict]:
+    """Extract structured items from text output (markdown tables, lists, etc)."""
+    import re
+    
+    items = []
+    
+    # Pattern 1: Markdown tables | Name | Location |
+    table_pattern = r'\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|'
+    tables = re.findall(table_pattern, text)
+    if tables and len(tables) >= 2:
+        # Use first row as header
+        header = tables[0]
+        
+        # Check if first row is header (has non-word chars like --- or ===)
+        is_header_row = (
+            '---' in header[0].lower() or 
+            '---' in header[1].lower() or
+            not any(c.isalnum() for c in header[0]) or
+            not any(c.isalnum() for c in header[1])
+        )
+        data_rows = tables[1:] if is_header_row else tables
+        
+        if data_rows:
+            key1 = header[0].strip().lower()
+            key2 = header[1].strip().lower()
+            
+            # Map common headers to our field names
+            header_map = {
+                'name': 'name', 'event': 'name', 'title': 'name', 'activity': 'name',
+                'location': 'location', 'venue': 'location', 'place': 'place', 'where': 'location',
+                'day': 'day', 'date': 'day', 'when': 'day', 'time': 'time',
+            }
+            field1 = header_map.get(key1, 'name')
+            field2 = header_map.get(key2, key2)
+            
+            for row in data_rows:
+                # Skip separator rows (like |----|----|)
+                if '---' in row[0].lower() or '---' in row[1].lower():
+                    continue
+                if not row[0].strip() or not row[1].strip():
+                    continue
+                # Skip if it looks like a header label
+                row0_clean = row[0].strip().lower()
+                row1_clean = row[1].strip().lower()
+                if row0_clean in ['name', 'event', 'title', 'activity', 'location', 'venue', 'place', 'where'] or row1_clean in ['name', 'event', 'title', 'activity', 'location', 'venue', 'place', 'where']:
+                    continue
+                item = {field1: row[0].strip(), field2: row[1].strip()}
+                items.append(item)
+            
+            if items:
+                return items
+    
+    # Pattern 2: Lines with - or • bullets with "Key: Value" pairs
+    bullet_pattern = r'^[•\-]\s*(.+?)(?:\n|$)'
+    bullets = re.findall(bullet_pattern, text, re.MULTILINE)
+    for bullet in bullets:
+        bullet = bullet.strip()
+        if bullet and len(bullet) > 2:
+            parts = bullet.split(':', 1)
+            if len(parts) == 2:
+                key = parts[0].strip()
+                val = parts[1].strip()
+                # Map key to field name
+                field_map = {
+                    'name': 'name', 'event': 'name', 'title': 'name', 'activity': 'name',
+                    'location': 'location', 'venue': 'location', 'place': 'location',
+                }
+                field = field_map.get(key.lower(), key.lower())
+                items.append({field: val})
+            else:
+                # Try comma or hyphen separator
+                sep_match = re.match(r'^([^,\-]+)[,\-](.+)$', bullet)
+                if sep_match:
+                    items.append({'name': sep_match.group(1).strip(), 'location': sep_match.group(2).strip()})
+                else:
+                    items.append({'name': bullet})
+    
+    return items
 
 
 # ==========================================================
@@ -88,6 +168,8 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
         ]
         
         for filepath, summary in parsed.items():
+            if not isinstance(summary, str):
+                summary = str(summary) if summary else ""
             summary_lower = summary.lower()
             
             # Check if it's generic filename inference
@@ -602,41 +684,84 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
         return 0, result["error"], diagnosis
 
     # JSON tasks: handle both JSON and text outputs gracefully
-        if task_cfg["parse_json"]:
-            parsed = result.get("parsed")
-            content = safe_content(result)
-            source = task_cfg.get("source", "")
-            
-            if parsed:
-                # JSON format validation (Qwen)
-                validated = validator(parsed, source_text=source)
-            elif content and len(content) > 50:
-                # Model outputs text format (Foundation/Gemma) - validate as text
-                # Don't treat as FAIL_FORMAT, just validate directly
-                validated = validator(content)
-            else:
-                # No content at all
-                failure = "Empty content"
-                diagnosis = _classify_failure(result, task_cfg, 0, failure)
-                return 0, failure, diagnosis
-
-        # Show source matching details if debug
-        if debug and source and "weekend" in task_name:
+    is_parse_json = task_cfg.get("parse_json", False)
+    parsed = result.get("parsed")
+    content = safe_content(result)
+    source = task_cfg.get("source", "")
+    
+    # EARLY RETURN FOR PARSED - don't fall through
+    if is_parse_json and parsed:
+        validated = validator(parsed, source_text=source)
+        
+        if isinstance(validated, tuple):
+            score, failure_reason = validated
+        else:
+            score, failure_reason = validated, ""
+        
+        diagnosis = _classify_failure(result, task_cfg, score, failure_reason)
+        return score, failure_reason, diagnosis
+    
+    # Content-based extraction for text/markdown outputs
+    if is_parse_json and content:
+        import re
+        
+        # Try to extract JSON from content first (regardless of length)
+        json_match = re.search(r'\[[\s\S]*\]', content) or re.search(r'\{[\s\S]*\}', content)
+        extracted = None
+        if json_match:
+            try:
+                extracted = json.loads(json_match.group())
+                # Wrap dict in list if needed
+                if isinstance(extracted, dict):
+                    extracted = [extracted]
+            except:
+                pass
+        
+        # Try markdown extraction if no JSON found
+        if not extracted:
+            extracted = _extract_items_from_text(content)
+        
+        # If we have something extracted, validate it
+        if extracted:
+            validated = validator(extracted, source_text=source)
+            items_for_debug = extracted
+        elif len(content) > 50:
+            # Short fallback to text validation for very short content is handled below
+            # Here: content is too short for markdown but no JSON/markdown found
+            from lib.validators_lib import validate_summary
+            validated = validate_summary(content)
+            items_for_debug = None
+        else:
+            # Content too short - treat as empty
+            failure = "Empty content"
+            diagnosis = _classify_failure(result, task_cfg, 0, failure)
+            return 0, failure, diagnosis
+        
+        # Show source matching details if debug (only for weekend tasks)
+        if debug and source and "weekend" in task_name and items_for_debug:
             from lib.validators_lib import get_source_matching_details
-            details = get_source_matching_details(parsed, source)
+            details = get_source_matching_details(items_for_debug, source)
             console.print(f"[dim]Source matching for {task_name}:[/dim]")
             console.print(f"[dim]  Matched: {len(details['matched'])}/{len(details['matched']) + len(details['unmatched'])} ({details['ratio']*100:.0f}%)[/dim]")
             if details['unmatched']:
                 console.print(f"[dim]  Unmatched items:[/dim]")
                 for item in details['unmatched'][:3]:
                     console.print(f"[dim]    - {item['name']} (terms: {item.get('terms', [])[:3]})[/dim]")
-    else:
-        content = safe_content(result)
-        if not content:
-            failure = "Empty content"
-            diagnosis = _classify_failure(result, task_cfg, 0, failure)
-            return 0, failure, diagnosis
-        validated = validator(content)
+        
+        if isinstance(validated, tuple):
+            score, failure_reason = validated
+        else:
+            score, failure_reason = validated, ""
+        
+        diagnosis = _classify_failure(result, task_cfg, score, failure_reason)
+        return score, failure_reason, diagnosis
+    
+    # Non-JSON task
+    if not content:
+        failure = "Empty content"
+        diagnosis = _classify_failure(result, task_cfg, 0, failure)
+        return 0, failure, diagnosis
+    validated = validator(content)
 
     if isinstance(validated, tuple):
         score, failure_reason = validated
@@ -645,6 +770,7 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
 
     diagnosis = _classify_failure(result, task_cfg, score, failure_reason)
     return score, failure_reason, diagnosis
+
 
 def _call_model(model: str, task_cfg: dict, task_name: str, host: str, port: int, backend: str) -> dict:
     """Call model via the appropriate backend (pure transport, no validation)."""
@@ -688,6 +814,15 @@ def run_eval(
     console.print(f"[bold cyan]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold cyan]")
     console.print(f"[bold cyan]Testing {model} ({backend})[bold cyan]")
     console.print(f"[bold cyan]━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[/bold cyan]")
+
+    # Create model-specific debug log
+    import subprocess
+    debug_log = f"/tmp/osaurus_debug_{model.replace('-', '_').replace('.', '_')}.log"
+    try:
+        subprocess.run(["touch", debug_log], capture_output=True)
+        console.print(f"[dim]  ↳ Debug log: {debug_log}[/dim]")
+    except:
+        pass
 
     for task_name, task_cfg in tasks.items():
         best_score = -1
@@ -912,9 +1047,9 @@ def main():
         import subprocess
         console.print(f"[dim]  ↳ Flushing {prev_model} → {next_model}...[/dim]")
         
-        # Enable debug logging in osaurus
+        # Enable debug logging in osaurus with MODEL-SPECIFIC log files
         debug_log_paths = [
-            "/tmp/osaurus_debug.log",
+            f"/tmp/osaurus_debug_{next_model.replace('-', '_').replace('.', '_')}.log",
             "/tmp/osaurus_ttft_trace.log",
             "/tmp/osaurus_chat_perf.log",
         ]
@@ -923,7 +1058,7 @@ def main():
                 subprocess.run(["touch", path], capture_output=True)
             except:
                 pass
-        console.print(f"[dim]  ↳ Debug logs enabled: {debug_log_paths}[/dim]")
+        console.print(f"[dim]  ↳ Debug logs: {debug_log_paths[0]}[/dim]")
         
         try:
             r = call(next_model, [{"role": "user", "content": "ok"}], timeout=30)
