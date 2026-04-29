@@ -68,12 +68,20 @@ prompts:
   # Image renamer prompt (from image_renamer.py)
   # Variables: {} for text input
   filename: |
-    You are a file naming assistant. Read the following text and suggest a short, descriptive filename (without extension).
-    Use lowercase, underscores for spaces, no special characters.
-    Keep it under 50 characters.
-    Output ONLY the filename string, nothing else.
-
+    Output JSON now.
+    You are a file naming assistant. Read the following text and suggest a short, descriptive filename.
+    Output ONLY the filename string (no quotes, no JSON, no code blocks).
+    
     TEXT: {}
+
+  # File summary prompt (no inference from filename)
+  file_summary: |
+    Output JSON now. Schema: {"filepath": "summary", ...}
+    CRITICAL: Describe what each file DOES, not its filename extension.
+    - Bad: "a python script" (infers from .py)
+    - Good: "parses web content and extracts metadata"
+    
+    {}
 
 # Key normalizations (output -> our schema)
 key_mappings:

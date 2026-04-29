@@ -329,22 +329,23 @@ def validate_json(data: Any, source_text: str = "") -> Tuple[int, str]:
 
 def validate_detailed_json(data: Any, source_text: str = "") -> Tuple[int, str]:
     """Score objects with details based on quality, not count.
-
-    Args:
-        data: Parsed JSON data (list or dict)
-        source_text: Original input text - used to check if model extracts from input
+    
+    STRICT checks:
+    - Items must have full details (name + location + more)
+    - Items must NOT be duplicates (deduplication check)
+    - Source matching is critical (no hallucinations)
     """
     if not data:
         return 0, "empty response"
-
+    
     # Extract list from potentially nested dict
     if isinstance(data, dict):
         data = extract_list_from_dict(data)
-
+    
     items = data if isinstance(data, list) else []
     if not items:
         return 0, "no items found"
-
+    
     # Convert string arrays to objects (Gemma returns strings like ["item1", "item2"])
     converted_items = []
     for item in items:
@@ -355,37 +356,51 @@ def validate_detailed_json(data: Any, source_text: str = "") -> Tuple[int, str]:
         else:
             converted_items.append({"name": str(item)})
     items = converted_items
-
+    
     score = 0
     failures = []
-
+    
+    # STRICT: Check for exact duplicate names (counts against score)
+    names = [item.get("name", "").lower().strip() for item in items if item.get("name")]
+    unique_names = set(names)
+    duplicate_ratio = 1 - (len(unique_names) / len(names)) if names else 0
+    
     # Valid JSON structure with items
     score += DETAILED_STRUCTURE_WEIGHT
-
-    # Count: good if 3+ items
-    if len(items) >= MIN_ITEMS_GOOD:
+    
+    # Count: good if 8+ items (strict)
+    if len(items) >= 8:
         score += DETAILED_COUNT_GOOD
-    elif len(items) >= MIN_ITEMS_OK:
+        failures.append(f"only {len(items)} items") if len(items) < 8 else None
+    elif len(items) >= 5:
         score += DETAILED_COUNT_OK
     else:
-        failures.append(f"only {len(items)} items")
-
-    # Check each item quality
-    valid_with_details = sum(1 for item in items if has_item_details(item))
-
-    # Award points based on proportion with full details
-    if valid_with_details == len(items):
-        score += DETAILED_QUALITY_WEIGHT  # Perfect: all items have name AND details
-    elif valid_with_details >= len(items) * DETAIL_THRESHOLD_HIGH:
+        failures.append(f"only {len(items)} items (need 8+)")
+    
+    # STRICT: Check EACH item for details
+    valid_with_details = 0
+    for item in items:
+        if has_item_details(item):
+            valid_with_details += 1
+    
+    # STRICT scoring: all items must have details
+    all_have_details = valid_with_details == len(items)
+    most_have_details = valid_with_details >= len(items) * 0.8
+    
+    if all_have_details:
+        score += DETAILED_QUALITY_WEIGHT
+    elif most_have_details:
         score += DETAIL_PARTIAL_HIGH
-    elif valid_with_details >= len(items) * DETAIL_THRESHOLD_MID:
-        score += DETAIL_PARTIAL_MID
-    elif valid_with_details > 0:
-        score += DETAIL_PARTIAL_LOW
     else:
-        failures.append("no items with details")
-
+        failures.append(f"only {valid_with_details}/{len(items)} have details")
+    
+    # STRICT: Duplicate check - duplicates are BAD
+    if duplicate_ratio > 0.1:  # More than 10% duplicates
+        score -= int(duplicate_ratio * 20)  # Penalize
+        failures.append(f"duplicates ({int(duplicate_ratio*100)}%)")
+    
     # KEY QUALITY SIGNAL: Check if items use input data (not hallucinated)
+    # STRICT: Must extract from provided source
     source_ratio = 0.0
     if source_text and items:
         source_ratio = check_source_extraction(items, source_text)
@@ -397,7 +412,11 @@ def validate_detailed_json(data: Any, source_text: str = "") -> Tuple[int, str]:
             score += DETAILED_SOURCE_WEIGHT // 4
         else:
             failures.append("not from input (hallucinated)")
-
+    
+    # STRICT: No points if almost all from source OR not matching source enough - potential overfitting
+    if source_ratio >= 0.95 and len(items) >= 10:
+        failures.append("may be directly copied from source")
+    
     return min(MAX_SCORE, score), "; ".join(failures[:DETAIL_REQUIRED_FIELDS])
 
 

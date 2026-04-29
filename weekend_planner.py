@@ -622,6 +622,11 @@ def main(args=None):
     if args.model:
         os.environ['OLLAMA_MODEL'] = args.model
 
+    from lib.config import Task
+    from lib.osaurus_lib import get_best_model
+    model = os.environ.get('OLLAMA_MODEL') or get_best_model(Task.JSON)
+    console.print(f"[bold cyan]Using model:[/bold cyan] {model}")
+    
     start_time = time.time()
     console.print("[bold green]=== Weekend Generator Started ===[/bold green]")
     ensure_server()

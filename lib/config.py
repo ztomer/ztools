@@ -21,6 +21,7 @@ class Task(enum.Enum):
     WEEKEND_TRANSIENT = "weekend_transient"
     SUMMARIZE = "summarize"
     FILENAME = "filename"
+    FILE_SUMMARY = "file_summary"
     JSON = "json"
     DETAILED_JSON = "detailed_json"
 
@@ -317,6 +318,7 @@ _EVAL_TEST_INPUTS = {
     Task.WEEKEND_TRANSIENT: "Spring Festival April 20.",
     Task.FILENAME: "Screenshot of login page with error message.",
     Task.SUMMARIZE: "[@user1 | 10:00]: Test tweet",
+    Task.FILE_SUMMARY: "- alpha.py: core logic\n- beta.py: utilities\n- gamma.py: settings",
 }
 
 
@@ -327,7 +329,10 @@ def _safe_format_prompt(prompt_template: str, test_input: str) -> str:
     Returns the template as-is if no placeholder found.
     """
     if "{}" in prompt_template:
-        return prompt_template.format(test_input)
+        try:
+            return prompt_template.format(test_input)
+        except (KeyError, ValueError):
+            return prompt_template.replace("{}", test_input)
     return prompt_template
 
 
@@ -344,6 +349,12 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
 
     # Import validators lazily to avoid circular imports
     from lib.validators_lib import validate_detailed_json, validate_summary, validate_filename
+    try:
+        from model_eval import validate_file_summary
+    except ImportError:
+        def validate_file_summary(data, source_text=""):
+            from lib.validators_lib import validate_summary
+            return validate_summary(data)
 
     # Map prompt keys to task definitions using Task enum
     if Task.WEEKEND_FIXED.value in prompts:
@@ -390,6 +401,17 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
             ],
             "validator": validate_summary,
             "parse_json": False,
+        }
+
+    if Task.FILE_SUMMARY.value in prompts:
+        test_input = _EVAL_TEST_INPUTS[Task.FILE_SUMMARY]
+        prompt = _safe_format_prompt(prompts[Task.FILE_SUMMARY.value], test_input)
+        tasks["file_summary"] = {
+            "messages": [
+                {"role": "user", "content": prompt},
+            ],
+            "validator": validate_file_summary,
+            "parse_json": True,
         }
 
     return tasks

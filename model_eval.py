@@ -141,7 +141,13 @@ def _extract_items_from_text(text: str) -> List[Dict]:
 # ==========================================================
 
 def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
-    """Validate file summary quality - checks for ACTUAL content detail, not filename inference."""
+    """Validate file summary quality - checks for ACTUAL content detail, not filename inference.
+    
+    STRICT checks:
+    - No filename-only summaries (must describe what file does)
+    - No generic patterns like "a python script"
+    - Must have actionable content about file purpose/function
+    """
     if not data:
         return 0, "empty response"
     
@@ -170,7 +176,9 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
         # Check each summary for actual content (not filename inference)
         detailed_count = 0
         generic_count = 0
+        filename_only_count = 0
         
+        # STRICT: These = FAIL - filename inference, no content
         generic_patterns = [
             r'^a\s+python\s+script',
             r'^a\s+script\s+for',
@@ -179,8 +187,17 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
             r'^a\s+library',
             r'^a\s+package',
             r'^an?\s+(exploration|investigation)',
-            r'\bmodel\s+evaluation',
-            r'\btesting\s+script',
+            r'^python\s+(script|module|file)',
+            r'validat', 'evaluat',  # Missing key verbs
+        ]
+        
+        # Good content keywords - must have these
+        content_verbs = [
+            'parse', 'validat', 'evaluat', 'extract', 'load', 'save',
+            'read', 'write', 'fetch', 'send', 'process', 'handle',
+            'config', 'setting', 'option', 'parameter',
+            'main', 'run', 'execute', 'start', 'init',
+            'convert', 'transform', 'update', 'delete',
         ]
         
         for filepath, summary in parsed.items():
@@ -188,43 +205,48 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
                 summary = str(summary) if summary else ""
             summary_lower = summary.lower()
             
-            # Check if it's generic filename inference
+            # Check if it's filename-only (just describes filename, not content)
+            if filepath.lower() in summary_lower[:len(filepath)+20]:
+                filename_only_count += 1
+            
+            # Check if it's generic (no actual content)
             is_generic = any(re.search(p, summary_lower) for p in generic_patterns)
             
-            # Check if it has actual content detail
-            has_detail = any(kw in summary_lower for kw in [
-                'evaluat', 'parse', 'validat', 'extract', 'config', 'setting',
-                'planning', 'summariz', 'renam', 'browser', 'playwright', 'ocr',
-                'weekend', 'twitter', 'image', 'context', 'assistant', 'instruction',
-                'overview', 'documentation', 'guideline', 'interaction', 'setup'
-            ])
+            # Check for content verbs (real file description)
+            has_content = any(kw in summary_lower for kw in content_verbs)
             
-            if is_generic and not has_detail:
+            if is_generic or not has_content:
                 generic_count += 1
-            elif has_detail:
+            elif filename_only_count > 0:
+                generic_count += 1  # Also count as generic
+            else:
                 detailed_count += 1
         
-        # Score: detailed summaries = high quality
+        # STRICT scoring: Must have real content
         if detailed_count >= num_files * 0.8:
-            score = 85  # Excellent - all detailed
+            score = 85
         elif detailed_count >= num_files * 0.5:
-            score = 70  # Good - most detailed
+            score = 70
         elif detailed_count >= 2:
-            score = 55  # Some detail
+            score = 55
         elif detailed_count >= 1:
-            score = 40  # Minimal detail
+            score = 40
         else:
-            score = 25  # All generic
+            score = 20  # Lowered - filename inference is worse
         
-        if generic_count >= num_files * 0.7:
-            failures.append("all summaries are generic filename inference")
+        if generic_count >= num_files * 0.5:
+            failures.append("summaries are filename inference (no content)")
         
         return min(100, score), "; ".join(failures) if failures else ""
     
-    # Text format (Foundation/Gemma): check for ## headers and content
+    # Text format (Foundation/Gemma): check for ## headers OR prose content
     # Structure checks (40 points)
     if has_text_headers(data_str):
         score += 20
+    elif len(data_str) >= 500:
+        # Has content but no headers - allow prose format
+        score += 15
+        failures.append("no headers (prose format)")
     else:
         failures.append("no headers")
     
@@ -374,9 +396,15 @@ Execute the task based on the system instructions and the provided context to fi
 RENAME_PROMPT = """You are a file naming assistant. Read the following text extracted from an image and suggest a short, descriptive filename (without extension). Use lowercase, underscores for spaces, and no special characters other than hyphens/underscores. Keep it under 50 characters. Do NOT include any reasoning, thinking process, or introductory text. Output ONLY the final filename string, nothing else.
 
 TEXT:
-CONFIDENTIAL - Q3 2025 Financial Results & Board Meeting Minutes"""
+CONFIDENTIAL - Q3 2025 Financial Results & Board Meeting Minutes
+
+Output ONLY the filename string (no quotes, no backticks, no JSON)."""
 
 FILE_SUMMARY_PROMPT = """Read the file list below and give one-line summary for each file.
+
+CRITICAL: DO NOT infer from filename. Describe what each file DOES, not what its filename suggests.
+- Bad: "a python library" (infers from .py extension)
+- Good: "parses web content and extracts metadata"
 
 Use ## headers for each file (e.g., ## filename: summary).
 
@@ -544,6 +572,8 @@ def load_tasks_from_config(model: str):
         built["summarize"] = prompts["summarize"]
     if "filename" in prompts:
         built["filename"] = prompts["filename"]
+    if "file_summary" in prompts:
+        built["file_summary"] = prompts["file_summary"]
 
     return built
 
@@ -1338,10 +1368,12 @@ def run_eval(
         best_result = None
         best_failure = ""
         best_diagnosis = {"category": FAIL_NONE, "reason": "", "evidence": ""}
+        first_attempt_failed = False
         
         for attempt in range(MAX_RETRIES + 1):
             if attempt > 0:
                 eval_logger.warning(f"Retrying task '{task_name}' with model {model} (Attempt {attempt+1}/{MAX_RETRIES+1})...")
+                first_attempt_failed = True
             
             try:
                 result = _call_model(model, task_cfg, task_name, host, port, backend)
@@ -1389,10 +1421,12 @@ def run_eval(
                 "failure_category": category,
                 "failure_evidence": best_diagnosis.get("evidence", ""),
                 "result": best_result,
+                "first_attempt_failed": first_attempt_failed,
             }
         )
 
         status_symbol = "[PASS]" if status == "ok" else ("[WARN]" if status == "partial" else "[FAIL]")
+        retry_tag = " (2nd try)" if first_attempt_failed else ""
         category_tag = f" [{category}]" if category else ""
         fail_info = f" - {best_failure}" if best_failure else ""
         evidence_info = f"\n    ↳ {best_diagnosis['evidence']}" if best_diagnosis.get("evidence") else ""

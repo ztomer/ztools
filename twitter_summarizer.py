@@ -8,6 +8,9 @@ summarize with a local LLM, and export to Markdown.
 """
 
 import argparse
+from rich.console import Console
+
+console = Console()
 import hashlib
 import json
 import os
@@ -627,7 +630,10 @@ def clean_folder(output_dir: Path) -> None:
 def main() -> None:
     args = parse_args()
     output_dir = Path(args.output).expanduser()
-
+    
+    model = args.model or os.environ.get('OLLAMA_MODEL', 'default')
+    console.print(f"[bold cyan]Using model:[/bold cyan] {model}")
+    
     if args.clean:
         clean_folder(output_dir)
 

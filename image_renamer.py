@@ -13,6 +13,9 @@ import sys
 import json
 import argparse
 from pathlib import Path
+from rich.console import Console
+
+console = Console()
 from typing import List, Tuple, Optional
 
 from PIL import Image
@@ -447,7 +450,7 @@ Examples:
                     )
                     active_model = best_model
             else:
-                print(f"Using text model: {active_model}")
+                console.print(f"[bold cyan]Using model:[/bold cyan] {active_model}")
 
             # VLM Selection
             active_vlm_model = select_best_vlm_model(available_models)
@@ -467,9 +470,9 @@ Examples:
         mlx_model_path = find_best_mlx_model(TEXT_PREFERRED_MODELS)
         mlx_vlm_path = find_best_mlx_model(VLM_PREFERRED_MODELS)
         if mlx_model_path:
-            print(f"Using local MLX text model: {mlx_model_path.name}")
+            console.print(f"[bold cyan]Using model:[/bold cyan] {mlx_model_path.name} (MLX)")
         if mlx_vlm_path:
-            print(f"Using local MLX vision model: {mlx_vlm_path.name}")
+            console.print(f"[bold cyan]Using model:[/bold cyan] {mlx_vlm_path.name} (MLX VLM)")
         if not mlx_model_path and not mlx_vlm_path:
             print(
                 "No local MLX models found. Falling back to simple first-line extraction."

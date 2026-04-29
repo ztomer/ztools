@@ -13,32 +13,39 @@ prompts:
   # Weekend planner prompts (from weekend_planner.py)
   # Variables: {location}, {age_range}, {date_range}
   weekend_fixed: |
-    Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
-
-    Extract popular {location} venues for families with kids ages {age_range}.
-    Include location (city only), target_ages, price in CAD, weather.
-
-    MANDATORY default values:
+    Output JSON now. CRITICAL: Use EXACT schema with ALL these fields:
+    {"fixed_activities": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}]}
+    
+    Extract EXACTLY 8-10 popular {location} venues for families with kids ages {age_range}.
+    You MUST output a JSON ARRAY with 8-10 items.
+    
+    REQUIRED fields for EACH item:
     - target_ages: "{age_range}"
-    - price: $18-35 per child or free
-    - weather: "indoor"
-
-    Never leave any field empty.
+    - price: "$18-35 per child" or "free"
+    - weather: "indoor" or "outdoor"
+    - name: official venue name
+    - location: city/neighborhood only
+    
+    Output ONLY JSON array. No extra text.
 
   # Variables: {location}, {age_range}, {date_range}
   weekend_transient: |
-    Output JSON now. Use EXACT schema: {{"transient_events": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}}]}}
-
-    Extract {location} family events for {date_range}.
-
-    MANDATORY default values:
+    Output JSON now. CRITICAL: Use EXACT year 2026.
+    
+    Use EXACT schema: [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str", "day": "str", "duration": "str"}]
+    
+    Extract 8-10 {date_range} events in {location} for kids {age_range}.
+    
+    REQUIRED fields for EACH item:
+    - name: event name
+    - location: city/neighborhood
     - target_ages: "{age_range}"
-    - price: $20-30 per child or free
-    - duration: "2-3 hours"
-    - weather: "indoor"
-    - day: Friday/Saturday/Sunday
-
-    Never leave any field empty.
+    - price: "$20-30" or "free"
+    - weather: "indoor" or "outdoor"
+    - day: Friday, Saturday, or Sunday
+    - duration: "2-3 hours" or "all day"
+    
+    Output ONLY JSON array. No markdown, no extra text.
 
   # Twitter summarizer prompt (from twitter_summarizer.py)
   # Variables: {} for timeline
@@ -54,12 +61,23 @@ prompts:
   # Image renamer prompt (from image_renamer.py)
   # Variables: {} for text input
   filename: |
-    You are a file naming assistant. Read the following text and suggest a short, descriptive filename (without extension).
+    Output JSON now. Schema: {"filename": "str"}
+    You are a file naming assistant.
     Use lowercase, underscores for spaces, no special characters.
     Keep it under 50 characters.
-    Output ONLY the filename string, nothing else.
+    Output ONLY JSON. No extra text.
 
     TEXT: {}
+
+  # File summary (describe what files DO, not extension)
+  file_summary: |
+    Output JSON now. Schema: {"filepath": "summary", ...}
+    CRITICAL: Describe what each file DOES, not its filename extension.
+    - Bad: "a python script" (infers from .py)
+    - Good: "parses web content and extracts metadata"
+    
+    Files to summarize:
+    {}
 
 # Key normalizations (output -> our schema)
 key_mappings:

@@ -13,8 +13,13 @@ Use EXACT schema:
 
 WEEKEND_USR_TRANSIENT = """Find weekend activities in NYC for ages 3-7.
 
-Saturday: Music Festival at Central Park, Food Fair at Downtown, Art Show at Museum
-Sunday: Concert at Stadium, Picnic at Riverside, Swimming at Aquatics Center"""
+Use ONLY these specific events:
+- Music Festival at Central Park, Saturday 10am-6pm
+- Food Fair at Downtown, Saturday 11am-8pm
+- Art Show at Museum, Saturday-Sunday 9am-5pm
+- Concert at Stadium, Sunday 7pm-11pm
+
+Find additional events for Saturday and Sunday."""
 
 WEEKEND_SYS_FIXED = """You are a helpful Weekend Activity Planner for a family with young children.
 
@@ -22,11 +27,14 @@ Find popular family-friendly venues in {location} for kids ages {age_range}.
 
 Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}"""
 
-WEEKEND_USR_FIXED = """Find venues in NYC for ages 3-7."""
+WEEKEND_USR_FIXED = """Find venues in NYC for ages 3-7.
+
+Venues should be different from the transient events (festivals, concerts, fairs).
+Focus on: museums, parks, libraries, rec centers, playgrounds."""
 
 # Image renamer prompts
-FILENAME_SYS = "You are a file naming assistant."
-FILENAME_USR = "Rename: image_20240101_123456.jpg"
+FILENAME_SYS = "You are a file naming assistant. Output ONLY the new filename, no code blocks, no quotes, no explanation."
+FILENAME_USR = "Rename this file to a descriptive name: image_20240101_123456.jpg"
 
 # Summarize prompts
 SUMMARIZE_SYS = "You are a helpful assistant that summarizes content."
@@ -70,7 +78,7 @@ TASKS = {
     },
     "file_summary": {
         "messages": [
-            {"role": "user", "content": "Files in directory:\n- eval_lib.py: evaluates models\n- validators.py: validation logic\n- config.py: configuration\n\nSummarize what each file does."},
+            {"role": "user", "content": "Files in directory:\n- alpha.py: core logic\n- beta.py: utilities\n- gamma.py: settings\n\nDO NOT infer from filename. Describe each file based ONLY on its actual purpose (infer: parse, validate, convert, etc). Output as JSON: {\"filename\": \"description\"}."},
         ],
         "validator": None,
         "parse_json": False,

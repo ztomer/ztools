@@ -19,31 +19,39 @@ prompts:
   # Weekend planner prompts (from weekend_planner.py)
   # Variables: {location}, {age_range}, {date_range}
   weekend_fixed: |
-    Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
-
+    Output JSON now. CRITICAL: Use EXACT schema with ALL these fields:
+    {"fixed_activities": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}]}
+    
     Extract EXACTLY 8-10 popular {location} venues for families with kids ages {age_range}.
     You MUST output a JSON ARRAY with 8-10 items, not a single object.
     
-    Include location (city only), target_ages, price in CAD, weather.
-
-    MANDATORY default values:
+    REQUIRED fields for EACH item:
     - target_ages: "{age_range}"
-    - price: $18-35 per child or free
-    - weather: "indoor"
+    - price: "$18-35 per child" or "free"  
+    - weather: "indoor" or "outdoor"
+    - name: official name
+    - location: city/neighborhood only
 
-    CRITICAL: Output an ARRAY of 8-10 items. Do not output a single object.
+    Output ONLY JSON array. No extra text.
 
   # Variables: {location}, {age_range}, {date_range}
   weekend_transient: |
-    Output JSON now. NO explanations, NO preamble, NO markdown. ONLY valid JSON array.
+    Output JSON now. CRITICAL: Use EXACT year 2026.
     
-    CRITICAL: Use EXACT year 2026. NOT 2626 or 26.
-    
-    Required schema: [{"name": "...", "location": "...", "target_ages": "...", "price": "...", "weather": "...", "day": "..."}]
+    Use EXACT schema: [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str", "day": "str", "duration": "str"}]
     
     Extract 8-10 {date_range} events in {location} for kids {age_range}.
-    Output ONLY array with 8-10 items. No wrapper object.
-    No markdown, no text before or after JSON. No "Based on" or "Note:" text.
+    
+    REQUIRED fields for EACH item:
+    - name: event name
+    - location: city/neighborhood
+    - target_ages: "{age_range}"
+    - price: "$" or "free"
+    - weather: "indoor" or "outdoor"
+    - day: Friday|Saturday|Sunday
+    - duration: "2-3 hours" or "all day"
+    
+    Output ONLY JSON array. No markdown, no text.
 
   # Twitter summarizer prompt (from twitter_summarizer.py)
   # Variables: {} for timeline
@@ -59,10 +67,11 @@ prompts:
   # Image renamer prompt (from image_renamer.py)
   # Variables: {} for text input
   filename: |
-    You are a file naming assistant. Read the following text and suggest a short, descriptive filename (without extension).
+    Output JSON now. Schema: {{"filename": "str"}}
+    You are a file naming assistant. Output ONLY JSON.
     Use lowercase, underscores for spaces, no special characters.
     Keep it under 50 characters.
-    Output ONLY the filename string, nothing else.
+    Output ONLY JSON. No extra text.
 
     TEXT: {}
 

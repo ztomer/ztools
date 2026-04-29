@@ -11,6 +11,43 @@ eval_tasks/
 └── README.md     # This file
 ```
 
+## Adding a New Task
+
+1. Define prompts in `__init__.py`:
+```python
+NEW_SYS = "You are a helpful assistant for {topic}."
+NEW_USR = "Your question about {topic}."
+
+TASKS["new_task"] = {
+    "messages": [
+        {"role": "system", "content": NEW_SYS},
+        {"role": "user", "content": NEW_USR},
+    ],
+    "validator": validate_detailed_json,
+    "parse_json": True,
+    "source": NEW_USR,  # For source matching validation
+}
+```
+
+2. Validator choices:
+- `validate_detailed_json` - For structured JSON with details + source matching
+- `validate_filename` - For filename generation
+- `validate_file_summary` - For file summarization (strict: no filename inference)
+- `validate_summary` - For general text summaries
+
+## Model Prompts
+
+Prompts come from `conf/models/{model}.yaml`. Key tasks:
+- `weekend_fixed` / `weekend_transient` - Must output JSON array with 8-10 items
+- `filename` - Must output JSON: {"filename": "str"}
+- `summarize` - Bullet points with ## headers
+
+## Strict Validation Rules
+
+1. **file_summary**: No filename inference, must describe actual file content
+2. **validate_detailed_json**: 8+ items required, no duplicates, source matching checked
+3. **Prompts**: Must include "Output JSON now" + exact schema
+
 ## Quick Test Commands
 
 ```bash
