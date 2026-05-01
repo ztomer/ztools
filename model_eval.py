@@ -410,12 +410,10 @@ Potential Venues and Current Exhibits:
 Execute the task based on the system instructions and the provided context to find 10 year-round fixed activities, prioritizing current exhibits or highly-rated venues from the context. Output ONLY JSON.
 """
 
-RENAME_PROMPT = """You are a file naming assistant. Read the following text extracted from an image and suggest a short, descriptive filename (without extension). Use lowercase, underscores for spaces, and no special characters other than hyphens/underscores. Keep it under 50 characters. Do NOT include any reasoning, thinking process, or introductory text. Output ONLY the final filename string, nothing else.
+RENAME_PROMPT = """Suggest a short filename for this text. Use lowercase, underscores for spaces. Keep under 50 characters. Output ONLY the filename string.
 
 TEXT:
-CONFIDENTIAL - Q3 2025 Financial Results & Board Meeting Minutes
-
-Output ONLY the filename string (no quotes, no backticks, no JSON)."""
+CONFIDENTIAL - Q3 2025 Financial Results & Board Meeting Minutes"""
 
 FILE_SUMMARY_PROMPT = """Read the file list below and give one-line summary for each file.
 
@@ -563,7 +561,7 @@ TASKS = {
 }
 
 MAX_RETRIES = 1
-EVAL_TIMEOUT = 1800  # 30 minutes - server restart on timeout
+EVAL_TIMEOUT = 3600  # 1 hour - server restart on timeout
 MEMORY_WARNING_THRESHOLD = 80  # Skip/check if memory > 80%
 
 

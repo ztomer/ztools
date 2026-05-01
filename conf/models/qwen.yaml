@@ -67,7 +67,7 @@ prompts:
   # Image renamer prompt (from image_renamer.py)
   # Variables: {} for text input
   filename: |
-    Output ONLY the filename string (no JSON, no code blocks).
+    Output a short filename as plain text (no JSON, no code blocks).
     Use lowercase, underscores for spaces, no special characters.
     Keep it under 50 characters.
     

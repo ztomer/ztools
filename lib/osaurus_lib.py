@@ -42,9 +42,11 @@ def apply_model_quirks(messages: List[Dict[str, Any]], model: str) -> List[Dict[
         
         if family == "qwen" and role == "system":
             # Prepend JSON trigger for qwen models to prevent thinking output
+            # Skip if content already says no JSON or plain text
             if content and not content.startswith("Output JSON now"):
-                content = "Output JSON now.\n\n" + content
-                logger.debug(f"Applied qwen JSON trigger for {model}")
+                if "no JSON" not in content.lower() and "plain text" not in content.lower():
+                    content = "Output JSON now.\n\n" + content
+                    logger.debug(f"Applied qwen JSON trigger for {model}")
         
         elif family == "gemma4":
             if role == "system":
