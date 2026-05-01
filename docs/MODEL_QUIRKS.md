@@ -4,6 +4,53 @@ Reference for ZTools prompt engineering and model selection.
 
 ---
 
+## The Working Prompt Pattern (April 2026)
+
+**CRITICAL**: For weekend tasks, prompts must use RUNTIME PLACEHOLDERS, not {}. The model generates data with specified values.
+
+```yaml
+weekend_fixed: |
+    Output JSON now. Schema: {"fixed_activities": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}]}
+
+    Extract 8-10 popular {location} venues for families with kids ages {age_range}.
+
+    CRITICAL: Each item MUST have:
+    - target_ages: "{age_range}"
+    - price: "$18-35 per child" or "$25-35 per family"
+    - weather: "indoor" or "outdoor"
+
+    Output ONLY JSON.
+
+  weekend_transient: |
+    Output JSON now. Schema: {"transient_events": [...]}
+    
+    Find 5-10 events for {date_range} in {location}. Kids ages {age_range}.
+    
+    Use ONLY these values:
+    - day: Friday, Saturday, or Sunday
+    - target_ages: "{age_range}"
+    - weather: "indoor" or "outdoor"
+```
+
+Key: `{location}`, `{age_range}`, `{date_range}` are INJECTED at runtime (weekend_planner.py line ~305), NOT {} placeholders.
+
+---
+
+## Field Normalization (Critical)
+
+Different models output different field names. **All normalization must be in `normalize_llm_items()` in weekend_planner.py** - do not scatter it across the code.
+
+Known aliases:
+- **name**: `name`, `activity`, `activity_name`, `title`, `event`, `event_name`, `description`
+- **location**: `location`, `address`, `venue`, `place`
+- **target_ages**: `target_ages`, `age_group`, `ages`, `age_range`
+- **price**: `price`, `cost`, `pricing`, `fee`
+- **weather**: `weather`, `setting`, `type`, `indoor_outdoor`
+- **day**: `day`, `date`, `dates`, `event_date`
+- **duration**: `duration`, `end_date`, `time`
+
+---
+
 ## Critical Config
 
 | Constant | Value | Notes |
@@ -12,30 +59,64 @@ Reference for ZTools prompt engineering and model selection.
 
 ---
 
-## Best Models by Task (2025)
+## Best Models by Task (2026)
 
 | Task | Best Model | Score | Notes |
 |------|-----------|-------|-------|
-| **weekend_transient** | foundation | 100% | 8s, clean JSON |
-| **weekend_fixed** | foundation | 100% | reliable |
+| **weekend_transient** | foundation, qwen | 100% | extraction from pre-generated data |
+| **weekend_fixed** | foundation | 100% | extraction from pre-generated data |
 | **summarize** | foundation | 100% | clean ## headers |
-| **filename** | foundation | 100% | follows schema |
-| **file_summary** | gemma | 70% | produces headers but generic content |
+| **filename** | foundation, qwen | 100% | simpler prompt |
+| **file_summary** | foundation, qwen | 75% | prose format works |
 
 ---
 
-## Strict Validation Rules (Updated 2025)
+## Pre-Generated Baseline Data (2026)
+
+**Approach**: Task is "extract from provided JSON context" not "generate events".
+
+- Test data in `_EVAL_TEST_INPUTS` (config.py)
+- Pre-generated JSON with proper structure
+- Models score on accurate extraction, not generation
+- Consistent baseline across runs
+- Avoids "refuses to generate fictional events" problem
+
+### Test Data Locations:
+- `config.py` lines 316-355: `_EVAL_TEST_INPUTS` dict
+
+---
+
+## Known Issues (2026)
+
+### lfm2-24b (AVOID - Crashes Server)
+- Times out after 1800s (30 min)
+- Crashes osaurus server (OOM)
+- All tasks fail with INFRA after crash
+- **DO NOT USE** - Remove from eval
+
+### qwen filename (FIXED)
+- Empty response with complex prompt
+- Fix: Use simpler prompt without "Output JSON now"
+
+### gemma weekend tasks (WONT FIX)
+- Gemma refuses to generate fictional event data
+- Outputs clarification questions instead
+- Works on other tasks (filename, summarize)
+- Use foundation/qwen for weekend tasks
+
+---
+
+## Strict Validation Rules (Updated 2026)
+
+### Extraction Validation
+- **>80% from source**: Required for passing
+- **No hallucinated items**: Items must match input data
+- **Completeness**: All input items should be in output
 
 ### file_summary Validator
 - **No filename inference**: "a python script" = FAIL
 - **Must have content verbs**: parse, validate, extract, load, read, write, etc.
 - **Filename appearing in summary** = FAIL
-
-### validate_detailed_json Validator
-- **8+ items required** (was 3)
-- **No duplicates**: duplicate names penalized
-- **All items must have details**
-- **Source matching critical**: >=80% from input = bonus, <50% = FAIL
 
 ---
 

@@ -16,42 +16,25 @@ prompts:
   json: |
     Output JSON now. Use EXACT schema.
 
-  # Weekend planner prompts (from weekend_planner.py)
-  # Variables: {location}, {age_range}, {date_range}
-  weekend_fixed: |
-    Output JSON now. CRITICAL: Use EXACT schema with ALL these fields:
-    {"fixed_activities": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}]}
+  weekend_transient: |
+    Output JSON now. NO EXPLANATION. NO REFUSAL. TEST DATA ONLY.
+    [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str", "day": "str", "duration": "str"}]
     
-    Extract EXACTLY 8-10 popular {location} venues for families with kids ages {age_range}.
-    You MUST output a JSON ARRAY with 8-10 items, not a single object.
-    
-    REQUIRED fields for EACH item:
-    - target_ages: "{age_range}"
-    - price: "$18-35 per child" or "free"  
-    - weather: "indoor" or "outdoor"
-    - name: official name
-    - location: city/neighborhood only
+    Output ONLY valid JSON array. This is TEST DATA for eval.
+    Events for {date_range} in {location}. Kidsages {age_range}.
 
-    Output ONLY JSON array. No extra text.
+  # Weekend planner prompts (from weekend_planner.py)
+  # PRE-GENERATED BASELINE DATA - extract from provided JSON context
+  weekend_fixed: |
+    Extract venues from the JSON below. Output ONLY valid JSON array.
+    
+    {}
 
   # Variables: {location}, {age_range}, {date_range}
   weekend_transient: |
-    Output JSON now. CRITICAL: Use EXACT year 2026.
+    Extract events from the JSON below. Output ONLY valid JSON array.
     
-    Use EXACT schema: [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str", "day": "str", "duration": "str"}]
-    
-    Extract 8-10 {date_range} events in {location} for kids {age_range}.
-    
-    REQUIRED fields for EACH item:
-    - name: event name
-    - location: city/neighborhood
-    - target_ages: "{age_range}"
-    - price: "$" or "free"
-    - weather: "indoor" or "outdoor"
-    - day: Friday|Saturday|Sunday
-    - duration: "2-3 hours" or "all day"
-    
-    Output ONLY JSON array. No markdown, no text.
+    {}
 
   # Twitter summarizer prompt (from twitter_summarizer.py)
   # Variables: {} for timeline

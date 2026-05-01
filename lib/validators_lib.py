@@ -166,7 +166,10 @@ def check_source_extraction(items: List[Dict], source_text: str) -> float:
     if not items or not source_text:
         return 0.0
 
-    source_lower = source_text.lower()
+    # Normalize source by stripping JSON punctuation to match clean output text
+    import re
+    source_normalized = re.sub(r'[{}\[\]":,]', ' ', source_text)
+    source_lower = source_normalized.lower()
     source_terms = set(t for t in source_lower.split() if len(t) >= 3 and t not in STOPWORDS)
 
     if not source_terms:

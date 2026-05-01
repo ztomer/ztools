@@ -21,10 +21,10 @@ prompts:
   json: |
     Output JSON now. Use EXACT schema.
 
-  # Weekend planner prompts (from weekend_planner.py)
-  # Variables: {location}, {age_range}, {date_range}
+# Weekend planner prompts (from weekend_planner.py)
+  # GENERATE data with exact schema - DO NOT extract from web data
   weekend_fixed: |
-    Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
+    Output JSON now. Use EXACT schema: {"fixed_activities": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}]}
 
     Extract 8-10 popular {location} venues for families with kids ages {age_range}.
 
@@ -33,15 +33,14 @@ prompts:
     - price: "$18-35 per child" or "$25-35 per family" (NOT context_highlight, NOT description)
     - weather: "indoor" or "outdoor" (NOT setting, NOT category)
     - name: official name (NOT description)
-    - location: city/neighborhood only (NOT full address)
+    - location: city/neighborhood only
 
     EXCLUDE these places: {exclusions}
 
     Output ONLY JSON. No extra text.
 
-  # Variables: {location}, {age_range}, {date_range}
   weekend_transient: |
-    Output JSON now. Schema: {{"transient_events": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}}]}}
+    Output JSON now. Schema: {"transient_events": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}]}
 
     Find 5-10 events for {date_range} in {location}. Kids ages {age_range}.
 
@@ -52,7 +51,7 @@ prompts:
     - duration: "2-3 hours" or "all day"
     - weather: "indoor" or "outdoor"
 
-    Output ONLY JSON array inside the object. No thinking.
+    Output ONLY JSON. No extra text.
 
   # Twitter summarizer prompt (from twitter_summarizer.py)
   # Variables: {} for timeline
@@ -68,18 +67,17 @@ prompts:
   # Image renamer prompt (from image_renamer.py)
   # Variables: {} for text input
   filename: |
-    Output JSON now.
-    You are a file naming assistant. Read the following text and suggest a short, descriptive filename.
-    Output ONLY the filename string (no quotes, no JSON, no code blocks).
+    Output ONLY the filename string (no JSON, no code blocks).
+    Use lowercase, underscores for spaces, no special characters.
+    Keep it under 50 characters.
     
     TEXT: {}
 
   # File summary prompt (no inference from filename)
   file_summary: |
-    Output JSON now. Schema: {"filepath": "summary", ...}
-    CRITICAL: Describe what each file DOES, not its filename extension.
-    - Bad: "a python script" (infers from .py)
-    - Good: "parses web content and extracts metadata"
+    Output JSON array. One entry per file. Each must have "path" and "desc" fields.
+    Example: [{"path": "eval_lib.py", "desc": "model evaluation functions"}, {"path": "validators.py", "desc": "validation logic"}]
+    NO single summary. NO inference from filename.
     
     {}
 

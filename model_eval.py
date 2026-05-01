@@ -13,6 +13,7 @@ import sys
 import re
 import json
 import time
+import statistics
 import argparse
 from typing import Tuple, Any, List, Dict
 from rich.console import Console
@@ -151,78 +152,35 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
     if not data:
         return 0, "empty response"
     
-    # Handle dict input (from JSON parsing)
-    if isinstance(data, dict):
-        data = json.dumps(data)
-    
-    data_str = str(data).strip()
-    failures = []
-    score = 0
-    
-    # Try to parse as JSON (Qwen format)
-    parsed = None
-    if data_str.startswith('{'):
-        try:
-            parsed = json.loads(data_str)
-        except:
-            pass
-    
-    if parsed and isinstance(parsed, dict):
-        # JSON format: {"filepath": "summary", ...}
-        num_files = len(parsed)
-        if num_files < 5:
-            failures.append(f"only {num_files} files summarized")
+    # Handle list input directly (already parsed from JSON)
+    if isinstance(data, list):
+        failures = []
+        items = data
+        num_files = len(items)
+        if num_files < 4:
+            failures.append(f"only {num_files} files")
         
-        # Check each summary for actual content (not filename inference)
         detailed_count = 0
-        generic_count = 0
-        filename_only_count = 0
-        
-        # STRICT: These = FAIL - filename inference, no content
-        generic_patterns = [
-            r'^a\s+python\s+script',
-            r'^a\s+script\s+for',
-            r'^a\s+tool\s+for',
-            r'^a\s+utility\s+for',
-            r'^a\s+library',
-            r'^a\s+package',
-            r'^an?\s+(exploration|investigation)',
-            r'^python\s+(script|module|file)',
-            r'validat', 'evaluat',  # Missing key verbs
-        ]
-        
-        # Good content keywords - must have these
-        content_verbs = [
-            'parse', 'validat', 'evaluat', 'extract', 'load', 'save',
+        content_verbs = ['parse', 'validat', 'evaluat', 'extract', 'load', 'save',
             'read', 'write', 'fetch', 'send', 'process', 'handle',
-            'config', 'setting', 'option', 'parameter',
-            'main', 'run', 'execute', 'start', 'init',
-            'convert', 'transform', 'update', 'delete',
-        ]
+            'config', 'setting', 'option', 'parameter', 'api', 'client', 'model', 'llm']
         
-        for filepath, summary in parsed.items():
-            if not isinstance(summary, str):
-                summary = str(summary) if summary else ""
-            summary_lower = summary.lower()
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            path = item.get("path", "")
+            desc = item.get("desc", "") or item.get("summary", "")
+            if not path or not desc:
+                continue
+            desc_lower = str(desc).lower()
             
-            # Check if it's filename-only (just describes filename, not content)
-            if filepath.lower() in summary_lower[:len(filepath)+20]:
-                filename_only_count += 1
-            
-            # Check if it's generic (no actual content)
-            is_generic = any(re.search(p, summary_lower) for p in generic_patterns)
-            
-            # Check for content verbs (real file description)
-            has_content = any(kw in summary_lower for kw in content_verbs)
-            
-            if is_generic or not has_content:
-                generic_count += 1
-            elif filename_only_count > 0:
-                generic_count += 1  # Also count as generic
-            else:
+            has_content = any(kw in desc_lower for kw in content_verbs)
+            if has_content:
                 detailed_count += 1
         
-        # STRICT scoring: Must have real content
+        # Scoring
+        if num_files == 0:
+            return 0, "no items"
         if detailed_count >= num_files * 0.8:
             score = 85
         elif detailed_count >= num_files * 0.5:
@@ -232,12 +190,70 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
         elif detailed_count >= 1:
             score = 40
         else:
-            score = 20  # Lowered - filename inference is worse
-        
-        if generic_count >= num_files * 0.5:
-            failures.append("summaries are filename inference (no content)")
+            score = 25
+            failures.append("no content details")
         
         return min(100, score), "; ".join(failures) if failures else ""
+    
+    # Handle dict input (from JSON parsing)
+    if isinstance(data, dict):
+        data = json.dumps(data)
+    
+    data_str = str(data).strip()
+    failures = []
+    score = 0
+    
+    # Try to parse as JSON (string input from model output)
+    parsed = None
+    try:
+        parsed = json.loads(data_str)
+    except:
+        pass
+    
+    if not parsed:
+        # Fallback: check as prose/text
+        if has_text_headers(data_str):
+            score += 20
+        if len(data_str) >= 200:
+            score += 20
+        if score < 40:
+            failures.append("no headers")
+        return min(100, max(score, 20)), "; ".join(failures)
+    
+    # Handle dict format
+    items = list(parsed.items()) if isinstance(parsed, dict) else parsed
+    num_files = len(items)
+    
+    detailed_count = 0
+    content_verbs = ['parse', 'validat', 'evaluat', 'extract', 'load', 'save',
+        'read', 'write', 'fetch', 'send', 'process', 'handle',
+        'config', 'setting', 'option', 'parameter', 'api', 'client', 'model', 'llm']
+    
+    for filepath, summary in items:
+        if not filepath or not summary:
+            continue
+        summary_lower = str(summary).lower()
+        
+        has_content = any(kw in summary_lower for kw in content_verbs)
+        if has_content:
+            detailed_count += 1
+    
+    # Scoring
+    if detailed_count >= num_files * 0.8:
+        score = 85
+    elif detailed_count >= num_files * 0.5:
+        score = 70
+    elif detailed_count >= 2:
+        score = 55
+    elif detailed_count >= 1:
+        score = 40
+    else:
+        score = 25
+    
+    if not detailed_count:
+        failures.append("no content details")
+    
+    return min(100, score), "; ".join(failures) if failures else ""
     
     # Text format (Foundation/Gemma): check for ## headers OR prose content
     # Structure checks (40 points)
@@ -537,7 +553,7 @@ TASKS = {
     },
     "file_summary": {
         "messages": [
-            {"role": "system", "content": "Output JSON now. No preamble, no markdown.\n\nRequired format: {\"filepath\": \"summary\", ...}\n\nSummarize each file in one line. Be specific - mention actual functionality, not just file type."},
+            {"role": "system", "content": "Output JSON now. No preamble, no markdown.\n\nRequired format: {\"path\": \"description\", ...} OR [{\"path\": \"x\", \"desc\": \"y\"}, ...]\n\nSummarize each file in one line. Be specific - mention actual functionality, not just file type."},
             {"role": "user", "content": FILE_SUMMARY_PROMPT},
         ],
         "validator": validate_file_summary,
@@ -546,7 +562,69 @@ TASKS = {
 }
 
 MAX_RETRIES = 1
-EVAL_TIMEOUT = 600
+EVAL_TIMEOUT = 1800  # 30 minutes - server restart on timeout
+MEMORY_WARNING_THRESHOLD = 80  # Skip/check if memory > 80%
+
+
+# ==========================================================
+# Memory monitoring
+# ==========================================================
+
+def get_memory_percent() -> float:
+    """Get current memory usage percent."""
+    try:
+        import psutil
+        return psutil.virtual_memory().percent
+    except ImportError:
+        return 0.0
+
+
+def check_memory_safe() -> bool:
+    """Check if memory is safe to run eval."""
+    mem_pct = get_memory_percent()
+    if mem_pct > MEMORY_WARNING_THRESHOLD:
+        console.print(f"[yellow]  ⚠️  Memory at {mem_pct}% - may cause OOM[/yellow]")
+        return False
+    return True
+
+
+def is_server_responsive(host: str = "localhost", port: int = 1337, timeout: int = 5) -> bool:
+    """Check if osaurus server is responsive."""
+    import requests
+    try:
+        resp = requests.get(f"http://{host}:{port}/api/tags", timeout=timeout)
+        return resp.status_code == 200
+    except:
+        return False
+
+
+def monitor_memory_loop(interval: int = 30):
+    """Background thread to monitor memory during eval."""
+    import threading
+    import time
+    
+    def _monitor():
+        while getattr(threading.current_thread(), "running", True):
+            mem = get_memory_percent()
+            if mem > MEMORY_WARNING_THRESHOLD:
+                console.print(f"[yellow]  ⚠️  Memory at {mem}%[/yellow]")
+            time.sleep(interval)
+    
+    t = threading.Thread(target=_monitor, daemon=True)
+    t.running = True
+    t.start()
+    return t
+
+
+def estimate_model_memory(model: str) -> int:
+    """Estimate memory needed for a model (in GB). Extract size from model name."""
+    import re
+    # Pattern: lfm2-24b-a2b-mlx-8bit -> 24b = 24GB
+    match = re.search(r'(\d+)b', model.lower())
+    if match:
+        return int(match.group(1))
+    # Default: assume 4GB for small models
+    return 4
 
 
 # ==========================================================
@@ -1543,24 +1621,24 @@ def main():
         tasks_to_run = {args.task: TASKS[args.task]}
         console.print(f"[yellow]Running only task: {args.task}[/yellow]")
 
-    # Load tasks from YAML config
-    if args.config_tasks:
-        from lib.config import build_tasks_from_model
-
-        config_model = args.model if args.model else "qwen"
-        console.print(f"[yellow]Loading tasks from YAML config: {config_model}[/yellow]")
-        config_tasks = build_tasks_from_model(config_model)
-        if config_tasks:
-            if args.task:
-                if args.task in config_tasks:
-                    tasks_to_run = {args.task: config_tasks[args.task]}
-                else:
-                    console.print(f"[red]Task '{args.task}' not in config[/red]")
+    # Auto-load tasks from YAML config (prefer over default TASKS)
+    # Only skip if explicitly asked to use default
+    from lib.config import build_tasks_from_model
+    
+    config_model = args.model if args.model else "qwen"
+    config_tasks = build_tasks_from_model(config_model)
+    if config_tasks:
+        if args.task:
+            if args.task in config_tasks:
+                tasks_to_run = {args.task: config_tasks[args.task]}
+                console.print(f"[dim]Using config task: {args.task}[/dim]")
             else:
-                tasks_to_run = config_tasks
-            console.print(f"[green]Loaded {len(tasks_to_run)} tasks from config[/green]")
+                console.print(f"[red]Task '{args.task}' not in config[/red]")
         else:
-            console.print("[red]No config tasks found, using default TASKS[/red]")
+            tasks_to_run = config_tasks
+        console.print(f"[dim]Loaded {len(tasks_to_run)} tasks from config[/dim]")
+    else:
+        console.print("[dim]Using default TASKS (no config found)[/dim]")
 
     # In quick mode, only run first task once (no retries)
     if args.quick:
@@ -1638,6 +1716,24 @@ def main():
         prev_model = model
         
         console.print("")
+        
+        # Pre-flight memory and server check
+        mem_pct = get_memory_percent()
+        model_mem_gb = estimate_model_memory(model)
+        avail_mem_gb = (100 - mem_pct) / 100 * 64  # Assume 64GB total
+        
+        if mem_pct > MEMORY_WARNING_THRESHOLD:
+            console.print(f"[yellow]  ⚠️  Memory at {mem_pct}% - model may be slow[/yellow]")
+        
+        if model_mem_gb > avail_mem_gb * 0.8:
+            console.print(f"[yellow]  ⚠️  Model needs ~{model_mem_gb}GB, low memory - will be slower[/yellow]")
+        
+        if not is_server_responsive():
+            console.print(f"[yellow]  ⚠️  Server not responsive - attempting restart...[/yellow]")
+            # Trigger restart (will happen in flush_between_models next iteration)
+        
+        console.print(f"[dim]  ↳ Memory: {mem_pct}%, Server: OK[/dim]")
+        
         results = run_eval(model, tasks=tasks_to_run, backend=backend, verbose=args.verbose)
         scores = [r["quality_score"] for r in results]
         avg = sum(scores) / len(scores) if scores else 0

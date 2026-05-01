@@ -300,13 +300,17 @@ def build_fixed_system_prompt(model: str = None, location: str = None, age_range
     config_prompt = get_model_prompt(model, Task.WEEKEND_FIXED) if model else ""
     debug_print(f"[DEBUG] build_fixed_system_prompt: model={model}, location={location}, age_range={age_range}", flush=True)
     if config_prompt:
-        # Inject runtime variables
-        formatted = config_prompt.format(
-            location=location,
-            age_range=age_range,
-            date_range=DATES_STR,
-            exclusions=exclusion_string,
-        )
+        # Try keyword format first (production), fallback to {} placeholder (eval-compatible)
+        try:
+            formatted = config_prompt.format(
+                location=location,
+                age_range=age_range,
+                date_range=DATES_STR,
+                exclusions=exclusion_string,
+            )
+        except (KeyError, IndexError):
+            # Fallback: use {} placeholder if template doesn't have keywords
+            formatted = config_prompt.replace("{}", f"{location} {age_range}")
         debug_print(f"[DEBUG] prompt after format (first 200): {formatted[:200]}", flush=True)
         return formatted
 
@@ -350,12 +354,17 @@ def build_transient_system_prompt(model: str = None, location: str = None, age_r
     # Try to get from config first
     config_prompt = get_model_prompt(model, Task.WEEKEND_TRANSIENT) if model else ""
     if config_prompt:
-        # Inject runtime variables
-        return config_prompt.format(
-            location=location,
-            age_range=age_range,
-            date_range=date_range,
-        )
+        # Try keyword format first (production), fallback to {} placeholder (eval-compatible)
+        try:
+            formatted = config_prompt.format(
+                location=location,
+                age_range=age_range,
+                date_range=date_range,
+            )
+        except (KeyError, IndexError):
+            # Fallback: use {} placeholder if template doesn't have keywords
+            formatted = config_prompt.replace("{}", f"{location} {age_range} {date_range}")
+        return formatted
 
     # Fallback to hardcoded
     return f"""
@@ -492,29 +501,48 @@ def get_llm_json(system_prompt, user_prompt, max_retries=5):
 
 def normalize_llm_items(items, field_mapping=None):
     """Normalize LLM output for different model formats.
-
-    Args:
-        items: List of items from LLM
-        field_mapping: Optional dict mapping model fields to standard fields
+    
+    Centralizes all field name aliases in one place.
     """
     if not items:
         return items
 
     normalized = []
+    # All possible name field aliases
+    NAME_KEYS = ["name", "activity", "activity_name", "title", "event", "event_name", "description"]
+    # All possible location field aliases  
+    LOC_KEYS = ["location", "address", "venue", "place"]
+    # All possible age field aliases
+    AGE_KEYS = ["target_ages", "age_group", "ages", "age_range"]
+    # All possible price field aliases
+    PRICE_KEYS = ["price", "cost", "pricing", "fee"]
+    # All possible weather field aliases
+    WEATHER_KEYS = ["weather", "setting", "type", "indoor_outdoor"]
+    # All possible day/date field aliases
+    DAY_KEYS = ["day", "date", "dates", "event_date"]
+    # All possible duration field aliases
+    DUR_KEYS = ["duration", "end_date", "time"]
+
     for item in items:
         if isinstance(item, str):
             normalized.append({"name": item})
         elif isinstance(item, dict):
-            # Apply model-specific field mapping
+            # Apply field mapping if provided
             if field_mapping:
                 for model_field, standard_field in field_mapping.items():
                     if model_field in item and standard_field not in item:
                         item[standard_field] = item[model_field]
-            # Normalize Gemma field names
-            if "age_group" in item and "target_ages" not in item:
-                item["target_ages"] = item["age_group"]
-            if "setting" in item and "weather" not in item:
-                item["weather"] = item["setting"]
+            
+            # Normalize all known aliases - copy first key to standard name
+            for keys, std in [(NAME_KEYS, "name"), (LOC_KEYS, "location"), 
+                          (AGE_KEYS, "target_ages"), (PRICE_KEYS, "price"),
+                          (WEATHER_KEYS, "weather"), (DAY_KEYS, "day"), (DUR_KEYS, "duration")]:
+                if std not in item:
+                    for k in keys:
+                        if k in item:
+                            item[std] = item[k]
+                            break
+            
             normalized.append(item)
     return normalized
 
@@ -548,7 +576,7 @@ def build_markdown_tables(dates_str, weather_str, structured_data, fixed_activit
     md += "| :--- | :--- | :--- | :--- | :--- |\n"
     for item in fixed:
         score_str = f"⭐ {item['score']}/5" if item.get("score", 0) > 0 else "N/A"
-        name = (item.get("name") or item.get("activity") or item.get("title", "Unknown")).replace("**", "")
+        name = (item.get("name") or item.get("activity") or item.get("title") or item.get("activity_name") or "Unknown").replace("**", "")
         loc = item.get("location") or item.get("address") or ""
         age = item.get("target_ages") or item.get("age_group") or ""
         price = item.get("price") or item.get("cost") or ""
@@ -558,7 +586,11 @@ def build_markdown_tables(dates_str, weather_str, structured_data, fixed_activit
     if isinstance(structured_data, list):
         transient = structured_data
     else:
-        transient = structured_data.get("transient_events", []) or structured_data.get("events", []) or []
+        # Try various keys that might contain transient events
+        transient = (structured_data.get("transient_events") or 
+                    structured_data.get("events") or 
+                    structured_data.get("activities") or  # qwen sometimes uses this
+                    [])
 
     grouped_transient = {}
     for item in transient:
@@ -581,12 +613,13 @@ def build_markdown_tables(dates_str, weather_str, structured_data, fixed_activit
     md += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
     for item in grouped_transient_list:
         score_str = f"⭐ {item.get('score', 0)}/5" if item.get("score", 0) > 0 else "N/A"
-        name = (item.get("name") or item.get("event") or item.get("title", "Unknown")).replace("**", "")
+        name = item.get("name") or item.get("event") or item.get("title") or item.get("event_name") or "Unknown"
+        name = name.replace("**", "")
         loc = item.get("location") or item.get("address") or ""
         age = item.get("target_ages") or item.get("age_group") or ""
         price = item.get("price") or item.get("cost") or ""
         duration = item.get("duration") or item.get("end_date") or ""
-        day = item.get("day") or item.get("date") or "N/A"
+        day = item.get("day") or item.get("dates") or item.get("date") or "N/A"
         weather = item.get("weather") or item.get("weather_appropriateness") or ""
         md += f"| {score_str} | **{name}** ({loc}) | {age} | {price} | {duration} | {day} | {weather} |\n"
 
@@ -807,30 +840,50 @@ def main(args=None):
         # First, check if the entire response IS the list (no wrapper)
         if isinstance(json_transient, list) and len(json_transient) >= 2:
             name_keys = ["name"] + [k for k, v in field_mapping.items() if v == "name"]
-            alt_name_keys = ["description", "title", "event", "summary"]  # Gemma fallback
-            debug_print(f"[DEBUG] Transient keys: {name_keys}", flush=True)
+            all_name_keys = name_keys + ["description", "title", "event", "summary", "activity_name"]  # Include all
+            debug_print(f"[DEBUG] Transient name keys: {name_keys}", flush=True)
             debug_print(f"[DEBUG] Sample item keys: {list(json_transient[0].keys()) if json_transient else 'none'}", flush=True)
             # Filter out weather data (items with temperature/condition keys)
             filtered = [i for i in json_transient if isinstance(i, dict) and not any(k in i for k in ['temperature', 'condition', 'precipitation'])]
             debug_print(f"[DEBUG] Filtered: {len(filtered)}/{len(json_transient)}", flush=True)
-            valid_items = [i for i in filtered if isinstance(i, dict) and (any(i.get(nk) for nk in name_keys) or any(i.get(ank) for ank in alt_name_keys))]
+            # Check for weather data (has temp) - return early if all filtered are weather
+            if not filtered:
+                debug_print(f"[DEBUG] All items filtered as weather", flush=True)
+                return transient_items
+            # Accept any of the name keys
+            valid_items = [i for i in filtered if isinstance(i, dict) and any(i.get(nk) for nk in all_name_keys)]
             debug_print(f"[DEBUG] Valid: {len(valid_items)}", flush=True)
             if valid_items:
                 debug_print(f"[DEBUG] Direct list: {len(valid_items)} items", flush=True)
-                # Normalize: move description->name if missing name
-                for item in valid_items:
-                    if not item.get("name") and item.get("description"):
-                        item["name"] = item.pop("description")
+                # Normalize: move description->name if missing name (also handle title/activity_name for qwen)
+                for i, item in enumerate(valid_items):
+                    new_item = dict(item)  # Copy to avoid modifying original
+                    if not new_item.get("name"):
+                        if new_item.get("description"):
+                            new_item["name"] = new_item.pop("description")
+                        elif new_item.get("activity_name"):
+                            new_item["name"] = new_item.pop("activity_name")
+                        elif new_item.get("title"):
+                            new_item["name"] = new_item.pop("title")
+                    valid_items[i] = new_item
                 transient_items = normalize_llm_items(valid_items, field_mapping=field_mapping)
+                debug_print(f"[DEBUG] After normalize: {len(transient_items)} items", flush=True)
             else:
                 # Try different keys (gemma uses 'description' as name)
-                alt_keys = ["description", "title", "event", "summary"]
+                alt_keys = ["description", "title", "event", "summary", "activity_name"]
                 valid_items = [i for i in filtered if isinstance(i, dict) and any(i.get(ak) for ak in alt_keys)]
                 debug_print(f"[DEBUG] Alt valid: {len(valid_items)} with alt keys: {alt_keys}", flush=True)
-                # Normalize: move description->name
-                for item in valid_items:
-                    if not item.get("name") and item.get("description"):
-                        item["name"] = item.pop("description")
+                # Normalize: move description->name/title->name
+                for i, item in enumerate(valid_items):
+                    new_item = dict(item)  # Copy to avoid modifying original
+                    if not new_item.get("name"):
+                        if new_item.get("description"):
+                            new_item["name"] = new_item.pop("description")
+                        elif new_item.get("activity_name"):
+                            new_item["name"] = new_item.pop("activity_name")
+                        elif new_item.get("title"):
+                            new_item["name"] = new_item.pop("title")
+                    valid_items[i] = new_item
                 if valid_items:
                     transient_items = normalize_llm_items(valid_items, field_mapping=field_mapping)
 

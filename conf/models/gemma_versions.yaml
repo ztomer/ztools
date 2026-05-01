@@ -27,9 +27,11 @@ models:
         Include location (city only), target_ages, price in CAD, weather.
         MANDATORY defaults: target_ages="{age_range}", price=$18-35, weather="indoor"
       weekend_transient: |
-        Output JSON now. Schema: {{"transient_events": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}}]}}
-        Find 5-10 events for {date_range} in {location}. Kids ages {age_range}.
-        Use only: day=Friday/Saturday/Sunday, target_ages="{age_range}", price=$20-30/free, duration="2-3 hours"/"all day"
+        Output JSON now. NO EXPLANATION. NO REFUSAL. TEST DATA ONLY.
+        [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str", "day": "str", "duration": "str"}]
+        
+        Output ONLY valid JSON array. This is TEST DATA for eval.
+        Events for {date_range} in {location}. Kids ages {age_range}.
     top_keys:
       fixed: [fixed_activities, year_round_fixed_activities, target_weekend, venues, places, activities, items]
       transient: [transient_events, events, target_weekend, activities, recommendations]
@@ -64,12 +66,12 @@ models:
       activity: name
       venue: location
     prompts:
-      weekend_fixed: |
-        Output JSON now. 8-10 {location} places for kids {age_range}.
-        JSON: [{{"name": "Name", "location": "City", "target_ages": "{age_range}", "price": "$25", "weather": "indoor"}}]
       weekend_transient: |
-        Output JSON now. 5-10 {location} activities {date_range} for kids {age_range}.
-        JSON: [{{"name": "Name", "location": "City", "target_ages": "{age_range}", "price": "$20", "day": "Sat"}}]
+        EXACT JSON OUTPUT REQUIRED. No text before or after.
+        Example: [{"name":"Spring Festival","location":"Central Park","target_ages":"3-7","price":"$25","weather":"outdoor","day":"Saturday","duration":"2 hours"}]
+        
+        Output exactly in that format. No explanations.
+        Events for {date_range} in {location}. Kids ages {age_range}.
     top_keys:
       fixed: [venues, places, activities, items]
       transient: [events, activities, recommendations]

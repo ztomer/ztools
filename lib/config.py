@@ -312,13 +312,41 @@ def get_model_prompts_all(model: str) -> Dict[str, str]:
 # TASK BUILDER - Creates eval tasks from model config
 # ==========================================================
 
-# Test inputs for eval tasks - should be minimal but realistic
+# Pre-generated baseline data for extraction tasks
+# Models should extract this data accurately - not generate new content
 _EVAL_TEST_INPUTS = {
-    Task.WEEKEND_FIXED: "Vaughan Sports Arena: indoor.",
-    Task.WEEKEND_TRANSIENT: "Spring Festival April 20.",
-    Task.FILENAME: "Screenshot of login page with error message.",
-    Task.SUMMARIZE: "[@user1 | 10:00]: Test tweet",
-    Task.FILE_SUMMARY: "- alpha.py: core logic\n- beta.py: utilities\n- gamma.py: settings",
+    Task.WEEKEND_FIXED: """[
+        {"name": "Vaughan Sports Arena", "location": "Vaughan", "target_ages": "3-7", "price": "$25", "weather": "indoor"},
+        {"name": "Central Park Zoo", "location": "NYC", "target_ages": "3-7", "price": "$30", "weather": "outdoor"},
+        {"name": "Brooklyn Children's Library", "location": "Brooklyn", "target_ages": "3-7", "price": "free", "weather": "indoor"},
+        {"name": "Queens Museum", "location": "Queens", "target_ages": "3-7", "price": "$20", "weather": "indoor"},
+        {"name": "Staten Island Children's Museum", "location": "Staten Island", "target_ages": "3-7", "price": "$18", "weather": "indoor"},
+        {"name": "Bronx Zoo", "location": "Bronx", "target_ages": "3-7", "price": "$28", "weather": "outdoor"},
+        {"name": "NYC Aquarium", "location": "Coney Island", "target_ages": "3-7", "price": "$22", "weather": "indoor"},
+        {"name": "Central Park Playground", "location": "NYC", "target_ages": "3-7", "price": "free", "weather": "outdoor"}
+    ]""",
+    
+    Task.WEEKEND_TRANSIENT: """[
+        {"name": "Spring Festival", "location": "Central Park", "target_ages": "3-7", "price": "free", "weather": "outdoor", "day": "Saturday", "duration": "10am-6pm"},
+        {"name": "Food Fair", "location": "Downtown", "target_ages": "3-7", "price": "$15", "weather": "outdoor", "day": "Saturday", "duration": "11am-8pm"},
+        {"name": "Art Show", "location": "Museum", "target_ages": "3-7", "price": "$20", "weather": "indoor", "day": "Saturday", "duration": "9am-5pm"},
+        {"name": "Art Show", "location": "Museum", "target_ages": "3-7", "price": "$20", "weather": "indoor", "day": "Sunday", "duration": "9am-5pm"},
+        {"name": "Concert", "location": "Stadium", "target_ages": "3-7", "price": "$35", "weather": "outdoor", "day": "Sunday", "duration": "7pm-11pm"},
+        {"name": "Magic Show", "location": "Theater", "target_ages": "3-7", "price": "$25", "weather": "indoor", "day": "Saturday", "duration": "2pm-4pm"},
+        {"name": "Story Time", "location": "Library", "target_ages": "3-7", "price": "free", "weather": "indoor", "day": "Sunday", "duration": "10am-12pm"},
+        {"name": "Egg Hunt", "location": "Park", "target_ages": "3-7", "price": "free", "weather": "outdoor", "day": "Sunday", "duration": "11am-2pm"}
+    ]""",
+    
+    Task.FILENAME: "Screenshot showing login error: Invalid credentials. Please try again.",
+    
+    Task.SUMMARIZE: "[@user1 | 10:00] Just launched our new product! Excited to share.\n[@user2 | 10:15] Looks great! How do I get it?\n[@user1 | 10:30] Check the website for early access.\n[@user3 | 10:45] Got it, thanks!\n[@user2 | 11:00] Anyone tried the beta yet?\n[@user4 | 11:15] Been using it all morning, very smooth.\n[@user1 | 11:30] Great feedback!",
+    
+    Task.FILE_SUMMARY: """[
+        {"path": "eval_lib.py", "desc": "model evaluation functions for quality scoring"},
+        {"path": "validators.py", "desc": "validation logic for JSON and text output"},
+        {"path": "config.py", "desc": "configuration management and model prompts"},
+        {"path": "osaurus_lib.py", "desc": "LLM API client library for Ollama/OpenAI"}
+    ]""",
 }
 
 
@@ -359,10 +387,10 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
     # Map prompt keys to task definitions using Task enum
     if Task.WEEKEND_FIXED.value in prompts:
         test_input = _EVAL_TEST_INPUTS[Task.WEEKEND_FIXED]
+        prompt = _safe_format_prompt(prompts[Task.WEEKEND_FIXED.value], test_input)
         tasks["detailed_json"] = {
             "messages": [
-                {"role": "system", "content": prompts[Task.WEEKEND_FIXED.value]},
-                {"role": "user", "content": f"Extract venues from this context: {test_input}"},
+                {"role": "user", "content": prompt},
             ],
             "validator": validate_detailed_json,
             "parse_json": True,
@@ -371,10 +399,10 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
 
     if Task.WEEKEND_TRANSIENT.value in prompts:
         test_input = _EVAL_TEST_INPUTS[Task.WEEKEND_TRANSIENT]
+        prompt = _safe_format_prompt(prompts[Task.WEEKEND_TRANSIENT.value], test_input)
         tasks["json"] = {
             "messages": [
-                {"role": "system", "content": prompts[Task.WEEKEND_TRANSIENT.value]},
-                {"role": "user", "content": f"Extract events from this context: {test_input}"},
+                {"role": "user", "content": prompt},
             ],
             "validator": validate_detailed_json,
             "parse_json": True,
@@ -412,6 +440,7 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
             ],
             "validator": validate_file_summary,
             "parse_json": True,
+            "source": test_input,
         }
 
     return tasks

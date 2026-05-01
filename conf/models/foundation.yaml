@@ -11,72 +11,61 @@ prompts:
     Output JSON now. Use EXACT schema.
 
   # Weekend planner prompts (from weekend_planner.py)
-  # Variables: {location}, {age_range}, {date_range}
+  # GENERATE with EXACT schema - tells model exact field values to use
   weekend_fixed: |
-    Output JSON now. CRITICAL: Use EXACT schema with ALL these fields:
-    {"fixed_activities": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}]}
-    
-    Extract EXACTLY 8-10 popular {location} venues for families with kids ages {age_range}.
-    You MUST output a JSON ARRAY with 8-10 items.
-    
-    REQUIRED fields for EACH item:
-    - target_ages: "{age_range}"
-    - price: "$18-35 per child" or "free"
-    - weather: "indoor" or "outdoor"
-    - name: official venue name
-    - location: city/neighborhood only
-    
-    Output ONLY JSON array. No extra text.
+    Output JSON now. Use EXACT schema: {"fixed_activities": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}]}
 
-  # Variables: {location}, {age_range}, {date_range}
-  weekend_transient: |
-    Output JSON now. CRITICAL: Use EXACT year 2026.
-    
-    Use EXACT schema: [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str", "day": "str", "duration": "str"}]
-    
-    Extract 8-10 {date_range} events in {location} for kids {age_range}.
-    
-    REQUIRED fields for EACH item:
-    - name: event name
-    - location: city/neighborhood
+    Extract 8-10 popular {location} venues for families with kids ages {age_range}.
+
+    CRITICAL: Each item MUST have these exact fields:
     - target_ages: "{age_range}"
-    - price: "$20-30" or "free"
+    - price: "$18-35 per child" or "$25-35 per family"
     - weather: "indoor" or "outdoor"
+
+    Output ONLY JSON. No extra text.
+
+  weekend_transient: |
+    Output JSON now. Schema: {"transient_events": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}]}
+
+    Find 5-10 events for {date_range} in {location}. Kids ages {age_range}.
+
+    Use ONLY these values:
     - day: Friday, Saturday, or Sunday
+    - target_ages: "{age_range}"
+    - price: "$20-30 per child" or "free"
     - duration: "2-3 hours" or "all day"
-    
-    Output ONLY JSON array. No markdown, no extra text.
+    - weather: "indoor" or "outdoor"
+
+    Output ONLY JSON. No extra text.
 
   # Twitter summarizer prompt (from twitter_summarizer.py)
   # Variables: {} for timeline
   summarize: |
     Output the summary in bullet points. Use ## headers for topics.
-
+    
     <timeline>
     {}
     </timeline>
-
-    Summarize the timeline. Use bullet points for facts.
+    
+    Summarize the timeline. Use bullet points for facts, not opinions.
+    Include who, what, when, where for each event.
 
   # Image renamer prompt (from image_renamer.py)
   # Variables: {} for text input
   filename: |
-    Output JSON now. Schema: {"filename": "str"}
-    You are a file naming assistant.
+    Output ONLY the filename string (no JSON, no code blocks).
     Use lowercase, underscores for spaces, no special characters.
     Keep it under 50 characters.
-    Output ONLY JSON. No extra text.
-
+    
     TEXT: {}
 
   # File summary (describe what files DO, not extension)
   file_summary: |
-    Output JSON now. Schema: {"filepath": "summary", ...}
-    CRITICAL: Describe what each file DOES, not its filename extension.
-    - Bad: "a python script" (infers from .py)
-    - Good: "parses web content and extracts metadata"
+    Output JSON array. One entry per file. Each must have "path" and "desc" fields.
+    Example: [{"path": "eval_lib.py", "desc": "model evaluation functions"}, {"path": "validators.py", "desc": "validation logic"}]
+    NO single summary. NO inference from filename.
     
-    Files to summarize:
+    Files: {}
     {}
 
 # Key normalizations (output -> our schema)
