@@ -178,6 +178,7 @@ def get_model_family(model: str) -> str:
       qwen3.6-35b-a3b-mxfp4 -> qwen
       gemma-4-26b-a4b-it-4bit -> gemma
       foundation -> foundation
+      nemotron-3-nano-omni-30b-a3b-mxfp4 -> nemotron
     """
     if not model:
         return "default"
@@ -188,6 +189,8 @@ def get_model_family(model: str) -> str:
         return "qwen"
     elif "gemma" in model_lower:
         return "gemma"
+    elif "nemotron" in model_lower:
+        return "nemotron"
     elif "foundation" in model_lower:
         return "foundation"
     else:

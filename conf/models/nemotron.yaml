@@ -1,0 +1,109 @@
+# Nemotron model configuration
+# nemotron-3-nano-omni-30b-a3b-mxfp4
+
+name: nemotron
+timeout: 300
+
+# Model-specific field mappings (normalize LLM output to our schema)
+field_mapping:
+  category: target_ages
+  context_highlight: price
+  type: weather
+  event_date: day
+  end_date: end_date
+
+# Task prompts
+prompts:
+  json: |
+    Output JSON now. Use EXACT schema.
+
+  weekend_fixed: |
+    Output JSON now. Use EXACT schema: {"fixed_activities": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}]}
+    
+    Extract 8-10 popular {location} venues for families with kids ages {age_range}.
+    
+    CRITICAL: Each item MUST have these exact fields:
+    - target_ages: "{age_range}" (NOT category, NOT type)
+    - price: "$18-35 per child" or "$25-35 per family" (NOT context_highlight, NOT description)
+    - weather: "indoor" or "outdoor" (NOT setting, NOT category)
+    - name: official name (NOT description)
+    - location: city/neighborhood only
+    
+    EXCLUDE these places: {exclusions}
+    
+    Output ONLY JSON. No extra text.
+
+  weekend_transient: |
+    Output JSON now. Schema: {"transient_events": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}]}
+    
+    Find 5-10 events for {date_range} in {location}. Kids ages {age_range}.
+    
+    Use ONLY these values:
+    - day: Friday, Saturday, or Sunday
+    - target_ages: "{age_range}"
+    - price: "$20-30 per child" or "free"
+    - duration: "2-3 hours" or "all day"
+    - weather: "indoor" or "outdoor"
+    
+    Output ONLY JSON. No extra text.
+
+  summarize: |
+    Output a detailed summary with ## headers and bullet points. Be thorough - include all significant events.
+    
+    <timeline>
+    {}
+    </timeline>
+    
+    Summarize thoroughly. Use ## headers for topics and bullet points for facts.
+
+  filename: |
+    Output ONLY the filename string (no JSON, no code blocks).
+    Use lowercase, underscores for spaces, no special characters.
+    Keep it under 50 characters.
+    
+    TEXT: {}
+
+  file_summary: |
+    Output JSON array. One entry per file. Each must have "path" and "desc" fields.
+    Example: [{"path": "eval_lib.py", "desc": "model evaluation functions"}, {"path": "validators.py", "desc": "validation logic"}]
+    NO single summary. NO inference from filename.
+    
+    {}
+
+# Key normalizations (output -> our schema)
+key_mappings:
+  event: name
+  title: name
+  activity: name
+  venue: location
+  address: location
+  place: location
+  age_group: target_ages
+  ages: target_ages
+  age_range: target_ages
+  cost: price
+  pricing: price
+  fee: price
+  type: weather
+  category: weather
+
+# Model quirks - nemotron outputs clean JSON, minimal quirks needed
+quirks:
+  - type: prefix
+    pattern: "Output JSON now."
+    reason: Ensures clean JSON output without markdown
+
+# Top-level keys for extraction
+top_keys:
+  fixed:
+    - fixed_activities
+    - year_round_fixed_activities
+    - venues
+    - places
+    - activities
+    - items
+  transient:
+    - transient_events
+    - events
+    - activities
+    - recommendations
