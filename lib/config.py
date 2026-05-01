@@ -353,14 +353,43 @@ _EVAL_TEST_INPUTS = {
 def _safe_format_prompt(prompt_template: str, test_input: str) -> str:
     """Safely format a prompt template with test input.
 
-    Only formats if the template contains {} placeholder.
-    Returns the template as-is if no placeholder found.
+    Supports both:
+    - {} placeholder (eval mode - test_input gets injected)
+    - {location}, {age_range} style (production - uses runtime values)
+    
+    Priority: Try {} first, then try keyword placeholders from Task placeholders.
     """
+    # First try {}
     if "{}" in prompt_template:
         try:
             return prompt_template.format(test_input)
         except (KeyError, ValueError):
             return prompt_template.replace("{}", test_input)
+    
+    # Check for Task-based placeholders and extract from test_input JSON
+    # This allows prompts like "Extract {location} venues" to work in eval
+    if test_input and ("{" in prompt_template or "}" in prompt_template):
+        # Try to infer values from test_input JSON
+        import json
+        try:
+            data = json.loads(test_input)
+            if data and len(data) > 0:
+                first_item = data[0]
+                # Extract common values
+                location = first_item.get("location", "")
+                target_ages = first_item.get("target_ages", "")
+                
+                # Replace known placeholders
+                result = prompt_template
+                if location:
+                    result = result.replace("{location}", location)
+                if target_ages:
+                    result = result.replace("{age_range}", target_ages)
+                    result = result.replace("{age_range}", target_ages)
+                return result
+        except:
+            pass
+    
     return prompt_template
 
 

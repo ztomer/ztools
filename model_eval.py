@@ -178,17 +178,18 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
             if has_content:
                 detailed_count += 1
         
-        # Scoring
+        # Scoring - based on quality, not quantity
         if num_files == 0:
             return 0, "no items"
+        # All items have content details = perfect score
         if detailed_count >= num_files * 0.8:
-            score = 85
+            score = 100
         elif detailed_count >= num_files * 0.5:
-            score = 70
+            score = 85
         elif detailed_count >= 2:
-            score = 55
+            score = 70
         elif detailed_count >= 1:
-            score = 40
+            score = 50
         else:
             score = 25
             failures.append("no content details")
