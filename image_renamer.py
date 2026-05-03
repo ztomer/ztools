@@ -17,6 +17,7 @@ from rich.console import Console
 
 console = Console()
 from typing import List, Tuple, Optional
+from lib.config import get_filename_models, get_filename_prompt
 
 from PIL import Image
 import pytesseract
@@ -42,49 +43,90 @@ _TESSERACT_BREW = "/opt/homebrew/bin/tesseract"
 if Path(_TESSERACT_BREW).exists():
     pytesseract.pytesseract.tesseract_cmd = _TESSERACT_BREW
 
-# --- Constants & Prompts ---
 
-PROMPT_TEXT_TO_FILENAME = (
-    "You are a file naming assistant. Read the following text extracted from an image "
-    "and suggest a short, descriptive filename (without extension). "
-    "Use lowercase, underscores for spaces, and no special characters other than hyphens/underscores. "
-    "Keep it under 50 characters. "
-    "Output ONLY the final filename string, nothing else.\\n\\n"
-    "TEXT:\\n{text}"
-)
+# --- Server Management ---
+def ensure_llm_running() -> bool:
+    """Detect crash and restart server if needed."""
+    import subprocess
+    import time
+    
+    # Check if running
+    if check_llm_availability("http://localhost:1337"):
+        return True
+    
+    print("[WARN] LLM server not responding, restarting...")
+    
+    # Kill any stale processes
+    try:
+        subprocess.run(["pkill", "-f", "osaurus"], capture_output=True)
+        time.sleep(2)
+    except:
+        pass
+    
+    # Restart
+    try:
+        subprocess.Popen(["open", "-a", "osaurus"])
+        time.sleep(15)  # Wait for startup
+        if check_llm_availability("http://localhost:1337"):
+            print("[OK] Server restarted")
+            return True
+    except:
+        pass
+    
+    return False
 
-PROMPT_IMAGE_TO_FILENAME = (
-    "You are a file naming assistant. Look at this image and suggest a short, descriptive filename (without extension). "
-    "Use lowercase, underscores for spaces, and no special characters other than hyphens/underscores. "
-    "Keep it under 50 characters. "
-    "Output ONLY the final filename string, nothing else."
-)
 
+# --- Relevance Check Prompt ---
+RELEVANCE_CHECK_PROMPT = """Is this image content useful/interesting enough to keep and rename?
+Consider: educational content, useful tips, meaningful information, actionable advice.
 
-def get_filename_prompt(for_image: bool = False, model: str = None) -> str:
-    """Get model-specific filename prompt from config."""
-    from lib.config import get_model_prompt, Task
+Content:
+{text}
 
-    prompt = get_model_prompt(model, Task.FILENAME) if model else ""
-    if prompt:
-        return prompt
+Answer ONLY one word: "keep" or "skip"."""
 
-    # Fallback
-    return PROMPT_IMAGE_TO_FILENAME if for_image else PROMPT_TEXT_TO_FILENAME
+def is_relevant_with_llm(text: str, host: str, api_key: str = "") -> Optional[bool]:
+    """Ask LLM if image content is relevant worth keeping."""
+    import requests
+    
+    prompt = RELEVANCE_CHECK_PROMPT.format(text=text[:500])  # Limit text
+    messages = [{"role": "user", "content": prompt}]
+    
+    for model in ["qwen3.6-27b-mxfp4", "gemma-4-26b-a4b-it-mxfp4"]:
+        try:
+            resp = requests.post(
+                f"{host}/api/chat",
+                json={"model": model, "messages": messages},
+                timeout=5,
+            )
+            if resp.status_code != 200:
+                continue
+            content = ""
+            for line in resp.text.split("\n"):
+                if line.strip():
+                    try:
+                        j = json.loads(line)
+                        content = j.get("message", {}).get("content", "").lower()
+                        break
+                    except:
+                        continue
+            
+            if "keep" in content and "skip" not in content:
+                return True
+            elif "skip" in content:
+                return False
+        except:
+            continue
+    
+    return None  # Can't determine
 
-VLM_PREFERRED_MODELS = [
-    "qwen3.5-27b-claude-4.6-opus-distilled-mlx-4bit",  # Best: 100%
-    "gemma-4-e2b-it-4bit",  # Fast
-    "foundation",
-]
+FILENAME_MODELS = get_filename_models()
 
-TEXT_PREFERRED_MODELS = [
-    "qwen3.5-27b-claude-4.6-opus-distilled-mlx-4bit",  # Best: 100%
-    "gemma-4-e2b-it-8bit",  # Fast fallback
-    "foundation",
-]
+# Prompt loaded from config
+PROMPT_TEXT_TO_FILENAME = get_filename_prompt()
 
-MLX_MODELS_DIR = Path.home() / "MLXModels" / "mlx-community"
+# Use server for filename generation (MLX direct is broken)
+MLX_MODELS_DIR = Path.home() / "MLXModels"
 
 
 # --- Helper Functions ---
@@ -135,115 +177,169 @@ def extract_full_text(image_path: Path) -> Optional[str]:
         return None
 
 
+def is_meaningful_text(text: str, min_word_count: int = 2) -> bool:
+    """Check if extracted text is meaningful (human-readable) vs random characters."""
+    if not text:
+        return False
+    
+    # Remove common OCR artifacts
+    text = text.strip()
+    
+    # Check for patterns that indicate non-meaningful text:
+    # 1. All uppercase alphanumeric strings (like HFyWGG4XIAAvWXG)
+    # 2. Very short random-looking strings
+    # 3. Strings with no spaces between random characters
+    
+    if not text:
+        return False
+    
+    # If text is mostly uppercase letters with no spaces, it's likely an ID not readable text
+    # e.g., "HFYAG4XIAAVWXg" or "HAPPYBIRTHDAY"
+    words = text.split()
+    if len(words) == 1 and len(text) > 8:
+        # Single long word - check if it's alphanumeric ID
+        if text.isalnum() and text[:2].isupper():
+            return False
+    
+    # If all uppercase with no spaces and length > 4, likely not readable prose
+    if text.isupper() and len(text) > 4 and " " not in text:
+        return False
+    
+    # Count actual word-like sequences (letters > 2 chars)
+    word_like = sum(1 for w in words if len(w) > 2 and any(c.isalpha() for c in w))
+    
+    return word_like >= min_word_count
+
+
+def is_non_human_readable(text: str) -> bool:
+    """Check if text appears to be non-human-readable (IDs, random chars, codes)."""
+    if not text:
+        return True
+    
+    text = text.strip()
+    
+    # Skip empty or very short
+    if len(text) < 3:
+        return True
+    
+    import re
+    
+    # Pattern 1: HuggingFace-style IDs
+    # Like: HFyWGG4XIAAvWXG, HHRqeLwXUAAQmG6
+    # Starts with HF or HH, followed by 7+ alphanumeric chars
+    if re.match(r'^HF[A-Za-z0-9]{7,}$', text) or re.match(r'^HH[A-Za-z0-9]{7,}$', text):
+        return True
+    
+    # Pattern 2: Twitter-like handles (@something without spaces)
+    if text.startswith("@") and "_" not in text and len(text) > 1:
+        return True
+    
+    # Pattern 3: Very short codes (likely OCR mistakes or headers)
+    if len(text) <= 3 and text.isupper():
+        return True
+    
+    # Pattern 4: Single word that's all uppercase with digits mixed in
+    # Like: ABC123, TEST99 - these look like IDs/codes
+    if " " not in text:
+        if text.isupper() and any(c.isdigit() for c in text):
+            return True
+    
+    return False
+
+
 # Use consolidated functions from lib.osaurus_lib and mlx_lib
 
 
-def process_llm_content(content: str) -> Optional[str]:
-    """
-    Process raw LLM output - delegates to consolidated functions.
-    """
-
-    # Try both processing functions
-    content = strip_thinking(content)
-    content = process_mlx_content(content)
-
-    return content if content else None
-
-
-def parse_response_content(
-    response: requests.Response, endpoint_type: str = "chat"
-) -> str:
-    """
-    Helper to parse standard JSON or NDJSON response from Ollama/OpenAI.
-    """
-    try:
-        # Try standard JSON first
-        result = response.json()
-        if endpoint_type == "chat":
-            # Support both Ollama 'message' and OpenAI 'choices'
-            if "choices" in result and result["choices"]:
-                return result["choices"][0].get("message", {}).get("content", "")
-            return result.get("message", {}).get("content", "")
-        else:  # generate
-            return result.get("response", "")
-
-    except ValueError:
-        # Handle streaming/NDJSON (common with Ollama even when stream=False sometimes)
-        full_content = ""
-        for line in response.text.strip().split("\\n"):
-            if not line.strip():
-                continue
-            try:
-                obj = json.loads(line)
-                if endpoint_type == "chat":
-                    # OpenAI stream format
-                    if "choices" in obj and obj["choices"]:
-                        full_content += (
-                            obj["choices"][0].get("delta", {}).get("content", "")
-                        )
-                    elif "message" in obj:  # Ollama stream format
-                        full_content += obj["message"].get("content", "")
-                else:  # generate
-                    if "response" in obj:
-                        full_content += obj.get("response", "")
-            except Exception:
-                pass
-        return full_content
-
-
-def call_llm_api(
-    host: str,
-    model: str,
-    prompt: str,
-    images: Optional[List[str]] = None,
-    timeout: int = 60,
-    api_key: str = "",
+def query_llm_for_filename(
+    text: str, host: str = "http://localhost:1337", model: str = "", api_key: str = ""
 ) -> Optional[str]:
-    """
-    Generic function to call LLM/VLM APIs (Chat or Generate).
-    Uses consolidated functions from lib.osaurus_lib.
-    """
-    # Try server API first
-
-    messages = [{"role": "user", "content": prompt}]
-    if images:
-        messages[0]["images"] = images
-
-    result = _call_api(
-        f"http://{host}", model, messages, api_key=api_key, timeout=timeout
-    )
-    if result and "content" in result:
-        return result["content"]
-
-    # Fall back to mlx_lib
-    from lib.mlx_lib import call_mlx
-
-    model_path = find_mlx_model(model)
-    if model_path and not images:
-        raw = call_mlx(model_path, prompt)
-        if raw:
-            return process_mlx_content(raw)
-
+    """Query for filename using server models."""
+    
+    # Use server models
+    import requests
+    
+    for m in FILENAME_MODELS:
+        try:
+            prompt = PROMPT_TEXT_TO_FILENAME.format(text=text)
+            messages = [{"role": "user", "content": prompt}]
+            
+            resp = requests.post(
+                f"{host}/api/chat",
+                json={"model": m, "messages": messages},
+                timeout=120,  # 2 min timeout
+            )
+            if resp.status_code != 200:
+                continue
+            
+            # Accumulate all chunks until done=true
+            content = ""
+            for line in resp.text.split("\n"):
+                if line.strip():
+                    try:
+                        j = json.loads(line)
+                        content += j.get("message", {}).get("content", "")
+                        if j.get("done", False):
+                            break
+                    except:
+                        continue
+            
+            if content and len(content) >= 2:
+                content = content.strip()
+                content = content.lower()
+                
+                # Take first 4-6 words, but limit to ~30 chars
+                import re
+                words = re.findall(r'[a-z]+', content)
+                if not words:
+                    continue
+                
+                # Build filename, limiting to ~30 chars
+                content = '_'.join(words[:6])
+                if len(content) > 35:
+                    content = content[:35]
+                
+                # Must be letters and underscores only  
+                if not re.match(r"^[a-z_]+$", content):
+                    continue
+                    
+                # Must have at least one letter
+                if not any(c.isalpha() for c in content):
+                    continue
+                
+                return content
+                
+        except:
+            continue
+    
     return None
 
 
-def query_llm_for_filename(
-    text: str, host: str, model: str = "foundation", api_key: str = ""
-) -> Optional[str]:
-    """Query the LLM to generate a filename based on the OCR text."""
-    from lib.config import get_model_prompt, Task
-
-    # Try config first
-    prompt_template = get_model_prompt(model, Task.FILENAME)
-    if prompt_template:
-        prompt = prompt_template.format(text=text) if "{text}" in prompt_template else prompt_template
-    else:
-        prompt = PROMPT_TEXT_TO_FILENAME.format(text=text)
-
-    messages = [{"role": "user", "content": prompt}]
-    from lib.osaurus_lib import call_llm_api as _call
-    result = _call(host, model, messages, timeout=30, api_key=api_key)
-    return result.get("content") if result else None
+def query_mlx_for_filename(text: str) -> Optional[str]:
+    """Query MLX model directly for filename."""
+    from lib.mlx_lib import find_mlx_model, call_mlx, process_mlx_content
+    
+    # Try each model from config
+    for model_name in FILENAME_MODELS:
+        model_path = find_mlx_model(model_name, MLX_MODELS_DIR)
+        if not model_path:
+            continue
+            
+        try:
+            prompt = PROMPT_TEXT_TO_FILENAME.format(text=text)
+            raw = call_mlx(model_path, prompt)
+            if raw:
+                content = process_mlx_content(raw)
+                if content and len(content) >= 2:
+                    # Clean
+                    content = content.strip()
+                    content = re.sub(r"[^\x00-\x7F]", "", content)
+                    content = re.sub(r"[-\s]+", "_", content)
+                    content = content.strip("_").lower()
+                    return content
+        except Exception:
+            continue
+    
+    return None
 
 
 def query_vlm_for_filename(
@@ -286,6 +382,7 @@ def test_llm_connection(host: str, model: str, api_key: str = ""):
         print("   [OK] Server is reachable.")
     else:
         print("   [FAIL] Server unreachable.")
+        ensure_llm_running()  # Try to restart
         return
 
     print("\n2. Available Models:")
@@ -339,31 +436,94 @@ def rename_image(
     api_key: str,
     mlx_model_path: Optional[Path],
     mlx_vlm_path: Optional[Path],
+    mlx_mode: bool = False,
 ) -> Tuple[bool, str]:
     if not image_path.exists():
         return False, f"File not found: {image_path.name}"
         
     text = extract_full_text(image_path) or extract_first_line(image_path)
+    
+    # Check if text is human-readable - use LLM if available, else fallback to heuristics
     if not text:
         return False, f"Skipped (No text): {image_path.name}"
+    
+    # Use heuristics to check readability
+    if is_non_human_readable(text):
+        return False, f"Skipped (Non-human-readable): {image_path.name}"
+
+    if not is_meaningful_text(text, min_word_count=2):
+        return False, f"Skipped (No meaningful text): {image_path.name}"
+    
+    # In force mode, check relevance with LLM
+    if force and llm_host:
+        relevant = is_relevant_with_llm(text, llm_host, api_key)
+        if relevant is False:
+            return False, f"Skipped (Not relevant): {image_path.name}"
+        elif relevant is True:
+            print(f"   [RELEVANT] {image_path.name}")
         
     new_name = None
-    if llm_host and llm_model:
-        new_name = query_llm_for_filename(text, llm_host, llm_model, api_key)
-    elif mlx_model_path:
+    
+    # Query for new name - MLX mode or server mode
+    if mlx_mode:
+        # Use MLX directly
+        try:
+            new_name = query_mlx_for_filename(text)
+        except Exception as e:
+            print(f"   [WARN] MLX failed: {e}, using fallback")
+            new_name = None
+    elif llm_host and llm_model:
+        # Use server
+        try:
+            new_name = query_llm_for_filename(text, llm_host, llm_model, api_key)
+        except Exception as e:
+            print(f"   [WARN] LLM failed: {e}, using fallback")
+            new_name = None
+        
+        # Validate LLM result - accept if it looks like a filename
+        if new_name:
+            # Reject if it's clearly not a filename
+            if new_name in ("text", "file", "image", "unnamed", "output", "filename", "none"):
+                print(f"   [WARN] Generic LLM result: {new_name}, using fallback")
+                new_name = None
+            elif len(new_name) < 4:
+                print(f"   [WARN] Too short: {new_name}, using fallback")
+                new_name = None
+        
+    if not new_name:
+        new_name = clean_filename(text)
+        
+    # If cleaned is still generic, keep original (avoid data loss)
+    if new_name in ("text", "file", "image", "unnamed", "output"):
+        return False, f"Skipped (Generic name): {image_path.name}"
+        
+    if not new_name:
+        return False, f"Could not generate name: {image_path.name}"
         new_name = query_llm_for_filename(text, "localhost", mlx_model_path.name, api_key)
         
     if not new_name:
         new_name = clean_filename(text)
+        print(f"   [FALLBACK] Using cleaned: {new_name}")
         
     if not new_name:
         return False, f"Could not generate name: {image_path.name}"
         
     new_path = image_path.with_name(f"{new_name}{image_path.suffix}")
     
-    if new_path.exists() and not force:
-        return False, f"Skipped (Exists): {new_path.name}"
-        
+    # Validate new_path
+    if not new_name or len(new_name) < 1:
+        return False, f"Error: empty name for {image_path.name}"
+    
+    # Prevent duplicate names - add suffix if exists
+    counter = 1
+    original_name = new_name
+    while new_path.exists():
+        new_name = f"{original_name}_{counter}"
+        new_path = image_path.with_name(f"{new_name}{image_path.suffix}")
+        counter += 1
+        if counter > 100:
+            return False, f"Too many duplicates: {image_path.name}"
+    
     if not dry_run:
         try:
             image_path.rename(new_path)
@@ -390,12 +550,13 @@ Examples:
     )
 
     parser.add_argument(
-        "directory", nargs="?", default=".", help="Directory containing images"
+        "directory", nargs="?", default="", help="Directory containing images"
     )
     parser.add_argument(
         "--dry-run", "-n", action="store_true", help="Show changes without renaming"
     )
-    parser.add_argument("--force", "-f", action="store_true", help="Rename all images")
+    parser.add_argument("--force", "-f", action="store_true", 
+        help="Check relevance before rename, skip low-value content")
     parser.add_argument("--pattern", "-p", default="*", help="File pattern")
     parser.add_argument(
         "--max-length", "-m", type=int, default=50, help="Max filename length"
@@ -404,89 +565,53 @@ Examples:
         "--llm-host", default="http://localhost:1337", help="LLM server URL"
     )
     parser.add_argument(
-        "--llm-model", default=get_default_llm_model(), help="LLM model"
+        "--llm-model", default=FILENAME_MODELS[0] if FILENAME_MODELS else "foundation", help="LLM model"
     )
     parser.add_argument(
-        "--api-key",
-        default=os.environ.get("OLLAMA_API_KEY", ""),
-        help="Bearer token for LLM API",
+        "--api-key", default="", help="Bearer token for LLM API",
     )
     parser.add_argument("--test", action="store_true", help="Test connection")
-
+    parser.add_argument(
+        "--mlx-mode", action="store_true", 
+        help="Use MLX models directly, skip server",
+    )
+    
     args = parser.parse_args()
 
-    if args.test:
-        test_llm_connection(args.llm_host, args.llm_model, api_key=args.api_key)
-        sys.exit(0)
-
-    directory = Path(args.directory)
+    directory = Path(args.directory) if args.directory else Path.cwd()
+    
     if not directory.exists() or not directory.is_dir():
         print(f"Error: Invalid directory '{directory}'")
         sys.exit(1)
-
-    # Setup LLM/VLM
-    active_llm_host = None
-    active_model = args.llm_model
-    active_vlm_model = None
-    mlx_model_path = None
-    mlx_vlm_path = None
-
-    print(f"Checking LLM at {args.llm_host}...")
-    if check_llm_availability(args.llm_host, api_key=args.api_key):
-        active_llm_host = args.llm_host
-        print("LLM Server found!")
-
-        available_models = get_available_models(active_llm_host, api_key=args.api_key)
-        if available_models:
-            # Text Model Selection
-            if (
-                active_model not in available_models
-                and f"{active_model}:latest" not in available_models
-            ):
-                best_model = select_best_model(available_models)
-                if best_model:
-                    print(
-                        f"Requested text model '{active_model}' not found. Auto-selected: {best_model}"
-                    )
-                    active_model = best_model
-            else:
-                console.print(f"[bold cyan]Using model:[/bold cyan] {active_model}")
-
-            # VLM Selection
-            active_vlm_model = select_best_vlm_model(available_models)
-            if active_vlm_model:
-                print(f"VLM Support enabled using: {active_vlm_model}")
-            else:
-                print(
-                    "No Vision Language Model (VLM) found. Visual renaming will be disabled."
-                )
-                print(
-                    "Recommendation: Install 'llama3.2-vision' or 'minicpm-v' via Ollama."
-                )
-        else:
-            print("Could not fetch model list. Proceeding with default.")
+    
+    # Resolve to absolute path
+    directory = directory.resolve()
+    all_files = list(directory.glob('*'))
+    
+    # Check LLM availability (skip if mlx-mode)
+    use_mlx = args.mlx_mode
+    
+    if use_mlx:
+        print("MLX MODE - Using direct MLX calls")
     else:
-        print("LLM Server not found. Looking for local MLX models...")
-        mlx_model_path = find_best_mlx_model(TEXT_PREFERRED_MODELS)
-        mlx_vlm_path = find_best_mlx_model(VLM_PREFERRED_MODELS)
-        if mlx_model_path:
-            console.print(f"[bold cyan]Using model:[/bold cyan] {mlx_model_path.name} (MLX)")
-        if mlx_vlm_path:
-            console.print(f"[bold cyan]Using model:[/bold cyan] {mlx_vlm_path.name} (MLX VLM)")
-        if not mlx_model_path and not mlx_vlm_path:
-            print(
-                "No local MLX models found. Falling back to simple first-line extraction."
-            )
-
-    # Find Images
+        print(f"Checking LLM at {args.llm_host}...")
+        if check_llm_availability(args.llm_host, api_key=args.api_key):
+            active_llm_host = args.llm_host
+            print("LLM Server found!")
+        else:
+            print("ERROR: LLM server not responding")
+            print("Use --llm-host to specify a different server")
+            sys.exit(1)
+        
+        active_llm_host = args.llm_host
+        active_model = args.llm_model
+        print(f"Using model: {active_model}")
+    
+# Find Images
+    print("Finding images...")
     image_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp"}
     image_files = []
 
-    # Simple glob handling
-    
-    # If user provided specific pattern like "*.jpg", use it. If "*", use all extensions.
-
-    # Actually, previous logic was: if pattern is "*", check all ext. If pattern is specific, check it.
     if args.pattern == "*":
         for ext in image_extensions:
             image_files.extend(directory.glob(f"*{ext}"))
@@ -505,11 +630,16 @@ Examples:
     print(f"Found {len(image_files)} image(s)")
     if args.dry_run:
         print("DRY RUN MODE - No files will be renamed\n")
-    print()
-
-    # Process
+    
+    # Initialize None vars to avoid errors
+    active_vlm_model = None
+    mlx_model_path = None
+    mlx_vlm_path = None
+    
+# Process
     stats = {"renamed": 0, "skipped": 0, "errors": 0}
-
+    print(f"Processing {len(image_files)} images...")
+    
     for image_path in sorted(image_files):
         success, message = rename_image(
             image_path,
@@ -521,6 +651,7 @@ Examples:
             api_key=args.api_key,
             mlx_model_path=mlx_model_path,
             mlx_vlm_path=mlx_vlm_path,
+            mlx_mode=use_mlx,
         )
         print(message)
 
@@ -540,4 +671,6 @@ Examples:
 
 
 if __name__ == "__main__":
+    import sys
+    sys.stdout = sys.stderr  # Unbuffered
     main()

@@ -1,0 +1,54 @@
+# Eval test inputs - data models should extract from
+# These are the source data for extraction tasks
+
+test_inputs:
+  weekend_fixed: |
+    [
+      {"name": "Vaughan Sports Arena", "location": "Vaughan", "target_ages": "3-7", "price": "$25", "weather": "indoor"},
+      {"name": "Central Park Zoo", "location": "NYC", "target_ages": "3-7", "price": "$30", "weather": "outdoor"},
+      {"name": "Brooklyn Children's Library", "location": "Brooklyn", "target_ages": "3-7", "price": "free", "weather": "indoor"},
+      {"name": "Queens Museum", "location": "Queens", "target_ages": "3-7", "price": "$20", "weather": "indoor"},
+      {"name": "Staten Island Children's Museum", "location": "Staten Island", "target_ages": "3-7", "price": "$18", "weather": "indoor"},
+      {"name": "Bronx Zoo", "location": "Bronx", "target_ages": "3-7", "price": "$28", "weather": "outdoor"},
+      {"name": "NYC Aquarium", "location": "Coney Island", "target_ages": "3-7", "price": "$22", "weather": "indoor"},
+      {"name": "Central Park Playground", "location": "NYC", "target_ages": "3-7", "price": "free", "weather": "outdoor"}
+    ]
+
+  weekend_transient: |
+    [
+      {"name": "Spring Festival", "location": "Central Park", "target_ages": "3-7", "price": "free", "weather": "outdoor", "day": "Saturday", "duration": "10am-6pm"},
+      {"name": "Food Fair", "location": "Downtown", "target_ages": "3-7", "price": "$15", "weather": "outdoor", "day": "Saturday", "duration": "11am-8pm"},
+      {"name": "Art Show", "location": "Museum", "target_ages": "3-7", "price": "$20", "weather": "indoor", "day": "Saturday", "duration": "9am-5pm"},
+      {"name": "Art Show", "location": "Museum", "target_ages": "3-7", "price": "$20", "weather": "indoor", "day": "Sunday", "duration": "9am-5pm"},
+      {"name": "Concert", "location": "Stadium", "target_ages": "3-7", "price": "$35", "weather": "outdoor", "day": "Sunday", "duration": "7pm-11pm"},
+      {"name": "Magic Show", "location": "Theater", "target_ages": "3-7", "price": "$25", "weather": "indoor", "day": "Saturday", "duration": "2pm-4pm"},
+      {"name": "Story Time", "location": "Library", "target_ages": "3-7", "price": "free", "weather": "indoor", "day": "Sunday", "duration": "10am-12pm"},
+      {"name": "Egg Hunt", "location": "Park", "target_ages": "3-7", "price": "free", "weather": "outdoor", "day": "Sunday", "duration": "11am-2pm"}
+    ]
+
+  filename: "Screenshot showing login error: Invalid credentials. Please try again."
+
+  summarize: |
+    [@user1 | 10:00] Just launched our new product! Excited to share.
+    [@user2 | 10:15] Looks great! How do I get it?
+    [@user1 | 10:30] Check the website for early access.
+    [@user3 | 10:45] Got it, thanks!
+    [@user2 | 11:00] Anyone tried the beta yet?
+    [@user4 | 11:15] Been using it all morning, very smooth.
+    [@user1 | 11:30] Great feedback!
+
+  file_summary: |
+    [
+      {"path": "eval_lib.py", "desc": "model evaluation functions for quality scoring"},
+      {"path": "validators.py", "desc": "validation logic for JSON and text output"},
+      {"path": "config.py", "desc": "configuration management and model prompts"},
+      {"path": "osaurus_lib.py", "desc": "LLM API client library for Ollama/OpenAI"}
+    ]
+
+  image_filename: |
+    [
+      ["How To Manage Your Underperformers\n\nSees it?\nNo Yes Wants to fix it?", "how_to_manage_underperformers"],
+      ["What this llama-server command means\n\n*Llama-server* -> Start the llama.cpp model server.", "llama_server_command_reference"],
+      ["10 powerful sentences by scott adams navigating ai", "scott_adams_powerful_sentences"],
+      ["be_delusional.png", "be_delusional"]
+    ]

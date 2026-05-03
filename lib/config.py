@@ -179,6 +179,7 @@ def get_model_family(model: str) -> str:
       gemma-4-26b-a4b-it-4bit -> gemma
       foundation -> foundation
       nemotron-3-nano-omni-30b-a3b-mxfp4 -> nemotron
+      laguna-xs.2-mxfp4 -> laguna
     """
     if not model:
         return "default"
@@ -191,6 +192,8 @@ def get_model_family(model: str) -> str:
         return "gemma"
     elif "nemotron" in model_lower:
         return "nemotron"
+    elif "laguna" in model_lower:
+        return "laguna"
     elif "foundation" in model_lower:
         return "foundation"
     else:
@@ -242,7 +245,34 @@ def get_model_config(model: str) -> Dict:
         with open(config_path) as f:
             _model_configs_cache[family] = yaml.safe_load(f) or {}
     else:
-        _model_configs_cache[family] = {"name": family, "prompts": {}, "key_mappings": {}, "quirks": []}
+        # Fallback config for unknown models - use foundation-style prompts as default
+        _model_configs_cache[family] = {
+            "name": family,
+            "timeout": 300,
+            "prompts": {
+                "json": "Output JSON now. Use EXACT schema.",
+                "weekend_fixed": "Output JSON now. Use EXACT schema: {\"fixed_activities\": [{\"name\": \"str\", \"location\": \"str\", \"target_ages\": \"str\", \"price\": \"str\", \"weather\": \"str\"}]}\n\nExtract venues. Use exact fields. Output ONLY JSON.",
+                "weekend_transient": "Output JSON now. Schema: {\"transient_events\": [{\"name\": \"str\", \"location\": \"str\", \"target_ages\": \"str\", \"price\": \"str\", \"duration\": \"str\", \"weather\": \"str\", \"day\": \"str\"]}\n\nFind events. Use exact fields. Output ONLY JSON.",
+                "summarize": "Output a detailed summary with ## headers and bullet points.\n\n{}\n\nSummarize thoroughly.",
+                "filename": "Output ONLY the filename (lowercase, underscores).",
+                "file_summary": "Output JSON array with path and desc fields.",
+            },
+            "key_mappings": {
+                "event": "name", "title": "name", "activity": "name",
+                "venue": "location", "address": "location", "place": "location",
+                "age_group": "target_ages", "ages": "target_ages", "age_range": "target_ages",
+                "cost": "price", "pricing": "price", "fee": "price",
+                "type": "weather", "category": "weather",
+            },
+            "quirks": [
+                {"type": "prefix", "pattern": "Output JSON now.", "reason": "Ensures clean JSON"}
+            ],
+            "top_keys": {
+                "fixed": ["fixed_activities", "venues", "places", "activities", "items"],
+                "transient": ["transient_events", "events", "activities", "recommendations"],
+            },
+            "field_mapping": {},
+        }
 
     return _model_configs_cache.get(family, {"name": family, "prompts": {}, "key_mappings": {}, "quirks": []})
 
@@ -312,45 +342,41 @@ def get_model_prompts_all(model: str) -> Dict[str, str]:
 
 
 # ==========================================================
+# ==========================================================
 # TASK BUILDER - Creates eval tasks from model config
 # ==========================================================
 
-# Pre-generated baseline data for extraction tasks
-# Models should extract this data accurately - not generate new content
-_EVAL_TEST_INPUTS = {
-    Task.WEEKEND_FIXED: """[
-        {"name": "Vaughan Sports Arena", "location": "Vaughan", "target_ages": "3-7", "price": "$25", "weather": "indoor"},
-        {"name": "Central Park Zoo", "location": "NYC", "target_ages": "3-7", "price": "$30", "weather": "outdoor"},
-        {"name": "Brooklyn Children's Library", "location": "Brooklyn", "target_ages": "3-7", "price": "free", "weather": "indoor"},
-        {"name": "Queens Museum", "location": "Queens", "target_ages": "3-7", "price": "$20", "weather": "indoor"},
-        {"name": "Staten Island Children's Museum", "location": "Staten Island", "target_ages": "3-7", "price": "$18", "weather": "indoor"},
-        {"name": "Bronx Zoo", "location": "Bronx", "target_ages": "3-7", "price": "$28", "weather": "outdoor"},
-        {"name": "NYC Aquarium", "location": "Coney Island", "target_ages": "3-7", "price": "$22", "weather": "indoor"},
-        {"name": "Central Park Playground", "location": "NYC", "target_ages": "3-7", "price": "free", "weather": "outdoor"}
-    ]""",
+# Load test inputs from YAML config
+_eval_inputs_cache: Dict[str, str] = {}
+
+def _load_eval_inputs() -> Dict[str, str]:
+    """Load eval test inputs from conf/eval_inputs.yaml.
     
-    Task.WEEKEND_TRANSIENT: """[
-        {"name": "Spring Festival", "location": "Central Park", "target_ages": "3-7", "price": "free", "weather": "outdoor", "day": "Saturday", "duration": "10am-6pm"},
-        {"name": "Food Fair", "location": "Downtown", "target_ages": "3-7", "price": "$15", "weather": "outdoor", "day": "Saturday", "duration": "11am-8pm"},
-        {"name": "Art Show", "location": "Museum", "target_ages": "3-7", "price": "$20", "weather": "indoor", "day": "Saturday", "duration": "9am-5pm"},
-        {"name": "Art Show", "location": "Museum", "target_ages": "3-7", "price": "$20", "weather": "indoor", "day": "Sunday", "duration": "9am-5pm"},
-        {"name": "Concert", "location": "Stadium", "target_ages": "3-7", "price": "$35", "weather": "outdoor", "day": "Sunday", "duration": "7pm-11pm"},
-        {"name": "Magic Show", "location": "Theater", "target_ages": "3-7", "price": "$25", "weather": "indoor", "day": "Saturday", "duration": "2pm-4pm"},
-        {"name": "Story Time", "location": "Library", "target_ages": "3-7", "price": "free", "weather": "indoor", "day": "Sunday", "duration": "10am-12pm"},
-        {"name": "Egg Hunt", "location": "Park", "target_ages": "3-7", "price": "free", "weather": "outdoor", "day": "Sunday", "duration": "11am-2pm"}
-    ]""",
+    Fail-fast if file missing - configs should always exist.
+    """
+    global _eval_inputs_cache
+    if _eval_inputs_cache:
+        return _eval_inputs_cache
     
-    Task.FILENAME: "Screenshot showing login error: Invalid credentials. Please try again.",
+    inputs_path = Path(__file__).parent.parent / "conf" / "eval_inputs.yaml"
+    if not inputs_path.exists():
+        raise FileNotFoundError(f"Missing eval inputs: {inputs_path}")
     
-    Task.SUMMARIZE: "[@user1 | 10:00] Just launched our new product! Excited to share.\n[@user2 | 10:15] Looks great! How do I get it?\n[@user1 | 10:30] Check the website for early access.\n[@user3 | 10:45] Got it, thanks!\n[@user2 | 11:00] Anyone tried the beta yet?\n[@user4 | 11:15] Been using it all morning, very smooth.\n[@user1 | 11:30] Great feedback!",
+    with open(inputs_path) as f:
+        data = yaml.safe_load(f) or {}
+        _eval_inputs_cache = data.get("test_inputs", {})
     
-    Task.FILE_SUMMARY: """[
-        {"path": "eval_lib.py", "desc": "model evaluation functions for quality scoring"},
-        {"path": "validators.py", "desc": "validation logic for JSON and text output"},
-        {"path": "config.py", "desc": "configuration management and model prompts"},
-        {"path": "osaurus_lib.py", "desc": "LLM API client library for Ollama/OpenAI"}
-    ]""",
-}
+    if not _eval_inputs_cache:
+        raise ValueError(f"Empty test_inputs in {inputs_path}")
+    
+    return _eval_inputs_cache
+
+def get_eval_input(task: str) -> str:
+    """Get test input for a task from config."""
+    inputs = _load_eval_inputs()
+    if task not in inputs:
+        raise KeyError(f"Unknown task: {task}. Available: {list(inputs.keys())}")
+    return inputs[task]
 
 
 def _safe_format_prompt(prompt_template: str, test_input: str) -> str:
@@ -418,7 +444,7 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
 
     # Map prompt keys to task definitions using Task enum
     if Task.WEEKEND_FIXED.value in prompts:
-        test_input = _EVAL_TEST_INPUTS[Task.WEEKEND_FIXED]
+        test_input = get_eval_input("weekend_fixed")
         prompt = _safe_format_prompt(prompts[Task.WEEKEND_FIXED.value], test_input)
         tasks["detailed_json"] = {
             "messages": [
@@ -430,7 +456,7 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
         }
 
     if Task.WEEKEND_TRANSIENT.value in prompts:
-        test_input = _EVAL_TEST_INPUTS[Task.WEEKEND_TRANSIENT]
+        test_input = get_eval_input("weekend_transient")
         prompt = _safe_format_prompt(prompts[Task.WEEKEND_TRANSIENT.value], test_input)
         tasks["json"] = {
             "messages": [
@@ -442,7 +468,7 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
         }
 
     if Task.FILENAME.value in prompts:
-        test_input = _EVAL_TEST_INPUTS[Task.FILENAME]
+        test_input = get_eval_input("filename")
         prompt = _safe_format_prompt(prompts[Task.FILENAME.value], test_input)
         tasks["filename"] = {
             "messages": [
@@ -453,7 +479,7 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
         }
 
     if Task.SUMMARIZE.value in prompts:
-        test_input = _EVAL_TEST_INPUTS[Task.SUMMARIZE]
+        test_input = get_eval_input("summarize")
         prompt = _safe_format_prompt(prompts[Task.SUMMARIZE.value], test_input)
         tasks["summarize"] = {
             "messages": [
@@ -464,7 +490,7 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
         }
 
     if Task.FILE_SUMMARY.value in prompts:
-        test_input = _EVAL_TEST_INPUTS[Task.FILE_SUMMARY]
+        test_input = get_eval_input("file_summary")
         prompt = _safe_format_prompt(prompts[Task.FILE_SUMMARY.value], test_input)
         tasks["file_summary"] = {
             "messages": [
@@ -476,3 +502,22 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
         }
 
     return tasks
+
+
+# ==========================================================
+# FILENAME HELPERS - Get config for image renaming
+# ==========================================================
+
+
+def get_filename_models() -> List[str]:
+    """Get model list for filename generation, with fallback."""
+    _auto_load()
+    models = _config.get("filename_models", [])
+    return models if models else ["foundation"]
+
+
+def get_filename_prompt() -> str:
+    """Get prompt template for filename generation."""
+    _auto_load()
+    prompts = _config.get("prompts", {})
+    return prompts.get("filename", "Give a short summary of: {text}")

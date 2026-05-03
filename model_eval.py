@@ -543,6 +543,17 @@ TASKS = {
         "validator": validate_filename,
         "parse_json": False,
     },
+    "image_rename": {
+        "description": "Rename images from OCR text - test multiple cases",
+        "test_cases": [
+            ("How To Manage Your Underperformers\n\nSees it?\nNo Yes Wants to fix it?", "how_to_manage_underperformers"),
+            ("What this llama-server command means\n\n*Llama-server* -> Start the llama.cpp model server.", "llama_server_command_reference"),
+            ("10 powerful sentences by scott adams navigating ai", "scott_adams_powerful_sentences"),
+            ("Screenshot showing login error: Invalid credentials. Please try again.", "login_error_screenshot"),
+        ],
+        "validator": validate_filename,
+        "parse_json": False,
+    },
     "summarize": {
         "messages": [
             {"role": "user", "content": TWITTER_PROMPT},
@@ -1637,7 +1648,8 @@ def main():
             tasks_to_run = config_tasks
         console.print(f"[dim]Loaded {len(tasks_to_run)} tasks from config[/dim]")
     else:
-        console.print("[dim]Using default TASKS (no config found)[/dim]")
+        # This should never happen now - fallback prompts always exist
+        console.print("[yellow]Config loading failed, using minimal tasks[/yellow]")
 
     # In quick mode, only run first task once (no retries)
     if args.quick:

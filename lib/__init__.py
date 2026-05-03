@@ -14,7 +14,6 @@ from .validators_lib import (
     validate_detailed_json,
     validate_summary,
     validate_filename,
-    VALIDATORS,
 )
 from .osaurus_lib import (
     call,
@@ -28,6 +27,8 @@ from .osaurus_lib import (
     ensure_server,
     panic_dump,
     select_best_model,
+    # Also from new llm module
+    apply_model_quirks,
 )
 from .mlx_lib import (
     find_mlx_model,
@@ -63,7 +64,6 @@ __all__ = [
     "validate_detailed_json",
     "validate_summary",
     "validate_filename",
-    "VALIDATORS",
     # osaurus
     "call",
     "get_api_url",
@@ -74,6 +74,7 @@ __all__ = [
     "clean_output",
     "get_best_model",
     "ensure_server",
+    "apply_model_quirks",
     # mlx
     "find_mlx_model",
     "find_best_mlx_model",

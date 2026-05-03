@@ -5,7 +5,7 @@ best_models:
   think: qwen3.6-35b-a3b-mxfp4
   json: qwen3.6-35b-a3b-mxfp4
   summarize: qwen3.6-35b-a3b-mxfp4
-  filename: foundation
+  filename: nemotron-3-nano-omni-30b-a3b-mxfp4  # Fast (7-10s) + best quality
   vlm: gemma-4-26b-a4b-it-4bit
 
 timeouts:
@@ -21,3 +21,11 @@ max_tokens:
   summarize: 16000
   filename: 1000
   vlm: 16000
+
+filename_models:
+  - nemotron-3-nano-omni-30b-a3b-mxfp4  # Fast + accurate
+  - gemma-4-31b-it-jang_4m  # Slower but good
+  - foundation  # Fallback
+
+prompts:
+  filename: "Give a short 2-4 word summary of: {text}"
