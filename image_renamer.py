@@ -122,8 +122,9 @@ def is_relevant_with_llm(text: str, host: str, api_key: str = "") -> Optional[bo
 
 FILENAME_MODELS = get_filename_models()
 
-# Prompt loaded from config
-PROMPT_TEXT_TO_FILENAME = get_filename_prompt()
+# Use config prompt (updated to strong version)
+from lib.config import get_model_prompt, Task
+PROMPT_TEXT_TO_FILENAME = get_model_prompt(FILENAME_MODELS[0], Task.FILENAME)
 
 # Use server for filename generation (MLX direct is broken)
 MLX_MODELS_DIR = Path.home() / "MLXModels"

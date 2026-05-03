@@ -28,4 +28,27 @@ filename_models:
   - foundation  # Fallback
 
 prompts:
-  filename: "Give a short 2-4 word summary of: {text}"
+  filename: |
+    Output ONLY the filename string (no JSON, no code blocks).
+    Use lowercase, underscores for spaces, no special characters.
+    Keep it under 50 characters.
+    
+    TEXT: {text}
+
+eval_inputs:
+  filename:
+    - "business lessons"  # Simple
+    - "scott adams advice"  # Simple
+    
+  image_filename:
+    # Simple cases
+    - ["How to manage underperformers", "how_to_manage_underperformers"]
+    - ["Scott Adams essays", "scott_adams_essays"]
+    
+    # Real OCR outputs (from real images - DO NOT DELETE for evals)
+    - ["10 powerful sentences by Scott Adams navigating failure, ambition: ...", "scott_adams_powerful_sentences"]
+    - ["15 years of business lessons in <500 words: ...", "business_lessons"]
+    - ["Be delusional. Believe that you have the ability...", "delusional_belief"]
+    - ["How To Prioritize Like A Pro - Noemi Kis: ...", "prioritize_pro"]
+    - ["elon musk: how to win at founding - taking risk...", "musk_founding_tips"]
+    - ["context engineering template - comprehensive guide...", "context_engineering"]

@@ -410,10 +410,9 @@ Potential Venues and Current Exhibits:
 Execute the task based on the system instructions and the provided context to find 10 year-round fixed activities, prioritizing current exhibits or highly-rated venues from the context. Output ONLY JSON.
 """
 
-RENAME_PROMPT = """Suggest a short filename for this text. Use lowercase, underscores for spaces. Keep under 50 characters. Output ONLY the filename string.
+RENAME_PROMPT = """Give a short 2-4 word summary of: {text}
 
-TEXT:
-CONFIDENTIAL - Q3 2025 Financial Results & Board Meeting Minutes"""
+Output ONLY the filename string, lowercase with underscores. Max 35 characters."""
 
 FILE_SUMMARY_PROMPT = """Read the file list below and give one-line summary for each file.
 
@@ -546,10 +545,17 @@ TASKS = {
     "image_rename": {
         "description": "Rename images from OCR text - test multiple cases",
         "test_cases": [
-            ("How To Manage Your Underperformers\n\nSees it?\nNo Yes Wants to fix it?", "how_to_manage_underperformers"),
-            ("What this llama-server command means\n\n*Llama-server* -> Start the llama.cpp model server.", "llama_server_command_reference"),
-            ("10 powerful sentences by scott adams navigating ai", "scott_adams_powerful_sentences"),
-            ("Screenshot showing login error: Invalid credentials. Please try again.", "login_error_screenshot"),
+            # Simple cases (keep some of these)
+            ("How To Manage Your Underperformers", "how_to_manage_underperformers"),
+            ("Scott Adams essays", "scott_adams_essays"),
+            
+            # Real OCR outputs (from Downloads/life)
+            ("10 powerful sentences by Scott Adams navigating failure, ambition, the absurdities of life: 1. Creativity is allowing yourself to make mistakes...", "scott_adams_powerful_sentences"),
+            ("15 years of business lessons in <500 words: 1. Marrying well is the biggest life hack of all. 2. Be the type of person who reaches out to others...", "business_lessons"),
+            ("Be delusional. Believe that you have the ability to make it work no matter what. Believe that regardless of what happens...", "delusional_belief"),
+            ("How To Prioritize Like A Pro - Noemi Kis: Understand Your Values First Time Block Your Schedule Execute Through Habits...", "prioritize_pro"),
+            ("elon musk: how to win at founding - taking risk if things don't work out", "musk_founding_tips"),
+            ("context engineering template - comprehensive guide for AI prompts", "context_engineering"),
         ],
         "validator": validate_filename,
         "parse_json": False,

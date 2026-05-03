@@ -328,15 +328,19 @@ filename_models:
   - foundation  # Fallback
 
 prompts:
-  filename: "Give a short 2-4 word summary of: {text}"
+  filename: "Output ONLY the filename string (no JSON, no code blocks).
+  Use lowercase, underscores for spaces, no special characters.
+  Keep it under 50 characters.
+  
+  TEXT: {text}"
 ```
 
-Load via lib/config.py:
+Load via lib/config.py (use model-specific prompt):
 ```python
-from lib.config import get_filename_models, get_filename_prompt
+from lib.config import get_model_prompt, Task, get_filename_models
 
-FILENAME_MODELS = get_filename_models()
-PROMPT_TEXT_TO_FILENAME = get_filename_prompt()
+models = get_filename_models()
+PROMPT_TEXT_TO_FILENAME = get_model_prompt(models[0], Task.FILENAME)
 ```
 
 ### MLX Direct - Known Issues
