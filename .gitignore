@@ -136,7 +136,8 @@ logs/
 *.tmp
 *.temp
 
-# Data files
+# Data files (ignored - user data tracked separately)
+# To track eval results: git add -f ~/.config/ztools/eval_results.json
 *.json
 *.csv
 *.txt

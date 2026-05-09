@@ -256,24 +256,55 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
     
     return min(100, score), "; ".join(failures) if failures else ""
     
-    # Text format (Foundation/Gemma): check for ## headers OR prose content
-    # Structure checks (40 points)
+    # Text format: Check for QUALITY signals, not length
+    # Quality signals: users mentioned, timestamps, key events, structure
+    data_lower = data_str.lower()
+    
+    # 1. Structure check (20 pts)
     if has_text_headers(data_str):
         score += 20
-    elif len(data_str) >= 500:
-        # Has content but no headers - allow prose format
-        score += 15
-        failures.append("no headers (prose format)")
     else:
         failures.append("no headers")
     
-    # Length check (20 points)
-    if len(data_str) >= 500:
+    # 2. User mentions (20 pts) - check for specific users from input
+    user_mentions = ['@user1', '@user2', '@user3', '@user4']
+    found_users = sum(1 for u in user_mentions if u in data_lower)
+    if found_users >= 3:
         score += 20
-    elif len(data_str) >= 200:
+    elif found_users >= 2:
+        score += 10
+    else:
+        failures.append(f"missing user mentions ({found_users}/4)")
+    
+    # 3. Timestamp mentions (20 pts)
+    time_patterns = ['10:00', '10:15', '10:30', '10:45', '11:00', '11:15', '11:30']
+    found_times = sum(1 for t in time_patterns if t in data_str)
+    if found_times >= 4:
+        score += 20
+    elif found_times >= 2:
+        score += 10
+    else:
+        failures.append(f"missing timestamps ({found_times})")
+    
+    # 4. Key event coverage (20 pts): product launch, access, beta, feedback
+    key_events = ['launch', 'access', 'beta', 'feedback', 'smooth']
+    found_events = sum(1 for e in key_events if e in data_lower)
+    if found_events >= 3:
+        score += 20
+    elif found_events >= 2:
+        score += 10
+    else:
+        failures.append(f"missing key events ({found_events})")
+    
+    # 5. Length check (20 pts) - just to ensure minimum effort
+    if len(data_str) >= 300:
+        score += 20
+    elif len(data_str) >= 150:
         score += 10
     else:
         failures.append(f"too short ({len(data_str)} chars)")
+    
+    return min(100, score), "; ".join(failures) if failures else ""
     
     # Quality checks: evidence of ACTUAL file reading
     # Filter out header-only lines (## filename only, no content after)

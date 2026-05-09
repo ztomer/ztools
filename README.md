@@ -174,6 +174,16 @@ pytest tests/ -k weekend   # run specific test file
 - `test_content_processing.py` — thinking block removal
 - `test_twitter.py` — twitter output cleaning
 
+### Eval Results
+
+Eval results are stored in `~/.config/ztools/` (outside the repo). To track them:
+
+```bash
+# Track eval results (intentional, not automatic)
+git add -f ~/.config/ztools/eval_results.json
+git add -f ~/.config/ztools/eval_history.json
+```
+
 ## Requirements
 
 - **Osaurus or Ollama** server running on port 1337
