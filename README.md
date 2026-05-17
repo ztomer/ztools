@@ -90,13 +90,17 @@ python3 model_eval.py --task weekend_fixed  # test specific task
 python3 model_eval.py --model qwen3.6-35b-a3b-mxfp4  # test specific model
 ```
 
-**Tasks:** `weekend_transient`, `weekend_fixed`, `summarize`, `filename`, `file_summary`
+**Tasks:** `weekend_transient`, `weekend_fixed`, `summarize`, `filename`, `file_summary`, `taxes_anomalies`, `taxes_audit_readiness`, `taxes_synthesis`
 
 **Quality Checks:**
 - Source matching (detects hallucination)
 - Item details validation
 - JSON structure validation
 - Code-pattern detection (file_summary: detects filename inference vs actual file reading)
+- Cross-border tax-domain grounding (taxes_*: counts T1135 / Form 106 / box 38 / quarterly-tax mentions)
+- GT-leak detection (taxes_*: drops score to 0 if filed-return totals appear in output)
+
+**Taxes tasks (ported 2026-05-17):** three real cross-border tax-prep prompts from [github.com/ztomer/Taxes](https://github.com/ztomer/Taxes), sanitized (dollar amounts bucketed, no PII) and vendored in `eval_tasks/data/taxes/`. Substantially harder than the other tasks — 2.7-7.5kB user prompts, dense domain context, expect specific finding codes. Good for filtering "useful for a real workload" from "can summarize four bullets." Regenerate from the source repo via `python scripts/snapshot_eval_prompts.py --year YYYY --sanitize` and copy `*.sanitized.json` over.
 
 ---
 
