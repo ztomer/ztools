@@ -157,3 +157,6 @@ output/
 
 # Ruff
 .ruff_cache/
+# Vendored taxes-eval snapshots — sanitized prompts ported from
+# github.com/ztomer/Taxes; safe to commit (no PII).
+!eval_tasks/data/taxes/*.json

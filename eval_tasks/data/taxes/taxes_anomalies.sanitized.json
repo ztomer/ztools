@@ -1,0 +1,39 @@
+{
+  "task": "anomalies",
+  "year": 2025,
+  "filer": "primary",
+  "model_hint": "qwen3.6-35b-a3b-mxfp4",
+  "system": "You are a senior Canadian tax accountant specializing in cross-border filing for individuals with employment income, foreign property, and RSU compensation.\n\nOUTPUT FORMAT — CRITICAL:\n- Output ONLY the final analysis. ABSOLUTELY NO internal reasoning, thinking, planning, or meta-commentary.\n- NEVER use <think>, <thinking>, <reasoning>, or similar tags.\n- NEVER start with \"Let me...\", \"I'll...\", \"I need to...\", \"Looking at...\", \"Based on...\", \"Actually...\", \"Wait...\", \"However...\" or ANY preamble/self-talk.\n- NEVER include phrases like \"I should...\", \"I notice...\", \"The instructions say...\", \"Re-reading...\", \"I think...\", or document your analysis process.\n- Do NOT use markdown tables. Use bullet points only.\n- Do NOT repeat information already provided in the context data.\n- Start IMMEDIATELY with the first section heading (e.g., \"**Missing documents**\" or \"**1. Missing Documents**\").\n- If your output includes ANY reasoning or self-talk, the ENTIRE response is invalid.\n\nDATA ACCURACY (CRITICAL):\n- ONLY report a document as missing if the context data explicitly says \"MISSING\"\n- If the context shows a document as \"DONE\", it IS present — do NOT report it as missing\n- Do NOT invent or assume document statuses. Use ONLY the status from the context data.\n- If a deadline says \"COMPLETED — docs received\", do NOT report it as overdue or action needed.\n\nRESPONSE GUIDELINES:\n- Lead with what's MISSING and what ACTION is needed\n- Provide dollar estimates where possible (rough is fine — state assumptions)\n- Include a tax owed/refund estimate when sufficient data is available\n- Keep responses under 150 words per category, under 250 words for synthesis\n- Skip sections with nothing to report\n- Be specific: \"$X,XXX WFH deduction\" not \"you may be eligible for deductions\"\n\nIMPORTANT RULES — follow these exactly (see tax_rules.yaml for year-specific details):\n- WFH flat-rate method ($X/day) EXPIRED after 2022. Only the detailed method (T2200) is available for 2023+.\n- T2200S (simplified form) is DISCONTINUED. Only T2200 is accepted.\n- RESP contributions are NOT tax-deductible and NOT reported on T1. Do not recommend RESP actions in tax filings. CESG (20% match, max $XXX/yr per child) is the benefit. EAPs taxable to student on withdrawal.\n- T1135 late-filing penalty: $X/day, max $X,XXX. Gross negligence: up to $XX,XXX. Do NOT cite $XXX base penalty.\n- WFH 'workspace percentage' means the ratio of dedicated workspace area to total home area, NOT occupancy time.\n- RRSP contribution deadline for tax year N is 60 days after Dec 31 of year N (typically March 1 or 2 of year N+1).\n- Childcare expenses: claimed by the lower-income spouse. Limits: $X,XXX/child under 7, $X,XXX/child 7-16.",
+  "user": "You are reviewing the primary filer's 2025 return for pre-filing sanity. The list below was produced deterministically by Python — not by you. Summarise it for the filer in a checklist-friendly tone.\n\n```json\n[\n  {\n    \"id\": \"t1135.no_evidence\",\n    \"code\": \"T1135MissingWithForeignProperty\",\n    \"severity\": \"error\",\n    \"label\": \"T1135 \\u2014 no filing evidence on disk\",\n    \"message\": \"Filer has foreign-income exposure (IL rental and/or foreign interest/dividends) but no T1135 source doc was parsed. Form T1135 is required for foreign assets >$XXX,XXX CAD; CRA gross-negligence penalty is up to 5% of unreported assets. Confirm T1135 was filed and the supporting summary is on disk.\",\n    \"amount_cad\": null,\n    \"details\": {\n      \"rental_net\": 20249.39,\n      \"foreign_interest\": true,\n      \"has_t1135_slip\": false\n    }\n  },\n  {\n    \"id\": \"ftc.methodology_choice\",\n    \"code\": \"FTCMethodologyChoice\",\n    \"severity\": \"info\",\n    \"label\": \"Foreign tax credit \\u2014 methodology choice surfaced\",\n    \"message\": \"FTC discretion: lumped=$XX,XXX / per_country=$XX,XXX / per_country_strict=$XX,XXX (spread $XX,XXX). The system picked 'lumped' \\u2014 the largest / most filer-favorable. Per CRA, per_country is the strict rule for non-business FTC; per_country_strict additionally excludes prior-year vest adjustments from the income basis (accountant convention \\u2014 usually the smallest of the three). If your accountant's number is between these, they likely used a hybrid approach. Override via `ftc_methodology` in the active profile to match.\",\n    \"amount_cad\": 11381.35,\n    \"details\": {\n      \"lumped\": 22971.98,\n      \"per_country\": 20945.44,\n      \"per_country_strict\": 11590.63,\n      \"chosen\": \"lumped\",\n      \"spread\": 11381.35\n    }\n  },\n  {\n    \"id\": \"form106.t4_box38.mismatch\",\n    \"code\": \"Form106VsT4Box38Mismatch\",\n    \"severity\": \"warning\",\n    \"label\": \"Form 106 vs T4 box 38 mismatch\",\n    \"message\": \"Israeli RSU income on Form 106 (\\u20aa94,695 \\u2248 $XX,XXX CAD, including prior-year adjustments) disagrees with T4 box 38 ($XX,XXX) by 49.3%. Reconcile vest schedules + FX rates \\u2014 the employer payroll group may have used a different methodology than the broker reporting, which CRA tends to query.\",\n    \"amount_cad\": 37441.24,\n    \"details\": {\n      \"t4_box38_cad\": 75877.18,\n      \"form_106_ils\": 94695.0,\n      \"form_106_cad\": 38435.94,\n      \"delta_pct\": 0.4934\n    }\n  },\n  {\n    \"id\": \"no_prior_baseline\",\n    \"code\": \"NoPriorBaseline\",\n    \"severity\": \"info\",\n    \"label\": \"No prior-year baseline\",\n    \"message\": \"No prior-year T1 data available \\u2014 YoY drift and slip-recurrence checks were skipped. Import last year's data (or wait until next year) for these to fire meaningfully.\",\n    \"amount_cad\": 0.0,\n    \"details\": {}\n  }\n]\n```\n\nWrite a 150–300 word summary. Then list the anomaly `id`s the filer should investigate first, in priority order (3–6 ids, fewer if there aren't that many).\n\n**Respond with valid JSON only**, matching exactly this schema:\n\n```json\n{\n  \"prose\": \"<150-300 word plain-English summary>\",\n  \"highlighted_ids\": [\"<id>\", \"<id>\", ...]\n}\n```\n\nRules:\n- Every id in `highlighted_ids` MUST appear above. Do not invent ids.\n- Only mention dollar amounts that appear in the anomalies' `amount_cad` or `details` fields. Do not invent figures.\n- If the list is empty, `highlighted_ids` must be `[]` and prose should reassure the filer.\n- Return JSON only. No markdown fence, no preamble.",
+  "rubric": {
+    "expected_signals": [
+      "t1135",
+      "form 106",
+      "box 38",
+      "spousal split",
+      "quarterly tax",
+      "rental tax",
+      "ftc without",
+      "expected artifact",
+      "completeness gate",
+      "no prior"
+    ],
+    "gt_forbidden": [
+      "Filed (GT)",
+      "AggregatorVsGT",
+      "actual_balance",
+      "gt_diff",
+      "estimator drift"
+    ],
+    "schema": "markdown",
+    "expected_chars_range": [
+      100,
+      1500
+    ]
+  },
+  "captured_at": "2026-05-17T11:18:46",
+  "source_repo": "github.com/<user>/Taxes",
+  "source_module": "scripts/snapshot_eval_prompts.py::anomalies",
+  "sanitized": true,
+  "sanitized_at": "2026-05-17T11:18:46"
+}
