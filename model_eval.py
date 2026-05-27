@@ -609,7 +609,10 @@ TASKS = {
 }
 
 MAX_RETRIES = 1
-EVAL_TIMEOUT = 3600  # 1 hour - server restart on timeout
+# Per-task timeout. Anything > a few minutes means a hung/crashed model;
+# the outer eval would rather move on than block for an hour. Override
+# with --timeout if you have a slow big model that legitimately needs more.
+EVAL_TIMEOUT = 300  # 5 minutes
 MEMORY_WARNING_THRESHOLD = 80  # Skip/check if memory > 80%
 
 
@@ -1528,8 +1531,12 @@ def run_eval(
                 best_result = result
                 best_failure = failure_reason
                 best_diagnosis = diagnosis
-            
+
             if score >= 90:
+                break
+            # Retrying a deterministic CONTENT failure with the same prompt
+            # produces the same output. Only retry transport-layer failures.
+            if diagnosis.get("category") == FAIL_CONTENT:
                 break
 
         status = "ok" if best_score >= 90 else ("partial" if best_score >= 50 else "fail")
@@ -1629,7 +1636,10 @@ def main():
     parser.add_argument("--config-tasks", action="store_true", help="Load tasks from YAML config instead of hardcoded prompts")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging to console")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show raw model output for debugging quality")
+    global EVAL_TIMEOUT
+    parser.add_argument("--timeout", type=int, default=EVAL_TIMEOUT, help=f"Per-task timeout in seconds (default {EVAL_TIMEOUT})")
     args = parser.parse_args()
+    EVAL_TIMEOUT = args.timeout
 
     models_to_test = []
     

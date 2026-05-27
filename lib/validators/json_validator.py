@@ -182,7 +182,7 @@ def validate_detailed_json(data: Any, source_text: str = "") -> Tuple[int, str]:
     score += JSON_SCHEMA_WEIGHT
     
     # Check each item has required fields
-    valid_items = sum(1 for item in items if has_required_fields(item, REQUIRED_DETAILED_FIELDS))
+    valid_items = sum(1 for item in items if isinstance(item, dict) and has_required_fields(item, REQUIRED_DETAILED_FIELDS))
     if valid_items == len(items):
         score += JSON_COMPLETENESS_WEIGHT
     elif valid_items > 0:
@@ -191,8 +191,8 @@ def validate_detailed_json(data: Any, source_text: str = "") -> Tuple[int, str]:
     else:
         failures.append("no items with name + location")
     
-    # Check for duplicates
-    names = [item.get("name", "") for item in items]
+    # Check for duplicates (guard: some models return list of strings)
+    names = [item.get("name", "") if isinstance(item, dict) else str(item) for item in items]
     unique_names = set(n for n in names if n)
     if len(unique_names) < len(names):
         failures.append(f"{len(names) - len(unique_names)} duplicates")

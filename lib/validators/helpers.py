@@ -6,8 +6,8 @@ from typing import List, Tuple, Any
 
 
 def has_text_headers(text: str) -> bool:
-    """Check if text has ## headers."""
-    return bool(re.search(r'^##\s+\w+', text, re.MULTILINE))
+    """Check if text has ## or ### headers."""
+    return bool(re.search(r'^#{2,}\s+\w+', text, re.MULTILINE))
 
 
 def count_content_lines(text: str) -> int:

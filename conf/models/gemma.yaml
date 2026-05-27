@@ -39,13 +39,11 @@ prompts:
   # Twitter summarizer prompt (from twitter_summarizer.py)
   # Variables: {} for timeline
   summarize: |
-    Output the summary in bullet points. Use ## headers for topics.
+    Create a structured summary of this timeline. Start with a brief TL;DR paragraph that captures the overall narrative. Then organize events into topic sections with ## headers, using bullet points. Include who (@user mentions), what happened, and when. Use natural connecting language between related events.
 
     <timeline>
     {}
     </timeline>
-
-    Summarize the timeline. Use bullet points for facts.
 
   # Image renamer prompt (from image_renamer.py)
   # Variables: {} for text input

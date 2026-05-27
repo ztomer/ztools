@@ -186,7 +186,9 @@ def get_model_family(model: str) -> str:
 
     model_lower = model.lower()
 
-    if "qwen" in model_lower:
+    if "qwopus" in model_lower:
+        return "qwopus"
+    elif "qwen" in model_lower:
         return "qwen"
     elif "gemma" in model_lower:
         return "gemma"
@@ -253,7 +255,7 @@ def get_model_config(model: str) -> Dict:
                 "json": "Output JSON now. Use EXACT schema.",
                 "weekend_fixed": "Output JSON now. Use EXACT schema: {\"fixed_activities\": [{\"name\": \"str\", \"location\": \"str\", \"target_ages\": \"str\", \"price\": \"str\", \"weather\": \"str\"}]}\n\nExtract venues. Use exact fields. Output ONLY JSON.",
                 "weekend_transient": "Output JSON now. Schema: {\"transient_events\": [{\"name\": \"str\", \"location\": \"str\", \"target_ages\": \"str\", \"price\": \"str\", \"duration\": \"str\", \"weather\": \"str\", \"day\": \"str\"]}\n\nFind events. Use exact fields. Output ONLY JSON.",
-                "summarize": "Output a detailed summary with ## headers and bullet points.\n\n{}\n\nSummarize thoroughly.",
+                "summarize": "Create a structured summary of this timeline. Start with a brief TL;DR paragraph that captures the overall narrative. Then organize events into topic sections with ## headers, using bullet points. Include who (@user mentions), what happened, and when. Use natural connecting language between related events.\n\n{}\n",
                 "filename": "Output ONLY the filename (lowercase, underscores).",
                 "file_summary": "Output JSON array with path and desc fields.",
             },

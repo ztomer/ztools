@@ -1,12 +1,12 @@
 llm_url: http://localhost:1337
-default_model: qwen3.6-35b-a3b-mxfp4
+default_model: qwopus3.6-27b-v2-mlx-4bit
 
 best_models:
-  think: qwen3.6-35b-a3b-mxfp4
-  json: qwen3.6-35b-a3b-mxfp4
-  summarize: qwen3.6-35b-a3b-mxfp4
-  filename: nemotron-3-nano-omni-30b-a3b-mxfp4  # Fast (7-10s) + best quality
-  vlm: gemma-4-26b-a4b-it-4bit
+  think: qwopus3.6-27b-v2-mlx-4bit
+  json: qwopus3.6-27b-v2-mlx-4bit
+  summarize: qwopus3.6-27b-v2-mlx-4bit
+  filename: qwopus3.6-27b-v2-mlx-4bit
+  vlm: qwopus3.6-27b-v2-mlx-4bit
 
 timeouts:
   think: 600

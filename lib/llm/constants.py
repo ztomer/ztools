@@ -18,7 +18,7 @@ DEFAULT_MAX_TOKENS = 16000
 DEFAULT_TIMEOUT = 600
 
 # Model families for quirks
-MODEL_FAMILIES = ["qwen", "gemma", "nemotron", "laguna", "foundation"]
+MODEL_FAMILIES = ["qwopus", "qwen", "gemma", "nemotron", "laguna", "foundation"]
 
 # Timeouts per task type
 TIMEOUTS = {
