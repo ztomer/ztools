@@ -41,7 +41,8 @@ def check_source_extraction(items: List[Dict], source_text: str) -> float:
     matched = 0
     
     for item in items:
-        # Check if any field value is in source
+        if not isinstance(item, dict):
+            continue
         for value in item.values():
             if isinstance(value, str) and value.lower() in source_lower:
                 matched += 1
@@ -60,6 +61,9 @@ def get_source_matching_details(items: List[Dict], source_text: str) -> Dict:
     unmatched = []
     
     for item in items:
+        if not isinstance(item, dict):
+            unmatched.append(str(item)[:30])
+            continue
         name = item.get("name", "")
         item_matched = False
         
