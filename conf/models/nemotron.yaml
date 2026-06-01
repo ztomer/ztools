@@ -48,16 +48,19 @@ prompts:
     Output ONLY JSON. No extra text.
 
   summarize: |
-    Create a structured summary of this timeline. Start with a brief TL;DR paragraph that captures the overall narrative. Then organize events into topic sections with ## headers, using bullet points. Include who (@user mentions), what happened, and when. Use natural connecting language between related events.
+    Create a structured summary of this timeline.
+    Start with a brief overall paragraph capturing the main narrative.
+    Then organize events into topic sections with ## headers, using bullet points.
+    Include who (@user mentions), what happened, and when.
+    Use connecting phrases and narrative verbs to show how events relate.
 
     <timeline>
     {}
     </timeline>
 
   filename: |
-    Output ONLY the filename string (no JSON, no code blocks).
-    Use lowercase, underscores for spaces, no special characters.
-    Keep it under 50 characters.
+    Output ONLY the bare filename. No "here is", no prefixes, no quotes, no explanation of any kind. Just the raw string.
+    Lowercase, underscores, max 50 chars.
     
     TEXT: {}
 

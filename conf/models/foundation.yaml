@@ -41,7 +41,11 @@ prompts:
   # Twitter summarizer prompt (from twitter_summarizer.py)
   # Variables: {} for timeline
   summarize: |
-    Create a structured summary of this timeline. Start with a brief TL;DR paragraph that captures the overall narrative. Then organize events into topic sections with ## headers, using bullet points. Include who (@user mentions), what happened, and when. Use natural connecting language between related events.
+    Create a structured summary of this timeline.
+    Start with a brief overall paragraph capturing the main narrative.
+    Then organize events into topic sections with ## headers, using bullet points.
+    Include who (@user mentions), what happened, and when.
+    Use connecting phrases and narrative verbs to show how events relate.
 
     <timeline>
     {}

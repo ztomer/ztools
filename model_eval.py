@@ -1638,6 +1638,7 @@ def main():
     parser.add_argument("--verbose", "-v", action="store_true", help="Show raw model output for debugging quality")
     global EVAL_TIMEOUT
     parser.add_argument("--timeout", type=int, default=EVAL_TIMEOUT, help=f"Per-task timeout in seconds (default {EVAL_TIMEOUT})")
+    parser.add_argument("--quality", action="store_true", help="Use quality.py dimension-based scoring instead of old validators")
     args = parser.parse_args()
     EVAL_TIMEOUT = args.timeout
 
@@ -1792,7 +1793,40 @@ def main():
         
         console.print(f"[dim]  ↳ Memory: {mem_pct}%, Server: OK[/dim]")
         
-        results = run_eval(model, tasks=tasks_to_run, backend=backend, verbose=args.verbose)
+        if args.quality:
+            from lib import quality as qm
+            # Filter cases to requested task if --task was given
+            cases = qm.ALL_TEST_CASES
+            if args.task:
+                cases = [c for c in cases if c.task == args.task]
+            scorecards = qm.run_suite([model], cases, verbose=True)
+            # Convert ScoreCards to model_eval result format
+            results = []
+            for sc in scorecards:
+                failures = [f for d in sc.dimensions for f in d.failures]
+                composite = sc.composite
+                status = "ok" if composite >= 90 else ("partial" if composite >= 50 else "fail")
+                results.append({
+                    "task": sc.task,
+                    "case_id": sc.case_id,
+                    "status": status,
+                    "quality_score": round(composite, 1),
+                    "time": round(sc.elapsed, 1),
+                    "error": None,
+                    "failure_reason": "; ".join(failures) if failures else "",
+                    "failure_category": None,
+                    "failure_evidence": "",
+                    "result": {"model": model, "time": sc.elapsed, "content": sc.output},
+                })
+            # Print per-task averages
+            by_task = {}
+            for r in results:
+                bt = by_task.setdefault(r["task"], [])
+                bt.append(r)
+            qs_parts = "  ".join(f"{t}={r[0]['quality_score']:.0f}%" for t, r in by_task.items())
+            console.print(f"[dim]  ↳ Quality scores: {qs_parts}[/dim]")
+        else:
+            results = run_eval(model, tasks=tasks_to_run, backend=backend, verbose=args.verbose)
         scores = [r["quality_score"] for r in results]
         avg = sum(scores) / len(scores) if scores else 0
         
@@ -1806,6 +1840,9 @@ def main():
         for r in results:
             task = r["task"]
             score = r["quality_score"]
+            # Extend best_scores with quality task names if needed
+            if task not in best_scores:
+                best_scores[task] = -1
             if score > best_scores[task]:
                 best_scores[task] = score
                 best_models[task] = model
