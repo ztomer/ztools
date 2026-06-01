@@ -530,8 +530,19 @@ def summarize_with_llm(
                 if thinking:
                     print(f"[llm] {try_model}: included thinking block")
                     return merge_thinking_with_summary(thinking, cleaned)
-                # No XML thinking - strip plaintext thinking
-                return strip_thinking(cleaned)
+                cleaned = strip_thinking(cleaned)
+                # Validate summary quality
+                if cleaned:
+                    n_headers = len(re.findall(r'^#{2,}\s+\w+', cleaned, re.MULTILINE))
+                    n_bullets = cleaned.count('- ') + cleaned.count('* ')
+                    n_users = len(re.findall(r'@\w+', cleaned))
+                    if n_headers == 0:
+                        print(f"   [WARN] Summary has no ## headers — may be unstructured")
+                    if n_bullets < 3:
+                        print(f"   [WARN] Summary has only {n_bullets} bullet points — may lack detail")
+                    if len(cleaned.strip()) < 100:
+                        print(f"   [WARN] Summary is very short ({len(cleaned.strip())} chars)")
+                return cleaned
             elif result and "error" in result:
                 print(f"[llm] {try_model} error: {result['error'][:50]}")
         except Exception as e:

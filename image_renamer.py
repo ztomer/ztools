@@ -234,6 +234,14 @@ def query_llm_for_filename(
             if content and len(content) >= 2:
                 content = content.strip().lower()
 
+                # Strip common instruction/explanation prefixes from LLM outputs
+                for prefix in ("here is a filename:", "here is the filename:", "here is:",
+                               "here's the filename:", "the filename is:", "filename:",
+                               "rename to:", "output:"):
+                    if content.startswith(prefix):
+                        content = content[len(prefix):].strip()
+                        break
+
                 words = re.findall(r'[a-z]+', content)
                 if not words:
                     continue
@@ -388,7 +396,12 @@ def rename_image(
                 new_name = None
 
             if new_name:
-                if new_name in ("text", "file", "image", "unnamed", "output", "filename", "none"):
+                GENERIC_NAMES = {"text", "file", "image", "unnamed", "output", "filename",
+                                 "none", "screenshot", "document", "note",
+                                 "filename_txt", "file_txt", "text_txt",
+                                 "output_txt", "note_txt", "document_txt",
+                                 "screenshot_png", "image_png", "unnamed_png"}
+                if new_name in GENERIC_NAMES:
                     print(f"   [WARN] Generic LLM result: {new_name}, using fallback")
                     new_name = None
                 elif len(new_name) < 4:
