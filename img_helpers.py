@@ -1,0 +1,115 @@
+"""
+Helper utilities for image processing and filename generation.
+"""
+
+import re
+from pathlib import Path
+from lib.tui import STEP, WARN, FAIL
+from typing import Optional
+from PIL import Image
+import pytesseract
+
+# Point pytesseract at Homebrew's tesseract binary if not on PATH
+_TESSERACT_BREW = "/opt/homebrew/bin/tesseract"
+if Path(_TESSERACT_BREW).exists():
+    pytesseract.pytesseract.tesseract_cmd = _TESSERACT_BREW
+
+# Generic LLM outputs that should be rejected (not real filenames)
+_GENERIC_BASES = frozenset({
+    "text", "file", "image", "unnamed", "output", "filename",
+    "none", "screenshot", "document", "note", "empty", "blank",
+})
+_GENERIC_EXTENSIONS = frozenset({
+    "txt", "png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif", "webp",
+})
+_GENERIC_NAMES = _GENERIC_BASES | frozenset(
+    f"{base}_{ext}" for base in _GENERIC_BASES for ext in _GENERIC_EXTENSIONS
+)
+
+image_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".webp"}
+
+
+def clean_filename(text: str, max_length: int = 50) -> str:
+    cleaned = re.sub(r"[^\w\s-]", "", text)
+    cleaned = re.sub(r"[-\s]+", "_", cleaned)
+    cleaned = cleaned.strip("_").lower()
+
+    if len(cleaned) > max_length:
+        cleaned = cleaned[:max_length].rstrip("_")
+
+    return cleaned if cleaned else "unnamed"
+
+
+def extract_first_line(image_path: Path) -> Optional[str]:
+    try:
+        image = Image.open(image_path)
+        text = pytesseract.image_to_string(image)
+        lines = [line.strip() for line in text.split("\n") if line.strip()]
+        if lines:
+            return lines[0]
+        return None
+    except Exception as e:
+        print(f"{FAIL} {image_path.name}: {e}")
+        return None
+
+
+def extract_full_text(image_path: Path) -> Optional[str]:
+    try:
+        image = Image.open(image_path)
+        text = pytesseract.image_to_string(image)
+        return text.strip() if text.strip() else None
+    except Exception as e:
+        print(f"{FAIL} {image_path.name}: {e}")
+        return None
+
+
+def is_meaningful_text(text: str, min_word_count: int = 2) -> bool:
+    if not text:
+        return False
+
+    text = text.strip()
+    if not text:
+        return False
+
+    words = text.split()
+    if len(words) == 1 and len(text) > 8:
+        if text.isalnum() and text[:2].isupper():
+            return False
+
+    if text.isupper() and len(text) > 4 and " " not in text:
+        return False
+
+    word_like = sum(1 for w in words if len(w) > 2 and any(c.isalpha() for c in w))
+    return word_like >= min_word_count
+
+
+def is_non_human_readable(text: str) -> bool:
+    if not text:
+        return True
+
+    text = text.strip()
+    if len(text) < 3:
+        return True
+
+    if re.match(r'^HF[A-Za-z0-9]{7,}$', text) or re.match(r'^HH[A-Za-z0-9]{7,}$', text):
+        return True
+
+    if text.startswith("@") and "_" not in text and len(text) > 1:
+        return True
+
+    if len(text) <= 3 and text.isupper():
+        return True
+
+    if " " not in text:
+        if text.isupper() and any(c.isdigit() for c in text):
+            return True
+
+    return False
+
+
+def _strip_instruction_prefix(content: str) -> str:
+    return re.sub(
+        r"^\s*(?:(?:here(?: is|'s)?(?: a| the)?|the|suggested|renamed? to)?\s*"
+        r"(?:filename|file|name|output|result|response)?(?:\s+is)?\s*:\s*)",
+        '', content, count=1, flags=re.IGNORECASE
+    ).strip()

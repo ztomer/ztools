@@ -82,7 +82,7 @@ def call(
         response.raise_for_status()
         
         data = response.json()
-        result["time"] = time.time() - start
+        result["time"] = round(time.time() - start, 1)
         
         if "message" in data:
             result["content"] = data["message"].get("content", "")
@@ -112,7 +112,7 @@ def is_server_running(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> boo
             timeout=5,
         )
         return response.status_code == 200
-    except:
+    except Exception:
         return False
 
 
@@ -125,5 +125,5 @@ def get_models(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> List[str]:
         )
         data = response.json()
         return [m["model"] for m in data.get("models", [])]
-    except:
+    except Exception:
         return []

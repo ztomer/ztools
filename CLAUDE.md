@@ -5,6 +5,16 @@
 
 ## Key Rules
 
+### File Size Limit
+- No file may exceed 500 lines of code. Enforced by split modules and shim files. Pre-existing shims:
+  - `lib/config.py` → `lib/config_core.py`, `lib/config_getters.py`, `lib/config_tasks.py`
+  - `lib/quality.py` → `lib/quality_models.py`, `lib/quality_scorers.py`, `lib/quality_runner.py`, `lib/quality_report.py`, `lib/quality_entry.py`
+  - `lib/osaurus_lib.py` → `lib/llm/` submodules + shim
+  - `image_renamer.py` → `img_helpers.py`, `img_llm.py`, `img_renamer.py`
+  - `twitter_summarizer.py` → `twit_cookies.py`, `twit_browser.py`, `twit_summarize.py`, `twit_output.py`, `twit_main.py`
+  - `weekend_planner.py` → `weekend_config.py`, `weekend_data.py`, `weekend_prompts.py`, `weekend_llm.py`, `weekend_output.py`, `weekend_main.py`
+  - `model_eval.py` → `eval_tasks.py`, `eval_run.py`, `eval_report.py`, `eval_failures.py`, `eval_validate.py`, `eval_main.py`
+
 ### Model Evals
 - Use quick mode for iteration: `--quick --task <task>`
 - Add discovered learnings to docs/MODEL_QUIRKS.md immediately when found

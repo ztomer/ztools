@@ -184,11 +184,9 @@ print(response, flush=True)
         elif stdout.strip():
             return stdout.strip()
         else:
-            logger.warning(f"MLX failed (rc={result.returncode}): {stderr[:300] if stderr else 'no output'}")
-            return None
+            logger.warning(f"MLX generate failed (rc={result.returncode}): {stderr[:300] if stderr else 'no output'}")
     except Exception as e:
         logger.error(f"MLX generate failed: {type(e).__name__}: {e}")
-        return None
 
     # Fallback: main.py
     main_py = model_path / "main.py"

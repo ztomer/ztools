@@ -141,7 +141,7 @@ def load_tasks_from_config(model: str) -> Dict[str, Any]:
     tasks = TASKS.copy()
 
     # Try to load from config
-    config_path = Path("conf/config.yaml")
+    config_path = Path(__file__).resolve().parent.parent / "conf" / "config.yaml"
     if config_path.exists():
         try:
             with open(config_path) as f:

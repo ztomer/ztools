@@ -47,7 +47,7 @@ def test_get_model_top_keys_gemma():
     """Test gemma top keys from yaml config."""
     clear_model_config_cache()
     keys = get_model_top_keys("gemma-4-31b-it-jang_4m")
-    assert "weekend_forecast" in keys["transient"]
+    assert "transient_events" in keys["transient"]
 
 
 def test_get_model_top_keys_default():

@@ -18,6 +18,7 @@ from typing import List, Dict, Optional, Tuple, Callable
 
 from lib.config import clear_model_config_cache, get_model_prompt, get_model_family, Task
 from lib.osaurus_lib import call as llm_call, get_models
+from lib.tui import STEP, WARN, FAIL
 
 
 # =============================================================
@@ -289,14 +290,12 @@ def run_benchmark(models: List[str] = None, verbose: bool = True):
         ("file_summary", Task.FILE_SUMMARY, FILE_SUMMARY_CASES, score_file_summary),
     ]
 
-    print(f"{'='*80}")
     print(f"  QUALITY BENCHMARK - {len(models)} models × {sum(len(c[2]) for c in ALL_CASES)} cases")
-    print(f"{'='*80}")
 
     all_results = {}
 
     for model in models:
-        print(f"\n  ── Model: {model} ──")
+        print(f"\n  Model: {model}")
         model_scores = {"human": {}, "auto": {}}
         model_total_human = 0
         model_total_auto = 0
@@ -308,7 +307,7 @@ def run_benchmark(models: List[str] = None, verbose: bool = True):
 
             prompt = get_model_prompt(model, task_enum)
             if not prompt:
-                print(f"SKIP (no prompt)")
+                print(f"{STEP} SKIP (no prompt)")
                 continue
 
             for case in cases:
@@ -318,7 +317,7 @@ def run_benchmark(models: List[str] = None, verbose: bool = True):
                 elapsed = time.time() - t0
 
                 if output is None:
-                    print(f"ERROR (call failed)")
+                    print(f"{FAIL} ERROR (call failed)")
                     continue
 
                 human_score, _ = scorer(output, case)
@@ -329,7 +328,7 @@ def run_benchmark(models: List[str] = None, verbose: bool = True):
                 model_count += 1
 
                 if verbose:
-                    prefix = "✓" if human_score >= 70 else ("△" if human_score >= 30 else "✗")
+                    prefix = STEP if human_score >= 70 else (WARN if human_score >= 30 else FAIL)
                     print(f"\n      {prefix} H:{human_score:3} A:{auto_score:3}  {elapsed:.1f}s  {case['description']}")
                     if human_score < 70:
                         print(f"         output: {repr(output[:80])}")
@@ -347,16 +346,14 @@ def run_benchmark(models: List[str] = None, verbose: bool = True):
                 "gap": avg_auto - avg_human,
                 "count": model_count,
             }
-            print(f"\n    ── Summary for {model} ──")
+            print(f"\n    Summary for {model}:")
             print(f"      Avg Human: {avg_human:.0f}/100")
             print(f"      Avg Auto:  {avg_auto:.0f}/100")
             print(f"      Gap:       {avg_auto - avg_human:+2.0f} pts")
 
     # Cross-model comparison
     if len(all_results) > 1:
-        print(f"\n{'='*80}")
-        print(f"  CROSS-MODEL COMPARISON")
-        print(f"{'='*80}")
+        print(f"\n  CROSS-MODEL COMPARISON")
         print(f"  {'Model':35s} {'Human':>7} {'Auto':>7} {'Gap':>5}")
         print(f"  {'-'*35} {'-'*7} {'-'*7} {'-'*5}")
         for model, res in sorted(all_results.items(), key=lambda x: -x[1]["avg_human"]):

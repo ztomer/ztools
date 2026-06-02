@@ -13,7 +13,7 @@ def extract_json(content: str, model: str = None) -> Optional[Any]:
     # Try direct parse first
     try:
         return json.loads(content)
-    except:
+    except Exception:
         pass
     
     # Try extracting from markdown code blocks
@@ -21,7 +21,7 @@ def extract_json(content: str, model: str = None) -> Optional[Any]:
     if match:
         try:
             return json.loads(match.group(1))
-        except:
+        except Exception:
             pass
     
     # Try finding JSON array or object
@@ -29,7 +29,7 @@ def extract_json(content: str, model: str = None) -> Optional[Any]:
     if match:
         try:
             return json.loads(match.group(1))
-        except:
+        except Exception:
             pass
     
     return None
