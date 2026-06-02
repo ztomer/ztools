@@ -37,7 +37,7 @@ from img_llm import (
     MLX_MODELS_DIR,
 )
 from lib.osaurus_lib import check_llm_availability
-from lib.tui import STEP, WARN, FAIL
+from lib.tui import STEP, FAIL
 
 __all__ = [
     "ensure_llm_running",

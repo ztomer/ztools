@@ -9,7 +9,7 @@ console = Console(force_terminal=True, force_interactive=True)
 
 
 def print_header(label, value):
-    console.print(f"[bold cyan]{label}:[/bold cyan] {value}")
+    console.print(f"{label}: {value}")
 
 
 def print_step(message):
@@ -17,11 +17,11 @@ def print_step(message):
 
 
 def print_info(label, value):
-    console.print(f"  [cyan]{label}:[/cyan] {value}")
+    console.print(f"  {label}: {value}")
 
 
 def print_warning(message):
-    console.print(f"[yellow]  {WARN}  {message}[/yellow]")
+    console.print(f"  {WARN}  {message}")
 
 
 def print_summary(status, fixed_count, transient_count, filepath, elapsed_time):

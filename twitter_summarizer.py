@@ -10,22 +10,11 @@ Shim that re-exports from smaller sub-modules.
 """
 
 import argparse
-import hashlib
-import json
 import os
 import re
-import shutil
-import sqlite3
-import subprocess
 import sys
-import tempfile
-import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-
-from rich.console import Console
-
-console = Console()
 
 try:
     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -39,12 +28,8 @@ except ImportError:
 
 from lib import init_config
 from lib.osaurus_lib import get_best_model
-from lib.mlx_lib import (
-    find_mlx_model,
-    find_best_mlx_model,
-)
 from lib.config import Task
-from lib.tui import STEP, WARN, FAIL
+from lib.tui import STEP, WARN
 
 from twit_cookies import (
     CHROME_COOKIES_DB,
@@ -84,7 +69,6 @@ from twit_output import (
 DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", get_best_model(Task.SUMMARIZE))
 
 __all__ = [
-    "console",
     "MLX_PREFERRED",
     "STATE_FILE",
     "DEBUG_CACHE_FILE",
@@ -184,7 +168,7 @@ def main() -> None:
     output_dir = Path(args.output).expanduser()
 
     model = args.model or os.environ.get('OLLAMA_MODEL', 'default')
-    console.print(f"[bold cyan]Using model:[/bold cyan] {model}")
+    print(f"{STEP} Using model: {model}")
 
     if args.clean:
         clean_folder(output_dir)

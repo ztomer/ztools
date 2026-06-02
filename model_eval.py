@@ -16,13 +16,10 @@ import sys
 import re
 import json
 import time
-import statistics
 import argparse
 import os
 from pathlib import Path
-from typing import Tuple, Any, List, Dict
 from rich.console import Console
-from rich.table import Table
 
 from lib import init_config
 from lib.osaurus_lib import (
@@ -32,15 +29,6 @@ from lib.osaurus_lib import (
 )
 
 from lib.tui import STEP, WARN, FAIL
-
-from lib.validators_lib import (
-    validate_detailed_json,
-    validate_summary,
-    validate_filename,
-    has_item_details,
-    has_text_headers,
-    count_content_lines,
-)
 
 from eval_tasks_core import (
     TASKS,
@@ -137,7 +125,7 @@ def check_memory_safe() -> bool:
     """Check if memory is safe to run eval."""
     mem_pct = get_memory_percent()
     if mem_pct > MEMORY_WARNING_THRESHOLD:
-        console.print(f"[yellow]  !  Memory at {mem_pct}% - may cause OOM[/yellow]")
+        console.print(f"{WARN} Memory at {mem_pct}% - may cause OOM")
         return False
     return True
 
@@ -161,7 +149,7 @@ def monitor_memory_loop(interval: int = 30):
         while getattr(threading.current_thread(), "running", True):
             mem = get_memory_percent()
             if mem > MEMORY_WARNING_THRESHOLD:
-                console.print(f"[yellow]  !  Memory at {mem}%[/yellow]")
+                console.print(f"{WARN} Memory at {mem}%")
             time.sleep(interval)
 
     t = threading.Thread(target=_monitor, daemon=True)
@@ -212,7 +200,7 @@ def update_config(best_models: dict):
     import yaml
     config_path = Path(__file__).parent / "conf" / "config.yaml"
     if not config_path.exists():
-        console.print("[yellow]Config file not found, skipping update.[/yellow]")
+        console.print(f"{WARN} Config file not found, skipping update.")
         return
 
     with open(config_path, "r") as f:
@@ -228,7 +216,7 @@ def update_config(best_models: dict):
     with open(config_path, "w") as f:
         yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
-    console.print("[green]Updated conf/config.yaml with best models.[/green]")
+    console.print(f"{STEP} Updated conf/config.yaml with best models.")
 
 
 def main():
@@ -254,24 +242,24 @@ def main():
         for m in osaurus_models:
             models_to_test.append((m, "osaurus"))
     else:
-        console.print("[yellow]Warning: Osaurus server not running[/yellow]")
+        console.print(f"{WARN} Osaurus server not running")
 
     if args.model:
         models_to_test = [(m, b) for m, b in models_to_test if m == args.model]
 
     if not models_to_test:
-        console.print("[red]No models found[/red]")
+        console.print(f"{FAIL} No models found")
         sys.exit(1)
 
-    console.print(f"[green]Found {len(models_to_test)} models to test[/green]")
+    console.print(f"{STEP} Found {len(models_to_test)} models to test")
 
     tasks_to_run = TASKS
     if args.task:
         if args.task not in TASKS:
-            console.print(f"[red]Unknown task: {args.task}. Available: {list(TASKS.keys())}[/red]")
+            console.print(f"{FAIL} Unknown task: {args.task}. Available: {list(TASKS.keys())}")
             sys.exit(1)
         tasks_to_run = {args.task: TASKS[args.task]}
-        console.print(f"[yellow]Running only task: {args.task}[/yellow]")
+        console.print(f"{WARN} Running only task: {args.task}")
 
     from lib.config import build_tasks_from_model
 
@@ -281,17 +269,17 @@ def main():
         if args.task:
             if args.task in config_tasks:
                 tasks_to_run = {args.task: config_tasks[args.task]}
-                console.print(f"[dim]Using config task: {args.task}[/dim]")
+                console.print(f"{STEP} Using config task: {args.task}")
             else:
-                console.print(f"[red]Task '{args.task}' not in config[/red]")
+                console.print(f"{FAIL} Task '{args.task}' not in config")
         else:
             tasks_to_run = config_tasks
-        console.print(f"[dim]Loaded {len(tasks_to_run)} tasks from config[/dim]")
+        console.print(f"{STEP} Loaded {len(tasks_to_run)} tasks from config")
     else:
-        console.print("[yellow]Config loading failed, using minimal tasks[/yellow]")
+        console.print(f"{WARN} Config loading failed, using minimal tasks")
 
     if args.quick:
-        console.print(f"[yellow]Quick mode: single run, no retries[/yellow]")
+        console.print(f"{STEP} Quick mode: single run, no retries")
         orig_run_eval = run_eval
 
         def quick_run_eval(model, backend="osaurus", **kwargs):
@@ -317,24 +305,12 @@ def main():
     def flush_between_models(prev_model: str, next_model: str) -> None:
         import time
         import subprocess
-        console.print(f"[dim]  \u21b3 Flushing {prev_model} \u2192 {next_model}...[/dim]")
-
-        debug_log_paths = [
-            f"/tmp/osaurus_debug_{next_model.replace('-', '_').replace('.', '_')}.log",
-            "/tmp/osaurus_ttft_trace.log",
-            "/tmp/osaurus_chat_perf.log",
-        ]
-        for path in debug_log_paths:
-            try:
-                subprocess.run(["touch", path], capture_output=True)
-            except Exception:
-                pass
-        console.print(f"[dim]  \u21b3 Debug logs: {debug_log_paths[0]}[/dim]")
+        console.print(f"{STEP} Flushing {prev_model} -> {next_model}...")
 
         try:
             r = call(next_model, [{"role": "user", "content": "ok"}], timeout=30)
             if r.get("error"):
-                console.print(f"[dim]  \u21b3 Flush failed, attempting restart...[/dim]")
+                console.print(f"{WARN} Flush failed, attempting restart...")
                 try:
                     subprocess.run(["osascript", "-e", 'quit app "osaurus"'], capture_output=True)
                 except Exception:
@@ -350,12 +326,12 @@ def main():
                         import requests
                         resp = requests.get("http://localhost:1337/api/tags", timeout=2)
                         if resp.status_code == 200:
-                            console.print(f"[dim]  \u21b3 Server restarted[/dim]")
+                            console.print(f"{STEP} Server restarted")
                             break
                     except Exception:
                         time.sleep(2)
         except Exception as e:
-            console.print(f"[dim]  \u21b3 Flush error: {e}[/dim]")
+            console.print(f"{FAIL} Flush error: {e}")
         time.sleep(2)
 
     prev_model = None
@@ -364,22 +340,20 @@ def main():
             flush_between_models(prev_model, model)
         prev_model = model
 
-        console.print("")
-
         mem_pct = get_memory_percent()
         model_mem_gb = estimate_model_memory(model)
         avail_mem_gb = (100 - mem_pct) / 100 * 64
 
         if mem_pct > MEMORY_WARNING_THRESHOLD:
-            console.print(f"[yellow]  !  Memory at {mem_pct}% - model may be slow[/yellow]")
+            console.print(f"{WARN} Memory at {mem_pct}% - model may be slow")
 
         if model_mem_gb > avail_mem_gb * 0.8:
-            console.print(f"[yellow]  !  Model needs ~{model_mem_gb}GB, low memory - will be slower[/yellow]")
+            console.print(f"{WARN} Model needs ~{model_mem_gb}GB, low memory - will be slower")
 
         if not is_server_responsive():
-            console.print(f"[yellow]  !  Server not responsive - attempting restart...[/yellow]")
+            console.print(f"{FAIL} Server not responsive - attempting restart...")
 
-        console.print(f"[dim]  \u21b3 Memory: {mem_pct}%, Server: OK[/dim]")
+        console.print(f"{STEP} Memory: {mem_pct}%, Server: OK")
 
         if args.quality:
             from lib import quality as qm
@@ -393,17 +367,17 @@ def main():
                 lst = task_avgs.setdefault(r["task"], [])
                 lst.append(r["quality_score"])
             summary = "  ".join(f"{t}={int(round(sum(s)/len(s)))}%" for t, s in task_avgs.items())
-            console.print(f"[dim]  \u21b3 Quality scores: {summary}[/dim]")
+            console.print(f"{STEP} Quality scores: {summary}")
         else:
             results = run_eval(model, tasks=tasks_to_run, backend=backend, verbose=args.verbose)
 
         scores = [r["quality_score"] for r in results]
         if not scores:
-            console.print(f"[bold]{STEP} {model} ({backend}):[/bold] 0 tasks")
+            console.print(f"{STEP} {model} ({backend}): 0 tasks")
         else:
             avg = sum(scores) / len(scores)
             status = STEP if all(s >= 90 for s in scores) else (WARN if any(s >= 50 for s in scores) else FAIL)
-            console.print(f"[bold]{status} {model} ({backend}):[/bold] {avg:.0f}% avg")
+            console.print(f"{status} {model} ({backend}): {avg:.0f}% avg")
 
         all_results.append({'model': model, 'backend': backend, 'results': results})
         for r in results:
@@ -415,7 +389,11 @@ def main():
                 best_scores[task] = score
                 best_models_dict[task] = model
 
-    console.print("[bold]Best Models per Task:[/bold]")
+    _print_results(all_results, best_scores, best_models_dict)
+
+
+def _print_results(all_results, best_scores, best_models_dict):
+    console.print("\nBest Models per Task:")
     for task, model in best_models_dict.items():
         console.print(f"  {task}: {model} ({best_scores[task]}%)")
 
@@ -438,7 +416,7 @@ def main():
 
     winners = compute_task_winners(all_results)
     console.print("")
-    console.print("[bold]Task Winners:[/bold]")
+    console.print("Task Winners:")
     for task, (model, score) in sorted(winners.items()):
         console.print(f"  {task}: {model} ({score}%)")
 
@@ -457,7 +435,7 @@ def main():
             "best_scores": best_scores,
             "best_models": best_models_dict,
         }, f, indent=2)
-    console.print(f"[green]Saved to {results_file}[/green]")
+    console.print(f"{STEP} Saved to {results_file}")
 
 
 if __name__ == "__main__":

@@ -6,15 +6,11 @@ Contains the main eval loop, model calling, and validation orchestration.
 
 import json
 import re
-import subprocess
-import time
-from typing import Any, Dict, List
 from rich.console import Console
 from lib.osaurus_lib import call
 from eval_tasks_core import TASKS, _extract_items_from_text
 from eval_failures import FAIL_INFRA, FAIL_CONTENT, FAIL_NONE, _classify_failure
 from eval_validate import safe_content
-from lib.validators_lib import has_text_headers, count_content_lines
 from lib.tui import STEP, WARN, FAIL
 
 
@@ -78,12 +74,12 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
         if debug and source and "weekend" in task_name and items_for_debug:
             from lib.validators_lib import get_source_matching_details
             details = get_source_matching_details(items_for_debug, source)
-            console.print(f"[dim]Source matching for {task_name}:[/dim]")
-            console.print(f"[dim]  Matched: {len(details['matched'])}/{len(details['matched']) + len(details['unmatched'])} ({details['ratio']*100:.0f}%)[/dim]")
+            console.print(f"  Source matching for {task_name}:")
+            console.print(f"    Matched: {len(details['matched'])}/{len(details['matched']) + len(details['unmatched'])} ({details['ratio']*100:.0f}%)")
             if details['unmatched']:
-                console.print(f"[dim]  Unmatched items:[/dim]")
+                console.print(f"    Unmatched items:")
                 for item in details['unmatched'][:3]:
-                    console.print(f"[dim]    - {item['name']} (terms: {item.get('terms', [])[:3]})[/dim]")
+                    console.print(f"      - {item['name']} (terms: {item.get('terms', [])[:3]})")
 
         if isinstance(validated, tuple):
             score, failure_reason = validated
@@ -167,18 +163,11 @@ def run_eval(
     tasks = tasks or TASKS
     results = []
 
-    console.print(f"[bold cyan]Testing {model} ({backend})[bold cyan]")
-
-    debug_log = f"/tmp/osaurus_debug_{model.replace('-', '_').replace('.', '_')}.log"
-    try:
-        subprocess.run(["touch", debug_log], capture_output=True)
-        console.print(f"[dim]  \u21b3 Debug log: {debug_log}[/dim]")
-    except Exception:
-        pass
+    console.print(f"{STEP} Testing {model} ({backend})")
 
     for task_name, task_cfg in tasks.items():
         if "messages" not in task_cfg:
-            console.print(f"[yellow]  !  Skipping '{task_name}' (no messages key)[/yellow]")
+            console.print(f"{WARN} Skipping '{task_name}' (no messages key)")
             continue
         best_score = -1
         best_result = None
@@ -247,7 +236,7 @@ def run_eval(
         retry_tag = " (2nd try)" if first_attempt_failed else ""
         category_tag = f" [{category}]" if category else ""
         fail_info = f" - {best_failure}" if best_failure else ""
-        evidence_info = f"\n    \u21b3 {best_diagnosis['evidence']}" if best_diagnosis.get("evidence") else ""
+        evidence_info = f"\n    - {best_diagnosis['evidence']}" if best_diagnosis.get("evidence") else ""
         time_taken = best_result.get('time') if best_result else None
         time_taken_str = f"{time_taken}s" if time_taken is not None else "N/A"
         console.print(
@@ -257,13 +246,13 @@ def run_eval(
         if verbose and best_result:
             content = safe_content(best_result)[:500]
             if content:
-                console.print(f"[dim]  Raw output: {content}[/dim]")
+                console.print(f"  Raw output: {content}")
 
     weekend_tasks = [k for k in tasks.keys() if "weekend" in k]
     if weekend_tasks:
         from lib.validators_lib import get_source_matching_details
         console.print("")
-        console.print("[bold]Quality Check Summary:[/bold]")
+        console.print("Quality Check Summary:")
         for r in results:
             task_name = r["task"]
             if task_name not in weekend_tasks:
@@ -282,6 +271,6 @@ def run_eval(
             console.print(f"  {task_name}: {matched}/{total} items from source ({ratio:.0f}%)")
             if details["unmatched"]:
                 names = [u["name"] for u in details["unmatched"][:2]]
-                console.print(f"    ! Not from source: {names}")
+                console.print(f"    {WARN} Not from source: {names}")
 
     return results

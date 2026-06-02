@@ -10,9 +10,9 @@ import os
 import statistics
 import time
 from pathlib import Path
-from typing import Dict, List, Any
 from rich.console import Console
 
+from lib.tui import STEP
 
 console = Console()
 
@@ -22,7 +22,7 @@ def print_cross_model_comparison(all_results: list) -> None:
     if not all_results:
         return
 
-    console.print("\n  Cross-Model Comparison")
+    console.print(f"\n{STEP} Cross-Model Comparison")
 
     models = [r["model"] for r in all_results]
     if not models:
@@ -229,6 +229,7 @@ def print_historical_trends() -> None:
         return
 
     console.print("")
+    console.print(f"{STEP} Historical Trends")
     console.print(f"{'Model':<20} | {'Runs':>5} | {'Mean':>6} | {'Stdev':>6} | {'Trend'}")
 
     for model, s in sorted(stats.items(), key=lambda x: x[1]["mean"], reverse=True):
@@ -291,6 +292,7 @@ def print_verbosity(verbosity: dict) -> None:
         return
 
     console.print("")
+    console.print(f"{STEP} Response Length per Task")
     first_model = next(iter(verbosity.keys()))
     tasks = verbosity[first_model].keys()
 
@@ -348,6 +350,7 @@ def print_error_rates(rates: dict) -> None:
         return
 
     console.print("")
+    console.print(f"{STEP} Error Rates")
     console.print(f"{'Model':<20} | {'Infra':>6} | {'Quality':>8} | {'Success':>8} | {'Rate'}")
 
     for model, r in sorted(rates.items(), key=lambda x: x[1]["success_rate"], reverse=True):
@@ -469,4 +472,4 @@ def export_to_csv(all_results: list, output_file: str = None) -> None:
 
                 writer.writerow([model, res.get("task"), score, status, time_s, failure, category])
 
-    print(f"Exported to {output_file}")
+    console.print(f"{STEP} Exported to {output_file}")

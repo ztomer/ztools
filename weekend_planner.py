@@ -1,36 +1,14 @@
 #!/usr/bin/env python3
 import os
-import sys
-import datetime
 import time
-import json
-import yaml
-import re
-import concurrent.futures
 import argparse
-import requests
-from pathlib import Path
-from ddgs import DDGS
 
 
 from lib import init_config
-from lib.config import get_model_top_keys, get_model_field_mapping, get_model_quirks, Task
-from lib.osaurus_lib import (
-    restart_server,
-    get_best_model,
-    is_server_running,
-    call_llm_api,
-    strip_thinking,
-    panic_dump,
-    get_available_models,
-    select_best_model,
-)
-from lib.mlx_lib import (
-    find_text_mlx_model,
-    call_mlx,
-    process_mlx_content,
-)
-from lib.tui import STEP, WARN, FAIL
+from lib.config import get_model_top_keys, get_model_field_mapping, Task
+from lib.osaurus_lib import get_best_model
+
+from lib.tui import STEP, WARN
 
 from weekend_config import (
     DEBUG_EVENTS_FILE, DEBUG_VENUES_FILE,

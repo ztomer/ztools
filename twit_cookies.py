@@ -11,6 +11,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from lib.tui import WARN
+
 try:
     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 except ImportError:
@@ -58,7 +60,7 @@ def get_chrome_cookies(
     domains: tuple[str, ...] = (".twitter.com", ".x.com"),
 ) -> list[dict]:
     if not CHROME_COOKIES_DB.exists():
-        print(f"[!] Chrome Cookies DB not found at {CHROME_COOKIES_DB}")
+        print(f"{WARN} Chrome Cookies DB not found at {CHROME_COOKIES_DB}")
         sys.exit(1)
 
     tmp_db = Path(tempfile.mktemp(suffix=".db"))
