@@ -304,7 +304,7 @@ def print_verbosity(verbosity: dict) -> None:
 
     for task in tasks:
         row = f"{task:<20}"
-        for model, task_lengths in verbosity.items():
+        for task_lengths in verbosity.values():
             length = task_lengths.get(task, 0)
             row += f" | {length:>12,}"
         console.print(row)

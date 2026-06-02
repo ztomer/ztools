@@ -3,11 +3,9 @@
 LLM summarization helpers for twitter_summarizer.
 """
 
-import os
 import re
 import shutil
 import textwrap
-from datetime import datetime, timezone
 
 from lib.config import get_model_prompt, Task
 from lib.osaurus_lib import (
@@ -18,7 +16,7 @@ from lib.mlx_lib import (
     find_mlx_model, find_best_mlx_model, get_mlx_context_length,
     call_mlx, process_mlx_content,
 )
-from lib.tui import STEP, WARN, FAIL
+from lib.tui import STEP, WARN
 
 MLX_PREFERRED = [
     "qwen2.5-0.5b",

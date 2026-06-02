@@ -1,7 +1,7 @@
 """Config getters - all config lookup functions."""
 
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, List
 import yaml
 
 from .config_core import (

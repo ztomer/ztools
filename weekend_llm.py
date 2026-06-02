@@ -9,8 +9,11 @@ from lib.osaurus_lib import (
     call_llm_api,
     strip_thinking,
     panic_dump,
+    apply_model_quirks,
+    _extract_json_only,
 )
 from lib.config import Task
+from lib.tui import debug_print
 from lib.mlx_lib import (
     find_text_mlx_model,
     call_mlx,
@@ -19,13 +22,9 @@ from lib.mlx_lib import (
 
 
 def get_llm_json(system_prompt, user_prompt, max_retries=5):
-    from lib.osaurus_lib import extract_json
-
     for attempt in range(1, max_retries + 1):
         target_model = get_best_model(Task.JSON)
-        from weekend_planner import debug_print
         debug_print(f"[llm] Trying Osaurus model: {target_model}")
-        from lib.osaurus_lib import apply_model_quirks
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -48,7 +47,6 @@ def get_llm_json(system_prompt, user_prompt, max_retries=5):
 
         if result and "content" in result:
             try:
-                from lib.osaurus_lib import _extract_json_only
                 raw_content = result["content"]
                 debug_print(f"[llm] Raw content length: {len(raw_content)}", flush=True)
                 debug_print(f"[llm] Raw content preview: {raw_content[:300]}", flush=True)
@@ -83,7 +81,6 @@ def get_llm_json(system_prompt, user_prompt, max_retries=5):
     if mlx_model:
         print(f"[llm] Falling back to MLX: {mlx_model.name}")
         try:
-            from lib.osaurus_lib import apply_model_quirks
             messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -96,7 +93,6 @@ def get_llm_json(system_prompt, user_prompt, max_retries=5):
                 mlx_model, f"System: {mlx_sys}\n\nUser: {mlx_usr}"
             )
             if raw:
-                from lib.osaurus_lib import _extract_json_only
                 cleaned = process_mlx_content(raw)
                 json_str = _extract_json_only(cleaned)
                 if json_str is not None:

@@ -9,7 +9,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from lib.tui import STEP, WARN, FAIL
+from lib.tui import STEP, WARN
 
 STATE_FILE = Path.home() / ".twitter_summary_state.json"
 DEBUG_CACHE_FILE = Path.home() / ".twitter_summary_debug_cache.json"

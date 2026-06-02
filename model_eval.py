@@ -29,6 +29,7 @@ from lib.osaurus_lib import (
 )
 
 from lib.tui import STEP, WARN, FAIL
+from lib.config import get_model_prompts_all, build_tasks_from_model
 
 from eval_tasks_core import (
     TASKS,
@@ -173,8 +174,6 @@ def estimate_model_memory(model: str) -> int:
 
 def load_tasks_from_config(model: str):
     """Build task prompts from model config YAML."""
-    from lib.config import get_model_prompts_all
-
     prompts = get_model_prompts_all(model)
     if not prompts:
         return None
@@ -260,8 +259,6 @@ def main():
             sys.exit(1)
         tasks_to_run = {args.task: TASKS[args.task]}
         console.print(f"{WARN} Running only task: {args.task}")
-
-    from lib.config import build_tasks_from_model
 
     config_model = args.model if args.model else "qwen"
     config_tasks = build_tasks_from_model(config_model)

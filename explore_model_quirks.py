@@ -6,10 +6,7 @@ Used to discover prompt/response patterns for different models.
 Run: python3 explore_model_quirks.py <model>
 """
 
-import sys
-import json
-import argparse
-from lib.osaurus_lib import call, extract_json, filter_json_items, fix_json_years
+from lib.osaurus_lib import call, filter_json_items, fix_json_years
 from lib.validators_lib import check_source_extraction, has_item_details
 
 TEST_PROMPTS = {

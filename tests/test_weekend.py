@@ -335,21 +335,21 @@ class TestScriptIntegration:
 
     def test_debug_print_defined(self):
         """Test that debug_print is defined at module level."""
-        from weekend_planner import debug_print, DEBUG
+        from lib.tui import debug_print, DEBUG
         assert callable(debug_print)
         assert DEBUG is False
 
     def test_debug_print_outputs_when_enabled(self, capsys):
         """Test that debug_print outputs when DEBUG is True."""
-        import weekend_planner
-        original_debug = weekend_planner.DEBUG
-        weekend_planner.DEBUG = True
+        import lib.tui
+        original_debug = lib.tui.DEBUG
+        lib.tui.DEBUG = True
         try:
-            weekend_planner.debug_print("test message")
+            lib.tui.debug_print("test message")
             captured = capsys.readouterr()
             assert "test message" in captured.out
         finally:
-            weekend_planner.DEBUG = original_debug
+            lib.tui.DEBUG = original_debug
 
     def test_main_accepts_debug_arg(self):
         """Test that main() accepts debug argument."""

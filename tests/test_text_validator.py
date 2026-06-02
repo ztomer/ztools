@@ -1,0 +1,435 @@
+"""Tests for lib.validators.text_validator."""
+import pytest
+
+
+class TestValidateFilename:
+    def test_empty(self):
+        from lib.validators.text_validator import validate_filename
+        score, msg = validate_filename("")
+        assert score == 0
+        assert "empty" in msg
+
+    def test_none(self):
+        from lib.validators.text_validator import validate_filename
+        score, msg = validate_filename(None)
+        assert score == 0
+
+    def test_good_filename(self):
+        from lib.validators.text_validator import validate_filename
+        score, _ = validate_filename("my_great_file")
+        # 30 (length) + 20 (chars) + 25 (format) + 25 (specificity) = 100
+        assert score == 100
+
+    def test_too_short(self):
+        from lib.validators.text_validator import validate_filename
+        score, msg = validate_filename("abc")  # 3 chars
+        assert "generic" in msg or score == 0
+
+    def test_too_long(self):
+        from lib.validators.text_validator import validate_filename
+        long_name = "a" * 60  # 60 chars, hits FILENAME_LENGTH_MAX
+        score, msg = validate_filename(long_name)
+        # Should fall back to extract_best_filename_candidate
+        # Then check if that one passes
+        assert "length" in msg or score < 100
+
+    def test_with_dash(self):
+        from lib.validators.text_validator import validate_filename
+        score, _ = validate_filename("my-cool-file")
+        assert score >= 75
+
+    def test_with_dot(self):
+        from lib.validators.text_validator import validate_filename
+        score, _ = validate_filename("my.file.txt")
+        assert score >= 75
+
+    def test_invalid_chars(self):
+        from lib.validators.text_validator import validate_filename
+        # 60+ chars with invalid chars triggers fallback to extract_best
+        long_with_invalid = "this is a long thing @#$%^&*() stuff"
+        score, msg = validate_filename(long_with_invalid)
+        # Falls back to extract_best_filename_candidate which finds first valid line
+        # Result depends on what's there - just check the function ran without crashing
+        assert isinstance(score, int)
+
+    def test_question_in_filename(self):
+        from lib.validators.text_validator import validate_filename
+        score, msg = validate_filename("what_file?")
+        assert "question" in msg
+        assert score < 100
+
+    def test_wordy_filename(self):
+        from lib.validators.text_validator import validate_filename
+        score, msg = validate_filename("the quick brown fox jumps")
+        # 25 chars, no question - hits wordy path
+        assert "wordy" in msg
+
+    def test_starts_with_the(self):
+        from lib.validators.text_validator import validate_filename
+        score, msg = validate_filename("the summer party event")
+        # 23 chars, no ?, starts with "the" - wordy
+        assert "wordy" in msg
+
+    def test_starts_with_this(self):
+        from lib.validators.text_validator import validate_filename
+        score, msg = validate_filename("this is some event name")
+        # 23 chars, starts with "this"
+        assert "wordy" in msg
+
+    def test_starts_with_a(self):
+        from lib.validators.text_validator import validate_filename
+        score, msg = validate_filename("a special event name")
+        # 20 chars, starts with "a" - wordy
+        assert "wordy" in msg
+
+    def test_starts_with_please(self):
+        from lib.validators.text_validator import validate_filename
+        score, msg = validate_filename("please_what_to_call_this")
+        assert "question" in msg
+
+    def test_starts_with_which(self):
+        from lib.validators.text_validator import validate_filename
+        score, msg = validate_filename("which_file_is_better")
+        assert "question" in msg
+
+    def test_starts_with_what(self):
+        from lib.validators.text_validator import validate_filename
+        score, msg = validate_filename("what_should_i_name_this")
+        assert "question" in msg
+
+    def test_no_separators(self):
+        from lib.validators.text_validator import validate_filename
+        score, msg = validate_filename("abcdefghij")
+        assert "no separators" in msg
+        # But still has length, chars, and non-wordy score
+        # 30 (length) + 20 (chars) + 0 (no format) + 25 (specific) = 75
+        assert score < 100
+
+    def test_with_backticks(self):
+        from lib.validators.text_validator import validate_filename
+        score, _ = validate_filename("`my_file`")
+        # strip_backtick_value removes backticks
+        assert score >= 75
+
+    def test_with_code_block(self):
+        from lib.validators.text_validator import validate_filename
+        score, _ = validate_filename("```my_file```")
+        assert score >= 75
+
+    def test_generic_filename_txt(self):
+        from lib.validators.text_validator import validate_filename
+        score, msg = validate_filename("filename.txt")
+        assert "generic" in msg
+        assert score == 0
+
+    def test_generic_filename_just(self):
+        from lib.validators.text_validator import validate_filename
+        score, msg = validate_filename("file")
+        assert "generic" in msg
+        assert score == 0
+
+    def test_generic_image(self):
+        from lib.validators.text_validator import validate_filename
+        score, msg = validate_filename("image.png")
+        assert "generic" in msg
+
+    def test_length_failure(self):
+        """When clean is in length failure range (>= MAX after fallback)."""
+        from lib.validators.text_validator import validate_filename
+        # A single line of 59+ chars with no separators will be kept by extract_best
+        # but then fail the length check
+        long_line = "a" * 59  # exactly at MAX
+        score, msg = validate_filename(long_line)
+        # len 59 is NOT in (4, 59) (exclusive), so length failure
+        assert "length" in msg
+
+
+class TestValidateSummary:
+    def test_empty(self):
+        from lib.validators.text_validator import validate_summary
+        score, msg = validate_summary("")
+        assert score == 0
+        assert "empty" in msg
+
+    def test_none(self):
+        from lib.validators.text_validator import validate_summary
+        score, msg = validate_summary(None)
+        assert score == 0
+
+    def test_dict_input(self):
+        from lib.validators.text_validator import validate_summary
+        score, _ = validate_summary({"key": "value"})
+        # str(dict)
+        assert score >= 0
+
+    def test_structure_headers_and_bullets(self):
+        from lib.validators.text_validator import validate_summary
+        text = "## Section 1\n- bullet one\n- bullet two"
+        score, _ = validate_summary(text)
+        # Has headers and bullets = 15 pts structure
+        assert score >= 15
+
+    def test_structure_headers_only(self):
+        from lib.validators.text_validator import validate_summary
+        text = "## Section 1\n## Section 2\nsome content here"
+        score, _ = validate_summary(text)
+        # Just headers = 10 pts
+        assert score >= 10
+
+    def test_structure_bullets_long(self):
+        from lib.validators.text_validator import validate_summary
+        text = "- " + ("a " * 200)  # > 300 chars
+        score, _ = validate_summary(text)
+        # Just bullets, long = 8 pts
+        assert score >= 8
+
+    def test_structure_long_no_headers(self):
+        from lib.validators.text_validator import validate_summary
+        text = "a " * 200  # 400 chars
+        score, _ = validate_summary(text)
+        # Long text, no headers = 5 pts
+        assert score >= 5
+
+    def test_structure_short_no_headers(self):
+        from lib.validators.text_validator import validate_summary
+        text = "short text"
+        score, msg = validate_summary(text)
+        # < 200 chars, no headers
+        assert "no structure" in msg
+
+    def test_user_mentions_3plus(self):
+        from lib.validators.text_validator import validate_summary
+        text = "@user1 @user2 @user3 hello"
+        score, _ = validate_summary(text)
+        # 3 users = 15 pts
+        assert score >= 15
+
+    def test_user_mentions_2(self):
+        from lib.validators.text_validator import validate_summary
+        text = "@user1 @user2 hello"
+        score, _ = validate_summary(text)
+        # 2 users = 10 pts
+
+    def test_user_mentions_1(self):
+        from lib.validators.text_validator import validate_summary
+        text = "@user1 hello"
+        score, _ = validate_summary(text)
+        # 1 user = 5 pts
+
+    def test_user_mentions_none(self):
+        from lib.validators.text_validator import validate_summary
+        text = "no mentions here at all just text"
+        score, msg = validate_summary(text)
+        # 0 users
+        assert "no user" in msg
+
+    def test_user_word_format(self):
+        from lib.validators.text_validator import validate_summary
+        # "user 1" without @
+        text = "user 1 user 2 user 3 did things"
+        score, _ = validate_summary(text)
+        assert score >= 15
+
+    def test_timestamps(self):
+        from lib.validators.text_validator import validate_summary
+        text = "At 10:30 something happened"
+        score, _ = validate_summary(text)
+        # Timestamp = 10 pts specificity
+        assert score >= 10
+
+    def test_narrative_words(self):
+        from lib.validators.text_validator import validate_summary
+        text = "user asks and then responds and thanks"
+        score, _ = validate_summary(text)
+        # Multiple narrative verbs
+
+    def test_no_specificity(self):
+        from lib.validators.text_validator import validate_summary
+        text = "very short text"
+        score, msg = validate_summary(text)
+        assert "no timestamps" in msg
+
+    def test_template_driven(self):
+        from lib.validators.text_validator import validate_summary
+        text = "**Who: x\n**What: y\n**When: z\nbody text here"
+        score, msg = validate_summary(text)
+        assert "template-driven" in msg
+
+    def test_boilerplate(self):
+        from lib.validators.text_validator import validate_summary
+        text = "Some content with not specified value here"
+        score, msg = validate_summary(text)
+        assert "boilerplate" in msg
+
+    def test_synthesis_top_level(self):
+        from lib.validators.text_validator import validate_summary
+        # Has "overall" in top-level
+        text = "Overall, this is a summary of events. ## Section\n- bullet"
+        score, _ = validate_summary(text)
+        # Has synthesis
+
+    def test_synthesis_key_takeaways(self):
+        from lib.validators.text_validator import validate_summary
+        text = "Key takeaways: lots happened. ## Section"
+        score, _ = validate_summary(text)
+        assert score >= 0
+
+    def test_synthesis_tldr(self):
+        from lib.validators.text_validator import validate_summary
+        text = "TL;DR: short version. ## Section"
+        score, _ = validate_summary(text)
+        assert score >= 0
+
+    def test_topic_markers_many(self):
+        from lib.validators.text_validator import validate_summary
+        text = "## Topic1\n## Topic2\n- bullets"
+        score, _ = validate_summary(text)
+        # 2 topic markers = 25
+        assert score >= 25
+
+    def test_topic_markers_one(self):
+        from lib.validators.text_validator import validate_summary
+        text = "## Topic1\n- bullets"
+        score, _ = validate_summary(text)
+        # 1 topic = 15
+
+    def test_topic_transitions(self):
+        from lib.validators.text_validator import validate_summary
+        text = "First this happened. Then that. Also meanwhile something."
+        score, _ = validate_summary(text)
+        # Transitions = 10
+
+    def test_topic_no_structure(self):
+        from lib.validators.text_validator import validate_summary
+        text = "just a plain text with no structure at all"
+        score, msg = validate_summary(text)
+        assert "no topic" in msg
+
+    def test_synthesis_in_short(self):
+        from lib.validators.text_validator import validate_summary
+        text = "In short, things happened. ## Section"
+        score, _ = validate_summary(text)
+        # has_synthesis match
+
+    def test_synthesis_this_conversation(self):
+        from lib.validators.text_validator import validate_summary
+        text = "This conversation was interesting. ## Section"
+        score, _ = validate_summary(text)
+
+    def test_no_header_no_top_level(self):
+        from lib.validators.text_validator import validate_summary
+        text = "no headers here just text"
+        # top_level gets set to the whole thing
+        score, _ = validate_summary(text)
+
+
+class TestValidateFileSummary:
+    def test_empty(self):
+        from lib.validators.text_validator import validate_file_summary
+        score, msg = validate_file_summary(None)
+        assert score == 0
+        assert "empty" in msg
+
+    def test_empty_list(self):
+        from lib.validators.text_validator import validate_file_summary
+        score, msg = validate_file_summary([])
+        assert score == 0
+        # Empty list is falsy
+        assert "empty" in msg
+
+    def test_dict_input(self):
+        from lib.validators.text_validator import validate_file_summary
+        score, _ = validate_file_summary({"path": "x.py", "desc": "python file"})
+        # Wrapped in list
+
+    def test_string_input(self):
+        from lib.validators.text_validator import validate_file_summary
+        score, _ = validate_file_summary("not a list")
+        # Not a dict or list, treated as empty list
+        assert score == 0
+
+    def test_too_few_items(self):
+        from lib.validators.text_validator import validate_file_summary
+        items = [{"path": "x.py", "desc": "a python file"}]
+        score, msg = validate_file_summary(items)
+        assert "only 1 items" in msg
+
+    def test_good_count(self):
+        from lib.validators.text_validator import validate_file_summary
+        items = [
+            {"path": f"file{i}.py", "desc": f"description for file {i} which is good"}
+            for i in range(5)
+        ]
+        score, _ = validate_file_summary(items)
+        # 30 (count) + 30 (paths) + 40 (quality) = 100
+        assert score == 100
+
+    def test_unrealistic_paths(self):
+        from lib.validators.text_validator import validate_file_summary
+        items = [
+            {"path": "filename", "desc": "specific unique description here"}
+            for _ in range(5)
+        ]
+        score, msg = validate_file_summary(items)
+        # No . or / in paths
+        assert "unrealistic paths" in msg
+
+    def test_partial_paths(self):
+        from lib.validators.text_validator import validate_file_summary
+        items = [
+            {"path": "x.py", "desc": "specific desc 1"},
+            {"path": "y.py", "desc": "specific desc 2"},
+            {"path": "filename", "desc": "specific desc 3"},
+            {"path": "another", "desc": "specific desc 4"},
+            {"path": "another2", "desc": "specific desc 5"},
+        ]
+        # 2/5 = 40% real paths
+        score, msg = validate_file_summary(items)
+        # Partial credit (20 pts)
+
+    def test_generic_descriptions(self):
+        from lib.validators.text_validator import validate_file_summary
+        items = [
+            {"path": "x.py", "desc": "personal document"} for _ in range(5)
+        ]
+        score, msg = validate_file_summary(items)
+        # Generic descriptions - quality score is 15 (unique but generic)
+        # No specific "generic" failure msg
+        assert score == 75  # 30 + 30 + 15
+
+    def test_one_specific(self):
+        from lib.validators.text_validator import validate_file_summary
+        items = [
+            {"path": "x.py", "desc": "personal document"},
+            {"path": "y.py", "desc": "specific unique description for the file"},
+            {"path": "z.py", "desc": "another generic item"},
+            {"path": "a.py", "desc": "another generic item"},
+            {"path": "b.py", "desc": "another generic item"},
+        ]
+        score, _ = validate_file_summary(items)
+        # 1 specific = 25 pts
+
+    def test_no_descriptions(self):
+        from lib.validators.text_validator import validate_file_summary
+        items = [
+            {"path": "x.py"},  # No desc field
+            {"path": "y.py"},
+            {"path": "z.py"},
+            {"path": "a.py"},
+            {"path": "b.py"},
+        ]
+        score, _ = validate_file_summary(items)
+        # unique_descs is empty
+
+    def test_description_field_alias(self):
+        from lib.validators.text_validator import validate_file_summary
+        items = [
+            {"path": "x.py", "description": "specific description here"},
+            {"path": "y.py", "description": "another specific one here"},
+            {"path": "z.py", "description": "third specific here"},
+            {"path": "a.py", "description": "fourth specific here"},
+            {"path": "b.py", "description": "fifth specific here"},
+        ]
+        score, _ = validate_file_summary(items)
+        # Uses "description" as fallback
+        assert score > 50

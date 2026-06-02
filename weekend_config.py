@@ -6,6 +6,7 @@ from lib.osaurus_lib import (
     restart_server,
     get_best_model,
     is_server_running,
+    ensure_server as _osaurus_ensure_server,
 )
 
 DEBUG_EVENTS_FILE = Path.home() / ".weekend_events_debug_cache.json"
@@ -70,5 +71,4 @@ def restart_osaurus(wait=20):
 
 
 def ensure_server(max_retries=3, wait=20):
-    from lib.osaurus_lib import ensure_server as osaurus_ensure_server
-    return osaurus_ensure_server(max_retries=max_retries, wait=wait)
+    return _osaurus_ensure_server(max_retries=max_retries, wait=wait)

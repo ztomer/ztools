@@ -25,9 +25,6 @@ from .osaurus_lib import (
     clean_output,
     get_best_model,
     ensure_server,
-    panic_dump,
-    select_best_model,
-    # Also from new llm module
     apply_model_quirks,
 )
 from .mlx_lib import (

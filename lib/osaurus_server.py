@@ -2,7 +2,7 @@
 import time
 import subprocess
 from pathlib import Path
-from typing import Optional
+
 
 from .logging_config import osaurus_logger as logger
 from .osaurus_models import is_server_running, get_models, DEFAULT_HOST, DEFAULT_PORT

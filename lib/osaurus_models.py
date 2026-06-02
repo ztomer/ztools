@@ -3,7 +3,7 @@ import os
 import requests
 from typing import List, Optional
 
-from .logging_config import osaurus_logger as logger
+
 
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 1337

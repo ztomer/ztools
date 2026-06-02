@@ -4,7 +4,7 @@ Failure diagnosis module for model evaluation.
 Classifies WHY a model result failed.
 """
 
-from typing import Dict, Any
+
 from eval_validate import safe_content
 from lib.validators_lib import has_item_details
 

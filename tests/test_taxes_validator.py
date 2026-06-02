@@ -126,3 +126,21 @@ def test_empty_output_scores_zero():
     score, reason = validate_taxes_anomalies("")
     assert "grounding=0/40" in reason
     assert score <= 30  # only no_leak can fire
+
+
+def test_load_rubric_missing_file(tmp_path, monkeypatch):
+    """When the rubric file doesn't exist, _load_rubric returns {}."""
+    import lib.validators.taxes_validator as tv
+    # Patch the data_dir to a path that doesn't have the file
+    monkeypatch.setattr(tv, "Path", lambda *a, **kw: tmp_path)
+    from lib.validators.taxes_validator import _load_rubric
+    result = _load_rubric("nonexistent_task")
+    assert result == {}
+
+
+def test_grounding_score_empty_signals():
+    """When expected_signals is empty, full 40 score."""
+    from lib.validators.taxes_validator import _grounding_score
+    score, hits = _grounding_score("any output", [])
+    assert score == 40
+    assert hits == 0

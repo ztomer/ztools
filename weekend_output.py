@@ -3,7 +3,7 @@ from rich.markdown import Markdown
 
 from weekend_llm import fetch_scores_for_items
 from weekend_config import AGE_RANGE
-from lib.tui import STEP, WARN
+from lib.tui import STEP, WARN, debug_print
 
 console = Console(force_terminal=True, force_interactive=True)
 
@@ -95,7 +95,6 @@ def _build_transient_table(grouped_transient_list):
 
 
 def build_markdown_tables(dates_str, weather_str, structured_data, fixed_activities):
-    from weekend_planner import debug_print
     md = f"# Weekend Plan: {dates_str}\n\n{weather_str}\n\n"
 
     fixed = fixed_activities

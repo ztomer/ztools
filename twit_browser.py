@@ -15,7 +15,7 @@ except ImportError:
     sync_playwright = PWTimeout = None
 
 from twit_cookies import get_chrome_cookies
-from lib.tui import STEP, WARN, FAIL
+from lib.tui import STEP, WARN
 
 MAX_SCROLLS = 1200
 SCROLL_PAUSE_MS = 1800

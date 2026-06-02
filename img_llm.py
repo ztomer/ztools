@@ -14,7 +14,7 @@ import requests
 from lib.config import get_filename_models, get_model_prompt, Task
 from lib.osaurus_lib import check_llm_availability
 from lib.mlx_lib import find_mlx_model, process_mlx_content, call_mlx
-from lib.tui import STEP, WARN, FAIL
+from lib.tui import WARN, FAIL
 from img_helpers import _strip_instruction_prefix
 
 RELEVANCE_CHECK_PROMPT = """Is this image content useful/interesting enough to keep and rename?

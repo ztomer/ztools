@@ -5,7 +5,7 @@ Contains all hardcoded prompts and the TASKS dict.
 """
 
 import re
-from typing import Dict, List, Any
+from typing import Dict, List
 
 from lib.validators_lib import validate_detailed_json, validate_summary, validate_filename
 from eval_validate import validate_file_summary

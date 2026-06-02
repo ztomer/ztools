@@ -299,7 +299,6 @@ def run_benchmark(models: List[str] = None, verbose: bool = True):
 
     for model in models:
         print_model_header(model)
-        model_scores = {"human": {}, "auto": {}}
         model_total_human = 0
         model_total_auto = 0
         model_count = 0

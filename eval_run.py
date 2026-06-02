@@ -11,6 +11,9 @@ from lib.osaurus_lib import call
 from eval_tasks_core import TASKS, _extract_items_from_text
 from eval_failures import FAIL_INFRA, FAIL_CONTENT, FAIL_NONE, _classify_failure
 from eval_validate import safe_content
+from lib.validators_lib import validate_summary, get_source_matching_details
+from lib.mlx_lib import call as mlx_call
+from lib.logging_config import osaurus_logger as eval_logger
 from lib.tui import STEP, WARN, FAIL
 
 
@@ -63,7 +66,6 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
             validated = validator(extracted, source_text=source)
             items_for_debug = extracted
         elif len(content) > 50:
-            from lib.validators_lib import validate_summary
             validated = validate_summary(content)
             items_for_debug = None
         else:
@@ -72,14 +74,16 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
             return 0, failure, diagnosis
 
         if debug and source and "weekend" in task_name and items_for_debug:
-            from lib.validators_lib import get_source_matching_details
             details = get_source_matching_details(items_for_debug, source)
             console.print(f"  Source matching for {task_name}:")
             console.print(f"    Matched: {len(details['matched'])}/{len(details['matched']) + len(details['unmatched'])} ({details['ratio']*100:.0f}%)")
             if details['unmatched']:
                 console.print(f"    Unmatched items:")
                 for item in details['unmatched'][:3]:
-                    console.print(f"      - {item['name']} (terms: {item.get('terms', [])[:3]})")
+                    if isinstance(item, dict):
+                        console.print(f"      - {item['name']} (terms: {item.get('terms', [])[:3]})")
+                    else:
+                        console.print(f"      - {item}")
 
         if isinstance(validated, tuple):
             score, failure_reason = validated
@@ -107,7 +111,6 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
 def _call_model(model: str, task_cfg: dict, task_name: str, host: str, port: int, backend: str) -> dict:
     """Call model via the appropriate backend (pure transport, no validation)."""
     if backend == "mlx":
-        from lib.mlx_lib import call as mlx_call
         return mlx_call(
             model,
             messages=task_cfg["messages"],
@@ -158,8 +161,6 @@ def run_eval(
     This function owns all validation and retry logic.
     The library call() functions are pure transport/parsing layers.
     """
-    from lib.logging_config import osaurus_logger as eval_logger
-
     tasks = tasks or TASKS
     results = []
 
@@ -233,7 +234,6 @@ def run_eval(
         )
 
         status_symbol = STEP if status == "ok" else (WARN if status == "partial" else FAIL)
-        retry_tag = " (2nd try)" if first_attempt_failed else ""
         category_tag = f" [{category}]" if category else ""
         fail_info = f" - {best_failure}" if best_failure else ""
         evidence_info = f"\n    - {best_diagnosis['evidence']}" if best_diagnosis.get("evidence") else ""
@@ -250,7 +250,6 @@ def run_eval(
 
     weekend_tasks = [k for k in tasks.keys() if "weekend" in k]
     if weekend_tasks:
-        from lib.validators_lib import get_source_matching_details
         console.print("")
         console.print("Quality Check Summary:")
         for r in results:
@@ -270,7 +269,7 @@ def run_eval(
             ratio = details["ratio"] * 100
             console.print(f"  {task_name}: {matched}/{total} items from source ({ratio:.0f}%)")
             if details["unmatched"]:
-                names = [u["name"] for u in details["unmatched"][:2]]
+                names = [u if isinstance(u, str) else u.get("name", "unnamed") for u in details["unmatched"][:2]]
                 console.print(f"    {WARN} Not from source: {names}")
 
     return results

@@ -1,5 +1,6 @@
 from weekend_config import EXCLUDE_PLACES, CITY, REGION, AGE_RANGE, DATES_STR
 from lib.config import get_model_prompt, Task
+from lib.tui import debug_print
 
 
 def build_fixed_system_prompt(model: str = None, location: str = None, age_range: str = None):
@@ -10,7 +11,6 @@ def build_fixed_system_prompt(model: str = None, location: str = None, age_range
 
     config_prompt = get_model_prompt(model, Task.WEEKEND_FIXED) if model else ""
 
-    from weekend_planner import debug_print
     debug_print(f"[DEBUG] build_fixed_system_prompt: model={model}, location={location}, age_range={age_range}", flush=True)
     if config_prompt:
         try:
@@ -20,7 +20,7 @@ def build_fixed_system_prompt(model: str = None, location: str = None, age_range
                 date_range=DATES_STR,
                 exclusions=exclusion_string,
             )
-        except (KeyError, IndexError):
+        except (KeyError, IndexError, ValueError):
             formatted = config_prompt.replace("{}", f"{location} {age_range}")
         debug_print(f"[DEBUG] prompt after format (first 200): {formatted[:200]}", flush=True)
         return formatted
@@ -66,7 +66,7 @@ def build_transient_system_prompt(model: str = None, location: str = None, age_r
                 age_range=age_range,
                 date_range=date_range,
             )
-        except (KeyError, IndexError):
+        except (KeyError, IndexError, ValueError):
             formatted = config_prompt.replace("{}", f"{location} {age_range} {date_range}")
         return formatted
 

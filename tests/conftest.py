@@ -1,16 +1,77 @@
-"""Shared fixtures for ZTools tests."""
+"""
+Pytest configuration: shared fixtures for all tests.
+"""
+
 import sys
 import os
 import pytest
 from pathlib import Path
 
-# Add project root to path
+from lib.testing import MockLLM
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
+# Capture references to lib.mlx_lib functions at conftest load time.
+# This MUST happen before any mock patches them.
+import lib.mlx_lib  # noqa: E402
+_REAL_MLX_FUNCTIONS = {
+    "call": lib.mlx_lib.call,
+    "call_mlx": lib.mlx_lib.call_mlx,
+    "process_mlx_content": lib.mlx_lib.process_mlx_content,
+    "find_mlx_model": lib.mlx_lib.find_mlx_model,
+    "find_text_mlx_model": lib.mlx_lib.find_text_mlx_model,
+}
+
+
+@pytest.fixture
+def real_mlx_functions():
+    """Return real (unmocked) lib.mlx_lib functions.
+
+    Captures references at conftest load time, before any mock patches.
+    """
+    return _REAL_MLX_FUNCTIONS
+
+
+@pytest.fixture
+def mock_llm():
+    """Fixture that patches all LLM functions with a MockLLM provider.
+
+    Usage:
+        def test_something(mock_llm):
+            import eval_run as er
+            from unittest.mock import patch
+            with patch.object(er, "call", mock_llm.call):
+                result = er.run_eval(...)
+    """
+    mock = MockLLM()
+    mock.patch_all()
+    yield mock
+    mock.unpatch()
+
+
+@pytest.fixture
+def mock_llm_osaurus():
+    """Same as mock_llm but only patches osaurus_lib."""
+    mock = MockLLM()
+    mock.patch_osaurus()
+    yield mock
+    mock.unpatch()
+
+
+@pytest.fixture
+def mock_llm_osaurus():
+    """Same as mock_llm but only patches osaurus_lib."""
+    mock = MockLLM()
+    mock.patch_osaurus()
+    yield mock
+    mock.unpatch()
+
+
+# Legacy fixtures used by existing test files
+
 @pytest.fixture
 def mock_llm_response():
-    """Sample LLM responses for testing."""
     return {
         "json_with_activities": {
             "activities": [
@@ -48,21 +109,18 @@ stats:456""",
 
 @pytest.fixture
 def sample_events_data():
-    """Sample events data for testing."""
     return """- Event 1 (Toronto): Details here
 - Event 2 (Vaughan): More details"""
 
 
 @pytest.fixture
 def sample_venues_data():
-    """Sample venues data for testing."""
     return """- Venue 1 (123 Main St): Great place
 - Venue 2 (456 Oak Ave): Another great place"""
 
 
 @pytest.fixture
 def sample_tweets():
-    """Sample tweets for testing."""
     return [
         {"screen_name": "user1", "text": "Test tweet 1", "created_at": "2026-04-21"},
         {"screen_name": "user2", "text": "Test tweet 2", "created_at": "2026-04-21"},

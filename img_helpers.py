@@ -4,7 +4,7 @@ Helper utilities for image processing and filename generation.
 
 import re
 from pathlib import Path
-from lib.tui import STEP, WARN, FAIL
+from lib.tui import FAIL
 from typing import Optional
 from PIL import Image
 import pytesseract
