@@ -55,8 +55,11 @@ class TestDefaultParsedFor:
     def test_json(self):
         from lib.testing import _default_parsed_for
         result = _default_parsed_for("json")
-        assert result is not None
         assert isinstance(result, list)
+        # Has 2+ items with expected structure
+        assert len(result) >= 2
+        assert "name" in result[0]
+        assert "location" in result[0]
 
     def test_weekend_transient(self):
         from lib.testing import _default_parsed_for
@@ -200,8 +203,11 @@ class TestMockLLM:
     def test_ensure_server(self):
         from lib.testing import MockLLM
         m = MockLLM()
-        # Just verify it doesn't raise
-        m.ensure_server()
+        # No-op: verify it returns None (the mock contract)
+        result = m.ensure_server()
+        assert result is None
+        # Also accept any args/kwargs without raising
+        m.ensure_server("any", model="x", timeout=30)
 
     def test_strip_thinking(self):
         from lib.testing import MockLLM

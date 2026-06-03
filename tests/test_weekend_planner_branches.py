@@ -58,17 +58,27 @@ class TestParseTransientEdges:
         # Both branches return [] since nothing is truthy
         assert result == []
 
-    def test_parse_transient_alt_keys_fallback_branch(self, mock_llm):
-        """Items have alt keys (event/summary) but no 'name' — line 154-157."""
+    def test_alt_keys_are_dead_code(self, mock_llm):
+        """Lines 154-157 (alt_items branch) are dead code.
+
+        The valid_items and alt_items branches both check the same keys,
+        so if valid_items is empty, alt_items is also empty. This test
+        documents the dead code by verifying that an item with only alt-keys
+        flows through valid_items (never needs the alt_items fallback).
+        """
         import weekend_planner as wp
-        # valid_items checks all_name_keys = name_keys + ["description", "title", "event", "summary", "activity_name"]
-        # So if any of these has a value, valid_items is non-empty
-        # To make valid_items empty, the items must have no truthy values for these keys
-        # But also no "name"
-        # To reach alt_items branch (line 154), valid_items must be empty AND alt_items must be non-empty
-        # Since both check the same keys, this is logically impossible
-        # So line 154-157 is unreachable dead code
-        pass
+        # List with 2+ items (so we enter the list branch), all using alt-keys
+        # (description/title). The valid_items branch picks them up via line 149.
+        items = [
+            {"description": "d1", "title": "t1"},
+            {"description": "d2", "title": "t2"},
+        ]
+        result = wp._parse_transient(items, "mock-model", {})
+        # Both items are picked up by valid_items (description/title match)
+        assert len(result) == 2
+        # Both items have a "name" key (from alt-keys)
+        for item in result:
+            assert "name" in item
 
     def test_parse_transient_weekend_forecast(self, mock_llm):
         """Dict with weekend_forecast key — line 171-178."""
@@ -163,7 +173,7 @@ class TestParseArgs:
 class TestMainEntry:
     """Test __main__ block via runpy."""
 
-    def test_main_block(self, monkeypatch):
+    def test_main_block(self, monkeypatch, capsys):
         import runpy
         import sys
         import types
@@ -184,3 +194,7 @@ class TestMainEntry:
             import os
             os.makedirs("/tmp/wp_test_main", exist_ok=True)
             runpy.run_module("weekend_planner", run_name="__main__")
+        # main() should have printed expected workflow output
+        out = capsys.readouterr().out
+        # The model name header is printed early in main()
+        assert "Using model" in out or "Started" in out or "Transient" in out

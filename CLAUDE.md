@@ -1,5 +1,5 @@
 @docs/MODEL_QUIRKS.md
-@docs/PROJECT_MEMORY.md
+@docs/TESTING.md
 
 # Project-Specific Instructions
 
@@ -27,3 +27,10 @@
 ### MLX Backend
 - Currently not working - subprocess returns empty
 - Document in docs/MODEL_QUIRKS.md when debugging
+
+### Testing
+- See `docs/TESTING.md` for patterns, mock infrastructure, and rules
+- Every test must have a non-tautological assertion
+- Use the real scorer/validator when possible; mock only the LLM layer
+- Test the real `__main__` block via `exec` of the real source — never re-implement it in the test
+- Add discovered test patterns or bugs to `docs/TESTING.md` immediately

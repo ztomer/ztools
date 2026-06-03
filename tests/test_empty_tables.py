@@ -90,6 +90,8 @@ class TestPrintFunctions:
     def test_print_to_cli_empty(self, capsys):
         print_to_cli("")
         captured = capsys.readouterr()
+        # Empty string → no output (or only whitespace)
+        assert captured.out.strip() == ""
 
     def test_print_to_cli_content(self, capsys):
         print_to_cli("hello world")

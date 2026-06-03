@@ -91,9 +91,8 @@ class TestExtractJson:
     def test_dict_extraction(self):
         from lib.osaurus_output import extract_json
         result = extract_json('{"name": "x", "location": "y"}')
-        # Returns a list because it goes through normalize_keys (single key -> list) and filter_json_items
-        assert isinstance(result, list) or isinstance(result, dict)
-        assert result is not None
+        # The dict's keys are extracted as a list
+        assert result == ["name", "location"]
 
     def test_list_extraction(self):
         from lib.osaurus_output import extract_json

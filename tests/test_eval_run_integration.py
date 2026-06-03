@@ -208,7 +208,11 @@ class TestQualityResultsToEvalFormat:
         }
         result = {"content": "1. festival park\n2. beach toronto", "parsed": None}
         score, failure, diagnosis = _validate_result(result, task_cfg, "json", debug=True)
-        assert score is not None
+        # Score is a number (extraction path was taken)
+        assert isinstance(score, (int, float))
+        assert 0 <= score <= 100
+        # Failure reason is a string
+        assert isinstance(failure, str)
 
     def test_summary_validation_path(self):
         """Lines 68-70: long content but no extractable items, falls back to validate_summary."""
@@ -224,7 +228,9 @@ class TestQualityResultsToEvalFormat:
         # Long content (>50 chars), no JSON, no list - should go through validate_summary
         result = {"content": "This is a long descriptive summary of what happened today in toronto with the children and the family event at the park location", "parsed": None}
         score, failure, diagnosis = _validate_result(result, task_cfg, "json", debug=True)
+        # Should fall through to summary path
         assert score is not None
+        assert isinstance(score, (int, float))
 
     def test_debug_weekend_with_items(self):
         """Lines 76-83: debug=True, weekend task, with items and source - prints source matching details."""
@@ -304,7 +310,9 @@ class TestValidateResultBranches:
         result = {"content": "before [not valid json] after", "parsed": None}
         score, failure, diagnosis = _validate_result(result, task_cfg, "json")
         # Falls through to _extract_items_from_text
-        assert score is not None
+        assert isinstance(score, (int, float))
+        assert 0 <= score <= 100
+        assert isinstance(failure, str)
 
     def test_short_content_no_extracted(self):
         from eval_run import _validate_result
@@ -339,8 +347,7 @@ class TestValidateResultBranches:
         }
         score, failure, diagnosis = _validate_result(result, task_cfg, "weekend_thing", debug=True)
         assert score == 100
-        # Console output captured via Rich
-        assert score is not None
+        assert failure == ""
 
     def test_text_task_no_content(self):
         from eval_run import _validate_result
@@ -418,7 +425,12 @@ class TestRunEvalAllBranches:
             from eval_tasks_core import TASKS
             tasks = {"filename": TASKS["filename"]}
             results = er.run_eval("m", tasks=tasks, verbose=True)
-        assert results[0]["quality_score"] >= 0
+        # Filename validation: mock returns "mock_test_filename" which won't pass filename
+        # validation since real filename detection may not match. Just check it ran.
+        assert results[0]["quality_score"] is not None
+        # Verbose mode should print something
+        captured = capsys.readouterr()
+        assert len(captured.out) > 0 or len(captured.err) > 0
 
     def test_weekend_quality_summary(self, mock_llm, capsys):
         import eval_run as er

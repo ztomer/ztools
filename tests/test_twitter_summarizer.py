@@ -102,9 +102,15 @@ class TestMain:
         tweets = [{"screen_name": "u", "text": "t", "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc)}]
         with patch("twitter_summarizer.load_state", return_value={}), \
              patch("twitter_summarizer.load_debug_cache", return_value=tweets), \
-             patch("twitter_summarizer.summarize_with_llm", return_value="## Good\n- a\n- b\n- c"), \
-             patch("twitter_summarizer.write_markdown", return_value=(tmp_path / "out.md", "md")):
+             patch("twitter_summarizer.summarize_with_llm", return_value="## Good\n- a\n- b\n- c") as mock_sum, \
+             patch("twitter_summarizer.write_markdown", return_value=(tmp_path / "out.md", "md")) as mock_write:
             main()
+        # Verify summarize was called with our cached tweets
+        mock_sum.assert_called_once()
+        args, kwargs = mock_sum.call_args
+        assert args[0] == tweets
+        # Verify write was called
+        mock_write.assert_called_once()
 
     def test_no_tweets_exits(self, monkeypatch, mock_llm):
         """When no tweets collected → sys.exit(0)."""
@@ -130,7 +136,7 @@ class TestMain:
                 main()
             mock_sys.exit.assert_called_with(1)
 
-    def test_full_success(self, monkeypatch, mock_llm, tmp_path):
+    def test_full_success(self, monkeypatch, mock_llm, tmp_path, capsys):
         """Full happy path: collect, summarize, write, save state."""
         monkeypatch.setattr("sys.argv", ["twitter_summarizer", "--output", str(tmp_path)])
         tweets = [{"screen_name": "u", "text": "t", "created_at": datetime(2026, 1, 1, tzinfo=timezone.utc)}]
@@ -141,6 +147,12 @@ class TestMain:
              patch("twitter_summarizer.save_state") as mock_save:
             main()
             mock_save.assert_called_once()
+            # Verify the save state was called with a last_run key
+            call_args = mock_save.call_args[0][0]
+            assert "last_run" in call_args
+            # Verify output was written
+            captured = capsys.readouterr()
+            assert "Summary written" in captured.out or "out.md" in captured.out
 
     def test_main_with_iso_since(self, monkeypatch, mock_llm, tmp_path):
         """--since with ISO format is used to compute since_time."""

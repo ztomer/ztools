@@ -167,17 +167,18 @@ class TestParseTweetsFromResponse:
         tweets = parse_tweets_from_response(data)
         assert tweets[0]["screen_name"] == "unknown"
 
-    def test_top_level_exception_caught(self, monkeypatch):
-        """Exception in parsing is caught, returns whatever was collected so far."""
-        # Use a malformed data structure that triggers an exception
+    def test_top_level_exception_caught(self, monkeypatch, capsys):
+        """Exception in parsing is caught, prints debug error, returns empty list."""
+        # Use a malformed data structure that triggers AttributeError deep in the loop
+        # Without try/except, this would raise AttributeError
         data = {"data": "not a dict"}
-        # The data.get("data", {}) returns "not a dict" and then .get("home", {}) fails
-        # but wait, the data IS a dict so .get("data") works. The value is a string though.
-        # .get("home", {}) on a string would fail
-        with monkeypatch.context() as m:
-            m.setenv("DEBUG", "1")
-            result = parse_tweets_from_response(data)
+        monkeypatch.setenv("DEBUG", "1")
+        result = parse_tweets_from_response(data)
+        # Exception was caught
         assert result == []
+        # DEBUG error was printed
+        out = capsys.readouterr()
+        assert "Error" in out.out or len(out.out) > 0
 
     def test_import_error(self, monkeypatch):
         """When playwright fails to import, sync_playwright/PWTimeout are None."""
@@ -248,7 +249,7 @@ class TestCollectTweetsViaBrowser:
             mock_sys.exit.assert_called_with(1)
 
     def test_collects_tweets(self, monkeypatch):
-        """Happy path: collects tweets via browser."""
+        """Happy path: tweets are actually returned in the result list."""
         from twit_browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
@@ -262,40 +263,27 @@ class TestCollectTweetsViaBrowser:
         mock_context.new_page.return_value = mock_page
         mock_page.title.return_value = "Home / X"
 
-        # Build tweet data
-        tweet_data = _make_tweet_data(
-            "user1", "Hello world!", "Mon Jun 01 12:00:00 +0000 2026"
-        )
-
-        # Build a fake response
-        fake_response = MagicMock()
-        fake_response.url = "https://x.com/api/graphql/HomeTimeline"
-        fake_response.json.return_value = tweet_data
-
-        captured_handlers = []
+        # On page.on("response", handler), invoke handler immediately with mock data
         def on_response(event, handler):
-            captured_handlers.append(handler)
+            mock_response = MagicMock()
+            mock_response.url = "https://x.com/api/graphql/HomeTimeline"
+            mock_response.json.return_value = _make_tweet_data(
+                "user1", "Hello world!", "Mon Jun 01 12:00:00 +0000 2026"
+            )
+            handler(mock_response)
         mock_page.on.side_effect = on_response
 
-        # Make page.evaluate break the loop immediately
-        # The break condition is oldest_seen < since_time. Since since=2020 and tweet=2026, this won't trigger.
-        # We need to set MAX_SCROLLS to 0 effectively. Let's just call the handler manually then close.
         with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
              patch("twit_browser.sync_playwright", return_value=mock_pw), \
              patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 0):  # skip the loop entirely
+             patch("twit_browser.MAX_SCROLLS", 0):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
 
-        # Now invoke the captured handler manually
-        for handler in captured_handlers:
-            handler(fake_response)
-
-        # The tweets list is built BEFORE the loop in the actual function
-        # Hmm, actually it's a closure. Let me re-read.
-
-        # Actually, the handler appends to all_tweets inside the with block.
-        # So invoking after the function returns won't work.
-        # Let me use a different approach.
+        # Verify the tweet was actually collected and returned
+        assert len(tweets) == 1
+        assert tweets[0]["screen_name"] == "user1"
+        assert tweets[0]["text"] == "Hello world!"
+        assert tweets[0]["created_at"].year == 2026
 
     def test_following_tab_click_succeeds(self, monkeypatch):
         """When following tab click works, no exception."""
@@ -377,7 +365,7 @@ class TestCollectTweetsViaBrowser:
         assert tweets == []
 
     def test_response_handler_url_not_match(self, monkeypatch):
-        """Response URL doesn't match HomeTimeline — ignored."""
+        """Response URL doesn't match HomeTimeline — handler ignores it, oldest_seen stays None."""
         from twit_browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
@@ -391,26 +379,35 @@ class TestCollectTweetsViaBrowser:
         mock_context.new_page.return_value = mock_page
         mock_page.title.return_value = "Home / X"
 
-        # Capture handler
+        # Capture handler and inject it into the scroll loop
         captured_handler = []
         def on_response(event, handler):
             captured_handler.append(handler)
         mock_page.on.side_effect = on_response
 
+        # page.evaluate side effect: invoke the captured handler on first call
+        # to verify the URL-doesn't-match branch
+        def eval_side_effect(*args, **kwargs):
+            if len(captured_handler) == 0:
+                return None
+            fake_response = MagicMock()
+            fake_response.url = "https://x.com/some/other/endpoint"  # not HomeTimeline
+            captured_handler[0](fake_response)
+            return None
+        mock_page.evaluate.side_effect = eval_side_effect
+
         with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
              patch("twit_browser.sync_playwright", return_value=mock_pw), \
              patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 0):
-            collect_tweets_via_browser(since_time=since, debug=False)
-
-        # Invoke handler with non-matching URL
-        fake_response = MagicMock()
-        fake_response.url = "https://x.com/some/other/endpoint"
-        captured_handler[0](fake_response)
-        # No error means it was ignored
+             patch("twit_browser.MAX_SCROLLS", 3):
+            tweets = collect_tweets_via_browser(since_time=since, debug=False)
+        # Handler was called, but URL didn't match → oldest_seen stayed None → loop ran
+        # all 3 scrolls (didn't break early). No tweets returned.
+        assert tweets == []
+        assert mock_page.evaluate.call_count == 3
 
     def test_response_handler_json_fails(self, monkeypatch):
-        """Response.json() fails — handler returns silently."""
+        """Response.json() fails — handler returns silently, loop continues all scrolls."""
         from twit_browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
@@ -429,17 +426,25 @@ class TestCollectTweetsViaBrowser:
             captured_handler.append(handler)
         mock_page.on.side_effect = on_response
 
+        def eval_side_effect(*args, **kwargs):
+            if len(captured_handler) == 0:
+                return None
+            fake_response = MagicMock()
+            fake_response.url = "https://x.com/api/graphql/HomeLatestTimeline"  # matches
+            fake_response.json.side_effect = Exception("not json")
+            captured_handler[0](fake_response)
+            return None
+        mock_page.evaluate.side_effect = eval_side_effect
+
         with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
              patch("twit_browser.sync_playwright", return_value=mock_pw), \
              patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 0):
-            collect_tweets_via_browser(since_time=since, debug=False)
-
-        fake_response = MagicMock()
-        fake_response.url = "https://x.com/api/graphql/HomeLatestTimeline"
-        fake_response.json.side_effect = Exception("not json")
-        captured_handler[0](fake_response)
-        # No error means handler returned silently
+             patch("twit_browser.MAX_SCROLLS", 3):
+            tweets = collect_tweets_via_browser(since_time=since, debug=False)
+        # URL matched, but json() raised → handler returned silently → no oldest_seen
+        # → loop ran all 3 scrolls
+        assert tweets == []
+        assert mock_page.evaluate.call_count == 3
 
     def test_loop_breaks_on_oldest_seen(self, monkeypatch):
         """Loop breaks when oldest_seen < since_time."""
@@ -574,7 +579,7 @@ class TestCollectTweetsViaBrowser:
         assert tweets == []
 
     def test_response_handler_with_tweets(self, monkeypatch):
-        """Handler processes a valid HomeTimeline response with tweets."""
+        """Handler processes a valid HomeTimeline response with tweets — loop sees oldest_seen."""
         from twit_browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
@@ -588,8 +593,9 @@ class TestCollectTweetsViaBrowser:
         mock_context.new_page.return_value = mock_page
         mock_page.title.return_value = "Home / X"
 
+        # Tweet older than since_time so the loop breaks
         tweet_data = _make_tweet_data(
-            "user1", "Hello", "Mon Jun 01 12:00:00 +0000 2026"
+            "user1", "Hello", "Mon Jan 01 12:00:00 +0000 2018"
         )
 
         captured_handler = []
@@ -597,19 +603,26 @@ class TestCollectTweetsViaBrowser:
             captured_handler.append(handler)
         mock_page.on.side_effect = on_response
 
+        def eval_side_effect(*args, **kwargs):
+            if len(captured_handler) == 0:
+                return None
+            fake_response = MagicMock()
+            fake_response.url = "https://x.com/api/graphql/HomeLatestTimeline"
+            fake_response.json.return_value = tweet_data
+            captured_handler[0](fake_response)
+            return None
+        mock_page.evaluate.side_effect = eval_side_effect
+
         with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
              patch("twit_browser.sync_playwright", return_value=mock_pw), \
              patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 0):
+             patch("twit_browser.MAX_SCROLLS", 10):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
-
-        # Handler captured after function returned
-        fake_response = MagicMock()
-        fake_response.url = "https://x.com/api/graphql/HomeLatestTimeline"
-        fake_response.json.return_value = tweet_data
-        captured_handler[0](fake_response)
-        # Oldest_seen is updated, but tweets aren't in the returned list
-        # (they were appended to all_tweets inside the closure)
+        # Handler ran, set oldest_seen to 2018 which is < since (2020) → loop broke
+        # after first scroll. Only 1 page.evaluate call.
+        assert mock_page.evaluate.call_count == 1
+        # The tweet (2018) is older than since_time (2020) → filtered out
+        assert tweets == []
 
     def test_cookie_add_fails(self, monkeypatch):
         """When add_cookies fails, swallowed."""
@@ -634,8 +647,8 @@ class TestCollectTweetsViaBrowser:
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
         assert tweets == []
 
-    def test_unique_filtering(self, monkeypatch):
-        """Tweets are filtered and deduplicated."""
+    def test_basic_collection(self, monkeypatch):
+        """A single tweet is returned with all expected fields."""
         from twit_browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
@@ -655,7 +668,7 @@ class TestCollectTweetsViaBrowser:
             mock_response = MagicMock()
             mock_response.url = "https://x.com/api/graphql/HomeTimeline"
             mock_response.json.return_value = _make_tweet_data(
-                "u", "Same text", "Mon Jun 01 12:00:00 +0000 2026"
+                "u", "Some text", "Mon Jun 01 12:00:00 +0000 2026"
             )
             handler(mock_response)
         mock_page.on.side_effect = on_response
@@ -665,7 +678,64 @@ class TestCollectTweetsViaBrowser:
              patch("twit_browser.time"), \
              patch("twit_browser.MAX_SCROLLS", 0):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
+        # Sanity: one tweet, sorted by created_at ascending
         assert len(tweets) == 1
+        assert tweets[0]["text"] == "Some text"
+
+    def test_returns_sorted_by_date(self, monkeypatch):
+        """Tweets are sorted by created_at ascending."""
+        from twit_browser import collect_tweets_via_browser
+        since = datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+        mock_pw = MagicMock()
+        mock_browser = MagicMock()
+        mock_context = MagicMock()
+        mock_page = MagicMock()
+
+        mock_pw.__enter__.return_value.chromium.launch.return_value = mock_browser
+        mock_browser.new_context.return_value = mock_context
+        mock_context.new_page.return_value = mock_page
+        mock_page.title.return_value = "Home / X"
+
+        # Provide 3 tweets in non-sorted order
+        def on_response(event, handler):
+            mock_response = MagicMock()
+            mock_response.url = "https://x.com/api/graphql/HomeTimeline"
+            mock_response.json.return_value = {
+                "data": {"home": {"home_timeline_urt": {"instructions": [{
+                    "type": "TimelineAddEntries",
+                    "entries": [
+                        {"content": {"itemContent": {"itemType": "TimelineTweet", "tweet_results": {"result": {
+                            "__typename": "Tweet",
+                            "legacy": {"full_text": "third", "created_at": "Mon Jun 03 12:00:00 +0000 2026"},
+                            "core": {"user_results": {"result": {"core": {"screen_name": "u"}, "legacy": {}}}},
+                        }}}}},
+                        {"content": {"itemContent": {"itemType": "TimelineTweet", "tweet_results": {"result": {
+                            "__typename": "Tweet",
+                            "legacy": {"full_text": "first", "created_at": "Mon Jun 01 12:00:00 +0000 2026"},
+                            "core": {"user_results": {"result": {"core": {"screen_name": "u"}, "legacy": {}}}},
+                        }}}}},
+                        {"content": {"itemContent": {"itemType": "TimelineTweet", "tweet_results": {"result": {
+                            "__typename": "Tweet",
+                            "legacy": {"full_text": "second", "created_at": "Mon Jun 02 12:00:00 +0000 2026"},
+                            "core": {"user_results": {"result": {"core": {"screen_name": "u"}, "legacy": {}}}},
+                        }}}}},
+                    ],
+                }]}}}
+            }
+            handler(mock_response)
+        mock_page.on.side_effect = on_response
+
+        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twit_browser.sync_playwright", return_value=mock_pw), \
+             patch("twit_browser.time"), \
+             patch("twit_browser.MAX_SCROLLS", 0):
+            tweets = collect_tweets_via_browser(since_time=since, debug=False)
+        # 3 tweets returned, sorted by date ascending
+        assert len(tweets) == 3
+        assert tweets[0]["text"] == "first"
+        assert tweets[1]["text"] == "second"
+        assert tweets[2]["text"] == "third"
 
     def test_unique_filtering_rt_dedup(self, monkeypatch):
         """RTs with same content after stripping prefix are deduped."""
@@ -762,7 +832,7 @@ class TestCollectTweetsViaBrowser:
         assert len(tweets) == 1
 
     def test_filtered_by_since_time(self, monkeypatch):
-        """Tweets older than since_time are filtered out."""
+        """Tweets older than since_time are filtered out, recent ones kept."""
         from twit_browser import collect_tweets_via_browser
         since = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
@@ -776,14 +846,27 @@ class TestCollectTweetsViaBrowser:
         mock_context.new_page.return_value = mock_page
         mock_page.title.return_value = "Home / X"
 
+        # Two tweets: one before since_time (filtered), one after (kept)
         def on_response(event, handler):
-            # Tweet from 2020 (older than since_time)
-            data = _make_tweet_data(
-                "u", "Old text", "Mon Jan 01 12:00:00 +0000 2020"
-            )
             mock_response = MagicMock()
             mock_response.url = "https://x.com/api/graphql/HomeTimeline"
-            mock_response.json.return_value = data
+            mock_response.json.return_value = {
+                "data": {"home": {"home_timeline_urt": {"instructions": [{
+                    "type": "TimelineAddEntries",
+                    "entries": [
+                        {"content": {"itemContent": {"itemType": "TimelineTweet", "tweet_results": {"result": {
+                            "__typename": "Tweet",
+                            "legacy": {"full_text": "old tweet", "created_at": "Mon Jan 01 12:00:00 +0000 2020"},
+                            "core": {"user_results": {"result": {"core": {"screen_name": "u1"}, "legacy": {}}}},
+                        }}}}},
+                        {"content": {"itemContent": {"itemType": "TimelineTweet", "tweet_results": {"result": {
+                            "__typename": "Tweet",
+                            "legacy": {"full_text": "recent tweet", "created_at": "Mon Jun 01 12:00:00 +0000 2026"},
+                            "core": {"user_results": {"result": {"core": {"screen_name": "u2"}, "legacy": {}}}},
+                        }}}}},
+                    ],
+                }]}}}
+            }
             handler(mock_response)
         mock_page.on.side_effect = on_response
 
@@ -792,4 +875,7 @@ class TestCollectTweetsViaBrowser:
              patch("twit_browser.time"), \
              patch("twit_browser.MAX_SCROLLS", 0):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
-        assert tweets == []
+        # Only the recent tweet survives
+        assert len(tweets) == 1
+        assert tweets[0]["text"] == "recent tweet"
+        assert tweets[0]["screen_name"] == "u2"

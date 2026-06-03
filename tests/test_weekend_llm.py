@@ -210,7 +210,8 @@ class TestScoreItem:
     def test_basic_score_no_fields(self, mock_llm):
         from weekend_llm import _score_item
         score = _score_item({})
-        assert 0 <= score <= 5
+        # No fields populated → populated/len*3.0 = 0; normalized round(0/2, 1) = 0
+        assert score == 0.0
 
     def test_full_score_with_match(self, mock_llm):
         from weekend_llm import _score_item
@@ -219,13 +220,26 @@ class TestScoreItem:
             "target_ages": "5-10", "weather": "outdoor", "day": "Sat", "duration": "2h",
         }
         score = _score_item(item, weather_str="Sunny", age_range="5-10")
-        assert score > 0
+        # 7/7 fields populated → 3.0
+        # age 5-10 vs 5-10 → overlap 6 ≥ 2 → +3.0
+        # weather outdoor + Sunny → +2.0
+        # price $10 (not free) → +0.5
+        # location len > 5 → +0.5
+        # raw = 9.0; round(9.0 / 2.0, 1) = 4.5
+        assert score == 4.5
 
     def test_age_overlap(self, mock_llm):
         from weekend_llm import _score_item
         item = {"target_ages": "5-10"}
         score_overlap = _score_item(item, age_range="5-12")
         score_no_overlap = _score_item(item, age_range="20-30")
+        # 1/7 fields populated → 0.4286
+        # overlap: 5-10 vs 5-12 → 6 years → +3.0; vs 20-30 → 0 → +0
+        # raw_overlap = 3.4286; raw_no_overlap = 0.4286
+        # normalized: round(3.4286/2, 1) = 1.7; round(0.4286/2, 1) = 0.2
+        assert score_overlap == 1.7
+        assert score_no_overlap == 0.2
+        # Key invariant: overlap scores higher than no overlap
         assert score_overlap > score_no_overlap
 
     def test_age_overlap_one_year(self, mock_llm):
@@ -235,19 +249,33 @@ class TestScoreItem:
         item = {"target_ages": "10-15"}
         score_one = _score_item(item, age_range="5-10")
         score_none = _score_item(item, age_range="20-25")
+        # 1/7 fields populated → 0.4286
+        # raw_one = 0.4286 + 1.5 = 1.9286; round(1.9286/2, 1) = 1.0
+        # raw_none = 0.4286; round(0.4286/2, 1) = 0.2
+        assert score_one == 1.0
+        assert score_none == 0.2
+        # Key invariant: one-year overlap (1.5 bonus) scores higher than no overlap
         assert score_one > score_none
 
     def test_age_no_nums(self, mock_llm):
         from weekend_llm import _score_item
         item = {"target_ages": "all"}
         score = _score_item(item, age_range="5-10")
-        assert 0 <= score <= 5
+        # No digits → age range block skipped
+        # 1/7 fields populated → 0.4286; round(0.4286/2, 1) = 0.2
+        assert score == 0.2
 
     def test_weather_match_sunny(self, mock_llm):
         from weekend_llm import _score_item
         item = {"weather": "outdoor"}
         score_match = _score_item(item, weather_str="Sunny and clear")
         score_mismatch = _score_item(item, weather_str="Cloudy with rain")
+        # 1/7 fields populated → 0.4286
+        # "outdoor" + Sunny → is_sunny + forecast_sunny → +2.0; raw_match = 2.4286 / 2 = 1.2
+        # "outdoor" + Cloudy → is_sunny True, forecast_sunny False, is_cloudy False → +1.0; raw_mismatch = 1.4286 / 2 = 0.7
+        assert score_match == 1.2
+        assert score_mismatch == 0.7
+        # Match is greater than mismatch
         assert score_match > score_mismatch
 
     def test_weather_match_cloudy(self, mock_llm):
@@ -255,13 +283,21 @@ class TestScoreItem:
         item = {"weather": "indoor"}
         score_match = _score_item(item, weather_str="Cloudy and wet")
         score_mismatch = _score_item(item, weather_str="Sunny and clear")
+        # 1/7 fields populated → 0.4286
+        # "indoor" + Cloudy → is_cloudy + forecast_cloudy → +2.0; raw_match = 2.4286 / 2 = 1.2
+        # "indoor" + Sunny → is_cloudy True, forecast_cloudy False, is_sunny False → +1.0; raw_mismatch = 1.4286 / 2 = 0.7
+        assert score_match == 1.2
+        assert score_mismatch == 0.7
         assert score_match > score_mismatch
 
     def test_price_free(self, mock_llm):
         from weekend_llm import _score_item
         item = {"price": "Free"}
         score = _score_item(item)
-        assert 0 <= score <= 5
+        # 1/7 fields populated → 0.4286
+        # "free" is in skip list → no price bonus
+        # round(0.4286/2, 1) = 0.2
+        assert score == 0.2
 
     def test_price_paid(self, mock_llm):
         from weekend_llm import _score_item

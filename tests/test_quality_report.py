@@ -107,6 +107,10 @@ class TestGenerateReport:
         result = generate_report([sc])
         # No filename section in middle
         # The summary table still has all columns
+        assert "summarize" in result
+        # The other task sections should not appear
+        assert "FILENAME" not in result
+        assert "FILE_SUMMARY" not in result
 
 
 class TestBaseline:

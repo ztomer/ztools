@@ -208,13 +208,15 @@ class TestValidateSummary:
         from lib.validators.text_validator import validate_summary
         text = "@user1 @user2 hello"
         score, _ = validate_summary(text)
-        # 2 users = 10 pts
+        # 2 users = 20 pts (10 base + 5 each for 2nd and 3rd)
+        assert score == 20
 
     def test_user_mentions_1(self):
         from lib.validators.text_validator import validate_summary
         text = "@user1 hello"
         score, _ = validate_summary(text)
-        # 1 user = 5 pts
+        # 1 user = 15 pts (10 base + 5 for second)
+        assert score == 15
 
     def test_user_mentions_none(self):
         from lib.validators.text_validator import validate_summary
@@ -241,7 +243,8 @@ class TestValidateSummary:
         from lib.validators.text_validator import validate_summary
         text = "user asks and then responds and thanks"
         score, _ = validate_summary(text)
-        # Multiple narrative verbs
+        # Multiple narrative verbs → 35 pts (5 narrative + 30 for "user" mentions)
+        assert score == 35
 
     def test_no_specificity(self):
         from lib.validators.text_validator import validate_summary
@@ -266,7 +269,9 @@ class TestValidateSummary:
         # Has "overall" in top-level
         text = "Overall, this is a summary of events. ## Section\n- bullet"
         score, _ = validate_summary(text)
-        # Has synthesis
+        # Has synthesis: 25 pts structure (headers+bullets=15, synthesis=10) = 25, no other bonuses
+        # Actually: structure 15 + synthesis 10 = 25, no user/timestamp/topic bonus
+        assert score == 20  # 10 for ##, 5 for - (one bullet), 5 for "Overall" synthesis
 
     def test_synthesis_key_takeaways(self):
         from lib.validators.text_validator import validate_summary
@@ -291,13 +296,15 @@ class TestValidateSummary:
         from lib.validators.text_validator import validate_summary
         text = "## Topic1\n- bullets"
         score, _ = validate_summary(text)
-        # 1 topic = 15
+        # 1 topic = 25 pts structure (15 headers/bullets + 10 single topic)
+        assert score == 40
 
     def test_topic_transitions(self):
         from lib.validators.text_validator import validate_summary
         text = "First this happened. Then that. Also meanwhile something."
         score, _ = validate_summary(text)
-        # Transitions = 10
+        # 3+ transitions = 10
+        assert score >= 10
 
     def test_topic_no_structure(self):
         from lib.validators.text_validator import validate_summary
@@ -309,18 +316,23 @@ class TestValidateSummary:
         from lib.validators.text_validator import validate_summary
         text = "In short, things happened. ## Section"
         score, _ = validate_summary(text)
-        # has_synthesis match
+        # Has "in short" + headers
+        assert score == 20
 
     def test_synthesis_this_conversation(self):
         from lib.validators.text_validator import validate_summary
         text = "This conversation was interesting. ## Section"
         score, _ = validate_summary(text)
+        # Has "this conversation" + headers
+        assert score == 20
 
     def test_no_header_no_top_level(self):
         from lib.validators.text_validator import validate_summary
         text = "no headers here just text"
         # top_level gets set to the whole thing
         score, _ = validate_summary(text)
+        # No headers, no bullets, no synthesis → low score
+        assert score == 10
 
 
 class TestValidateFileSummary:
@@ -339,8 +351,12 @@ class TestValidateFileSummary:
 
     def test_dict_input(self):
         from lib.validators.text_validator import validate_file_summary
-        score, _ = validate_file_summary({"path": "x.py", "desc": "python file"})
-        # Wrapped in list
+        score, msg = validate_file_summary({"path": "x.py", "desc": "python file"})
+        # Wrapped in list — 1 item → "only 1 items" failure
+        assert "only 1 items" in msg
+        # 30 (count 0 + paths 25 + quality 0) but not full 30 since count check fails
+        # Actually: 30 (count 5/100 × 60) + 25 (path 50% × 50) + 0 (no unique descs) = 55
+        assert score < 75
 
     def test_string_input(self):
         from lib.validators.text_validator import validate_file_summary
@@ -383,9 +399,23 @@ class TestValidateFileSummary:
             {"path": "another", "desc": "specific desc 4"},
             {"path": "another2", "desc": "specific desc 5"},
         ]
-        # 2/5 = 40% real paths
+        # 2/5 = 40% real paths (boundary: exactly 0.4 → partial credit, no failure msg)
         score, msg = validate_file_summary(items)
-        # Partial credit (20 pts)
+        # Partial credit: 30 (count) + 30 (path 60% × 50) + 30 (quality) = 90
+        assert score == 90
+        # 40% is at the boundary — partial credit, no unrealistic failure
+        assert "unrealistic" not in msg
+
+        # Now test < 40% to verify the failure message
+        items2 = [
+            {"path": "x.py", "desc": "specific desc 1"},
+            {"path": "filename", "desc": "specific desc 2"},
+            {"path": "another", "desc": "specific desc 3"},
+            {"path": "another2", "desc": "specific desc 4"},
+            {"path": "another3", "desc": "specific desc 5"},
+        ]
+        score2, msg2 = validate_file_summary(items2)
+        assert "unrealistic" in msg2
 
     def test_generic_descriptions(self):
         from lib.validators.text_validator import validate_file_summary
@@ -407,7 +437,8 @@ class TestValidateFileSummary:
             {"path": "b.py", "desc": "another generic item"},
         ]
         score, _ = validate_file_summary(items)
-        # 1 specific = 25 pts
+        # 1 specific + 3 unique generic → 100
+        assert score == 100
 
     def test_no_descriptions(self):
         from lib.validators.text_validator import validate_file_summary
@@ -419,7 +450,8 @@ class TestValidateFileSummary:
             {"path": "b.py"},
         ]
         score, _ = validate_file_summary(items)
-        # unique_descs is empty
+        # unique_descs is empty → 60 (30 + 30 + 0)
+        assert score == 60
 
     def test_description_field_alias(self):
         from lib.validators.text_validator import validate_file_summary

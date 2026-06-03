@@ -548,7 +548,8 @@ class TestValidateDetailedJson:
         # Just 1/10 = 0.1 = minimal tier (but > 0)
         source = "event 0"
         score, _ = validate_json(items, source_text=source)
-        # Some score from source
+        # Source match contributes ~20 (minimal tier) + base 55 (10 items, unique) = 75
+        assert score == 75
 
     def test_source_match_high_score(self):
         from lib.validators.json_validator import validate_json

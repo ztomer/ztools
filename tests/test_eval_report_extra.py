@@ -35,6 +35,11 @@ class TestPrintCrossModelComparison:
             eval_report.print_cross_model_comparison([{"model": "m1", "results": []}])
         finally:
             eval_report.console = old
+        # Header printed but no rows (first_results is empty)
+        out = buf.getvalue()
+        assert "Cross-Model" in out
+        # No table rows because first_results is empty
+        assert "model_a" not in out
 
     def test_no_first_results(self):
         import eval_report
@@ -48,6 +53,10 @@ class TestPrintCrossModelComparison:
             eval_report.print_cross_model_comparison(results)
         finally:
             eval_report.console = old
+        out = buf.getvalue()
+        # Header printed, no rows
+        assert "Cross-Model" in out
+        assert "m1" not in out  # m1 is a screen_name not in task rows
 
     def test_full_table(self):
         import eval_report
@@ -67,6 +76,17 @@ class TestPrintCrossModelComparison:
             eval_report.print_cross_model_comparison(results)
         finally:
             eval_report.console = old
+        out = buf.getvalue()
+        # Header printed
+        assert "Cross-Model" in out
+        # Both models in the table
+        assert "model_a" in out
+        assert "model_b" in out
+        # Tasks rendered
+        assert "t1" in out
+        assert "t2" in out
+        # Best score marker (*)
+        assert "*" in out
 
 
 class TestPrintScoreStats:
@@ -78,6 +98,8 @@ class TestPrintScoreStats:
             eval_report.print_score_stats({})
         finally:
             eval_report.console = old
+        # Empty stats → no header printed
+        assert "Mean" not in buf.getvalue()
 
     def test_full_stats(self):
         import eval_report
@@ -91,6 +113,16 @@ class TestPrintScoreStats:
             eval_report.print_score_stats(stats)
         finally:
             eval_report.console = old
+        out = buf.getvalue()
+        # Both models printed
+        assert "m1" in out
+        assert "m2" in out
+        # Mean values
+        assert "85.0" in out
+        assert "70.0" in out
+        # Header columns
+        assert "Mean" in out
+        assert "Stdev" in out
 
 
 class TestPrintFailureSummary:
@@ -102,6 +134,8 @@ class TestPrintFailureSummary:
             eval_report.print_failure_summary({})
         finally:
             eval_report.console = old
+        # Empty → nothing printed
+        assert buf.getvalue() == ""
 
     def test_with_categories(self):
         import eval_report
@@ -115,6 +149,15 @@ class TestPrintFailureSummary:
             eval_report.print_failure_summary(categories)
         finally:
             eval_report.console = old
+        out = buf.getvalue()
+        # Both categories printed
+        assert "FORMAT" in out
+        assert "INFRA" in out
+        # Counts
+        assert "5" in out
+        assert "3" in out
+        # Models mentioned
+        assert "m1" in out or "m2" in out
 
 
 class TestHistoricalFunctions:
@@ -238,6 +281,8 @@ class TestPrintHistoricalTrends:
                 eval_report.print_historical_trends()
         finally:
             eval_report.console = old
+        # No stats → no output
+        assert "Historical" not in buf.getvalue() or buf.getvalue() == ""
 
     def test_with_stats(self):
         import eval_report
@@ -254,6 +299,9 @@ class TestPrintHistoricalTrends:
                 eval_report.print_historical_trends()
         finally:
             eval_report.console = old
+        out = buf.getvalue()
+        # At least the section header is printed
+        assert "Historical" in out or "Trend" in out or len(out) > 0
 
 
 class TestPrintVerbosity:
@@ -265,6 +313,8 @@ class TestPrintVerbosity:
             eval_report.print_verbosity({})
         finally:
             eval_report.console = old
+        # Empty → no output
+        assert buf.getvalue() == ""
 
     def test_with_verbosity(self):
         import eval_report
@@ -278,6 +328,10 @@ class TestPrintVerbosity:
             eval_report.print_verbosity(verbosity)
         finally:
             eval_report.console = old
+        out = buf.getvalue()
+        # Both models printed
+        assert "m1" in out
+        assert "m2" in out
 
 
 class TestPrintErrorRates:
@@ -289,6 +343,8 @@ class TestPrintErrorRates:
             eval_report.print_error_rates({})
         finally:
             eval_report.console = old
+        # Empty → no output
+        assert buf.getvalue() == ""
 
     def test_with_rates(self):
         import eval_report
@@ -304,6 +360,12 @@ class TestPrintErrorRates:
             eval_report.print_error_rates(rates)
         finally:
             eval_report.console = old
+        out = buf.getvalue()
+        # Both models printed
+        assert "m1" in out
+        assert "m2" in out
+        # At least one rate is visible
+        assert "62" in out or "100" in out or "%" in out
 
 
 class TestDiffFromLastRun:
@@ -367,6 +429,8 @@ class TestPrintDiff:
             eval_report.print_diff({})
         finally:
             eval_report.console = old
+        # Empty → no output
+        assert buf.getvalue() == ""
 
     def test_no_changes(self):
         import eval_report
@@ -377,6 +441,10 @@ class TestPrintDiff:
             eval_report.print_diff(diffs)
         finally:
             eval_report.console = old
+        out = buf.getvalue()
+        # No changes → no table printed (only blank line at top)
+        assert "Model" not in out
+        assert "Diff" not in out
 
     def test_with_changes(self):
         import eval_report
@@ -392,6 +460,17 @@ class TestPrintDiff:
             eval_report.print_diff(diffs)
         finally:
             eval_report.console = old
+        out = buf.getvalue()
+        # Both tasks printed with their diffs
+        assert "m1" in out
+        assert "t1" in out
+        assert "t2" in out
+        # Arrow characters present (up for +5, down for -10)
+        assert "\u2191" in out
+        assert "\u2193" in out
+        # Diff magnitudes shown
+        assert "5" in out
+        assert "10" in out
 
 
 class TestExportToCsv:

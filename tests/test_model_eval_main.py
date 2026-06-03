@@ -59,7 +59,7 @@ class TestMainFlow:
                 model_eval.main()
         assert e.value.code == 1
 
-    def test_specific_task(self, mock_llm, monkeypatch):
+    def test_specific_task(self, mock_llm, monkeypatch, capsys):
         import model_eval
         monkeypatch.setattr(sys, "argv", ["model_eval", "--task", "filename"])
         fake_results = [{"task": "filename", "quality_score": 80, "result": {"content": "x"}}]
@@ -67,9 +67,19 @@ class TestMainFlow:
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1"]), \
              patch.object(model_eval, "build_tasks_from_model", return_value={}), \
-             patch.object(model_eval, "run_eval", return_value=fake_results), \
-             patch.object(model_eval, "_print_results"):
+             patch.object(model_eval, "run_eval", return_value=fake_results) as mock_run, \
+             patch.object(model_eval, "_print_results"), \
+             patch.object(model_eval, "is_server_responsive", return_value=True), \
+             patch.object(model_eval, "estimate_model_memory", return_value=4), \
+             patch.object(model_eval, "get_memory_percent", return_value=50.0):
             model_eval.main()
+        # run_eval was called with the specific task
+        called_tasks = mock_run.call_args.kwargs.get("tasks", {})
+        assert "filename" in called_tasks
+        assert len(called_tasks) == 1
+        # Score rendered
+        out = capsys.readouterr().out
+        assert "80%" in out
 
     def test_unknown_task_exits(self, mock_llm, monkeypatch):
         import model_eval
@@ -82,7 +92,7 @@ class TestMainFlow:
                 model_eval.main()
         assert e.value.code == 1
 
-    def test_config_tasks_loaded(self, mock_llm, monkeypatch):
+    def test_config_tasks_loaded(self, mock_llm, monkeypatch, capsys):
         """When build_tasks_from_model returns tasks, use them."""
         import model_eval
         monkeypatch.setattr(sys, "argv", ["model_eval"])
@@ -91,9 +101,17 @@ class TestMainFlow:
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1"]), \
              patch.object(model_eval, "build_tasks_from_model", return_value=config_tasks), \
-             patch.object(model_eval, "run_eval", return_value=[]), \
-             patch.object(model_eval, "_print_results"):
+             patch.object(model_eval, "run_eval", return_value=[]) as mock_run, \
+             patch.object(model_eval, "_print_results"), \
+             patch.object(model_eval, "is_server_responsive", return_value=True), \
+             patch.object(model_eval, "estimate_model_memory", return_value=4), \
+             patch.object(model_eval, "get_memory_percent", return_value=50.0):
             model_eval.main()
+        # run_eval was called with the config_tasks
+        called_tasks = mock_run.call_args.kwargs.get("tasks", {})
+        assert called_tasks == config_tasks
+        out = capsys.readouterr().out
+        assert "0 tasks" in out
 
     def test_config_tasks_with_specific_task_match(self, mock_llm, monkeypatch):
         """--task matching config task uses that task only."""
@@ -115,25 +133,37 @@ class TestMainFlow:
         assert task_name in called_tasks
         assert len(called_tasks) == 1
 
-    def test_config_tasks_with_specific_task_no_match(self, mock_llm, monkeypatch):
-        """--task not in config_tasks prints FAIL."""
+    def test_config_tasks_with_specific_task_no_match(self, mock_llm, monkeypatch, capsys):
+        """--task not in config_tasks prints FAIL but keeps using the original TASKS dict."""
         import model_eval
         from eval_tasks_core import TASKS
         task_name = next(iter(TASKS.keys()))
         monkeypatch.setattr(sys, "argv", ["model_eval", "--task", task_name])
-        # config_tasks has different tasks
+        # config_tasks has different tasks (no overlap with --task)
         config_tasks = {"other1": {"prompt": "P"}, "other2": {"prompt": "P"}}
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1"]), \
              patch.object(model_eval, "build_tasks_from_model", return_value=config_tasks), \
              patch.object(model_eval, "run_eval", return_value=[]) as mock_run, \
-             patch.object(model_eval, "_print_results"):
+             patch.object(model_eval, "_print_results"), \
+             patch.object(model_eval, "is_server_responsive", return_value=True), \
+             patch.object(model_eval, "estimate_model_memory", return_value=4), \
+             patch.object(model_eval, "get_memory_percent", return_value=50.0):
             model_eval.main()
-        # Falls back to all config tasks
+        # main() still runs run_eval — it just doesn't substitute the task from config
         mock_run.assert_called_once()
+        called_tasks = mock_run.call_args.kwargs["tasks"]
+        # The --task wasn't in config_tasks, so tasks_to_run keeps the {task: TASKS[task]} subset
+        # (set by the earlier args.task branch — config branch didn't override it)
+        assert task_name in called_tasks
+        assert len(called_tasks) == 1
+        out = capsys.readouterr().out
+        # The not-in-config error message is printed
+        assert "not in config" in out
 
-    def test_quick_mode(self, mock_llm, monkeypatch):
+    def test_quick_mode(self, mock_llm, monkeypatch, capsys):
+        """--quick mode prints the quick mode banner and still calls run_eval."""
         import model_eval
         monkeypatch.setattr(sys, "argv", ["model_eval", "--quick"])
         with patch.object(model_eval, "init_config"), \
@@ -141,27 +171,44 @@ class TestMainFlow:
              patch.object(model_eval, "get_models", return_value=["m1"]), \
              patch.object(model_eval, "build_tasks_from_model", return_value={}), \
              patch.object(model_eval, "run_eval", return_value=[]) as mock_run, \
-             patch.object(model_eval, "_print_results"):
+             patch.object(model_eval, "_print_results"), \
+             patch.object(model_eval, "is_server_responsive", return_value=True), \
+             patch.object(model_eval, "estimate_model_memory", return_value=4), \
+             patch.object(model_eval, "get_memory_percent", return_value=50.0):
             model_eval.main()
-        # quick_run_eval was called (via mock since we replaced run_eval)
         mock_run.assert_called_once()
+        out = capsys.readouterr().out
+        # Quick mode banner
+        assert "Quick mode" in out
 
-    def test_quality_mode(self, mock_llm, monkeypatch):
+    def test_quality_mode(self, mock_llm, monkeypatch, capsys):
+        """--quality mode calls lib.quality.run_suite and prints Quality scores line."""
         import model_eval
         monkeypatch.setattr(sys, "argv", ["model_eval", "--quality"])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1"]), \
              patch.object(model_eval, "build_tasks_from_model", return_value={}), \
-             patch.object(model_eval, "_print_results"):
-            # Mock the lib.quality module
+             patch.object(model_eval, "_print_results"), \
+             patch.object(model_eval, "is_server_responsive", return_value=True), \
+             patch.object(model_eval, "estimate_model_memory", return_value=4), \
+             patch.object(model_eval, "get_memory_percent", return_value=50.0):
             fake_qm = MagicMock()
-            fake_qm.ALL_TEST_CASES = [MagicMock(task="t1")]
+            fake_case = MagicMock(task="t1")
+            fake_qm.ALL_TEST_CASES = [fake_case]
             fake_qm.run_suite.return_value = [MagicMock()]
             with patch.dict("sys.modules", {"lib.quality": fake_qm}):
                 with patch.object(model_eval, "_quality_results_to_eval_format",
                                  return_value=[{"task": "t1", "quality_score": 80, "result": {"content": "x"}}]):
                     model_eval.main()
+        # lib.quality.run_suite was called with the model
+        fake_qm.run_suite.assert_called_once()
+        call_args = fake_qm.run_suite.call_args
+        assert call_args[0][0] == ["m1"]  # models list
+        # _quality_results_to_eval_format was called
+        out = capsys.readouterr().out
+        # Quality scores summary printed
+        assert "Quality scores" in out
 
     def test_quality_mode_with_task_filter(self, mock_llm, monkeypatch):
         """Quality mode with --task filters cases."""
@@ -187,7 +234,7 @@ class TestMainFlow:
                 call_args = fake_qm.run_suite.call_args
                 assert len(call_args[0][1]) == 1
 
-    def test_no_scores(self, mock_llm, monkeypatch):
+    def test_no_scores(self, mock_llm, monkeypatch, capsys):
         """When results have no scores, prints '0 tasks'."""
         import model_eval
         monkeypatch.setattr(sys, "argv", ["model_eval"])
@@ -196,11 +243,16 @@ class TestMainFlow:
              patch.object(model_eval, "get_models", return_value=["m1"]), \
              patch.object(model_eval, "build_tasks_from_model", return_value={}), \
              patch.object(model_eval, "run_eval", return_value=[]), \
-             patch.object(model_eval, "_print_results"):
+             patch.object(model_eval, "_print_results"), \
+             patch.object(model_eval, "is_server_responsive", return_value=True), \
+             patch.object(model_eval, "estimate_model_memory", return_value=4), \
+             patch.object(model_eval, "get_memory_percent", return_value=50.0):
             model_eval.main()
+        out = capsys.readouterr().out
+        assert "0 tasks" in out
 
-    def test_high_avg_score(self, mock_llm, monkeypatch):
-        """All scores >= 90 — STEP status."""
+    def test_high_avg_score(self, mock_llm, monkeypatch, capsys):
+        """All scores >= 90 — STEP status (·)."""
         import model_eval
         monkeypatch.setattr(sys, "argv", ["model_eval"])
         fake_results = [
@@ -212,11 +264,17 @@ class TestMainFlow:
              patch.object(model_eval, "get_models", return_value=["m1"]), \
              patch.object(model_eval, "build_tasks_from_model", return_value={}), \
              patch.object(model_eval, "run_eval", return_value=fake_results), \
-             patch.object(model_eval, "_print_results"):
+             patch.object(model_eval, "_print_results"), \
+             patch.object(model_eval, "is_server_responsive", return_value=True), \
+             patch.object(model_eval, "estimate_model_memory", return_value=4), \
+             patch.object(model_eval, "get_memory_percent", return_value=50.0):
             model_eval.main()
+        out = capsys.readouterr().out
+        # STEP (·) means all scores >= 90
+        assert "98%" in out or "97%" in out  # avg of 95+100 = 97.5
 
-    def test_mid_avg_score(self, mock_llm, monkeypatch):
-        """Some scores >= 50 but not all >= 90 — WARN."""
+    def test_mid_avg_score(self, mock_llm, monkeypatch, capsys):
+        """Some scores >= 50 but not all >= 90 — WARN (!)."""
         import model_eval
         monkeypatch.setattr(sys, "argv", ["model_eval"])
         fake_results = [
@@ -228,11 +286,17 @@ class TestMainFlow:
              patch.object(model_eval, "get_models", return_value=["m1"]), \
              patch.object(model_eval, "build_tasks_from_model", return_value={}), \
              patch.object(model_eval, "run_eval", return_value=fake_results), \
-             patch.object(model_eval, "_print_results"):
+             patch.object(model_eval, "_print_results"), \
+             patch.object(model_eval, "is_server_responsive", return_value=True), \
+             patch.object(model_eval, "estimate_model_memory", return_value=4), \
+             patch.object(model_eval, "get_memory_percent", return_value=50.0):
             model_eval.main()
+        out = capsys.readouterr().out
+        # WARN (!) means any score >= 50 but not all >= 90
+        assert "70%" in out  # avg of 60+80
 
-    def test_low_avg_score(self, mock_llm, monkeypatch):
-        """All scores < 50 — FAIL."""
+    def test_low_avg_score(self, mock_llm, monkeypatch, capsys):
+        """All scores < 50 — FAIL (✗)."""
         import model_eval
         monkeypatch.setattr(sys, "argv", ["model_eval"])
         fake_results = [
@@ -244,10 +308,16 @@ class TestMainFlow:
              patch.object(model_eval, "get_models", return_value=["m1"]), \
              patch.object(model_eval, "build_tasks_from_model", return_value={}), \
              patch.object(model_eval, "run_eval", return_value=fake_results), \
-             patch.object(model_eval, "_print_results"):
+             patch.object(model_eval, "_print_results"), \
+             patch.object(model_eval, "is_server_responsive", return_value=True), \
+             patch.object(model_eval, "estimate_model_memory", return_value=4), \
+             patch.object(model_eval, "get_memory_percent", return_value=50.0):
             model_eval.main()
+        out = capsys.readouterr().out
+        # FAIL (✗) means all scores < 50
+        assert "25%" in out  # avg of 30+20
 
-    def test_multiple_models_with_flush(self, mock_llm, monkeypatch):
+    def test_multiple_models_with_flush(self, mock_llm, monkeypatch, capsys):
         """Multiple models trigger flush_between_models (which calls call)."""
         import model_eval
         monkeypatch.setattr(sys, "argv", ["model_eval"])
@@ -265,9 +335,11 @@ class TestMainFlow:
              patch("time.sleep"):
             model_eval.main()
         # Flush calls call() once for the next model
-        mock_call.assert_called()
+        assert mock_call.call_count == 1
+        out = capsys.readouterr().out
+        assert "Flushing" in out or "m1" in out
 
-    def test_low_memory_warning(self, mock_llm, monkeypatch):
+    def test_low_memory_warning(self, mock_llm, monkeypatch, capsys):
         """Memory > threshold triggers warning."""
         import model_eval
         monkeypatch.setattr(sys, "argv", ["model_eval"])
@@ -281,8 +353,10 @@ class TestMainFlow:
              patch.object(model_eval, "estimate_model_memory", return_value=4), \
              patch.object(model_eval, "get_memory_percent", return_value=95.0):
             model_eval.main()
+        out = capsys.readouterr().out
+        assert "95.0%" in out
 
-    def test_model_too_big_for_memory(self, mock_llm, monkeypatch):
+    def test_model_too_big_for_memory(self, mock_llm, monkeypatch, capsys):
         """Model too big for available memory — warning."""
         import model_eval
         monkeypatch.setattr(sys, "argv", ["model_eval"])
@@ -296,8 +370,11 @@ class TestMainFlow:
              patch.object(model_eval, "estimate_model_memory", return_value=70), \
              patch.object(model_eval, "get_memory_percent", return_value=50.0):
             model_eval.main()
+        out = capsys.readouterr().out
+        # 70b model with 50% memory free (32GB) → too big
+        assert "70GB" in out or "70b" in out
 
-    def test_server_not_responsive(self, mock_llm, monkeypatch):
+    def test_server_not_responsive(self, mock_llm, monkeypatch, capsys):
         """Server not responsive — print FAIL."""
         import model_eval
         monkeypatch.setattr(sys, "argv", ["model_eval"])
@@ -311,6 +388,8 @@ class TestMainFlow:
              patch.object(model_eval, "estimate_model_memory", return_value=4), \
              patch.object(model_eval, "get_memory_percent", return_value=50.0):
             model_eval.main()
+        out = capsys.readouterr().out
+        assert "Server not responsive" in out or "restart" in out.lower()
 
     def test_task_arg_in_hardcoded_tasks(self, mock_llm, monkeypatch):
         """--task filters to single task from hardcoded TASKS."""
@@ -335,7 +414,7 @@ class TestMainFlow:
 class TestFlushBetweenModels:
     """flush_between_models is a nested function inside main(). Use main() to exercise it."""
 
-    def test_flush_success_path(self, mock_llm, monkeypatch):
+    def test_flush_success_path(self, mock_llm, monkeypatch, capsys):
         """Test the success path of flush via main() with multiple models."""
         import model_eval
         monkeypatch.setattr(sys, "argv", ["model_eval"])
@@ -344,13 +423,112 @@ class TestFlushBetweenModels:
              patch.object(model_eval, "get_models", return_value=["m1", "m2"]), \
              patch.object(model_eval, "build_tasks_from_model", return_value={}), \
              patch.object(model_eval, "run_eval", return_value=[]), \
-             patch.object(model_eval, "call", return_value={}), \
+             patch.object(model_eval, "call", return_value={}) as mock_call, \
              patch.object(model_eval, "_print_results"), \
              patch.object(model_eval, "is_server_responsive", return_value=True), \
              patch.object(model_eval, "estimate_model_memory", return_value=4), \
              patch.object(model_eval, "get_memory_percent", return_value=50.0), \
              patch("time.sleep"):
             model_eval.main()
+        # call() was invoked for the flush
+        assert mock_call.call_count == 1
+        out = capsys.readouterr().out
+        assert "Flushing" in out
+
+    def test_flush_with_error_triggers_restart(self, mock_llm, monkeypatch, capsys):
+        import model_eval
+        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        with patch.object(model_eval, "init_config"), \
+             patch.object(model_eval, "is_server_running", return_value=True), \
+             patch.object(model_eval, "get_models", return_value=["m1", "m2"]), \
+             patch.object(model_eval, "build_tasks_from_model", return_value={}), \
+             patch.object(model_eval, "run_eval", return_value=[]), \
+             patch.object(model_eval, "call", return_value={"error": "fail"}), \
+             patch.object(model_eval, "_print_results"), \
+             patch.object(model_eval, "is_server_responsive", return_value=True), \
+             patch.object(model_eval, "estimate_model_memory", return_value=4), \
+             patch.object(model_eval, "get_memory_percent", return_value=50.0), \
+             patch("subprocess.run") as mock_subprocess, \
+             patch("time.sleep"), \
+             patch("requests.get") as mock_get:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_get.return_value = mock_resp
+            model_eval.main()
+        # subprocess was called for both quit and open. Verify the right commands.
+        sub_calls = [str(c) for c in mock_subprocess.call_args_list]
+        # Quit command (osascript)
+        assert any("osascript" in s and "quit" in s for s in sub_calls)
+        # Open command
+        assert any("open" in s and "osaurus" in s for s in sub_calls)
+        out = capsys.readouterr().out
+        assert "Flush failed" in out or "restart" in out.lower()
+
+    def test_flush_subprocess_error_caught(self, mock_llm, monkeypatch, capsys):
+        import model_eval
+        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        with patch.object(model_eval, "init_config"), \
+             patch.object(model_eval, "is_server_running", return_value=True), \
+             patch.object(model_eval, "get_models", return_value=["m1", "m2"]), \
+             patch.object(model_eval, "build_tasks_from_model", return_value={}), \
+             patch.object(model_eval, "run_eval", return_value=[]), \
+             patch.object(model_eval, "call", return_value={"error": "fail"}), \
+             patch.object(model_eval, "_print_results"), \
+             patch.object(model_eval, "is_server_responsive", return_value=True), \
+             patch.object(model_eval, "estimate_model_memory", return_value=4), \
+             patch.object(model_eval, "get_memory_percent", return_value=50.0), \
+             patch("subprocess.run", side_effect=Exception("cmd error")), \
+             patch("time.sleep"), \
+             patch("requests.get", return_value=MagicMock(status_code=200)):
+            # Should not raise — exception caught
+            model_eval.main()
+        out = capsys.readouterr().out
+        # We got to the flush step
+        assert "Flushing" in out
+        # And the error was caught (no traceback printed to stdout)
+        assert "Traceback" not in out
+
+    def test_flush_request_error_caught(self, mock_llm, monkeypatch, capsys):
+        import model_eval
+        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        with patch.object(model_eval, "init_config"), \
+             patch.object(model_eval, "is_server_running", return_value=True), \
+             patch.object(model_eval, "get_models", return_value=["m1", "m2"]), \
+             patch.object(model_eval, "build_tasks_from_model", return_value={}), \
+             patch.object(model_eval, "run_eval", return_value=[]), \
+             patch.object(model_eval, "call", return_value={"error": "fail"}), \
+             patch.object(model_eval, "_print_results"), \
+             patch.object(model_eval, "is_server_responsive", return_value=True), \
+             patch.object(model_eval, "estimate_model_memory", return_value=4), \
+             patch.object(model_eval, "get_memory_percent", return_value=50.0), \
+             patch("subprocess.run"), \
+             patch("time.sleep"), \
+             patch("requests.get", side_effect=Exception("conn err")):
+            # Should not raise
+            model_eval.main()
+        out = capsys.readouterr().out
+        assert "Flushing" in out
+        # requests exception is caught by inner try/except → no traceback
+        assert "Traceback" not in out
+
+    def test_flush_call_exception_caught(self, mock_llm, monkeypatch, capsys):
+        import model_eval
+        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        with patch.object(model_eval, "init_config"), \
+             patch.object(model_eval, "is_server_running", return_value=True), \
+             patch.object(model_eval, "get_models", return_value=["m1", "m2"]), \
+             patch.object(model_eval, "build_tasks_from_model", return_value={}), \
+             patch.object(model_eval, "run_eval", return_value=[]), \
+             patch.object(model_eval, "call", side_effect=Exception("api boom")), \
+             patch.object(model_eval, "_print_results"), \
+             patch.object(model_eval, "is_server_responsive", return_value=True), \
+             patch.object(model_eval, "estimate_model_memory", return_value=4), \
+             patch.object(model_eval, "get_memory_percent", return_value=50.0), \
+             patch("time.sleep"):
+            model_eval.main()
+        out = capsys.readouterr().out
+        # Outer try/except caught the exception
+        assert "Flush error" in out and "api boom" in out
 
     def test_flush_with_error_triggers_restart(self, mock_llm, monkeypatch):
         import model_eval

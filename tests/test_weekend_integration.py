@@ -76,20 +76,26 @@ class TestWeekendMainFlow:
         try:
             with patch("os.path.expanduser", return_value=str(tmp_path)), \
                  patch.object(wp, "_fetch_data", return_value=(FAKE_WEATHER, FAKE_EVENTS, FAKE_VENUES, FAKE_DATES)), \
-                 patch.object(wp, "get_llm_json", side_effect=[FAKE_TRANSIENT, FAKE_FIXED]):
+                 patch.object(wp, "get_llm_json", side_effect=[FAKE_TRANSIENT, FAKE_FIXED]) as mock_get:
                 wp.main(_make_args(model="custom-model"))
             captured = capsys.readouterr()
+            # Model name appears in output (e.g., "Using model: custom-model")
             assert "custom-model" in captured.out
+            # Verify the LLM was called twice (transient + fixed)
+            assert mock_get.call_count == 2
         finally:
             if original is not None:
                 os.environ["OLLAMA_MODEL"] = original
 
-    def test_main_debug_mode(self, mock_llm, tmp_path):
+    def test_main_debug_mode(self, mock_llm, capsys, tmp_path):
         import weekend_planner as wp
         with patch("os.path.expanduser", return_value=str(tmp_path)), \
              patch.object(wp, "_fetch_data", return_value=(FAKE_WEATHER, FAKE_EVENTS, FAKE_VENUES, FAKE_DATES)), \
              patch.object(wp, "get_llm_json", side_effect=[FAKE_TRANSIENT, FAKE_FIXED]):
             wp.main(_make_args(debug=True))
+        # Debug mode should print debug indicators
+        captured = capsys.readouterr()
+        assert len(captured.out) > 0
 
     def test_main_low_items_triggers_warning(self, mock_llm, capsys, tmp_path):
         import weekend_planner as wp
@@ -108,7 +114,8 @@ class TestWeekendMainFlow:
              patch.object(wp, "get_llm_json", side_effect=[None, None]):
             wp.main(_make_args())
         captured = capsys.readouterr()
-        assert len(captured.out) > 0
+        # Should not crash, should print something
+        assert "FAIL" in captured.out or "error" in captured.out.lower() or len(captured.out) > 0
 
     def test_main_passes_use_cache_to_fetch_data(self, mock_llm, capsys, tmp_path):
         import weekend_planner as wp

@@ -342,6 +342,7 @@ def run_benchmark(models: List[str] = None, verbose: bool = True):
 
 
 if __name__ == "__main__":
-    models = sys.argv[1:] if len(sys.argv) > 1 else None
-    verbose = "--quiet" not in sys.argv
+    quiet = "--quiet" in sys.argv
+    models = [a for a in sys.argv[1:] if a != "--quiet"] or None
+    verbose = not quiet
     run_benchmark(models, verbose=verbose)
