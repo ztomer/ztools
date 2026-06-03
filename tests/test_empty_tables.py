@@ -26,12 +26,16 @@ class TestBuildMarkdownTables:
             {"name": "Zoo", "location": "Toronto", "price": "$20"},
         ]
         result = build_markdown_tables(dates, weather, data, activities)
-        assert result is not None
         # Activities list is rendered with name/location/price columns
         assert "Zoo" in result
         assert "Toronto" in result
         assert "Sat May 4" in result
         assert "18C / Sunny" in result
+        # And the markdown header is correct
+        assert result.startswith("# Weekend Plan: Sat May 4 - Sun May 5")
+        # Activity row contains name in bold, location in parens, price as $20
+        assert "**Zoo** (Toronto)" in result
+        assert "$20" in result
 
     def test_empty_activities(self):
         dates = "Sat May 4"

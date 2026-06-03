@@ -24,7 +24,8 @@ class TestRunEvalWithMock:
 
         assert len(results) == 1
         assert results[0]["task"] == "json"
-        assert results[0]["quality_score"] >= 90
+        # Mock returns 2 valid items → score 100 (only fails on <10 items check, not penalized)
+        assert results[0]["quality_score"] == 100
 
     def test_multiple_tasks(self, mock_llm):
         import eval_run as er
@@ -45,7 +46,8 @@ class TestRunEvalWithMock:
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
 
         result = results[0]
-        assert 0 <= result["quality_score"] <= 100
+        # Mock returns valid 2-item JSON → score 100
+        assert result["quality_score"] == 100
         assert result["result"] is not None
 
     def test_custom_response(self, mock_llm):
@@ -163,10 +165,11 @@ class TestRunEvalWithMock:
             from eval_tasks_core import TASKS
             tasks = {"json": TASKS["json"]}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
-        # Retry happened: 2+ calls
-        assert call_count["n"] >= 2
+        # Retry happened: exactly 2 calls (first failed, second succeeded with 10 items)
+        assert call_count["n"] == 2
         # best_score should be the second (high) score, not the first
-        assert results[0]["quality_score"] >= 90
+        # 10 items + detailed + paths → ~90 with "not from input" penalty
+        assert results[0]["quality_score"] == 90
         # first_attempt_failed is set when any retry happens
         assert results[0]["first_attempt_failed"] is True
 
@@ -524,9 +527,8 @@ class TestRunEvalAllBranches:
             from eval_tasks_core import TASKS
             tasks = {"filename": TASKS["filename"]}
             results = er.run_eval("m", tasks=tasks, verbose=True)
-        # Filename validation: mock returns "mock_test_filename" which won't pass filename
-        # validation since real filename detection may not match. Just check it ran.
-        assert results[0]["quality_score"] is not None
+        # Filename validation: mock returns "mock_test_filename" - all score
+        assert results[0]["quality_score"] == 100
         # Verbose mode should print something
         captured = capsys.readouterr()
         assert len(captured.out) > 0 or len(captured.err) > 0

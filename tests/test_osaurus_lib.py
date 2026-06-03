@@ -118,7 +118,9 @@ class TestCall:
             result = call("model-a", [{"role": "user", "content": "hi"}])
         assert result["content"] == "Hello response"
         assert result["error"] is None
-        assert result["time"] is not None
+        # time is a float, always >= 0
+        assert isinstance(result["time"], (int, float))
+        assert result["time"] >= 0
 
     def test_call_with_parse_json(self, no_mock_llm):
         import lib.osaurus_lib
@@ -131,7 +133,8 @@ class TestCall:
         with patch("lib.osaurus_lib.requests.post", return_value=mock_response) as post:
             result = call("model-a", [{"role": "user", "content": "hi"}], parse_json=True)
         assert "response_format" in post.call_args.kwargs["json"]
-        assert result["parsed"] is not None
+        # extract_json normalizes {"a": 1} dict to ["a"] keys list
+        assert result["parsed"] == ["a"]
 
     def test_call_parse_json_fails(self, no_mock_llm):
         import lib.osaurus_lib

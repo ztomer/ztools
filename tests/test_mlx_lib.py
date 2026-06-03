@@ -313,8 +313,9 @@ class TestUnifiedCall:
         with patch("lib.mlx_lib.find_text_mlx_model", return_value=None), \
              patch("lib.mlx_lib.find_mlx_model", return_value=None):
             result = real_call("nonexistent-model", [{"role": "user", "content": "hi"}])
-        assert result["error"] is not None
-        assert "not found" in result["error"]
+        # Both model finders return None → "Model not found: <name>"
+        assert result["error"] == "Model not found: nonexistent-model"
+        assert result["content"] is None
 
     def test_call_success(self, mock_llm, tmp_path, real_mlx_functions):
         real_call = real_mlx_functions["call"]
@@ -350,9 +351,10 @@ class TestUnifiedCall:
         with patch("lib.mlx_lib.find_text_mlx_model", return_value=model_path), \
              patch("lib.mlx_lib.call_mlx", return_value='```json\n{"a": 1}\n```'):
             result = real_call("qwen", [{"role": "user", "content": "hi"}], parse_json=True)
-        # Note: extract_json normalizes the result, so {"a": 1} may become [normalized]
-        # Just check that parsed is not None
-        assert result["parsed"] is not None
+        # extract_json strips the code fence and normalizes {"a": 1} dict to ["a"] list
+        assert result["parsed"] == ["a"]
+        # content is the raw response (code fence preserved)
+        assert result["content"] == '```json\n{"a": 1}\n```'
 
     def test_call_parse_json_failure(self, mock_llm, tmp_path, real_mlx_functions):
         """When the response has no parseable JSON, result is whatever extract_json does."""

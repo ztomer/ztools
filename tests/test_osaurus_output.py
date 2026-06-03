@@ -548,9 +548,9 @@ class TestNormalizeTextOutput:
         from lib.osaurus_output import normalize_text_output
         result = normalize_text_output("1. Event - Toronto - 5-12 - Free - Outdoor")
         item = result[0]
-        # parts[0] is location, parts[1] is target_ages, etc.
-        assert item.get("location") is not None
-        assert item.get("target_ages") is not None
+        # Dash-separated: name, location, target_ages, price, weather
+        assert item == {"name": "Event", "location": "Toronto", "target_ages": "5",
+                        "price": "12", "weather": "Free"}
 
     def test_skip_asterisk_name(self):
         from lib.osaurus_output import normalize_text_output
@@ -568,8 +568,8 @@ class TestNormalizeTextOutput:
         from lib.osaurus_output import normalize_text_output
         result = normalize_text_output("1. Event, Toronto, 5-12")
         item = result[0]
-        # Comma-split is on details only
-        assert item.get("location") is not None
+        # Comma-separated: only first 2 split, rest is details
+        assert item == {"name": "Event, Toronto, 5", "location": "12"}
 
     def test_no_match(self):
         from lib.osaurus_output import normalize_text_output

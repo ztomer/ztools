@@ -234,8 +234,8 @@ class TestBuildTasksFromModel:
         assert "file_summary" in tasks
         # Validator is the fallback - call it to cover lines 72-73
         result = tasks["file_summary"]["validator"]("test data")
-        # Returns the result of validate_summary
-        assert result is not None
+        # Returns the validate_summary tuple: (score, msg)
+        assert result == (10, 'no structure; no user mentions; no timestamps or narrative words; no topic structure')
 
     def test_build_tasks_only_filename(self, mock_llm):
         from lib.config_tasks import build_tasks_from_model

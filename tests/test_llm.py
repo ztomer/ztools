@@ -21,4 +21,7 @@ class TestLlmServer:
             parse_json=False,
         )
         assert res is not None
+        # Real call should return a dict with content and time fields
+        assert isinstance(res, dict)
         assert "content" in res
+        assert isinstance(res.get("time"), (int, float))

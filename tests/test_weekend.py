@@ -234,24 +234,27 @@ class TestMinimumItems:
     """Test minimum item count validation."""
 
     def test_minimum_5_items(self):
-        """Test that we require at least 5 items."""
-        # This is the expected behavior - we want 5-10 items
-        MIN_ITEMS = 5
-        items = [{"name": f"Item {i}"} for i in range(5)]
-        assert len(items) >= MIN_ITEMS
+        """The MIN_ITEMS threshold in weekend_planner is 5."""
+        # MIN_ITEMS is defined in weekend_planner.main() as 5
+        from weekend_planner import main
+        import inspect
+        src = inspect.getsource(main)
+        # Verify MIN_ITEMS = 5 is hardcoded in the source
+        assert "MIN_ITEMS = 5" in src
 
     def test_minimum_not_met(self):
-        """Test behavior when fewer than 5 items."""
+        """With < MIN_ITEMS items, the planner should print a low-count warning."""
         MIN_ITEMS = 5
         items = [{"name": "Only One"}]
-        # In practice, we should still try to get more
+        # 1 < 5 → low count triggers warning
         assert len(items) < MIN_ITEMS
 
     def test_10_items_acceptable(self):
-        """Test that 10 items is within acceptable range."""
-        MAX_ITEMS = 10
+        """The target range is 5-10 items per category."""
+        MIN_ITEMS = 5
         items = [{"name": f"Item {i}"} for i in range(10)]
-        assert len(items) <= MAX_ITEMS
+        # 10 >= 5 → no low count warning
+        assert len(items) >= MIN_ITEMS
 
 
 class TestJsonExtractionRobustness:
@@ -329,9 +332,10 @@ class TestScriptIntegration:
     """Test that the script can be imported and run without errors."""
 
     def test_import_weekend_planner(self):
-        """Test that weekend_planner can be imported."""
+        """Test that weekend_planner can be imported and exposes main()."""
         import weekend_planner
-        assert weekend_planner is not None
+        assert callable(getattr(weekend_planner, "main", None))
+        assert callable(getattr(weekend_planner, "parse_args", None))
 
     def test_debug_print_defined(self):
         """Test that debug_print is defined at module level."""

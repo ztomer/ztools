@@ -55,11 +55,13 @@ class TestDefaultParsedFor:
     def test_json(self):
         from lib.testing import _default_parsed_for
         result = _default_parsed_for("json")
-        assert isinstance(result, list)
-        # Has 2+ items with expected structure
-        assert len(result) >= 2
-        assert "name" in result[0]
-        assert "location" in result[0]
+        # Default mock: 2 weekend items with full fields
+        assert result == [
+            {"name": "Spring Festival", "location": "Toronto", "target_ages": "All",
+             "price": "Free", "weather": "outdoor", "day": "Saturday"},
+            {"name": "Indoor Coding Workshop", "location": "Vaughan", "target_ages": "8-14",
+             "price": "$25", "weather": "indoor", "day": "Sunday"},
+        ]
 
     def test_weekend_transient(self):
         from lib.testing import _default_parsed_for
@@ -142,7 +144,13 @@ class TestMockLLM:
         from lib.testing import MockLLM
         m = MockLLM()
         result = m.call(task="json", parse_json=True)
-        assert result["parsed"] is not None
+        # parse_json=True triggers _default_parsed_for → list of 2 items
+        assert result["parsed"] == [
+            {"name": "Spring Festival", "location": "Toronto", "target_ages": "All",
+             "price": "Free", "weather": "outdoor", "day": "Saturday"},
+            {"name": "Indoor Coding Workshop", "location": "Vaughan", "target_ages": "8-14",
+             "price": "$25", "weather": "indoor", "day": "Sunday"},
+        ]
 
     def test_call_without_parse_json(self):
         from lib.testing import MockLLM

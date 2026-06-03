@@ -35,8 +35,8 @@ class TestExtractItemsFromText:
     def test_bullet_with_name_location_colon(self):
         text = "- name: Park, location: Toronto"
         items = _extract_items_from_text(text)
-        assert len(items) == 1
-        assert items[0].get("name") is not None
+        # "name:" is parsed as field marker, but comma on the same line keeps the rest as the name value
+        assert items == [{"name": "Park, location: Toronto"}]
 
     def test_bullet_with_separator(self):
         text = "- Park - Toronto\n- Zoo - Vaughan"

@@ -111,8 +111,11 @@ class TestConstants:
         )
         assert isinstance(DEBUG_EVENTS_FILE, Path)
         assert isinstance(DEBUG_VENUES_FILE, Path)
-        assert MODEL_CONFIG is not None
+        # MODEL_CONFIG is the path to the config JSON file
+        assert isinstance(MODEL_CONFIG, str)
+        assert MODEL_CONFIG.endswith(".json")
         assert isinstance(MODEL_NAME, str)
+        assert len(MODEL_NAME) > 0
         assert OSAURUS_BASE_URL.startswith("http")
         assert OSAURUS_APP.endswith(".app")
         assert DATES_STR  # Non-empty

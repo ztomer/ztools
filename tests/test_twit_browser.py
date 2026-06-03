@@ -72,7 +72,9 @@ class TestParseTweetsFromResponse:
             "user1", "test", "Mon Jun 01 12:00:00 +0000 2026"
         )
         tweets = parse_tweets_from_response(data)
-        assert tweets[0]["created_at"].tzinfo is not None
+        # +0000 parsed as UTC
+        assert tweets[0]["created_at"].tzinfo is timezone.utc
+        assert tweets[0]["created_at"].utcoffset().total_seconds() == 0
         assert tweets[0]["created_at"].year == 2026
         assert tweets[0]["created_at"].month == 6
         assert tweets[0]["created_at"].day == 1

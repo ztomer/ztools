@@ -16,7 +16,8 @@ def mock_llm():
 class TestTestCases:
     def test_filename_cases_count(self, mock_llm):
         from lib.quality_runner import FILENAME_CASES
-        assert len(FILENAME_CASES) >= 3
+        # 5 cases covering keyword, no-match, format variations
+        assert len(FILENAME_CASES) == 5
         for case in FILENAME_CASES:
             assert case.task == "filename"
             assert case.input_text
@@ -24,13 +25,15 @@ class TestTestCases:
 
     def test_summarize_cases_count(self, mock_llm):
         from lib.quality_runner import SUMMARIZE_CASES
-        assert len(SUMMARIZE_CASES) >= 1
+        # 2 summarize cases
+        assert len(SUMMARIZE_CASES) == 2
         for case in SUMMARIZE_CASES:
             assert case.task == "summarize"
 
     def test_file_summary_cases_count(self, mock_llm):
         from lib.quality_runner import FILE_SUMMARY_CASES
-        assert len(FILE_SUMMARY_CASES) >= 1
+        # 1 file_summary case
+        assert len(FILE_SUMMARY_CASES) == 1
         for case in FILE_SUMMARY_CASES:
             assert case.task == "file_summary"
 
@@ -43,8 +46,8 @@ class TestQueryModel:
     def test_query_model_success(self, mock_llm):
         from lib import quality_runner as qr
         result = qr.query_model("test-model", "Hello {text}", "world", "think")
-        assert result is not None
-        assert isinstance(result, str)
+        # Mock returns "mock content for think" for unknown task
+        assert result == "mock content for think"
 
     def test_query_model_exception(self, mock_llm):
         from lib import quality_runner as qr

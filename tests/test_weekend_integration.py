@@ -66,8 +66,9 @@ class TestWeekendMainFlow:
              patch.object(wp, "get_llm_json", side_effect=[FAKE_TRANSIENT, FAKE_FIXED]):
             wp.main(_make_args())
         out_files = list(tmp_path.iterdir())
-        assert len(out_files) >= 1
-        assert any("weekend_plan" in f.name for f in out_files)
+        # At least one weekend_plan file written
+        plan_files = [f for f in out_files if "weekend_plan" in f.name]
+        assert len(plan_files) >= 1
 
     def test_main_resolves_model_arg(self, mock_llm, capsys, tmp_path):
         import weekend_planner as wp
