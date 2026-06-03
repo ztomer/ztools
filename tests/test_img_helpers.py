@@ -31,8 +31,9 @@ class TestCleanFilename:
 
     def test_truncation(self):
         result = clean_filename("a" * 100, max_length=20)
-        assert len(result) <= 20
-        assert result == result.rstrip("_")
+        # Truncates to exactly max_length=20 chars
+        assert result == "a" * 20
+        assert len(result) == 20
 
     def test_empty_returns_unnamed(self):
         assert clean_filename("") == "unnamed"

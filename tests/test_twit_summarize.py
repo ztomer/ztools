@@ -96,8 +96,9 @@ class TestBuildPrompt:
         ]
         with patch.object(twit_summarize, "get_model_prompt", return_value="{}"):
             prompt, n = twit_summarize._build_prompt(tweets, max_chars=300)
-        # Only one should fit
-        assert n <= 1
+        # 200 chars each + overhead > 300 budget; none fit
+        assert n == 0
+        assert prompt == ""
 
     def test_for_mlx_wider_width(self, mock_llm):
         import twit_summarize

@@ -224,7 +224,9 @@ class TestQueryLlmForFilename:
              patch("img_llm.FILENAME_MODELS", ["test-model"]), \
              patch("img_llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"):
             result = query_llm_for_filename("x", "http://localhost:1337")
-            assert len(result) <= 35
+            # Truncated to exactly 35 chars
+            assert result == "x" * 35
+            assert len(result) == 35
 
     def test_non_alpha_content_skipped(self):
         """Lines 135-136, 138-139: non-alpha content is skipped."""

@@ -209,7 +209,9 @@ class TestCheckSourceExtraction:
         # String "toronto library event" has 3 terms matching >= 2
         # 1 match out of 3 items
         score = check_source_extraction(items, source)
-        assert 0 < score <= 1.0
+        # 1 string item matches (3 terms in "toronto library event" matches), 2 non-string skipped
+        # ratio = 1/3 = 0.33
+        assert score == 1.0 / 3.0
 
 
 class TestGetSourceMatchingDetails:
@@ -267,8 +269,10 @@ class TestGetSourceMatchingDetails:
         items = [42, None, {"name": "toronto"}]
         source = "toronto library event"
         result = get_source_matching_details(items, source)
-        # dict and other types handled
-        assert result["ratio"] >= 0
+        # 42 and None converted to "42"/"None", dict to "{'name': 'toronto'}"
+        # None of these strings appear in source → ratio 0
+        assert result["ratio"] == 0.0
+        assert result["matched"] == []
 
     def test_unnamed_item(self):
         from lib.validators.json_validator import get_source_matching_details
@@ -566,7 +570,7 @@ class TestValidateDetailedJson:
         source = " ".join(f"uniquename{i} with stuff" for i in range(10))
         score, _ = validate_json(items, source_text=source)
         # High tier
-        assert score >= 95
+        assert score == 100
 
     def test_source_match_mid_score(self):
         from lib.validators.json_validator import validate_json
@@ -574,8 +578,8 @@ class TestValidateDetailedJson:
         items = [{"name": f"uniquename{i} with stuff"} for i in range(10)]
         source = " ".join(f"uniquename{i} with stuff" for i in range(6))
         score, _ = validate_json(items, source_text=source)
-        # Mid tier (line 199)
-        assert score >= 70
+        # Mid tier (line 199): 10 items, 6 match source, 10 detailed
+        assert score == 87
 
     def test_source_match_low_score(self):
         from lib.validators.json_validator import validate_json

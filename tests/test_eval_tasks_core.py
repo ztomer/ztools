@@ -47,7 +47,8 @@ class TestExtractItemsFromText:
     def test_simple_bullets_without_detail(self):
         text = "- just a line\n- another line"
         items = _extract_items_from_text(text)
-        assert len(items) >= 2
+        # 2 bullet lines → 2 single-name items
+        assert items == [{"name": "just a line"}, {"name": "another line"}]
 
     def test_table_header_row_skipped(self):
         text = "| ---- | ---- |\n| Data | Point |"

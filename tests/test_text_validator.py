@@ -36,12 +36,14 @@ class TestValidateFilename:
     def test_with_dash(self):
         from lib.validators.text_validator import validate_filename
         score, _ = validate_filename("my-cool-file")
-        assert score >= 75
+        # 3 words separated by dash, no generic terms
+        assert score == 100
 
     def test_with_dot(self):
         from lib.validators.text_validator import validate_filename
         score, _ = validate_filename("my.file.txt")
-        assert score >= 75
+        # 2 word parts separated by dot
+        assert score == 100
 
     def test_invalid_chars(self):
         from lib.validators.text_validator import validate_filename
@@ -110,12 +112,13 @@ class TestValidateFilename:
         from lib.validators.text_validator import validate_filename
         score, _ = validate_filename("`my_file`")
         # strip_backtick_value removes backticks
-        assert score >= 75
+        assert score == 100
 
     def test_with_code_block(self):
         from lib.validators.text_validator import validate_filename
         score, _ = validate_filename("```my_file```")
-        assert score >= 75
+        # Code fence stripped, then 2-word name
+        assert score == 100
 
     def test_generic_filename_txt(self):
         from lib.validators.text_validator import validate_filename
@@ -159,37 +162,38 @@ class TestValidateSummary:
 
     def test_dict_input(self):
         from lib.validators.text_validator import validate_summary
-        score, _ = validate_summary({"key": "value"})
-        # str(dict)
-        assert score >= 0
+        score, msg = validate_summary({"key": "value"})
+        # str(dict) = "{'key': 'value'}" - no structure detected
+        assert score == 10
+        assert "no structure" in msg
 
     def test_structure_headers_and_bullets(self):
         from lib.validators.text_validator import validate_summary
         text = "## Section 1\n- bullet one\n- bullet two"
         score, _ = validate_summary(text)
-        # Has headers and bullets = 15 pts structure
-        assert score >= 15
+        # Has headers and bullets = 15 + 10 + 15 = 40 (length not met)
+        assert score == 40
 
     def test_structure_headers_only(self):
         from lib.validators.text_validator import validate_summary
         text = "## Section 1\n## Section 2\nsome content here"
         score, _ = validate_summary(text)
-        # Just headers = 10 pts
-        assert score >= 10
+        # 2 headers (15) + 1 header=structure (15) + length>=200 (15) = 45
+        assert score == 45
 
     def test_structure_bullets_long(self):
         from lib.validators.text_validator import validate_summary
         text = "- " + ("a " * 200)  # > 300 chars
         score, _ = validate_summary(text)
-        # Just bullets, long = 8 pts
-        assert score >= 8
+        # 1 header (10) + length (5) + bullets long (3) = 18
+        assert score == 18
 
     def test_structure_long_no_headers(self):
         from lib.validators.text_validator import validate_summary
         text = "a " * 200  # 400 chars
         score, _ = validate_summary(text)
-        # Long text, no headers = 5 pts
-        assert score >= 5
+        # No structure (0) + length>=200 (15) = 15
+        assert score == 15
 
     def test_structure_short_no_headers(self):
         from lib.validators.text_validator import validate_summary
@@ -202,8 +206,8 @@ class TestValidateSummary:
         from lib.validators.text_validator import validate_summary
         text = "@user1 @user2 @user3 hello"
         score, _ = validate_summary(text)
-        # 3 users = 15 pts
-        assert score >= 15
+        # 3 users = 25 pts (10 base + 5*2 + 5 for 3rd+)
+        assert score == 25
 
     def test_user_mentions_2(self):
         from lib.validators.text_validator import validate_summary
@@ -231,14 +235,15 @@ class TestValidateSummary:
         # "user 1" without @
         text = "user 1 user 2 user 3 did things"
         score, _ = validate_summary(text)
-        assert score >= 15
+        # 3 "user N" patterns = 25 pts
+        assert score == 25
 
     def test_timestamps(self):
         from lib.validators.text_validator import validate_summary
         text = "At 10:30 something happened"
         score, _ = validate_summary(text)
-        # Timestamp = 10 pts specificity
-        assert score >= 10
+        # Timestamp 10 + length>=200? no → 0
+        assert score == 20
 
     def test_narrative_words(self):
         from lib.validators.text_validator import validate_summary
@@ -278,20 +283,22 @@ class TestValidateSummary:
         from lib.validators.text_validator import validate_summary
         text = "Key takeaways: lots happened. ## Section"
         score, _ = validate_summary(text)
-        assert score >= 0
+        # 1 header (10) + 1 'overall/synthesis' keyword (10) = 20
+        assert score == 20
 
     def test_synthesis_tldr(self):
         from lib.validators.text_validator import validate_summary
         text = "TL;DR: short version. ## Section"
         score, _ = validate_summary(text)
-        assert score >= 0
+        # 1 header (10) + 1 tldr synthesis (15) + 1 'overall' (10) = 35
+        assert score == 35
 
     def test_topic_markers_many(self):
         from lib.validators.text_validator import validate_summary
         text = "## Topic1\n## Topic2\n- bullets"
         score, _ = validate_summary(text)
-        # 2 topic markers = 25
-        assert score >= 25
+        # 2 headers (15) + 1 header structure (15) + topic markers bonus (20) = 50
+        assert score == 50
 
     def test_topic_markers_one(self):
         from lib.validators.text_validator import validate_summary
@@ -304,8 +311,8 @@ class TestValidateSummary:
         from lib.validators.text_validator import validate_summary
         text = "First this happened. Then that. Also meanwhile something."
         score, _ = validate_summary(text)
-        # 3+ transitions = 10
-        assert score >= 10
+        # 3+ transitions = 10; plus length>=200? no → 0
+        assert score == 20
 
     def test_topic_no_structure(self):
         from lib.validators.text_validator import validate_summary

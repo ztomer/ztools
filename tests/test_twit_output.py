@@ -197,6 +197,8 @@ class TestCleanFolder:
                     with pytest.raises(SystemExit):
                         twit_output.clean_folder(out_dir)
         mock_sys.exit.assert_called_once_with(0)
-        # Find the warning call
-        warn_calls = [c for c in mock_print.call_args_list if "WARN" in str(c) or "Failed" in str(c)]
-        assert len(warn_calls) >= 1
+        # Find the warning call (one for each failed delete)
+        warn_calls = [c for c in mock_print.call_args_list if "Failed" in str(c)]
+        assert len(warn_calls) == 1
+        # Verify it mentions the file that failed
+        assert "locked.md" in str(warn_calls[0])
