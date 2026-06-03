@@ -56,7 +56,8 @@ class TestValidateFileSummary:
             {"path": "b.py", "desc": "another file"},
         ]
         score, msg = validate_file_summary(data)
-        assert score <= 50
+        # 0 detailed out of 2 → 0; only 2 files (<3) → 25
+        assert score == 25
         assert "no content details" in msg
 
     def test_dict_input_with_parsed_json(self):
@@ -92,7 +93,8 @@ class TestValidateFileSummary:
             {"path": "d.py", "desc": "yet another file"},
         ]
         score, msg = validate_file_summary(data)
-        assert 50 <= score <= 85
+        # 4 files <5 files, 1/4 detailed = 25% → 0
+        assert score == 50
 
     def test_non_dict_items_skipped(self):
         """Lines 47, 51: non-dict items and items without path/desc are skipped."""

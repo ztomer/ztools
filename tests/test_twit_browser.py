@@ -489,7 +489,8 @@ class TestCollectTweetsViaBrowser:
              patch("twit_browser.MAX_SCROLLS", 5):
             collect_tweets_via_browser(since_time=since, debug=False)
         # If we got here without looping 5 times, the break worked
-        assert call_count[0] <= 2  # broke on iteration 2
+        # Broke on first iteration (tweet already seen)
+        assert call_count[0] <= 2  # max 2, actually 1 in this scenario
 
     def test_unique_filtering_exact_dedup(self, monkeypatch):
         """Exact duplicate tweets (same screen_name + first 80 chars) are deduped."""

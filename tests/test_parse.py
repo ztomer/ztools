@@ -5,14 +5,15 @@ from lib.osaurus_lib import extract_json, normalize_keys, filter_json_items, fix
 def test_extract_json_valid():
     content = '''[{"name": "Event", "location": "Park"}]'''
     result = extract_json(content)
-    assert result is not None
-    assert len(result) > 0
+    # Valid JSON array of 1 item, passed through unchanged
+    assert result == [{"name": "Event", "location": "Park"}]
 
 
 def test_extract_json_with_markdown():
     content = '''**[{"name": "Event", "location": "Park"}]**'''
     result = extract_json(content)
-    assert result is not None
+    # Bold markdown wrapper stripped, JSON extracted
+    assert result == [{"name": "Event", "location": "Park"}]
 
 
 def test_normalize_keys():

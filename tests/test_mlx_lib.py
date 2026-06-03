@@ -44,14 +44,14 @@ class TestModelDiscovery:
     def test_find_mlx_model_top_level(self, mock_llm, fake_mlx_dir, real_mlx_functions):
         real = real_mlx_functions["find_mlx_model"]
         result = real("qwen", mlx_dir=fake_mlx_dir)
-        assert result is not None
-        assert "qwen" in result.name.lower()
+        # qwen-7b-fp16 is direct child, has config.json
+        assert result == fake_mlx_dir / "qwen-7b-fp16"
 
     def test_find_mlx_model_subdir(self, mock_llm, fake_mlx_dir, real_mlx_functions):
         real = real_mlx_functions["find_mlx_model"]
         result = real("llama", mlx_dir=fake_mlx_dir)
-        assert result is not None
-        assert "llama" in result.name.lower()
+        # llama-3-8b is nested under mlx-community
+        assert result == fake_mlx_dir / "mlx-community" / "llama-3-8b"
 
     def test_find_mlx_model_not_found(self, mock_llm, fake_mlx_dir, real_mlx_functions):
         real = real_mlx_functions["find_mlx_model"]

@@ -326,4 +326,6 @@ class TestFetchScoresForItems:
         fetch_scores_for_items(items, weather_str="Sunny", age_range="5-10")
         assert "score" in items[0]
         assert "score" in items[1]
-        assert 0 <= items[0]["score"] <= 5
+        # A: matches age+weather → ~3.1; B: no match → ~0.2
+        assert items[0]["score"] == 3.1
+        assert items[1]["score"] == 0.2

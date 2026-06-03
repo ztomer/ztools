@@ -125,7 +125,8 @@ def test_empty_output_scores_zero():
     """Empty output → 0 grounding, but no_leak=30 (vacuously true)."""
     score, reason = validate_taxes_anomalies("")
     assert "grounding=0/40" in reason
-    assert score <= 30  # only no_leak can fire
+    # Only no_leak (30) fires; substance and grounding both 0
+    assert score == 30
 
 
 def test_load_rubric_missing_file(tmp_path, monkeypatch):

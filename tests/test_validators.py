@@ -92,7 +92,8 @@ def test_check_source_extraction():
     ]
     source = "Spring Festival at Downsview Park and Indoor Coding Workshop"
     ratio = check_source_extraction(items, source)
-    assert ratio >= 0.5
+    # Both items fully match: "Spring Festival at Downsview Park" + "Indoor Coding Workshop"
+    assert ratio == 1.0
 
 
 def test_get_source_matching_details():
@@ -102,7 +103,10 @@ def test_get_source_matching_details():
     source = "Valid Event happens"
     details = get_source_matching_details(items, source)
     assert "ratio" in details
-    assert len(details["matched"]) >= 1
+    # "Valid Event" matches the source
+    assert details["matched"] == ["Valid Event"]
+    assert details["unmatched"] == []
+    assert details["ratio"] == 1.0
 
 
 def test_has_item_details():

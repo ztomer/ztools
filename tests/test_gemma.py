@@ -14,5 +14,9 @@ class TestGemmaModel:
             parse_json=True,
             max_retries=0,
         )
-        assert result is not None
+        # Real result should be a dict with content, time, and parsed
+        assert isinstance(result, dict)
         assert "content" in result
+        assert "time" in result
+        assert isinstance(result["time"], (int, float))
+        assert result["time"] >= 0

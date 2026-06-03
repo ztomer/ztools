@@ -508,5 +508,9 @@ class TestExportToCsv:
             results = [{"model": "m1", "results": [{"task": "t1", "quality_score": 80, "time": 1.0}]}]
             eval_report.export_to_csv(results, str(output))
             assert output.exists()
+            # Verify file was written to custom path, not default
+            content = output.read_text()
+            assert "m1" in content
+            assert "t1" in content
         finally:
             eval_report.console = old

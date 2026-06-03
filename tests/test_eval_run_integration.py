@@ -94,7 +94,10 @@ class TestRunEvalWithMock:
             from eval_tasks_core import TASKS
             tasks = {"file_summary": TASKS["file_summary"]}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
-        assert results[0]["quality_score"] >= 50
+        # Mock returns 4 file summaries with detailed descriptions
+        # 4 paths matched (40) + 4 detailed (40) + 4 real paths (20) = 100
+        assert results[0]["quality_score"] == 100
+        assert results[0]["status"] == "ok"
 
     def test_server_unreachable(self, mock_llm):
         import eval_run as er
@@ -318,9 +321,9 @@ class TestQualityResultsToEvalFormat:
         score, failure, diagnosis = _validate_result(result, task_cfg, "json", debug=True)
         # Validator was bypassed in favor of validate_summary
         assert calls == []
-        # Score is whatever validate_summary returns (a number in 0-100)
+        # validate_summary returns 20 for unstructured prose
+        assert score == 20
         assert isinstance(score, (int, float))
-        assert 0 <= score <= 100
 
     def test_debug_weekend_with_items(self):
         """Lines 76-83: debug=True, weekend task, with items and source - prints source matching details."""
@@ -406,8 +409,9 @@ class TestValidateResultBranches:
         }
         score, failure, diagnosis = _validate_result(result, task_cfg, "json")
         assert calls == []
+        # validate_summary returns 10 for prose with no structure
+        assert score == 10
         assert isinstance(score, (int, float))
-        assert 0 <= score <= 100
 
     def test_short_content_no_extracted(self):
         from eval_run import _validate_result

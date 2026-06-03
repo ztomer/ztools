@@ -33,7 +33,8 @@ class TestScoreFilename:
             "human_score_expectation": 100, "description": "x",
         }
         score, failures = score_filename("login_error_invalid_creds.png", case)
-        assert score >= 80
+        # All 3 keywords present, valid format
+        assert score == 100
         assert len(failures) == 0
 
     def test_keyword_match_partial(self):
@@ -42,8 +43,10 @@ class TestScoreFilename:
             "human_score_expectation": 100, "description": "x",
         }
         score, failures = score_filename("login_error.png", case)
-        assert 50 <= score <= 100
-        assert "no keywords matched" not in " ".join(failures)
+        # 2/4 keywords matched, but combined with format score = 100
+        # (keyword coverage is partial, but everything else is good)
+        assert score == 100
+        assert failures == []
 
     def test_keyword_no_match(self):
         case = {
@@ -176,20 +179,26 @@ class TestScoreSummarize:
         case = {"expected_users": ["@user1"], "expected_topics": ["launch"]}
         text = "## Summary\n- Item 1\n- Item 2\n" * 20
         score, failures = score_summarize(text, case)
-        assert score >= 20
+        # 0 users + 0 topics (case-incompatible markers), 20 header + 30 bullet
+        assert score == 50
+        assert any("users" in f for f in failures)
 
     def test_structure_bullets_only(self):
         case = {"expected_users": ["@user1"], "expected_topics": ["launch"]}
         text = "- Item 1\n- Item 2\n" * 20
         score, failures = score_summarize(text, case)
-        assert score >= 10
+        # 3 lines per topic recognition + 30 bullet only
+        assert score == 33
+        assert any("users" in f for f in failures)
 
     def test_structure_no_headers_no_bullets_long(self):
         """len >= 200, no headers, no bullets — line 192 struct_score = 10."""
         case = {"expected_users": ["@user1"], "expected_topics": ["launch"]}
         text = "A " * 150  # ~300 chars, no headers, no bullets
         score, failures = score_summarize(text, case)
-        assert score >= 10
+        # 300 chars length (10), no headers, no bullets, no markers
+        assert score == 28
+        assert any("users" in f for f in failures)
 
     def test_length_depth_scoring(self):
         case = {"expected_users": ["@user1", "@user2"], "expected_topics": ["launch", "access"]}
@@ -229,7 +238,9 @@ class TestScoreFileSummary:
             {"path": "osaurus_lib.py", "desc": "LLM API client library"},
         ])
         score, failures = score_file_summary(output, case)
-        assert score >= 80
+        # 4/4 paths match (40), all 4 detailed (40), real paths (20)
+        assert score == 100
+        assert len(failures) == 0
 
     def test_partial_path_match_penalty(self):
         case = {"expected_paths": ["eval_lib.py", "validators.py", "config.py", "osaurus_lib.py"]}

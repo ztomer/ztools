@@ -70,7 +70,12 @@ class TestExtractJson:
         from lib.osaurus_output import extract_json
         # Invalid JSON that ALSO has no plain list - falls through to normalize_text_output
         result = extract_json("Event: Toronto Festival\nTime: 10am\nLocation: Park")
-        assert result is not None
+        # Text normalizer creates 3 single-field items, one per line
+        assert result == [
+            {"name": "Event: Toronto Festival"},
+            {"name": "Time: 10am"},
+            {"name": "Location: Park"},
+        ]
 
     def test_text_normalization_only(self):
         from lib.osaurus_output import extract_json
@@ -116,8 +121,11 @@ class TestExtractJson:
     def test_text_normalization_fallback(self):
         from lib.osaurus_output import extract_json
         result = extract_json("Event: Toronto Event\nTime: 10am")
-        # Returns a list with parsed items
-        assert result is not None
+        # Two single-field items from newline-separated key: value lines
+        assert result == [
+            {"name": "Event: Toronto Event"},
+            {"name": "Time: 10am"},
+        ]
 
     def test_invalid_json_no_fallback(self):
         from lib.osaurus_output import extract_json
