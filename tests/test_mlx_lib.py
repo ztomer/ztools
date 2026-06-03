@@ -73,7 +73,8 @@ class TestModelDiscovery:
         from lib import mlx_lib
         with patch("lib.mlx_lib.find_mlx_model", return_value=fake_mlx_dir / "qwen-7b-fp16"):
             result = mlx_lib.find_best_mlx_model(["nonexistent", "qwen"])
-        assert result is not None
+        # First match wins (qwen is preferred over nonexistent)
+        assert result == fake_mlx_dir / "qwen-7b-fp16"
 
     def test_find_best_mlx_model_none(self, mock_llm):
         from lib import mlx_lib
@@ -84,13 +85,13 @@ class TestModelDiscovery:
         real = real_mlx_functions["find_text_mlx_model"]
         with patch("lib.mlx_lib.find_best_mlx_model", return_value=fake_mlx_dir / "qwen-7b-fp16"):
             result = real()
-        assert result is not None
+        assert result == fake_mlx_dir / "qwen-7b-fp16"
 
     def test_find_text_mlx_model_preferred(self, mock_llm, fake_mlx_dir, real_mlx_functions):
         real = real_mlx_functions["find_text_mlx_model"]
         with patch("lib.mlx_lib.find_best_mlx_model", return_value=fake_mlx_dir / "qwen-7b-fp16"):
             result = real(["qwen"])
-        assert result is not None
+        assert result == fake_mlx_dir / "qwen-7b-fp16"
 
     def test_get_mlx_context_length(self, mock_llm, fake_mlx_dir):
         from lib.mlx_lib import get_mlx_context_length

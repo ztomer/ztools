@@ -60,7 +60,8 @@ class TestClient:
             result = call("test-model", [{"role": "user", "content": "hi"}])
         assert result["content"] == "Hello"
         assert result["error"] is None
-        assert result["time"] is not None
+        assert isinstance(result["time"], (int, float))
+        assert result["time"] >= 0
 
     def test_call_content_key(self, mock_llm):
         from lib.llm.client import call

@@ -55,8 +55,9 @@ class TestFilenameRelevance:
     def test_substring_match(self, mock_llm):
         from lib.quality_scorers import _score_filename_relevance
         s = _score_filename_relevance("prefix_hello", make_case("hello world", "hello"))
-        # "hello" is substring of "prefix_hello"
-        assert s.score >= 75
+        # "hello" is substring of "prefix_hello" (1/1 = 100% coverage, 75 score)
+        assert s.score == 75
+        assert s.failures == []
 
     def test_substring_match_inner_break(self, mock_llm):
         """Test the inner substring match path: inp token is substring of out token."""
@@ -67,9 +68,10 @@ class TestFilenameRelevance:
         # Actually re.findall splits on non-alphanumeric, so "helloworld" stays as one token
         # "hello" is in "helloworld" (substring) → True branch
         s = _score_filename_relevance("helloworld_there", make_case("hello there", "hello"))
-        # hello is substring of helloworld
-        # there is direct match
-        assert s.score >= 75
+        # hello substring of helloworld, there direct match
+        # coverage = 2/2 = 100%, score 100
+        assert s.score == 100
+        assert s.failures == []
 
     def test_mid_score_50(self, mock_llm):
         from lib.quality_scorers import _score_filename_relevance
@@ -115,40 +117,51 @@ class TestFilenameFormat:
     def test_question(self, mock_llm):
         from lib.quality_scorers import _score_filename_format
         s = _score_filename_format("what is this?", make_case())
-        assert s.score <= 50
+        # Multiple penalties: question, spaces, invalid char, no separators
+        assert s.score == 0
         assert any("question" in f for f in s.failures)
 
     def test_please(self, mock_llm):
         from lib.quality_scorers import _score_filename_format
         s = _score_filename_format("please_name.txt", make_case())
-        assert s.score <= 50
+        # 'please' alone triggers question/instruction text penalty
+        assert s.score == 50
+        assert any("question" in f or "instruction" in f for f in s.failures)
 
     def test_spaces(self, mock_llm):
         from lib.quality_scorers import _score_filename_format
         s = _score_filename_format("hello world.txt", make_case())
-        assert s.score <= 60
+        # 1 space penalty
+        assert s.score == 55
         assert any("space" in f for f in s.failures)
 
     def test_invalid_chars(self, mock_llm):
         from lib.quality_scorers import _score_filename_format
         s = _score_filename_format("hello@world.txt", make_case())
-        assert s.score <= 80
+        # 1 invalid char penalty (-20)
+        assert s.score == 80
         assert any("invalid" in f for f in s.failures)
 
     def test_too_long(self, mock_llm):
         from lib.quality_scorers import _score_filename_format
         s = _score_filename_format("a" * 70 + ".txt", make_case())
-        assert s.score <= 80
+        # 74 chars exceeds 59 → -20
+        assert s.score == 80
+        assert any("long" in f for f in s.failures)
 
     def test_uppercase(self, mock_llm):
         from lib.quality_scorers import _score_filename_format
         s = _score_filename_format("Hello.txt", make_case())
-        assert s.score <= 90
+        # 1 uppercase letter → -10
+        assert s.score == 90
+        assert any("uppercase" in f for f in s.failures)
 
     def test_no_separators(self, mock_llm):
         from lib.quality_scorers import _score_filename_format
         s = _score_filename_format("helloworld", make_case())
-        assert s.score <= 90
+        # No separators (-10), otherwise valid
+        assert s.score == 90
+        assert any("separator" in f for f in s.failures)
 
     def test_perfect(self, mock_llm):
         from lib.quality_scorers import _score_filename_format
@@ -205,9 +218,10 @@ class TestFilenameConciseness:
     def test_filler_words(self, mock_llm):
         from lib.quality_scorers import _score_filename_conciseness
         s = _score_filename_conciseness("the-hello-world.txt", make_case())
-        assert s.score <= 100
-        # 'the' is a filler word
-        assert any("filler" in f for f in s.failures) or s.score < 100
+        # 'the' is a filler word, 19 chars (within 4-59), passes other checks
+        # score = 100 (length) - 15 (filler) = 85
+        assert s.score == 85
+        assert any("filler" in f for f in s.failures)
 
 
 class TestSummarizeCompleteness:
@@ -226,14 +240,17 @@ class TestSummarizeCompleteness:
         from lib.quality_scorers import _score_summarize_completeness
         s = _score_summarize_completeness("Long enough text to pass minimum check." * 5,
                                           make_case("plain text input"))
-        # user_ratio defaults to 1, no users constraint
-        assert s.score >= 0
+        # No user constraint in input, no failure
+        assert s.score == 100
+        assert s.failures == []
 
     def test_no_events_in_input(self, mock_llm):
         from lib.quality_scorers import _score_summarize_completeness
         s = _score_summarize_completeness("Long enough text." * 10,
                                           make_case("plain text"))
-        assert s.score >= 0
+        # No events constraint in input, full score
+        assert s.score == 100
+        assert s.failures == []
 
     def test_full_coverage(self, mock_llm):
         from lib.quality_scorers import _score_summarize_completeness
@@ -275,19 +292,26 @@ class TestSummarizeSynthesis:
         from lib.quality_scorers import _score_summarize_synthesis
         s = _score_summarize_synthesis("Just some text without synthesis.",
                                        make_case())
-        assert s.score < 40
+        # All three signals missing
+        assert s.score == 0
+        assert any("TL;DR" in f for f in s.failures)
 
     def test_with_summary(self, mock_llm):
         from lib.quality_scorers import _score_summarize_synthesis
         out = "Overall, the conversation was about migration. user 1 asked things and user 2 responded with thanks."
         s = _score_summarize_synthesis(out, make_case())
-        assert s.score >= 40
+        # 'Overall' is synthesis cue, 'asked'/'responded' are narrative verbs
+        # 'user X asked' + 'user Y responded' = relationship awareness
+        assert s.score == 66
+        assert s.failures == []
 
     def test_with_tldr(self, mock_llm):
         from lib.quality_scorers import _score_summarize_synthesis
         out = "TL;DR this is a short summary of the thread. user 1 asked user 2 and user 2 confirmed."
         s = _score_summarize_synthesis(out, make_case())
-        assert s.score >= 40
+        # TL;DR cue (+33), narrative verbs (+?), relationship (+?)
+        assert s.score == 68
+        assert s.failures == []
 
     def test_narrative_verbs(self, mock_llm):
         from lib.quality_scorers import _score_summarize_synthesis
@@ -307,8 +331,8 @@ class TestSummarizeSynthesis:
         from lib.quality_scorers import _score_summarize_synthesis
         out = "## Section\nContent here"  # starts with header
         s = _score_summarize_synthesis(out, make_case())
-        # top_level becomes empty
-        assert s.score >= 0
+        # top_level is empty, no synthesis/narrative/relationship signals
+        assert s.score == 0
 
     def test_with_top_level_pre_header(self, mock_llm):
         from lib.quality_scorers import _score_summarize_synthesis
@@ -361,13 +385,17 @@ class TestSummarizeStructure:
     def test_too_short(self, mock_llm):
         from lib.quality_scorers import _score_summarize_structure
         s = _score_summarize_structure("## Short\nbody", make_case())
-        assert s.score <= 50
+        # 13 chars < 150 → 0 length, 50 header
+        assert s.score == 50
+        assert any("short" in f for f in s.failures)
 
     def test_too_long(self, mock_llm):
         from lib.quality_scorers import _score_summarize_structure
         out = "## Title\n- Bullet\n" + ("filler " * 500)
         s = _score_summarize_structure(out, make_case())
-        assert s.score <= 80
+        # 3000+ chars > 350 (good), header (20), bullet (30), -long penalty
+        assert s.score == 80
+        assert any("long" in f for f in s.failures)
 
 
 class TestSummarizeSpecificity:

@@ -178,7 +178,8 @@ class TestParseTweetsFromResponse:
         assert result == []
         # DEBUG error was printed
         out = capsys.readouterr()
-        assert "Error" in out.out or len(out.out) > 0
+        assert "Error" in out.out
+        assert "get" in out.out  # AttributeError: 'str' object has no attribute 'get'
 
     def test_import_error(self, monkeypatch):
         """When playwright fails to import, sync_playwright/PWTimeout are None."""

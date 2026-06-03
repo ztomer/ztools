@@ -59,15 +59,6 @@ def mock_llm_osaurus():
     mock.unpatch()
 
 
-@pytest.fixture
-def mock_llm_osaurus():
-    """Same as mock_llm but only patches osaurus_lib."""
-    mock = MockLLM()
-    mock.patch_osaurus()
-    yield mock
-    mock.unpatch()
-
-
 # Legacy fixtures used by existing test files
 
 @pytest.fixture
