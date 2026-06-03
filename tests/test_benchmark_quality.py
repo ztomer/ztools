@@ -153,8 +153,10 @@ class TestScoreSummarize:
             "- @User5 provided a review\n"
         )
         score, failures = score_summarize(text, case)
-        assert score >= 25
-        assert len(failures) == 0 or not any("users" in f for f in failures)
+        # Users: 5/4 = full, topic launch in text, structure good
+        # user_score=37, topic_score=20, structure=10 = 67
+        assert score == 67
+        assert "topics" in failures[0]
 
     def test_topic_coverage(self):
         case = {"expected_users": ["@user1"], "expected_topics": ["launch", "access", "beta", "feedback"]}
@@ -165,7 +167,10 @@ class TestScoreSummarize:
             "We received great feedback from the community.\n"
         )
         score, failures = score_summarize(text, case)
-        assert score >= 25
+        # Users: 0/1, topics: 4/4, structure: header
+        # topic_score=20, structure=10, partial user = 55
+        assert score == 55
+        assert any("users" in f for f in failures)
 
     def test_structure_with_headers_and_bullets(self):
         case = {"expected_users": ["@user1"], "expected_topics": ["launch"]}
@@ -274,4 +279,7 @@ class TestScoreFileSummary:
             {"path": "validators.py", "desc": "JSON and text validation logic"},
         ])
         score, failures = score_file_summary(output, case)
-        assert score >= 50
+        # 2/2 paths match, 2/2 have meaningful descs (long, has verbs/nouns)
+        # path_score=40 + desc_score=40 = 80
+        assert score == 80
+        assert failures == []

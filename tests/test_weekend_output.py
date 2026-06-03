@@ -119,8 +119,10 @@ class TestBuildFixedTable:
         items = [{"title": "My Title", "address": "123 Main", "age_group": "3-7",
                   "cost": "$5", "weather_appropriateness": "indoor", "activity_name": "Alt"}]
         result = _build_fixed_table(items)
-        # Should pick title first since name is empty
-        assert "My Title" in result or "Alt" in result
+        # title has priority over activity_name when name is missing
+        assert "My Title" in result
+        assert "(123 Main)" in result
+        assert "indoor" in result
 
     def test_unknown_name(self):
         from weekend_output import _build_fixed_table

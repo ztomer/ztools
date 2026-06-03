@@ -1,6 +1,7 @@
 """Tests for image_renamer rename_image function."""
 
 import sys
+import pytest
 from unittest.mock import patch, MagicMock
 from pathlib import Path
 
@@ -592,6 +593,3 @@ class TestRenameImageMain:
             runpy.run_module("image_renamer", run_name="__main__")
         out = capsys.readouterr()
         assert "1 renamed" in out.out or "1 renamed" in out.err
-
-
-import pytest

@@ -48,9 +48,10 @@ class TestValidateFilename:
         # 60+ chars with invalid chars triggers fallback to extract_best
         long_with_invalid = "this is a long thing @#$%^&*() stuff"
         score, msg = validate_filename(long_with_invalid)
-        # Falls back to extract_best_filename_candidate which finds first valid line
-        # Result depends on what's there - just check the function ran without crashing
-        assert isinstance(score, int)
+        # Falls back to extract_best which finds "this is a long thing" (no invalid chars)
+        # but still has spaces and is wordy
+        assert score == 45
+        assert "invalid chars" in msg
 
     def test_question_in_filename(self):
         from lib.validators.text_validator import validate_filename

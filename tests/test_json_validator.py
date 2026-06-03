@@ -343,25 +343,30 @@ class TestValidateJson:
 
     def test_mostly_valid(self):
         from lib.validators.json_validator import validate_json
-        items = [{"name": "x"}] * 8 + [{}] * 2  # 8/10 valid
-        score, _ = validate_json(items)
-        # Should still get JSON_VALIDITY_WEIGHT or partial
-        assert score > 20
+        items = [{"name": "x"}] * 8 + [{}] * 2  # 8/10 valid (80% >= 70% threshold)
+        score, msg = validate_json(items)
+        # Structure(20) + Count(25) + Validity partial(15) = 60
+        assert score == 60
+        assert "8/10 items are valid" in msg
 
     def test_source_match_high(self):
         from lib.validators.json_validator import validate_json
-        items = [{"name": f"event {i}"} for i in range(10)]
-        source = "event 0 event 1 event 2 event 3 event 4 event 5 event 6 event 7 event 8 event 9"
-        score, _ = validate_json(items, source_text=source)
-        # High source match
-        assert score > 50
+        # Items with 2-word names → "toronto park" appears in both source and items
+        items = [{"name": f"toronto park {i}"} for i in range(10)]
+        source = " ".join(f"toronto park event {i}" for i in range(10))
+        score, msg = validate_json(items, source_text=source)
+        # 10/10 items share 2+ terms with source → ratio 1.0
+        # Structure(20) + Count(25) + Validity(30) + Source full(25) = 100
+        assert score == 100
+        assert msg == ""
 
     def test_source_match_low(self):
         from lib.validators.json_validator import validate_json
         items = [{"name": f"event {i}"} for i in range(10)]
         score, msg = validate_json(items, source_text="totally different text here")
-        # Low source match
-        assert "hallucinated" in msg or score < 100
+        # 0 items share 2+ terms with source → ratio 0.0 → "hallucinated" failure
+        assert "hallucinated" in msg
+        assert score < 100
 
     def test_source_match_mid(self):
         from lib.validators.json_validator import validate_json
@@ -535,12 +540,15 @@ class TestValidateDetailedJson:
 
     def test_source_match_mid_score(self):
         from lib.validators.json_validator import validate_json
-        items = [{"name": f"event {i}"} for i in range(10)]
-        # 6/10 = 0.6 source ratio = mid tier
-        source = " ".join(f"event {i}" for i in range(6))
-        score, _ = validate_json(items, source_text=source)
-        # Mid tier score
-        assert score > 50
+        # First 5 items share 2+ terms with source (matched), next 5 don't (unmatched)
+        items = [{"name": f"toronto park {i}"} for i in range(5)] + \
+                [{"name": f"beach cafe {i}"} for i in range(5, 10)]
+        # 5/10 = 0.5 source ratio = mid tier
+        source = " ".join(f"toronto park event" for _ in range(5))
+        score, fail = validate_json(items, source_text=source)
+        # Structure(20) + Count(25) + Validity(30) + Source mid(12) = 87
+        assert score == 87
+        assert fail == ""
 
     def test_source_match_minimal(self):
         from lib.validators.json_validator import validate_json

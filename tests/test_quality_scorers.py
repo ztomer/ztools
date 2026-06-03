@@ -393,7 +393,7 @@ class TestSummarizeSpecificity:
         out = "At 10:00 user 1 said hi. At 11:00 user 2 responded. At 12:00 user 3 confirmed."
         inp = "10:00 user 1 said hi\n11:00 user 2 said back\n12:00 user 3 confirmed"
         s = _score_summarize_specificity(out, make_case(inp))
-        assert s.score >= 70
+        assert s.score == 100
 
     def test_missing_timestamps(self, mock_llm):
         from lib.quality_scorers import _score_summarize_specificity

@@ -27,7 +27,11 @@ class TestBuildMarkdownTables:
         ]
         result = build_markdown_tables(dates, weather, data, activities)
         assert result is not None
-        assert "Park" in result or "Zoo" in result
+        # Activities list is rendered with name/location/price columns
+        assert "Zoo" in result
+        assert "Toronto" in result
+        assert "Sat May 4" in result
+        assert "18C / Sunny" in result
 
     def test_empty_activities(self):
         dates = "Sat May 4"
@@ -37,8 +41,9 @@ class TestBuildMarkdownTables:
 
     def test_weather_table_structure(self):
         result = build_markdown_tables("Sat May 4", "22C", {}, [])
-        if result:
-            assert "22C" in result or "Sat" in result
+        # Both dates and weather are echoed in the header section
+        assert "Sat May 4" in result
+        assert "22C" in result
 
 
 class TestNormalizeLlmItems:
@@ -47,7 +52,7 @@ class TestNormalizeLlmItems:
 
     def test_none_input(self):
         result = normalize_llm_items(None)
-        assert result is None or result == []
+        assert result is None
 
     def test_strings_to_dicts(self):
         result = normalize_llm_items(["item1", "item2"])

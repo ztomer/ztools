@@ -194,8 +194,8 @@ class TestStripBacktickValue:
     def test_only_open_code_block(self):
         from lib.validators.helpers import strip_backtick_value
         result = strip_backtick_value("```hello")
-        # Strips leading ``` but keeps the text
-        assert "hello" in result
+        # Strips leading ``` (3 chars) but keeps the text after it
+        assert result == "hello"
 
 
 class TestNormalizeWhitespace:

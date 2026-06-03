@@ -62,7 +62,11 @@ class TestValidateFileSummary:
     def test_dict_input_with_parsed_json(self):
         data = {"main.py": "parses input data", "utils.py": "validates output"}
         score, msg = validate_file_summary(data)
-        assert score >= 40
+        # Dict becomes [{main.py: parses input data}, {utils.py: validates output}] → 2 items
+        # Both descs have content verbs ("parses", "validates") → 2/2 = 100% detailed
+        # 2/2 >= 0.8 → score 85
+        assert score == 85
+        assert msg == ""
 
     def test_dict_no_content_detail(self):
         data = {"main.py": "a python script", "utils.py": "helper functions"}
@@ -72,7 +76,9 @@ class TestValidateFileSummary:
     def test_string_with_text_headers(self):
         content = "## Main module\nhandles configuration and api calls\n## Utils\nvalidation helpers"
         score, msg = validate_file_summary(content)
-        assert score >= 20
+        # String is not JSON-parseable as a list/dict of items → score 20, "no headers"
+        assert score == 20
+        assert "no headers" in msg
 
     def test_string_too_short(self):
         score, msg = validate_file_summary("hello")
@@ -169,7 +175,9 @@ class TestValidateFileSummary:
         """Line 91: string input that's long enough."""
         content = "## Header\nThis is a long string that should pass the 200 character threshold for additional scoring in the file summary validation function." * 3
         score, msg = validate_file_summary(content)
-        assert score >= 40
+        # String isn't valid JSON, has text headers (+20) and length >= 200 (+20) = 40
+        assert score == 40
+        assert msg == ""
 
     def test_dict_input_medium_detail(self):
         """Lines 116, 118, 120: dict path with various detailed counts."""
@@ -217,8 +225,9 @@ class TestValidateFileSummary:
             "e.py": "handles error processing logic",
         }
         score, msg = validate_file_summary(data)
-        # 3 valid detailed, 2 skipped
-        assert score >= 40
+        # num_files = 5 (all keys), detailed = 3/5 = 60% → 70
+        assert score == 70
+        assert msg == ""
 
     def test_no_items_returns_zero(self):
         """Items list with only non-dict entries: num_files is len(items) which is > 0,

@@ -132,6 +132,88 @@ class TestRunEvalWithMock:
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
         assert results[0]["quality_score"] < 90
 
+    def test_retry_then_success(self, mock_llm, monkeypatch):
+        """First attempt scores < 90, retry returns good content — best score wins.
+
+        Verifies the retry loop tracks best_score across attempts and stops
+        when score >= 90 on retry.
+        """
+        import eval_run as er
+        # First call returns low-score content, subsequent calls return high-score
+        call_count = {"n": 0}
+        # 10 items with full details to score >= 90 on the validator
+        good_items = [
+            {"name": f"Item {i}", "location": f"Place {i}", "target_ages": "All",
+             "price": "Free", "weather": "outdoor", "day": "Saturday"}
+            for i in range(10)
+        ]
+        def side_effect(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return {"content": "no json here at all", "parsed": None}
+            return {
+                "content": json.dumps(good_items),
+                "parsed": good_items,
+            }
+        with patch.object(er, "call", side_effect=side_effect), \
+             patch.object(er, "MAX_RETRIES", 2):
+            from eval_tasks_core import TASKS
+            tasks = {"json": TASKS["json"]}
+            results = er.run_eval("mock-model", tasks=tasks, verbose=False)
+        # Retry happened: 2+ calls
+        assert call_count["n"] >= 2
+        # best_score should be the second (high) score, not the first
+        assert results[0]["quality_score"] >= 90
+        # first_attempt_failed is set when any retry happens
+        assert results[0]["first_attempt_failed"] is True
+
+    def test_retry_exhausted_low_score(self, mock_llm, monkeypatch):
+        """When all attempts score < 90, the best (lowest) score is reported with FAIL status."""
+        import eval_run as er
+        # All calls return low-score content
+        mock_llm.set_response("json", {"content": "no json", "parsed": None})
+        with patch.object(er, "call", mock_llm.call), \
+             patch.object(er, "MAX_RETRIES", 2):
+            from eval_tasks_core import TASKS
+            tasks = {"json": TASKS["json"]}
+            results = er.run_eval("mock-model", tasks=tasks, verbose=False)
+        # All retries exhausted
+        assert results[0]["quality_score"] < 90
+        assert results[0]["status"] == "fail"
+        assert results[0]["first_attempt_failed"] is True
+
+    def test_fail_content_breaks_retry_early(self, mock_llm, monkeypatch):
+        """If diagnosis category is FAIL_CONTENT, retry loop breaks immediately.
+
+        A FAIL_CONTENT happens when the model emits > 200 chars of prose before
+        the first JSON bracket. In that case, no point retrying — the model
+        burned its context window on reasoning.
+        """
+        import eval_run as er
+        # 200+ chars of prose, then valid JSON (parsed) but only 2 items so
+        # score < 90. This triggers has_prose_before_json=True → FAIL_CONTENT.
+        prose = "Let me think carefully about this request. " * 10  # > 200 chars
+        items = [
+            {"name": f"Item {i}", "location": "X", "target_ages": "All",
+             "price": "Free", "weather": "outdoor", "day": "Sat"}
+            for i in range(2)
+        ]
+        content = prose + json.dumps(items)
+        parsed = items
+        call_count = {"n": 0}
+        def counting_call(*args, **kwargs):
+            call_count["n"] += 1
+            return {"content": content, "parsed": parsed}
+        with patch.object(er, "call", side_effect=counting_call), \
+             patch.object(er, "MAX_RETRIES", 5):
+            from eval_tasks_core import TASKS
+            tasks = {"json": TASKS["json"]}
+            results = er.run_eval("mock-model", tasks=tasks, verbose=False)
+        # FAIL_CONTENT → break after first attempt (no retry)
+        assert call_count["n"] == 1
+        # The category is recorded in the result
+        assert results[0]["failure_category"] == "CONTENT"
+
 
 class TestValidateResultDirectly:
     def test_error_result(self, mock_llm):
@@ -151,7 +233,9 @@ class TestValidateResultDirectly:
         task_cfg = TASKS["filename"]
         result = {"content": "valid_filename", "parsed": None}
         score, failure, diagnosis = _validate_result(result, task_cfg, "filename")
-        assert score >= 50
+        # "valid_filename" passes length, chars, format checks
+        assert score == 100
+        assert failure == ""
 
 
 class TestQualityResultsToEvalFormat:
@@ -195,10 +279,12 @@ class TestQualityResultsToEvalFormat:
         assert score == 95
 
     def test_text_extraction_path(self):
-        """Lines 62-67: Content has JSON match but extraction falls through to _extract_items_from_text."""
+        """Lines 62-67: No JSON match — falls through to _extract_items_from_text (markdown table)."""
         from eval_run import _validate_result
 
+        received = []
         def fake_validator(items, source_text=None):
+            received.append(list(items))
             return 60, "fail"
 
         task_cfg = {
@@ -206,19 +292,21 @@ class TestQualityResultsToEvalFormat:
             "parse_json": True,
             "source": "festival park toronto",
         }
-        result = {"content": "1. festival park\n2. beach toronto", "parsed": None}
+        result = {"content": "| Name | Location |\n|---|---|\n| Festival Park | Toronto |\n| Beach | Toronto |", "parsed": None}
         score, failure, diagnosis = _validate_result(result, task_cfg, "json", debug=True)
-        # Score is a number (extraction path was taken)
-        assert isinstance(score, (int, float))
-        assert 0 <= score <= 100
-        # Failure reason is a string
-        assert isinstance(failure, str)
+        # Validator received 2 extracted items from the markdown table
+        assert received == [[{"name": "Festival Park", "location": "Toronto"}, {"name": "Beach", "location": "Toronto"}]]
+        assert score == 60
+        assert failure == "fail"
 
     def test_summary_validation_path(self):
         """Lines 68-70: long content but no extractable items, falls back to validate_summary."""
         from eval_run import _validate_result
 
+        # Validator is never called in this path — validate_summary runs instead.
+        calls = []
         def fake_validator(items, source_text=None):
+            calls.append(items)
             return 80, ""
 
         task_cfg = {
@@ -228,9 +316,11 @@ class TestQualityResultsToEvalFormat:
         # Long content (>50 chars), no JSON, no list - should go through validate_summary
         result = {"content": "This is a long descriptive summary of what happened today in toronto with the children and the family event at the park location", "parsed": None}
         score, failure, diagnosis = _validate_result(result, task_cfg, "json", debug=True)
-        # Should fall through to summary path
-        assert score is not None
+        # Validator was bypassed in favor of validate_summary
+        assert calls == []
+        # Score is whatever validate_summary returns (a number in 0-100)
         assert isinstance(score, (int, float))
+        assert 0 <= score <= 100
 
     def test_debug_weekend_with_items(self):
         """Lines 76-83: debug=True, weekend task, with items and source - prints source matching details."""
@@ -299,20 +389,25 @@ class TestValidateResultBranches:
     def test_json_match_invalid_extracted(self):
         from eval_run import _validate_result
 
+        # Validator should NOT be called in this path: json.loads fails,
+        # _extract_items_from_text returns nothing (no bullets/tables),
+        # content > 50 chars → validate_summary path is taken instead.
+        calls = []
         def fake_validator(items, source_text=None):
+            calls.append(items)
             return 50, "fail"
 
-        # Content has "[" "]" but extracted is invalid JSON - lines 55-60
+        # Content has "[" "]" (matches JSON regex) but contents aren't valid JSON.
+        # Long enough (>50 chars) to skip "Empty content" and reach validate_summary.
+        result = {"content": "Here is some prose [this is not valid json at all] and more prose after the bracket text to make it long", "parsed": None}
         task_cfg = {
             "validator": fake_validator,
             "parse_json": True,
         }
-        result = {"content": "before [not valid json] after", "parsed": None}
         score, failure, diagnosis = _validate_result(result, task_cfg, "json")
-        # Falls through to _extract_items_from_text
+        assert calls == []
         assert isinstance(score, (int, float))
         assert 0 <= score <= 100
-        assert isinstance(failure, str)
 
     def test_short_content_no_extracted(self):
         from eval_run import _validate_result

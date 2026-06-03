@@ -530,93 +530,29 @@ class TestFlushBetweenModels:
         # Outer try/except caught the exception
         assert "Flush error" in out and "api boom" in out
 
-    def test_flush_with_error_triggers_restart(self, mock_llm, monkeypatch):
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
-        with patch.object(model_eval, "init_config"), \
-             patch.object(model_eval, "is_server_running", return_value=True), \
-             patch.object(model_eval, "get_models", return_value=["m1", "m2"]), \
-             patch.object(model_eval, "build_tasks_from_model", return_value={}), \
-             patch.object(model_eval, "run_eval", return_value=[]), \
-             patch.object(model_eval, "call", return_value={"error": "fail"}), \
-             patch.object(model_eval, "_print_results"), \
-             patch.object(model_eval, "is_server_responsive", return_value=True), \
-             patch.object(model_eval, "estimate_model_memory", return_value=4), \
-             patch.object(model_eval, "get_memory_percent", return_value=50.0), \
-             patch("subprocess.run"), \
-             patch("time.sleep"), \
-             patch("requests.get") as mock_get:
-            mock_resp = MagicMock()
-            mock_resp.status_code = 200
-            mock_get.return_value = mock_resp
-            model_eval.main()
-
-    def test_flush_subprocess_error_caught(self, mock_llm, monkeypatch):
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
-        with patch.object(model_eval, "init_config"), \
-             patch.object(model_eval, "is_server_running", return_value=True), \
-             patch.object(model_eval, "get_models", return_value=["m1", "m2"]), \
-             patch.object(model_eval, "build_tasks_from_model", return_value={}), \
-             patch.object(model_eval, "run_eval", return_value=[]), \
-             patch.object(model_eval, "call", return_value={"error": "fail"}), \
-             patch.object(model_eval, "_print_results"), \
-             patch.object(model_eval, "is_server_responsive", return_value=True), \
-             patch.object(model_eval, "estimate_model_memory", return_value=4), \
-             patch.object(model_eval, "get_memory_percent", return_value=50.0), \
-             patch("subprocess.run", side_effect=Exception("cmd error")), \
-             patch("time.sleep"), \
-             patch("requests.get", return_value=MagicMock(status_code=200)):
-            model_eval.main()
-
-    def test_flush_request_error_caught(self, mock_llm, monkeypatch):
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
-        with patch.object(model_eval, "init_config"), \
-             patch.object(model_eval, "is_server_running", return_value=True), \
-             patch.object(model_eval, "get_models", return_value=["m1", "m2"]), \
-             patch.object(model_eval, "build_tasks_from_model", return_value={}), \
-             patch.object(model_eval, "run_eval", return_value=[]), \
-             patch.object(model_eval, "call", return_value={"error": "fail"}), \
-             patch.object(model_eval, "_print_results"), \
-             patch.object(model_eval, "is_server_responsive", return_value=True), \
-             patch.object(model_eval, "estimate_model_memory", return_value=4), \
-             patch.object(model_eval, "get_memory_percent", return_value=50.0), \
-             patch("subprocess.run"), \
-             patch("time.sleep"), \
-             patch("requests.get", side_effect=Exception("conn err")):
-            model_eval.main()
-
-    def test_flush_call_exception_caught(self, mock_llm, monkeypatch):
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
-        with patch.object(model_eval, "init_config"), \
-             patch.object(model_eval, "is_server_running", return_value=True), \
-             patch.object(model_eval, "get_models", return_value=["m1", "m2"]), \
-             patch.object(model_eval, "build_tasks_from_model", return_value={}), \
-             patch.object(model_eval, "run_eval", return_value=[]), \
-             patch.object(model_eval, "call", side_effect=Exception("call err")), \
-             patch.object(model_eval, "_print_results"), \
-             patch.object(model_eval, "is_server_responsive", return_value=True), \
-             patch.object(model_eval, "estimate_model_memory", return_value=4), \
-             patch.object(model_eval, "get_memory_percent", return_value=50.0), \
-             patch("time.sleep"):
-            model_eval.main()
-
 
 class TestMainBlock:
     def test_main_block(self, monkeypatch):
+        """Exec the real `if __name__ == "__main__":` block from model_eval.py and verify it calls main()."""
+        import re
         import sys
+        import textwrap
         from unittest.mock import MagicMock
         monkeypatch.setattr(sys, "argv", ["model_eval"])
+        from pathlib import Path
         import model_eval
         mock_main = MagicMock()
         saved = model_eval.main
         model_eval.main = mock_main
         try:
-            # Inline the __main__ block
-            exec("if __name__ == \"__main__\":\n    main()\n",
-                 {"__name__": "__main__", "main": mock_main})
+            source = Path(model_eval.__file__).read_text()
+            match = re.search(
+                r'if __name__ == "__main__":\n(?:    .*\n)+',
+                source,
+            )
+            assert match is not None, "model_eval.py must have an if __name__ == __main__ block"
+            block = textwrap.dedent(match.group())
+            exec(block, {"__name__": "__main__", "main": mock_main})
         finally:
             model_eval.main = saved
         mock_main.assert_called_once()

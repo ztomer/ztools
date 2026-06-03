@@ -352,18 +352,18 @@ class TestScriptIntegration:
             lib.tui.DEBUG = original_debug
 
     def test_main_accepts_debug_arg(self):
-        """Test that main() accepts debug argument."""
-        from weekend_planner import main
-        import types
+        """Test that parse_args() correctly parses --debug flag."""
+        from weekend_planner import parse_args
+        import sys
 
-        # Create mock args with debug=True
-        args = types.SimpleNamespace(
-            use_cache=True,
-            model=None,
-            skip_web=True,
-            debug=True
-        )
-        # Just verify it doesn't crash on arg parsing
-        # (won't actually run due to mock deps)
-        assert hasattr(args, 'debug')
-        assert args.debug is True
+        saved = sys.argv
+        try:
+            sys.argv = ["weekend_planner", "--debug"]
+            args = parse_args()
+            assert args.debug is True
+
+            sys.argv = ["weekend_planner"]
+            args = parse_args()
+            assert args.debug is False
+        finally:
+            sys.argv = saved
