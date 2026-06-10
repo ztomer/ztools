@@ -23,7 +23,7 @@ except ImportError:
 
 try:
     from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
-except ImportError:
+except Exception:
     sync_playwright = PWTimeout = None
 
 from lib import init_config

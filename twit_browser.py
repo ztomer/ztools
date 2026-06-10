@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 try:
     from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
-except ImportError:
+except Exception:
     sync_playwright = PWTimeout = None
 
 from twit_cookies import get_chrome_cookies
@@ -88,6 +88,10 @@ def collect_tweets_via_browser(since_time: datetime, debug: bool) -> list[dict]:
     cookies = get_chrome_cookies()
     if not cookies:
         print(f"{WARN} No Twitter/X cookies found. Are you logged in to x.com in Chrome?")
+        sys.exit(1)
+
+    if sync_playwright is None:
+        print(f"{WARN} Playwright is not available. Install it with: uv sync")
         sys.exit(1)
 
     all_tweets: list[dict] = []
