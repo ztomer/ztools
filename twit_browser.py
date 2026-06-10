@@ -113,7 +113,16 @@ def collect_tweets_via_browser(since_time: datetime, debug: bool) -> list[dict]:
                 oldest_seen = tweet["created_at"]
 
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=not debug)
+        try:
+            browser = pw.chromium.launch(headless=not debug)
+        except Exception as e:
+            if "Executable doesn't exist" in str(e):
+                print(f"{WARN} Browser binary missing — running playwright install chromium ...")
+                import subprocess
+                subprocess.run(["playwright", "install", "chromium"], check=True)
+                browser = pw.chromium.launch(headless=not debug)
+            else:
+                raise
         context = browser.new_context()
         for cookie in cookies:
             try:
