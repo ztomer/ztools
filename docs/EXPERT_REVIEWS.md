@@ -232,12 +232,12 @@
 | 9 | **HIGH** | Add error handling for keychain read failure in cookie extraction | twitter | Uncle Bob | ✅ |
 | 10 | **HIGH** | Remove bare `except:` clauses (catch KeyboardInterrupt) in 6 locations | eval_tasks, lib | Both | ✅ |
 | 11 | **MEDIUM** | Move config loading out of module scope into init/lazy functions | weekend, lib | Uncle Bob | ✅ |
-| 12 | **MEDIUM** | Make monitor_memory_loop thread-safe or move to main-loop polling | eval/cli | Torvalds | ⬜ |
+| 12 | **MEDIUM** | Make monitor_memory_loop thread-safe or move to main-loop polling | eval/cli | Torvalds | ✅ |
 | 13 | **MEDIUM** | Cache `content.index()` results; fix double-eval in generator | lib/content_processing | Uncle Bob | ✅ |
 | 14 | **MEDIUM** | Use `requests.Session` as context manager everywhere | All apps | Uncle Bob | ⬜ |
-| 15 | **MEDIUM** | Add integration tests for LLM error/edge cases | tests | Torvalds | ⬜ |
-| 16 | **LOW** | Fix shared mutable references in `TASKS["json"] = TASKS["weekend_transient"]` | eval/tasks | Uncle Bob | ⬜ |
-| 17 | **LOW** | Remove `eval/cli.py:295` circular self-import | eval/cli | Torvalds | ⬜ |
-| 18 | **LOW** | Fix `"name"` key duplication in `normalize_keys` | lib/osaurus_output | Uncle Bob | ⬜ |
-| 19 | **LOW** | Fix misleading comment / inverted logic in `text_validator.py` "wordy" bonus | lib/validators | Uncle Bob | ⬜ |
-| 20 | **LOW** | Fix tautological test assertion in `test_mlx_lib.py:298` | tests | Torvalds | ⬜ |
+| 15 | **MEDIUM** | Add integration tests for LLM error/edge cases | tests | Torvalds | ✅ |
+| 16 | **LOW** | Fix shared mutable references in `TASKS["json"] = TASKS["weekend_transient"]` | eval/tasks | Uncle Bob | ✅ |
+| 17 | **LOW** | Remove `eval/cli.py:295` circular self-import | eval/cli | Torvalds | ✅ |
+| 18 | **LOW** | Fix `"name"` key duplication in `normalize_keys` | lib/osaurus_output | Uncle Bob | ✅ |
+| 19 | **LOW** | Fix misleading comment / inverted logic in `text_validator.py` "wordy" bonus | lib/validators | Uncle Bob | ✅ |
+| 20 | **LOW** | Fix tautological test assertion in `test_mlx_lib.py:298` | tests | Torvalds | ✅ |

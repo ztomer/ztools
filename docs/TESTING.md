@@ -1,6 +1,6 @@
 # Testing Patterns and Findings
 
-**Updated: June 2026** — captures the test patterns, mock infrastructure, and bugs found during the multi-round test audit.
+**Updated: June 2026** — captures the test patterns, mock infrastructure, and bugs found during the multi-round test audit. All phases of the remediation plan complete.
 
 ---
 
@@ -26,6 +26,7 @@ Use `tests/` for a full regression check before commits. Use a specific file dur
 | Module | Patched functions |
 |--------|------------------|
 | `lib.osaurus_lib` | `call`, `call_llm_api`, `get_models`, `is_server_running`, `get_best_model`, `check_llm_availability`, `ensure_server`, `panic_dump`, `_extract_json_only` |
+| `lib.llm.client` | `call`, `get_models`, `is_server_running` |
 | `lib.mlx_lib` | `call`, `call_mlx`, `find_text_mlx_model`, `find_mlx_model`, `process_mlx_content` |
 | `lib.config` | `get_model_prompts_all`, `build_tasks_from_model` |
 
@@ -347,3 +348,8 @@ Before merging a test, verify:
 - `lib/testing.py` — MockLLM implementation
 - `tests/conftest.py` — shared fixtures
 - `CLAUDE.md` — project rules
+
+## New Modules (Phase 3)
+
+- **`lib/llm/fallback.py`** — shared fallback orchestration (`call_with_fallback`), extracted from the three duplicate implementations in `twitter/summarize.py`, `weekend/llm.py`, `rename/llm.py`.
+- **`lib/llm/protocol.py`** — `LLMClient` protocol class unifying the three call interfaces (`lib.osaurus_lib.call`, `lib.llm/client.call`, `lib.mlx_lib.call`).

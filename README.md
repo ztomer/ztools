@@ -38,6 +38,15 @@ python3 -m eval --task file_summary --quick
 
 Shim scripts at root (`twitter_summarizer.py`, etc.) still work for backward compat.
 
+**Entry points** (via `pyproject.toml` `[project.scripts]`):
+```
+tw    → python3 -m twitter
+wk    → python3 -m weekend
+rn    → python3 -m rename
+ev    → python3 -m eval
+```
+After `pip install -e .`: `tw --help`, `wk --help`, etc.
+
 ## The Tools
 
 ### Weekend Planner
@@ -147,7 +156,19 @@ lib/                     # Shared infrastructure
 ├── quality_*.py         # Quality scoring models + runners
 ├── validators_lib.py    # Source matching, hallucination detection
 ├── config_core.py       # Config loading (lazy, thread-safe)
-└── logging_config.py    # Structured logging
+├── logging_config.py    # Structured logging
+├── testing.py           # MockLLM infrastructure
+├── llm/                 # LLM client, protocol, fallback, quirks
+│   ├── client.py        # Core LLM client
+│   ├── protocol.py      # LLMClient protocol
+│   ├── fallback.py      # Shared fallback orchestration
+│   ├── quirks.py        # Model quirks (canonical source)
+│   └── parsing.py       # JSON extraction, output cleaning
+└── validators/          # Validator implementations
+    ├── helpers.py       # Shared validation helpers
+    ├── text_validator.py# Text/entity validation
+    ├── json_validator.py# JSON structure validation
+    └── taxes_validator.py# Tax-domain validators
 
 twitter/                 # Twitter summarizer
 ├── cli.py               # CLI entry point
