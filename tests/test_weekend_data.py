@@ -36,7 +36,9 @@ class TestFetchWeather:
                 "precipitation_sum": [0.0, 2.5, 0.3],
             }
         }
-        with patch("weekend.data.requests.get", return_value=mock_response) as mock_get:
+        with patch("weekend.data.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_response
             result = fetch_weather(friday, sunday)
         assert "Daily Forecast" in result
         assert "Friday" in result
@@ -49,7 +51,9 @@ class TestFetchWeather:
         from weekend.data import fetch_weather
         friday = datetime.date(2026, 4, 10)
         sunday = datetime.date(2026, 4, 12)
-        with patch("weekend.data.requests.get", side_effect=Exception("network")):
+        with patch("weekend.data.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.side_effect = Exception("network")
             result = fetch_weather(friday, sunday)
         assert "fallback" in result.lower() or "Precipitation" in result
         out = capsys.readouterr()
@@ -61,7 +65,9 @@ class TestFetchWeather:
         sunday = datetime.date(2026, 4, 12)
         mock_response = MagicMock()
         mock_response.json.return_value = {"daily": {}}
-        with patch("weekend.data.requests.get", return_value=mock_response):
+        with patch("weekend.data.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_response
             result = fetch_weather(friday, sunday)
         assert "Daily Forecast" in result
 
@@ -77,7 +83,9 @@ class TestFetchWeather:
                 "precipitation_sum": [],  # empty
             }
         }
-        with patch("weekend.data.requests.get", return_value=mock_response):
+        with patch("weekend.data.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_response
             result = fetch_weather(friday, sunday)
         assert "Daily Forecast" in result
 

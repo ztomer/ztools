@@ -74,11 +74,12 @@ def call(
     timeout = timeout or get_timeout(task)
     
     try:
-        response = requests.post(
-            f"{url}{API_CHAT}",
-            json=payload,
-            timeout=timeout,
-        )
+        with requests.Session() as s:
+            response = s.post(
+                f"{url}{API_CHAT}",
+                json=payload,
+                timeout=timeout,
+            )
         response.raise_for_status()
         
         data = response.json()
@@ -107,10 +108,11 @@ def call(
 def is_server_running(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> bool:
     """Check if server is running."""
     try:
-        response = requests.get(
-            f"{get_api_url(host, port)}/api/tags",
-            timeout=5,
-        )
+        with requests.Session() as s:
+            response = s.get(
+                f"{get_api_url(host, port)}/api/tags",
+                timeout=5,
+            )
         return response.status_code == 200
     except Exception:
         return False
@@ -119,10 +121,11 @@ def is_server_running(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> boo
 def get_models(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> List[str]:
     """Get list of available models."""
     try:
-        response = requests.get(
-            f"{get_api_url(host, port)}/api/tags",
-            timeout=10,
-        )
+        with requests.Session() as s:
+            response = s.get(
+                f"{get_api_url(host, port)}/api/tags",
+                timeout=10,
+            )
         data = response.json()
         return [m["model"] for m in data.get("models", [])]
     except Exception:

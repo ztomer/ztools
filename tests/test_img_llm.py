@@ -35,7 +35,9 @@ class TestIsRelevantWithLlm:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.text = '{"message": {"content": "keep"}}'
-        with patch("rename.llm.requests.post", return_value=mock_resp):
+        with patch("rename.llm.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             assert is_relevant_with_llm("some content", "http://localhost:1337") is True
 
     def test_skip_response(self):
@@ -43,7 +45,9 @@ class TestIsRelevantWithLlm:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.text = '{"message": {"content": "skip"}}'
-        with patch("rename.llm.requests.post", return_value=mock_resp):
+        with patch("rename.llm.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             assert is_relevant_with_llm("some content", "http://localhost:1337") is False
 
     def test_first_model_fails_second_succeeds(self):
@@ -55,19 +59,25 @@ class TestIsRelevantWithLlm:
         fail_resp = MagicMock()
         fail_resp.status_code = 500
 
-        with patch("rename.llm.requests.post", side_effect=[fail_resp, mock_resp]):
+        with patch("rename.llm.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.side_effect = [fail_resp, mock_resp]
             assert is_relevant_with_llm("x", "http://localhost:1337") is True
 
     def test_all_models_fail(self):
         from rename.llm import is_relevant_with_llm
         fail_resp = MagicMock()
         fail_resp.status_code = 500
-        with patch("rename.llm.requests.post", return_value=fail_resp):
+        with patch("rename.llm.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = fail_resp
             assert is_relevant_with_llm("x", "http://localhost:1337") is None
 
     def test_http_exception(self):
         from rename.llm import is_relevant_with_llm
-        with patch("rename.llm.requests.post", side_effect=Exception("connection error")):
+        with patch("rename.llm.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.side_effect = Exception("connection error")
             assert is_relevant_with_llm("x", "http://localhost:1337") is None
 
     def test_invalid_json_line_continues(self):
@@ -79,7 +89,9 @@ class TestIsRelevantWithLlm:
             'not valid json\n'
             '{"message": {"content": "keep"}}'
         )
-        with patch("rename.llm.requests.post", return_value=mock_resp):
+        with patch("rename.llm.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             assert is_relevant_with_llm("x", "http://localhost:1337") is True
 
     def test_empty_lines_skipped(self):
@@ -91,7 +103,9 @@ class TestIsRelevantWithLlm:
             '\n\n'
             '{"message": {"content": "keep"}}'
         )
-        with patch("rename.llm.requests.post", return_value=mock_resp):
+        with patch("rename.llm.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             assert is_relevant_with_llm("x", "http://localhost:1337") is True
 
 
@@ -104,9 +118,11 @@ class TestQueryLlmForFilename:
             '{"message": {"content": "my_cool_photo"}}\n'
             '{"message": {"content": "", "done": true}}\n'
         )
-        with patch("rename.llm.requests.post", return_value=mock_resp), \
+        with patch("rename.llm.requests.Session") as mock_session, \
              patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
              patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"):
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             result = query_llm_for_filename("Test image text", "http://localhost:1337")
             assert result == "my_cool_photo"
 
@@ -118,9 +134,11 @@ class TestQueryLlmForFilename:
             '{"message": {"content": "filename: my_photo"}}\n'
             '{"message": {"content": "", "done": true}}\n'
         )
-        with patch("rename.llm.requests.post", return_value=mock_resp), \
+        with patch("rename.llm.requests.Session") as mock_session, \
              patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
              patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"):
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             result = query_llm_for_filename("Test image text", "http://localhost:1337")
             assert result == "my_photo"
 
@@ -129,9 +147,11 @@ class TestQueryLlmForFilename:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.text = '{"message": {"content": ""}}\n'
-        with patch("rename.llm.requests.post", return_value=mock_resp), \
+        with patch("rename.llm.requests.Session") as mock_session, \
              patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
              patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"):
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             assert query_llm_for_filename("Test text", "http://localhost:1337") is None
 
     def test_http_error_fallback(self):
@@ -145,9 +165,11 @@ class TestQueryLlmForFilename:
             '{"message": {"content": "successful_name"}}\n'
             '{"message": {"content": "", "done": true}}\n'
         )
-        with patch("rename.llm.requests.post", side_effect=[fail_resp, success_resp]), \
+        with patch("rename.llm.requests.Session") as mock_session, \
              patch("rename.llm.FILENAME_MODELS", ["fail-model", "success-model"]), \
              patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"):
+            s = mock_session.return_value.__enter__.return_value
+            s.post.side_effect = [fail_resp, success_resp]
             result = query_llm_for_filename("Test text", "http://localhost:1337")
             assert result == "successful_name"
 
@@ -159,9 +181,11 @@ class TestQueryLlmForFilename:
             '{"message": {"content": "one two three four five six seven eight"}}\n'
             '{"message": {"content": "", "done": true}}\n'
         )
-        with patch("rename.llm.requests.post", return_value=mock_resp), \
+        with patch("rename.llm.requests.Session") as mock_session, \
              patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
              patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"):
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             result = query_llm_for_filename("x", "http://localhost:1337")
             assert result == "one_two_three_four_five_six"
             assert "_seven" not in result
@@ -174,8 +198,10 @@ class TestQueryLlmForFilename:
             '{"message": {"content": "123 456 789"}}\n'
             '{"message": {"content": "", "done": true}}\n'
         )
-        with patch("rename.llm.requests.post", return_value=mock_resp), \
+        with patch("rename.llm.requests.Session") as mock_session, \
              patch("rename.llm.FILENAME_MODELS", ["test-model"]):
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             assert query_llm_for_filename("x", "http://localhost:1337") is None
 
     def test_invalid_json_in_streaming_response(self):
@@ -187,9 +213,11 @@ class TestQueryLlmForFilename:
             'not valid json\n'
             '{"message": {"content": "valid_name", "done": true}}\n'
         )
-        with patch("rename.llm.requests.post", return_value=mock_resp), \
+        with patch("rename.llm.requests.Session") as mock_session, \
              patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
              patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"):
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             result = query_llm_for_filename("x", "http://localhost:1337")
             assert result == "valid_name"
 
@@ -203,9 +231,11 @@ class TestQueryLlmForFilename:
             f'{{"message": {{"content": "{long_name}"}}}}\n'
             '{"message": {"content": "", "done": true}}\n'
         )
-        with patch("rename.llm.requests.post", return_value=mock_resp), \
+        with patch("rename.llm.requests.Session") as mock_session, \
              patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
              patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"):
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             result = query_llm_for_filename("x", "http://localhost:1337")
             # Truncated to exactly 35 chars
             assert result == "x" * 35
@@ -221,9 +251,11 @@ class TestQueryLlmForFilename:
             '{"message": {"content": "!!! ??? ???"}}\n'
             '{"message": {"content": "", "done": true}}\n'
         )
-        with patch("rename.llm.requests.post", return_value=mock_resp), \
+        with patch("rename.llm.requests.Session") as mock_session, \
              patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
              patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"):
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             assert query_llm_for_filename("x", "http://localhost:1337") is None
 
     def test_short_content_skipped(self):
@@ -236,9 +268,11 @@ class TestQueryLlmForFilename:
             '{"message": {"content": "!!!"}}\n'
             '{"message": {"content": "", "done": true}}\n'
         )
-        with patch("rename.llm.requests.post", return_value=mock_resp), \
+        with patch("rename.llm.requests.Session") as mock_session, \
              patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
              patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"):
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             assert query_llm_for_filename("x", "http://localhost:1337") is None
 
     def test_invalid_alpha_pattern(self):
@@ -251,9 +285,11 @@ class TestQueryLlmForFilename:
             '{"message": {"content": "TEST NAME"}}\n'
             '{"message": {"content": "", "done": true}}\n'
         )
-        with patch("rename.llm.requests.post", return_value=mock_resp), \
+        with patch("rename.llm.requests.Session") as mock_session, \
              patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
              patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"):
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             # Result is lowercased to "test name" → joined "test_name" → valid
             result = query_llm_for_filename("x", "http://localhost:1337")
             assert result == "test_name"
@@ -269,7 +305,9 @@ class TestQueryVlmForFilename:
             '{"message": {"content": "", "done": true}}\n'
         )
         with patch("builtins.open", mock_open(read_data=b"fake_image_data")), \
-             patch("rename.llm.requests.post", return_value=mock_resp):
+             patch("rename.llm.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             result = query_vlm_for_filename(
                 Path("/fake/image.png"), "http://localhost:1337", "vlm-model"
             )
@@ -281,7 +319,9 @@ class TestQueryVlmForFilename:
         mock_resp.status_code = 500
         mock_resp.text = "Internal server error"
         with patch("builtins.open", mock_open(read_data=b"data")), \
-             patch("rename.llm.requests.post", return_value=mock_resp):
+             patch("rename.llm.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             result = query_vlm_for_filename(
                 Path("/fake/image.png"), "http://localhost:1337", "vlm-model"
             )
@@ -301,13 +341,14 @@ class TestQueryVlmForFilename:
         mock_resp.status_code = 200
         mock_resp.text = '{"message": {"content": "output"}}\n{"message": {"done": true}}\n'
         with patch("builtins.open", mock_open(read_data=b"data")), \
-             patch("rename.llm.requests.post") as mock_post:
-            mock_post.return_value = mock_resp
+             patch("rename.llm.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             result = query_vlm_for_filename(
                 Path("/fake/image.png"), "http://localhost:1337", "vlm-model", api_key="mykey"
             )
             assert result == "output"
-            headers = mock_post.call_args[1].get("headers", {})
+            headers = s.post.call_args[1].get("headers", {})
             assert headers.get("Authorization") == "Bearer mykey"
 
     def test_vlm_done_break(self):
@@ -321,7 +362,9 @@ class TestQueryVlmForFilename:
             '{"done": true, "message": {"content": "more"}}\n'
         )
         with patch("builtins.open", mock_open(read_data=b"data")), \
-             patch("rename.llm.requests.post", return_value=mock_resp):
+             patch("rename.llm.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             result = query_vlm_for_filename(
                 Path("/fake/image.png"), "http://localhost:1337", "vlm-model"
             )
@@ -337,7 +380,9 @@ class TestQueryVlmForFilename:
             '{"message": {"content": "valid_part", "done": true}}\n'
         )
         with patch("builtins.open", mock_open(read_data=b"data")), \
-             patch("rename.llm.requests.post", return_value=mock_resp):
+             patch("rename.llm.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             result = query_vlm_for_filename(
                 Path("/fake/image.png"), "http://localhost:1337", "vlm-model"
             )
@@ -353,8 +398,10 @@ class TestQueryVlmForFilename:
             '{"message": {"content": "first_"}}\n'
             '{"message": {"content": "name"}, "done": true}\n'
         )
-        with patch("rename.llm.requests.post", return_value=mock_resp), \
+        with patch("rename.llm.requests.Session") as mock_session, \
              patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
              patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"):
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             result = query_llm_for_filename("x", "http://localhost:1337")
             assert result == "first_name"

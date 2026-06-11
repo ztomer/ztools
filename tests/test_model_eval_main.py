@@ -448,10 +448,11 @@ class TestFlushBetweenModels:
              patch.object(model_eval, "get_memory_percent", return_value=50.0), \
              patch("subprocess.run") as mock_subprocess, \
              patch("time.sleep"), \
-             patch("requests.get") as mock_get:
+             patch("requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
             mock_resp = MagicMock()
             mock_resp.status_code = 200
-            mock_get.return_value = mock_resp
+            s.get.return_value = mock_resp
             model_eval.main()
         # subprocess was called for both quit and open. Verify the right commands.
         sub_calls = [str(c) for c in mock_subprocess.call_args_list]
@@ -477,7 +478,9 @@ class TestFlushBetweenModels:
              patch.object(model_eval, "get_memory_percent", return_value=50.0), \
              patch("subprocess.run", side_effect=Exception("cmd error")), \
              patch("time.sleep"), \
-             patch("requests.get", return_value=MagicMock(status_code=200)):
+             patch("requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = MagicMock(status_code=200)
             # Should not raise — exception caught
             model_eval.main()
         out = capsys.readouterr().out
@@ -501,7 +504,9 @@ class TestFlushBetweenModels:
              patch.object(model_eval, "get_memory_percent", return_value=50.0), \
              patch("subprocess.run"), \
              patch("time.sleep"), \
-             patch("requests.get", side_effect=Exception("conn err")):
+             patch("requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.side_effect = Exception("conn err")
             # Should not raise
             model_eval.main()
         out = capsys.readouterr().out

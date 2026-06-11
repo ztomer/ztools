@@ -38,7 +38,9 @@ class TestGetModels:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"data": [{"id": "a"}, {"id": "b"}]}
-        with patch("lib.osaurus_models.requests.get", return_value=mock_resp):
+        with patch("lib.osaurus_models.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_resp
             assert get_models() == ["a", "b"]
 
     def test_get_models_with_api_key(self, mock_llm):
@@ -46,41 +48,51 @@ class TestGetModels:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"data": [{"id": "a"}]}
-        with patch("lib.osaurus_models.requests.get", return_value=mock_resp) as get:
+        with patch("lib.osaurus_models.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_resp
             get_models("localhost", 1337, api_key="secret")
-        assert get.call_args.kwargs["headers"]["Authorization"] == "Bearer secret"
+            assert s.get.call_args.kwargs["headers"]["Authorization"] == "Bearer secret"
 
     def test_get_models_http_prefix(self, mock_llm):
         from lib.osaurus_models import get_models
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"data": []}
-        with patch("lib.osaurus_models.requests.get", return_value=mock_resp) as get:
+        with patch("lib.osaurus_models.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_resp
             get_models("http://example.com", 80)
-        assert "http://example.com/v1/models" in get.call_args.args[0]
+            assert "http://example.com/v1/models" in s.get.call_args.args[0]
 
     def test_get_models_non_200(self, mock_llm):
         from lib.osaurus_models import get_models
         mock_resp = MagicMock()
         mock_resp.status_code = 500
-        with patch("lib.osaurus_models.requests.get", return_value=mock_resp):
+        with patch("lib.osaurus_models.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_resp
             assert get_models() == []
 
     def test_get_models_timeout(self, mock_llm):
         from lib.osaurus_models import get_models
-        with patch("lib.osaurus_models.requests.get",
-                   side_effect=requests.exceptions.Timeout):
+        with patch("lib.osaurus_models.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.side_effect = requests.exceptions.Timeout
             assert get_models() == []
 
     def test_get_models_connection_error(self, mock_llm):
         from lib.osaurus_models import get_models
-        with patch("lib.osaurus_models.requests.get",
-                   side_effect=requests.exceptions.ConnectionError):
+        with patch("lib.osaurus_models.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.side_effect = requests.exceptions.ConnectionError
             assert get_models() == []
 
     def test_get_models_exception(self, mock_llm, capsys):
         from lib.osaurus_models import get_models
-        with patch("lib.osaurus_models.requests.get", side_effect=Exception("boom")):
+        with patch("lib.osaurus_models.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.side_effect = Exception("boom")
             assert get_models() == []
         captured = capsys.readouterr()
         assert "Warning" in captured.out
@@ -91,38 +103,48 @@ class TestServerCheck:
         from lib.osaurus_models import is_server_running
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        with patch("lib.osaurus_models.requests.get", return_value=mock_resp):
+        with patch("lib.osaurus_models.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_resp
             assert is_server_running() is True
 
     def test_is_server_running_404(self, mock_llm):
         from lib.osaurus_models import is_server_running
         mock_resp = MagicMock()
         mock_resp.status_code = 404
-        with patch("lib.osaurus_models.requests.get", return_value=mock_resp):
+        with patch("lib.osaurus_models.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_resp
             assert is_server_running() is True
 
     def test_is_server_running_500(self, mock_llm):
         from lib.osaurus_models import is_server_running
         mock_resp = MagicMock()
         mock_resp.status_code = 500
-        with patch("lib.osaurus_models.requests.get", return_value=mock_resp):
+        with patch("lib.osaurus_models.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_resp
             assert is_server_running() is False
 
     def test_is_server_running_timeout(self, mock_llm):
         from lib.osaurus_models import is_server_running
-        with patch("lib.osaurus_models.requests.get",
-                   side_effect=requests.exceptions.Timeout):
+        with patch("lib.osaurus_models.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.side_effect = requests.exceptions.Timeout
             assert is_server_running() is False
 
     def test_is_server_running_connection(self, mock_llm):
         from lib.osaurus_models import is_server_running
-        with patch("lib.osaurus_models.requests.get",
-                   side_effect=requests.exceptions.ConnectionError):
+        with patch("lib.osaurus_models.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.side_effect = requests.exceptions.ConnectionError
             assert is_server_running() is False
 
     def test_is_server_running_exception(self, mock_llm, capsys):
         from lib.osaurus_models import is_server_running
-        with patch("lib.osaurus_models.requests.get", side_effect=Exception("boom")):
+        with patch("lib.osaurus_models.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.side_effect = Exception("boom")
             assert is_server_running() is False
         captured = capsys.readouterr()
         assert "Warning" in captured.out
@@ -131,9 +153,11 @@ class TestServerCheck:
         from lib.osaurus_models import is_server_running
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        with patch("lib.osaurus_models.requests.get", return_value=mock_resp) as get:
+        with patch("lib.osaurus_models.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_resp
             is_server_running("http://example.com")
-        assert "http://example.com/v1/models" in get.call_args.args[0]
+            assert "http://example.com/v1/models" in s.get.call_args.args[0]
 
 
 class TestCheckAvailability:

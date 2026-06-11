@@ -106,11 +106,12 @@ def call(
     try:
         timeout = timeout or get_timeout(task)
         logger.debug(f"Sending request with {len(messages)} messages, timeout={timeout}s")
-        resp = requests.post(
-            url, json=payload,
-            headers={"Content-Type": "application/json"},
-            timeout=timeout,
-        )
+        with requests.Session() as s:
+            resp = s.post(
+                url, json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=timeout,
+            )
         result["time"] = round(time.time() - start, 1)
         logger.debug(f"Response received in {result['time']}s")
         if resp.status_code != 200:
@@ -198,7 +199,8 @@ def call_llm_api(
             url = f"{host}/v1/chat/completions"
         else:
             url = f"http://{host}/v1/chat/completions"
-        response = requests.post(url, headers=headers, json=payload, timeout=timeout)
+        with requests.Session() as s:
+            response = s.post(url, headers=headers, json=payload, timeout=timeout)
         response.raise_for_status()
         data = response.json()
         return {

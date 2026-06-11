@@ -136,7 +136,8 @@ def is_server_responsive(host: str = "localhost", port: int = 1337, timeout: int
     """Check if osaurus server is responsive."""
     import requests
     try:
-        resp = requests.get(f"http://{host}:{port}/api/tags", timeout=timeout)
+        with requests.Session() as s:
+            resp = s.get(f"http://{host}:{port}/api/tags", timeout=timeout)
         return resp.status_code == 200
     except Exception:
         return False
@@ -307,7 +308,8 @@ def main():
                 for _ in range(5):
                     try:
                         import requests
-                        resp = requests.get("http://localhost:1337/api/tags", timeout=2)
+                        with requests.Session() as s:
+                            resp = s.get("http://localhost:1337/api/tags", timeout=2)
                         if resp.status_code == 200:
                             console.print(f"{STEP} Server restarted")
                             break

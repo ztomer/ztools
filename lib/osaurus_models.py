@@ -24,7 +24,8 @@ def get_models(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, api_key: str 
         else:
             url = f"http://{host}:{port}/v1/models"
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
-        resp = requests.get(url, timeout=10, headers=headers)
+        with requests.Session() as s:
+            resp = s.get(url, timeout=10, headers=headers)
         if resp.status_code == 200:
             return [m["id"] for m in resp.json().get("data", [])]
     except requests.exceptions.Timeout:
@@ -42,7 +43,8 @@ def is_server_running(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> boo
             url = f"{host}/v1/models"
         else:
             url = f"http://{host}:{port}/v1/models"
-        resp = requests.get(url, timeout=3)
+        with requests.Session() as s:
+            resp = s.get(url, timeout=3)
         return resp.status_code in (200, 404)
     except requests.exceptions.Timeout:
         return False

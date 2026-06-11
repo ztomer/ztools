@@ -67,19 +67,25 @@ class TestIsServerResponsive:
         import eval.cli as model_eval
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        with patch("requests.get", return_value=mock_resp):
+        with patch("requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_resp
             assert model_eval.is_server_responsive() is True
 
     def test_not_responsive(self, mock_llm):
         import eval.cli as model_eval
         mock_resp = MagicMock()
         mock_resp.status_code = 500
-        with patch("requests.get", return_value=mock_resp):
+        with patch("requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_resp
             assert model_eval.is_server_responsive() is False
 
     def test_exception(self, mock_llm):
         import eval.cli as model_eval
-        with patch("requests.get", side_effect=Exception("conn error")):
+        with patch("requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.side_effect = Exception("conn error")
             assert model_eval.is_server_responsive() is False
 
 

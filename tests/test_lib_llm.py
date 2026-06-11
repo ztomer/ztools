@@ -56,7 +56,9 @@ class TestClient:
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {"message": {"content": "Hello"}}
-        with patch("lib.llm.client.requests.post", return_value=mock_resp):
+        with patch("lib.llm.client.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             result = call("test-model", [{"role": "user", "content": "hi"}])
         assert result["content"] == "Hello"
         assert result["error"] is None
@@ -68,7 +70,9 @@ class TestClient:
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {"content": "Direct content"}
-        with patch("lib.llm.client.requests.post", return_value=mock_resp):
+        with patch("lib.llm.client.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             result = call("test-model", [{"role": "user", "content": "hi"}])
         assert result["content"] == "Direct content"
 
@@ -77,15 +81,19 @@ class TestClient:
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {"message": {"content": '{"key": "val"}'}}
-        with patch("lib.llm.client.requests.post", return_value=mock_resp) as post:
+        with patch("lib.llm.client.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             result = call("test-model", [{"role": "user", "content": "hi"}], parse_json=True)
         assert result["parsed"] == {"key": "val"}
-        assert "response_format" in post.call_args.kwargs["json"]
+        assert "response_format" in s.post.call_args.kwargs["json"]
 
     def test_call_timeout(self, mock_llm):
         from lib.llm.client import call
         import requests
-        with patch("lib.llm.client.requests.post", side_effect=requests.exceptions.Timeout):
+        with patch("lib.llm.client.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.side_effect = requests.exceptions.Timeout
             result = call("test-model", [{"role": "user", "content": "hi"}])
         assert result["error"] == "Timeout"
         assert result["content"] is None
@@ -93,13 +101,17 @@ class TestClient:
     def test_call_connection_error(self, mock_llm):
         from lib.llm.client import call
         import requests
-        with patch("lib.llm.client.requests.post", side_effect=requests.exceptions.ConnectionError):
+        with patch("lib.llm.client.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.side_effect = requests.exceptions.ConnectionError
             result = call("test-model", [{"role": "user", "content": "hi"}])
         assert result["error"] == "Connection failed"
 
     def test_call_generic_exception(self, mock_llm):
         from lib.llm.client import call
-        with patch("lib.llm.client.requests.post", side_effect=Exception("weird")):
+        with patch("lib.llm.client.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.side_effect = Exception("weird")
             result = call("test-model", [{"role": "user", "content": "hi"}])
         assert "weird" in result["error"]
 
@@ -108,39 +120,51 @@ class TestClient:
         mock_resp = MagicMock()
         mock_resp.raise_for_status = MagicMock()
         mock_resp.json.return_value = {"message": {"content": "ok"}}
-        with patch("lib.llm.client.requests.post", return_value=mock_resp) as post:
+        with patch("lib.llm.client.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_resp
             call("test-model", [{"role": "user", "content": "hi"}], max_tokens=999)
-        assert post.call_args.kwargs["json"]["max_tokens"] == 999
+            assert s.post.call_args.kwargs["json"]["max_tokens"] == 999
 
     def test_is_server_running_true(self, mock_llm):
         from lib.llm.client import is_server_running
         mock_resp = MagicMock()
         mock_resp.status_code = 200
-        with patch("lib.llm.client.requests.get", return_value=mock_resp):
+        with patch("lib.llm.client.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_resp
             assert is_server_running() is True
 
     def test_is_server_running_false_status(self, mock_llm):
         from lib.llm.client import is_server_running
         mock_resp = MagicMock()
         mock_resp.status_code = 500
-        with patch("lib.llm.client.requests.get", return_value=mock_resp):
+        with patch("lib.llm.client.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_resp
             assert is_server_running() is False
 
     def test_is_server_running_exception(self, mock_llm):
         from lib.llm.client import is_server_running
-        with patch("lib.llm.client.requests.get", side_effect=Exception):
+        with patch("lib.llm.client.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.side_effect = Exception
             assert is_server_running() is False
 
     def test_get_models_success(self, mock_llm):
         from lib.llm.client import get_models
         mock_resp = MagicMock()
         mock_resp.json.return_value = {"models": [{"model": "a"}, {"model": "b"}]}
-        with patch("lib.llm.client.requests.get", return_value=mock_resp):
+        with patch("lib.llm.client.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_resp
             assert get_models() == ["a", "b"]
 
     def test_get_models_exception(self, mock_llm):
         from lib.llm.client import get_models
-        with patch("lib.llm.client.requests.get", side_effect=Exception):
+        with patch("lib.llm.client.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.side_effect = Exception
             assert get_models() == []
 
 

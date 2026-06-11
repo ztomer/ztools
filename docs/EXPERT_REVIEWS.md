@@ -234,7 +234,7 @@
 | 11 | **MEDIUM** | Move config loading out of module scope into init/lazy functions | weekend, lib | Uncle Bob | ✅ |
 | 12 | **MEDIUM** | Make monitor_memory_loop thread-safe or move to main-loop polling | eval/cli | Torvalds | ✅ |
 | 13 | **MEDIUM** | Cache `content.index()` results; fix double-eval in generator | lib/content_processing | Uncle Bob | ✅ |
-| 14 | **MEDIUM** | Use `requests.Session` as context manager everywhere | All apps | Uncle Bob | ⬜ |
+| 14 | **MEDIUM** | Use `requests.Session` as context manager everywhere | All apps | Uncle Bob | ✅ |
 | 15 | **MEDIUM** | Add integration tests for LLM error/edge cases | tests | Torvalds | ✅ |
 | 16 | **LOW** | Fix shared mutable references in `TASKS["json"] = TASKS["weekend_transient"]` | eval/tasks | Uncle Bob | ✅ |
 | 17 | **LOW** | Remove `eval/cli.py:295` circular self-import | eval/cli | Torvalds | ✅ |

@@ -28,7 +28,8 @@ def fetch_weather(friday, sunday):
             "start_date": friday.strftime("%Y-%m-%d"),
             "end_date": sunday.strftime("%Y-%m-%d"),
         }
-        resp = requests.get(url, params=params, timeout=10).json()
+        with requests.Session() as s:
+            resp = s.get(url, params=params, timeout=10).json()
         daily = resp.get("daily", {})
 
         dates = daily.get("time", [])

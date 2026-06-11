@@ -114,7 +114,9 @@ class TestCall:
         mock_response.json.return_value = {
             "choices": [{"message": {"content": "Hello response"}}]
         }
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             result = call("model-a", [{"role": "user", "content": "hi"}])
         assert result["content"] == "Hello response"
         assert result["error"] is None
@@ -130,9 +132,11 @@ class TestCall:
         mock_response.json.return_value = {
             "choices": [{"message": {"content": '{"a": 1}'}}]
         }
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response) as post:
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             result = call("model-a", [{"role": "user", "content": "hi"}], parse_json=True)
-        assert "response_format" in post.call_args.kwargs["json"]
+        assert "response_format" in s.post.call_args.kwargs["json"]
         # extract_json normalizes {"a": 1} dict to ["a"] keys list
         assert result["parsed"] == ["a"]
 
@@ -146,7 +150,9 @@ class TestCall:
         mock_response.json.return_value = {
             "choices": [{"message": {"content": "This is {broken: json with no quotes}"}}]
         }
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             result = call("model-a", [{"role": "user", "content": "hi"}], parse_json=True)
         # Either parsed is None, or extract_json recovered something
         # The key is no exception is raised
@@ -158,7 +164,9 @@ class TestCall:
         mock_response = MagicMock()
         mock_response.status_code = 500
         mock_response.text = "Internal Server Error"
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             result = call("model-a", [{"role": "user", "content": "hi"}])
         assert "HTTP 500" in result["error"]
 
@@ -168,7 +176,9 @@ class TestCall:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": []}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             result = call("model-a", [{"role": "user", "content": "hi"}])
         assert "Empty response" in result["error"]
 
@@ -178,21 +188,27 @@ class TestCall:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"oops": "no choices"}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             result = call("model-a", [{"role": "user", "content": "hi"}])
         assert "Empty response" in result["error"]
 
     def test_call_timeout(self, no_mock_llm):
         import lib.osaurus_lib
         call = lib.osaurus_lib.call
-        with patch("lib.osaurus_lib.requests.post", side_effect=requests.exceptions.Timeout):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.side_effect = requests.exceptions.Timeout
             result = call("model-a", [{"role": "user", "content": "hi"}])
         assert result["error"] == "Timeout"
 
     def test_call_connection_error(self, no_mock_llm):
         import lib.osaurus_lib
         call = lib.osaurus_lib.call
-        with patch("lib.osaurus_lib.requests.post", side_effect=requests.exceptions.ConnectionError):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.side_effect = requests.exceptions.ConnectionError
             result = call("model-a", [{"role": "user", "content": "hi"}])
         assert "Connection failed" in result["error"]
 
@@ -202,21 +218,27 @@ class TestCall:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.side_effect = json.JSONDecodeError("err", "doc", 0)
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             result = call("model-a", [{"role": "user", "content": "hi"}])
         assert "Invalid JSON" in result["error"]
 
     def test_call_key_error(self, no_mock_llm):
         import lib.osaurus_lib
         call = lib.osaurus_lib.call
-        with patch("lib.osaurus_lib.requests.post", side_effect=KeyError("missing")):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.side_effect = KeyError("missing")
             result = call("model-a", [{"role": "user", "content": "hi"}])
         assert "Unexpected response format" in result["error"]
 
     def test_call_generic_exception(self, no_mock_llm):
         import lib.osaurus_lib
         call = lib.osaurus_lib.call
-        with patch("lib.osaurus_lib.requests.post", side_effect=RuntimeError("oops")):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.side_effect = RuntimeError("oops")
             result = call("model-a", [{"role": "user", "content": "hi"}])
         assert "RuntimeError" in result["error"]
 
@@ -226,9 +248,11 @@ class TestCall:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "x"}}]}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response) as post:
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             call("model-a", [{"role": "user", "content": "hi"}], max_tokens=99)
-        assert post.call_args.kwargs["json"]["max_tokens"] == 99
+        assert s.post.call_args.kwargs["json"]["max_tokens"] == 99
 
     def test_call_with_custom_timeout(self, no_mock_llm):
         import lib.osaurus_lib
@@ -236,9 +260,11 @@ class TestCall:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "x"}}]}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response) as post:
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             call("model-a", [{"role": "user", "content": "hi"}], timeout=42)
-        assert post.call_args.kwargs["timeout"] == 42
+        assert s.post.call_args.kwargs["timeout"] == 42
 
     def test_call_parse_json_empty_content(self, no_mock_llm):
         import lib.osaurus_lib
@@ -246,7 +272,9 @@ class TestCall:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": ""}}]}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             result = call("model-a", [{"role": "user", "content": "hi"}], parse_json=True)
         assert result["parsed"] is None
 
@@ -256,10 +284,12 @@ class TestCall:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "x"}}]}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response) as post, \
+        with patch("lib.osaurus_lib.requests.Session") as mock_session, \
              patch("lib.osaurus_lib.get_max_tokens_for_task", return_value=2048):
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             call("model-a", [{"role": "user", "content": "hi"}])
-        assert post.call_args.kwargs["json"]["max_tokens"] == 2048
+        assert s.post.call_args.kwargs["json"]["max_tokens"] == 2048
 
 
 class TestCallWithPrompt:
@@ -268,7 +298,9 @@ class TestCallWithPrompt:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "thoughtful"}}]}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             result = lib.osaurus_lib.call_with_prompt("model-a", "Tell me about X", task="think")
         assert result["content"] == "thoughtful"
 
@@ -277,25 +309,31 @@ class TestCallWithPrompt:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": '{"a":1}'}}]}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response) as post:
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             result = lib.osaurus_lib.call_with_prompt("model-a", "extract", task="json")
-        assert post.call_args.kwargs["json"].get("response_format") == {"type": "json_object"}
+        assert s.post.call_args.kwargs["json"].get("response_format") == {"type": "json_object"}
 
     def test_detailed_json_task(self, no_mock_llm):
         import lib.osaurus_lib
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "{}"}}]}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response) as post:
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             lib.osaurus_lib.call_with_prompt("model-a", "extract", task="detailed_json")
-        assert post.call_args.kwargs["json"].get("response_format") == {"type": "json_object"}
+        assert s.post.call_args.kwargs["json"].get("response_format") == {"type": "json_object"}
 
     def test_summarize_task(self, no_mock_llm):
         import lib.osaurus_lib
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "summary"}}]}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             result = lib.osaurus_lib.call_with_prompt("model-a", "lots of text", task="summarize")
         assert result["content"] == "summary"
 
@@ -304,7 +342,9 @@ class TestCallWithPrompt:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "my_file"}}]}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             result = lib.osaurus_lib.call_with_prompt("model-a", "long text", task="filename")
         assert result["content"] == "my_file"
 
@@ -313,20 +353,24 @@ class TestCallWithPrompt:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "x"}}]}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response) as post:
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             lib.osaurus_lib.call_with_prompt("model-a", "hi", task="unknown_task")
         # Uses single user message
-        assert post.call_args.kwargs["json"]["messages"] == [{"role": "user", "content": "hi"}]
+        assert s.post.call_args.kwargs["json"]["messages"] == [{"role": "user", "content": "hi"}]
 
     def test_prompt_substitution(self, no_mock_llm):
         import lib.osaurus_lib
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "x"}}]}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response) as post:
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             lib.osaurus_lib.call_with_prompt("model-a", "lots of content", task="think")
         # Substitution happened for {prompt} -> "lots of content"
-        assert post.call_args.kwargs["json"]["messages"][1]["content"] == "lots of content"
+        assert s.post.call_args.kwargs["json"]["messages"][1]["content"] == "lots of content"
 
 
 class TestTestModel:
@@ -335,7 +379,9 @@ class TestTestModel:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "Hello!"}}]}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             result = lib.osaurus_lib.test_model("model-a")
         assert result["content"] == "Hello!"
 
@@ -349,41 +395,51 @@ class TestCallLLMApi:
             "usage": {"tokens": 100},
             "model": "remote-model",
         }
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response) as post:
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             result = lib.osaurus_lib.call_llm_api("https://api.example.com", "model", [{"role": "user", "content": "hi"}])
         assert result["content"] == "resp"
         assert result["model"] == "remote-model"
         assert result["usage"] == {"tokens": 100}
         # Authorization NOT set when api_key is empty
-        assert "Authorization" not in post.call_args.kwargs["headers"]
+        assert "Authorization" not in s.post.call_args.kwargs["headers"]
 
     def test_call_llm_api_without_http(self, no_mock_llm):
         import lib.osaurus_lib
         mock_response = MagicMock()
         mock_response.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response) as post:
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             lib.osaurus_lib.call_llm_api("api.example.com", "model", [])
-        assert post.call_args.args[0] == "http://api.example.com/v1/chat/completions"
+        assert s.post.call_args.args[0] == "http://api.example.com/v1/chat/completions"
 
     def test_call_llm_api_with_api_key(self, no_mock_llm):
         import lib.osaurus_lib
         mock_response = MagicMock()
         mock_response.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response) as post:
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             lib.osaurus_lib.call_llm_api("https://api.x.com", "model", [], api_key="key123")
-        assert post.call_args.kwargs["headers"]["Authorization"] == "Bearer key123"
+        assert s.post.call_args.kwargs["headers"]["Authorization"] == "Bearer key123"
 
     def test_call_llm_api_parse_json(self, no_mock_llm):
         import lib.osaurus_lib
         mock_response = MagicMock()
         mock_response.json.return_value = {"choices": [{"message": {"content": "{}"}}]}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response) as post:
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             lib.osaurus_lib.call_llm_api("https://api.x.com", "model", [], parse_json=True)
-        assert post.call_args.kwargs["json"]["response_format"] == {"type": "json_object"}
+        assert s.post.call_args.kwargs["json"]["response_format"] == {"type": "json_object"}
 
     def test_call_llm_api_http_error(self, no_mock_llm):
         import lib.osaurus_lib
-        with patch("lib.osaurus_lib.requests.post", side_effect=Exception("boom")):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.side_effect = Exception("boom")
             result = lib.osaurus_lib.call_llm_api("https://api.x.com", "model", [])
         assert "boom" in result["error"]
 
@@ -391,7 +447,9 @@ class TestCallLLMApi:
         import lib.osaurus_lib
         mock_response = MagicMock()
         mock_response.json.return_value = {"oops": "no choices"}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             result = lib.osaurus_lib.call_llm_api("https://api.x.com", "model", [])
         assert "error" in result
 
@@ -399,7 +457,9 @@ class TestCallLLMApi:
         import lib.osaurus_lib
         mock_response = MagicMock()
         mock_response.json.return_value = {"choices": [{"message": {"content": "x"}}]}
-        with patch("lib.osaurus_lib.requests.post", return_value=mock_response):
+        with patch("lib.osaurus_lib.requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.post.return_value = mock_response
             result = lib.osaurus_lib.call_llm_api("https://api.x.com", "fallback-model", [])
         assert result["model"] == "fallback-model"
 

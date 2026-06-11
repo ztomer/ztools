@@ -65,11 +65,12 @@ def is_relevant_with_llm(text: str, host: str, api_key: str = "") -> Optional[bo
 
     for model in ["qwen3.6-27b-mxfp4", "gemma-4-26b-a4b-it-mxfp4"]:
         try:
-            resp = requests.post(
-                f"{host}/api/chat",
-                json={"model": model, "messages": messages},
-                timeout=5,
-            )
+            with requests.Session() as s:
+                resp = s.post(
+                    f"{host}/api/chat",
+                    json={"model": model, "messages": messages},
+                    timeout=5,
+                )
             if resp.status_code != 200:
                 continue
             content = ""
@@ -100,11 +101,12 @@ def query_llm_for_filename(
             prompt = PROMPT_TEXT_TO_FILENAME.format(text=text)
             messages = [{"role": "user", "content": prompt}]
 
-            resp = requests.post(
-                f"{host}/api/chat",
-                json={"model": m, "messages": messages},
-                timeout=120,
-            )
+            with requests.Session() as sess:
+                resp = sess.post(
+                    f"{host}/api/chat",
+                    json={"model": m, "messages": messages},
+                    timeout=120,
+                )
             if resp.status_code != 200:
                 continue
 
@@ -201,12 +203,13 @@ def query_vlm_for_filename(
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
 
-        resp = requests.post(
-            f"{host}/api/chat",
-            json={"model": model, "messages": messages},
-            headers=headers,
-            timeout=60,
-        )
+        with requests.Session() as s:
+            resp = s.post(
+                f"{host}/api/chat",
+                json={"model": model, "messages": messages},
+                headers=headers,
+                timeout=60,
+            )
 
         if resp.status_code != 200:
             print(f"{FAIL} VLM API Error: {resp.status_code} - {resp.text}")
