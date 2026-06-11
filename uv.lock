@@ -1557,7 +1557,7 @@ wheels = [
 [[package]]
 name = "otools"
 version = "1.0.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "pyyaml" },
     { name = "requests" },

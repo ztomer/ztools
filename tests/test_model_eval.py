@@ -83,34 +83,24 @@ class TestIsServerResponsive:
             assert model_eval.is_server_responsive() is False
 
 
-class TestMonitorMemoryLoop:
-    def test_starts_thread(self, mock_llm):
+class TestPrintMemoryUsage:
+    def test_normal_memory(self, mock_llm):
         import eval.cli as model_eval
         with patch.object(eval.cli, "get_memory_percent", return_value=50.0):
-            t = model_eval.monitor_memory_loop(interval=1)
-        # Real thread started
-        assert t is not None
-        assert t.daemon is True  # daemon=True set in code
-        # Stop it so the test doesn't hang
-        t.running = False
+            result = model_eval.print_memory_usage()
+        assert result == 50.0
 
-    def test_monitor_thread_logs_high_memory(self, mock_llm):
-        """Line 153: when mem > threshold, log warning."""
+    def test_high_memory_logs_warning(self, mock_llm):
         import eval.cli as model_eval
-        from io import StringIO
-        from rich.console import Console
-        buf = StringIO()
-        old_console = model_eval.console
-        new_console = Console(file=buf, force_terminal=True, force_interactive=True, width=120)
-        model_eval.console = new_console
+        old, new, buf = _capture_console()
         try:
+            model_eval.console = new
             with patch.object(eval.cli, "get_memory_percent", return_value=95.0):
-                t = model_eval.monitor_memory_loop(interval=0)  # no sleep
-            t.join(timeout=2)  # wait for thread to finish one iteration
-            t.running = False
+                result = model_eval.print_memory_usage()
             assert "Memory" in buf.getvalue()
+            assert result == 95.0
         finally:
-            model_eval.console = old_console
+            model_eval.console = old
 
 
 class TestEstimateModelMemory:

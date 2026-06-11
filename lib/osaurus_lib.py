@@ -13,7 +13,8 @@ from typing import Any, Optional, List, Dict
 from .content_processing import remove_thinking_blocks
 from .logging_config import osaurus_logger as logger
 from .config import get_timeout, get_max_tokens_for_task
-from .config import get_model_family as _get_model_family
+
+from lib.llm.quirks import apply_model_quirks
 
 from .osaurus_models import (
     DEFAULT_HOST, DEFAULT_PORT,
@@ -47,32 +48,6 @@ __all__ = [
     "test_model", "call_llm_api", "extract_thinking",
     "merge_thinking_with_summary", "strip_thinking",
 ]
-
-
-def apply_model_quirks(messages: List[Dict[str, Any]], model: str) -> List[Dict[str, Any]]:
-    family = _get_model_family(model)
-    updated = []
-    for msg in messages:
-        content = msg.get("content", "")
-        role = msg.get("role", "user")
-        if family == "qwen" and role == "system":
-            if content and not content.startswith("Output JSON now"):
-                if "no JSON" not in content.lower() and "plain text" not in content.lower():
-                    content = "Output JSON now.\n\n" + content
-                    logger.debug(f"Applied qwen JSON trigger for {model}")
-        elif family == "gemma4":
-            if role == "system":
-                if "JSON" in content.upper() and not content.startswith("IMPORTANT"):
-                    content = "IMPORTANT: This is DATA EXTRACTION. Output JSON only. " + content
-                    logger.debug(f"Applied gemma4 system quirk for {model}")
-        if role == "user":
-            if "execute" in content.lower() or "context" in content.lower():
-                content = content.replace("Current Context", "Data")
-                content = content.replace("Execute the task", "Extract to JSON")
-                content = content.replace("Execute the task based on", "Extract")
-                logger.debug(f"Applied user quirk for {model}")
-        updated.append({**msg, "content": content})
-    return updated
 
 
 PROMPTS = {

@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "otools"
 version = "1.0.0"
@@ -8,6 +12,9 @@ dependencies = [
     "rich>=14.0.0",
     "pyyaml>=6.0.0",
 ]
+
+[tool.setuptools.packages.find]
+include = ["lib*", "twitter*", "weekend*", "rename*", "eval*"]
 
 [project.optional-dependencies]
 all = [
@@ -20,6 +27,12 @@ all = [
     "mlx-lm",
     "mlx-vlm",
 ]
+
+[project.scripts]
+tw = "twitter.cli:main"
+wk = "weekend.cli:main"
+rn = "rename.cli:main"
+ev = "eval.cli:main"
 
 [tool.rtk]
 python = "3.14"

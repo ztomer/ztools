@@ -150,6 +150,8 @@ def normalize_keys(data: Any, model: str = None) -> Any:
             only_value = result[only_key]
             if isinstance(only_value, str) and only_value:
                 result["name"] = only_value
+                if only_key != "name":
+                    del result[only_key]
         return result
     if isinstance(data, list):
         fixed = []

@@ -4,6 +4,7 @@ import re
 from typing import List, Dict, Any
 
 from lib.llm.constants import MODEL_FAMILIES
+from lib.logging_config import lib_logger as logger
 
 
 def _get_model_family(model: str) -> str:
@@ -35,17 +36,22 @@ def apply_model_quirks(messages: List[Dict[str, Any]], model: str) -> List[Dict[
             if content and not content.startswith("Output JSON now"):
                 if "no JSON" not in content.lower() and "plain text" not in content.lower():
                     content = "Output JSON now.\n\n" + content
+                    logger.debug(f"Applied qwen JSON trigger for {model}")
         
         elif family == "gemma4":
             if role == "system":
                 # Gemma4 needs extraction framing
                 if "JSON" in content.upper() and not content.startswith("IMPORTANT"):
                     content = "IMPORTANT: This is DATA EXTRACTION. Output JSON only. " + content
+                    logger.debug(f"Applied gemma4 system quirk for {model}")
         
         if role == "user":
             # Models respond badly to "Execute", "Context", "Task" - use "Data" / "Extract"
             if "execute" in content.lower() or "context" in content.lower():
                 content = content.replace("Current Context", "Data")
+                content = content.replace("Execute the task", "Extract to JSON")
+                content = content.replace("Execute the task based on", "Extract")
+                logger.debug(f"Applied user quirk for {model}")
         
         updated.append({**msg, "content": content})
     

@@ -316,5 +316,5 @@ TASKS = {
     },
 }
 
-TASKS["json"] = TASKS["weekend_transient"]
-TASKS["detailed_json"] = TASKS["weekend_fixed"]
+TASKS["json"] = dict(TASKS["weekend_transient"])
+TASKS["detailed_json"] = dict(TASKS["weekend_fixed"])

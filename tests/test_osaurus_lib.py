@@ -50,42 +50,42 @@ class TestApplyModelQuirks:
     def test_apply_quirks_qwen_system_adds_trigger(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
         messages = [{"role": "system", "content": "Extract data"}]
-        with patch("lib.osaurus_lib._get_model_family", return_value="qwen"):
+        with patch("lib.llm.quirks._get_model_family", return_value="qwen"):
             result = apply_model_quirks(messages, "qwen2.5-7b")
         assert "Output JSON now" in result[0]["content"]
 
     def test_apply_quirks_qwen_system_already_has_trigger(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
         messages = [{"role": "system", "content": "Output JSON now\nDo thing"}]
-        with patch("lib.osaurus_lib._get_model_family", return_value="qwen"):
+        with patch("lib.llm.quirks._get_model_family", return_value="qwen"):
             result = apply_model_quirks(messages, "qwen2.5-7b")
         assert result[0]["content"] == "Output JSON now\nDo thing"
 
     def test_apply_quirks_qwen_no_json_text_skips(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
         messages = [{"role": "system", "content": "no JSON required plain text output"}]
-        with patch("lib.osaurus_lib._get_model_family", return_value="qwen"):
+        with patch("lib.llm.quirks._get_model_family", return_value="qwen"):
             result = apply_model_quirks(messages, "qwen2.5-7b")
         assert "Output JSON now" not in result[0]["content"]
 
     def test_apply_quirks_qwen_empty_content(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
         messages = [{"role": "system", "content": ""}]
-        with patch("lib.osaurus_lib._get_model_family", return_value="qwen"):
+        with patch("lib.llm.quirks._get_model_family", return_value="qwen"):
             result = apply_model_quirks(messages, "qwen2.5-7b")
         assert result[0]["content"] == ""
 
     def test_apply_quirks_gemma4_system_json(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
         messages = [{"role": "system", "content": "Output JSON"}]
-        with patch("lib.osaurus_lib._get_model_family", return_value="gemma4"):
+        with patch("lib.llm.quirks._get_model_family", return_value="gemma4"):
             result = apply_model_quirks(messages, "gemma-4-9b")
         assert "IMPORTANT" in result[0]["content"]
 
     def test_apply_quirks_gemma4_already_important(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
         messages = [{"role": "system", "content": "IMPORTANT: Output JSON"}]
-        with patch("lib.osaurus_lib._get_model_family", return_value="gemma4"):
+        with patch("lib.llm.quirks._get_model_family", return_value="gemma4"):
             result = apply_model_quirks(messages, "gemma-4-9b")
         assert result[0]["content"].count("IMPORTANT") == 1
 

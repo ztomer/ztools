@@ -152,6 +152,20 @@ def _quality_results_to_eval_format(scorecards: list, model: str) -> list[dict]:
     return results
 
 
+def run_eval_quick(
+    model: str, tasks: dict = None, host: str = "localhost", port: int = 1337, backend: str = "osaurus",
+    verbose: bool = False
+) -> dict:
+    """Run evaluation with no retries (quick mode)."""
+    global MAX_RETRIES
+    orig_retries = MAX_RETRIES
+    MAX_RETRIES = 0
+    try:
+        return run_eval(model, tasks=tasks, host=host, port=port, backend=backend, verbose=verbose)
+    finally:
+        MAX_RETRIES = orig_retries
+
+
 def run_eval(
     model: str, tasks: dict = None, host: str = "localhost", port: int = 1337, backend: str = "osaurus",
     verbose: bool = False
@@ -247,6 +261,9 @@ def run_eval(
             content = safe_content(best_result)[:500]
             if content:
                 console.print(f"  Raw output: {content}")
+
+    from eval.cli import print_memory_usage
+    print_memory_usage()
 
     weekend_tasks = [k for k in tasks.keys() if "weekend" in k]
     if weekend_tasks:

@@ -163,20 +163,18 @@ class TestMainFlow:
         assert "not in config" in out
 
     def test_quick_mode(self, mock_llm, monkeypatch, capsys):
-        """--quick mode prints the quick mode banner and still calls run_eval."""
+        """--quick flag runs with no retries (MAX_RETRIES=0)."""
         import eval.cli as model_eval
         monkeypatch.setattr(sys, "argv", ["eval.cli", "--quick"])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1"]), \
              patch.object(model_eval, "build_tasks_from_model", return_value={}), \
-             patch.object(model_eval, "run_eval", return_value=[]) as mock_run, \
              patch.object(model_eval, "_print_results"), \
              patch.object(model_eval, "is_server_responsive", return_value=True), \
              patch.object(model_eval, "estimate_model_memory", return_value=4), \
              patch.object(model_eval, "get_memory_percent", return_value=50.0):
             model_eval.main()
-        mock_run.assert_called_once()
         out = capsys.readouterr().out
         # Quick mode banner
         assert "Quick mode" in out

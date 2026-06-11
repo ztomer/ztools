@@ -62,6 +62,7 @@ from eval.run import (
     _call_model,
     _quality_results_to_eval_format,
     run_eval,
+    run_eval_quick,
 )
 from eval.report import (
     print_cross_model_comparison,
@@ -99,7 +100,7 @@ __all__ = [
     "compute_error_rates", "print_error_rates",
     "compute_task_winners", "diff_from_last_run", "print_diff", "export_to_csv",
     "get_memory_percent", "check_memory_safe", "is_server_responsive",
-    "monitor_memory_loop", "estimate_model_memory",
+    "print_memory_usage", "estimate_model_memory",
     "load_tasks_from_config", "update_config", "main",
     "WEEKEND_SYS_TRANSIENT", "WEEKEND_SYS_FIXED",
     "WEEKEND_USR_TRANSIENT", "WEEKEND_USR_FIXED",
@@ -141,22 +142,12 @@ def is_server_responsive(host: str = "localhost", port: int = 1337, timeout: int
         return False
 
 
-def monitor_memory_loop(interval: int = 30):
-    """Background thread to monitor memory during eval."""
-    import threading
-    import time
-
-    def _monitor():
-        while getattr(threading.current_thread(), "running", True):
-            mem = get_memory_percent()
-            if mem > MEMORY_WARNING_THRESHOLD:
-                console.print(f"{WARN} Memory at {mem}%")
-            time.sleep(interval)
-
-    t = threading.Thread(target=_monitor, daemon=True)
-    t.running = True
-    t.start()
-    return t
+def print_memory_usage():
+    """Print current memory usage once (no thread)."""
+    mem = get_memory_percent()
+    if mem > MEMORY_WARNING_THRESHOLD:
+        console.print(f"{WARN} Memory at {mem}%")
+    return mem
 
 
 def estimate_model_memory(model: str) -> int:
@@ -277,23 +268,18 @@ def main():
 
     if args.quick:
         console.print(f"{STEP} Quick mode: single run, no retries")
-        orig_run_eval = run_eval
 
         def quick_run_eval(model, backend="osaurus", **kwargs):
-            orig_retries = MAX_RETRIES
-            eval_run.MAX_RETRIES = 0
-            try:
-                return orig_run_eval(
-                    model,
-                    tasks=kwargs.get("tasks"),
-                    backend=backend,
-                    verbose=kwargs.get("verbose", False),
-                )
-            finally:
-                eval_run.MAX_RETRIES = orig_retries
+            return run_eval_quick(
+                model,
+                tasks=kwargs.get("tasks"),
+                backend=backend,
+                verbose=kwargs.get("verbose", False),
+            )
 
-        import eval.cli as me
-        me.run_eval = quick_run_eval
+        _run_eval = quick_run_eval
+    else:
+        _run_eval = run_eval
 
     all_results = []
     best_scores = {task: -1 for task in tasks_to_run.keys()}
@@ -366,7 +352,7 @@ def main():
             summary = "  ".join(f"{t}={int(round(sum(s)/len(s)))}%" for t, s in task_avgs.items())
             console.print(f"{STEP} Quality scores: {summary}")
         else:
-            results = run_eval(model, tasks=tasks_to_run, backend=backend, verbose=args.verbose)
+            results = _run_eval(model, tasks=tasks_to_run, backend=backend, verbose=args.verbose)
 
         scores = [r["quality_score"] for r in results]
         if not scores:

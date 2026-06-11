@@ -294,8 +294,8 @@ class TestProcessMlxContent:
         proc = real_mlx_functions["process_mlx_content"]
         text = "before ```code``` after"
         result = proc(text)
-        # Code block is extracted and content is cleaned
-        assert "before" in result or "after" in result
+        # Code block markers removed, surrounding text preserved
+        assert "before" in result and "after" in result
 
     def test_extract_json_code_block(self, mock_llm, real_mlx_functions):
         """When the content has a code block, it's extracted and used."""

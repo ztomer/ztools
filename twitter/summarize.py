@@ -6,6 +6,7 @@ LLM summarization helpers for twitter_summarizer.
 import re
 import shutil
 import textwrap
+from typing import Optional
 
 from lib.config import get_model_prompt, Task
 from lib.osaurus_lib import (
@@ -17,6 +18,7 @@ from lib.mlx_lib import (
     find_mlx_model, find_best_mlx_model, find_any_working_mlx_model,
     get_mlx_context_length, call_mlx, process_mlx_content,
 )
+from lib.llm.fallback import call_with_fallback
 from lib.tui import STEP, WARN
 
 MLX_PREFERRED = [
@@ -96,6 +98,46 @@ def _build_prompt(
     return prompt, len(lines)
 
 
+def _summarize_with_model(
+    tweets: list[dict], base_url: str, api_key: str,
+    ctx_chars: int, models: list[str], try_model: str,
+) -> Optional[str]:
+    if models and try_model not in models:
+        return None
+    prompt, n = _build_prompt(tweets, max_chars=ctx_chars, model=try_model)
+    try:
+        print(f"{STEP} Trying {try_model} ({n} tweets)...")
+        result = call_llm_api(
+            f"{base_url.rstrip('/')}",
+            try_model,
+            [{"role": "user", "content": prompt}],
+            api_key=api_key,
+            timeout=120,
+        )
+        if result and "content" in result:
+            thinking, cleaned = extract_thinking(result["content"])
+            if thinking:
+                print(f"{STEP} {try_model}: included thinking block")
+                warnings, critical = _check_summary_quality(cleaned)
+                if critical:
+                    for w in warnings:
+                        print(f"   {WARN} {w}")
+                    return None
+                return merge_thinking_with_summary(thinking, cleaned)
+            cleaned = strip_thinking(cleaned)
+            warnings, critical = _check_summary_quality(cleaned)
+            if critical:
+                for w in warnings:
+                    print(f"   {WARN} {w}")
+                return None
+            return cleaned
+        elif result and "error" in result:
+            print(f"{WARN} {try_model} error: {result['error'][:50]}")
+    except Exception as e:
+        print(f"{WARN} {try_model} failed: {str(e)[:50]}")
+    return None
+
+
 def summarize_with_llm(
     tweets: list[dict], base_url: str, model: str, api_key: str = ""
 ) -> str:
@@ -110,83 +152,55 @@ def summarize_with_llm(
         target_model = select_best_model(models) or target_model
 
     ctx_chars = (8192 - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN
-    prompt, n = _build_prompt(tweets, max_chars=ctx_chars, model=target_model)
 
     fallback_models = list(dict.fromkeys([target_model, "qwen3.6-35b-a3b-mxfp4", "foundation"]))
-    tried = set()
-    attempted_models = []
 
-    for try_model in fallback_models:
-        if try_model in tried:
-            continue
-        if models and try_model not in models:
-            tried.add(try_model)
-            continue
-        tried.add(try_model)
-        attempted_models.append(try_model)
+    def call_fn(m: str) -> Optional[str]:
+        return _summarize_with_model(tweets, base_url, api_key, ctx_chars, models, m)
 
-        prompt, n = _build_prompt(tweets, max_chars=ctx_chars, model=try_model)
-
-        try:
-            print(f"{STEP} Trying {try_model} ({n} tweets)...")
-            result = call_llm_api(
-                f"{base_url.rstrip('/')}",
-                try_model,
-                [{"role": "user", "content": prompt}],
-                api_key=api_key,
-                timeout=120,
-            )
-            if result and "content" in result:
-                thinking, cleaned = extract_thinking(result["content"])
-                if thinking:
-                    print(f"{STEP} {try_model}: included thinking block")
-                    warnings, critical = _check_summary_quality(cleaned)
-                    if critical:
-                        for w in warnings:
-                            print(f"   {WARN} {w}")
-                        continue
-                    return merge_thinking_with_summary(thinking, cleaned)
-                cleaned = strip_thinking(cleaned)
-                warnings, critical = _check_summary_quality(cleaned)
-                if critical:
-                    for w in warnings:
-                        print(f"   {WARN} {w}")
-                    continue
-                return cleaned
-            elif result and "error" in result:
-                print(f"{WARN} {try_model} error: {result['error'][:50]}")
-        except Exception as e:
-            print(f"{WARN} {try_model} failed: {str(e)[:50]}")
-            continue
-
-    print("Server models failed, trying MLX...")
-
-    mlx_paths = []
-    first = find_mlx_model(target_model)
-    if first:
-        mlx_paths.append(first)
-    mlx_paths.extend(m for m in [find_best_mlx_model(MLX_PREFERRED), find_any_working_mlx_model()] if m and m not in mlx_paths)
-
-    for mlx_path in mlx_paths:
-        mlx_ctx = get_mlx_context_length(mlx_path)
-        mlx_prompt_chars = (mlx_ctx - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN
-        prompt, n = _build_prompt(
-            tweets, max_chars=mlx_prompt_chars, for_mlx=True, model=mlx_path.name)
-        print(
-            f"{STEP} Sending {n}/{len(tweets)} tweets to MLX model {mlx_path.name} ..."
+    def mlx_fn() -> Optional[str]:
+        mlx_paths = []
+        first = find_mlx_model(target_model)
+        if first:
+            mlx_paths.append(first)
+        mlx_paths.extend(
+            m for m in [
+                find_best_mlx_model(MLX_PREFERRED),
+                find_any_working_mlx_model()
+            ] if m and m not in mlx_paths
         )
-        raw = call_mlx(mlx_path, prompt)
-        if raw and not raw.startswith("[LLM error"):
-            cleaned = process_mlx_content(raw)
-            warnings, critical = _check_summary_quality(cleaned)
-            if warnings:
-                for w in warnings:
-                    print(f"   {WARN} MLX summary: {w}")
-            if critical:
-                print("MLX returned unusable summary, aborting.")
-                return "[LLM error: both local MLX and server failed]"
-            return cleaned
-        print(f"{WARN} MLX model {mlx_path.name} failed, trying next...")
 
-    print(f"{WARN} All server models failed: {attempted_models}")
+        for mlx_path in mlx_paths:
+            mlx_ctx = get_mlx_context_length(mlx_path)
+            mlx_prompt_chars = (mlx_ctx - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN
+            prompt, n = _build_prompt(
+                tweets, max_chars=mlx_prompt_chars, for_mlx=True, model=mlx_path.name)
+            print(
+                f"{STEP} Sending {n}/{len(tweets)} tweets to MLX model {mlx_path.name} ..."
+            )
+            raw = call_mlx(mlx_path, prompt)
+            if raw and not raw.startswith("[LLM error"):
+                cleaned = process_mlx_content(raw)
+                warnings, critical = _check_summary_quality(cleaned)
+                if warnings:
+                    for w in warnings:
+                        print(f"   {WARN} MLX summary: {w}")
+                if critical:
+                    print("MLX returned unusable summary, aborting.")
+                    return None
+                return cleaned
+            print(f"{WARN} MLX model {mlx_path.name} failed, trying next...")
+        return None
+
+    result = call_with_fallback(
+        fallback_models, call_fn,
+        mlx_fn=mlx_fn,
+        max_server_retries=0,
+        label="model",
+    )
+
+    if result:
+        return result
+
+    print(f"{WARN} All server models failed: {fallback_models}")
     return "[LLM error: both local MLX and server failed]"

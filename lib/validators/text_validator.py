@@ -69,7 +69,7 @@ def validate_filename(data: Any, source_text: str = "") -> Tuple[int, str]:
         failures.append("no separators/structure")
 
     # Non-generic specificity (25 pts)
-    # Penalize outputs that look like the model asked a question or explained
+    # Score outputs based on whether they look like filenames vs prose explanations
     clean_lower = clean.lower()
     has_question_parts = "?" in clean or "please" in clean_lower or "which" in clean_lower or "what" in clean_lower
     has_explanation = len(clean) > 70 or clean_lower.startswith(("the ", "this ", "a "))

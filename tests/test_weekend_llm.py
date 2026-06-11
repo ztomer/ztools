@@ -36,7 +36,6 @@ class TestGetLlmJsonRetries:
         ]), \
              patch.object(wl, "strip_thinking", side_effect=lambda x: x), \
              patch.object(wl, "_extract_json_only", side_effect=[None, '{"ok": true}']), \
-             patch.object(wl, "time", MagicMock()), \
              patch.object(wl, "ensure_server"):
             result = wl.get_llm_json("sys", "user", max_retries=2)
         assert result == {"ok": True}
@@ -48,7 +47,6 @@ class TestGetLlmJsonRetries:
              patch.object(wl, "strip_thinking", return_value="bad"), \
              patch.object(wl, "_extract_json_only", return_value=None), \
              patch.object(wl, "panic_dump") as mock_dump, \
-             patch.object(wl, "time", MagicMock()), \
              patch.object(wl, "ensure_server"):
             result = wl.get_llm_json("sys", "user", max_retries=2)
         assert result is None
@@ -58,7 +56,6 @@ class TestGetLlmJsonRetries:
         """Result has no 'content' key."""
         import weekend.llm as wl
         with patch.object(wl, "call_llm_api", return_value={"status": "ok"}), \
-             patch.object(wl, "time", MagicMock()), \
              patch.object(wl, "ensure_server"):
             result = wl.get_llm_json("sys", "user", max_retries=1)
         assert result is None
