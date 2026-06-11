@@ -14,16 +14,16 @@ from lib.osaurus_lib import (
     ensure_server,
 )
 from lib.mlx_lib import (
-    find_mlx_model, find_best_mlx_model, get_mlx_context_length,
-    call_mlx, process_mlx_content,
+    find_mlx_model, find_best_mlx_model, find_any_working_mlx_model,
+    get_mlx_context_length, call_mlx, process_mlx_content,
 )
 from lib.tui import STEP, WARN
 
 MLX_PREFERRED = [
-    "qwen2.5-0.5b",
-    "qwen2.5-1b",
-    "llama-1b",
-    "phi-4",
+    "Qwopus3.6-27B-v2-MLX-4bit",
+    "Qwen3.6",
+    "gemma-4",
+    "MiniMax",
 ]
 
 _PROMPT_RULES = """
@@ -161,9 +161,13 @@ def summarize_with_llm(
 
     print("Server models failed, trying MLX...")
 
-    mlx_path = find_mlx_model(target_model) or find_best_mlx_model(MLX_PREFERRED)
+    mlx_paths = []
+    first = find_mlx_model(target_model)
+    if first:
+        mlx_paths.append(first)
+    mlx_paths.extend(m for m in [find_best_mlx_model(MLX_PREFERRED), find_any_working_mlx_model()] if m and m not in mlx_paths)
 
-    if mlx_path:
+    for mlx_path in mlx_paths:
         mlx_ctx = get_mlx_context_length(mlx_path)
         mlx_prompt_chars = (mlx_ctx - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN
         prompt, n = _build_prompt(
@@ -182,7 +186,7 @@ def summarize_with_llm(
                 print("MLX returned unusable summary, aborting.")
                 return "[LLM error: both local MLX and server failed]"
             return cleaned
-        print(f"{WARN} MLX error: {raw}")
+        print(f"{WARN} MLX model {mlx_path.name} failed, trying next...")
 
     print(f"{WARN} All server models failed: {attempted_models}")
     return "[LLM error: both local MLX and server failed]"

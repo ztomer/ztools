@@ -259,7 +259,7 @@ def diff_from_last_run(all_results: list) -> dict:
     try:
         with open(prev_file) as f:
             prev_data = json.load(f)
-    except:
+    except Exception:
         return {}
     
     prev_results = prev_data.get("models", [])
@@ -366,7 +366,7 @@ def save_historical_results(all_results: list, stats: dict, categories: dict) ->
         try:
             with open(history_file) as f:
                 history = json.load(f)
-        except:
+        except Exception:
             pass
     
     for r in all_results:
@@ -402,7 +402,7 @@ def load_historical_stats() -> dict:
     try:
         with open(history_file) as f:
             history = json.load(f)
-    except:
+    except Exception:
         return {}
     
     if not history:
@@ -439,7 +439,7 @@ def check_model_history(model: str) -> dict:
     try:
         with open(history_file) as f:
             history = json.load(f)
-    except:
+    except Exception:
         return {}
     
     return history.get(model, [])

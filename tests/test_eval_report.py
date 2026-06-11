@@ -1,6 +1,6 @@
 import pytest
 
-from eval_report import (
+from eval.report import (
     compute_score_stats,
     categorize_failures,
     compute_token_estimates,

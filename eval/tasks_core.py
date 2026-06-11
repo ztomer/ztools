@@ -8,7 +8,7 @@ import re
 from typing import Dict, List
 
 from lib.validators_lib import validate_detailed_json, validate_summary, validate_filename
-from eval_validate import validate_file_summary
+from eval.validate import validate_file_summary
 
 
 def _extract_items_from_text(text: str) -> List[Dict]:

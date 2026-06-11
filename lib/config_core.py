@@ -1,5 +1,6 @@
 """Config core - shared state, Task enum, init/reset."""
 
+import threading
 import yaml
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -25,22 +26,24 @@ _FALLBACK_MODEL = "foundation"
 _config_loaded = False
 _config: Dict[str, Any] = {}
 _model_configs_cache: Dict[str, Dict] = {}
+_config_lock = threading.Lock()
 
 
 def _auto_load():
     global _config_loaded, _config
-    if _config_loaded:
-        return
-    config_path = Path(__file__).parent.parent / "conf" / "config.yaml"
-    if not config_path.exists():
-        print(f"Config file not found: {config_path}, using fallback defaults")
+    with _config_lock:
+        if _config_loaded:
+            return
+        config_path = Path(__file__).parent.parent / "conf" / "config.yaml"
+        if not config_path.exists():
+            print(f"Config file not found: {config_path}, using fallback defaults")
+            _config_loaded = True
+            return
+        with open(config_path, 'r') as f:
+            loaded = yaml.safe_load(f)
+        _config.clear()
+        _config.update(loaded if isinstance(loaded, dict) else {})
         _config_loaded = True
-        return
-    with open(config_path, 'r') as f:
-        loaded = yaml.safe_load(f)
-    _config.clear()
-    _config.update(loaded if isinstance(loaded, dict) else {})
-    _config_loaded = True
 
 
 def init_config(config_path: Optional[str] = None) -> bool:

@@ -78,7 +78,7 @@ def extract_json_list(content: str) -> List[dict]:
     if match:
         try:
             return json.loads(match.group())
-        except:
+        except Exception:
             pass
     
     return []
@@ -88,15 +88,4 @@ def has_item_details(item: dict) -> bool:
     """Check if item has sufficient details beyond name only."""
     if not isinstance(item, dict):
         return False
-    # Has any field beyond just name
     return len(item.keys()) > 1
-    
-    # Try to find JSON array
-    match = re.search(r'\[[\s\S]*\]', content)
-    if match:
-        try:
-            return json.loads(match.group())
-        except:
-            pass
-    
-    return []

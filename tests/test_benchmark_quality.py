@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from benchmark_quality import score_filename, score_summarize, score_file_summary
+from eval.benchmark_quality import score_filename, score_summarize, score_file_summary
 
 
 FILENAME_CASES = [

@@ -1,7 +1,7 @@
 import json
 import pytest
 
-from eval_validate import safe_content, validate_file_summary
+from eval.validate import safe_content, validate_file_summary
 
 
 class TestSafeContent:

@@ -10,7 +10,7 @@ from rich.console import Console
 
 def _capture_rich_console():
     """Replace eval_report.console with one that writes to a StringIO buffer."""
-    import eval_report
+    from eval import report as eval_report
     buf = StringIO()
     new_console = Console(file=buf, force_terminal=True, force_interactive=True, width=120)
     return eval_report.console, new_console, buf
@@ -18,7 +18,7 @@ def _capture_rich_console():
 
 class TestPrintCrossModelComparison:
     def test_empty_results(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -28,7 +28,7 @@ class TestPrintCrossModelComparison:
         assert "Cross-Model" not in buf.getvalue()
 
     def test_no_models(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -42,7 +42,7 @@ class TestPrintCrossModelComparison:
         assert "model_a" not in out
 
     def test_no_first_results(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -59,7 +59,7 @@ class TestPrintCrossModelComparison:
         assert "m1" not in out  # m1 is a screen_name not in task rows
 
     def test_full_table(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -91,7 +91,7 @@ class TestPrintCrossModelComparison:
 
 class TestPrintScoreStats:
     def test_empty_stats(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -102,7 +102,7 @@ class TestPrintScoreStats:
         assert "Mean" not in buf.getvalue()
 
     def test_full_stats(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -127,7 +127,7 @@ class TestPrintScoreStats:
 
 class TestPrintFailureSummary:
     def test_empty_categories(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -138,7 +138,7 @@ class TestPrintFailureSummary:
         assert buf.getvalue() == ""
 
     def test_with_categories(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -162,7 +162,7 @@ class TestPrintFailureSummary:
 
 class TestHistoricalFunctions:
     def test_save_and_load_history(self, tmp_path, monkeypatch):
-        import eval_report
+        from eval import report as eval_report
         # Redirect the config dir to tmp_path
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         results = [
@@ -187,7 +187,7 @@ class TestHistoricalFunctions:
         assert loaded["m1"]["max"] == 90
 
     def test_save_truncates_to_100(self, tmp_path, monkeypatch):
-        import eval_report
+        from eval import report as eval_report
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         # Generate 110 results for one model
         results = [{"model": "m1", "results": [
@@ -201,7 +201,7 @@ class TestHistoricalFunctions:
 
     def test_save_with_invalid_existing_history(self, tmp_path, monkeypatch):
         """Lines 146-150: existing history file has invalid JSON, exception caught."""
-        import eval_report
+        from eval import report as eval_report
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text("{not valid json")
@@ -216,13 +216,13 @@ class TestHistoricalFunctions:
         assert "m1" in data
 
     def test_load_history_no_file(self, tmp_path, monkeypatch):
-        import eval_report
+        from eval import report as eval_report
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         result = eval_report.load_historical_stats()
         assert result == {}
 
     def test_load_history_invalid_json(self, tmp_path, monkeypatch):
-        import eval_report
+        from eval import report as eval_report
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text("{invalid json")
@@ -230,7 +230,7 @@ class TestHistoricalFunctions:
         assert result == {}
 
     def test_load_history_empty(self, tmp_path, monkeypatch):
-        import eval_report
+        from eval import report as eval_report
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text("{}")
@@ -238,7 +238,7 @@ class TestHistoricalFunctions:
         assert result == {}
 
     def test_load_history_no_scores(self, tmp_path, monkeypatch):
-        import eval_report
+        from eval import report as eval_report
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text(json.dumps({"m1": [{"date": "2024-01-01"}]}))  # no score
@@ -246,13 +246,13 @@ class TestHistoricalFunctions:
         assert "m1" not in result
 
     def test_check_model_history_no_file(self, tmp_path, monkeypatch):
-        import eval_report
+        from eval import report as eval_report
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         result = eval_report.check_model_history("m1")
         assert result == {}
 
     def test_check_model_history_invalid_json(self, tmp_path, monkeypatch):
-        import eval_report
+        from eval import report as eval_report
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text("{not json")
@@ -260,7 +260,7 @@ class TestHistoricalFunctions:
         assert result == {}
 
     def test_check_model_history_found(self, tmp_path, monkeypatch):
-        import eval_report
+        from eval import report as eval_report
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text(json.dumps({
@@ -273,7 +273,7 @@ class TestHistoricalFunctions:
 
 class TestPrintHistoricalTrends:
     def test_no_stats(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -285,7 +285,7 @@ class TestPrintHistoricalTrends:
         assert "Historical" not in buf.getvalue() or buf.getvalue() == ""
 
     def test_with_stats(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -306,7 +306,7 @@ class TestPrintHistoricalTrends:
 
 class TestPrintVerbosity:
     def test_empty_verbosity(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -317,7 +317,7 @@ class TestPrintVerbosity:
         assert buf.getvalue() == ""
 
     def test_with_verbosity(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -336,7 +336,7 @@ class TestPrintVerbosity:
 
 class TestPrintErrorRates:
     def test_empty_rates(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -347,7 +347,7 @@ class TestPrintErrorRates:
         assert buf.getvalue() == ""
 
     def test_with_rates(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -370,13 +370,13 @@ class TestPrintErrorRates:
 
 class TestDiffFromLastRun:
     def test_no_prev_file(self, tmp_path, monkeypatch):
-        import eval_report
+        from eval import report as eval_report
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         result = eval_report.diff_from_last_run([])
         assert result == {}
 
     def test_invalid_prev_json(self, tmp_path, monkeypatch):
-        import eval_report
+        from eval import report as eval_report
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         prev = tmp_path / "eval_results.json"
         prev.write_text("{invalid")
@@ -384,7 +384,7 @@ class TestDiffFromLastRun:
         assert result == {}
 
     def test_no_models_in_prev(self, tmp_path, monkeypatch):
-        import eval_report
+        from eval import report as eval_report
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         prev = tmp_path / "eval_results.json"
         prev.write_text(json.dumps({}))  # no models key
@@ -392,7 +392,7 @@ class TestDiffFromLastRun:
         assert result == {}
 
     def test_no_matching_model(self, tmp_path, monkeypatch):
-        import eval_report
+        from eval import report as eval_report
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         prev = tmp_path / "eval_results.json"
         prev.write_text(json.dumps({"models": [{"model": "other", "results": []}]}))
@@ -400,7 +400,7 @@ class TestDiffFromLastRun:
         assert result == {}
 
     def test_with_diffs(self, tmp_path, monkeypatch):
-        import eval_report
+        from eval import report as eval_report
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         prev = tmp_path / "eval_results.json"
         prev.write_text(json.dumps({
@@ -422,7 +422,7 @@ class TestDiffFromLastRun:
 
 class TestPrintDiff:
     def test_empty_diffs(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -433,7 +433,7 @@ class TestPrintDiff:
         assert buf.getvalue() == ""
 
     def test_no_changes(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -447,7 +447,7 @@ class TestPrintDiff:
         assert "Diff" not in out
 
     def test_with_changes(self):
-        import eval_report
+        from eval import report as eval_report
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -475,7 +475,7 @@ class TestPrintDiff:
 
 class TestExportToCsv:
     def test_default_path(self, tmp_path, monkeypatch):
-        import eval_report
+        from eval import report as eval_report
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         old, new, buf = _capture_rich_console()
         try:
@@ -499,7 +499,7 @@ class TestExportToCsv:
             eval_report.console = old
 
     def test_custom_path(self, tmp_path, monkeypatch):
-        import eval_report
+        from eval import report as eval_report
         monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
         old, new, buf = _capture_rich_console()
         try:

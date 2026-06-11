@@ -5,6 +5,15 @@ from typing import Dict, List, Callable
 from lib.quality_models import Score, ScoreCard, TestCase, _str, _lower
 
 
+def get_dimension_weights(task: str) -> dict[str, float]:
+    """Return {dimension_name: weight} for a task from the registered scorers."""
+    weights: dict[str, float] = {}
+    for scorer in TASK_SCORERS.get(task, []):
+        dummy = scorer("", TestCase(task, "", "", ""))
+        weights[dummy.name] = dummy.weight
+    return weights
+
+
 def _score_filename_relevance(output: str, case: TestCase) -> Score:
     out = _lower(output).strip()
     inp = _lower(case.input_text)

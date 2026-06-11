@@ -8,9 +8,9 @@ import json
 import re
 from rich.console import Console
 from lib.osaurus_lib import call
-from eval_tasks_core import TASKS, _extract_items_from_text
-from eval_failures import FAIL_INFRA, FAIL_CONTENT, FAIL_NONE, _classify_failure
-from eval_validate import safe_content
+from eval.tasks_core import TASKS, _extract_items_from_text
+from eval.failures import FAIL_INFRA, FAIL_CONTENT, FAIL_NONE, _classify_failure
+from eval.validate import safe_content
 from lib.validators_lib import validate_summary, get_source_matching_details
 from lib.mlx_lib import call as mlx_call
 from lib.logging_config import osaurus_logger as eval_logger

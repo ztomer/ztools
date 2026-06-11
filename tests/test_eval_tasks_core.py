@@ -1,6 +1,6 @@
 import pytest
 
-from eval_tasks_core import _extract_items_from_text
+from eval.tasks_core import _extract_items_from_text
 
 
 class TestExtractItemsFromText:

@@ -1,4 +1,4 @@
-"""Tests for weekend_planner edge cases in _parse_fixed and _parse_transient."""
+"""Tests for weekend.cli edge cases in _parse_fixed and _parse_transient."""
 import pytest
 
 
@@ -6,7 +6,7 @@ class TestParseFixedEdges:
     """Test _parse_fixed edge cases."""
 
     def test_parse_fixed_list_no_name(self, mock_llm):
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_fixed(
             [{"description": "Item without name"}],
             "mock-model", {}
@@ -14,7 +14,7 @@ class TestParseFixedEdges:
         assert result == []
 
     def test_parse_fixed_list_with_mapping(self, mock_llm):
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_fixed(
             [{"activity": "Mapped"}],
             "mock-model", {"activity": "name"}
@@ -28,7 +28,7 @@ class TestParseTransientEdges:
 
     def test_parse_transient_all_weather(self, mock_llm):
         """All items are weather data — line 135 returns []."""
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_transient(
             [{"temperature": "20", "condition": "Sunny"},
              {"temperature": "22", "condition": "Cloudy"}],
@@ -38,7 +38,7 @@ class TestParseTransientEdges:
 
     def test_parse_transient_alt_items_only(self, mock_llm):
         """Items have alt keys but no 'name' — line 154-157."""
-        import weekend_planner as wp
+        import weekend.cli as wp
         # Use 'event' key which is NOT in all_name_keys (which has description/title/summary)
         # but IS in the alt_items check.
         # Note: 'event' IS in all_name_keys per line 130: ["description", "title", "event", "summary", "activity_name"]
@@ -66,7 +66,7 @@ class TestParseTransientEdges:
         documents the dead code by verifying that an item with only alt-keys
         flows through valid_items (never needs the alt_items fallback).
         """
-        import weekend_planner as wp
+        import weekend.cli as wp
         # List with 2+ items (so we enter the list branch), all using alt-keys
         # (description/title). The valid_items branch picks them up via line 149.
         items = [
@@ -82,7 +82,7 @@ class TestParseTransientEdges:
 
     def test_parse_transient_weekend_forecast(self, mock_llm):
         """Dict with weekend_forecast key — line 171-178."""
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_transient(
             {"weekend_forecast": {
                 "Friday": {"events": [{"name": "Event A"}]},
@@ -94,7 +94,7 @@ class TestParseTransientEdges:
 
     def test_parse_transient_single_object_with_name(self, mock_llm):
         """Single dict with name — line 181."""
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_transient(
             {"name": "Solo Event", "location": "Toronto"},
             "mock-model", {}
@@ -104,7 +104,7 @@ class TestParseTransientEdges:
 
     def test_parse_transient_fallback_list_len_3(self, mock_llm):
         """Dict with random list >= 3 — line 184-187."""
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_transient(
             {"random_key": [
                 {"name": "A", "location": "X"},
@@ -117,7 +117,7 @@ class TestParseTransientEdges:
 
     def test_parse_transient_fallback_list_len_2(self, mock_llm):
         """Dict with random list >= 2 — line 190-191."""
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_transient(
             {"random_key": [
                 {"name": "A", "location": "X"},
@@ -133,36 +133,36 @@ class TestParseArgs:
 
     def test_parse_args_use_cache(self, monkeypatch):
         import sys
-        import weekend_planner as wp
-        monkeypatch.setattr(sys, "argv", ["weekend_planner", "--use-cache"])
+        import weekend.cli as wp
+        monkeypatch.setattr(sys, "argv", ["weekend.cli", "--use-cache"])
         args = wp.parse_args()
         assert args.use_cache is True
 
     def test_parse_args_model(self, monkeypatch):
         import sys
-        import weekend_planner as wp
-        monkeypatch.setattr(sys, "argv", ["weekend_planner", "--model", "x-model"])
+        import weekend.cli as wp
+        monkeypatch.setattr(sys, "argv", ["weekend.cli", "--model", "x-model"])
         args = wp.parse_args()
         assert args.model == "x-model"
 
     def test_parse_args_skip_web(self, monkeypatch):
         import sys
-        import weekend_planner as wp
-        monkeypatch.setattr(sys, "argv", ["weekend_planner", "--skip-web"])
+        import weekend.cli as wp
+        monkeypatch.setattr(sys, "argv", ["weekend.cli", "--skip-web"])
         args = wp.parse_args()
         assert args.skip_web is True
 
     def test_parse_args_debug(self, monkeypatch):
         import sys
-        import weekend_planner as wp
-        monkeypatch.setattr(sys, "argv", ["weekend_planner", "--debug"])
+        import weekend.cli as wp
+        monkeypatch.setattr(sys, "argv", ["weekend.cli", "--debug"])
         args = wp.parse_args()
         assert args.debug is True
 
     def test_parse_args_all(self, monkeypatch):
         import sys
-        import weekend_planner as wp
-        monkeypatch.setattr(sys, "argv", ["weekend_planner", "--use-cache", "--model", "x", "--skip-web", "--debug"])
+        import weekend.cli as wp
+        monkeypatch.setattr(sys, "argv", ["weekend.cli", "--use-cache", "--model", "x", "--skip-web", "--debug"])
         args = wp.parse_args()
         assert args.use_cache is True
         assert args.model == "x"
@@ -178,22 +178,20 @@ class TestMainEntry:
         import sys
         import types
         from unittest.mock import patch, MagicMock
-        monkeypatch.setattr(sys, "argv", ["weekend_planner", "--use-cache"])
+        monkeypatch.setattr(sys, "argv", ["weekend.cli", "--use-cache"])
         mock_ddgs = MagicMock()
         mock_ddgs.DDGS = MagicMock()
         sys.modules['ddgs'] = mock_ddgs
-        with patch("lib.osaurus_lib.call", return_value='{"transient_events": [{"name": "E1"}], "fixed_activities": [{"name": "F1"}]}'), \
-             patch("weekend_planner.ensure_server"), \
-             patch("weekend_planner.get_weekend_date_objects", return_value=(MagicMock(), MagicMock())), \
-             patch("weekend_planner.fetch_weather", return_value="Sunny"), \
-             patch("weekend_planner.fetch_transient_events", return_value="- E1"), \
-             patch("weekend_planner.fetch_fixed_venues", return_value="- F1"), \
-             patch("weekend_planner.load_events_cache", return_value=None), \
-             patch("weekend_planner.load_venues_cache", return_value=None), \
+        with patch("weekend.cli._fetch_data", return_value=("Sunny", "- E1", "- F1", "June 5-7")), \
+             patch("weekend.cli.init_config"), \
+             patch("weekend.cli.get_llm_json", side_effect=[
+                 {"transient_events": [{"name": "E1"}]},
+                 {"fixed_activities": [{"name": "F1"}]}
+             ]), \
              patch("os.path.expanduser", return_value="/tmp/wp_test_main"):
             import os
             os.makedirs("/tmp/wp_test_main", exist_ok=True)
-            runpy.run_module("weekend_planner", run_name="__main__")
+            runpy.run_module("weekend", run_name="__main__")
         # main() should have printed expected workflow output
         out = capsys.readouterr().out
         # The model name header is printed early in main()

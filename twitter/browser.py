@@ -14,7 +14,7 @@ try:
 except Exception:
     sync_playwright = PWTimeout = None
 
-from twit_cookies import get_chrome_cookies
+from twitter.cookies import get_chrome_cookies
 from lib.tui import STEP, WARN
 
 MAX_SCROLLS = 1200

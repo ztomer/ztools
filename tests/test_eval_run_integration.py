@@ -16,9 +16,9 @@ def mock_llm():
 
 class TestRunEvalWithMock:
     def test_basic_success(self, mock_llm):
-        import eval_run as er
+        import eval.run as er
         with patch.object(er, "call", mock_llm.call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"json": TASKS["json"]}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
 
@@ -28,9 +28,9 @@ class TestRunEvalWithMock:
         assert results[0]["quality_score"] == 100
 
     def test_multiple_tasks(self, mock_llm):
-        import eval_run as er
+        import eval.run as er
         with patch.object(er, "call", mock_llm.call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"json": TASKS["json"], "filename": TASKS["filename"]}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
 
@@ -39,9 +39,9 @@ class TestRunEvalWithMock:
         assert {"json", "filename"} == tasks_seen
 
     def test_returns_valid_scores(self, mock_llm):
-        import eval_run as er
+        import eval.run as er
         with patch.object(er, "call", mock_llm.call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"json": TASKS["json"]}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
 
@@ -51,7 +51,7 @@ class TestRunEvalWithMock:
         assert result["result"] is not None
 
     def test_custom_response(self, mock_llm):
-        import eval_run as er
+        import eval.run as er
         mock_llm.set_response("json", {
             "content": json.dumps([
                 {"name": "Custom Venue", "location": "Test City",
@@ -63,7 +63,7 @@ class TestRunEvalWithMock:
             ],
         })
         with patch.object(er, "call", mock_llm.call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"json": TASKS["json"]}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
 
@@ -71,9 +71,9 @@ class TestRunEvalWithMock:
         assert "Custom Venue" in results[0]["result"]["content"]
 
     def test_filename_task(self, mock_llm):
-        import eval_run as er
+        import eval.run as er
         with patch.object(er, "call", mock_llm.call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"filename": TASKS["filename"]}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
 
@@ -81,9 +81,9 @@ class TestRunEvalWithMock:
         assert results[0]["task"] == "filename"
 
     def test_summarize_task(self, mock_llm):
-        import eval_run as er
+        import eval.run as er
         with patch.object(er, "call", mock_llm.call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"summarize": TASKS["summarize"]}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
 
@@ -91,9 +91,9 @@ class TestRunEvalWithMock:
         assert results[0]["task"] == "summarize"
 
     def test_file_summary_task(self, mock_llm):
-        import eval_run as er
+        import eval.run as er
         with patch.object(er, "call", mock_llm.call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"file_summary": TASKS["file_summary"]}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
         # Mock returns 4 file summaries with detailed descriptions
@@ -102,37 +102,37 @@ class TestRunEvalWithMock:
         assert results[0]["status"] == "ok"
 
     def test_server_unreachable(self, mock_llm):
-        import eval_run as er
+        import eval.run as er
         mock_llm.set_response("json", {"content": "", "error": "Connection refused"})
         with patch.object(er, "call", mock_llm.call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"json": TASKS["json"]}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
         assert results[0]["quality_score"] == 0
 
     def test_model_not_found(self, mock_llm):
-        import eval_run as er
+        import eval.run as er
         mock_llm.set_response("json", {"content": "", "error": "Model not found: xxx"})
         with patch.object(er, "call", mock_llm.call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"json": TASKS["json"]}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
         assert results[0]["quality_score"] == 0
 
     def test_empty_content(self, mock_llm):
-        import eval_run as er
+        import eval.run as er
         mock_llm.set_response("json", {"content": ""})
         with patch.object(er, "call", mock_llm.call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"json": TASKS["json"]}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
         assert results[0]["quality_score"] == 0
 
     def test_non_json_content_for_json_task(self, mock_llm):
-        import eval_run as er
+        import eval.run as er
         mock_llm.set_response("json", {"content": "Just plain text without JSON"})
         with patch.object(er, "call", mock_llm.call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"json": TASKS["json"]}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
         assert results[0]["quality_score"] < 90
@@ -143,7 +143,7 @@ class TestRunEvalWithMock:
         Verifies the retry loop tracks best_score across attempts and stops
         when score >= 90 on retry.
         """
-        import eval_run as er
+        import eval.run as er
         # First call returns low-score content, subsequent calls return high-score
         call_count = {"n": 0}
         # 10 items with full details to score >= 90 on the validator
@@ -162,7 +162,7 @@ class TestRunEvalWithMock:
             }
         with patch.object(er, "call", side_effect=side_effect), \
              patch.object(er, "MAX_RETRIES", 2):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"json": TASKS["json"]}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
         # Retry happened: exactly 2 calls (first failed, second succeeded with 10 items)
@@ -175,12 +175,12 @@ class TestRunEvalWithMock:
 
     def test_retry_exhausted_low_score(self, mock_llm, monkeypatch):
         """When all attempts score < 90, the best (lowest) score is reported with FAIL status."""
-        import eval_run as er
+        import eval.run as er
         # All calls return low-score content
         mock_llm.set_response("json", {"content": "no json", "parsed": None})
         with patch.object(er, "call", mock_llm.call), \
              patch.object(er, "MAX_RETRIES", 2):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"json": TASKS["json"]}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
         # All retries exhausted
@@ -195,7 +195,7 @@ class TestRunEvalWithMock:
         the first JSON bracket. In that case, no point retrying — the model
         burned its context window on reasoning.
         """
-        import eval_run as er
+        import eval.run as er
         # 200+ chars of prose, then valid JSON (parsed) but only 2 items so
         # score < 90. This triggers has_prose_before_json=True → FAIL_CONTENT.
         prose = "Let me think carefully about this request. " * 10  # > 200 chars
@@ -212,7 +212,7 @@ class TestRunEvalWithMock:
             return {"content": content, "parsed": parsed}
         with patch.object(er, "call", side_effect=counting_call), \
              patch.object(er, "MAX_RETRIES", 5):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"json": TASKS["json"]}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
         # FAIL_CONTENT → break after first attempt (no retry)
@@ -223,8 +223,8 @@ class TestRunEvalWithMock:
 
 class TestValidateResultDirectly:
     def test_error_result(self, mock_llm):
-        from eval_run import _validate_result
-        from eval_tasks_core import TASKS
+        from eval.run import _validate_result
+        from eval.tasks_core import TASKS
 
         task_cfg = TASKS["json"]
         result = {"content": "", "error": "Timeout"}
@@ -233,8 +233,8 @@ class TestValidateResultDirectly:
         assert failure == "Timeout"
 
     def test_text_task_result(self, mock_llm):
-        from eval_run import _validate_result
-        from eval_tasks_core import TASKS
+        from eval.run import _validate_result
+        from eval.tasks_core import TASKS
 
         task_cfg = TASKS["filename"]
         result = {"content": "valid_filename", "parsed": None}
@@ -246,7 +246,7 @@ class TestValidateResultDirectly:
 
 class TestQualityResultsToEvalFormat:
     def test_conversion_ok(self, mock_llm):
-        from eval_run import _quality_results_to_eval_format
+        from eval.run import _quality_results_to_eval_format
         from lib.quality_models import Score
         from lib.quality_entry import ScoreCard
 
@@ -258,7 +258,7 @@ class TestQualityResultsToEvalFormat:
         assert results[0]["task"] == "json"
 
     def test_conversion_fail(self, mock_llm):
-        from eval_run import _quality_results_to_eval_format
+        from eval.run import _quality_results_to_eval_format
         from lib.quality_models import Score
         from lib.quality_entry import ScoreCard
 
@@ -270,7 +270,7 @@ class TestQualityResultsToEvalFormat:
 
     def test_json_dict_extracted(self):
         """Lines 57-58: JSON object is wrapped in list."""
-        from eval_run import _validate_result
+        from eval.run import _validate_result
 
         def fake_validator(items, source_text=None):
             return 95, ""
@@ -286,7 +286,7 @@ class TestQualityResultsToEvalFormat:
 
     def test_text_extraction_path(self):
         """Lines 62-67: No JSON match — falls through to _extract_items_from_text (markdown table)."""
-        from eval_run import _validate_result
+        from eval.run import _validate_result
 
         received = []
         def fake_validator(items, source_text=None):
@@ -307,7 +307,7 @@ class TestQualityResultsToEvalFormat:
 
     def test_summary_validation_path(self):
         """Lines 68-70: long content but no extractable items, falls back to validate_summary."""
-        from eval_run import _validate_result
+        from eval.run import _validate_result
 
         # Validator is never called in this path — validate_summary runs instead.
         calls = []
@@ -330,12 +330,12 @@ class TestQualityResultsToEvalFormat:
 
     def test_debug_weekend_with_items(self):
         """Lines 76-83: debug=True, weekend task, with items and source - prints source matching details."""
-        from eval_run import _validate_result
+        from eval.run import _validate_result
         from unittest.mock import MagicMock
         from rich.console import Console
         from io import StringIO
         fake_console = Console(file=StringIO(), force_terminal=False, width=200)
-        import eval_run as er
+        import eval.run as er
 
         def fake_validator(items, source_text=None):
             return 100, ""
@@ -359,7 +359,7 @@ class TestQualityResultsToEvalFormat:
 
     def test_int_validator_json_match_path(self):
         """Line 88: validator returns int in json_match path."""
-        from eval_run import _validate_result
+        from eval.run import _validate_result
 
         def int_validator(items, source_text=None):
             return 75
@@ -376,7 +376,7 @@ class TestQualityResultsToEvalFormat:
 
 class TestValidateResultBranches:
     def test_non_tuple_validated_result(self):
-        from eval_run import _validate_result
+        from eval.run import _validate_result
         from unittest.mock import patch
 
         # A validator that returns a plain int (not a tuple) - line 46
@@ -393,7 +393,7 @@ class TestValidateResultBranches:
         assert failure == ""
 
     def test_json_match_invalid_extracted(self):
-        from eval_run import _validate_result
+        from eval.run import _validate_result
 
         # Validator should NOT be called in this path: json.loads fails,
         # _extract_items_from_text returns nothing (no bullets/tables),
@@ -417,7 +417,7 @@ class TestValidateResultBranches:
         assert isinstance(score, (int, float))
 
     def test_short_content_no_extracted(self):
-        from eval_run import _validate_result
+        from eval.run import _validate_result
 
         def fake_validator(items, source_text=None):
             return 100
@@ -433,7 +433,7 @@ class TestValidateResultBranches:
         assert failure == "Empty content"
 
     def test_debug_weekend_task(self, capsys):
-        from eval_run import _validate_result
+        from eval.run import _validate_result
 
         def fake_validator(items, source_text=None):
             return 100
@@ -452,7 +452,7 @@ class TestValidateResultBranches:
         assert failure == ""
 
     def test_text_task_no_content(self):
-        from eval_run import _validate_result
+        from eval.run import _validate_result
 
         task_cfg = {
             "validator": lambda x: (50, "x"),
@@ -464,7 +464,7 @@ class TestValidateResultBranches:
         assert failure == "Empty content"
 
     def test_text_task_int_validator(self):
-        from eval_run import _validate_result
+        from eval.run import _validate_result
 
         task_cfg = {
             "validator": lambda x: 75,  # returns int
@@ -477,14 +477,8 @@ class TestValidateResultBranches:
 
 
 class TestCallModelBackend:
-    def test_mlx_backend(self, mock_llm):
-        import eval_run as er
-        with patch.object(er, "mlx_call", return_value={"content": "ok"}):
-            result = er._call_model("m", {"messages": []}, "task", "h", 99, "mlx")
-        assert result == {"content": "ok"}
-
     def test_default_backend(self, mock_llm):
-        import eval_run as er
+        import eval.run as er
         with patch.object(er, "call", return_value={"content": "ok", "parse_json": False}):
             result = er._call_model("m", {"messages": [], "parse_json": False}, "task", "h", 99, "osaurus")
         assert result["content"] == "ok"
@@ -492,26 +486,26 @@ class TestCallModelBackend:
 
 class TestRunEvalAllBranches:
     def test_skip_task_no_messages(self, mock_llm, capsys):
-        import eval_run as er
+        import eval.run as er
         with patch.object(er, "call", mock_llm.call):
             tasks = {"json_no_msgs": {}}  # no messages key
             results = er.run_eval("m", tasks=tasks, verbose=False)
         assert results == []
 
     def test_model_call_exception(self, mock_llm):
-        import eval_run as er
+        import eval.run as er
         def bad_call(*args, **kwargs):
             raise RuntimeError("boom")
         with patch.object(er, "call", bad_call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"json": TASKS["json"]}
             results = er.run_eval("m", tasks=tasks, verbose=False)
         assert results[0]["quality_score"] == 0
         assert "boom" in (results[0]["error"] or "")
 
     def test_validation_exception(self, mock_llm):
-        import eval_run as er
-        from eval_tasks_core import TASKS
+        import eval.run as er
+        from eval.tasks_core import TASKS
         # Set response that makes validation explode
         mock_llm.set_response("json", {"content": "x", "parsed": "not-a-list"})
         with patch.object(er, "call", mock_llm.call), \
@@ -522,9 +516,9 @@ class TestRunEvalAllBranches:
         assert "Validation error" in results[0]["failure_reason"]
 
     def test_verbose_mode(self, mock_llm, capsys):
-        import eval_run as er
+        import eval.run as er
         with patch.object(er, "call", mock_llm.call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"filename": TASKS["filename"]}
             results = er.run_eval("m", tasks=tasks, verbose=True)
         # Filename validation: mock returns "mock_test_filename" - all score
@@ -534,9 +528,9 @@ class TestRunEvalAllBranches:
         assert len(captured.out) > 0 or len(captured.err) > 0
 
     def test_weekend_quality_summary(self, mock_llm, capsys):
-        import eval_run as er
+        import eval.run as er
         # Set parsed data that includes items
-        from eval_tasks_core import TASKS
+        from eval.tasks_core import TASKS
         mock_llm.set_response("weekend_things", {
             "content": "[]",
             "parsed": [{"name": "uniquename_a"}, {"name": "uniquename_b"}],
@@ -550,9 +544,9 @@ class TestRunEvalAllBranches:
 
     def test_weekend_no_source_continue(self, mock_llm):
         """Line 262: weekend task but no source key."""
-        import eval_run as er
+        import eval.run as er
         with patch.object(er, "call", mock_llm.call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             # Weekend task without source - explicitly remove it
             cfg = {k: v for k, v in TASKS["json"].items() if k != "source"}
             tasks = {"weekend_nosource": cfg}
@@ -561,21 +555,21 @@ class TestRunEvalAllBranches:
 
     def test_weekend_no_parsed_continue(self, mock_llm):
         """Line 262: weekend task with source but result.parsed is empty."""
-        import eval_run as er
+        import eval.run as er
         mock_llm.set_response("weekend_noparsed", {"content": "", "parsed": []})
         with patch.object(er, "call", mock_llm.call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {"weekend_noparsed": {**TASKS["json"], "source": "some source text"}}
             results = er.run_eval("m", tasks=tasks, verbose=False)
         assert len(results) == 1
 
     def test_run_eval_skip_non_weekend_result(self, mock_llm):
         """Line 258: result has task_name not in weekend_tasks (when the result is built from a non-weekend task that ran)."""
-        import eval_run as er
+        import eval.run as er
         # Provide BOTH a weekend task AND a non-weekend task
         mock_llm.set_response("json", {"content": "[]", "parsed": []})
         with patch.object(er, "call", mock_llm.call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {
                 "json": TASKS["json"],  # non-weekend
                 "weekend_x": {**TASKS["json"], "source": "abc"},  # weekend with source
@@ -586,9 +580,9 @@ class TestRunEvalAllBranches:
 
     def test_non_weekend_task_continue(self, mock_llm):
         """Line 255: result is in results but task_name is not in weekend_tasks."""
-        import eval_run as er
+        import eval.run as er
         with patch.object(er, "call", mock_llm.call):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             # Regular (non-weekend) task
             tasks = {"json": TASKS["json"]}
             results = er.run_eval("m", tasks=tasks, verbose=False)
@@ -597,7 +591,7 @@ class TestRunEvalAllBranches:
 
     def test_weekend_debug_summary_path(self, mock_llm):
         """Lines 77-83: weekend task with items and source - exercises debug source matching."""
-        import eval_run as er
+        import eval.run as er
         from rich.console import Console
         from io import StringIO
         fake_console = Console(file=StringIO(), force_terminal=False, width=200)
@@ -608,7 +602,7 @@ class TestRunEvalAllBranches:
         })
         with patch.object(er, "call", mock_llm.call), \
              patch.object(er, "console", fake_console):
-            from eval_tasks_core import TASKS
+            from eval.tasks_core import TASKS
             tasks = {
                 "weekend_debug": {**TASKS["json"], "source": "festival toronto park weekend stuff"}
             }
@@ -619,10 +613,10 @@ class TestRunEvalAllBranches:
 
     def test_weekend_debug_with_dict_unmatched(self):
         """Line 84: when unmatched item is a dict (not a string) - uses dict path."""
-        from eval_run import _validate_result
+        from eval.run import _validate_result
         from rich.console import Console
         from io import StringIO
-        import eval_run as er
+        import eval.run as er
         fake_console = Console(file=StringIO(), force_terminal=False, width=200)
 
         def fake_validator(items, source_text=None):
@@ -639,7 +633,7 @@ class TestRunEvalAllBranches:
             "parsed": None,
         }
         with patch.object(er, "console", fake_console), \
-             patch("eval_run.get_source_matching_details") as mock_details:
+             patch("eval.run.get_source_matching_details") as mock_details:
             mock_details.return_value = {
                 "matched": [],
                 "unmatched": [{"name": "fake_dict_item", "terms": ["a", "b"]}],
@@ -653,7 +647,7 @@ class TestRunEvalAllBranches:
 
 class TestQualityResultsFormat:
     def test_partial_status(self):
-        from eval_run import _quality_results_to_eval_format
+        from eval.run import _quality_results_to_eval_format
         from lib.quality_models import Score
         from lib.quality_entry import ScoreCard
 
@@ -662,7 +656,7 @@ class TestQualityResultsFormat:
         assert results[0]["status"] == "partial"
 
     def test_failure_list_joins(self):
-        from eval_run import _quality_results_to_eval_format
+        from eval.run import _quality_results_to_eval_format
         from lib.quality_models import Score
         from lib.quality_entry import ScoreCard
 

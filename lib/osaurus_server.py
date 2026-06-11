@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import os
+import signal
 import time
 import subprocess
 from pathlib import Path
@@ -7,19 +9,35 @@ from pathlib import Path
 from .logging_config import osaurus_logger as logger
 from .osaurus_models import is_server_running, get_models, DEFAULT_HOST, DEFAULT_PORT
 
+PID_FILE = Path.home() / ".osaurus.pid"
+
+
+def _kill_osaurus():
+    if PID_FILE.exists():
+        try:
+            pid = int(PID_FILE.read_text().strip())
+            os.kill(pid, signal.SIGTERM)
+            time.sleep(1)
+        except (ProcessLookupError, ValueError, OSError):
+            pass
+        PID_FILE.unlink(missing_ok=True)
+
 
 def restart_server(app_path: str = "/Applications/osaurus.app", wait: int = 20) -> bool:
+    _kill_osaurus()
+    time.sleep(1)
+
+    if Path(app_path).exists():
+        launcher = ["open", app_path]
+    else:
+        launcher = ["osaurus", "serve", "--yes"]
     try:
-        subprocess.run(["pkill", "-f", "osaurus"], stderr=subprocess.DEVNULL)
-    except Exception:
-        pass
-    time.sleep(2)
-    try:
-        subprocess.Popen(
-            ["open", app_path],
+        proc = subprocess.Popen(
+            launcher,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
+        PID_FILE.write_text(str(proc.pid))
     except Exception as e:
         print(f"Failed to restart: {e}")
         return False

@@ -180,9 +180,32 @@ assert any("osascript" in s and "quit" in s for s in sub_calls)
 assert any("open" in s and "osaurus" in s for s in sub_calls)
 ```
 
-### `ddgs` Mock Pattern
+### MLX Model Discovery via Fake Filesystem
 
-`patch("weekend_data.DDGS", fake_ddgs)` (with pre-built MagicMock as 2nd arg) is required. Using `patch("weekend_data.DDGS")` as a context manager fails in the full test suite with `ModuleNotFoundError: No module named 'ddgs.ddgs'` — the `ddgs` package's `_DDGSProxy`/`_ProxyMeta` triggers re-import of the `ddgs.ddgs` submodule on first call.
+`test_mlx_lib.py` uses a `fake_mlx_dir(tmp_path)` fixture that creates real directories and `config.json` files for model discovery tests — no mocking of `Path.iterdir()` or file existence checks. This exercises the real filesystem scanning logic:
+
+```python
+@pytest.fixture
+def fake_mlx_dir(tmp_path):
+    models = tmp_path / "MLXModels"
+    models.mkdir()
+    qwen = models / "qwen-7b-fp16"
+    qwen.mkdir()
+    (qwen / "config.json").write_text(json.dumps({"context_length": 8192}))
+    (models / "no-config").mkdir()
+    return models
+```
+
+Use with `real_mlx_functions` fixture to run real discovery functions against fake dirs:
+
+```python
+def test_find_mlx_model_top_level(self, mock_llm, fake_mlx_dir, real_mlx_functions):
+    real = real_mlx_functions["find_mlx_model"]
+    result = real("qwen", mlx_dir=fake_mlx_dir)
+    assert result == fake_mlx_dir / "qwen-7b-fp16"
+```
+
+### `ddgs` Mock Pattern
 
 ---
 

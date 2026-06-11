@@ -212,7 +212,7 @@ class TestBuildTasksFromModel:
         prompts = {Task.FILE_SUMMARY.value: "Summarize {}"}
         with patch("lib.config_tasks.get_model_prompts_all", return_value=prompts), \
              patch("lib.config_tasks.get_eval_input", return_value="x"), \
-             patch.dict("sys.modules", {"eval_validate": MagicMock(validate_file_summary=lambda d, s="": d)}):
+             patch.dict("sys.modules", {"eval.validate": MagicMock(validate_file_summary=lambda d, s="": d)}):
             tasks = build_tasks_from_model("model-x")
         assert "file_summary" in tasks
 
@@ -224,7 +224,7 @@ class TestBuildTasksFromModel:
         import builtins
         real_import = builtins.__import__
         def my_import(name, *a, **kw):
-            if name == "eval_validate":
+            if name == "eval.validate":
                 raise ImportError("test")
             return real_import(name, *a, **kw)
         with patch("lib.config_tasks.get_model_prompts_all", return_value=prompts), \

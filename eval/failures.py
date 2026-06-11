@@ -5,7 +5,7 @@ Classifies WHY a model result failed.
 """
 
 
-from eval_validate import safe_content
+from eval.validate import safe_content
 from lib.validators_lib import has_item_details
 
 
@@ -27,7 +27,7 @@ def _classify_failure(result: dict, task_cfg: dict, score: int, failure_reason: 
             "evidence": specific evidence for the diagnosis,
         }
     """
-    from eval_run import EVAL_TIMEOUT
+    from eval.run import EVAL_TIMEOUT
 
     error = result.get("error") or ""
     content = safe_content(result)

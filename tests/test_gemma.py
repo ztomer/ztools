@@ -5,7 +5,7 @@ import pytest
 class TestGemmaModel:
     def test_gemma_call(self):
         from lib.osaurus_lib import call as osaurus_call
-        from model_eval import TASKS
+        from eval.cli import TASKS
         task = TASKS["json"]
         result = osaurus_call(
             model="gemma-4-26b-a4b-it-4bit",

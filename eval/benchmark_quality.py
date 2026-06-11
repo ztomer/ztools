@@ -18,7 +18,7 @@ from typing import List, Optional, Tuple
 from lib.config import get_model_prompt, Task
 from lib.osaurus_lib import call as llm_call
 
-from benchmark_output import (
+from eval.benchmark_output import (
     print_header, print_model_header, print_case_result,
     print_model_summary, print_cross_model_comparison,
 )

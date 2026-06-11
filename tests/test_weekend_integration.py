@@ -1,4 +1,4 @@
-"""Integration tests for weekend_planner with mocked LLM and data fetchers."""
+"""Integration tests for weekend.cli with mocked LLM and data fetchers."""
 
 import types
 from unittest.mock import patch
@@ -47,10 +47,10 @@ def _make_args(**overrides):
 
 
 class TestWeekendMainFlow:
-    """Test weekend_planner.main() full flow with mocked dependencies."""
+    """Test weekend.cli.main() full flow with mocked dependencies."""
 
     def test_main_happy_path(self, mock_llm, capsys, tmp_path):
-        import weekend_planner as wp
+        import weekend.cli as wp
         with patch("os.path.expanduser", return_value=str(tmp_path)), \
              patch.object(wp, "_fetch_data", return_value=(FAKE_WEATHER, FAKE_EVENTS, FAKE_VENUES, FAKE_DATES)), \
              patch.object(wp, "get_llm_json", side_effect=[FAKE_TRANSIENT, FAKE_FIXED]):
@@ -60,7 +60,7 @@ class TestWeekendMainFlow:
         assert "Weekend plan" in captured.out or "weekend" in captured.out.lower()
 
     def test_main_creates_file(self, mock_llm, capsys, tmp_path):
-        import weekend_planner as wp
+        import weekend.cli as wp
         with patch("os.path.expanduser", return_value=str(tmp_path)), \
              patch.object(wp, "_fetch_data", return_value=(FAKE_WEATHER, FAKE_EVENTS, FAKE_VENUES, FAKE_DATES)), \
              patch.object(wp, "get_llm_json", side_effect=[FAKE_TRANSIENT, FAKE_FIXED]):
@@ -71,7 +71,7 @@ class TestWeekendMainFlow:
         assert len(plan_files) >= 1
 
     def test_main_resolves_model_arg(self, mock_llm, capsys, tmp_path):
-        import weekend_planner as wp
+        import weekend.cli as wp
         import os
         original = os.environ.pop("OLLAMA_MODEL", None)
         try:
@@ -89,7 +89,7 @@ class TestWeekendMainFlow:
                 os.environ["OLLAMA_MODEL"] = original
 
     def test_main_debug_mode(self, mock_llm, capsys, tmp_path):
-        import weekend_planner as wp
+        import weekend.cli as wp
         with patch("os.path.expanduser", return_value=str(tmp_path)), \
              patch.object(wp, "_fetch_data", return_value=(FAKE_WEATHER, FAKE_EVENTS, FAKE_VENUES, FAKE_DATES)), \
              patch.object(wp, "get_llm_json", side_effect=[FAKE_TRANSIENT, FAKE_FIXED]):
@@ -99,7 +99,7 @@ class TestWeekendMainFlow:
         assert len(captured.out) > 0
 
     def test_main_low_items_triggers_warning(self, mock_llm, capsys, tmp_path):
-        import weekend_planner as wp
+        import weekend.cli as wp
         few_items = {"transient_events": [{"name": "Only One", "location": "Toronto"}]}
         with patch("os.path.expanduser", return_value=str(tmp_path)), \
              patch.object(wp, "_fetch_data", return_value=(FAKE_WEATHER, FAKE_EVENTS, FAKE_VENUES, FAKE_DATES)), \
@@ -109,7 +109,7 @@ class TestWeekendMainFlow:
         assert "Low item count" in captured.out
 
     def test_main_empty_llm_response_still_works(self, mock_llm, capsys, tmp_path):
-        import weekend_planner as wp
+        import weekend.cli as wp
         with patch("os.path.expanduser", return_value=str(tmp_path)), \
              patch.object(wp, "_fetch_data", return_value=(FAKE_WEATHER, FAKE_EVENTS, FAKE_VENUES, FAKE_DATES)), \
              patch.object(wp, "get_llm_json", side_effect=[None, None]):
@@ -119,7 +119,7 @@ class TestWeekendMainFlow:
         assert "FAIL" in captured.out or "error" in captured.out.lower() or len(captured.out) > 0
 
     def test_main_passes_use_cache_to_fetch_data(self, mock_llm, capsys, tmp_path):
-        import weekend_planner as wp
+        import weekend.cli as wp
         with patch("os.path.expanduser", return_value=str(tmp_path)), \
              patch.object(wp, "_fetch_data", return_value=(FAKE_WEATHER, FAKE_EVENTS, FAKE_VENUES, FAKE_DATES)) as mock_fetch, \
              patch.object(wp, "get_llm_json", side_effect=[FAKE_TRANSIENT, FAKE_FIXED]):
@@ -133,7 +133,7 @@ class TestWeekendFetchData:
     """Test _fetch_data with mocked internals."""
 
     def test_fetch_data_basic(self, mock_llm):
-        import weekend_planner as wp
+        import weekend.cli as wp
         from datetime import date
         fri = date(2026, 6, 5)
         sun = date(2026, 6, 7)
@@ -150,7 +150,7 @@ class TestWeekendFetchData:
         assert "June" in dates and "2026" in dates
 
     def test_fetch_data_uses_cache_hit(self, mock_llm):
-        import weekend_planner as wp
+        import weekend.cli as wp
         from datetime import date
         fri = date(2026, 6, 5)
         sun = date(2026, 6, 7)
@@ -167,7 +167,7 @@ class TestWeekendFetchData:
         mock_fixed.assert_not_called()
 
     def test_fetch_data_cache_miss_loads_fresh(self, mock_llm):
-        import weekend_planner as wp
+        import weekend.cli as wp
         from datetime import date
         fri = date(2026, 6, 5)
         sun = date(2026, 6, 7)
@@ -188,7 +188,7 @@ class TestWeekendParseFunctions:
     """Test _parse_fixed and _parse_transient directly."""
 
     def test_parse_fixed_list(self):
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_fixed(
             [{"name": "Place 1"}, {"name": "Place 2"}],
             "mock-model", {}
@@ -197,7 +197,7 @@ class TestWeekendParseFunctions:
         assert result[0]["name"] == "Place 1"
 
     def test_parse_fixed_dict_with_key(self):
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_fixed(
             {"fixed_activities": [{"name": "Place 1"}]},
             "mock-model", {}
@@ -206,12 +206,12 @@ class TestWeekendParseFunctions:
         assert result[0]["name"] == "Place 1"
 
     def test_parse_fixed_empty(self):
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_fixed({}, "mock-model", {})
         assert result == []
 
     def test_parse_fixed_single_object(self):
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_fixed(
             {"name": "Single Place", "location": "Toronto"},
             "mock-model", {}
@@ -220,7 +220,7 @@ class TestWeekendParseFunctions:
         assert result[0]["name"] == "Single Place"
 
     def test_parse_fixed_fallback_key(self):
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_fixed(
             {"odd_key": [{"name": "Fallback Item"}]},
             "mock-model", {}
@@ -229,7 +229,7 @@ class TestWeekendParseFunctions:
         assert result[0]["name"] == "Fallback Item"
 
     def test_parse_transient_list(self):
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_transient(
             [{"name": "Event 1"}, {"name": "Event 2"}],
             "mock-model", {}
@@ -237,7 +237,7 @@ class TestWeekendParseFunctions:
         assert len(result) == 2
 
     def test_parse_transient_dict_with_key(self):
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_transient(
             {"transient_events": [{"name": "Event 1"}]},
             "mock-model", {}
@@ -245,12 +245,12 @@ class TestWeekendParseFunctions:
         assert len(result) == 1
 
     def test_parse_transient_empty(self):
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_transient({}, "mock-model", {})
         assert result == []
 
     def test_parse_transient_with_alt_name_keys_in_list(self):
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_transient(
             [{"description": "Desc Event", "location": "Toronto"},
              {"description": "Another Event", "location": "Vaughan"}],
@@ -260,7 +260,7 @@ class TestWeekendParseFunctions:
         assert result[0]["name"] == "Desc Event"
 
     def test_parse_transient_filters_weather_objects(self):
-        import weekend_planner as wp
+        import weekend.cli as wp
         result = wp._parse_transient(
             [{"temperature": "20C", "condition": "Sunny", "precipitation": "0"},
              {"name": "Real Event", "day": "Saturday"}],
@@ -274,31 +274,31 @@ class TestWeekendPrompts:
     """Test prompt building functions."""
 
     def test_build_fixed_system_prompt_defaults(self):
-        from weekend_prompts import build_fixed_system_prompt
+        from weekend.prompts import build_fixed_system_prompt
         prompt = build_fixed_system_prompt()
         assert "Output JSON now" in prompt
         assert "fixed_activities" in prompt
 
     def test_build_fixed_system_prompt_with_args(self):
-        from weekend_prompts import build_fixed_system_prompt
+        from weekend.prompts import build_fixed_system_prompt
         prompt = build_fixed_system_prompt(model="mock-model", location="Vaughan/Toronto", age_range="4-12")
         assert "Output JSON now" in prompt
         assert "fixed_activities" in prompt
 
     def test_build_fixed_user_prompt(self):
-        from weekend_prompts import build_fixed_user_prompt
+        from weekend.prompts import build_fixed_user_prompt
         prompt = build_fixed_user_prompt("June 5-7", "Sunny", "- Venue A\n- Venue B")
         assert "June 5-7" in prompt
         assert "Venue A" in prompt
 
     def test_build_transient_system_prompt_defaults(self):
-        from weekend_prompts import build_transient_system_prompt
+        from weekend.prompts import build_transient_system_prompt
         prompt = build_transient_system_prompt()
         assert "Output JSON now" in prompt
         assert "transient_events" in prompt
 
     def test_build_transient_user_prompt(self):
-        from weekend_prompts import build_transient_user_prompt
+        from weekend.prompts import build_transient_user_prompt
         prompt = build_transient_user_prompt("June 5-7", "Rainy", "- Event A\n- Event B")
         assert "June 5-7" in prompt
         assert "Event A" in prompt

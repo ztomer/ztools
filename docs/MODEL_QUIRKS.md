@@ -380,8 +380,10 @@ PROMPT_TEXT_TO_FILENAME = get_model_prompt(models[0], Task.FILENAME)
 
 ### MLX Direct - Known Issues
 
-- **JANG models** (gemma-4-31b-it-jang_4m): Need `jang` package
-- **gemma-4-e4b-it-4bit**: Repeats input in loop
+- OsaurusAI models use custom quantization (MXFP4/MXFP8/JANGTQ) and architectures — only loadable via `osaurus serve`
+- Standard `mlx-lm` 0.31.3 supports most architectures (`qwen3_5`, `gemma4`, `minimax_m2`) but fails on OsaurusAI weight formats (extra params like k_proj.biases/scales)
+- Only Jackrong's `Qwopus3.6-27B-v2-MLX-4bit` uses standard weights and is fully loadable
+- Model search: `find_best_mlx_model` now skips incompatible models; `find_any_working_mlx_model()` scans all dirs
 - **Qwen**: Can't disable thinking tokens
 
 ### Refactoring Summary (812 → 676 lines)

@@ -27,38 +27,65 @@ MLX_MODELS_DIR = Path(os.environ.get(
 # ==========================================================
 
 
+def _check_mlx_model_compatible(model_path: Path) -> bool:
+    """Quick sanity check that a path looks like a loadable MLX model.
+
+    Verifies: (1) is a directory, (2) has config.json.
+    Full compatibility is verified at load time by call_mlx().
+    """
+    return model_path.is_dir() and (model_path / "config.json").exists()
+
+
 def find_mlx_model(model_name: str, mlx_dir: Path = MLX_MODELS_DIR) -> Optional[Path]:
     """Find an MLX model by name in the models directory."""
     if not mlx_dir.exists():
         return None
 
+    name_lower = model_name.lower()
     for item in mlx_dir.iterdir():
         if not item.is_dir():
             continue
-        if model_name.lower() in item.name.lower():
+        if name_lower in item.name.lower():
             return item
         # Check subdirs
         for sub in item.iterdir():
-            if sub.is_dir() and model_name.lower() in sub.name.lower():
+            if sub.is_dir() and name_lower in sub.name.lower():
                 return sub
 
     return None
 
 
 def find_best_mlx_model(preferred: List[str]) -> Optional[Path]:
-    """Find the best available MLX model from preferred list."""
+    """Find the best available MLX model from preferred list.
+
+    Skips models that are incompatible with the installed mlx_lm.
+    """
     for name in preferred:
         model = find_mlx_model(name)
-        if model:
+        if model and _check_mlx_model_compatible(model):
             return model
+    return None
+
+
+def find_any_working_mlx_model() -> Optional[Path]:
+    """Find any MLX model that's compatible with the installed mlx_lm."""
+    for item in MLX_MODELS_DIR.iterdir():
+        if not item.is_dir():
+            continue
+        for model_dir in [item] + [sub for sub in item.iterdir() if sub.is_dir()]:
+            if _check_mlx_model_compatible(model_dir):
+                return model_dir
     return None
 
 
 def find_text_mlx_model(preferred: List[str] = None) -> Optional[Path]:
     """Find best text generation MLX model."""
     if preferred is None:
-        preferred = ["qwen", "llama", "phi", "mistral", "gemma", "airoboros"]
-    return find_best_mlx_model(preferred)
+        preferred = ["Qwopus", "Qwen3.6", "gemma-4", "MiniMax"]
+    found = find_best_mlx_model(preferred)
+    if found:
+        return found
+    return find_any_working_mlx_model()
 
 
 def get_mlx_context_length(model_path: Path) -> int:
@@ -142,11 +169,14 @@ def call_mlx(model_path: Path, prompt: str) -> Optional[str]:
 
     with open(script_path, 'w') as sf:
         sf.write(f'''
-import os
+import os, sys, json, traceback
 os.chdir("{model_parent}")
-from mlx_lm import load, stream_generate
-
-model, tokenizer = load("{model_path_str}")
+try:
+    from mlx_lm import load, stream_generate
+    model, tokenizer = load("{model_path_str}")
+except Exception as e:
+    print(f"[MLX LOAD ERROR] {{type(e).__name__}}: {{e}}", flush=True)
+    sys.exit(1)
 
 with open("{prompt_file}", "r") as f:
     prompt = f.read()
@@ -154,57 +184,76 @@ with open("{prompt_file}", "r") as f:
 # Prepend JSON trigger to avoid thinking
 prompt = "Output JSON:\\n" + prompt
 text_parts = []
-for r in stream_generate(model, tokenizer, prompt, max_tokens=8192):
-    if hasattr(r, "text"):
-        text_parts.append(r.text)
-    elif isinstance(r, str):
-        text_parts.append(r)
+try:
+    for r in stream_generate(model, tokenizer, prompt, max_tokens=8192):
+        if hasattr(r, "text"):
+            text_parts.append(r.text)
+        elif isinstance(r, str):
+            text_parts.append(r)
+except Exception as e:
+    print(f"[MLX GENERATE ERROR] {{type(e).__name__}}: {{e}}", flush=True)
+    sys.exit(1)
+
 response = "".join(text_parts)
 # Strip the trigger from response
 if response.startswith("Output JSON:\\n"):
     response = response[13:]
 print(response, flush=True)
 ''')
-    
+
     try:
-        cmd = UV_RUN + [script_path]
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=1800,
-        )
-        stdout = result.stdout
-        stderr = result.stderr
-
-        if result.returncode == 0 and stdout.strip():
-            return stdout.strip()
-        elif stdout.strip():
-            return stdout.strip()
-        else:
-            logger.warning(f"MLX generate failed (rc={result.returncode}): {stderr[:300] if stderr else 'no output'}")
-    except Exception as e:
-        logger.error(f"MLX generate failed: {type(e).__name__}: {e}")
-
-    # Fallback: main.py
-    main_py = model_path / "main.py"
-    if main_py.exists():
-        logger.debug("Trying fallback main.py")
         try:
+            cmd = UV_RUN + [script_path]
             result = subprocess.run(
-                ["python3", str(main_py), prompt],
+                cmd,
                 capture_output=True,
                 text=True,
-                timeout=600,
+                timeout=1800,
             )
-            if result.returncode == 0:
-                logger.info(
-                    f"Fallback successful, got {len(result.stdout)} chars")
-                return result.stdout.strip()
-        except Exception as e:
-            logger.debug(f"Fallback failed: {e}")
+            stdout = result.stdout
+            stderr = result.stderr
 
-    logger.error(f"Failed to call MLX model at {model_path}")
+            if result.returncode == 0 and stdout.strip():
+                return stdout.strip()
+            elif stdout.strip() and not stdout.strip().startswith("[MLX"):
+                return stdout.strip()
+            elif stdout.strip():
+                error_msg = stdout.strip()
+                logger.warning(f"MLX model error: {error_msg}")
+                return None
+            else:
+                logger.warning(f"MLX generate failed (rc={result.returncode}): {stderr[:300] if stderr else 'no output'}")
+        except subprocess.TimeoutExpired:
+            logger.warning(f"MLX generate timed out after 1800s for {model_path.name}")
+        except Exception as e:
+            logger.error(f"MLX generate failed: {type(e).__name__}: {e}")
+
+        # Fallback: main.py
+        main_py = model_path / "main.py"
+        if main_py.exists():
+            logger.debug("Trying fallback main.py")
+            try:
+                result = subprocess.run(
+                    ["python3", str(main_py), prompt],
+                    capture_output=True,
+                    text=True,
+                    timeout=600,
+                )
+                if result.returncode == 0:
+                    logger.info(
+                        f"Fallback successful, got {len(result.stdout)} chars")
+                    return result.stdout.strip()
+            except Exception as e:
+                logger.debug(f"Fallback failed: {e}")
+
+    finally:
+        for f in [prompt_file, script_path]:
+            try:
+                os.unlink(f)
+            except FileNotFoundError:
+                pass
+    
+    logger.debug(f"All MLX attempts failed for {model_path.name}")
     return None
 
 

@@ -1,11 +1,11 @@
 import pytest
-from weekend_planner import (
+from weekend.output import (
     build_markdown_tables,
-    normalize_llm_items,
     print_to_cli,
     print_summary,
     print_header,
 )
+from weekend.llm import normalize_llm_items
 
 
 class TestBuildMarkdownTables:
@@ -115,12 +115,12 @@ class TestPrintFunctions:
 
 class TestGetFunctions:
     def test_get_model_field_mapping_exists(self):
-        from weekend_planner import get_model_field_mapping
+        from lib.config_getters import get_model_field_mapping
         result = get_model_field_mapping("qwen3.6")
         assert isinstance(result, dict)
 
     def test_get_model_top_keys_exists(self):
-        from weekend_planner import get_model_top_keys
+        from lib.config_getters import get_model_top_keys
         result = get_model_top_keys("qwen3.6")
         assert result is not None
         assert isinstance(result, dict) or isinstance(result, list)

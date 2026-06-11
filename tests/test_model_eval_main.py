@@ -6,8 +6,8 @@ from unittest.mock import patch, MagicMock
 
 class TestMainFlow:
     def test_no_server_no_models(self, mock_llm, monkeypatch):
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=False), \
              patch.object(model_eval, "get_models", return_value=[]), \
@@ -17,8 +17,8 @@ class TestMainFlow:
         assert e.value.code == 1
 
     def test_server_with_models(self, mock_llm, monkeypatch, capsys):
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         fake_results = [{"task": "t1", "quality_score": 80, "result": {"content": "x"}}]
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
@@ -32,8 +32,8 @@ class TestMainFlow:
         assert "1 models" in captured.out or "Found" in captured.out
 
     def test_specific_model_filter(self, mock_llm, monkeypatch):
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval", "--model", "m1"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli", "--model", "m1"])
         fake_results = [{"task": "t1", "quality_score": 80, "result": {"content": "x"}}]
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
@@ -49,8 +49,8 @@ class TestMainFlow:
         assert results[0]["model"] == "m1"
 
     def test_specific_model_not_found(self, mock_llm, monkeypatch):
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval", "--model", "missing"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli", "--model", "missing"])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1"]), \
@@ -60,8 +60,8 @@ class TestMainFlow:
         assert e.value.code == 1
 
     def test_specific_task(self, mock_llm, monkeypatch, capsys):
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval", "--task", "filename"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli", "--task", "filename"])
         fake_results = [{"task": "filename", "quality_score": 80, "result": {"content": "x"}}]
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
@@ -82,8 +82,8 @@ class TestMainFlow:
         assert "80%" in out
 
     def test_unknown_task_exits(self, mock_llm, monkeypatch):
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval", "--task", "nonexistent"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli", "--task", "nonexistent"])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1"]), \
@@ -94,8 +94,8 @@ class TestMainFlow:
 
     def test_config_tasks_loaded(self, mock_llm, monkeypatch, capsys):
         """When build_tasks_from_model returns tasks, use them."""
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         config_tasks = {"t1": {"prompt": "P"}, "t2": {"prompt": "P"}}
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
@@ -115,11 +115,11 @@ class TestMainFlow:
 
     def test_config_tasks_with_specific_task_match(self, mock_llm, monkeypatch):
         """--task matching config task uses that task only."""
-        import model_eval
+        import eval.cli as model_eval
         # Use a real task name that exists in hardcoded TASKS
-        from eval_tasks_core import TASKS
+        from eval.tasks_core import TASKS
         task_name = next(iter(TASKS.keys()))
-        monkeypatch.setattr(sys, "argv", ["model_eval", "--task", task_name])
+        monkeypatch.setattr(sys, "argv", ["eval.cli", "--task", task_name])
         config_tasks = {task_name: {"prompt": "P"}, "t2": {"prompt": "P"}}
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
@@ -135,10 +135,10 @@ class TestMainFlow:
 
     def test_config_tasks_with_specific_task_no_match(self, mock_llm, monkeypatch, capsys):
         """--task not in config_tasks prints FAIL but keeps using the original TASKS dict."""
-        import model_eval
-        from eval_tasks_core import TASKS
+        import eval.cli as model_eval
+        from eval.tasks_core import TASKS
         task_name = next(iter(TASKS.keys()))
-        monkeypatch.setattr(sys, "argv", ["model_eval", "--task", task_name])
+        monkeypatch.setattr(sys, "argv", ["eval.cli", "--task", task_name])
         # config_tasks has different tasks (no overlap with --task)
         config_tasks = {"other1": {"prompt": "P"}, "other2": {"prompt": "P"}}
         with patch.object(model_eval, "init_config"), \
@@ -164,8 +164,8 @@ class TestMainFlow:
 
     def test_quick_mode(self, mock_llm, monkeypatch, capsys):
         """--quick mode prints the quick mode banner and still calls run_eval."""
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval", "--quick"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli", "--quick"])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1"]), \
@@ -183,8 +183,8 @@ class TestMainFlow:
 
     def test_quality_mode(self, mock_llm, monkeypatch, capsys):
         """--quality mode calls lib.quality.run_suite and prints Quality scores line."""
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval", "--quality"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli", "--quality"])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1"]), \
@@ -212,10 +212,10 @@ class TestMainFlow:
 
     def test_quality_mode_with_task_filter(self, mock_llm, monkeypatch):
         """Quality mode with --task filters cases."""
-        import model_eval
-        from eval_tasks_core import TASKS
+        import eval.cli as model_eval
+        from eval.tasks_core import TASKS
         task_name = next(iter(TASKS.keys()))
-        monkeypatch.setattr(sys, "argv", ["model_eval", "--quality", "--task", task_name])
+        monkeypatch.setattr(sys, "argv", ["eval.cli", "--quality", "--task", task_name])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1"]), \
@@ -236,8 +236,8 @@ class TestMainFlow:
 
     def test_no_scores(self, mock_llm, monkeypatch, capsys):
         """When results have no scores, prints '0 tasks'."""
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1"]), \
@@ -253,8 +253,8 @@ class TestMainFlow:
 
     def test_high_avg_score(self, mock_llm, monkeypatch, capsys):
         """All scores >= 90 — STEP status (·)."""
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         fake_results = [
             {"task": "t1", "quality_score": 95, "result": {"content": "x"}},
             {"task": "t2", "quality_score": 100, "result": {"content": "y"}},
@@ -275,8 +275,8 @@ class TestMainFlow:
 
     def test_mid_avg_score(self, mock_llm, monkeypatch, capsys):
         """Some scores >= 50 but not all >= 90 — WARN (!)."""
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         fake_results = [
             {"task": "t1", "quality_score": 60, "result": {"content": "x"}},
             {"task": "t2", "quality_score": 80, "result": {"content": "y"}},
@@ -297,8 +297,8 @@ class TestMainFlow:
 
     def test_low_avg_score(self, mock_llm, monkeypatch, capsys):
         """All scores < 50 — FAIL (✗)."""
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         fake_results = [
             {"task": "t1", "quality_score": 30, "result": {"content": "x"}},
             {"task": "t2", "quality_score": 20, "result": {"content": "y"}},
@@ -319,8 +319,8 @@ class TestMainFlow:
 
     def test_multiple_models_with_flush(self, mock_llm, monkeypatch, capsys):
         """Multiple models trigger flush_between_models (which calls call)."""
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         fake_results = [{"task": "t1", "quality_score": 80, "result": {"content": "x"}}]
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
@@ -341,8 +341,8 @@ class TestMainFlow:
 
     def test_low_memory_warning(self, mock_llm, monkeypatch, capsys):
         """Memory > threshold triggers warning."""
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1"]), \
@@ -358,8 +358,8 @@ class TestMainFlow:
 
     def test_model_too_big_for_memory(self, mock_llm, monkeypatch, capsys):
         """Model too big for available memory — warning."""
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1-70b"]), \
@@ -376,8 +376,8 @@ class TestMainFlow:
 
     def test_server_not_responsive(self, mock_llm, monkeypatch, capsys):
         """Server not responsive — print FAIL."""
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1"]), \
@@ -393,11 +393,11 @@ class TestMainFlow:
 
     def test_task_arg_in_hardcoded_tasks(self, mock_llm, monkeypatch):
         """--task filters to single task from hardcoded TASKS."""
-        import model_eval
+        import eval.cli as model_eval
         # Get a real task from eval_tasks_core
-        from eval_tasks_core import TASKS
+        from eval.tasks_core import TASKS
         first_task = next(iter(TASKS.keys()))
-        monkeypatch.setattr(sys, "argv", ["model_eval", "--task", first_task])
+        monkeypatch.setattr(sys, "argv", ["eval.cli", "--task", first_task])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1"]), \
@@ -416,8 +416,8 @@ class TestFlushBetweenModels:
 
     def test_flush_success_path(self, mock_llm, monkeypatch, capsys):
         """Test the success path of flush via main() with multiple models."""
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1", "m2"]), \
@@ -436,8 +436,8 @@ class TestFlushBetweenModels:
         assert "Flushing" in out
 
     def test_flush_with_error_triggers_restart(self, mock_llm, monkeypatch, capsys):
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1", "m2"]), \
@@ -465,8 +465,8 @@ class TestFlushBetweenModels:
         assert "Flush failed" in out or "restart" in out.lower()
 
     def test_flush_subprocess_error_caught(self, mock_llm, monkeypatch, capsys):
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1", "m2"]), \
@@ -489,8 +489,8 @@ class TestFlushBetweenModels:
         assert "Traceback" not in out
 
     def test_flush_request_error_caught(self, mock_llm, monkeypatch, capsys):
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1", "m2"]), \
@@ -512,8 +512,8 @@ class TestFlushBetweenModels:
         assert "Traceback" not in out
 
     def test_flush_call_exception_caught(self, mock_llm, monkeypatch, capsys):
-        import model_eval
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
              patch.object(model_eval, "get_models", return_value=["m1", "m2"]), \
@@ -533,24 +533,25 @@ class TestFlushBetweenModels:
 
 class TestMainBlock:
     def test_main_block(self, monkeypatch):
-        """Exec the real `if __name__ == "__main__":` block from model_eval.py and verify it calls main()."""
+        """Exec the real `if __name__ == "__main__":` block from eval/__main__.py and verify it calls main()."""
         import re
         import sys
         import textwrap
         from unittest.mock import MagicMock
-        monkeypatch.setattr(sys, "argv", ["model_eval"])
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
         from pathlib import Path
-        import model_eval
+        import eval.__main__ as eval_main
+        import eval.cli as model_eval
         mock_main = MagicMock()
         saved = model_eval.main
         model_eval.main = mock_main
         try:
-            source = Path(model_eval.__file__).read_text()
+            source = Path(eval_main.__file__).read_text()
             match = re.search(
                 r'if __name__ == "__main__":\n(?:    .*\n)+',
                 source,
             )
-            assert match is not None, "model_eval.py must have an if __name__ == __main__ block"
+            assert match is not None, "eval/__main__.py must have an if __name__ == __main__ block"
             block = textwrap.dedent(match.group())
             exec(block, {"__name__": "__main__", "main": mock_main})
         finally:

@@ -7,6 +7,7 @@ from lib.quality_report import (
     compare_to_baseline,
 )
 from lib.quality_runner import ALL_TEST_CASES, run_suite
+from lib.quality_scorers import get_dimension_weights
 
 
 def main():
@@ -45,9 +46,11 @@ def main():
             parts = key.split("::", 2)
             if len(parts) == 3:
                 model, task, case_id = parts
+                dim_weights = get_dimension_weights(task)
                 dims = []
                 for dname, dscore in prev.get("dimensions", {}).items():
-                    dims.append(Score(dname, dscore, 0.0))
+                    weight = dim_weights.get(dname, 1.0)
+                    dims.append(Score(dname, dscore, weight))
                 sc = ScoreCard(model, task, case_id, dims, "", prev.get("elapsed", 0.0))
                 scorecards.append(sc)
 

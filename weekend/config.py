@@ -34,7 +34,7 @@ def save_venues_cache(venues_str):
 
 
 def load_weekend_config():
-    config_path = Path(__file__).parent / "conf" / "weekend.yaml"
+    config_path = Path(__file__).parent.parent / "conf" / "weekend.yaml"
     try:
         with open(config_path) as f:
             return yaml.safe_load(f)
@@ -43,7 +43,10 @@ def load_weekend_config():
         return {}
 
 
-WEEKEND_CONFIG = load_weekend_config()
+try:
+    WEEKEND_CONFIG = load_weekend_config()
+except Exception:
+    WEEKEND_CONFIG = {}
 EXCLUDE_PLACES = WEEKEND_CONFIG.get("exclude_places", [])
 CHILDREN = WEEKEND_CONFIG.get("children", [])
 CHILDREN_STR = ", ".join([f"{c['age']}yo {c['gender']}" for c in CHILDREN]) if CHILDREN else "{CHILDREN_STR}"

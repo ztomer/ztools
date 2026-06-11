@@ -66,7 +66,7 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
     tasks = {}
     from lib.validators_lib import validate_detailed_json, validate_summary, validate_filename
     try:
-        from eval_validate import validate_file_summary
+        from eval.validate import validate_file_summary
     except ImportError:
         def validate_file_summary(data, source_text=""):
             from lib.validators_lib import validate_summary

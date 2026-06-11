@@ -8,14 +8,14 @@ from unittest.mock import patch, MagicMock, mock_open
 
 class TestLoadSaveState:
     def test_load_state_no_file(self, tmp_path, monkeypatch):
-        import twit_output
+        import twitter.output as twit_output
         # Redirect Path.home() to tmp_path
         monkeypatch.setattr(twit_output, "STATE_FILE", tmp_path / "state.json")
         result = twit_output.load_state()
         assert result == {}
 
     def test_load_state_valid(self, tmp_path, monkeypatch):
-        import twit_output
+        import twitter.output as twit_output
         state_file = tmp_path / "state.json"
         state_file.write_text(json.dumps({"key": "value"}))
         monkeypatch.setattr(twit_output, "STATE_FILE", state_file)
@@ -23,7 +23,7 @@ class TestLoadSaveState:
         assert result == {"key": "value"}
 
     def test_load_state_invalid_json(self, tmp_path, monkeypatch):
-        import twit_output
+        import twitter.output as twit_output
         state_file = tmp_path / "state.json"
         state_file.write_text("not json")
         monkeypatch.setattr(twit_output, "STATE_FILE", state_file)
@@ -31,7 +31,7 @@ class TestLoadSaveState:
         assert result == {}
 
     def test_save_state(self, tmp_path, monkeypatch):
-        import twit_output
+        import twitter.output as twit_output
         state_file = tmp_path / "state.json"
         monkeypatch.setattr(twit_output, "STATE_FILE", state_file)
         twit_output.save_state({"key": "value"})
@@ -40,13 +40,13 @@ class TestLoadSaveState:
 
 class TestLoadSaveDebugCache:
     def test_load_debug_cache_no_file(self, tmp_path, monkeypatch):
-        import twit_output
+        import twitter.output as twit_output
         monkeypatch.setattr(twit_output, "DEBUG_CACHE_FILE", tmp_path / "cache.json")
         result = twit_output.load_debug_cache()
         assert result == []
 
     def test_load_debug_cache_invalid(self, tmp_path, monkeypatch):
-        import twit_output
+        import twitter.output as twit_output
         cache_file = tmp_path / "cache.json"
         cache_file.write_text("not json")
         monkeypatch.setattr(twit_output, "DEBUG_CACHE_FILE", cache_file)
@@ -54,7 +54,7 @@ class TestLoadSaveDebugCache:
         assert result == []
 
     def test_load_debug_cache_with_dates(self, tmp_path, monkeypatch):
-        import twit_output
+        import twitter.output as twit_output
         cache_file = tmp_path / "cache.json"
         cache_file.write_text(json.dumps([
             {"id": 1, "created_at": "2024-01-01T12:00:00"},
@@ -66,7 +66,7 @@ class TestLoadSaveDebugCache:
         assert isinstance(result[0]["created_at"], datetime)
 
     def test_load_debug_cache_no_dates(self, tmp_path, monkeypatch):
-        import twit_output
+        import twitter.output as twit_output
         cache_file = tmp_path / "cache.json"
         cache_file.write_text(json.dumps([{"id": 1, "screen_name": "x"}]))
         monkeypatch.setattr(twit_output, "DEBUG_CACHE_FILE", cache_file)
@@ -74,7 +74,7 @@ class TestLoadSaveDebugCache:
         assert result == [{"id": 1, "screen_name": "x"}]
 
     def test_save_debug_cache(self, tmp_path, monkeypatch):
-        import twit_output
+        import twitter.output as twit_output
         cache_file = tmp_path / "cache.json"
         monkeypatch.setattr(twit_output, "DEBUG_CACHE_FILE", cache_file)
         dt = datetime(2024, 1, 1, 12, 0, 0)
@@ -84,7 +84,7 @@ class TestLoadSaveDebugCache:
 
     def test_save_debug_cache_non_serializable_raises(self, tmp_path, monkeypatch):
         """Line 50: TypeError for non-datetime non-serializable objects."""
-        import twit_output
+        import twitter.output as twit_output
         cache_file = tmp_path / "cache.json"
         monkeypatch.setattr(twit_output, "DEBUG_CACHE_FILE", cache_file)
         # set is not JSON serializable
@@ -95,14 +95,14 @@ class TestLoadSaveDebugCache:
 
 class TestPrintToStdout:
     def test_no_bat_uses_print(self, mock_llm, capsys):
-        import twit_output
+        import twitter.output as twit_output
         with patch("shutil.which", return_value=None):
             twit_output.print_to_stdout("# Hello")
         captured = capsys.readouterr()
         assert "Hello" in captured.out
 
     def test_with_bat_success(self, mock_llm):
-        import twit_output
+        import twitter.output as twit_output
         with patch("shutil.which", return_value="/usr/bin/bat"), \
              patch("subprocess.run") as mock_run:
             twit_output.print_to_stdout("# Hello")
@@ -110,7 +110,7 @@ class TestPrintToStdout:
         assert mock_run.call_args.kwargs["input"] == "# Hello"
 
     def test_with_bat_failure_falls_back_to_print(self, mock_llm, capsys):
-        import twit_output
+        import twitter.output as twit_output
         with patch("shutil.which", return_value="/usr/bin/bat"), \
              patch("subprocess.run", side_effect=Exception("bat failed")):
             twit_output.print_to_stdout("# Hello")
@@ -121,7 +121,7 @@ class TestPrintToStdout:
 class TestWriteMarkdown:
     def test_basic(self, tmp_path):
         from datetime import datetime, timezone
-        import twit_output
+        import twitter.output as twit_output
         tweets = [
             {"screen_name": "alice", "text": "Hello"},
             {"screen_name": "bob", "text": "World"},
@@ -138,7 +138,7 @@ class TestWriteMarkdown:
 
     def test_unique_authors(self, tmp_path):
         from datetime import datetime, timezone
-        import twit_output
+        import twitter.output as twit_output
         tweets = [
             {"screen_name": "alice", "text": "1"},
             {"screen_name": "alice", "text": "2"},
@@ -154,7 +154,7 @@ class TestWriteMarkdown:
 
 class TestCleanFolder:
     def test_folder_not_exists(self, tmp_path, monkeypatch):
-        import twit_output
+        import twitter.output as twit_output
         from io import StringIO
         fake_dir = tmp_path / "nonexistent"
         # twit_output does `import sys` and calls sys.exit(0)
@@ -169,7 +169,7 @@ class TestCleanFolder:
         assert "does not exist" in str(mock_print.call_args)
 
     def test_folder_exists_with_files(self, tmp_path, monkeypatch):
-        import twit_output
+        import twitter.output as twit_output
         out_dir = tmp_path / "summaries"
         out_dir.mkdir()
         (out_dir / "old1.md").write_text("old1")
@@ -185,7 +185,7 @@ class TestCleanFolder:
         mock_sys.exit.assert_called_once_with(0)
 
     def test_delete_failure_warning(self, tmp_path, monkeypatch):
-        import twit_output
+        import twitter.output as twit_output
         out_dir = tmp_path / "summaries"
         out_dir.mkdir()
         md = out_dir / "locked.md"

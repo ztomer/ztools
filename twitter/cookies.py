@@ -17,6 +17,8 @@ try:
     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 except ImportError:
     Cipher = algorithms = modes = None
+    import warnings
+    warnings.warn("cryptography module not installed — Chrome cookie decryption will fail")
 
 CHROME_COOKIES_DB = (
     Path.home()
@@ -63,16 +65,24 @@ def get_chrome_cookies(
         print(f"{WARN} Chrome Cookies DB not found at {CHROME_COOKIES_DB}")
         sys.exit(1)
 
-    tmp_db = Path(tempfile.mktemp(suffix=".db"))
+    tf = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tmp_db = Path(tf.name)
+    tf.close()
     shutil.copy2(CHROME_COOKIES_DB, tmp_db)
 
     try:
-        key = _get_chrome_keychain_key()
-        domain_clauses = " OR ".join(f"host_key LIKE '%{d}'" for d in domains)
+        try:
+            key = _get_chrome_keychain_key()
+        except subprocess.CalledProcessError:
+            print(f"{WARN} Failed to read Chrome keychain key — cookies cannot be decrypted", file=sys.stderr)
+            return []
+        placeholders = " OR ".join(f"host_key LIKE ?" for _ in domains)
+        params = [f"%{d}" for d in domains]
         conn = sqlite3.connect(f"file:{tmp_db}?mode=ro", uri=True)
         rows = conn.execute(
             f"SELECT name, encrypted_value, value, path, host_key, expires_utc, is_secure "
-            f"FROM cookies WHERE {domain_clauses}"
+            f"FROM cookies WHERE {placeholders}",
+            params,
         ).fetchall()
         conn.close()
     finally:

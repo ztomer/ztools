@@ -5,13 +5,13 @@ from unittest.mock import patch, MagicMock
 
 class TestQueryModel:
     def test_query_model_success(self, mock_llm):
-        import benchmark_quality as bq
+        from eval import benchmark_quality as bq
         with patch.object(bq, "llm_call", return_value={"content": "result.txt"}):
             result = bq.query_model("model-x", "system prompt", "input", "filename")
         assert result == "result.txt"
 
     def test_query_model_exception(self, mock_llm):
-        import benchmark_quality as bq
+        from eval import benchmark_quality as bq
         with patch.object(bq, "llm_call", side_effect=Exception("API error")):
             result = bq.query_model("model-x", "system", "input", "filename")
         assert result is None
@@ -20,7 +20,7 @@ class TestQueryModel:
 class TestRunBenchmark:
     def test_run_benchmark_with_models(self, mock_llm, capsys):
         """run_benchmark calls query_model for each model x task x case combo."""
-        import benchmark_quality as bq
+        from eval import benchmark_quality as bq
         with patch.object(bq, "get_model_prompt", return_value="test prompt"), \
              patch.object(bq, "query_model", return_value="login_error_invalid.png") as mock_q, \
              patch.object(bq, "print_header") as mock_header, \
@@ -45,7 +45,7 @@ class TestRunBenchmark:
 
     def test_run_benchmark_default_models(self, mock_llm, capsys):
         """run_benchmark() with no args uses the default model list."""
-        import benchmark_quality as bq
+        from eval import benchmark_quality as bq
         with patch.object(bq, "get_model_prompt", return_value=None), \
              patch.object(bq, "print_header") as mock_header, \
              patch.object(bq, "print_model_header"), \
@@ -65,7 +65,7 @@ class TestRunBenchmark:
 
     def test_run_benchmark_no_prompt_skips_task(self, mock_llm, capsys):
         """When get_model_prompt returns None, that task is skipped."""
-        import benchmark_quality as bq
+        from eval import benchmark_quality as bq
         with patch.object(bq, "get_model_prompt", return_value=None), \
              patch.object(bq, "query_model") as mock_q, \
              patch.object(bq, "print_header"), \
@@ -78,7 +78,7 @@ class TestRunBenchmark:
 
     def test_run_benchmark_none_output_skips_case(self, mock_llm, capsys):
         """When query_model returns None, the case is skipped (no scoring)."""
-        import benchmark_quality as bq
+        from eval import benchmark_quality as bq
         with patch.object(bq, "get_model_prompt", return_value="prompt"), \
              patch.object(bq, "query_model", return_value=None), \
              patch.object(bq, "print_header"), \
@@ -92,7 +92,7 @@ class TestRunBenchmark:
 
     def test_run_benchmark_quiet_mode(self, mock_llm, capsys):
         """verbose=False skips per-case printing."""
-        import benchmark_quality as bq
+        from eval import benchmark_quality as bq
         with patch.object(bq, "get_model_prompt", return_value="prompt"), \
              patch.object(bq, "query_model", return_value="login_error.png"), \
              patch.object(bq, "print_header"), \
@@ -112,10 +112,10 @@ class TestRunBenchmark:
         actual scoring code. Returns good outputs for each case and verifies
         the aggregated summary numbers.
         """
-        import benchmark_quality as bq
+        from eval import benchmark_quality as bq
         # Build a query_model that returns a perfect output for each filename case
         # by referencing the real FILENAME_CASES
-        from benchmark_quality import FILENAME_CASES, SUMMARIZE_CASES, FILE_SUMMARY_CASES
+        from eval.benchmark_quality import FILENAME_CASES, SUMMARIZE_CASES, FILE_SUMMARY_CASES
         from lib.config import Task
         # Perfect filename outputs: each contains all expected keywords, lowercase,
         # no spaces, no invalid chars, < 60 chars
@@ -182,14 +182,14 @@ class TestMainBlock:
 
     @staticmethod
     def _get_main_block_source():
-        """Read and return the __main__ block body source from benchmark_quality.py.
+        """Read and return the __main__ block body source from eval/benchmark_quality.py.
 
         Returns the body with common leading whitespace removed so it can be
         exec'd at module level.
         """
         import re
         import textwrap
-        with open("benchmark_quality.py") as f:
+        with open("eval/benchmark_quality.py") as f:
             source = f.read()
         # Match: if __name__ == "__main__":\n    <body lines>
         match = re.search(
@@ -204,20 +204,20 @@ class TestMainBlock:
         """Exec the actual __main__ block with mocked run_benchmark."""
         import sys
         from unittest.mock import MagicMock
-        import benchmark_quality
+        from eval import benchmark_quality as bq
 
         monkeypatch.setattr(sys, "argv", argv)
         mock_run = MagicMock()
-        saved = benchmark_quality.run_benchmark
-        benchmark_quality.run_benchmark = mock_run
+        saved = bq.run_benchmark
+        bq.run_benchmark = mock_run
         try:
             main_source = self._get_main_block_source()
             # Exec the actual __main__ block, using benchmark_quality's globals
             # so that run_benchmark (which we just replaced) is visible
             code = compile(main_source, "<benchmark_quality __main__>", "exec")
-            exec(code, benchmark_quality.__dict__)
+            exec(code, bq.__dict__)
         finally:
-            benchmark_quality.run_benchmark = saved
+            bq.run_benchmark = saved
         return mock_run
 
     def test_main_block_default(self, monkeypatch):

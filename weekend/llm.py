@@ -2,7 +2,7 @@ import json
 import re
 import time
 
-from weekend_config import OSAURUS_BASE_URL, ensure_server
+from weekend.config import OSAURUS_BASE_URL, ensure_server
 
 from lib.osaurus_lib import (
     get_best_model,

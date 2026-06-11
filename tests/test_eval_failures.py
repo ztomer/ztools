@@ -1,6 +1,6 @@
 import pytest
 
-from eval_failures import (_classify_failure, _describe_content_failure,
+from eval.failures import (_classify_failure, _describe_content_failure,
                            FAIL_INFRA, FAIL_TIMEOUT, FAIL_PARSE, FAIL_FORMAT,
                            FAIL_CONTENT, FAIL_NONE)
 

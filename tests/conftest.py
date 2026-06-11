@@ -39,7 +39,7 @@ def mock_llm():
 
     Usage:
         def test_something(mock_llm):
-            import eval_run as er
+            import eval.run as er
             from unittest.mock import patch
             with patch.object(er, "call", mock_llm.call):
                 result = er.run_eval(...)
@@ -52,7 +52,7 @@ def mock_llm():
 
 @pytest.fixture
 def mock_llm_osaurus():
-    """Same as mock_llm but only patches osaurus_lib."""
+    """Same as mock_llm but only patches lib.osaurus_lib."""
     mock = MockLLM()
     mock.patch_osaurus()
     yield mock

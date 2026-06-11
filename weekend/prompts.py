@@ -1,4 +1,4 @@
-from weekend_config import EXCLUDE_PLACES, CITY, REGION, AGE_RANGE, DATES_STR
+from weekend.config import EXCLUDE_PLACES, CITY, REGION, AGE_RANGE, DATES_STR
 from lib.config import get_model_prompt, Task
 from lib.tui import debug_print
 

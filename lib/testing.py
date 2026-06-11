@@ -56,7 +56,7 @@ class MockLLM:
         mock = MockLLM()
         mock.set_response("json", {"content": "...", "parsed": [...]})
         mock.patch_all()
-        from eval_run import run_eval
+        from eval.run import run_eval
         run_eval("mock-model", tasks=["json"])
         mock.unpatch()
     """

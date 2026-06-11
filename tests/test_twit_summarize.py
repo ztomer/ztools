@@ -6,13 +6,13 @@ from unittest.mock import patch, MagicMock
 
 class TestCheckSummaryQuality:
     def test_empty_summary(self, mock_llm):
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         warnings, critical = twit_summarize._check_summary_quality("")
         assert "empty" in warnings[0]
         assert critical is True
 
     def test_good_summary(self, mock_llm):
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         summary = """## Topic 1
 - fact 1 about this topic
 - fact 2 about this topic
@@ -34,13 +34,13 @@ class TestCheckSummaryQuality:
         assert warnings == []
 
     def test_no_headers(self, mock_llm):
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         summary = "Just some text without structure"
         warnings, critical = twit_summarize._check_summary_quality(summary)
         assert any("headers" in w for w in warnings)
 
     def test_few_bullets(self, mock_llm):
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         summary = """## Topic
 - only one bullet
 """
@@ -48,13 +48,13 @@ class TestCheckSummaryQuality:
         assert any("bullet" in w for w in warnings)
 
     def test_very_short(self, mock_llm):
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         summary = "## Short\n- one"
         warnings, critical = twit_summarize._check_summary_quality(summary)
         assert any("short" in w for w in warnings)
 
     def test_critical_both_missing(self, mock_llm):
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         summary = "Just text with no structure and short"
         warnings, critical = twit_summarize._check_summary_quality(summary)
         assert critical is True
@@ -62,7 +62,7 @@ class TestCheckSummaryQuality:
 
 class TestBuildPrompt:
     def test_basic(self, mock_llm):
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         tweets = [
             {"screen_name": "user1", "text": "Hello world", "created_at": datetime(2024, 1, 1, 12, 0)},
             {"screen_name": "user2", "text": "Another tweet", "created_at": datetime(2024, 1, 1, 13, 0)},
@@ -74,14 +74,14 @@ class TestBuildPrompt:
         assert "Hello world" in prompt
 
     def test_prompt_without_placeholder(self, mock_llm):
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         tweets = [{"screen_name": "u", "text": "t", "created_at": datetime(2024, 1, 1)}]
         with patch.object(twit_summarize, "get_model_prompt", return_value="Just summarize"):
             prompt, n = twit_summarize._build_prompt(tweets, max_chars=10000)
         assert prompt == "Just summarize"
 
     def test_no_prompt_falls_back(self, mock_llm):
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         tweets = [{"screen_name": "u", "text": "t", "created_at": datetime(2024, 1, 1)}]
         with patch.object(twit_summarize, "get_model_prompt", return_value=None):
             prompt, n = twit_summarize._build_prompt(tweets, max_chars=10000)
@@ -89,7 +89,7 @@ class TestBuildPrompt:
         assert "{}" not in prompt  # placeholder is filled
 
     def test_respects_budget(self, mock_llm):
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         tweets = [
             {"screen_name": "u", "text": "x" * 200, "created_at": datetime(2024, 1, 1)},
             {"screen_name": "u", "text": "x" * 200, "created_at": datetime(2024, 1, 1)},
@@ -100,13 +100,6 @@ class TestBuildPrompt:
         assert n == 0
         assert prompt == ""
 
-    def test_for_mlx_wider_width(self, mock_llm):
-        import twit_summarize
-        tweets = [{"screen_name": "u", "text": "x", "created_at": datetime(2024, 1, 1)}]
-        with patch.object(twit_summarize, "get_model_prompt", return_value="{}"):
-            prompt, n = twit_summarize._build_prompt(tweets, max_chars=10000, for_mlx=True)
-        assert n == 1
-
 
 class TestSummarizeWithLlm:
     def _make_tweets(self):
@@ -115,7 +108,7 @@ class TestSummarizeWithLlm:
         ]
 
     def test_success_first_model(self, mock_llm):
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         with patch.object(twit_summarize, "get_available_models", return_value=["m1"]), \
              patch.object(twit_summarize, "call_llm_api", return_value={"content": "## Topic\n- fact 1\n- fact 2\n- fact 3"}), \
              patch.object(twit_summarize, "extract_thinking", return_value=(None, "## Topic\n- fact 1\n- fact 2\n- fact 3")), \
@@ -124,7 +117,7 @@ class TestSummarizeWithLlm:
         assert "Topic" in result
 
     def test_success_with_thinking(self, mock_llm):
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         with patch.object(twit_summarize, "get_available_models", return_value=["m1"]), \
              patch.object(twit_summarize, "call_llm_api", return_value={"content": "<thinking>x</thinking>## Topic\n- a\n- b\n- c"}), \
              patch.object(twit_summarize, "extract_thinking", return_value=("<thinking>x</thinking>", "## Topic\n- a\n- b\n- c")), \
@@ -134,7 +127,7 @@ class TestSummarizeWithLlm:
 
     def test_thinking_critical_skips(self, mock_llm):
         """When thinking is present but summary is critical, skip to next model."""
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         with patch.object(twit_summarize, "get_available_models", return_value=["m1", "qwen3.6-35b-a3b-mxfp4"]), \
              patch.object(twit_summarize, "call_llm_api", side_effect=[
                  {"content": "<thinking>x</thinking>bad"},
@@ -150,7 +143,7 @@ class TestSummarizeWithLlm:
 
     def test_no_content_error(self, mock_llm):
         """Result has 'error' key — falls through to next model."""
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         with patch.object(twit_summarize, "get_available_models", return_value=["m1", "qwen3.6-35b-a3b-mxfp4"]), \
              patch.object(twit_summarize, "call_llm_api", side_effect=[
                  {"error": "model not found"},
@@ -163,7 +156,7 @@ class TestSummarizeWithLlm:
 
     def test_exception_in_call(self, mock_llm):
         """Exception during call_llm_api is caught, falls through to next model."""
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         with patch.object(twit_summarize, "get_available_models", return_value=["m1", "qwen3.6-35b-a3b-mxfp4"]), \
              patch.object(twit_summarize, "call_llm_api", side_effect=[
                  Exception("API error"),
@@ -176,7 +169,7 @@ class TestSummarizeWithLlm:
 
     def test_target_model_not_in_models(self, mock_llm):
         """When target model not in available models, select_best_model picks one."""
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         with patch.object(twit_summarize, "get_available_models", return_value=["m2"]), \
              patch.object(twit_summarize, "get_best_model", return_value="m1"), \
              patch.object(twit_summarize, "select_best_model", return_value="m2"), \
@@ -186,61 +179,17 @@ class TestSummarizeWithLlm:
             result = twit_summarize.summarize_with_llm(self._make_tweets(), "http://localhost:1337", "m1")
         assert "Topic" in result
 
-    def test_fallback_to_mlx(self, mock_llm):
-        """When all server models fail, fall back to MLX."""
-        import twit_summarize
-        mlx_model = MagicMock()
-        mlx_model.name = "mlx-model"
+    def test_all_models_fail(self, mock_llm):
+        """When all server models fail, return error string."""
+        import twitter.summarize as twit_summarize
         with patch.object(twit_summarize, "get_available_models", return_value=["m1"]), \
-             patch.object(twit_summarize, "call_llm_api", return_value={"error": "fail"}), \
-             patch.object(twit_summarize, "find_mlx_model", return_value=None), \
-             patch.object(twit_summarize, "find_best_mlx_model", return_value=mlx_model), \
-             patch.object(twit_summarize, "get_mlx_context_length", return_value=8192), \
-             patch.object(twit_summarize, "call_mlx", return_value="## MLX Topic\n- a\n- b\n- c"), \
-             patch.object(twit_summarize, "process_mlx_content", side_effect=lambda x: x):
-            result = twit_summarize.summarize_with_llm(self._make_tweets(), "http://localhost:1337", "m1")
-        assert "MLX" in result
-
-    def test_mlx_unusable_critical(self, mock_llm):
-        """MLX returns content that fails quality check."""
-        import twit_summarize
-        mlx_model = MagicMock()
-        mlx_model.name = "mlx-model"
-        with patch.object(twit_summarize, "get_available_models", return_value=["m1"]), \
-             patch.object(twit_summarize, "call_llm_api", return_value={"error": "fail"}), \
-             patch.object(twit_summarize, "find_mlx_model", return_value=mlx_model), \
-             patch.object(twit_summarize, "get_mlx_context_length", return_value=8192), \
-             patch.object(twit_summarize, "call_mlx", return_value="bad"), \
-             patch.object(twit_summarize, "process_mlx_content", side_effect=lambda x: x):
-            result = twit_summarize.summarize_with_llm(self._make_tweets(), "http://localhost:1337", "m1")
-        assert "LLM error" in result
-
-    def test_mlx_returns_error_string(self, mock_llm):
-        """MLX returns '[LLM error...' — fail."""
-        import twit_summarize
-        mlx_model = MagicMock()
-        mlx_model.name = "mlx-model"
-        with patch.object(twit_summarize, "get_available_models", return_value=["m1"]), \
-             patch.object(twit_summarize, "call_llm_api", return_value={"error": "fail"}), \
-             patch.object(twit_summarize, "find_mlx_model", return_value=mlx_model), \
-             patch.object(twit_summarize, "get_mlx_context_length", return_value=8192), \
-             patch.object(twit_summarize, "call_mlx", return_value="[LLM error: oom]"):
-            result = twit_summarize.summarize_with_llm(self._make_tweets(), "http://localhost:1337", "m1")
-        assert "LLM error" in result
-
-    def test_no_mlx_available(self, mock_llm):
-        """When MLX not available either, return error."""
-        import twit_summarize
-        with patch.object(twit_summarize, "get_available_models", return_value=["m1"]), \
-             patch.object(twit_summarize, "call_llm_api", return_value={"error": "fail"}), \
-             patch.object(twit_summarize, "find_mlx_model", return_value=None), \
-             patch.object(twit_summarize, "find_best_mlx_model", return_value=None):
+             patch.object(twit_summarize, "call_llm_api", return_value={"error": "fail"}):
             result = twit_summarize.summarize_with_llm(self._make_tweets(), "http://localhost:1337", "m1")
         assert "LLM error" in result
 
     def test_target_model_with_known_critical_skips(self, mock_llm):
         """When target model returns critical summary, try next model."""
-        import twit_summarize
+        import twitter.summarize as twit_summarize
         with patch.object(twit_summarize, "get_available_models", return_value=["m1", "qwen3.6-35b-a3b-mxfp4"]), \
              patch.object(twit_summarize, "call_llm_api", side_effect=[
                  {"content": "no structure here at all"},

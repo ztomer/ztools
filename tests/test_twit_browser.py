@@ -2,7 +2,7 @@ import pytest
 from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
 
-from twit_browser import parse_tweets_from_response
+from twitter.browser import parse_tweets_from_response
 
 
 def _make_tweet_data(screen_name, text, date_str, typename="TimelineTweet"):
@@ -193,18 +193,18 @@ class TestParseTweetsFromResponse:
         monkeypatch.setitem(sys.modules, "playwright.sync_api", None)
 
         # Force re-import
-        if "twit_browser" in sys.modules:
-            del sys.modules["twit_browser"]
-        import twit_browser
+        if "twitter.browser" in sys.modules:
+            del sys.modules["twitter.browser"]
+        import twitter.browser as twit_browser
 
         assert twit_browser.sync_playwright is None
         assert twit_browser.PWTimeout is None
 
         # Cleanup
-        del sys.modules["twit_browser"]
+        del sys.modules["twitter.browser"]
         # Re-import normally
-        import twit_browser as tb
-        from twit_browser import parse_tweets_from_response
+        import twitter.browser as tb
+        from twitter.browser import parse_tweets_from_response
         assert parse_tweets_from_response({}) == []
 
 
@@ -213,9 +213,9 @@ class TestCollectTweetsViaBrowser:
 
     def test_no_cookies_exits(self, monkeypatch):
         """When no cookies found, sys.exit(1) is called."""
-        from twit_browser import collect_tweets_via_browser
-        with patch("twit_browser.get_chrome_cookies", return_value=[]), \
-             patch("twit_browser.sys") as mock_sys:
+        from twitter.browser import collect_tweets_via_browser
+        with patch("twitter.browser.get_chrome_cookies", return_value=[]), \
+             patch("twitter.browser.sys") as mock_sys:
             mock_sys.exit.side_effect = SystemExit(1)
             with pytest.raises(SystemExit):
                 collect_tweets_via_browser(since_time=datetime.now(timezone.utc), debug=False)
@@ -223,7 +223,7 @@ class TestCollectTweetsViaBrowser:
 
     def test_login_page_detected_exits(self, monkeypatch):
         """When page title indicates login, exit."""
-        from twit_browser import collect_tweets_via_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -242,10 +242,10 @@ class TestCollectTweetsViaBrowser:
             captured_handlers.append(handler)
         mock_page.on.side_effect = on_response
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.sys") as mock_sys:
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.sys") as mock_sys:
             mock_sys.exit.side_effect = SystemExit(1)
             with pytest.raises(SystemExit):
                 collect_tweets_via_browser(since_time=since, debug=False)
@@ -253,7 +253,7 @@ class TestCollectTweetsViaBrowser:
 
     def test_collects_tweets(self, monkeypatch):
         """Happy path: tweets are actually returned in the result list."""
-        from twit_browser import collect_tweets_via_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -276,10 +276,10 @@ class TestCollectTweetsViaBrowser:
             handler(mock_response)
         mock_page.on.side_effect = on_response
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 0):
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.MAX_SCROLLS", 0):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
 
         # Verify the tweet was actually collected and returned
@@ -290,7 +290,7 @@ class TestCollectTweetsViaBrowser:
 
     def test_following_tab_click_succeeds(self, monkeypatch):
         """When following tab click works, no exception."""
-        from twit_browser import collect_tweets_via_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -306,16 +306,16 @@ class TestCollectTweetsViaBrowser:
         # Following tab exists and clicks
         mock_page.locator.return_value.first.click.return_value = None
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 0):
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.MAX_SCROLLS", 0):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
         assert tweets == []
 
     def test_following_tab_click_fails(self, monkeypatch):
         """When following tab click fails, swallowed."""
-        from twit_browser import collect_tweets_via_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -331,17 +331,17 @@ class TestCollectTweetsViaBrowser:
         # Click raises exception
         mock_page.locator.return_value.first.click.side_effect = Exception("not found")
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 0):
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.MAX_SCROLLS", 0):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
         assert tweets == []
 
     def test_goto_timeout_caught(self, monkeypatch):
         """PWTimeout on page.goto is caught."""
-        import twit_browser
-        from twit_browser import collect_tweets_via_browser
+        import twitter.browser as twit_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -360,16 +360,16 @@ class TestCollectTweetsViaBrowser:
         twit_browser.PWTimeout = FakeTimeout
         mock_page.goto.side_effect = FakeTimeout("timeout")
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 0):
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.MAX_SCROLLS", 0):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
         assert tweets == []
 
     def test_response_handler_url_not_match(self, monkeypatch):
         """Response URL doesn't match HomeTimeline — handler ignores it, oldest_seen stays None."""
-        from twit_browser import collect_tweets_via_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -399,10 +399,10 @@ class TestCollectTweetsViaBrowser:
             return None
         mock_page.evaluate.side_effect = eval_side_effect
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 3):
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.MAX_SCROLLS", 3):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
         # Handler was called, but URL didn't match → oldest_seen stayed None → loop ran
         # all 3 scrolls (didn't break early). No tweets returned.
@@ -411,7 +411,7 @@ class TestCollectTweetsViaBrowser:
 
     def test_response_handler_json_fails(self, monkeypatch):
         """Response.json() fails — handler returns silently, loop continues all scrolls."""
-        from twit_browser import collect_tweets_via_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -439,10 +439,10 @@ class TestCollectTweetsViaBrowser:
             return None
         mock_page.evaluate.side_effect = eval_side_effect
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 3):
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.MAX_SCROLLS", 3):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
         # URL matched, but json() raised → handler returned silently → no oldest_seen
         # → loop ran all 3 scrolls
@@ -451,7 +451,7 @@ class TestCollectTweetsViaBrowser:
 
     def test_loop_breaks_on_oldest_seen(self, monkeypatch):
         """Loop breaks when oldest_seen < since_time."""
-        from twit_browser import collect_tweets_via_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -485,10 +485,10 @@ class TestCollectTweetsViaBrowser:
                 captured_handler[0](fake_response)
         mock_page.evaluate.side_effect = fake_evaluate
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 5):
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.MAX_SCROLLS", 5):
             collect_tweets_via_browser(since_time=since, debug=False)
         # If we got here without looping 5 times, the break worked
         # Broke on first iteration (tweet already seen)
@@ -496,7 +496,7 @@ class TestCollectTweetsViaBrowser:
 
     def test_unique_filtering_exact_dedup(self, monkeypatch):
         """Exact duplicate tweets (same screen_name + first 80 chars) are deduped."""
-        from twit_browser import collect_tweets_via_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -529,17 +529,17 @@ class TestCollectTweetsViaBrowser:
                 captured_handler[0](mock_response)
         mock_page.evaluate.side_effect = fake_evaluate
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 2):
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.MAX_SCROLLS", 2):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
         # First invocation adds, second is deduped
         assert len(tweets) == 1
 
     def test_signin_keyword_detected(self, monkeypatch):
         """'signin' in title also triggers exit."""
-        from twit_browser import collect_tweets_via_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -552,17 +552,17 @@ class TestCollectTweetsViaBrowser:
         mock_context.new_page.return_value = mock_page
         mock_page.title.return_value = "Sign in to X"
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.sys") as mock_sys:
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.sys") as mock_sys:
             mock_sys.exit.side_effect = SystemExit(1)
             with pytest.raises(SystemExit):
                 collect_tweets_via_browser(since_time=since, debug=False)
 
     def test_loop_max_scrolls_reached(self, monkeypatch):
         """Loop completes when MAX_SCROLLS reached."""
-        from twit_browser import collect_tweets_via_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -575,16 +575,16 @@ class TestCollectTweetsViaBrowser:
         mock_context.new_page.return_value = mock_page
         mock_page.title.return_value = "Home / X"
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 3):
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.MAX_SCROLLS", 3):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
         assert tweets == []
 
     def test_response_handler_with_tweets(self, monkeypatch):
         """Handler processes a valid HomeTimeline response with tweets — loop sees oldest_seen."""
-        from twit_browser import collect_tweets_via_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -617,10 +617,10 @@ class TestCollectTweetsViaBrowser:
             return None
         mock_page.evaluate.side_effect = eval_side_effect
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 10):
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.MAX_SCROLLS", 10):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
         # Handler ran, set oldest_seen to 2018 which is < since (2020) → loop broke
         # after first scroll. Only 1 page.evaluate call.
@@ -630,7 +630,7 @@ class TestCollectTweetsViaBrowser:
 
     def test_cookie_add_fails(self, monkeypatch):
         """When add_cookies fails, swallowed."""
-        from twit_browser import collect_tweets_via_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -644,16 +644,16 @@ class TestCollectTweetsViaBrowser:
         mock_page.title.return_value = "Home / X"
         mock_context.add_cookies.side_effect = Exception("bad cookie")
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 0):
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.MAX_SCROLLS", 0):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
         assert tweets == []
 
     def test_basic_collection(self, monkeypatch):
         """A single tweet is returned with all expected fields."""
-        from twit_browser import collect_tweets_via_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -677,10 +677,10 @@ class TestCollectTweetsViaBrowser:
             handler(mock_response)
         mock_page.on.side_effect = on_response
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 0):
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.MAX_SCROLLS", 0):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
         # Sanity: one tweet, sorted by created_at ascending
         assert len(tweets) == 1
@@ -688,7 +688,7 @@ class TestCollectTweetsViaBrowser:
 
     def test_returns_sorted_by_date(self, monkeypatch):
         """Tweets are sorted by created_at ascending."""
-        from twit_browser import collect_tweets_via_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -730,10 +730,10 @@ class TestCollectTweetsViaBrowser:
             handler(mock_response)
         mock_page.on.side_effect = on_response
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 0):
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.MAX_SCROLLS", 0):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
         # 3 tweets returned, sorted by date ascending
         assert len(tweets) == 3
@@ -743,7 +743,7 @@ class TestCollectTweetsViaBrowser:
 
     def test_unique_filtering_rt_dedup(self, monkeypatch):
         """RTs with same content after stripping prefix are deduped."""
-        from twit_browser import collect_tweets_via_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -827,17 +827,17 @@ class TestCollectTweetsViaBrowser:
             handler(mock_response)
         mock_page.on.side_effect = on_response
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 0):
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.MAX_SCROLLS", 0):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
         # First tweet kept, second (RT with same content) deduped
         assert len(tweets) == 1
 
     def test_filtered_by_since_time(self, monkeypatch):
         """Tweets older than since_time are filtered out, recent ones kept."""
-        from twit_browser import collect_tweets_via_browser
+        from twitter.browser import collect_tweets_via_browser
         since = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
         mock_pw = MagicMock()
@@ -874,10 +874,10 @@ class TestCollectTweetsViaBrowser:
             handler(mock_response)
         mock_page.on.side_effect = on_response
 
-        with patch("twit_browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
-             patch("twit_browser.sync_playwright", return_value=mock_pw), \
-             patch("twit_browser.time"), \
-             patch("twit_browser.MAX_SCROLLS", 0):
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.MAX_SCROLLS", 0):
             tweets = collect_tweets_via_browser(since_time=since, debug=False)
         # Only the recent tweet survives
         assert len(tweets) == 1

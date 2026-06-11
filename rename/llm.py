@@ -13,9 +13,9 @@ import requests
 
 from lib.config import get_filename_models, get_model_prompt, Task
 from lib.osaurus_lib import check_llm_availability
-from lib.mlx_lib import find_mlx_model, process_mlx_content, call_mlx
+from lib.mlx_lib import find_mlx_model, find_any_working_mlx_model, process_mlx_content, call_mlx
 from lib.tui import WARN, FAIL
-from img_helpers import _strip_instruction_prefix
+from rename.helpers import _strip_instruction_prefix
 
 RELEVANCE_CHECK_PROMPT = """Is this image content useful/interesting enough to keep and rename?
 Consider: educational content, useful tips, meaningful information, actionable advice.
@@ -146,25 +146,37 @@ def query_llm_for_filename(
 
 
 def query_mlx_for_filename(text: str) -> Optional[str]:
+    tried = []
     for model_name in FILENAME_MODELS:
         model_path = find_mlx_model(model_name, MLX_MODELS_DIR)
-        if not model_path:
+        if not model_path or model_path in tried:
             continue
+        tried.append(model_path)
+        prompt = PROMPT_TEXT_TO_FILENAME.format(text=text)
+        raw = call_mlx(model_path, prompt)
+        if raw:
+            content = process_mlx_content(raw)
+            if content and len(content) >= 2:
+                content = content.strip()
+                content = _strip_instruction_prefix(content)
+                content = re.sub(r"[^\x00-\x7F]", "", content)
+                content = re.sub(r"[-\s]+", "_", content)
+                content = content.strip("_").lower()
+                return content
 
-        try:
-            prompt = PROMPT_TEXT_TO_FILENAME.format(text=text)
-            raw = call_mlx(model_path, prompt)
-            if raw:
-                content = process_mlx_content(raw)
-                if content and len(content) >= 2:
-                    content = content.strip()
-                    content = _strip_instruction_prefix(content)
-                    content = re.sub(r"[^\x00-\x7F]", "", content)
-                    content = re.sub(r"[-\s]+", "_", content)
-                    content = content.strip("_").lower()
-                    return content
-        except Exception:
-            continue
+    fallback = find_any_working_mlx_model()
+    if fallback and fallback not in tried:
+        prompt = PROMPT_TEXT_TO_FILENAME.format(text=text)
+        raw = call_mlx(fallback, prompt)
+        if raw:
+            content = process_mlx_content(raw)
+            if content and len(content) >= 2:
+                content = content.strip()
+                content = _strip_instruction_prefix(content)
+                content = re.sub(r"[^\x00-\x7F]", "", content)
+                content = re.sub(r"[-\s]+", "_", content)
+                content = content.strip("_").lower()
+                return content
 
     return None
 

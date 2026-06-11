@@ -1,8 +1,8 @@
 from rich.console import Console
 from rich.markdown import Markdown
 
-from weekend_llm import fetch_scores_for_items
-from weekend_config import AGE_RANGE
+from weekend.llm import fetch_scores_for_items
+from weekend.config import AGE_RANGE
 from lib.tui import STEP, WARN, debug_print
 
 console = Console(force_terminal=True, force_interactive=True)
