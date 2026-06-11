@@ -11,6 +11,7 @@ from lib.config import get_model_prompt, Task
 from lib.osaurus_lib import (
     call_llm_api, strip_thinking, get_available_models,
     get_best_model, select_best_model, merge_thinking_with_summary, extract_thinking,
+    ensure_server,
 )
 from lib.mlx_lib import (
     find_mlx_model, find_best_mlx_model, get_mlx_context_length,
@@ -98,8 +99,13 @@ def _build_prompt(
 def summarize_with_llm(
     tweets: list[dict], base_url: str, model: str, api_key: str = ""
 ) -> str:
-    models = get_available_models()
     target_model = model if model else get_best_model(Task.SUMMARIZE)
+    models = get_available_models()
+    if not models:
+        print(f"{WARN} Osaurus server not responding — trying to start it...")
+        ensure_server()
+        models = get_available_models()
+
     if models and target_model not in models:
         target_model = select_best_model(models) or target_model
 
@@ -111,7 +117,9 @@ def summarize_with_llm(
     attempted_models = []
 
     for try_model in fallback_models:
-        if try_model in tried or try_model not in models:
+        if try_model in tried:
+            continue
+        if models and try_model not in models:
             tried.add(try_model)
             continue
         tried.add(try_model)

@@ -13,7 +13,7 @@ from lib.osaurus_lib import (
     _extract_json_only,
 )
 from lib.config import Task
-from lib.tui import debug_print
+from lib.tui import debug_print, WARN
 from lib.mlx_lib import (
     find_text_mlx_model,
     call_mlx,
@@ -68,6 +68,8 @@ def get_llm_json(system_prompt, user_prompt, max_retries=5):
                     debug_print(f"[llm] All retries failed, dumping content", flush=True)
                     panic_dump(result["content"])
         else:
+            err = result.get("error", "no content") if isinstance(result, dict) else str(result)
+            print(f"{WARN} Osaurus API error: {err[:100]}")
             debug_print(f"[llm] WARNING: No content in result: {result}", flush=True)
 
         if attempt < max_retries:
