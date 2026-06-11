@@ -1,8 +1,8 @@
 # Remediation Plan
 
-Consolidated plan to address all findings from `docs/EXPERT_REVIEWS.md`.
-Organized in dependency order — later phases assume earlier ones are done.
-No phase exceeds 5 files changed.
+Phases 0–2 completed June 2026. Phases 3–5 pending.
+Consolidated plan from `docs/EXPERT_REVIEWS.md`.
+Organized in dependency order — no phase exceeds 5 files changed.
 
 ---
 

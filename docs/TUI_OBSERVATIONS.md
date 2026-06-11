@@ -1,12 +1,12 @@
 # TUI Observations & Issues
 
-## Cross-Cutting: Foundation Model Usage
+## Cross-Cutting: Foundation Model Default
 
-Twitter, rename-images, and weekend all default to `foundation`. This is a weak model — may not be intentional.
+All tools default to `foundation`.
 
 ---
 
-## Twitter Summarizer
+## Twitter (`twitter/cli.py`)
 
 ### Word Wrap in TUI View
 
@@ -26,7 +26,7 @@ Desired: text after `@name` column aligns, no mid-word breaks:
 
 ---
 
-## Weekend Planner
+## Weekend (`weekend/cli.py`)
 
 ### Output
 
@@ -71,7 +71,7 @@ Daily Forecast: Friday: 27.1°C, Precipitation (4.5mm) Saturday: 19.9°C, Precip
 
 ---
 
-## Image Renamer
+## Rename (`rename/cli.py`)
 
 ### Output
 

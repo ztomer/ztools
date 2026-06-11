@@ -6,13 +6,16 @@
 
 ## Overview
 
-- **1566 tests** across 56 test files. **3 skipped** (real MLX backend, real Osaurus server).
+- **1515 pass, 3 skip** (real MLX backend, real Osaurus server).
 - **96% coverage** total. All modules ≥ 95%, most at 100%.
 - All tests use mocked LLM providers — **no real model calls in CI**.
 
-Run: `python3 -m pytest tests/`
-Run specific: `python3 -m pytest tests/test_twit_browser.py -v`
+Run all: `python3 -m pytest tests/`
+Run single file: `python3 -m pytest tests/test_twit_browser.py -v`
+Run single test: `python3 -m pytest tests/test_file.py::test_name -v`
 Coverage: `python3 -m pytest --cov=. --cov-report=term`
+
+Use `tests/` for a full regression check before commits. Use a specific file during development to iterate faster on one component.
 
 ---
 
@@ -83,7 +86,7 @@ If you `mock` the function under test AND replicate the logic in the test, the t
 def test_main_block(monkeypatch):
     import re
     import textwrap
-    with open("benchmark_quality.py") as f:
+    with open("eval/benchmark_quality.py") as f:
         source = f.read()
     match = re.search(
         r'if __name__ == "__main__":\n((?:    .*\n)+)',
@@ -170,7 +173,7 @@ assert mock_page.evaluate.call_count == 1  # loop broke after 1 scroll
 
 ### Subprocess / AppleScript Calls
 
-`flush_between_models` in `model_eval.py` calls `subprocess.run(["osascript", "-e", 'quit app "osaurus"'])` and `subprocess.run(["open", "-n", "-a", "osaurus"])`. Test by:
+`flush_between_models` in `eval/run.py` calls `subprocess.run(["osascript", "-e", 'quit app "osaurus"'])` and `subprocess.run(["open", "-n", "-a", "osaurus"])`. Test by:
 
 ```python
 with patch("subprocess.run") as mock_subprocess, ...:
@@ -213,7 +216,7 @@ def test_find_mlx_model_top_level(self, mock_llm, fake_mlx_dir, real_mlx_functio
 
 ### 1. `--quiet` was treated as a model name (FIXED)
 
-**File:** `benchmark_quality.py:344-347`
+**File:** `eval/benchmark_quality.py:344-347`
 
 ```python
 # BROKEN
@@ -230,7 +233,7 @@ The original code included `--quiet` in the models list when iterating. Locked i
 
 ### 2. `_parse_transient` alt-keys branch is unreachable dead code (DOCUMENTED)
 
-**File:** `weekend_planner.py:149-157`
+**File:** `weekend/cli.py:149-157`
 
 `alt_items` is filtered using the same keys as `valid_items`, so both are empty simultaneously. Documented by `test_alt_keys_are_dead_code` with a comment explaining the unreachable branch.
 
@@ -281,7 +284,7 @@ Not `[{"name": "x", "location": "y"}]`. Locked in by `test_dict_extraction` whic
 
 ### 7. `test_top_level_exception_caught` requires a non-dict body
 
-**File:** `lib/twitter_summarizer.py`
+**File:** `twitter/summarize.py`
 
 ```python
 data = {"data": "not a dict"}  # string has no .get()

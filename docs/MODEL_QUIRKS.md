@@ -1,18 +1,12 @@
 # Model Quirks & Best Practices
 
-**Updated: May 2025** - Canonical reference for ztools model selection and prompts.
+**Updated: June 2026** — canonical reference for model selection and prompts.
 
 ---
 
 ## TL;DR Cheat Sheet
 
-```bash
-# Kill stale servers
-pkill -f "osaurus" && sleep 2
-
-# Start fresh
-osaurus serve &>/dev/null & sleep 10
-```
+Start server: `osaurus serve &>/dev/null & sleep 10`
 
 ---
 
@@ -20,9 +14,9 @@ osaurus serve &>/dev/null & sleep 10
 
 | Task | Model | Speed | Command |
 |------|-------|-------|---------|
-| weekend (fixed/transient) | qwen3.6-35b-a3b-mxfp4 | ~100s | model_eval.py --task weekend |
-| **image filename** | **nemotron-3-nano-omni-30b** | **7-10s** | image_renamer.py |
-| summarize | qwen3.6-35b-a3b-mxfp4 | ~30s | - |
+| eval weekend | qwen3.6-35b-a3b-mxfp4 | ~100s | `python3 -m eval --task weekend` |
+| rename | laguna-xs.2-mxfp4 | 2.8s | `python3 -m rename` |
+| summarize | qwen3.6-27b-mxfp8-mtp | 14.8s | `python3 -m twitter` |
 
 ---
 
@@ -67,54 +61,9 @@ weekend_fixed: |
 
 ## Config Location
 
-- `conf/config.yaml` - Best models, timeouts, prompts
-- `conf/models/*.yaml` - Per-model settings
-- `lib/config.py` - Load functions
-
----
-
-## Legacy Docs
-
-Archived in `docs/*.ARCHIVE.md`:
-- PROJECT_MEMORY.ARCHIVE.md - Weekend planner history
-- CODE_REVIEW*.ARCHIVE.md - Old refactoring notes  
-- debug-playbook.md - Legacy debug tips
-
-| Model | Speed | Quality | Notes |
-|-------|-------|---------|-------|
-| **nemotron-3-nano-omni-30b-a3b-mxfp4** | 7-10s | **Best** | Fast + accurate summaries |
-| gemma-4-31b-it-jang_4m | 20-35s | Good | Slower, sometimes verbose |
-| foundation | 0.3-0.7s | Generic | Fast but meaningless |
-
-### Example Outputs (weight loss tips):
-- nemotron: `common_weight_loss_errors`
-- gemma: `avoid_weight_loss_mistakes`  
-- foundation: `weightlossmistakes`
-
-### Prompt Evolution:
-1. `Filename: {text} (one word)` → Too short
-2. `Give a short 2-4 word summary of: {text}` → **Winner**
-3. Max 4-6 words, limit to ~35 chars
-
----
-
-## Response Parsing Bug Found
-
-**CRITICAL**: Osaurus server streams tokens. Previous code only read first chunk!
-
-```python
-# BROKEN - only gets first chunk
-content = j.get("message", {}).get("content", "")
-
-# FIXED - accumulate until done=true
-for line in resp.text.split("\n"):
-    j = json.loads(line)
-    content += j.get("message", {}).get("content", "")
-    if j.get("done", False):
-        break
-```
-
----
+- `conf/config.yaml` — models, timeouts, prompts
+- `conf/models/*.yaml` — per-model config
+- `lib/config_core.py` — load functions (shim at `lib/config.py`)
 
 ---
 
@@ -146,13 +95,13 @@ weekend_fixed: |
     - weather: "indoor" or "outdoor"
 ```
 
-Key: `{location}`, `{age_range}`, `{date_range}` are INJECTED at runtime (weekend_planner.py line ~305), NOT {} placeholders.
+Key: `{location}`, `{age_range}`, `{date_range}` are INJECTED at runtime (`weekend/cli.py`), NOT {} placeholders.
 
 ---
 
 ## Field Normalization (Critical)
 
-Different models output different field names. **All normalization must be in `normalize_llm_items()` in weekend_planner.py** - do not scatter it across the code.
+Different models output different field names. **All normalization must be in `normalize_llm_items()` in `weekend/cli.py`** - do not scatter it across the code.
 
 Known aliases:
 - **name**: `name`, `activity`, `activity_name`, `title`, `event`, `event_name`, `description`
@@ -173,19 +122,6 @@ Known aliases:
 
 ---
 
-## Best Models by Task (2026 — Quality Suite v2)
-
-| Task | Best Model | Score | Runner-up | Score | Notes |
-|------|-----------|-------|-----------|-------|-------|
-| **filename** | qwen3.6-27b-mxfp8-mtp | **99%** | laguna-xs.2 | 98% | foundation 97% at 0.6s |
-| **summarize** | qwen3.6-27b-mxfp4/8-mtp | **100%** | qwopus | 98.5% | laguna 92%, foundation 88% |
-| **file_summary** | ALL models tied | **91.6%** | — | — | scorer cap: extra detail penalized |
-| **overall** | laguna-xs.2-mxfp4 | **94%** | qwen27b-mtp | 97% | laguna 2.8s, no failures |
-
-**Speed-quality tradeoff**: foundation (1.5s avg, 92% overall) vs laguna (2.8s avg, 94% overall) vs qwen27b-mtp (14.8s avg, 97% overall)
-
----
-
 ## Pre-Generated Baseline Data (2026)
 
 **Approach**: Task is "extract from provided JSON context" not "generate events".
@@ -201,23 +137,13 @@ Known aliases:
 
 ---
 
-## Known Issues (2026)
+## Known Issues (Additional)
 
-### lfm2-24b (AVOID - Crashes Server)
-- Times out after 1800s (30 min)
-- Crashes osaurus server (OOM)
-- All tasks fail with INFRA after crash
-- **DO NOT USE** - Remove from eval
-
-### qwen filename (FIXED)
-- Empty response with complex prompt
-- Fix: Use simpler prompt without "Output JSON now"
-
-### gemma weekend tasks (WONT FIX)
-- Gemma refuses to generate fictional event data
-- Outputs clarification questions instead
-- Works on other tasks (filename, summarize)
-- Use foundation/qwen for weekend tasks
+| Model | Issue | Status |
+|-------|-------|--------|
+| lfm2-24b | Crashes server (OOM), 30m timeout | AVOID |
+| gemma weekend | Refuses fictional event data; outputs weather or questions | WONTFIX |
+| qwen filename | Empty response with complex prompts | FIXED (simpler prompt) |
 
 ---
 
@@ -258,19 +184,6 @@ filename: |
 summarize: |
   Output the summary in bullet points. Use ## headers.
 ```
-
----
-
-## Known Issues
-
-### Gemma Weather Bug
-All gemma models output weather data instead of events for transient tasks:
-- gemma-4-26b-a4b-it-mxfp4: Returns `{"date": "April 25", "temperature": "12°C"}`
-- **Root cause**: Model doesn't follow schema - generates conversational text
-
-### Qwen Filename Empty
-qwen3.6 models return empty for filename task:
-- **Fix**: Added "Output JSON now" trigger to prompt
 
 ---
 
@@ -330,75 +243,41 @@ qwen3.6 models return empty for filename task:
 ## Eval Commands
 
 ```bash
-# Quick single model
-python3 -m eval_tasks --model foundation --quick
+# Quick single model eval
+python3 -m eval --model foundation --quick --task filename
 
 # Full eval
-python3 model_eval.py
+python3 -m eval
 
-# Test imports
-python3 -c "from model_eval import run_eval, TASKS; print('OK')"
+# Quick alias via shim
+python3 model_eval.py --model foundation --task filename --quick
+
+# Quality benchmark
+python3 -m eval.benchmark_quality
 ```
 
 ---
 
 ## Key Files
 
-- `model_eval.py` - Main eval runner
-- `eval_tasks/` - Task definitions
-- `lib/validators_lib.py` - Core validators  
+- `eval/cli.py` - Eval runner CLI
+- `eval/tasks_core.py` - Task definitions
+- `eval/run.py` - Eval loop
+- `lib/quality_models.py` / `lib/quality_scorers.py` - Quality evaluation
+- `lib/validators/` - Validator implementations
 - `conf/models/*.yaml` - Model prompts
 
 ---
 
-## IMAGE RENAMER DOCS (May 2025)
+## Filename / Rename Task
 
-### Config-Driven Approach
-
-In `conf/config.yaml`:
+Config-driven via `conf/config.yaml`:
 ```yaml
-filename_models:
-  - nemotron-3-nano-omni-30b-a3b-mxfp4  # Fast + Accurate
-  - gemma-4-31b-it-jang_4m  # Slower but good
-  - foundation  # Fallback
-
+filename_models: [laguna-xs.2-mxfp4, foundation]
 prompts:
   filename: "Output ONLY the filename string (no JSON, no code blocks).
   Use lowercase, underscores for spaces, no special characters.
-  Keep it under 50 characters.
-  
-  TEXT: {text}"
+  Keep it under 50 characters. TEXT: {text}"
 ```
 
-Load via lib/config.py (use model-specific prompt):
-```python
-from lib.config import get_model_prompt, Task, get_filename_models
-
-models = get_filename_models()
-PROMPT_TEXT_TO_FILENAME = get_model_prompt(models[0], Task.FILENAME)
-```
-
-### MLX Direct - Known Issues
-
-- OsaurusAI models use custom quantization (MXFP4/MXFP8/JANGTQ) and architectures — only loadable via `osaurus serve`
-- Standard `mlx-lm` 0.31.3 supports most architectures (`qwen3_5`, `gemma4`, `minimax_m2`) but fails on OsaurusAI weight formats (extra params like k_proj.biases/scales)
-- Only Jackrong's `Qwopus3.6-27B-v2-MLX-4bit` uses standard weights and is fully loadable
-- Model search: `find_best_mlx_model` now skips incompatible models; `find_any_working_mlx_model()` scans all dirs
-- **Qwen**: Can't disable thinking tokens
-
-### Refactoring Summary (812 → 676 lines)
-
-Removed:
-- Duplicate `query_mlx_for_filename()` function
-- Dead/commented code blocks (~20 lines)  
-- Redundant wrapper functions (~50 lines)
-- Hardcoded prompts → moved to config
-
-### Test Results (nemotron)
-
-```
-10_massive_weight_loss_mistakes_to_avoid... -> common_weight_loss_mistakes
-10_powerful_sentences_by_scott_adams... -> resilience_systems_growth
-scott_adams -> witty_corporate_satire
-business lessons -> entrepreneurial_wisdom
-```
+MLX backend: OsaurusAI custom quant (MXFP4/JANGTQ) only loadable via `osaurus serve`. Standard mlx-lm supports qwen3_5, gemma4 architectures. Model discovery (`find_any_working_mlx_model`) scans all dirs and filters incompatible architectures.

@@ -7,7 +7,7 @@
 **Verdict:** B+. Symbols right, ornamentation wrong.
 
 ### Fixes
-- Kill Rich Progress in weekend_planner
+- Kill Rich Progress in weekend package
 - Kill `===` decorative borders
 - Kill the `N/A` column — wasted pixels
 - Weather: readable sentence, not raw data dump
@@ -44,7 +44,7 @@
 
 ## Uncle Bob (Clean Architecture)
 
-> "You're violating SRP all over the place. weekend_planner.py::main() fetches data, calls LLMs, and formats output. weekend_output.py exists but the main function still has console.print calls. Output formatting is a detail; your domain logic shouldn't know about console or Progress."
+> "You're violating SRP all over the place. weekend/cli.py::main() fetches data, calls LLMs, and formats output. weekend/output.py exists but the main function still has console.print calls. Output formatting is a detail — domain logic shouldn't know about console or Progress."
 
 **Verdict:** D. Business logic knows about terminal rendering.
 
@@ -217,27 +217,27 @@
 
 ---
 
-## Action Items (Ranked by Impact)
+## Findings (Ranked by Impact)
 
-| # | Priority | Item | Area | Expert |
-|---|----------|------|------|--------|
-| 1 | **CRITICAL** | Fix string mutation during iteration in `remove_thinking_blocks` | lib/content_processing | Uncle Bob |
-| 2 | **CRITICAL** | Fix zero-weight reconstruction in `quality_entry.py` — `--regression-only` is broken | lib/quality | Uncle Bob |
-| 3 | **CRITICAL** | Kill dead code in `eval/validate.py:129-229` and `validators/helpers.py:94-102` | eval, lib | Uncle Bob |
-| 4 | **CRITICAL** | Replace SQL string interpolation with parameterized query in `twitter/cookies.py` | twitter | Uncle Bob |
-| 5 | **CRITICAL** | Replace `pkill -f` with PID-file-based process management | lib/osaurus, rename | Torvalds |
-| 6 | **HIGH** | Warn when cryptography not installed / cookies returned as garbage | twitter | Uncle Bob |
-| 7 | **HIGH** | Clean up `/tmp/mlx_debug/` files or add opt-out / TTL | lib/mlx | Torvalds |
-| 8 | **HIGH** | Replace `tempfile.mktemp` with `NamedTemporaryFile(delete=False)` | twitter | Uncle Bob |
-| 9 | **HIGH** | Add error handling for keychain read failure in cookie extraction | twitter | Uncle Bob |
-| 10 | **HIGH** | Remove bare `except:` clauses (catch KeyboardInterrupt) in 6 locations | eval_tasks, lib | Both |
-| 11 | **MEDIUM** | Move config loading out of module scope into init/lazy functions | weekend, lib | Uncle Bob |
-| 12 | **MEDIUM** | Make monitor_memory_loop thread-safe or move to main-loop polling | eval/cli | Torvalds |
-| 13 | **MEDIUM** | Cache `content.index()` results; fix double-eval in generator | lib/content_processing | Uncle Bob |
-| 14 | **MEDIUM** | Use `requests.Session` as context manager everywhere | All apps | Uncle Bob |
-| 15 | **MEDIUM** | Add integration tests for LLM error/edge cases | tests | Torvalds |
-| 16 | **LOW** | Fix shared mutable references in `TASKS["json"] = TASKS["weekend_transient"]` | eval/tasks | Uncle Bob |
-| 17 | **LOW** | Remove `eval/cli.py:295` circular self-import | eval/cli | Torvalds |
-| 18 | **LOW** | Fix `"name"` key duplication in `normalize_keys` | lib/osaurus_output | Uncle Bob |
-| 19 | **LOW** | Fix misleading comment / inverted logic in `text_validator.py` "wordy" bonus | lib/validators | Uncle Bob |
-| 20 | **LOW** | Fix tautological test assertion in `test_mlx_lib.py:298` | tests | Torvalds |
+| # | Priority | Item | Area | Expert | Status |
+|---|----------|------|------|--------|--------|
+| 1 | **CRITICAL** | Fix string mutation during iteration in `remove_thinking_blocks` | lib/content_processing | Uncle Bob | ✅ |
+| 2 | **CRITICAL** | Fix zero-weight reconstruction in `quality_entry.py` — `--regression-only` is broken | lib/quality | Uncle Bob | ✅ |
+| 3 | **CRITICAL** | Kill dead code in `eval/validate.py:129-229` and `validators/helpers.py:94-102` | eval, lib | Uncle Bob | ✅ |
+| 4 | **CRITICAL** | Replace SQL string interpolation with parameterized query in `twitter/cookies.py` | twitter | Uncle Bob | ✅ |
+| 5 | **CRITICAL** | Replace `pkill -f` with PID-file-based process management | lib/osaurus, rename | Torvalds | ✅ |
+| 6 | **HIGH** | Warn when cryptography not installed / cookies returned as garbage | twitter | Uncle Bob | ✅ |
+| 7 | **HIGH** | Clean up `/tmp/mlx_debug/` files or add opt-out / TTL | lib/mlx | Torvalds | ✅ |
+| 8 | **HIGH** | Replace `tempfile.mktemp` with `NamedTemporaryFile(delete=False)` | twitter | Uncle Bob | ✅ |
+| 9 | **HIGH** | Add error handling for keychain read failure in cookie extraction | twitter | Uncle Bob | ✅ |
+| 10 | **HIGH** | Remove bare `except:` clauses (catch KeyboardInterrupt) in 6 locations | eval_tasks, lib | Both | ✅ |
+| 11 | **MEDIUM** | Move config loading out of module scope into init/lazy functions | weekend, lib | Uncle Bob | ✅ |
+| 12 | **MEDIUM** | Make monitor_memory_loop thread-safe or move to main-loop polling | eval/cli | Torvalds | ⬜ |
+| 13 | **MEDIUM** | Cache `content.index()` results; fix double-eval in generator | lib/content_processing | Uncle Bob | ✅ |
+| 14 | **MEDIUM** | Use `requests.Session` as context manager everywhere | All apps | Uncle Bob | ⬜ |
+| 15 | **MEDIUM** | Add integration tests for LLM error/edge cases | tests | Torvalds | ⬜ |
+| 16 | **LOW** | Fix shared mutable references in `TASKS["json"] = TASKS["weekend_transient"]` | eval/tasks | Uncle Bob | ⬜ |
+| 17 | **LOW** | Remove `eval/cli.py:295` circular self-import | eval/cli | Torvalds | ⬜ |
+| 18 | **LOW** | Fix `"name"` key duplication in `normalize_keys` | lib/osaurus_output | Uncle Bob | ⬜ |
+| 19 | **LOW** | Fix misleading comment / inverted logic in `text_validator.py` "wordy" bonus | lib/validators | Uncle Bob | ⬜ |
+| 20 | **LOW** | Fix tautological test assertion in `test_mlx_lib.py:298` | tests | Torvalds | ⬜ |

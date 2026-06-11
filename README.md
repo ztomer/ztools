@@ -23,18 +23,20 @@ ZTools is a suite of productivity scripts powered by local LLMs. They run entire
 
 ```bash
 # Weekend planner
-python3 weekend_planner.py
+python3 -m weekend
 
 # Twitter summarizer (needs uv for playwright)
-uv run twitter_summarizer.py
+uv run -m twitter
 
 # Image renamer (needs uv for vision deps)
-uv run image_renamer.py /path/to/images
+uv run -m rename /path/to/images
 
 # Evaluate models
-python3 model_eval.py --quick
-python3 model_eval.py --task file_summary --quick  # test file reading quality
+python3 -m eval --quick
+python3 -m eval --task file_summary --quick
 ```
+
+Shim scripts at root (`twitter_summarizer.py`, etc.) still work for backward compat.
 
 ## The Tools
 
@@ -43,9 +45,9 @@ python3 model_eval.py --task file_summary --quick  # test file reading quality
 Generates a family-friendly weekend itinerary.
 
 ```bash
-python3 weekend_planner.py
-python3 weekend_planner.py --model qwen3.6-35b-a3b-mxfp4  # use specific model
-python3 weekend_planner.py --skip-web  # use cached search results
+python3 -m weekend
+python3 -m weekend --model qwen3.6-35b-a3b-mxfp4
+python3 -m weekend --skip-web
 ```
 
 **What it does:** Fetches weather forecast → searches for local events/venues → uses LLM to filter and rank activities.
@@ -57,10 +59,10 @@ python3 weekend_planner.py --skip-web  # use cached search results
 Turns your Twitter/X timeline into a structured briefing.
 
 ```bash
-uv run twitter_summarizer.py
-uv run twitter_summarizer.py --use-cache      # skip fetching, use last run
-uv run twitter_summarizer.py --model foundation
-uv run twitter_summarizer.py --since 24h      # tweets from last 24 hours
+uv run -m twitter
+uv run -m twitter --use-cache
+uv run -m twitter --model foundation
+uv run -m twitter --since 24h
 ```
 
 **What it does:** Opens Chrome via Playwright → scrolls your timeline → LLM extracts key facts → outputs markdown briefing.
@@ -72,7 +74,7 @@ uv run twitter_summarizer.py --since 24h      # tweets from last 24 hours
 Generates descriptive filenames for screenshots and photos.
 
 ```bash
-uv run image_renamer.py ~/Desktop/screenshots
+uv run -m rename ~/Desktop/screenshots
 ```
 
 **What it does:** Runs OCR (pytesseract) or Vision LLM → LLM generates a clean snake_case filename.
@@ -84,10 +86,10 @@ uv run image_renamer.py ~/Desktop/screenshots
 Tests which local models perform best on your actual prompts.
 
 ```bash
-python3 model_eval.py                    # full benchmark
-python3 model_eval.py --quick             # single run, no retries
-python3 model_eval.py --task weekend_fixed  # test specific task
-python3 model_eval.py --model qwen3.6-35b-a3b-mxfp4  # test specific model
+python3 -m eval                    # full benchmark
+python3 -m eval --quick             # single run, no retries
+python3 -m eval --task weekend_fixed
+python3 -m eval --model qwen3.6-35b-a3b-mxfp4
 ```
 
 **Tasks:** `weekend_transient`, `weekend_fixed`, `summarize`, `filename`, `file_summary`, `taxes_anomalies`, `taxes_audit_readiness`, `taxes_synthesis`
@@ -137,13 +139,45 @@ See `docs/MODEL_QUIRKS.md` for detailed model-specific quirks and known issues.
 ## Architecture
 
 ```
-lib/
-├── osaurus_lib.py        # Server API, JSON extraction, normalization
-├── mlx_lib.py           # Local Apple Silicon MLX models
-├── content_processing.py  # Clean LLM output (markdown, thinking)
-├── validators_lib.py     # Quality scoring (source matching)
-├── config.py            # Centralized config
-└── logging_config.py   # Structured logging
+lib/                     # Shared infrastructure
+├── osaurus_lib.py       # Server API, JSON extraction
+├── osaurus_server.py    # Server lifecycle (PID-based restart)
+├── mlx_lib.py           # Local Apple Silicon MLX fallback
+├── content_processing.py# Clean LLM output (thinking, stats)
+├── quality_*.py         # Quality scoring models + runners
+├── validators_lib.py    # Source matching, hallucination detection
+├── config_core.py       # Config loading (lazy, thread-safe)
+└── logging_config.py    # Structured logging
+
+twitter/                 # Twitter summarizer
+├── cli.py               # CLI entry point
+├── browser.py           # Playwright browser automation
+├── cookies.py           # Chrome cookie extraction
+├── output.py            # Markdown output formatting
+└── summarize.py         # LLM summarization + MLX fallback
+
+weekend/                 # Weekend planner
+├── cli.py               # CLI entry point
+├── config.py            # Weekend-specific config
+├── data.py              # Weather + events data fetching
+├── prompts.py           # LLM prompt templates
+├── llm.py               # LLM orchestration + MLX fallback
+└── output.py            # HTML/markdown output
+
+rename/                  # Image renamer
+├── cli.py               # CLI entry point
+├── helpers.py           # OCR, text processing
+└── llm.py               # LLM + VLM calls + MLX fallback
+
+eval/                    # Model evaluator
+├── cli.py               # CLI entry point
+├── run.py               # Eval runner
+├── tasks_core.py        # Task definitions
+├── report.py            # Report generation
+├── failures.py          # Failure classification
+├── validate.py          # Output validation
+├── benchmark_output.py  # Benchmark formatting
+└── benchmark_quality.py # Benchmark quality scoring
 ```
 
 ## Development Tools
@@ -153,8 +187,8 @@ lib/
 Discover which prompts work best for a model:
 
 ```bash
-python3 explore_model_quirks.py foundation
-python3 explore_model_quirks.py qwen3.6-35b-a3b-mxfp4
+python3 -m eval.explore_quirks foundation
+python3 -m eval.explore_quirks qwen3.6-35b-a3b-mxfp4
 ```
 
 Tests:
@@ -171,12 +205,15 @@ pytest tests/ -v           # verbose
 pytest tests/ -k weekend   # run specific test file
 ```
 
-**Test Coverage:**
-- `test_validators.py` — scoring logic, source matching
-- `test_parse.py` — JSON extraction, markdown stripping, year fixes
-- `test_weekend.py` — weekend planner output
-- `test_content_processing.py` — thinking block removal
-- `test_twitter.py` — twitter output cleaning
+**Key test files:**
+- `tests/test_quality_entry.py` — Score reconstruction, baseline comparison
+- `tests/test_content_processing.py` — Thinking block removal
+- `tests/test_twit_cookies.py` — Cookie extraction error paths
+- `tests/test_img_llm.py` — LLM server restart, MLX fallback
+- `tests/test_mlx_lib.py` — Model discovery, execution
+- `tests/test_weekend_*.py` — Weekend planner output, config, LLM
+- `tests/test_twit_*.py` — Twitter summarizer output, browser, cookies
+- `tests/test_model_eval*.py` — Eval runner, reports
 
 ### Eval Results
 

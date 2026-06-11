@@ -1,7 +1,7 @@
 # Quality Eval Full Suite Findings
 
 Run: 2026-05-31
-Method: `lib/quality.py` — dimension-based quality scoring (3-4 dimensions per task, each 0-100, weighted composite)
+Method: `lib/quality_models.py` — dimension-based quality scoring (3-4 dimensions per task, each 0-100, weighted composite)
 
 ## Models Tested
 
@@ -127,21 +127,17 @@ ALL models produce 71.9% Accuracy because they add extra descriptive detail beyo
 - **minimax**: Unusable — 400s+ per call, all outputs generic or empty
 - **gemma-***: Unrecognized by MLX backend — all fail immediately
 
-### Outstanding Questions
+### Open Questions
 1. Why does qwen3.6-35b-a3b-mxfp8-mtp crash on summarize but not filename? Architecture issue (MoE layer handling?)
-2. Is nemotron's instruction leak fixable with prompt change (like "Output ONLY the filename, no explanation")?
-3. Should we add a "first-call reliability" metric for models used in interactive tools?
+2. Is nemotron's instruction leak fixable with prompt change ("Output ONLY the filename, no explanation")?
+3. Should add a "first-call reliability" metric for models used in interactive tools?
 
-## Recommendations
+## Model Selection
 
-### Interactive tools (ztools defaults)
-Use **foundation** (1.5s avg, 97% filename, reliable).
-
-### Batch/offline processing
-Use **qwen3.6-27b-mxfp8-mtp** (14.8s avg, 99% filename, 100% summarize, 0 failures).
-
-### Quality-critical applications
-Use **laguna-xs.2-mxfp4** (2.8s avg, 98% filename, 92% summarize, no failures).
-
-### Never use
-minimax, gemma variants, qwen3.6-35b-a3b-mxfp8-mtp (for complex tasks), qwopus (unless quality is the only priority and you accept crashes).
+| Use Case | Model | Speed | Notes |
+|----------|-------|-------|-------|
+| Interactive (default) | foundation | 1.5s avg | 97% filename, reliable |
+| Batch/offline | qwen3.6-27b-mxfp8-mtp | 14.8s avg | 99% filename, 100% summarize, 0 failures |
+| Quality-critical | laguna-xs.2-mxfp4 | 2.8s avg | 98% filename, 92% summarize, no failures |
+| Avoid | minimax, gemma variants, qwen3.6-35b-a3b-mxfp8-mtp | — | Crashes on complex tasks |
+| Avoid | qwopus | 52s avg | 40% crash rate
