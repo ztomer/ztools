@@ -209,7 +209,7 @@ def main(args=None):
     actual_model = os.environ.get("OLLAMA_MODEL") or get_best_model(Task.JSON)
     field_mapping = get_model_field_mapping(actual_model)
 
-    print_step("Generating weekend plan (multiphase)...")
+    print_step("Generating weekend plan...")
     json_transient, json_fixed = generate_weekend_plan(
         actual_model, weather_str, events_str, venues_str, dates_str,
         location=f"{CITY}/{REGION}",
