@@ -12,9 +12,23 @@ WEATHER_API_TIMEOUT = 10
 FETCH_RETRIES = 3
 DDGS_MAX_RESULTS = 8
 REVIEW_MAX_RESULTS = 5
+MAX_BODY_LENGTH = 300
 
 # Rate limiting
 RATE_LIMIT_SLEEP = 0.5
+
+
+def _clean_search_results(results, default_label="Item", max_body=MAX_BODY_LENGTH):
+    seen = set()
+    cleaned = []
+    for r in results:
+        title = r.get("title", "").strip()
+        norm = title.lower().rstrip(".,!?:; ") if title else ""
+        if norm and norm not in seen:
+            seen.add(norm)
+            body = (r.get("body") or "")[:max_body].strip()
+            cleaned.append(f"- {title or default_label}: {body}")
+    return "\n".join(cleaned)
 
 
 def get_weekend_date_objects():
@@ -91,21 +105,7 @@ def fetch_transient_events(dates_str, year, month_name):
             results = safe_search(q)
             all_results.extend(results)
 
-        seen = set()
-        unique_results = []
-        for r in all_results:
-            title = r.get("title", "")
-            if title and title not in seen:
-                seen.add(title)
-                unique_results.append(r)
-
-        text_output = "\n".join(
-            [
-                f"- {r.get('title', 'Event')}: {r.get('body', '')}"
-                for r in unique_results
-            ]
-        )
-        return text_output
+        return _clean_search_results(all_results, "Event", max_body=MAX_BODY_LENGTH)
     except Exception as e:
         print(f"[ERROR] Transient event fetch failed: {e}", file=sys.stderr)
         return "Error fetching transient events."
@@ -129,21 +129,7 @@ def fetch_fixed_venues(year, month_name):
             except Exception as e:
                 print(f"[WARN] Query failed: {q[:30]}... - {e}")
 
-        seen = set()
-        unique_results = []
-        for r in all_results:
-            title = r.get("title", "")
-            if title and title not in seen:
-                seen.add(title)
-                unique_results.append(r)
-
-        text_output = "\n".join(
-            [
-                f"- {r.get('title', 'Venue/Exhibit')}: {r.get('body', '')}"
-                for r in unique_results
-            ]
-        )
-        return text_output
+        return _clean_search_results(all_results, "Venue/Exhibit", max_body=MAX_BODY_LENGTH)
     except Exception as e:
         print(f"[ERROR] Fixed venue fetch failed: {e}", file=sys.stderr)
         return "Error fetching fixed venues."
