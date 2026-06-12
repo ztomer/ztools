@@ -28,6 +28,7 @@ PHASE_TIMEOUT_DRAFT = 300
 PHASE_TIMEOUT_REFINE = 120
 PHASE_TIMEOUT_STRUCTURE = 120
 PHASE_MAX_RETRIES = 3
+PHASE_SIGNALS_PATH = Path(__file__).parent.parent / "conf" / "phase_signals.json"
 from lib.mlx_lib import (
     find_text_mlx_model,
     call_mlx,
@@ -35,23 +36,42 @@ from lib.mlx_lib import (
 )
 
 
-def _call_llm(system_prompt, user_prompt, timeout, max_retries=PHASE_MAX_RETRIES, parse_json=False):
+def _load_phase_signals():
+    try:
+        if PHASE_SIGNALS_PATH.exists():
+            return json.loads(PHASE_SIGNALS_PATH.read_text())
+    except Exception:
+        pass
+    return {}
+
+
+def _save_phase_signals(signals):
+    PHASE_SIGNALS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    PHASE_SIGNALS_PATH.write_text(json.dumps(signals, indent=2, sort_keys=True))
+
+
+def _call_llm(system_prompt, user_prompt, timeout, max_retries=PHASE_MAX_RETRIES, parse_json=False, phase_key=None):
     target_model = get_best_model(Task.JSON)
     last_content = None
     _attempt = [0]
+
+    signals = _load_phase_signals() if phase_key else {}
+    model_signals = signals.setdefault(target_model, {}) if phase_key else {}
+    phase_signals = model_signals.get(phase_key, {}) if phase_key else {}
+    base_timeout = phase_signals.get("timeout", timeout) if phase_key else timeout
 
     def call_fn(model_name):
         nonlocal last_content
         _attempt[0] += 1
         backoff = min(_attempt[0], 5)
-        current_timeout = timeout * backoff
+        current_timeout = base_timeout * backoff
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
         messages = apply_model_quirks(messages, model_name)
 
-        debug_print(f"[llm] _call_llm: attempt={_attempt[0]}, timeout={current_timeout}, parse_json={parse_json}", flush=True)
+        debug_print(f"[llm] _call_llm: phase={phase_key}, attempt={_attempt[0]}, base={base_timeout}, timeout={current_timeout}", flush=True)
         debug_print(f"[llm] system={len(messages[0]['content'])} chars, user={len(messages[1]['content'])} chars", flush=True)
 
         result = call_llm_api(
@@ -114,6 +134,11 @@ def _call_llm(system_prompt, user_prompt, timeout, max_retries=PHASE_MAX_RETRIES
         restart_fn=ensure_server, mlx_fn=mlx_fn,
         max_server_retries=max_retries - 1, label="Osaurus",
     )
+
+    if result is not None and phase_key and _attempt[0] > 1:
+        working_timeout = base_timeout * _attempt[0]
+        model_signals[phase_key] = {"timeout": working_timeout}
+        _save_phase_signals(signals)
 
     if parse_json and result is None and last_content is not None:
         debug_print("[llm] All retries failed, dumping content")
@@ -212,7 +237,7 @@ def fetch_scores_for_items(items, weather_str="", age_range=""):
 
 def condense_weather(weather_str):
     from weekend.prompts import build_weather_condense_prompt
-    result = _call_llm("", build_weather_condense_prompt(weather_str), timeout=PHASE_TIMEOUT_WEATHER)
+    result = _call_llm("", build_weather_condense_prompt(weather_str), timeout=PHASE_TIMEOUT_WEATHER, phase_key="condense_weather")
     return result if result else weather_str[:200]
 
 
@@ -244,6 +269,7 @@ def extract_sources(raw_text, source_type, model_name="default"):
     signals = _load_extract_signals()
     per_type = signals.setdefault(model_name or "default", {}).setdefault(source_type, {})
     batch_size = per_type.get("batch_size", DEFAULT_BATCH_SIZE)
+    phase_key = f"extract_sources/{source_type}"
 
     lines = [l for l in raw_text.split("\n") if l.startswith("- ")]
     if not lines:
@@ -255,7 +281,7 @@ def extract_sources(raw_text, source_type, model_name="default"):
     while i < len(lines):
         chunk = lines[i:i + batch_size]
         prompt = _extract_group_prompt(chunk, source_type)
-        result = _call_llm("", prompt, timeout=PHASE_TIMEOUT_EXTRACT)
+        result = _call_llm("", prompt, timeout=PHASE_TIMEOUT_EXTRACT, phase_key=phase_key)
 
         if result:
             results.append(result)
@@ -284,12 +310,12 @@ def extract_sources(raw_text, source_type, model_name="default"):
 def draft_activities(weather_condensed, cleaned_sources, source_type, location, age_range, date_range):
     from weekend.prompts import build_draft_prompt
     prompt = build_draft_prompt(weather_condensed, cleaned_sources, source_type, location, age_range, date_range)
-    return _call_llm("", prompt, timeout=PHASE_TIMEOUT_DRAFT)
+    return _call_llm("", prompt, timeout=PHASE_TIMEOUT_DRAFT, phase_key=f"draft_activities/{source_type}")
 
 
 def refine_draft(draft_text):
     from weekend.prompts import build_refine_prompt
-    result = _call_llm("", build_refine_prompt(draft_text), timeout=PHASE_TIMEOUT_REFINE)
+    result = _call_llm("", build_refine_prompt(draft_text), timeout=PHASE_TIMEOUT_REFINE, phase_key="refine_draft")
     return result if result else draft_text
 
 
@@ -297,7 +323,7 @@ def structure_to_json(text, source_type, age_range):
     from weekend.prompts import build_structure_system_prompt, build_structure_user_prompt
     sys_prompt = build_structure_system_prompt(source_type, age_range)
     usr_prompt = build_structure_user_prompt(text)
-    return _call_llm(sys_prompt, usr_prompt, timeout=PHASE_TIMEOUT_STRUCTURE, parse_json=True)
+    return _call_llm(sys_prompt, usr_prompt, timeout=PHASE_TIMEOUT_STRUCTURE, parse_json=True, phase_key=f"structure_to_json/{source_type}")
 
 
 def generate_weekend_plan(model, weather_str, events_str, venues_str, dates_str, location, age_range, date_range):
