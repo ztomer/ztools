@@ -2,6 +2,104 @@ from weekend.config import EXCLUDE_PLACES, CITY, REGION, AGE_RANGE, DATES_STR
 from lib.config import get_model_prompt, Task
 from lib.tui import debug_print
 
+# Phase-specific template constants
+PHASE_WEATHER_CONDENSE = """Given this weather forecast, summarize what to expect for the weekend in 1-2 sentences. Be specific about temperatures and conditions.
+
+{weather_str}
+
+Output only the summary, nothing else."""
+
+PHASE_EXTRACT_EVENTS = """Extract family-friendly event listings from the search results below. For each event, list its name, location, dates, price if available, and description. Ignore irrelevant search results, ads, and navigation text.
+
+Search results:
+{raw_text}
+
+List each relevant event with key details, one per line."""
+
+PHASE_EXTRACT_VENUES = """Extract family-friendly venues from the search results below. For each venue, list its name, location, price if available, and what it offers for kids. Ignore irrelevant search results, ads, and navigation text.
+
+Search results:
+{raw_text}
+
+List each relevant venue with key details, one per line."""
+
+PHASE_DRAFT_TRANSIENT = """You are a family activity planner. Suggest 10 specific weekend activities for families with kids ages {age_range} in {location}. Focus on time-limited events happening specifically on {date_range}.
+
+Weather: {weather_condensed}
+
+Available events:
+{cleaned_sources}
+
+List specific activity suggestions, one per line. Include name, location, and brief description."""
+
+PHASE_DRAFT_FIXED = """You are a family activity planner. Suggest 10 specific weekend activities for families with kids ages {age_range} in {location}. Focus on year-round venues and fixed-location activities.
+
+Weather: {weather_condensed}
+
+Available venues:
+{cleaned_sources}
+
+List specific activity suggestions, one per line. Include name, location, and brief description."""
+
+PHASE_REFINE = """Here are activity suggestions:
+
+{draft_text}
+
+Merge any near-duplicates, keep the best 8, remove low-quality or irrelevant ones, and sort by overall appeal. Output the refined list, one per line with name + description."""
+
+PHASE_STRUCTURE_TRANSIENT_SYSTEM = """Output JSON now. Use EXACT schema: {{"transient_events": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}}]}}
+
+MANDATORY default values:
+- target_ages: "{age_range}"
+- price: $20-30 per child or free
+- duration: "2-3 hours"
+- weather: "indoor"
+- day: Friday/Saturday/Sunday
+
+Never leave any field empty. Output ONLY JSON."""
+
+PHASE_STRUCTURE_FIXED_SYSTEM = """Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
+
+MANDATORY default values:
+- target_ages: "{age_range}"
+- price: $18-35 per child or free
+- weather: "indoor"
+
+Never leave any field empty. Output ONLY JSON."""
+
+
+def build_weather_condense_prompt(weather_str):
+    return PHASE_WEATHER_CONDENSE.format(weather_str=weather_str)
+
+
+def build_source_extract_prompt(raw_text, source_type):
+    template = PHASE_EXTRACT_EVENTS if source_type == "events" else PHASE_EXTRACT_VENUES
+    return template.format(raw_text=raw_text)
+
+
+def build_draft_prompt(weather_condensed, cleaned_sources, source_type, location, age_range, date_range):
+    template = PHASE_DRAFT_TRANSIENT if source_type == "transient" else PHASE_DRAFT_FIXED
+    return template.format(
+        weather_condensed=weather_condensed,
+        cleaned_sources=cleaned_sources,
+        location=location,
+        age_range=age_range,
+        date_range=date_range,
+    )
+
+
+def build_refine_prompt(draft_text):
+    return PHASE_REFINE.format(draft_text=draft_text)
+
+
+def build_structure_system_prompt(source_type, age_range):
+    template = PHASE_STRUCTURE_TRANSIENT_SYSTEM if source_type == "transient" else PHASE_STRUCTURE_FIXED_SYSTEM
+    return template.format(age_range=age_range)
+
+
+def build_structure_user_prompt(draft_text):
+    return f"Convert these activities to the schema:\n\n{draft_text}"
+
 
 def build_fixed_system_prompt(model: str = None, location: str = None, age_range: str = None):
     exclusion_string = ", ".join(EXCLUDE_PLACES)

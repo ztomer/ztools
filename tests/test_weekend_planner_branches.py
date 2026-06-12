@@ -176,7 +176,6 @@ class TestMainEntry:
     def test_main_block(self, monkeypatch, capsys):
         import runpy
         import sys
-        import types
         from unittest.mock import patch, MagicMock
         monkeypatch.setattr(sys, "argv", ["weekend.cli", "--use-cache"])
         mock_ddgs = MagicMock()
@@ -184,15 +183,13 @@ class TestMainEntry:
         sys.modules['ddgs'] = mock_ddgs
         with patch("weekend.cli._fetch_data", return_value=("Sunny", "- E1", "- F1", "June 5-7")), \
              patch("weekend.cli.init_config"), \
-             patch("weekend.cli.get_llm_json", side_effect=[
+             patch("weekend.cli.generate_weekend_plan", return_value=(
                  {"transient_events": [{"name": "E1"}]},
-                 {"fixed_activities": [{"name": "F1"}]}
-             ]), \
+                 {"fixed_activities": [{"name": "F1"}]},
+             )), \
              patch("os.path.expanduser", return_value="/tmp/wp_test_main"):
             import os
             os.makedirs("/tmp/wp_test_main", exist_ok=True)
             runpy.run_module("weekend", run_name="__main__")
-        # main() should have printed expected workflow output
         out = capsys.readouterr().out
-        # The model name header is printed early in main()
         assert "Using model" in out or "Started" in out or "Transient" in out

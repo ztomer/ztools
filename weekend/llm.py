@@ -19,6 +19,14 @@ from lib.tui import debug_print, WARN
 LLM_TEMPERATURE = 0.1
 LLM_API_TIMEOUT = 1800
 LLM_MAX_RETRIES = 5
+
+# Phase pipeline timeouts (seconds)
+PHASE_TIMEOUT_WEATHER = 60
+PHASE_TIMEOUT_EXTRACT = 120
+PHASE_TIMEOUT_DRAFT = 300
+PHASE_TIMEOUT_REFINE = 120
+PHASE_TIMEOUT_STRUCTURE = 120
+PHASE_MAX_RETRIES = 3
 from lib.mlx_lib import (
     find_text_mlx_model,
     call_mlx,
@@ -26,7 +34,7 @@ from lib.mlx_lib import (
 )
 
 
-def get_llm_json(system_prompt, user_prompt, max_retries=LLM_MAX_RETRIES):
+def _call_llm(system_prompt, user_prompt, timeout, max_retries=PHASE_MAX_RETRIES, parse_json=False):
     target_model = get_best_model(Task.JSON)
     last_content = None
 
@@ -38,51 +46,43 @@ def get_llm_json(system_prompt, user_prompt, max_retries=LLM_MAX_RETRIES):
         ]
         messages = apply_model_quirks(messages, model_name)
 
-        debug_print(f"[llm] Calling API with {len(messages)} messages, system={len(messages[0]['content'])}, user={len(messages[1]['content'])}", flush=True)
+        debug_print(f"[llm] _call_llm: {len(messages)} messages, timeout={timeout}, parse_json={parse_json}", flush=True)
+        debug_print(f"[llm] system={len(messages[0]['content'])} chars, user={len(messages[1]['content'])} chars", flush=True)
 
         result = call_llm_api(
             OSAURUS_BASE_URL.rstrip("/"),
             model_name,
             messages,
             temperature=LLM_TEMPERATURE,
-            timeout=LLM_API_TIMEOUT,
-            parse_json=True,
+            timeout=timeout,
+            parse_json=parse_json,
         )
 
-        debug_print(f"[llm] API response keys: {result.keys() if isinstance(result, dict) else type(result)}", flush=True)
-        debug_print(f"[llm] API response preview: {str(result)[:200]}", flush=True)
-
         if result and "content" in result:
-            try:
-                raw_content = result["content"]
-                last_content = raw_content
-                debug_print(f"[llm] Raw content length: {len(raw_content)}", flush=True)
-                debug_print(f"[llm] Raw content preview: {raw_content[:300]}", flush=True)
-
-                cleaned = strip_thinking(raw_content)
-                debug_print(f"[llm] After strip_thinking length: {len(cleaned)}", flush=True)
-                debug_print(f"[llm] After strip_thinking preview: {cleaned[:300]}", flush=True)
-
-                json_str = _extract_json_only(cleaned)
-                if json_str is not None:
-                    debug_print(f"[llm] JSON extracted successfully, length: {len(json_str)}", flush=True)
-                    return json.loads(json_str)
-                else:
-                    debug_print(f"[llm] WARNING: _extract_json_only returned None", flush=True)
-                    raise ValueError("No valid JSON found")
-            except Exception as e:
-                debug_print(f"[llm] JSON parse error: {e}", flush=True)
+            raw_content = result["content"]
+            last_content = raw_content
+            cleaned = strip_thinking(raw_content)
+            if parse_json:
+                try:
+                    json_str = _extract_json_only(cleaned)
+                    if json_str is not None:
+                        debug_print(f"[llm] JSON extracted, length={len(json_str)}", flush=True)
+                        return json.loads(json_str)
+                    debug_print("[llm] WARNING: _extract_json_only returned None", flush=True)
+                except Exception as e:
+                    debug_print(f"[llm] JSON parse error: {e}", flush=True)
+                return None
+            return cleaned
         else:
             err = result.get("error", "no content") if isinstance(result, dict) else str(result)
             print(f"{WARN} Osaurus API error: {err[:100]}")
-            debug_print(f"[llm] WARNING: No content in result: {result}", flush=True)
-
+            debug_print(f"[llm] No content in result: {result}", flush=True)
         return None
 
     def mlx_fn():
         mlx_model = find_text_mlx_model(["qwen", "llama", "phi"])
         if mlx_model:
-            print(f"[llm] Falling back to MLX: {mlx_model.name}")
+            print(f"[llm] MLX fallback: {mlx_model.name}")
             try:
                 messages = [
                     {"role": "system", "content": system_prompt},
@@ -91,37 +91,36 @@ def get_llm_json(system_prompt, user_prompt, max_retries=LLM_MAX_RETRIES):
                 messages = apply_model_quirks(messages, getattr(mlx_model, "name", str(mlx_model)))
                 mlx_sys = next((m["content"] for m in messages if m["role"] == "system"), system_prompt)
                 mlx_usr = next((m["content"] for m in messages if m["role"] == "user"), user_prompt)
-
-                raw = call_mlx(
-                    mlx_model, f"System: {mlx_sys}\n\nUser: {mlx_usr}"
-                )
+                raw = call_mlx(mlx_model, f"System: {mlx_sys}\n\nUser: {mlx_usr}")
                 if raw:
                     cleaned = process_mlx_content(raw)
-                    json_str = _extract_json_only(cleaned)
-                    if json_str is not None:
-                        return json.loads(json_str)
-                    else:
-                        raise ValueError("No valid JSON found")
+                    if parse_json:
+                        json_str = _extract_json_only(cleaned)
+                        if json_str is not None:
+                            return json.loads(json_str)
+                        raise ValueError("No valid JSON in MLX response")
+                    return cleaned
             except Exception as e:
                 print(f"[llm] MLX failed: {e}")
         return None
 
     result = call_with_fallback(
-        [target_model],
-        call_fn,
-        restart_fn=ensure_server,
-        mlx_fn=mlx_fn,
-        max_server_retries=max_retries - 1,
-        label="Osaurus",
+        [target_model], call_fn,
+        restart_fn=ensure_server, mlx_fn=mlx_fn,
+        max_server_retries=max_retries - 1, label="Osaurus",
     )
 
-    if result is None and last_content is not None:
+    if parse_json and result is None and last_content is not None:
         debug_print("[llm] All retries failed, dumping content")
         panic_dump(last_content)
 
+    return result
+
+
+def get_llm_json(system_prompt, user_prompt, max_retries=LLM_MAX_RETRIES):
+    result = _call_llm(system_prompt, user_prompt, timeout=LLM_API_TIMEOUT, max_retries=max_retries, parse_json=True)
     if result is None:
         print("[llm] WARNING: Failed to parse JSON, returning empty result")
-
     return result
 
 
@@ -204,3 +203,68 @@ def _score_item(item, weather_str="", age_range=""):
 def fetch_scores_for_items(items, weather_str="", age_range=""):
     for item in items:
         item["score"] = _score_item(item, weather_str=weather_str, age_range=age_range)
+
+
+def condense_weather(weather_str):
+    from weekend.prompts import build_weather_condense_prompt
+    result = _call_llm("", build_weather_condense_prompt(weather_str), timeout=PHASE_TIMEOUT_WEATHER)
+    return result if result else weather_str[:200]
+
+
+def extract_sources(raw_text, source_type):
+    from weekend.prompts import build_source_extract_prompt
+    result = _call_llm("", build_source_extract_prompt(raw_text, source_type), timeout=PHASE_TIMEOUT_EXTRACT)
+    return result if result else raw_text
+
+
+def draft_activities(weather_condensed, cleaned_sources, source_type, location, age_range, date_range):
+    from weekend.prompts import build_draft_prompt
+    prompt = build_draft_prompt(weather_condensed, cleaned_sources, source_type, location, age_range, date_range)
+    return _call_llm("", prompt, timeout=PHASE_TIMEOUT_DRAFT)
+
+
+def refine_draft(draft_text):
+    from weekend.prompts import build_refine_prompt
+    result = _call_llm("", build_refine_prompt(draft_text), timeout=PHASE_TIMEOUT_REFINE)
+    return result if result else draft_text
+
+
+def structure_to_json(text, source_type, age_range):
+    from weekend.prompts import build_structure_system_prompt, build_structure_user_prompt
+    sys_prompt = build_structure_system_prompt(source_type, age_range)
+    usr_prompt = build_structure_user_prompt(text)
+    return _call_llm(sys_prompt, usr_prompt, timeout=PHASE_TIMEOUT_STRUCTURE, parse_json=True)
+
+
+def generate_weekend_plan(model, weather_str, events_str, venues_str, dates_str, location, age_range, date_range):
+    from weekend.output import print_step, print_warning
+
+    condensed_weather = condense_weather(weather_str)
+
+    cleaned_events = extract_sources(events_str, "events")
+    draft_transient = draft_activities(condensed_weather or weather_str[:200], cleaned_events, "transient", location, age_range, date_range)
+    json_transient = {}
+    if draft_transient:
+        refined_transient = refine_draft(draft_transient)
+        json_transient = structure_to_json(refined_transient, "transient", age_range) or {}
+    else:
+        print_warning("Transient draft failed, using monolithic fallback")
+        from weekend.prompts import build_transient_system_prompt, build_transient_user_prompt
+        sys_t = build_transient_system_prompt(model, location=location, age_range=age_range, date_range=date_range)
+        usr_t = build_transient_user_prompt(dates_str, weather_str, events_str)
+        json_transient = get_llm_json(sys_t, usr_t) or {}
+
+    cleaned_venues = extract_sources(venues_str, "venues")
+    draft_fixed = draft_activities(condensed_weather or weather_str[:200], cleaned_venues, "fixed", location, age_range, date_range)
+    json_fixed = {}
+    if draft_fixed:
+        refined_fixed = refine_draft(draft_fixed)
+        json_fixed = structure_to_json(refined_fixed, "fixed", age_range) or {}
+    else:
+        print_warning("Fixed draft failed, using monolithic fallback")
+        from weekend.prompts import build_fixed_system_prompt, build_fixed_user_prompt
+        sys_f = build_fixed_system_prompt(model, location=location, age_range=age_range)
+        usr_f = build_fixed_user_prompt(dates_str, weather_str, venues_str)
+        json_fixed = get_llm_json(sys_f, usr_f) or {}
+
+    return json_transient, json_fixed

@@ -19,6 +19,7 @@ from weekend.prompts import (
 )
 from weekend.llm import (
     get_llm_json, normalize_llm_items, fetch_scores_for_items,
+    generate_weekend_plan,
 )
 from weekend.output import (
     build_markdown_tables, print_to_cli, print_header, print_step, print_info, print_warning, print_summary,

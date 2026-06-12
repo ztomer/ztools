@@ -24,12 +24,9 @@ from weekend.data import (
     get_weekend_date_objects, get_weekend_dates_string,
     fetch_weather, fetch_transient_events, fetch_fixed_venues, scrape_review_score,
 )
-from weekend.prompts import (
-    build_fixed_system_prompt, build_fixed_user_prompt,
-    build_transient_system_prompt, build_transient_user_prompt,
-)
 from weekend.llm import (
     get_llm_json, normalize_llm_items, fetch_scores_for_items,
+    generate_weekend_plan,
 )
 from weekend.output import (
     build_markdown_tables, print_to_cli, print_header, print_step, print_info, print_warning, print_summary,
@@ -47,11 +44,8 @@ __all__ = [
     # weekend_data
     "get_weekend_date_objects", "get_weekend_dates_string",
     "fetch_weather", "fetch_transient_events", "fetch_fixed_venues", "scrape_review_score",
-    # weekend_prompts
-    "build_fixed_system_prompt", "build_fixed_user_prompt",
-    "build_transient_system_prompt", "build_transient_user_prompt",
     # weekend_llm
-    "get_llm_json", "normalize_llm_items", "fetch_scores_for_items",
+    "get_llm_json", "normalize_llm_items", "fetch_scores_for_items", "generate_weekend_plan",
     # weekend_output
     "build_markdown_tables", "print_to_cli", "print_header", "print_step", "print_info", "print_warning", "print_summary",
     # shim-specific
@@ -215,26 +209,14 @@ def main(args=None):
     actual_model = os.environ.get("OLLAMA_MODEL") or get_best_model(Task.JSON)
     field_mapping = get_model_field_mapping(actual_model)
 
-    print_step("Generating Transient Events...")
-    sys_transient = build_transient_system_prompt(
-        actual_model,
+    print_step("Generating weekend plan (multiphase)...")
+    json_transient, json_fixed = generate_weekend_plan(
+        actual_model, weather_str, events_str, venues_str, dates_str,
         location=f"{CITY}/{REGION}",
         age_range=AGE_RANGE,
         date_range=dates_str,
     )
-    usr_transient = build_transient_user_prompt(dates_str, weather_str, events_str)
-    json_transient = get_llm_json(sys_transient, usr_transient) or {}
-    print_step("Generated Transient Events")
-
-    print_step("Generating Fixed Activities...")
-    sys_fixed = build_fixed_system_prompt(
-        actual_model,
-        location=f"{CITY}/{REGION}",
-        age_range=AGE_RANGE,
-    )
-    usr_fixed = build_fixed_user_prompt(dates_str, weather_str, venues_str)
-    json_fixed = get_llm_json(sys_fixed, usr_fixed) or {}
-    print_step("Generated Fixed Activities")
+    print_step("Generated weekend plan")
 
     fixed_acts = _parse_fixed(json_fixed, actual_model, field_mapping)
     transient_items = _parse_transient(json_transient, actual_model, field_mapping)
