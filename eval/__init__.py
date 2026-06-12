@@ -15,7 +15,7 @@ from eval.failures import (
     _classify_failure, _describe_content_failure,
 )
 from eval.run import (
-    MAX_RETRIES, EVAL_TIMEOUT, MEMORY_WARNING_THRESHOLD,
+    MAX_RETRIES, DEFAULT_EVAL_TIMEOUT, MEMORY_WARNING_THRESHOLD,
     _validate_result, _call_model,
     _quality_results_to_eval_format, run_eval,
 )

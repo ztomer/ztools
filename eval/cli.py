@@ -56,7 +56,7 @@ from eval.failures import (
 import eval.run as eval_run
 from eval.run import (
     MAX_RETRIES,
-    EVAL_TIMEOUT,
+    DEFAULT_EVAL_TIMEOUT,
     MEMORY_WARNING_THRESHOLD,
     _validate_result,
     _call_model,
@@ -87,7 +87,7 @@ from eval.report import (
 
 
 __all__ = [
-    "TASKS", "MAX_RETRIES", "EVAL_TIMEOUT", "MEMORY_WARNING_THRESHOLD",
+    "TASKS", "MAX_RETRIES", "DEFAULT_EVAL_TIMEOUT", "MEMORY_WARNING_THRESHOLD",
     "safe_content", "validate_file_summary",
     "FAIL_INFRA", "FAIL_TIMEOUT", "FAIL_PARSE", "FAIL_FORMAT", "FAIL_CONTENT", "FAIL_NONE",
     "run_eval", "_validate_result", "_call_model", "_quality_results_to_eval_format",
@@ -236,11 +236,11 @@ def main():
     parser.add_argument("--config-tasks", action="store_true", help="Load tasks from YAML config instead of hardcoded prompts")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging to console")
     parser.add_argument("--verbose", "-v", action="store_true", help="Show raw model output for debugging quality")
-    parser.add_argument("--timeout", type=int, default=EVAL_TIMEOUT, help=f"Per-task timeout in seconds (default {EVAL_TIMEOUT})")
+    parser.add_argument("--timeout", type=int, default=DEFAULT_EVAL_TIMEOUT, help=f"Per-task timeout in seconds (default {DEFAULT_EVAL_TIMEOUT})")
     parser.add_argument("--quality", action="store_true", help="Use quality.py dimension-based scoring instead of old validators")
     args = parser.parse_args()
 
-    eval_run.EVAL_TIMEOUT = args.timeout
+    eval_run.DEFAULT_EVAL_TIMEOUT = args.timeout
 
     models_to_test = []
 

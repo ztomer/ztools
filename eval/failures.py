@@ -27,7 +27,7 @@ def _classify_failure(result: dict, task_cfg: dict, score: int, failure_reason: 
             "evidence": specific evidence for the diagnosis,
         }
     """
-    from eval.run import EVAL_TIMEOUT
+    from eval.run import DEFAULT_EVAL_TIMEOUT
 
     error = result.get("error") or ""
     content = safe_content(result)
@@ -54,7 +54,7 @@ def _classify_failure(result: dict, task_cfg: dict, score: int, failure_reason: 
         return {
             "category": FAIL_TIMEOUT,
             "reason": error,
-            "evidence": f"Model did not respond within {EVAL_TIMEOUT}s",
+            "evidence": f"Model did not respond within {DEFAULT_EVAL_TIMEOUT}s",
         }
 
     if task_cfg["parse_json"]:

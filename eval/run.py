@@ -6,8 +6,10 @@ Contains the main eval loop, model calling, and validation orchestration.
 
 import json
 import re
+from pathlib import Path
 from rich.console import Console
 from lib.osaurus_lib import call
+from lib.config import Task, get_timeout
 from eval.tasks_core import TASKS, _extract_items_from_text
 from eval.failures import FAIL_INFRA, FAIL_CONTENT, FAIL_NONE, _classify_failure
 from eval.validate import safe_content
@@ -18,8 +20,62 @@ from lib.tui import STEP, WARN, FAIL
 
 
 MAX_RETRIES = 1
-EVAL_TIMEOUT = 300
+DEFAULT_EVAL_TIMEOUT = 300
 MEMORY_WARNING_THRESHOLD = 80
+
+EVAL_SIGNALS_PATH = Path(__file__).parent.parent / "conf" / "eval_signals.json"
+
+
+def _load_eval_signals():
+    try:
+        if EVAL_SIGNALS_PATH.exists():
+            return json.loads(EVAL_SIGNALS_PATH.read_text())
+    except Exception:
+        pass
+    return {}
+
+
+def _save_eval_signals(signals):
+    EVAL_SIGNALS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    EVAL_SIGNALS_PATH.write_text(json.dumps(signals, indent=2, sort_keys=True))
+
+
+def _effective_timeout(model: str, task_name: str) -> int:
+    signals = _load_eval_signals()
+    task_signals = signals.get(model, {}).get(task_name, {})
+    learned = task_signals.get("timeout", 0)
+    try:
+        configured = get_timeout(Task(task_name))
+    except Exception:
+        configured = DEFAULT_EVAL_TIMEOUT
+    return max(learned, configured, DEFAULT_EVAL_TIMEOUT)
+
+
+def _record_signal(model: str, task_name: str, time_taken: float, had_retries: bool, is_parse_failure: bool):
+    if not time_taken and not had_retries:
+        return
+    signals = _load_eval_signals()
+    per_task = signals.setdefault(model, {}).setdefault(task_name, {})
+    samples = per_task.get("samples", 0)
+    p95 = per_task.get("p95_latency", 0)
+
+    if time_taken > 0:
+        if p95:
+            p95 = max(time_taken, p95 * 0.95 + time_taken * 0.05)
+        else:
+            p95 = time_taken
+        per_task["p95_latency"] = round(p95, 1)
+
+    per_task["samples"] = samples + 1
+    per_task["total_retries"] = per_task.get("total_retries", 0) + (1 if had_retries else 0)
+    per_task["parse_failures"] = per_task.get("parse_failures", 0) + (1 if is_parse_failure else 0)
+
+    if time_taken > 0 and p95 > 0:
+        new_timeout = max(DEFAULT_EVAL_TIMEOUT, int(p95 * 1.5))
+        if new_timeout != per_task.get("timeout"):
+            per_task["timeout"] = new_timeout
+
+    _save_eval_signals(signals)
 
 console = Console()
 
@@ -108,15 +164,16 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
     return score, failure_reason, diagnosis
 
 
-def _call_model(model: str, task_cfg: dict, task_name: str, host: str, port: int, backend: str) -> dict:
+def _call_model(model: str, task_cfg: dict, task_name: str, host: str, port: int, backend: str, timeout: int = None) -> dict:
     """Call model via the appropriate backend (pure transport, no validation)."""
+    effective_timeout = timeout or DEFAULT_EVAL_TIMEOUT
     if backend == "mlx":
         return mlx_call(
             model,
             messages=task_cfg["messages"],
             host=host,
             port=port,
-            timeout=EVAL_TIMEOUT,
+            timeout=effective_timeout,
         )
     else:
         return call(
@@ -126,7 +183,7 @@ def _call_model(model: str, task_cfg: dict, task_name: str, host: str, port: int
             port=port,
             task=task_name,
             parse_json=task_cfg["parse_json"],
-            timeout=EVAL_TIMEOUT,
+            timeout=effective_timeout,
         )
 
 
@@ -184,6 +241,7 @@ def run_eval(
         if "messages" not in task_cfg:
             console.print(f"{WARN} Skipping '{task_name}' (no messages key)")
             continue
+        task_timeout = _effective_timeout(model, task_name)
         best_score = -1
         best_result = None
         best_failure = ""
@@ -196,7 +254,7 @@ def run_eval(
                 first_attempt_failed = True
 
             try:
-                result = _call_model(model, task_cfg, task_name, host, port, backend)
+                result = _call_model(model, task_cfg, task_name, host, port, backend, timeout=task_timeout)
             except Exception as e:
                 eval_logger.error(f"Model call failed with exception: {e}")
                 result = {"content": None, "error": str(e), "time": None, "model": model}
@@ -245,6 +303,13 @@ def run_eval(
                 "result": best_result,
                 "first_attempt_failed": first_attempt_failed,
             }
+        )
+
+        _record_signal(
+            model, task_name,
+            time_taken=(best_result.get("time") or 0) if best_result else 0,
+            had_retries=first_attempt_failed,
+            is_parse_failure=(category == "PARSE"),
         )
 
         status_symbol = STEP if status == "ok" else (WARN if status == "partial" else FAIL)
