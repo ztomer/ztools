@@ -38,16 +38,20 @@ from lib.mlx_lib import (
 def _call_llm(system_prompt, user_prompt, timeout, max_retries=PHASE_MAX_RETRIES, parse_json=False):
     target_model = get_best_model(Task.JSON)
     last_content = None
+    _attempt = [0]
 
     def call_fn(model_name):
         nonlocal last_content
+        _attempt[0] += 1
+        backoff = min(_attempt[0], 5)
+        current_timeout = timeout * backoff
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
         messages = apply_model_quirks(messages, model_name)
 
-        debug_print(f"[llm] _call_llm: {len(messages)} messages, timeout={timeout}, parse_json={parse_json}", flush=True)
+        debug_print(f"[llm] _call_llm: attempt={_attempt[0]}, timeout={current_timeout}, parse_json={parse_json}", flush=True)
         debug_print(f"[llm] system={len(messages[0]['content'])} chars, user={len(messages[1]['content'])} chars", flush=True)
 
         result = call_llm_api(
@@ -55,7 +59,7 @@ def _call_llm(system_prompt, user_prompt, timeout, max_retries=PHASE_MAX_RETRIES
             model_name,
             messages,
             temperature=LLM_TEMPERATURE,
-            timeout=timeout,
+            timeout=current_timeout,
             parse_json=parse_json,
         )
 
