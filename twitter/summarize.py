@@ -36,6 +36,20 @@ _PROMPT_RULES = """
 
 CHARS_PER_TOKEN = 3
 OUTPUT_RESERVE_TOKENS = 4096
+COLD_START_BASE = 120
+MAX_TIMEOUT = 600
+
+# Default context window size for Osaurus models (tokens)
+OSAURUS_CONTEXT_WINDOW = 8192
+
+# Timeout estimation: chars per second processing rate
+CHARS_PER_SECOND = 25
+
+# Quality thresholds
+MIN_BULLET_COUNT = 3
+MIN_SUMMARY_CHARS = 100
+BUDGET_MARGIN = 200
+TERMINAL_WIDTH_LIMIT = 100
 
 
 def _check_summary_quality(summary: str) -> tuple[list[str], bool]:
@@ -55,9 +69,9 @@ def _check_summary_quality(summary: str) -> tuple[list[str], bool]:
             bullet_count += 1
     if header_count == 0:
         warnings.append("No ## headers — may be unstructured")
-    if bullet_count < 3:
+    if bullet_count < MIN_BULLET_COUNT:
         warnings.append(f"Only {bullet_count} bullet points — may lack detail")
-    if char_count < 100:
+    if char_count < MIN_SUMMARY_CHARS:
         warnings.append(f"Very short ({char_count} chars)")
     critical = header_count == 0 and bullet_count == 0
     return (warnings, critical)
@@ -66,10 +80,10 @@ def _check_summary_quality(summary: str) -> tuple[list[str], bool]:
 def _build_prompt(
     tweets: list[dict], max_chars: int, for_mlx: bool = False, model: str = None
 ) -> tuple[str, int]:
-    budget = max_chars - 200
+    budget = max_chars - BUDGET_MARGIN
     lines = []
     used = 0
-    width = min(100, shutil.get_terminal_size().columns) if not for_mlx else 120
+    width = min(TERMINAL_WIDTH_LIMIT, shutil.get_terminal_size().columns) if not for_mlx else 120
     for t in reversed(tweets):
         prefix = f"[@{t['screen_name']} | {t['created_at'].strftime('%H:%M')}]: "
         text = t['text'].strip()
@@ -98,6 +112,10 @@ def _build_prompt(
     return prompt, len(lines)
 
 
+def _estimate_timeout(prompt: str) -> int:
+    return max(COLD_START_BASE, min(MAX_TIMEOUT, len(prompt) // CHARS_PER_SECOND))
+
+
 def _summarize_with_model(
     tweets: list[dict], base_url: str, api_key: str,
     ctx_chars: int, models: list[str], try_model: str,
@@ -112,7 +130,7 @@ def _summarize_with_model(
             try_model,
             [{"role": "user", "content": prompt}],
             api_key=api_key,
-            timeout=120,
+            timeout=_estimate_timeout(prompt),
         )
         if result and "content" in result:
             thinking, cleaned = extract_thinking(result["content"])
@@ -132,7 +150,7 @@ def _summarize_with_model(
                 return None
             return cleaned
         elif result and "error" in result:
-            print(f"{WARN} {try_model} error: {result['error'][:50]}")
+            print(f"{WARN} {try_model} error: {result['error']}")
     except Exception as e:
         print(f"{WARN} {try_model} failed: {str(e)[:50]}")
     return None
@@ -151,7 +169,7 @@ def summarize_with_llm(
     if models and target_model not in models:
         target_model = select_best_model(models) or target_model
 
-    ctx_chars = (8192 - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN
+    ctx_chars = (OSAURUS_CONTEXT_WINDOW - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN
 
     fallback_models = list(dict.fromkeys([target_model, "qwen3.6-35b-a3b-mxfp4", "foundation"]))
 

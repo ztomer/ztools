@@ -8,6 +8,10 @@ from typing import List, Optional
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 1337
 
+# Timeouts for HTTP requests (seconds)
+HTTP_READ_TIMEOUT = 10
+SERVER_CHECK_TIMEOUT = 3
+
 
 def get_api_url(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> str:
     return f"http://{host}:{port}/v1/chat/completions"
@@ -25,7 +29,7 @@ def get_models(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, api_key: str 
             url = f"http://{host}:{port}/v1/models"
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         with requests.Session() as s:
-            resp = s.get(url, timeout=10, headers=headers)
+            resp = s.get(url, timeout=HTTP_READ_TIMEOUT, headers=headers)
         if resp.status_code == 200:
             return [m["id"] for m in resp.json().get("data", [])]
     except requests.exceptions.Timeout:
@@ -44,7 +48,7 @@ def is_server_running(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> boo
         else:
             url = f"http://{host}:{port}/v1/models"
         with requests.Session() as s:
-            resp = s.get(url, timeout=3)
+            resp = s.get(url, timeout=SERVER_CHECK_TIMEOUT)
         return resp.status_code in (200, 404)
     except requests.exceptions.Timeout:
         return False

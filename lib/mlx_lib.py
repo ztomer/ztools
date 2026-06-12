@@ -17,6 +17,19 @@ UV_RUN = ["rtk", "uv", "run", "--with", "mlx", "--with", "mlx-lm"]
 from .content_processing import clean_model_output, extract_content_from_code_blocks
 from .logging_config import mlx_logger as logger
 
+# Timeouts for MLX subprocess calls (seconds)
+MLX_GEN_TIMEOUT = 1800
+MLX_FALLBACK_TIMEOUT = 600
+MLX_VLM_TIMEOUT = 180
+
+# MLX generation parameters
+MLX_MAX_TOKENS = 8192
+DEFAULT_CTX_LENGTH = 4096
+
+# Unified API defaults (matches osaurus_lib interface)
+MLX_DEFAULT_PORT = 1337
+MLX_DEFAULT_TEMPERATURE = 0.1
+
 # MLX models directory
 MLX_MODELS_DIR = Path(os.environ.get(
     "MLX_MODELS_DIR", Path.home() / "MLXModels"))
@@ -92,14 +105,14 @@ def get_mlx_context_length(model_path: Path) -> int:
     """Get context length from MLX model's config.json."""
     config_file = model_path / "config.json"
     if not config_file.exists():
-        return 4096
+        return DEFAULT_CTX_LENGTH
 
     import json
 
     with open(config_file) as f:
         config = json.load(f)
 
-    return config.get("context_length", config.get("max_position_embeddings", 4096))
+    return config.get("context_length", config.get("max_position_embeddings", DEFAULT_CTX_LENGTH))
 
 
 def list_mlx_models(mlx_dir: Path = MLX_MODELS_DIR) -> List[str]:
@@ -185,7 +198,7 @@ with open("{prompt_file}", "r") as f:
 prompt = "Output JSON:\\n" + prompt
 text_parts = []
 try:
-    for r in stream_generate(model, tokenizer, prompt, max_tokens=8192):
+    for r in stream_generate(model, tokenizer, prompt, max_tokens=MLX_MAX_TOKENS):
         if hasattr(r, "text"):
             text_parts.append(r.text)
         elif isinstance(r, str):
@@ -208,7 +221,7 @@ print(response, flush=True)
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=1800,
+                timeout=MLX_GEN_TIMEOUT,
             )
             stdout = result.stdout
             stderr = result.stderr
@@ -237,7 +250,7 @@ print(response, flush=True)
                     ["python3", str(main_py), prompt],
                     capture_output=True,
                     text=True,
-                    timeout=600,
+                    timeout=MLX_FALLBACK_TIMEOUT,
                 )
                 if result.returncode == 0:
                     logger.info(
@@ -277,7 +290,7 @@ def run_mlx_vlm(model_path: Path, image_path: Path) -> Optional[str]:
             cmd,
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=MLX_VLM_TIMEOUT,
         )
         if result.returncode == 0:
             logger.info(f"VLM call successful, got {len(result.stdout)} chars")
@@ -326,8 +339,8 @@ def call(
     model: str,
     messages: List[Dict[str, Any]],
     host: str = "localhost",
-    port: int = 1337,
-    temperature: float = 0.1,
+    port: int = MLX_DEFAULT_PORT,
+    temperature: float = MLX_DEFAULT_TEMPERATURE,
     max_tokens: Optional[int] = None,
     timeout: Optional[int] = None,
     task: str = "think",

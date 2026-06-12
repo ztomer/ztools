@@ -8,6 +8,9 @@ from typing import Optional, Callable, Any
 from lib.osaurus_lib import ensure_server, check_llm_availability
 from lib.tui import WARN
 
+# Sleep between restart and retry (seconds)
+RETRY_SLEEP = 2
+
 
 def call_with_fallback(
     model_list: list[str],
@@ -39,7 +42,7 @@ def call_with_fallback(
             if attempt < max_server_retries:
                 print(f"{WARN} {model} failed, restarting server...")
                 restart_fn()
-                time.sleep(2)
+                time.sleep(RETRY_SLEEP)
 
     if mlx_fn:
         mlx_result = mlx_fn()

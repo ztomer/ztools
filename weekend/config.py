@@ -64,14 +64,18 @@ MODEL_NAME = os.environ.get(
 OSAURUS_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
 OSAURUS_APP = "/Applications/osaurus.app"
 
+# Defaults for server management
+RESTART_WAIT = 20
+ENSURE_MAX_RETRIES = 3
+
 
 def is_server_running_ours():
     return is_server_running()
 
 
-def restart_osaurus(wait=20):
+def restart_osaurus(wait=RESTART_WAIT):
     return restart_server(app_path=OSAURUS_APP, wait=wait)
 
 
-def ensure_server(max_retries=3, wait=20):
+def ensure_server(max_retries=ENSURE_MAX_RETRIES, wait=RESTART_WAIT):
     return _osaurus_ensure_server(max_retries=max_retries, wait=wait)

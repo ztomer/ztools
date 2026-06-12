@@ -6,16 +6,23 @@
 
 ## Overview
 
-- **1515 pass, 3 skip** (real MLX backend, real Osaurus server).
-- **96% coverage** total. All modules ≥ 95%, most at 100%.
-- All tests use mocked LLM providers — **no real model calls in CI**.
+- **1529 total** (1454 pass + 3 skip in main suite, 75 pass in excluded files).
+- Tests use **mocked LLM providers** — no real model calls in CI.
+- OCR-dependent tests (`test_img_helpers.py`, `test_image_renamer.py`) run **without coverage** (numpy C extension crashes under pytest-cov — see **Coverage Limitations** below).
 
 Run all: `python3 -m pytest tests/`
 Run single file: `python3 -m pytest tests/test_twit_browser.py -v`
 Run single test: `python3 -m pytest tests/test_file.py::test_name -v`
-Coverage: `python3 -m pytest --cov=. --cov-report=term`
-
-Use `tests/` for a full regression check before commits. Use a specific file during development to iterate faster on one component.
+Full coverage (excluding numpy-crashing tests):
+```bash
+python3 -m pytest tests/ \
+  --ignore=tests/test_img_helpers.py \
+  --ignore=tests/test_image_renamer.py \
+  --cov=rename.llm --cov=rename.helpers \
+  --cov=twitter.summarize --cov=twitter.cookies \
+  --cov-report=term-missing
+```
+OCR tests without coverage: `python3 -m pytest tests/test_img_helpers.py tests/test_image_renamer.py`
 
 ---
 
@@ -184,6 +191,55 @@ assert any("osascript" in s and "quit" in s for s in sub_calls)
 assert any("open" in s and "osaurus" in s for s in sub_calls)
 ```
 
+### pytesseract / numpy C Extension Crash
+
+`import pytesseract` → `import numpy` → `_multiarray_umath` C extension crashes under pytest-cov with `ImportError: cannot load module more than once per process`. This is a known macOS + numpy + `sys.settrace` interaction.
+
+**Fix (lazy import + mock injection):** Make pytesseract a lazy import inside the two functions that use it, with an optional `pytesseract` parameter so tests pass a mock directly:
+
+```python
+# rename/helpers.py
+def extract_first_line(image_path: Path, pytesseract=None) -> Optional[str]:
+    if pytesseract is None:
+        pytesseract = _get_tesseract()  # lazy import inside here
+    if pytesseract is None:
+        return None
+    ...
+```
+
+Tests pass a `MagicMock` instead of using `patch`:
+
+```python
+def test_returns_first_line(self):
+    mock_pt = MagicMock()
+    mock_pt.image_to_string.return_value = "First line\nSecond line"
+    with patch("rename.helpers.Image.open", return_value=MagicMock()):
+        result = extract_first_line("test.png", pytesseract=mock_pt)
+    assert result == "First line"
+```
+
+This avoids importing pytesseract under coverage entirely.
+
+### MLX Function Testing (`query_mlx_for_filename`)
+
+MLX-dependent functions in `rename/llm.py` mock the MLX layer entirely:
+
+```python
+def test_first_model_succeeds(self):
+    from rename.llm import query_mlx_for_filename
+    with patch("rename.llm.find_mlx_model", return_value=Path("/tmp/test.mlx")), \
+         patch("rename.llm.find_any_working_mlx_model", return_value=None), \
+         patch("rename.llm.call_mlx", return_value="my_cool_file"), \
+         patch("rename.llm.process_mlx_content", side_effect=lambda x: x), \
+         patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"), \
+         patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
+         patch("rename.llm.MLX_MODELS_DIR", Path("/tmp")):
+        result = query_mlx_for_filename("some text")
+    assert result == "my_cool_file"
+```
+
+Key: mock both the MLX discovery (`find_mlx_model`, `find_any_working_mlx_model`) AND the MLX response (`call_mlx`, `process_mlx_content`). Also mock module-level config constants (`FILENAME_MODELS`, `PROMPT_TEXT_TO_FILENAME`, `MLX_MODELS_DIR`).
+
 ### MLX Model Discovery via Fake Filesystem
 
 `test_mlx_lib.py` uses a `fake_mlx_dir(tmp_path)` fixture that creates real directories and `config.json` files for model discovery tests — no mocking of `Path.iterdir()` or file existence checks. This exercises the real filesystem scanning logic:
@@ -295,6 +351,26 @@ data = {"data": "not a dict"}  # string has no .get()
 
 The branch can only be exercised with a non-dict value inside the response. Tests must use this pattern to hit the error path.
 
+### 8. `query_mlx_for_filename` lines 147/150 are unreachable dead code
+
+**File:** `rename/llm.py:146-150`
+
+```python
+words = re.findall(r'[a-z]+', content)
+if not words:
+    continue                         # ← catches empty at 139-140
+
+content = '_'.join(words[:6])        # ← join of alpha-only words
+
+if not re.match(r"^[a-z_]+$", content):  # ← always matches (dead)
+    continue
+
+if not any(c.isalpha() for c in content): # ← always True (dead)
+    continue
+```
+
+`re.findall(r'[a-z]+')` extracts only lowercase-alpha sequences. If any found, the join of those with `_` always passes both guards. These lines have been documented but left in place for safety.
+
 ---
 
 ## Test Categories
@@ -313,18 +389,31 @@ The branch can only be exercised with a non-dict value inside the response. Test
 
 ## Coverage Discipline
 
-The `--cov` target is `.` (project root). The audit script used to find uncovered lines:
+Per-module coverage for key packages (excluding numpy-crashing test files):
+
+| File | Coverage | Remaining gaps |
+|------|----------|----------------|
+| `twitter/summarize.py` | **100%** | — |
+| `twitter/cookies.py` | **94%** | L18-21: cryptography ImportError guard (unreachable when crypto IS installed) |
+| `rename/llm.py` | **99%** | L147, L150: unreachable dead code (regex `re.findall(r'[a-z]+', ...)` guarantees match) |
+| `rename/helpers.py` | 21%+ | OCR functions excluded by numpy crash; non-OCR logic tested via `test_img_llm.py` imports |
+
+### Coverage Limitations
+
+1. **numpy + pytest-cov crash**: `ImportError: cannot load module more than once per process` when coverage traces through `import numpy`. Affects `rename/helpers.py` (pytesseract → numpy). **Workaround**: lazy import + mock injection (see pattern above). OCR tests (`test_img_helpers.py`, `test_image_renamer.py`) run without `--cov`.
+
+2. **Unreachable dead code**: `rename/llm.py` lines 147/150 are logically unreachable — `re.findall(r'[a-z]+', content)` at line 138 guarantees `^[a-z_]+$` matches and alpha chars exist. These will be removed in a future cleanup pass.
+
+### Audit Script
 
 ```bash
-python3 -m pytest --cov=. --cov-report=term-missing
+python3 -m pytest tests/ \
+  --ignore=tests/test_img_helpers.py \
+  --ignore=tests/test_image_renamer.py \
+  --cov=rename.llm --cov=rename.helpers \
+  --cov=twitter.summarize --cov=twitter.cookies \
+  --cov-report=term-missing
 ```
-
-Uncovered lines are usually:
-- `if __name__ == "__main__":` blocks (tested separately via `exec`)
-- Defensive `except` branches that never fire in normal flow
-- Subprocess `osascript` calls (covered via `subprocess.run` mock)
-
-When a test reaches an `if __name__ == "__main__":` block via `exec`, it counts as covered for the real block source.
 
 ---
 

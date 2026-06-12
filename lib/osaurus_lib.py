@@ -34,8 +34,15 @@ from .osaurus_output import (
     TOP_LEVEL_KEYS, KEY_NORMALIZATIONS,
 )
 
+# Default parameter values
+DEFAULT_TEMPERATURE = 0.1
+DEFAULT_MAX_TOKENS = 16000
+DEFAULT_TIMEOUT = 600
+ERROR_TRUNCATE_LEN = 200
+
 __all__ = [
     "DEFAULT_HOST", "DEFAULT_PORT",
+    "DEFAULT_TEMPERATURE", "DEFAULT_MAX_TOKENS", "DEFAULT_TIMEOUT", "ERROR_TRUNCATE_LEN",
     "get_api_url", "get_base_url", "get_models", "is_server_running",
     "check_llm_availability", "get_available_models",
     "get_best_model", "select_best_vlm_model", "select_best_model",
@@ -83,7 +90,7 @@ def call(
     messages: List[Dict[str, Any]],
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
-    temperature: float = 0.1,
+    temperature: float = DEFAULT_TEMPERATURE,
     max_tokens: Optional[int] = None,
     timeout: Optional[int] = None,
     task: str = "think",
@@ -115,7 +122,7 @@ def call(
         result["time"] = round(time.time() - start, 1)
         logger.debug(f"Response received in {result['time']}s")
         if resp.status_code != 200:
-            result["error"] = f"HTTP {resp.status_code}: {resp.text[:200]}"
+            result["error"] = f"HTTP {resp.status_code}: {resp.text[:ERROR_TRUNCATE_LEN]}"
             logger.error(f"HTTP error: {result['error']}")
             return result
         resp_data = resp.json()
@@ -157,8 +164,8 @@ def call_with_prompt(
     task: str = "think",
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
-    temperature: float = 0.1,
-    max_tokens: int = 16000,
+    temperature: float = DEFAULT_TEMPERATURE,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
 ) -> dict:
     if task in PROMPTS:
         template = PROMPTS[task]
@@ -181,8 +188,8 @@ def test_model(model: str, prompt: str = "Hello", task: str = "think", host: str
 
 def call_llm_api(
     host: str, model: str, messages: List[dict],
-    api_key: str = "", temperature: float = 0.1,
-    max_tokens: int = 16000, timeout: int = 600,
+    api_key: str = "",     temperature: float = DEFAULT_TEMPERATURE,
+    max_tokens: int = DEFAULT_MAX_TOKENS, timeout: int = DEFAULT_TIMEOUT,
     parse_json: bool = False,
 ) -> dict:
     headers = {"Content-Type": "application/json"}

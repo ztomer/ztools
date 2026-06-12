@@ -9,6 +9,11 @@ Run: python3 explore_model_quirks.py <model>
 from lib.osaurus_lib import call, filter_json_items, fix_json_years
 from lib.validators_lib import check_source_extraction, has_item_details
 
+# Timeouts for model tests (seconds)
+DEFAULT_TEST_TIMEOUT = 30
+SOURCE_MATCH_TIMEOUT = 60
+SOURCE_TEST_TIMEOUT = 90
+
 TEST_PROMPTS = {
     "simple_json": {
         "system": "Output JSON with name and age.",
@@ -33,7 +38,7 @@ TEST_PROMPTS = {
 }
 
 
-def run_test(model: str, test_name: str, timeout: int = 30) -> dict:
+def run_test(model: str, test_name: str, timeout: int = DEFAULT_TEST_TIMEOUT) -> dict:
     """Run a single test and return result."""
     prompts = TEST_PROMPTS.get(test_name, {})
     if not prompts:
@@ -73,7 +78,7 @@ def run_test(model: str, test_name: str, timeout: int = 30) -> dict:
         return {"error": str(e)}
 
 
-def test_source_matching(model: str, timeout: int = 60) -> dict:
+def test_source_matching(model: str, timeout: int = SOURCE_MATCH_TIMEOUT) -> dict:
     """Test if model extracts from input (not hallucinated)."""
     system = "Output JSON now. Extract from the context provided."
     user = """High-Signal Transient Events:
@@ -110,7 +115,7 @@ def test_source_matching(model: str, timeout: int = 60) -> dict:
         return {"status": "ERROR", "reason": str(e)}
 
 
-def explore_model(model: str, timeout: int = 30):
+def explore_model(model: str, timeout: int = DEFAULT_TEST_TIMEOUT):
     """Run tests on a model and report results."""
     print(f"\n{'='*60}")
     print(f"Exploring model: {model}")
@@ -143,7 +148,7 @@ def explore_model(model: str, timeout: int = 30):
     
     # Source matching test
     print(f"\n--- Source Matching Test ---")
-    src_result = test_source_matching(model, timeout=90)
+    src_result = test_source_matching(model, timeout=SOURCE_TEST_TIMEOUT)
     print(f"  Status: {src_result.get('status')}")
     print(f"  Match ratio: {src_result.get('source_match_ratio', 0):.0%}")
     print(f"  Items: {src_result.get('items', 0)}, with details: {src_result.get('with_details', 0)}")

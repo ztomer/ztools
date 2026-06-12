@@ -250,3 +250,22 @@ class TestErrorPaths:
              patch("twitter.cookies.tempfile.mktemp", return_value=str(tmp_path / "tmp.db")):
             with pytest.raises(Exception, match="keychain error"):
                 twit_cookies.get_chrome_cookies()
+
+    def test_keychain_called_process_error_returns_empty(self, tmp_path, monkeypatch):
+        """CalledProcessError is caught, returns []."""
+        import twitter.cookies as twit_cookies
+        import sqlite3
+        import subprocess
+        db_path = tmp_path / "Cookies"
+        conn = sqlite3.connect(str(db_path))
+        conn.execute("""CREATE TABLE cookies (
+            name TEXT, encrypted_value BLOB, value TEXT, path TEXT,
+            host_key TEXT, expires_utc INTEGER, is_secure INTEGER
+        )""")
+        conn.commit()
+        conn.close()
+        monkeypatch.setattr(twit_cookies, "CHROME_COOKIES_DB", db_path)
+        with patch.object(twit_cookies, "_get_chrome_keychain_key",
+                          side_effect=subprocess.CalledProcessError(1, "security")):
+            cookies = twit_cookies.get_chrome_cookies()
+        assert cookies == []

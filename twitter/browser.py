@@ -20,6 +20,14 @@ from lib.tui import STEP, WARN
 MAX_SCROLLS = 1200
 SCROLL_PAUSE_MS = 1800
 
+# Timeouts (milliseconds)
+PAGE_LOAD_TIMEOUT_MS = 30000
+CLICK_TIMEOUT_MS = 5000
+
+# Sleep durations (seconds)
+INITIAL_PAGE_WAIT = 3
+TAB_SWITCH_WAIT = 2
+
 
 def parse_tweets_from_response(data: dict) -> list[dict]:
     tweets = []
@@ -135,12 +143,12 @@ def collect_tweets_via_browser(since_time: datetime, debug: bool) -> list[dict]:
 
         try:
             page.goto(
-                "https://x.com/home", wait_until="domcontentloaded", timeout=30000
+                "https://x.com/home", wait_until="domcontentloaded", timeout=PAGE_LOAD_TIMEOUT_MS
             )
         except PWTimeout:
             pass
 
-        time.sleep(3)
+        time.sleep(INITIAL_PAGE_WAIT)
         if any(
             kw in page.title().lower()
             for kw in ("log in", "login", "sign in", "signin")
@@ -153,8 +161,8 @@ def collect_tweets_via_browser(since_time: datetime, debug: bool) -> list[dict]:
         try:
             following_tab = page.locator(
                 '[role="tab"]', has_text="Following").first
-            following_tab.click(timeout=5000)
-            time.sleep(2)
+            following_tab.click(timeout=CLICK_TIMEOUT_MS)
+            time.sleep(TAB_SWITCH_WAIT)
         except Exception:
             pass
 

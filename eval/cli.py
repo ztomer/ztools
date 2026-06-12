@@ -109,6 +109,22 @@ __all__ = [
 
 console = Console()
 
+# Default server port
+DEFAULT_SERVER_PORT = 1337
+
+# Timeouts for server checks (seconds)
+SERVER_RESPONSIVE_TIMEOUT = 5
+RESTART_CHECK_TIMEOUT = 2
+FLUSH_CALL_TIMEOUT = 30
+
+# Sleep durations during model flush (seconds)
+FLUSH_QUIT_WAIT = 3
+FLUSH_RESTART_WAIT = 8
+FLUSH_SETTLE_WAIT = 2
+
+# Retries for server restart check
+RESTART_CHECK_RETRIES = 5
+
 
 # ==========================================================
 # Memory monitoring
@@ -132,7 +148,7 @@ def check_memory_safe() -> bool:
     return True
 
 
-def is_server_responsive(host: str = "localhost", port: int = 1337, timeout: int = 5) -> bool:
+def is_server_responsive(host: str = "localhost", port: int = DEFAULT_SERVER_PORT, timeout: int = SERVER_RESPONSIVE_TIMEOUT) -> bool:
     """Check if osaurus server is responsive."""
     import requests
     try:
@@ -292,32 +308,32 @@ def main():
         console.print(f"{STEP} Flushing {prev_model} -> {next_model}...")
 
         try:
-            r = call(next_model, [{"role": "user", "content": "ok"}], timeout=30)
+            r = call(next_model, [{"role": "user", "content": "ok"}], timeout=FLUSH_CALL_TIMEOUT)
             if r.get("error"):
                 console.print(f"{WARN} Flush failed, attempting restart...")
                 try:
                     subprocess.run(["osascript", "-e", 'quit app "osaurus"'], capture_output=True)
                 except Exception:
                     pass
-                time.sleep(3)
+                time.sleep(FLUSH_QUIT_WAIT)
                 try:
                     subprocess.run(["open", "-n", "-a", "osaurus"], capture_output=True)
                 except Exception:
                     pass
-                time.sleep(8)
-                for _ in range(5):
+                time.sleep(FLUSH_RESTART_WAIT)
+                for _ in range(RESTART_CHECK_RETRIES):
                     try:
                         import requests
                         with requests.Session() as s:
-                            resp = s.get("http://localhost:1337/api/tags", timeout=2)
+                            resp = s.get("http://localhost:1337/api/tags", timeout=RESTART_CHECK_TIMEOUT)
                         if resp.status_code == 200:
                             console.print(f"{STEP} Server restarted")
                             break
                     except Exception:
-                        time.sleep(2)
+                        time.sleep(FLUSH_SETTLE_WAIT)
         except Exception as e:
             console.print(f"{FAIL} Flush error: {e}")
-        time.sleep(2)
+        time.sleep(FLUSH_SETTLE_WAIT)
 
     prev_model = None
     for model, backend in models_to_test:

@@ -11,21 +11,31 @@ from .osaurus_models import is_server_running, get_models, DEFAULT_HOST, DEFAULT
 
 PID_FILE = Path.home() / ".osaurus.pid"
 
+# Sleep durations (seconds)
+RESTART_SLEEP = 1
+SERVER_WAIT = 20
+
+# Retries
+ENSURE_MAX_RETRIES = 3
+
+# API call timeout (seconds)
+TEST_TIMEOUT = 10
+
 
 def _kill_osaurus():
     if PID_FILE.exists():
         try:
             pid = int(PID_FILE.read_text().strip())
             os.kill(pid, signal.SIGTERM)
-            time.sleep(1)
+            time.sleep(RESTART_SLEEP)
         except (ProcessLookupError, ValueError, OSError):
             pass
         PID_FILE.unlink(missing_ok=True)
 
 
-def restart_server(app_path: str = "/Applications/osaurus.app", wait: int = 20) -> bool:
+def restart_server(app_path: str = "/Applications/osaurus.app", wait: int = SERVER_WAIT) -> bool:
     _kill_osaurus()
-    time.sleep(1)
+    time.sleep(RESTART_SLEEP)
 
     if Path(app_path).exists():
         launcher = ["open", app_path]
@@ -48,7 +58,7 @@ def restart_server(app_path: str = "/Applications/osaurus.app", wait: int = 20) 
     return False
 
 
-def ensure_server(max_retries: int = 3, wait: int = 20) -> bool:
+def ensure_server(max_retries: int = ENSURE_MAX_RETRIES, wait: int = SERVER_WAIT) -> bool:
     for attempt in range(1, max_retries + 1):
         if is_server_running():
             return True
@@ -75,7 +85,7 @@ def test_connection(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, model: s
             [{"role": "user", "content": "Hi"}],
             host,
             port,
-            timeout=10,
+            timeout=TEST_TIMEOUT,
         )
         if result.get("error"):
             return {"status": "error", "message": result["error"]}

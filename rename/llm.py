@@ -33,6 +33,15 @@ PROMPT_TEXT_TO_FILENAME = get_model_prompt(FILENAME_MODELS[0], Task.FILENAME) if
 
 MLX_MODELS_DIR = Path.home() / "MLXModels"
 
+# Timeouts for LLM API calls (seconds)
+RELEVANCE_CHECK_TIMEOUT = 5
+FILENAME_QUERY_TIMEOUT = 120
+VLM_QUERY_TIMEOUT = 60
+
+# Sleep durations for server management (seconds)
+PKILL_WAIT = 2
+APP_LAUNCH_WAIT = 15
+
 
 def ensure_llm_running() -> bool:
     """Detect crash and restart server if needed."""
@@ -43,13 +52,13 @@ def ensure_llm_running() -> bool:
 
     try:
         subprocess.run(["pkill", "-f", "osaurus"], capture_output=True)
-        time.sleep(2)
+        time.sleep(PKILL_WAIT)
     except Exception:
         pass
 
     try:
         subprocess.Popen(["open", "-a", "osaurus"])
-        time.sleep(15)
+        time.sleep(APP_LAUNCH_WAIT)
         if check_llm_availability("http://localhost:1337"):
             return True
     except Exception:
@@ -69,7 +78,7 @@ def is_relevant_with_llm(text: str, host: str, api_key: str = "") -> Optional[bo
                 resp = s.post(
                     f"{host}/api/chat",
                     json={"model": model, "messages": messages},
-                    timeout=5,
+                    timeout=RELEVANCE_CHECK_TIMEOUT,
                 )
             if resp.status_code != 200:
                 continue
@@ -105,7 +114,7 @@ def query_llm_for_filename(
                 resp = sess.post(
                     f"{host}/api/chat",
                     json={"model": m, "messages": messages},
-                    timeout=120,
+                    timeout=FILENAME_QUERY_TIMEOUT,
                 )
             if resp.status_code != 200:
                 continue
@@ -208,7 +217,7 @@ def query_vlm_for_filename(
                 f"{host}/api/chat",
                 json={"model": model, "messages": messages},
                 headers=headers,
-                timeout=60,
+                timeout=VLM_QUERY_TIMEOUT,
             )
 
         if resp.status_code != 200:

@@ -14,6 +14,11 @@ from lib.osaurus_lib import (
 from lib.llm.fallback import call_with_fallback
 from lib.config import Task
 from lib.tui import debug_print, WARN
+
+# LLM API defaults
+LLM_TEMPERATURE = 0.1
+LLM_API_TIMEOUT = 1800
+LLM_MAX_RETRIES = 5
 from lib.mlx_lib import (
     find_text_mlx_model,
     call_mlx,
@@ -21,7 +26,7 @@ from lib.mlx_lib import (
 )
 
 
-def get_llm_json(system_prompt, user_prompt, max_retries=5):
+def get_llm_json(system_prompt, user_prompt, max_retries=LLM_MAX_RETRIES):
     target_model = get_best_model(Task.JSON)
     last_content = None
 
@@ -39,8 +44,8 @@ def get_llm_json(system_prompt, user_prompt, max_retries=5):
             OSAURUS_BASE_URL.rstrip("/"),
             model_name,
             messages,
-            temperature=0.1,
-            timeout=1800,
+            temperature=LLM_TEMPERATURE,
+            timeout=LLM_API_TIMEOUT,
             parse_json=True,
         )
 

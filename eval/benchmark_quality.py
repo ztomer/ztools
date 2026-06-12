@@ -18,6 +18,9 @@ from typing import List, Optional, Tuple
 from lib.config import get_model_prompt, Task
 from lib.osaurus_lib import call as llm_call
 
+# Timeout for model queries (seconds)
+BENCHMARK_QUERY_TIMEOUT = 120
+
 from eval.benchmark_output import (
     print_header, print_model_header, print_case_result,
     print_model_summary, print_cross_model_comparison,
@@ -265,7 +268,7 @@ def query_model(model: str, prompt: str, input_text: str, task: str) -> Optional
         result = llm_call(
             model=model,
             messages=messages,
-            timeout=120,
+            timeout=BENCHMARK_QUERY_TIMEOUT,
             task=task,
         )
         return result.get("content", "")

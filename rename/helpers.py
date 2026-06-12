@@ -7,12 +7,10 @@ from pathlib import Path
 from lib.tui import FAIL
 from typing import Optional
 from PIL import Image
-import pytesseract
 
-# Point pytesseract at Homebrew's tesseract binary if not on PATH
+# Point pytesseract at Homebrew's tesseract binary if not on PATH (lazy init)
 _TESSERACT_BREW = "/opt/homebrew/bin/tesseract"
-if Path(_TESSERACT_BREW).exists():
-    pytesseract.pytesseract.tesseract_cmd = _TESSERACT_BREW
+_TESSERACT_INIT = False
 
 # Generic LLM outputs that should be rejected (not real filenames)
 _GENERIC_BASES = frozenset({
@@ -40,7 +38,27 @@ def clean_filename(text: str, max_length: int = 50) -> str:
     return cleaned if cleaned else "unnamed"
 
 
-def extract_first_line(image_path: Path) -> Optional[str]:
+def _get_tesseract():
+    global _TESSERACT_INIT
+    if not _TESSERACT_INIT:
+        try:
+            import pytesseract
+        except ImportError:
+            pytesseract = None
+        if pytesseract and Path(_TESSERACT_BREW).exists():
+            pytesseract.pytesseract.tesseract_cmd = _TESSERACT_BREW
+        _TESSERACT_INIT = True
+    else:
+        import sys
+        pytesseract = sys.modules.get("pytesseract")
+    return pytesseract
+
+
+def extract_first_line(image_path: Path, pytesseract=None) -> Optional[str]:
+    if pytesseract is None:
+        pytesseract = _get_tesseract()
+    if pytesseract is None:
+        return None
     try:
         image = Image.open(image_path)
         text = pytesseract.image_to_string(image)
@@ -53,7 +71,11 @@ def extract_first_line(image_path: Path) -> Optional[str]:
         return None
 
 
-def extract_full_text(image_path: Path) -> Optional[str]:
+def extract_full_text(image_path: Path, pytesseract=None) -> Optional[str]:
+    if pytesseract is None:
+        pytesseract = _get_tesseract()
+    if pytesseract is None:
+        return None
     try:
         image = Image.open(image_path)
         text = pytesseract.image_to_string(image)

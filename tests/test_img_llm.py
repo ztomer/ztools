@@ -28,6 +28,22 @@ class TestEnsureLlmRunning:
              patch("lib.osaurus_server.restart_server", side_effect=Exception("fail")):
             assert ensure_llm_running() is False
 
+    def test_pkill_exception_caught(self):
+        from rename.llm import ensure_llm_running
+        with patch("rename.llm.check_llm_availability", return_value=False), \
+             patch("rename.llm.subprocess.run", side_effect=Exception("pkill fail")), \
+             patch("rename.llm.subprocess.Popen"), \
+             patch("time.sleep"):
+            assert ensure_llm_running() is False
+
+    def test_popen_exception_caught(self):
+        from rename.llm import ensure_llm_running
+        with patch("rename.llm.check_llm_availability", return_value=False), \
+             patch("rename.llm.subprocess.run"), \
+             patch("rename.llm.subprocess.Popen", side_effect=Exception("popen fail")), \
+             patch("time.sleep"):
+            assert ensure_llm_running() is False
+
 
 class TestIsRelevantWithLlm:
     def test_keep_response(self):
@@ -405,3 +421,86 @@ class TestQueryVlmForFilename:
             s.post.return_value = mock_resp
             result = query_llm_for_filename("x", "http://localhost:1337")
             assert result == "first_name"
+
+
+class TestQueryMlxForFilename:
+    def test_first_model_succeeds(self):
+        from rename.llm import query_mlx_for_filename
+        with patch("rename.llm.find_mlx_model", return_value=Path("/tmp/test.mlx")), \
+             patch("rename.llm.find_any_working_mlx_model", return_value=None), \
+             patch("rename.llm.call_mlx", return_value="my_cool_file"), \
+             patch("rename.llm.process_mlx_content", side_effect=lambda x: x), \
+             patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"), \
+             patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
+             patch("rename.llm.MLX_MODELS_DIR", Path("/tmp")):
+            result = query_mlx_for_filename("some text")
+        assert result == "my_cool_file"
+
+    def test_model_not_found_skips(self):
+        from rename.llm import query_mlx_for_filename
+        with patch("rename.llm.find_mlx_model", return_value=None), \
+             patch("rename.llm.find_any_working_mlx_model", return_value=None), \
+             patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"), \
+             patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
+             patch("rename.llm.MLX_MODELS_DIR", Path("/tmp")):
+            result = query_mlx_for_filename("some text")
+        assert result is None
+
+    def test_call_mlx_returns_none(self):
+        from rename.llm import query_mlx_for_filename
+        with patch("rename.llm.find_mlx_model", return_value=Path("/tmp/test.mlx")), \
+             patch("rename.llm.find_any_working_mlx_model", return_value=None), \
+             patch("rename.llm.call_mlx", return_value=None), \
+             patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"), \
+             patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
+             patch("rename.llm.MLX_MODELS_DIR", Path("/tmp")):
+            result = query_mlx_for_filename("some text")
+        assert result is None
+
+    def test_short_content_skipped(self):
+        from rename.llm import query_mlx_for_filename
+        with patch("rename.llm.find_mlx_model", return_value=Path("/tmp/test.mlx")), \
+             patch("rename.llm.find_any_working_mlx_model", return_value=None), \
+             patch("rename.llm.call_mlx", return_value="x"), \
+             patch("rename.llm.process_mlx_content", side_effect=lambda x: x), \
+             patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"), \
+             patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
+             patch("rename.llm.MLX_MODELS_DIR", Path("/tmp")):
+            result = query_mlx_for_filename("some text")
+        assert result is None
+
+    def test_fallback_succeeds(self):
+        from rename.llm import query_mlx_for_filename
+        with patch("rename.llm.find_mlx_model", return_value=None), \
+             patch("rename.llm.find_any_working_mlx_model", return_value=Path("/tmp/fallback.mlx")), \
+             patch("rename.llm.call_mlx", return_value="fallback_name"), \
+             patch("rename.llm.process_mlx_content", side_effect=lambda x: x), \
+             patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"), \
+             patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
+             patch("rename.llm.MLX_MODELS_DIR", Path("/tmp")):
+            result = query_mlx_for_filename("some text")
+        assert result == "fallback_name"
+
+    def test_fallback_already_tried(self):
+        from rename.llm import query_mlx_for_filename
+        mlx_path = Path("/tmp/my.mlx")
+        with patch("rename.llm.find_mlx_model", return_value=mlx_path), \
+             patch("rename.llm.find_any_working_mlx_model", return_value=mlx_path), \
+             patch("rename.llm.call_mlx", return_value="skipped"), \
+             patch("rename.llm.process_mlx_content", side_effect=lambda x: x), \
+             patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"), \
+             patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
+             patch("rename.llm.MLX_MODELS_DIR", Path("/tmp")):
+            result = query_mlx_for_filename("some text")
+        assert result == "skipped"
+
+    def test_fallback_call_mlx_returns_none(self):
+        from rename.llm import query_mlx_for_filename
+        with patch("rename.llm.find_mlx_model", return_value=None), \
+             patch("rename.llm.find_any_working_mlx_model", return_value=Path("/tmp/fallback.mlx")), \
+             patch("rename.llm.call_mlx", return_value=None), \
+             patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"), \
+             patch("rename.llm.FILENAME_MODELS", ["test-model"]), \
+             patch("rename.llm.MLX_MODELS_DIR", Path("/tmp")):
+            result = query_mlx_for_filename("some text")
+        assert result is None

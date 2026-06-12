@@ -129,28 +129,32 @@ class TestStripInstructionPrefix:
 class TestExtractFirstLine:
     def test_returns_first_line(self):
         mock_image = MagicMock()
-        with patch("rename.helpers.Image.open", return_value=mock_image), \
-             patch("rename.helpers.pytesseract.image_to_string", return_value="First line\nSecond line\nThird"):
-            result = extract_first_line("test.png")
+        mock_pt = MagicMock()
+        mock_pt.image_to_string.return_value = "First line\nSecond line\nThird"
+        with patch("rename.helpers.Image.open", return_value=mock_image):
+            result = extract_first_line("test.png", pytesseract=mock_pt)
         assert result == "First line"
 
     def test_returns_none_for_empty(self):
         mock_image = MagicMock()
-        with patch("rename.helpers.Image.open", return_value=mock_image), \
-             patch("rename.helpers.pytesseract.image_to_string", return_value=""):
-            result = extract_first_line("test.png")
+        mock_pt = MagicMock()
+        mock_pt.image_to_string.return_value = ""
+        with patch("rename.helpers.Image.open", return_value=mock_image):
+            result = extract_first_line("test.png", pytesseract=mock_pt)
         assert result is None
 
     def test_skips_blank_lines(self):
         mock_image = MagicMock()
-        with patch("rename.helpers.Image.open", return_value=mock_image), \
-             patch("rename.helpers.pytesseract.image_to_string", return_value="\n\nFirst real line"):
-            result = extract_first_line("test.png")
+        mock_pt = MagicMock()
+        mock_pt.image_to_string.return_value = "\n\nFirst real line"
+        with patch("rename.helpers.Image.open", return_value=mock_image):
+            result = extract_first_line("test.png", pytesseract=mock_pt)
         assert result == "First real line"
 
     def test_exception_returns_none(self, capsys):
+        mock_pt = MagicMock()
         with patch("rename.helpers.Image.open", side_effect=Exception("bad file")):
-            result = extract_first_line(MagicMock(name="broken.png"))
+            result = extract_first_line(MagicMock(name="broken.png"), pytesseract=mock_pt)
         assert result is None
         out = capsys.readouterr()
         assert "broken.png" in out.out or "broken.png" in out.err
@@ -159,21 +163,24 @@ class TestExtractFirstLine:
 class TestExtractFullText:
     def test_returns_full_text(self):
         mock_image = MagicMock()
-        with patch("rename.helpers.Image.open", return_value=mock_image), \
-             patch("rename.helpers.pytesseract.image_to_string", return_value="Line 1\nLine 2"):
-            result = extract_full_text("test.png")
+        mock_pt = MagicMock()
+        mock_pt.image_to_string.return_value = "Line 1\nLine 2"
+        with patch("rename.helpers.Image.open", return_value=mock_image):
+            result = extract_full_text("test.png", pytesseract=mock_pt)
         assert result == "Line 1\nLine 2"
 
     def test_returns_none_for_empty(self):
         mock_image = MagicMock()
-        with patch("rename.helpers.Image.open", return_value=mock_image), \
-             patch("rename.helpers.pytesseract.image_to_string", return_value=""):
-            result = extract_full_text("test.png")
+        mock_pt = MagicMock()
+        mock_pt.image_to_string.return_value = ""
+        with patch("rename.helpers.Image.open", return_value=mock_image):
+            result = extract_full_text("test.png", pytesseract=mock_pt)
         assert result is None
 
     def test_exception_returns_none(self, capsys):
+        mock_pt = MagicMock()
         with patch("rename.helpers.Image.open", side_effect=Exception("bad file")):
-            result = extract_full_text(MagicMock(name="broken.png"))
+            result = extract_full_text(MagicMock(name="broken.png"), pytesseract=mock_pt)
         assert result is None
         out = capsys.readouterr()
         assert "broken.png" in out.out or "broken.png" in out.err

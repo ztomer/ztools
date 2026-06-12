@@ -11,6 +11,10 @@ from lib.llm.constants import (
 )
 from lib.llm.quirks import apply_model_quirks
 
+# Timeouts for server checks (seconds)
+SERVER_CHECK_TIMEOUT = 5
+LIST_MODELS_TIMEOUT = 10
+
 
 def get_api_url(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> str:
     """Get API URL for host:port."""
@@ -111,7 +115,7 @@ def is_server_running(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> boo
         with requests.Session() as s:
             response = s.get(
                 f"{get_api_url(host, port)}/api/tags",
-                timeout=5,
+                timeout=SERVER_CHECK_TIMEOUT,
             )
         return response.status_code == 200
     except Exception:
@@ -124,7 +128,7 @@ def get_models(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> List[str]:
         with requests.Session() as s:
             response = s.get(
                 f"{get_api_url(host, port)}/api/tags",
-                timeout=10,
+                timeout=LIST_MODELS_TIMEOUT,
             )
         data = response.json()
         return [m["model"] for m in data.get("models", [])]

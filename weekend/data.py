@@ -5,6 +5,17 @@ import re
 import requests
 from ddgs import DDGS
 
+# HTTP request defaults
+WEATHER_API_TIMEOUT = 10
+
+# Web search retries and limits
+FETCH_RETRIES = 3
+DDGS_MAX_RESULTS = 8
+REVIEW_MAX_RESULTS = 5
+
+# Rate limiting
+RATE_LIMIT_SLEEP = 0.5
+
 
 def get_weekend_date_objects():
     today = datetime.date.today()
@@ -29,7 +40,7 @@ def fetch_weather(friday, sunday):
             "end_date": sunday.strftime("%Y-%m-%d"),
         }
         with requests.Session() as s:
-            resp = s.get(url, params=params, timeout=10).json()
+            resp = s.get(url, params=params, timeout=WEATHER_API_TIMEOUT).json()
         daily = resp.get("daily", {})
 
         dates = daily.get("time", [])
@@ -54,10 +65,10 @@ def fetch_weather(friday, sunday):
 
 
 def fetch_transient_events(dates_str, year, month_name):
-    def safe_search(q, retries=3):
+    def safe_search(q, retries=FETCH_RETRIES):
         for attempt in range(retries):
             try:
-                results = list(DDGS().text(q, max_results=8))
+                results = list(DDGS().text(q, max_results=DDGS_MAX_RESULTS))
                 return results
             except Exception as e:
                 if "429" in str(e) or "rate" in str(e).lower():
@@ -113,7 +124,7 @@ def fetch_fixed_venues(year, month_name):
         all_results = []
         for q in queries:
             try:
-                results = list(DDGS().text(q, max_results=8))
+                results = list(DDGS().text(q, max_results=DDGS_MAX_RESULTS))
                 all_results.extend(results)
             except Exception as e:
                 print(f"[WARN] Query failed: {q[:30]}... - {e}")
@@ -141,9 +152,9 @@ def fetch_fixed_venues(year, month_name):
 def scrape_review_score(place_name):
     for attempt in range(3):
         try:
-            time.sleep(0.5)
+            time.sleep(RATE_LIMIT_SLEEP)
             query = f'"{place_name}" rating review 5 stars'
-            results = list(DDGS().text(query, max_results=5))
+            results = list(DDGS().text(query, max_results=REVIEW_MAX_RESULTS))
             combined = " ".join([r.get("title", "") + " " + r.get("body", "") for r in results])
 
             match = re.search(r"([0-4]\.\d)\s*/?\s*5", combined, re.IGNORECASE)

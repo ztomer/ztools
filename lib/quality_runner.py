@@ -9,6 +9,8 @@ from lib.quality_scorers import score_output
 from lib.tui import STEP, WARN, FAIL
 
 
+LLM_TIMEOUT = 600
+
 FILENAME_CASES = [
     TestCase(
         task="filename",
@@ -127,7 +129,7 @@ def query_model(model: str, prompt: str, input_text: str, task: str) -> Optional
         result = llm_call(
             model=model,
             messages=[{"role": "user", "content": filled}],
-            timeout=600,
+            timeout=LLM_TIMEOUT,
             task=task,
         )
         return _str(result.get("content"))
