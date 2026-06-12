@@ -277,16 +277,35 @@ class TestPhaseFunctions:
 
     def test_extract_sources_returns_api_content(self, mock_llm):
         import weekend.llm as wl
-        with patch.object(wl, "_call_llm", return_value="- Event A: details\n- Event B: details"):
-            result = wl.extract_sources("raw search results", "events")
+        with patch.object(wl, "_call_llm", return_value="- Event A: details"), \
+             patch.object(wl, "_load_extract_signals", return_value={}), \
+             patch.object(wl, "_save_extract_signals"):
+            result = wl.extract_sources("- raw result", "events")
         assert "Event A" in result
 
     def test_extract_sources_fallback_on_none(self, mock_llm):
         import weekend.llm as wl
         raw = "- raw result 1\n- raw result 2"
-        with patch.object(wl, "_call_llm", return_value=None):
+        with patch.object(wl, "_call_llm", return_value=None), \
+             patch.object(wl, "_load_extract_signals", return_value={}), \
+             patch.object(wl, "_save_extract_signals"):
             result = wl.extract_sources(raw, "events")
-        assert result == raw
+        # With batch_size=1 fallback, results are raw lines
+        assert "- raw result" in result
+
+    def test_extract_sources_returns_raw_on_no_lines(self, mock_llm):
+        import weekend.llm as wl
+        result = wl.extract_sources("not a dash line", "events")
+        assert result == "not a dash line"
+
+    def test_extract_sources_reduces_batch_on_timeout(self, mock_llm):
+        import weekend.llm as wl
+        with patch.object(wl, "_call_llm", side_effect=[None, "- Event B: details"]), \
+             patch.object(wl, "_load_extract_signals", return_value={}), \
+             patch.object(wl, "_save_extract_signals"):
+            result = wl.extract_sources("- r1\n- r2", "events")
+        # First call with batch=5 fails → batch halves to 2 → retries both items → succeeds
+        assert "Event B" in result
 
     def test_draft_activities_returns_content(self, mock_llm):
         import weekend.llm as wl

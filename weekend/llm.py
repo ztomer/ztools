@@ -1,5 +1,6 @@
 import json
 import re
+from pathlib import Path
 
 from weekend.config import OSAURUS_BASE_URL, ensure_server
 
@@ -211,10 +212,69 @@ def condense_weather(weather_str):
     return result if result else weather_str[:200]
 
 
-def extract_sources(raw_text, source_type):
+EXTRACT_SIGNALS_PATH = Path(__file__).parent.parent / "conf" / "extract_signals.json"
+DEFAULT_BATCH_SIZE = 5
+MAX_BATCH_SIZE = 10
+
+
+def _load_extract_signals():
+    try:
+        if EXTRACT_SIGNALS_PATH.exists():
+            return json.loads(EXTRACT_SIGNALS_PATH.read_text())
+    except Exception:
+        pass
+    return {}
+
+
+def _save_extract_signals(signals):
+    EXTRACT_SIGNALS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    EXTRACT_SIGNALS_PATH.write_text(json.dumps(signals, indent=2, sort_keys=True))
+
+
+def _extract_group_prompt(lines, source_type):
     from weekend.prompts import build_source_extract_prompt
-    result = _call_llm("", build_source_extract_prompt(raw_text, source_type), timeout=PHASE_TIMEOUT_EXTRACT)
-    return result if result else raw_text
+    return build_source_extract_prompt("\n".join(lines), source_type)
+
+
+def extract_sources(raw_text, source_type, model_name="default"):
+    signals = _load_extract_signals()
+    per_type = signals.setdefault(model_name or "default", {}).setdefault(source_type, {})
+    batch_size = per_type.get("batch_size", DEFAULT_BATCH_SIZE)
+
+    lines = [l for l in raw_text.split("\n") if l.startswith("- ")]
+    if not lines:
+        return raw_text
+
+    results = []
+    streak = 0
+    i = 0
+    while i < len(lines):
+        chunk = lines[i:i + batch_size]
+        prompt = _extract_group_prompt(chunk, source_type)
+        result = _call_llm("", prompt, timeout=PHASE_TIMEOUT_EXTRACT)
+
+        if result:
+            results.append(result)
+            streak += 1
+            i += batch_size
+            if streak >= 3 and batch_size < MAX_BATCH_SIZE:
+                batch_size += 1
+                per_type["batch_size"] = batch_size
+                _save_extract_signals(signals)
+        else:
+            per_type["timeouts"] = per_type.get("timeouts", 0) + 1
+            batch_size = max(batch_size // 2, 1)
+            per_type["batch_size"] = batch_size
+            _save_extract_signals(signals)
+            streak = 0
+            if batch_size == 1:
+                results.append(chunk[0])
+                i += 1
+                batch_size = per_type.get("batch_size", DEFAULT_BATCH_SIZE)
+
+    if not results:
+        return raw_text
+    return "\n".join(results)
 
 
 def draft_activities(weather_condensed, cleaned_sources, source_type, location, age_range, date_range):
@@ -241,7 +301,7 @@ def generate_weekend_plan(model, weather_str, events_str, venues_str, dates_str,
 
     condensed_weather = condense_weather(weather_str)
 
-    cleaned_events = extract_sources(events_str, "events")
+    cleaned_events = extract_sources(events_str, "events", model_name=model)
     draft_transient = draft_activities(condensed_weather or weather_str[:200], cleaned_events, "transient", location, age_range, date_range)
     json_transient = {}
     if draft_transient:
@@ -254,7 +314,7 @@ def generate_weekend_plan(model, weather_str, events_str, venues_str, dates_str,
         usr_t = build_transient_user_prompt(dates_str, weather_str, events_str)
         json_transient = get_llm_json(sys_t, usr_t) or {}
 
-    cleaned_venues = extract_sources(venues_str, "venues")
+    cleaned_venues = extract_sources(venues_str, "venues", model_name=model)
     draft_fixed = draft_activities(condensed_weather or weather_str[:200], cleaned_venues, "fixed", location, age_range, date_range)
     json_fixed = {}
     if draft_fixed:
