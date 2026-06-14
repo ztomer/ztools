@@ -226,8 +226,12 @@ def update_config(best_models: dict):
     console.print(f"{STEP} Updated conf/config.yaml with best models.")
 
 
+from lib.signal_handling import setup_signals
+
+
 def main():
     """Main entry point for model evaluation."""
+    setup_signals()
     init_config()
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", help="Run evaluation for a specific model")

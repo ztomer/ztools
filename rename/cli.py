@@ -36,6 +36,7 @@ from rename.llm import (
 )
 from lib.osaurus_lib import check_llm_availability
 from lib.tui import STEP, FAIL
+from lib.signal_handling import setup_signals
 
 __all__ = [
     "ensure_llm_running",
@@ -163,6 +164,7 @@ def rename_image(
 
 
 def main():
+    setup_signals()
     args = parse_args()
 
     directory = Path(args.directory) if args.directory else Path.cwd()

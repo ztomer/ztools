@@ -10,6 +10,7 @@ from lib.osaurus_lib import get_best_model
 
 from lib.tui import STEP, WARN, debug_print
 import lib.tui as tui
+from lib.signal_handling import setup_signals
 
 from weekend.config import (
     DEBUG_EVENTS_FILE, DEBUG_VENUES_FILE,
@@ -188,6 +189,7 @@ def _parse_transient(json_transient, actual_model, field_mapping):
 
 
 def main(args=None):
+    setup_signals()
     args = args or type('Args', (), {'use_cache': False, 'model': None, 'skip_web': False, 'debug': False})()
     tui.DEBUG = getattr(args, 'debug', False)
     init_config()

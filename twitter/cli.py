@@ -12,6 +12,7 @@ from lib import init_config
 from lib.osaurus_lib import get_best_model
 from lib.config import Task
 from lib.tui import STEP, WARN
+from lib.signal_handling import setup_signals
 
 from twitter.cookies import (
     CHROME_COOKIES_DB,
@@ -112,6 +113,7 @@ def resolve_since_time(args_since: str | None, state: dict) -> datetime:
 
 
 def main() -> None:
+    setup_signals()
     args = parse_args()
     output_dir = Path(args.output).expanduser()
 
