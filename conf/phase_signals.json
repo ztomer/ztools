@@ -1,1 +1,7 @@
-{}
+{
+  "qwopus3.6-27b-v2-mlx-4bit": {
+    "draft_activities/transient": {
+      "timeout": 2700
+    }
+  }
+}

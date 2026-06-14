@@ -14,7 +14,7 @@ Start server: `osaurus serve &>/dev/null & sleep 10`
 
 | Task | Model | Speed | Command |
 |------|-------|-------|---------|
-| eval weekend | qwen3.6-35b-a3b-mxfp4 | ~100s | `python3 -m eval --task weekend` |
+| eval weekend | qwen3.6-27b-mxfp8-mtp | ~60s | `python3 -m eval --task weekend` |
 | rename | laguna-xs.2-mxfp4 | 2.8s | `python3 -m rename` |
 | summarize | qwen3.6-27b-mxfp8-mtp | 14.8s | `python3 -m twitter` |
 

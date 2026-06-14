@@ -20,7 +20,7 @@ from lib.tui import STEP, WARN, FAIL
 
 
 MAX_RETRIES = 1
-DEFAULT_EVAL_TIMEOUT = 300
+DEFAULT_EVAL_TIMEOUT = 900
 MEMORY_WARNING_THRESHOLD = 80
 
 EVAL_SIGNALS_PATH = Path(__file__).parent.parent / "conf" / "eval_signals.json"

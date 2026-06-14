@@ -3,6 +3,7 @@ import re
 from typing import Dict, List, Callable
 
 from lib.quality_models import Score, ScoreCard, TestCase, _str, _lower
+from lib.quality_weekend_scorers import TASK_SCORERS_WEEKEND
 
 
 def get_dimension_weights(task: str) -> dict[str, float]:
@@ -451,6 +452,7 @@ TASK_SCORERS: Dict[str, List[Callable]] = {
         _score_file_accuracy,
         _score_file_format,
     ],
+    **TASK_SCORERS_WEEKEND,
 }
 
 

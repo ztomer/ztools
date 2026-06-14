@@ -38,8 +38,9 @@ class TestTestCases:
             assert case.task == "file_summary"
 
     def test_all_test_cases_combined(self, mock_llm):
-        from lib.quality_runner import ALL_TEST_CASES, FILENAME_CASES, SUMMARIZE_CASES, FILE_SUMMARY_CASES
-        assert len(ALL_TEST_CASES) == len(FILENAME_CASES) + len(SUMMARIZE_CASES) + len(FILE_SUMMARY_CASES)
+        from lib.quality_runner import ALL_TEST_CASES, FILENAME_CASES, SUMMARIZE_CASES, FILE_SUMMARY_CASES, WEEKEND_TRANSIENT_CASES, WEEKEND_FIXED_CASES
+        expected = len(FILENAME_CASES) + len(SUMMARIZE_CASES) + len(FILE_SUMMARY_CASES) + len(WEEKEND_TRANSIENT_CASES) + len(WEEKEND_FIXED_CASES)
+        assert len(ALL_TEST_CASES) == expected
 
 
 class TestQueryModel:

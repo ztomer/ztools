@@ -59,7 +59,7 @@ python3 -m weekend --model qwen3.6-35b-a3b-mxfp4
 python3 -m weekend --skip-web
 ```
 
-**What it does:** Fetches weather forecast → searches for local events/venues → uses LLM to filter and rank activities.
+**What it does:** Fetches weather forecast → searches for local events/venues → runs a 4-phase LLM pipeline per section (condense weather → extract sources → draft ideas → structure JSON). Adapts batch size and timeout per model — values persisted to `conf/phase_signals.json` so learned optimizations carry across runs.
 
 ---
 
@@ -102,6 +102,8 @@ python3 -m eval --model qwen3.6-35b-a3b-mxfp4
 ```
 
 **Tasks:** `weekend_transient`, `weekend_fixed`, `summarize`, `filename`, `file_summary`, `taxes_anomalies`, `taxes_audit_readiness`, `taxes_synthesis`
+
+Adaptive: tracks p95 latency per (model, task) and sets timeout = p95 × 1.5. Learned values persist in `conf/eval_signals.json`.
 
 **Quality Checks:**
 - Source matching (detects hallucination)

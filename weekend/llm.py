@@ -21,12 +21,13 @@ LLM_TEMPERATURE = 0.1
 LLM_API_TIMEOUT = 1800
 LLM_MAX_RETRIES = 5
 
-# Phase pipeline timeouts (seconds)
-PHASE_TIMEOUT_WEATHER = 60
-PHASE_TIMEOUT_EXTRACT = 300
-PHASE_TIMEOUT_DRAFT = 300
-PHASE_TIMEOUT_REFINE = 120
-PHASE_TIMEOUT_STRUCTURE = 120
+# Phase pipeline timeouts (seconds) — set high for slow models (qwopus).
+# phase_signals.json learns actual per-model latencies and tightens on reruns.
+PHASE_TIMEOUT_WEATHER = 900
+PHASE_TIMEOUT_EXTRACT = 900
+PHASE_TIMEOUT_DRAFT = 900
+PHASE_TIMEOUT_REFINE = 900
+PHASE_TIMEOUT_STRUCTURE = 900
 PHASE_MAX_RETRIES = 3
 PHASE_SIGNALS_PATH = Path(__file__).parent.parent / "conf" / "phase_signals.json"
 from lib.mlx_lib import (
@@ -63,8 +64,7 @@ def _call_llm(system_prompt, user_prompt, timeout, max_retries=PHASE_MAX_RETRIES
     def call_fn(model_name):
         nonlocal last_content
         _attempt[0] += 1
-        backoff = min(_attempt[0], 5)
-        current_timeout = base_timeout * backoff
+        current_timeout = base_timeout
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -136,8 +136,7 @@ def _call_llm(system_prompt, user_prompt, timeout, max_retries=PHASE_MAX_RETRIES
     )
 
     if result is not None and phase_key and _attempt[0] > 1:
-        working_timeout = base_timeout * _attempt[0]
-        model_signals[phase_key] = {"timeout": working_timeout}
+        model_signals[phase_key] = {"timeout": current_timeout}
         _save_phase_signals(signals)
 
     if parse_json and result is None and last_content is not None:
@@ -242,8 +241,8 @@ def condense_weather(weather_str):
 
 
 EXTRACT_SIGNALS_PATH = Path(__file__).parent.parent / "conf" / "extract_signals.json"
-DEFAULT_BATCH_SIZE = 5
-MAX_BATCH_SIZE = 10
+DEFAULT_BATCH_SIZE = 3
+MAX_BATCH_SIZE = 5
 
 
 def _load_extract_signals():

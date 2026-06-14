@@ -1,12 +1,12 @@
 llm_url: http://localhost:1337
-default_model: qwopus3.6-27b-v2-mlx-4bit
+default_model: qwen3.6-27b-mxfp8-mtp
 
 best_models:
-  think: qwopus3.6-27b-v2-mlx-4bit
-  json: qwopus3.6-27b-v2-mlx-4bit
-  summarize: qwopus3.6-27b-v2-mlx-4bit
-  filename: qwopus3.6-27b-v2-mlx-4bit
-  vlm: qwopus3.6-27b-v2-mlx-4bit
+  think: qwen3.6-27b-mxfp8-mtp
+  json: qwen3.6-27b-mxfp8-mtp
+  summarize: qwen3.6-27b-mxfp8-mtp
+  filename: qwen3.6-27b-mxfp8-mtp
+  vlm: qwen3.6-27b-mxfp8-mtp
 
 timeouts:
   think: 600

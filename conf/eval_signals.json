@@ -1,1 +1,189 @@
-{}
+{
+  "diffusiongemma-26b-a4b-it": {
+    "weekend_fixed": {
+      "p95_latency": 0.1,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient": {
+      "p95_latency": 0.2,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    }
+  },
+  "foundation": {
+    "weekend_fixed": {
+      "p95_latency": 6.0,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient": {
+      "p95_latency": 8.2,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    }
+  },
+  "gemma-4-26b-a4b-it-mxfp4": {
+    "weekend_fixed": {
+      "p95_latency": 24.1,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient": {
+      "p95_latency": 26.5,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    }
+  },
+  "gemma-4-e4b-it-4bit": {
+    "weekend_fixed": {
+      "p95_latency": 25.2,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient": {
+      "p95_latency": 25.4,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    }
+  },
+  "gemma-4-e4b-it-8bit": {
+    "weekend_fixed": {
+      "p95_latency": 39.5,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient": {
+      "p95_latency": 24.6,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    }
+  },
+  "laguna-xs.2-mxfp4": {
+    "weekend_fixed": {
+      "p95_latency": 40.5,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient": {
+      "p95_latency": 165.8,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    }
+  },
+  "m": {
+    "json": {
+      "parse_failures": 1,
+      "samples": 3,
+      "total_retries": 3
+    },
+    "weekend_debug": {
+      "parse_failures": 1,
+      "samples": 1,
+      "total_retries": 1
+    },
+    "weekend_noparsed": {
+      "parse_failures": 0,
+      "samples": 1,
+      "total_retries": 1
+    },
+    "weekend_nosource": {
+      "parse_failures": 0,
+      "samples": 1,
+      "total_retries": 1
+    },
+    "weekend_x": {
+      "parse_failures": 0,
+      "samples": 1,
+      "total_retries": 1
+    }
+  },
+  "mock-model": {
+    "json": {
+      "parse_failures": 0,
+      "samples": 6,
+      "total_retries": 6
+    }
+  },
+  "potion-base-4m": {
+    "weekend_transient": {
+      "p95_latency": 0.1,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    }
+  },
+  "qwen3.6-27b-mxfp8-mtp": {
+    "weekend_fixed": {
+      "p95_latency": 42.2,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient": {
+      "p95_latency": 76.9,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    }
+  },
+  "qwen3.6-35b-a3b-mxfp8-mtp": {
+    "weekend_fixed": {
+      "p95_latency": 18.5,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient": {
+      "p95_latency": 35.3,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    }
+  },
+  "qwopus3.6-27b-v2-mlx-4bit": {
+    "weekend_fixed": {
+      "p95_latency": 248.9,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient": {
+      "p95_latency": 509.7,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    }
+  }
+}

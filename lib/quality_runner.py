@@ -120,7 +120,98 @@ FILE_SUMMARY_CASES = [
     ),
 ]
 
-ALL_TEST_CASES = FILENAME_CASES + SUMMARIZE_CASES + FILE_SUMMARY_CASES
+WEEKEND_TRANSIENT_PROMPT = """
+Current Context for the upcoming weekend:
+Dates: April 20 to April 22, 2026
+Friday: 15.0°C, Clear (0mm)
+Saturday: 12.0°C, Precipitation (5mm)
+Sunday: 14.0°C, Clear (0mm)
+
+High-Signal Transient Events:
+- Spring Festival at Downsview Park: Outdoor rides and games. April 20-22. All ages.
+- Indoor Coding Workshop for Kids: Learn Python. April 21. Ages 8-14.
+- Outdoor Movie Night: Watch a movie under the stars. April 21. All ages.
+- Farmers Market at Maple Village: Fresh produce and local crafts. April 20. All ages.
+- Pottery Wheel Workshop: Create clay art. April 22. Ages 12+.
+- Puppet Show at Vaughan Library: "The Magical Forest". April 20. Ages 4-10.
+- Kids Yoga in the Park: Morning yoga for families. April 20. Ages 5-12.
+- Magic Show at Markham Theatre: Illusionist show. April 21. All ages.
+- Nature Walk at Boyd Conservation: guided family hike. April 22. All ages.
+- Board Game Marathon at Community Centre: Family games. April 21. All ages.
+- Pizza Making Class: Learn to make pizza. April 22. Ages 8-16.
+- Easter Egg Hunt at Raccoon Creek: Egg hunt and crafts. April 20. Ages 3-10.
+
+Output JSON with schema: [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str", "day": "str"}]
+Include 5-10 items. day must be Friday, Saturday, or Sunday. Use "indoor" for rainy days, "outdoor" for clear days.
+Output ONLY JSON. No explanations.
+"""
+
+WEEKEND_FIXED_PROMPT = """
+Current Context for the upcoming weekend:
+Dates: April 20 to April 22, 2026
+Friday: 15.0°C, Clear (0mm)
+Saturday: 12.0°C, Precipitation (5mm)
+Sunday: 14.0°C, Clear (0mm)
+
+Potential Venues and Current Exhibits:
+- Vaughan Sports Arena: Indoor trampoline and dodgeball. All ages.
+- High Park: Large outdoor playground and zoo. All ages.
+- Aga Khan Museum: Islamic art and culture. Indoor. All ages.
+- McMichael Canadian Art Collection: Canadian art exhibits. Indoor. All ages.
+- Gibson Park: Playground and splash pad. Outdoor. Ages 3-12.
+- Richmond Hill Centre for the Performing Arts: Live theater. Indoor. All ages.
+- Maplewood Park Conservation: Hiking trails and picnic area. Outdoor. All ages.
+- Ezra Avenue Skatepark: Skateboarding and BMX. Outdoor. Ages 10+.
+- Oakridge Arts Festival: Art installations and workshops. April 20-22. Indoor/outdoor. All ages.
+- Toronto Fun Zone: Indoor play centre with wall climb. Indoor. Ages 4-14.
+- Lake Simcoe Sugar Bush: Maple syrup tours. Outdoor. All ages.
+- Markham Museum: Heritage buildings and events. Indoor/outdoor. All ages.
+
+Output JSON with schema: [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}]
+Include 8-10 items. Use "indoor" for rainy days, "outdoor" for clear days. Focus on venues appropriate for kids ages 6-13.
+Output ONLY JSON. No explanations.
+"""
+
+WEEKEND_TRANSIENT_REF = json.dumps({
+    "weather": {"friday": "clear", "saturday": "rain", "sunday": "clear"},
+    "age_range": [6, 13],
+    "source_item_names": ["spring festival", "coding workshop", "movie night",
+                          "farmers market", "pottery wheel", "puppet show",
+                          "kids yoga", "magic show", "nature walk",
+                          "board game marathon", "pizza making", "easter egg hunt"],
+    "expected_count": [5, 10],
+})
+
+WEEKEND_FIXED_REF = json.dumps({
+    "weather": {"friday": "clear", "saturday": "rain", "sunday": "clear"},
+    "age_range": [6, 13],
+    "source_item_names": ["vaughan sports arena", "high park", "aga khan museum",
+                          "mcmichael", "gibson park", "richmond hill centre",
+                          "maplewood park", "ezra avenue", "oakridge arts",
+                          "toronto fun zone", "lake simcoe sugar bush", "markham museum"],
+    "exclude": ["canada's wonderland", "ontario science centre", "toronto zoo"],
+    "expected_count": [8, 10],
+})
+
+WEEKEND_TRANSIENT_CASES = [
+    TestCase(
+        task="weekend_transient",
+        input_text=WEEKEND_TRANSIENT_PROMPT,
+        reference=WEEKEND_TRANSIENT_REF,
+        description="Transient events with mixed weather",
+    ),
+]
+
+WEEKEND_FIXED_CASES = [
+    TestCase(
+        task="weekend_fixed",
+        input_text=WEEKEND_FIXED_PROMPT,
+        reference=WEEKEND_FIXED_REF,
+        description="Fixed venues with mixed weather",
+    ),
+]
+
+ALL_TEST_CASES = FILENAME_CASES + SUMMARIZE_CASES + FILE_SUMMARY_CASES + WEEKEND_TRANSIENT_CASES + WEEKEND_FIXED_CASES
 
 
 def query_model(model: str, prompt: str, input_text: str, task: str) -> Optional[str]:
@@ -131,6 +222,18 @@ def query_model(model: str, prompt: str, input_text: str, task: str) -> Optional
             messages=[{"role": "user", "content": filled}],
             timeout=LLM_TIMEOUT,
             task=task,
+        )
+        return _str(result.get("content"))
+    except Exception:
+        return None
+
+
+def query_model_direct(model: str, full_prompt: str) -> Optional[str]:
+    try:
+        result = llm_call(
+            model=model,
+            messages=[{"role": "user", "content": full_prompt}],
+            timeout=LLM_TIMEOUT,
         )
         return _str(result.get("content"))
     except Exception:
@@ -151,14 +254,18 @@ def run_suite(models: List[str], cases: List[TestCase] = None,
                 print(f"  {STEP} {model[:30]:30s} {case.task:12s} {case.description}",
                       end=" ", flush=True)
 
-            prompt = get_model_prompt(model, Task(case.task))
-            if not prompt:
-                if verbose:
-                    print("- skip")
-                continue
-
             t0 = time.time()
-            output = query_model(model, prompt, case.input_text, case.task)
+
+            if case.task in ("weekend_transient", "weekend_fixed"):
+                output = query_model_direct(model, case.input_text)
+            else:
+                prompt = get_model_prompt(model, Task(case.task))
+                if not prompt:
+                    if verbose:
+                        print("- skip")
+                    continue
+                output = query_model(model, prompt, case.input_text, case.task)
+
             elapsed = time.time() - t0
 
             if output is None:
