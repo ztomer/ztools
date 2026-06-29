@@ -3,9 +3,13 @@ Mock LLM provider for integration tests.
 Provides canned responses for all task types so tests don't need a running server.
 """
 
+import re
 import json
 import unittest.mock
 from typing import Any, Callable, Dict, Optional
+
+_THINK_RE = re.compile(r'<think>.*?</think>', re.DOTALL)
+
 
 
 def _default_content_for(task: str) -> str:
@@ -117,8 +121,7 @@ class MockLLM:
         pass
 
     def strip_thinking(self, content: str) -> str:
-        import re
-        return re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+        return _THINK_RE.sub('', content).strip()
 
     def _patch(self, target: str, func: Callable):
         p = unittest.mock.patch(target, func)

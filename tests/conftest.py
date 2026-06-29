@@ -24,6 +24,18 @@ _REAL_MLX_FUNCTIONS = {
 }
 
 
+@pytest.fixture(autouse=True)
+def reset_global_sessions():
+    """Reset persistent session variables in client and osaurus_lib before and after each test."""
+    import lib.llm.client
+    import lib.osaurus_lib
+    lib.llm.client._session = None
+    lib.osaurus_lib._session = None
+    yield
+    lib.llm.client._session = None
+    lib.osaurus_lib._session = None
+
+
 @pytest.fixture
 def real_mlx_functions():
     """Return real (unmocked) lib.mlx_lib functions.

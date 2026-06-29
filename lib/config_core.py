@@ -7,6 +7,11 @@ from typing import Dict, Any, Optional
 import enum
 
 
+class ConfigurationError(Exception):
+    """Exception raised when configuration loading or parsing fails."""
+    pass
+
+
 class Task(enum.Enum):
     WEEKEND_FIXED = "weekend_fixed"
     WEEKEND_TRANSIENT = "weekend_transient"
@@ -39,8 +44,13 @@ def _auto_load():
             print(f"Config file not found: {config_path}, using fallback defaults")
             _config_loaded = True
             return
-        with open(config_path, 'r') as f:
-            loaded = yaml.safe_load(f)
+        try:
+            with open(config_path, 'r') as f:
+                loaded = yaml.safe_load(f)
+        except yaml.YAMLError as e:
+            raise ConfigurationError(f"Failed to parse YAML configuration file '{config_path}': {e}") from e
+        except OSError as e:
+            raise ConfigurationError(f"Failed to read configuration file '{config_path}': {e}") from e
         _config.clear()
         _config.update(loaded if isinstance(loaded, dict) else {})
         _config_loaded = True
@@ -53,8 +63,13 @@ def init_config(config_path: Optional[str] = None) -> bool:
     config_file = Path(config_path)
     if not config_file.exists():
         raise FileNotFoundError(f"Config file not found: {config_file}")
-    with open(config_file, 'r') as f:
-        loaded = yaml.safe_load(f)
+    try:
+        with open(config_file, 'r') as f:
+            loaded = yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        raise ConfigurationError(f"Failed to parse YAML configuration file '{config_file}': {e}") from e
+    except OSError as e:
+        raise ConfigurationError(f"Failed to read configuration file '{config_file}': {e}") from e
     if loaded is None:
         loaded = {}
     if not isinstance(loaded, dict):

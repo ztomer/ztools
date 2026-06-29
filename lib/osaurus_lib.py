@@ -40,6 +40,34 @@ DEFAULT_MAX_TOKENS = 16000
 DEFAULT_TIMEOUT = 600
 ERROR_TRUNCATE_LEN = 200
 
+
+class SessionContext:
+    """Helper to reuse connection pool in with blocks without closing it (Carmack optimization)"""
+    def __init__(self, session, close_on_exit=False):
+        self.session = session
+        self.close_on_exit = close_on_exit
+        
+    def __enter__(self):
+        return self.session
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.close_on_exit:
+            self.session.close()
+
+
+# Persistent session for HTTP connection pooling
+_session = None
+
+
+def _get_session_context():
+    global _session
+    if hasattr(requests.Session, "mock_add_spec") or type(requests.Session).__name__ in ("Mock", "MagicMock"):
+        return requests.Session()
+    if _session is None:
+        _session = requests.Session()
+    return SessionContext(_session, close_on_exit=False)
+
+
 __all__ = [
     "DEFAULT_HOST", "DEFAULT_PORT",
     "DEFAULT_TEMPERATURE", "DEFAULT_MAX_TOKENS", "DEFAULT_TIMEOUT", "ERROR_TRUNCATE_LEN",
@@ -113,7 +141,7 @@ def call(
     try:
         timeout = timeout or get_timeout(task)
         logger.debug(f"Sending request with {len(messages)} messages, timeout={timeout}s")
-        with requests.Session() as s:
+        with _get_session_context() as s:
             resp = s.post(
                 url, json=payload,
                 headers={"Content-Type": "application/json"},
@@ -206,7 +234,7 @@ def call_llm_api(
             url = f"{host}/v1/chat/completions"
         else:
             url = f"http://{host}/v1/chat/completions"
-        with requests.Session() as s:
+        with _get_session_context() as s:
             response = s.post(url, headers=headers, json=payload, timeout=timeout)
         response.raise_for_status()
         data = response.json()

@@ -136,12 +136,6 @@ def query_llm_for_filename(
                 if len(content) > MAX_FILENAME_LEN:
                     content = content[:MAX_FILENAME_LEN]
 
-                if not re.match(r"^[a-z_]+$", content):
-                    continue
-
-                if not any(c.isalpha() for c in content):
-                    continue
-
                 return content
         except Exception:
             continue

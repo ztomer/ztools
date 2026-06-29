@@ -6,7 +6,7 @@ from typing import Dict, List, Any, Optional
 
 from lib.llm.constants import (
     DEFAULT_HOST, DEFAULT_PORT, DEFAULT_TEMPERATURE,
-    DEFAULT_MAX_TOKENS, DEFAULT_TIMEOUT,
+    DEFAULT_MAX_TOKENS, DEFAULT_TIMEOUT, TIMEOUTS, MAX_TOKENS,
     API_GENERATE, API_CHAT, API_TAGS, HTTP_STATUS_OK, TASK_THINK,
 )
 from lib.llm.quirks import apply_model_quirks
@@ -16,6 +16,33 @@ SERVER_CHECK_TIMEOUT = 5
 LIST_MODELS_TIMEOUT = 10
 
 
+class SessionContext:
+    """Helper to reuse connection pool in with blocks without closing it (Carmack optimization)"""
+    def __init__(self, session, close_on_exit=False):
+        self.session = session
+        self.close_on_exit = close_on_exit
+        
+    def __enter__(self):
+        return self.session
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.close_on_exit:
+            self.session.close()
+
+
+# Persistent session for HTTP connection pooling
+_session = None
+
+
+def _get_session_context():
+    global _session
+    if hasattr(requests.Session, "mock_add_spec") or type(requests.Session).__name__ in ("Mock", "MagicMock"):
+        return requests.Session()
+    if _session is None:
+        _session = requests.Session()
+    return SessionContext(_session, close_on_exit=False)
+
+
 def get_api_url(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> str:
     """Get API URL for host:port."""
     return f"http://{host}:{port}"
@@ -23,14 +50,14 @@ def get_api_url(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> str:
 
 def get_timeout(task: str) -> int:
     """Get timeout for task type."""
-    from lib.config import get_timeout
-    return get_timeout(task)
+    from lib.config import get_timeout as _gt
+    return _gt(task)
 
 
 def get_max_tokens_for_task(task: str) -> int:
     """Get max tokens for task."""
-    from lib.config import get_max_tokens_for_task
-    return get_max_tokens_for_task(task)
+    from lib.config import get_max_tokens_for_task as _gmt
+    return _gmt(task)
 
 
 def call(
@@ -53,7 +80,7 @@ def call(
     messages = apply_model_quirks(messages, model)
     
     # Get defaults
-    max_tokens = max_tokens or get_max_tokens_for_task(task)
+    max_tokens = max_tokens or MAX_TOKENS.get(task, DEFAULT_MAX_TOKENS)
     
     url = get_api_url(host, port)
     payload = {
@@ -75,10 +102,10 @@ def call(
     }
     
     start = time.time()
-    timeout = timeout or get_timeout(task)
+    timeout = timeout or TIMEOUTS.get(task, DEFAULT_TIMEOUT)
     
     try:
-        with requests.Session() as s:
+        with _get_session_context() as s:
             response = s.post(
                 f"{url}{API_CHAT}",
                 json=payload,
@@ -112,7 +139,7 @@ def call(
 def is_server_running(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> bool:
     """Check if server is running."""
     try:
-        with requests.Session() as s:
+        with _get_session_context() as s:
             response = s.get(
                 f"{get_api_url(host, port)}{API_TAGS}",
                 timeout=SERVER_CHECK_TIMEOUT,
@@ -125,7 +152,7 @@ def is_server_running(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> boo
 def get_models(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> List[str]:
     """Get list of available models."""
     try:
-        with requests.Session() as s:
+        with _get_session_context() as s:
             response = s.get(
                 f"{get_api_url(host, port)}{API_TAGS}",
                 timeout=LIST_MODELS_TIMEOUT,

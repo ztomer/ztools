@@ -1,7 +1,7 @@
 """Config - shim re-exporting from split modules."""
 
 from .config_core import (
-    Task, TaskKeys,
+    Task, TaskKeys, ConfigurationError,
     _FALLBACK_TIMEOUT, _FALLBACK_MAX_TOKENS, _FALLBACK_MODEL,
     _config_loaded, _config, _model_configs_cache,
     _auto_load, init_config, reset_config, get_config, is_config_loaded,
@@ -21,7 +21,7 @@ from .config_tasks import (
 )
 
 __all__ = [
-    "Task", "TaskKeys",
+    "Task", "TaskKeys", "ConfigurationError",
     "_FALLBACK_TIMEOUT", "_FALLBACK_MAX_TOKENS", "_FALLBACK_MODEL",
     "_config_loaded", "_config", "_model_configs_cache",
     "_auto_load", "init_config", "reset_config", "get_config", "is_config_loaded",

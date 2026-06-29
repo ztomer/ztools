@@ -29,19 +29,39 @@ STATUS_ERROR = "error"
 STATUS_OK = "ok"
 
 
+def _is_osaurus_process(pid: int) -> bool:
+    """Verify that a given PID belongs to an active process named or running osaurus."""
+    try:
+        res = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "args="],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        if res.returncode == 0 and res.stdout:
+            return "osaurus" in res.stdout.lower()
+    except Exception:
+        pass
+    return False
+
+
 def _kill_osaurus():
     try:
         subprocess.run(["osascript", "-e", OSASCRIPT_QUIT_CMD], capture_output=True, timeout=OSASCRIPT_QUIT_TIMEOUT)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to quit osaurus app via osascript: {e}")
 
     if PID_FILE.exists():
         try:
             pid = int(PID_FILE.read_text().strip())
-            os.kill(pid, signal.SIGTERM)
-            time.sleep(RESTART_SLEEP)
-        except (ProcessLookupError, ValueError, OSError):
-            pass
+            if _is_osaurus_process(pid):
+                logger.info(f"Terminating osaurus process with PID {pid} via SIGTERM")
+                os.kill(pid, signal.SIGTERM)
+                time.sleep(RESTART_SLEEP)
+            else:
+                logger.warning(f"PID file contains process ID {pid} which is not osaurus. Skipping termination.")
+        except (ProcessLookupError, ValueError, OSError) as e:
+            logger.debug(f"Failed to kill process {pid}: {e}")
         PID_FILE.unlink(missing_ok=True)
 
 
@@ -63,10 +83,14 @@ def restart_server(app_path: str = DEFAULT_APP_PATH, wait: int = SERVER_WAIT) ->
         if not is_gui:
             PID_FILE.write_text(str(proc.pid))
     except Exception as e:
-        print(f"Failed to restart: {e}")
+        logger.error(f"Failed to restart osaurus server: {e}")
         return False
-    for i in range(wait):
-        time.sleep(POLL_SLEEP_SEC)
+    
+    # Poll every 0.1s up to wait seconds (Carmack/Hashimoto fast-poll latency optimization)
+    poll_interval = 0.1
+    max_polls = int(wait / poll_interval)
+    for _ in range(max_polls):
+        time.sleep(poll_interval)
         if is_server_running():
             return True
     return False
@@ -76,10 +100,10 @@ def ensure_server(max_retries: int = ENSURE_MAX_RETRIES, wait: int = SERVER_WAIT
     for attempt in range(1, max_retries + 1):
         if is_server_running():
             return True
-        print(f"Server not responding (attempt {attempt}/{max_retries})")
+        logger.warning(f"Server not responding (attempt {attempt}/{max_retries})")
         if not restart_server(wait=wait):
             if attempt == max_retries:
-                print("Server failed to restart")
+                logger.error("Server failed to restart")
                 return False
     return is_server_running()
 

@@ -79,3 +79,21 @@ def test_osaurus_port():
     result = subprocess.run(["osaurus", "status"], capture_output=True, text=True)
     assert result.returncode == 0
     assert "1337" in result.stdout
+
+
+def test_init_config_missing_file():
+    """Test init_config raises FileNotFoundError for missing file."""
+    from lib.config import init_config
+    with pytest.raises(FileNotFoundError):
+        init_config("nonexistent_config_file_xyz.yaml")
+
+
+def test_init_config_invalid_yaml(tmp_path):
+    """Test init_config raises ConfigurationError for corrupt YAML file."""
+    from lib.config import init_config, ConfigurationError
+    invalid_file = tmp_path / "invalid_config.yaml"
+    invalid_file.write_text("invalid: yaml: : content")  # Invalid YAML syntax
+    
+    with pytest.raises(ConfigurationError) as excinfo:
+        init_config(str(invalid_file))
+    assert "Failed to parse YAML configuration file" in str(excinfo.value)
