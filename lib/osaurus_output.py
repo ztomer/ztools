@@ -8,6 +8,31 @@ from .config_getters import get_model_config
 
 clean_output = clean_model_output
 
+# Extraction and normalization constants to avoid magic numbers and strings
+MAX_JSON_SEARCH_BOUND = 15
+JSON_ARRAY_START = '['
+JSON_ARRAY_END = ']'
+JSON_OBJECT_START = '{'
+JSON_OBJECT_END = '}'
+COMMENT_CHAR = '#'
+PIPE_CHAR = "|"
+TARGET_YEAR = '2026'
+MIN_LINE_LENGTH = 1
+
+BOLD_MARKDOWN_RE = re.compile(r'\*\*([^*]+)\*\*')
+TABLE_DIVIDER_RE = re.compile(r'\|[:\-]+\|')
+LIST_ITEM_RE = re.compile(r"^\d+[\.\)]\s+(.+)$|^- (.+)$")
+YEAR_RE_2626 = re.compile(r'\b2626\b')
+YEAR_RE_26 = re.compile(r'\b26(?!\d)')
+TEXT_NORM_RE_1 = re.compile(r"^\d+[\.\)]\s*([^\-:?]+)(?:\s*[-:]\s*(.+))?$")
+TEXT_NORM_RE_2 = re.compile(r"^-\s*([^\-:?]+)(?:\s*[-:]\s*(.+))?$")
+DETAILS_SPLIT_RE = re.compile(r"[-:,]")
+
+FILTER_START_KEYWORDS = ("based on", "note:")
+FILTER_EXCLUDE_STRINGS = ("", "-", ":", None, " | ", "|", "---", "----")
+WEATHER_KEYWORDS = ("temperature", "conditions")
+
+
 
 def _extract_json_only(content: str) -> Optional[str]:
     if not content:
@@ -25,8 +50,8 @@ def _extract_json_only(content: str) -> Optional[str]:
         starts = [i for i, c in enumerate(content) if c == start_char]
         ends = [i for i, c in enumerate(content) if c == end_char]
         ends.reverse()
-        for s in starts[:15]:
-            for e in ends[:15]:
+        for s in starts[:MAX_JSON_SEARCH_BOUND]:
+            for e in ends[:MAX_JSON_SEARCH_BOUND]:
                 if e > s:
                     candidate = content[s:e+1]
                     try:
@@ -36,10 +61,10 @@ def _extract_json_only(content: str) -> Optional[str]:
                         continue
         return None
 
-    res = find_json('[', ']')
+    res = find_json(JSON_ARRAY_START, JSON_ARRAY_END)
     if res:
         return res
-    res = find_json('{', '}')
+    res = find_json(JSON_OBJECT_START, JSON_OBJECT_END)
     if res:
         return res
     return None
@@ -47,8 +72,8 @@ def _extract_json_only(content: str) -> Optional[str]:
 
 def extract_json(content: str, model: str = None) -> Union[Dict[str, Any], List[Any], None]:
     if content:
-        content = re.sub(r'\*\*([^*]+)\*\*', r'\1', content)
-        content = re.sub(r'\|[:\-]+\|', '', content)
+        content = BOLD_MARKDOWN_RE.sub(r'\1', content)
+        content = TABLE_DIVIDER_RE.sub('', content)
     json_str = _extract_json_only(content)
     if json_str:
         try:
@@ -78,12 +103,12 @@ def _extract_plain_list(content: str) -> Optional[List[Dict[str, Any]]]:
         line = line.strip()
         if not line:
             continue
-        match = re.match(r"^\d+[\.\)]\s+(.+)$|^- (.+)$", line)
+        match = LIST_ITEM_RE.match(line)
         if match:
             name = (match.group(1) or match.group(2)).strip()
-            if name and not name.startswith("#"):
+            if name and not name.startswith(COMMENT_CHAR):
                 items.append({"name": name})
-        elif line and not line.startswith("#") and len(line) > 1:
+        elif line and not line.startswith(COMMENT_CHAR) and len(line) > MIN_LINE_LENGTH:
             items.append({"name": line})
     return items if items else None
 
@@ -180,22 +205,22 @@ def filter_json_items(items: List[Any]) -> List[Any]:
     for item in items:
         if isinstance(item, dict):
             keys = [str(k) for k in item.keys()]
-            if any(k.strip().startswith("|") for k in keys):
+            if any(k.strip().startswith(PIPE_CHAR) for k in keys):
                 continue
             vals = [str(v) for v in item.values() if v]
             text = " ".join(vals).lower()
-            if text.startswith("based on") or text.startswith("note:"):
+            if any(text.startswith(kw) for kw in FILTER_START_KEYWORDS):
                 continue
-            if "temperature" in text and "conditions" in text:
+            if all(kw in text for kw in WEATHER_KEYWORDS):
                 continue
-            if all(v in ("", "-", ":", None, " | ", "|", "---") for v in item.values()):
+            if all(v in FILTER_EXCLUDE_STRINGS for v in item.values()):
                 continue
             filtered.append(item)
         elif isinstance(item, str):
             text = item.strip().lower()
-            if text.startswith("|") or text.startswith(":") or text.startswith("based on"):
+            if text.startswith(PIPE_CHAR) or text.startswith(":") or any(text.startswith(kw) for kw in FILTER_START_KEYWORDS):
                 continue
-            if text in ("---", "----"):
+            if text in FILTER_EXCLUDE_STRINGS:
                 continue
             if text:
                 filtered.append(item)
@@ -213,8 +238,8 @@ def fix_json_years(items: List[Any]) -> List[Any]:
             fixed_item = {}
             for k, v in item.items():
                 if isinstance(v, str):
-                    v = re.sub(r'\b2626\b', '2026', v)
-                    v = re.sub(r'\b26(?!\d)', '2026', v)
+                    v = YEAR_RE_2626.sub(TARGET_YEAR, v)
+                    v = YEAR_RE_26.sub(TARGET_YEAR, v)
                 fixed_item[k] = v
             fixed.append(fixed_item)
         else:
@@ -228,17 +253,17 @@ def normalize_text_output(text_output: str) -> List[Dict[str, Any]]:
     items = []
     for line in text_output.split("\n"):
         line = line.strip()
-        if not line or line.startswith("#"):
+        if not line or line.startswith(COMMENT_CHAR):
             continue
-        match = re.match(r"^\d+[\.\)]\s*([^\-:?]+)(?:\s*[-:]\s*(.+))?$", line)
+        match = TEXT_NORM_RE_1.match(line)
         if not match:
-            match = re.match(r"^-\s*([^\-:?]+)(?:\s*[-:]\s*(.+))?$", line)
+            match = TEXT_NORM_RE_2.match(line)
         if match:
             name = (match.group(1) or "").strip()
             details = (match.group(2) or "").strip() if match.lastindex and match.group(2) else ""
             if name and not name.startswith("*"):
                 item = {"name": name}
-                parts = [p.strip() for p in re.split(r"[-:,]", details) if p.strip()] if details else []
+                parts = [p.strip() for p in DETAILS_SPLIT_RE.split(details) if p.strip()] if details else []
                 if len(parts) > 0 and parts[0]:
                     item["location"] = parts[0]
                 if len(parts) > 1 and parts[1]:

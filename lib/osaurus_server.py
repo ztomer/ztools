@@ -28,18 +28,29 @@ PREVIEW_LIMIT = 100
 STATUS_ERROR = "error"
 STATUS_OK = "ok"
 
+# Subprocess & command constants
+PS_CMD = "ps"
+PS_PID_FLAG = "-p"
+PS_ARGS_FLAG = "-o"
+PS_ARGS_FORMAT = "args="
+PROCESS_CHECK_TIMEOUT = 2
+OSASCRIPT_QUIT_CMD_LOWER = "osaurus"
+OSASCRIPT_CMD = "osascript"
+OSASCRIPT_FLAG = "-e"
+FAST_POLL_INTERVAL = 0.1
+
 
 def _is_osaurus_process(pid: int) -> bool:
     """Verify that a given PID belongs to an active process named or running osaurus."""
     try:
         res = subprocess.run(
-            ["ps", "-p", str(pid), "-o", "args="],
+            [PS_CMD, PS_PID_FLAG, str(pid), PS_ARGS_FLAG, PS_ARGS_FORMAT],
             capture_output=True,
             text=True,
-            timeout=2,
+            timeout=PROCESS_CHECK_TIMEOUT,
         )
         if res.returncode == 0 and res.stdout:
-            return "osaurus" in res.stdout.lower()
+            return OSASCRIPT_QUIT_CMD_LOWER in res.stdout.lower()
     except Exception:
         pass
     return False
@@ -47,7 +58,7 @@ def _is_osaurus_process(pid: int) -> bool:
 
 def _kill_osaurus():
     try:
-        subprocess.run(["osascript", "-e", OSASCRIPT_QUIT_CMD], capture_output=True, timeout=OSASCRIPT_QUIT_TIMEOUT)
+        subprocess.run([OSASCRIPT_CMD, OSASCRIPT_FLAG, OSASCRIPT_QUIT_CMD], capture_output=True, timeout=OSASCRIPT_QUIT_TIMEOUT)
     except Exception as e:
         logger.debug(f"Failed to quit osaurus app via osascript: {e}")
 
@@ -86,11 +97,10 @@ def restart_server(app_path: str = DEFAULT_APP_PATH, wait: int = SERVER_WAIT) ->
         logger.error(f"Failed to restart osaurus server: {e}")
         return False
     
-    # Poll every 0.1s up to wait seconds (Carmack/Hashimoto fast-poll latency optimization)
-    poll_interval = 0.1
-    max_polls = int(wait / poll_interval)
+    # Poll up to wait seconds (Carmack/Hashimoto fast-poll latency optimization)
+    max_polls = int(wait / FAST_POLL_INTERVAL)
     for _ in range(max_polls):
-        time.sleep(poll_interval)
+        time.sleep(FAST_POLL_INTERVAL)
         if is_server_running():
             return True
     return False

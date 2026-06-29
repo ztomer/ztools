@@ -33,10 +33,13 @@ class SessionContext:
 # Persistent session for HTTP connection pooling
 _session = None
 
+MOCK_SPEC_ATTRIBUTE = "mock_add_spec"
+MOCK_CLASS_NAMES = ("Mock", "MagicMock")
+
 
 def _get_session_context():
     global _session
-    if hasattr(requests.Session, "mock_add_spec") or type(requests.Session).__name__ in ("Mock", "MagicMock"):
+    if hasattr(requests.Session, MOCK_SPEC_ATTRIBUTE) or type(requests.Session).__name__ in MOCK_CLASS_NAMES:
         return requests.Session()
     if _session is None:
         _session = requests.Session()

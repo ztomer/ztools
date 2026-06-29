@@ -97,36 +97,36 @@
   },
   "m": {
     "json": {
-      "parse_failures": 18,
-      "samples": 54,
-      "total_retries": 54
+      "parse_failures": 21,
+      "samples": 63,
+      "total_retries": 63
     },
     "weekend_debug": {
-      "parse_failures": 18,
-      "samples": 18,
-      "total_retries": 18
+      "parse_failures": 21,
+      "samples": 21,
+      "total_retries": 21
     },
     "weekend_noparsed": {
       "parse_failures": 0,
-      "samples": 18,
-      "total_retries": 18
+      "samples": 21,
+      "total_retries": 21
     },
     "weekend_nosource": {
       "parse_failures": 0,
-      "samples": 18,
-      "total_retries": 18
+      "samples": 21,
+      "total_retries": 21
     },
     "weekend_x": {
       "parse_failures": 0,
-      "samples": 18,
-      "total_retries": 18
+      "samples": 21,
+      "total_retries": 21
     }
   },
   "mock-model": {
     "json": {
       "parse_failures": 0,
-      "samples": 108,
-      "total_retries": 108
+      "samples": 126,
+      "total_retries": 126
     }
   },
   "potion-base-4m": {

@@ -12,9 +12,24 @@ DEFAULT_PORT = 1337
 HTTP_READ_TIMEOUT = 10
 SERVER_CHECK_TIMEOUT = 3
 
+# API endpoints
+API_CHAT_PATH = "/v1/chat/completions"
+API_MODELS_PATH = "/v1/models"
+
+# HTTP protocols & status codes
+HTTP_PREFIX = "http"
+HTTP_STATUS_OK = 200
+HTTP_STATUS_NOT_FOUND = 404
+
+# Model defaults
+DEFAULT_ENV_VAR = "OLLAMA_MODEL"
+FALLBACK_MODEL = "foundation"
+DEFAULT_PREFERRED_MODELS = ["foundation", "qwen", "gemma"]
+DEFAULT_VLM_KEYWORDS = ["vl", "vision", "qwen", "llamavl"]
+
 
 def get_api_url(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> str:
-    return f"http://{host}:{port}/v1/chat/completions"
+    return f"http://{host}:{port}{API_CHAT_PATH}"
 
 
 def get_base_url(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> str:
@@ -23,14 +38,14 @@ def get_base_url(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> str:
 
 def get_models(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, api_key: str = "") -> List[str]:
     try:
-        if host.startswith("http"):
-            url = f"{host}/v1/models"
+        if host.startswith(HTTP_PREFIX):
+            url = f"{host}{API_MODELS_PATH}"
         else:
-            url = f"http://{host}:{port}/v1/models"
+            url = f"http://{host}:{port}{API_MODELS_PATH}"
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
         with requests.Session() as s:
             resp = s.get(url, timeout=HTTP_READ_TIMEOUT, headers=headers)
-        if resp.status_code == 200:
+        if resp.status_code == HTTP_STATUS_OK:
             return [m["id"] for m in resp.json().get("data", [])]
     except requests.exceptions.Timeout:
         pass
@@ -43,13 +58,13 @@ def get_models(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, api_key: str 
 
 def is_server_running(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> bool:
     try:
-        if host.startswith("http"):
-            url = f"{host}/v1/models"
+        if host.startswith(HTTP_PREFIX):
+            url = f"{host}{API_MODELS_PATH}"
         else:
-            url = f"http://{host}:{port}/v1/models"
+            url = f"http://{host}:{port}{API_MODELS_PATH}"
         with requests.Session() as s:
             resp = s.get(url, timeout=SERVER_CHECK_TIMEOUT)
-        return resp.status_code in (200, 404)
+        return resp.status_code in (HTTP_STATUS_OK, HTTP_STATUS_NOT_FOUND)
     except requests.exceptions.Timeout:
         return False
     except requests.exceptions.ConnectionError:
@@ -66,16 +81,15 @@ def check_llm_availability(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, a
 get_available_models = get_models
 
 
-def get_best_model(task: str = None, env_var: str = "OLLAMA_MODEL") -> str:
+def get_best_model(task: str = None, env_var: str = DEFAULT_ENV_VAR) -> str:
     from .config import get_best_model as _get_best
     if task:
         return os.environ.get(env_var, _get_best(task))
-    return os.environ.get(env_var, "foundation")
+    return os.environ.get(env_var, FALLBACK_MODEL)
 
 
 def select_best_vlm_model(available_models: List[str]) -> Optional[str]:
-    vlm_keywords = ["vl", "vision", "qwen", "llamavl"]
-    for keyword in vlm_keywords:
+    for keyword in DEFAULT_VLM_KEYWORDS:
         for model in available_models:
             if keyword.lower() in model.lower():
                 return model
@@ -86,7 +100,7 @@ def select_best_model(models: list, preferred: list = None) -> str:
     if not models:
         return None
     if preferred is None:
-        preferred = ["foundation", "qwen", "gemma"]
+        preferred = DEFAULT_PREFERRED_MODELS
     for pref in preferred:
         for model in models:
             if pref.lower() in model.lower():

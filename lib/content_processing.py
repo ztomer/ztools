@@ -29,6 +29,15 @@ UNICODE_REPLACEMENT_CHAR = "\ufffe"
 THINKING_END_TAG = "</think>"
 THINKING_PREFIX_MARKER = "Think:"
 
+QWEN_THINKING_MARKERS = [
+    "Here's a thinking process:",
+    "Thinking Process:",
+    "Here is my thinking process:",
+    "Let me think",
+    "Let me carefully",
+    "Let me analyze"
+]
+
 GEMMA_CORRECTION_LOOP_RE = re.compile(
     r"(\s*Let'?s? pick [^\n]+\? No\.){3,}",
     re.IGNORECASE
@@ -71,8 +80,7 @@ def remove_thinking_blocks(content: str) -> str:
     content = GEMMA_INTERNAL_RE.sub("", content)
 
     # Remove Qwen 3.6 plaintext thinking: "Here's a thinking process:" or "Thinking Process:"
-    for marker in ["Here's a thinking process:", "Thinking Process:", "Here is my thinking process:",
-                   "Let me think", "Let me carefully", "Let me analyze"]:
+    for marker in QWEN_THINKING_MARKERS:
         marker_idx = content.find(marker)
         if marker_idx < 0:
             continue
