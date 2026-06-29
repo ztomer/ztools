@@ -36,8 +36,8 @@ class TestDecryptCookie:
         """v10 prefix triggers AES decryption path."""
         import twitter.cookies as twit_cookies
         encrypted = b"v10" + b"\x00" * 16 + b"ciphertext_here"
-        # pad is the last byte. Use pad=2 so raw[16:-2] = "YYYYYYYYY" (8 bytes)
-        raw_data = b"A" * 16 + b"Y" * 10 + bytes([2])
+        # pad is the last byte. Use pad=2 so raw[16:-2] = "YYYYYYYYY" (9 bytes)
+        raw_data = b"A" * 16 + b"Y" * 9 + bytes([2, 2])
         with patch.object(twit_cookies, "Cipher", create=True) as mock_cipher, \
              patch.object(twit_cookies, "algorithms", create=True), \
              patch.object(twit_cookies, "modes", create=True):
@@ -87,6 +87,26 @@ class TestDecryptCookie:
              patch.object(twit_cookies, "modes", None):
             result = twit_cookies._decrypt_cookie(encrypted, b"key")
         assert isinstance(result, str)
+
+    def test_v10_invalid_padding(self, mock_llm):
+        """v10 cookie with invalid PKCS#7 padding falls back to raw decode."""
+        import twitter.cookies as twit_cookies
+        encrypted = b"v10" + b"\x00" * 16 + b"ciphertext_here"
+        # pad is invalid, e.g. 99 (larger than block size 16)
+        raw_data = b"A" * 16 + b"Y" * 10 + bytes([99])
+        with patch.object(twit_cookies, "Cipher", create=True) as mock_cipher, \
+             patch.object(twit_cookies, "algorithms", create=True), \
+             patch.object(twit_cookies, "modes", create=True):
+            mock_cipher_instance = MagicMock()
+            mock_cipher.return_value = mock_cipher_instance
+            mock_decryptor = MagicMock()
+            mock_cipher_instance.decryptor.return_value = mock_decryptor
+            mock_decryptor.update.return_value = b""
+            mock_decryptor.finalize.return_value = raw_data
+            result = twit_cookies._decrypt_cookie(encrypted, b"key1234567890ab")
+        # Falls back to raw decode of the input encrypted bytes since ValueError is raised
+        assert result == encrypted.decode("utf-8", errors="replace")
+
 
     def test_get_chrome_keychain_key_failure(self, mock_llm):
         """Keychain failure should propagate."""

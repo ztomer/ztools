@@ -883,3 +883,51 @@ class TestCollectTweetsViaBrowser:
         assert len(tweets) == 1
         assert tweets[0]["text"] == "recent tweet"
         assert tweets[0]["screen_name"] == "u2"
+
+    def test_keyboard_interrupt_handling(self, monkeypatch):
+        """KeyboardInterrupt during scroll loop is handled gracefully and returns collected tweets."""
+        from twitter.browser import collect_tweets_via_browser
+        since = datetime(2025, 1, 1, tzinfo=timezone.utc)
+
+        mock_pw = MagicMock()
+        mock_browser = MagicMock()
+        mock_context = MagicMock()
+        mock_page = MagicMock()
+
+        mock_pw.__enter__.return_value.chromium.launch.return_value = mock_browser
+        mock_browser.new_context.return_value = mock_context
+        mock_context.new_page.return_value = mock_page
+        mock_page.title.return_value = "Home / X"
+
+        def on_response(event, handler):
+            mock_response = MagicMock()
+            mock_response.url = "https://x.com/api/graphql/HomeTimeline"
+            mock_response.json.return_value = {
+                "data": {"home": {"home_timeline_urt": {"instructions": [{
+                    "type": "TimelineAddEntries",
+                    "entries": [
+                        {"content": {"itemContent": {"itemType": "TimelineTweet", "tweet_results": {"result": {
+                            "__typename": "Tweet",
+                            "legacy": {"full_text": "collected tweet", "created_at": "Mon Jun 01 12:00:00 +0000 2026"},
+                            "core": {"user_results": {"result": {"core": {"screen_name": "u1"}, "legacy": {}}}},
+                        }}}}},
+                    ],
+                }]}}}
+            }
+            handler(mock_response)
+        mock_page.on.side_effect = on_response
+
+        # Raise KeyboardInterrupt on page.evaluate to simulate Ctrl+C during scrolling
+        mock_page.evaluate.side_effect = KeyboardInterrupt("Ctrl+C")
+
+        with patch("twitter.browser.get_chrome_cookies", return_value=[{"name": "x"}]), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.print"):
+            tweets = collect_tweets_via_browser(since_time=since, debug=False)
+        # Even with interrupt, the tweet collected in response is processed and returned
+        assert len(tweets) == 1
+        assert tweets[0]["text"] == "collected tweet"
+        # Context and browser must be closed
+        mock_context.close.assert_called_once()
+        mock_browser.close.assert_called_once()

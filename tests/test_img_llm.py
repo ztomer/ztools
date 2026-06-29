@@ -5,44 +5,17 @@ from pathlib import Path
 
 
 class TestEnsureLlmRunning:
-    def test_returns_true_when_running(self):
+    def test_delegates_to_ensure_server(self):
         from rename.llm import ensure_llm_running
-        with patch("rename.llm.check_llm_availability", return_value=True):
+        with patch("lib.osaurus_lib.ensure_server", return_value=True) as mock_ensure:
             assert ensure_llm_running() is True
+            mock_ensure.assert_called_once()
 
-    def test_restarts_and_succeeds(self):
-        from rename.llm import ensure_llm_running
-        with patch("rename.llm.check_llm_availability", side_effect=[False, True]), \
-             patch("lib.osaurus_server.restart_server", return_value=True):
-            assert ensure_llm_running() is True
-
-    def test_restart_fails(self):
-        from rename.llm import ensure_llm_running
-        with patch("rename.llm.check_llm_availability", return_value=False), \
-             patch("lib.osaurus_server.restart_server", return_value=False):
+        with patch("lib.osaurus_lib.ensure_server", return_value=False) as mock_ensure:
             assert ensure_llm_running() is False
+            mock_ensure.assert_called_once()
 
-    def test_restart_exception(self):
-        from rename.llm import ensure_llm_running
-        with patch("rename.llm.check_llm_availability", side_effect=[False, False]), \
-             patch("lib.osaurus_server.restart_server", side_effect=Exception("fail")):
-            assert ensure_llm_running() is False
 
-    def test_pkill_exception_caught(self):
-        from rename.llm import ensure_llm_running
-        with patch("rename.llm.check_llm_availability", return_value=False), \
-             patch("rename.llm.subprocess.run", side_effect=Exception("pkill fail")), \
-             patch("rename.llm.subprocess.Popen"), \
-             patch("time.sleep"):
-            assert ensure_llm_running() is False
-
-    def test_popen_exception_caught(self):
-        from rename.llm import ensure_llm_running
-        with patch("rename.llm.check_llm_availability", return_value=False), \
-             patch("rename.llm.subprocess.run"), \
-             patch("rename.llm.subprocess.Popen", side_effect=Exception("popen fail")), \
-             patch("time.sleep"):
-            assert ensure_llm_running() is False
 
 
 class TestIsRelevantWithLlm:

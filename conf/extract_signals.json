@@ -1,12 +1,22 @@
 {
-  "mock-model": {
+  "custom-model": {
     "events": {
       "batch_size": 1,
-      "timeouts": 9
+      "timeouts": 3
     },
     "venues": {
       "batch_size": 1,
-      "timeouts": 9
+      "timeouts": 3
+    }
+  },
+  "mock-model": {
+    "events": {
+      "batch_size": 1,
+      "timeouts": 33
+    },
+    "venues": {
+      "batch_size": 1,
+      "timeouts": 33
     }
   },
   "qwen3.6-27b-mxfp8-mtp": {

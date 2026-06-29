@@ -4,6 +4,12 @@ import json
 import re
 from typing import Optional, Dict, Any, List
 
+# Pre-compiled regular expressions for performance (John Carmack optimization)
+MARKDOWN_JSON_BLOCK_RE = re.compile(r'```(?:json)?\s*([\s\S]*?)```')
+JSON_CONTAINER_RE = re.compile(r'(\{[\s\S]*\}|\[[\s\S]*\])')
+THINKING_BLOCK_RE = re.compile(r'<think>[\s\S]*?</think>')
+ANY_CODE_BLOCK_RE = re.compile(r'```[\s\S]*?```')
+
 
 def extract_json(content: str, model: str = None) -> Optional[Any]:
     """Extract JSON from model response."""
@@ -17,7 +23,7 @@ def extract_json(content: str, model: str = None) -> Optional[Any]:
         pass
     
     # Try extracting from markdown code blocks
-    match = re.search(r'```(?:json)?\s*([\s\S]*?)```', content)
+    match = MARKDOWN_JSON_BLOCK_RE.search(content)
     if match:
         try:
             return json.loads(match.group(1))
@@ -25,7 +31,7 @@ def extract_json(content: str, model: str = None) -> Optional[Any]:
             pass
     
     # Try finding JSON array or object
-    match = re.search(r'(\{[\s\S]*\}|\[[\s\S]*\])', content)
+    match = JSON_CONTAINER_RE.search(content)
     if match:
         try:
             return json.loads(match.group(1))
@@ -51,10 +57,10 @@ def clean_output(text: str) -> str:
         return ""
     
     # Remove thinking blocks
-    text = re.sub(r'<think>[\s\S]*?</think>', '', text)
+    text = THINKING_BLOCK_RE.sub('', text)
     
     # Remove markdown code blocks
-    text = re.sub(r'```[\s\S]*?```', '', text)
+    text = ANY_CODE_BLOCK_RE.sub('', text)
     
     # Remove backticks
     text = text.strip('`').strip()

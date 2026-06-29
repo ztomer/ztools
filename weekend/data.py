@@ -17,6 +17,26 @@ MAX_BODY_LENGTH = 300
 # Rate limiting
 RATE_LIMIT_SLEEP = 0.5
 
+# Date, weather, and scraper constants (Mitchell Hashimoto & John Carmack design)
+FRIDAY_WEEKDAY_INDEX = 4
+DAYS_IN_WEEK = 7
+SUNDAY_DELTA_DAYS = 2
+
+WEATHER_API_URL = "https://api.open-meteo.com/v1/forecast"
+DEFAULT_LATITUDE = 43.8361
+DEFAULT_LONGITUDE = -79.5083
+DAILY_METEO_VARS = "temperature_2m_max,precipitation_sum"
+DEFAULT_TIMEZONE = "America/Toronto"
+PRECIPITATION_THRESHOLD = 0.5
+FORECAST_HEADER = "Daily Forecast:\n"
+
+SCRAPE_ATTEMPTS = 3
+DEFAULT_REVIEW_SCORE = 0.0
+
+# Pre-compiled regular expressions (John Carmack optimization)
+RATING_OUT_OF_FIVE_RE = re.compile(r"([0-4]\.\d)\s*/?\s*5", re.IGNORECASE)
+RATING_LABEL_RE = re.compile(r"rating[:\s]*([0-4]\.\d)", re.IGNORECASE)
+
 
 def _clean_search_results(results, default_label="Item", max_body=MAX_BODY_LENGTH):
     seen = set()
@@ -33,8 +53,8 @@ def _clean_search_results(results, default_label="Item", max_body=MAX_BODY_LENGT
 
 def get_weekend_date_objects():
     today = datetime.date.today()
-    friday = today + datetime.timedelta((4 - today.weekday()) % 7)
-    sunday = friday + datetime.timedelta(days=2)
+    friday = today + datetime.timedelta((FRIDAY_WEEKDAY_INDEX - today.weekday()) % DAYS_IN_WEEK)
+    sunday = friday + datetime.timedelta(days=SUNDAY_DELTA_DAYS)
     return friday, sunday
 
 
@@ -44,12 +64,12 @@ def get_weekend_dates_string(friday, sunday):
 
 def fetch_weather(friday, sunday):
     try:
-        url = "https://api.open-meteo.com/v1/forecast"
+        url = WEATHER_API_URL
         params = {
-            "latitude": 43.8361,
-            "longitude": -79.5083,
-            "daily": "temperature_2m_max,precipitation_sum",
-            "timezone": "America/Toronto",
+            "latitude": DEFAULT_LATITUDE,
+            "longitude": DEFAULT_LONGITUDE,
+            "daily": DAILY_METEO_VARS,
+            "timezone": DEFAULT_TIMEZONE,
             "start_date": friday.strftime("%Y-%m-%d"),
             "end_date": sunday.strftime("%Y-%m-%d"),
         }
@@ -66,13 +86,13 @@ def fetch_weather(friday, sunday):
             date_str = dates[i]
             precip = precip_array[i] if i < len(precip_array) else 0
             temp = temp_array[i] if i < len(temp_array) else 0
-            condition = "Precipitation" if precip > 0.5 else "Clear"
+            condition = "Precipitation" if precip > PRECIPITATION_THRESHOLD else "Clear"
             day_name = datetime.datetime.strptime(
                 date_str, "%Y-%m-%d").strftime("%A")
             forecasts.append(
                 f"{day_name}: {temp:.1f}°C, {condition} ({precip}mm)")
 
-        return "Daily Forecast:\n" + "\n".join(forecasts)
+        return FORECAST_HEADER + "\n".join(forecasts)
     except Exception as e:
         print(f"[ERROR] Weather fetch failed: {e}", file=sys.stderr)
         return "Forecast: Precipitation expected (fallback due to error)."
@@ -136,17 +156,17 @@ def fetch_fixed_venues(year, month_name):
 
 
 def scrape_review_score(place_name):
-    for attempt in range(3):
+    for attempt in range(SCRAPE_ATTEMPTS):
         try:
             time.sleep(RATE_LIMIT_SLEEP)
             query = f'"{place_name}" rating review 5 stars'
             results = list(DDGS().text(query, max_results=REVIEW_MAX_RESULTS))
             combined = " ".join([r.get("title", "") + " " + r.get("body", "") for r in results])
 
-            match = re.search(r"([0-4]\.\d)\s*/?\s*5", combined, re.IGNORECASE)
+            match = RATING_OUT_OF_FIVE_RE.search(combined)
             if match:
                 return float(match.group(1))
-            match2 = re.search(r"rating[:\s]*([0-4]\.\d)", combined, re.IGNORECASE)
+            match2 = RATING_LABEL_RE.search(combined)
             if match2:
                 return float(match2.group(1))
             break
@@ -155,4 +175,4 @@ def scrape_review_score(place_name):
                 time.sleep(2 ** attempt)
             else:
                 break
-    return 0.0
+    return DEFAULT_REVIEW_SCORE

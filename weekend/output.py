@@ -7,6 +7,13 @@ from lib.tui import STEP, WARN, debug_print
 
 console = Console(force_terminal=True, force_interactive=True)
 
+# Timing, scoring, and layout constants (Mitchell Hashimoto design)
+DEFAULT_SCORE = 0
+MAX_RATING_SCALE = 5
+SECONDS_PER_MINUTE = 60.0
+MISSING_VALUE_PLACEHOLDER = "—"
+NEWLINE = "\n"
+
 
 def print_header(label, value):
     console.print(f"{label}: {value}")
@@ -27,18 +34,18 @@ def print_warning(message):
 def print_summary(status, fixed_count, transient_count, filepath, elapsed_time):
     console.print(f"\n{status} Weekend plan: {fixed_count} fixed, {transient_count} transient")
     print_info("Saved to", filepath)
-    print_info("Time", f"{elapsed_time / 60:.2f} minutes")
+    print_info("Time", f"{elapsed_time / SECONDS_PER_MINUTE:.2f} minutes")
 
 
 def _fmt_score(item):
-    score = item.get("score", 0)
-    return f"⭐ {score}/5" if score > 0 else ""
+    score = item.get("score", DEFAULT_SCORE)
+    return f"⭐ {score}/{MAX_RATING_SCALE}" if score > DEFAULT_SCORE else ""
 
 
 def _build_fixed_table(fixed):
     if not fixed:
         return ""
-    has_scores = any(item.get("score", 0) > 0 for item in fixed)
+    has_scores = any(item.get("score", DEFAULT_SCORE) > DEFAULT_SCORE for item in fixed)
     heading = "### Fixed / Year-Round Activities"
     if has_scores:
         heading += " (Ranked by Review Score)"
@@ -62,13 +69,13 @@ def _build_fixed_table(fixed):
 
 
 def _fmt_missing(value):
-    return value if value else "—"
+    return value if value else MISSING_VALUE_PLACEHOLDER
 
 
 def _build_transient_table(grouped_transient_list):
     if not grouped_transient_list:
         return ""
-    has_scores = any(item.get("score", 0) > 0 for item in grouped_transient_list)
+    has_scores = any(item.get("score", DEFAULT_SCORE) > DEFAULT_SCORE for item in grouped_transient_list)
     heading = "### Transient / Limited-Time Events"
     if has_scores:
         heading += " (Ranked by Review Score)"
@@ -124,13 +131,13 @@ def build_markdown_tables(dates_str, weather_str, structured_data, fixed_activit
             grouped_transient[name] = item
     grouped_transient_list = list(grouped_transient.values())
     fetch_scores_for_items(grouped_transient_list, weather_str=weather_str, age_range=AGE_RANGE)
-    grouped_transient_list.sort(key=lambda x: x.get("score", 0), reverse=True)
-    md += "\n" + _build_transient_table(grouped_transient_list)
+    grouped_transient_list.sort(key=lambda x: x.get("score", DEFAULT_SCORE), reverse=True)
+    md += NEWLINE + _build_transient_table(grouped_transient_list)
 
     return md
 
 
 def print_to_cli(markdown_content):
-    console.print("\n")
+    console.print(NEWLINE)
     console.print(Markdown(markdown_content))
-    console.print("\n")
+    console.print(NEWLINE)

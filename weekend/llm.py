@@ -30,11 +30,30 @@ PHASE_TIMEOUT_REFINE = 900
 PHASE_TIMEOUT_STRUCTURE = 900
 PHASE_MAX_RETRIES = 3
 PHASE_SIGNALS_PATH = Path(__file__).parent.parent / "conf" / "phase_signals.json"
+
+# Timing, scoring, and source constants (Mitchell Hashimoto & John Carmack design)
+DEFAULT_MLX_FALLBACKS = ["qwen", "llama", "phi"]
+POPULATED_FIELDS_BASE_SCORE = 3.0
+OVERLAP_SCORE_HIGH = 3.0
+OVERLAP_SCORE_LOW = 1.5
+WEATHER_MATCH_BONUS = 2.0
+WEATHER_PARTIAL_BONUS = 1.0
+PRICE_MATCH_BONUS = 0.5
+LOCATION_MATCH_BONUS = 0.5
+SCORE_DIVISOR = 2.0
+SCORE_MAX_LIMIT = 5.0
+SOURCE_TYPE_TRANSIENT = "transient"
+SOURCE_TYPE_FIXED = "fixed"
+SOURCE_TYPE_EVENTS = "events"
+SOURCE_TYPE_VENUES = "venues"
+WEATHER_PREVIEW_LIMIT = 200
+BATCH_GROWTH_STREAK_LIMIT = 3
+
 from lib.mlx_lib import (
     find_text_mlx_model,
     call_mlx,
     process_mlx_content,
-)
+    )
 
 
 def _load_phase_signals():
@@ -105,7 +124,7 @@ def _call_llm(system_prompt, user_prompt, timeout, max_retries=PHASE_MAX_RETRIES
         return None
 
     def mlx_fn():
-        mlx_model = find_text_mlx_model(["qwen", "llama", "phi"])
+        mlx_model = find_text_mlx_model(DEFAULT_MLX_FALLBACKS)
         if mlx_model:
             print(f"[llm] MLX fallback: {mlx_model.name}")
             try:
@@ -196,17 +215,17 @@ def _score_item(item, weather_str="", age_range=""):
 
     fields = ["name", "location", "price", "target_ages", "weather", "day", "duration"]
     populated = sum(1 for f in fields if item.get(f))
-    score += (populated / len(fields)) * 3.0
+    score += (populated / len(fields)) * POPULATED_FIELDS_BASE_SCORE
 
     if age_range and item.get("target_ages"):
         age_nums = sorted(set(int(n) for n in re.findall(r'\d+', str(age_range))))
         target_nums = sorted(set(int(n) for n in re.findall(r'\d+', str(item["target_ages"]))))
         if age_nums and target_nums:
-            overlap = len(set(range(age_nums[0], age_nums[-1] + 1)) & set(range(target_nums[0], target_nums[-1] + 1)))
+            overlap = max(0, min(age_nums[-1], target_nums[-1]) - max(age_nums[0], target_nums[0]) + 1)
             if overlap >= 2:
-                score += 3.0
+                score += OVERLAP_SCORE_HIGH
             elif overlap == 1:
-                score += 1.5
+                score += OVERLAP_SCORE_LOW
 
     if item.get("weather"):
         w = item["weather"].lower()
@@ -215,18 +234,18 @@ def _score_item(item, weather_str="", age_range=""):
         forecast_cloudy = any(k in weather_str.lower() for k in CLOUD_KEYWORDS) if weather_str else False
         forecast_sunny = any(k in weather_str.lower() for k in SUN_KEYWORDS) if weather_str else False
         if is_cloudy and forecast_cloudy:
-            score += 2.0
+            score += WEATHER_MATCH_BONUS
         elif is_sunny and forecast_sunny:
-            score += 2.0
+            score += WEATHER_MATCH_BONUS
         elif is_cloudy or is_sunny:
-            score += 1.0
+            score += WEATHER_PARTIAL_BONUS
 
     if item.get("price") and item["price"].lower() not in ("", "free", "n/a", "tbd"):
-        score += 0.5
+        score += PRICE_MATCH_BONUS
     if item.get("location") and len(item["location"]) > 5:
-        score += 0.5
+        score += LOCATION_MATCH_BONUS
 
-    return min(round(score / 2.0, 1), 5.0)
+    return min(round(score / SCORE_DIVISOR, 1), SCORE_MAX_LIMIT)
 
 
 def fetch_scores_for_items(items, weather_str="", age_range=""):
@@ -237,7 +256,7 @@ def fetch_scores_for_items(items, weather_str="", age_range=""):
 def condense_weather(weather_str):
     from weekend.prompts import build_weather_condense_prompt
     result = _call_llm("", build_weather_condense_prompt(weather_str), timeout=PHASE_TIMEOUT_WEATHER, phase_key="condense_weather")
-    return result if result else weather_str[:200]
+    return result if result else weather_str[:WEATHER_PREVIEW_LIMIT]
 
 
 EXTRACT_SIGNALS_PATH = Path(__file__).parent.parent / "conf" / "extract_signals.json"
@@ -286,7 +305,7 @@ def extract_sources(raw_text, source_type, model_name="default"):
             results.append(result)
             streak += 1
             i += batch_size
-            if streak >= 3 and batch_size < MAX_BATCH_SIZE:
+            if streak >= BATCH_GROWTH_STREAK_LIMIT and batch_size < MAX_BATCH_SIZE:
                 batch_size += 1
                 per_type["batch_size"] = batch_size
                 _save_extract_signals(signals)
@@ -330,12 +349,12 @@ def generate_weekend_plan(model, weather_str, events_str, venues_str, dates_str,
 
     condensed_weather = condense_weather(weather_str)
 
-    cleaned_events = extract_sources(events_str, "events", model_name=model)
-    draft_transient = draft_activities(condensed_weather or weather_str[:200], cleaned_events, "transient", location, age_range, date_range)
+    cleaned_events = extract_sources(events_str, SOURCE_TYPE_EVENTS, model_name=model)
+    draft_transient = draft_activities(condensed_weather or weather_str[:WEATHER_PREVIEW_LIMIT], cleaned_events, SOURCE_TYPE_TRANSIENT, location, age_range, date_range)
     json_transient = {}
     if draft_transient:
         refined_transient = refine_draft(draft_transient)
-        json_transient = structure_to_json(refined_transient, "transient", age_range) or {}
+        json_transient = structure_to_json(refined_transient, SOURCE_TYPE_TRANSIENT, age_range) or {}
     else:
         print_warning("Transient draft failed, using monolithic fallback")
         from weekend.prompts import build_transient_system_prompt, build_transient_user_prompt
@@ -343,12 +362,12 @@ def generate_weekend_plan(model, weather_str, events_str, venues_str, dates_str,
         usr_t = build_transient_user_prompt(dates_str, weather_str, events_str)
         json_transient = get_llm_json(sys_t, usr_t) or {}
 
-    cleaned_venues = extract_sources(venues_str, "venues", model_name=model)
-    draft_fixed = draft_activities(condensed_weather or weather_str[:200], cleaned_venues, "fixed", location, age_range, date_range)
+    cleaned_venues = extract_sources(venues_str, SOURCE_TYPE_VENUES, model_name=model)
+    draft_fixed = draft_activities(condensed_weather or weather_str[:WEATHER_PREVIEW_LIMIT], cleaned_venues, SOURCE_TYPE_FIXED, location, age_range, date_range)
     json_fixed = {}
     if draft_fixed:
         refined_fixed = refine_draft(draft_fixed)
-        json_fixed = structure_to_json(refined_fixed, "fixed", age_range) or {}
+        json_fixed = structure_to_json(refined_fixed, SOURCE_TYPE_FIXED, age_range) or {}
     else:
         print_warning("Fixed draft failed, using monolithic fallback")
         from weekend.prompts import build_fixed_system_prompt, build_fixed_user_prompt

@@ -144,6 +144,8 @@ def rename_image(
         return False, f"Skipped (Generic name): {image_path.name}"
 
     new_path = image_path.with_name(f"{new_name}{image_path.suffix}")
+    if new_path == image_path:
+        return False, f"SilentSkip (Already named correctly): {image_path.name}"
 
     counter = 1
     original_name = new_name
@@ -220,9 +222,10 @@ def main():
         )
         if success:
             stats["renamed"] += 1
-        elif "Skipped" in message:
+        elif "Skipped" in message or "Silent" in message:
             stats["skipped"] += 1
-            print(message)
+            if "Silent" not in message:
+                print(message)
         else:
             stats["errors"] += 1
             print(message)

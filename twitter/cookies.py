@@ -30,42 +30,69 @@ CHROME_COOKIES_DB = (
     / "Cookies"
 )
 
+# Keychain and Cryptographic Constants to eliminate magic numbers/strings (Mitchell Hashimoto design)
+KEYCHAIN_COMMAND = ["security", "find-generic-password", "-w", "-s", "Chrome Safe Storage"]
+PBKDF2_ALGORITHM = "sha1"
+PBKDF2_SALT = b"saltysalt"
+PBKDF2_ITERATIONS = 1003
+KEY_LENGTH = 16
+V10_HEADER = b"v10"
+IV_START_OFFSET = 3
+IV_END_OFFSET = 19
+CIPHERTEXT_START_OFFSET = 19
+AES_BLOCK_SIZE = 16
+PLAINTEXT_START_OFFSET = 16
+FILETIME_TO_UNIX_DIVISOR = 1_000_000
+FILETIME_TO_UNIX_OFFSET = 11_644_473_600
+DB_TEMP_FILE_SUFFIX = ".db"
+DEFAULT_DOMAINS = (".twitter.com", ".x.com")
+EXIT_ERROR = 1
+DEFAULT_COOKIE_PATH = "/"
+MIN_VALID_UNIX_TIMESTAMP = 0
+SQL_COOKIES_QUERY = (
+    "SELECT name, encrypted_value, value, path, host_key, expires_utc, is_secure FROM cookies"
+)
+
 
 def _get_chrome_keychain_key() -> bytes:
     password = subprocess.check_output(
-        ["security", "find-generic-password", "-w", "-s", "Chrome Safe Storage"],
+        KEYCHAIN_COMMAND,
         stderr=subprocess.DEVNULL,
     ).strip()
-    return hashlib.pbkdf2_hmac("sha1", password, b"saltysalt", 1003, dklen=16)
+    return hashlib.pbkdf2_hmac(PBKDF2_ALGORITHM, password, PBKDF2_SALT, PBKDF2_ITERATIONS, dklen=KEY_LENGTH)
 
 
 def _decrypt_cookie(encrypted_value: bytes, key: bytes) -> str:
-    if not encrypted_value or encrypted_value[:3] != b"v10":
+    if not encrypted_value or encrypted_value[:IV_START_OFFSET] != V10_HEADER:
         return encrypted_value.decode("utf-8", errors="replace")
 
     if not all((Cipher, algorithms, modes)):
         return encrypted_value.decode("utf-8", errors="replace")
 
     try:
-        iv = encrypted_value[3:19]
-        ciphertext = encrypted_value[19:]
+        iv = encrypted_value[IV_START_OFFSET:IV_END_OFFSET]
+        ciphertext = encrypted_value[CIPHERTEXT_START_OFFSET:]
         cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
         decryptor = cipher.decryptor()
         raw = decryptor.update(ciphertext) + decryptor.finalize()
         pad = raw[-1]
-        return raw[16:-pad].decode("utf-8", errors="replace")
+        if pad < 1 or pad > AES_BLOCK_SIZE or len(raw) < PLAINTEXT_START_OFFSET + pad:
+            raise ValueError("Invalid PKCS#7 padding length")
+        if not all(b == pad for b in raw[-pad:]):
+            raise ValueError("Invalid PKCS#7 padding bytes")
+        return raw[PLAINTEXT_START_OFFSET:-pad].decode("utf-8", errors="replace")
     except Exception:
         return encrypted_value.decode("utf-8", errors="replace")
 
 
 def get_chrome_cookies(
-    domains: tuple[str, ...] = (".twitter.com", ".x.com"),
+    domains: tuple[str, ...] = DEFAULT_DOMAINS,
 ) -> list[dict]:
     if not CHROME_COOKIES_DB.exists():
         print(f"{WARN} Chrome Cookies DB not found at {CHROME_COOKIES_DB}")
-        sys.exit(1)
+        sys.exit(EXIT_ERROR)
 
-    tf = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    tf = tempfile.NamedTemporaryFile(suffix=DB_TEMP_FILE_SUFFIX, delete=False)
     tmp_db = Path(tf.name)
     tf.close()
     shutil.copy2(CHROME_COOKIES_DB, tmp_db)
@@ -80,8 +107,7 @@ def get_chrome_cookies(
         params = [f"%{d}" for d in domains]
         conn = sqlite3.connect(f"file:{tmp_db}?mode=ro", uri=True)
         rows = conn.execute(
-            f"SELECT name, encrypted_value, value, path, host_key, expires_utc, is_secure "
-            f"FROM cookies WHERE {placeholders}",
+            f"{SQL_COOKIES_QUERY} WHERE {placeholders}",
             params,
         ).fetchall()
         conn.close()
@@ -97,12 +123,12 @@ def get_chrome_cookies(
             "name": name,
             "value": value,
             "domain": host_key,
-            "path": path or "/",
+            "path": path or DEFAULT_COOKIE_PATH,
             "secure": bool(is_secure),
         }
         if expires_utc:
-            unix_ts = int((expires_utc / 1_000_000) - 11_644_473_600)
-            if unix_ts > 0:
+            unix_ts = int((expires_utc / FILETIME_TO_UNIX_DIVISOR) - FILETIME_TO_UNIX_OFFSET)
+            if unix_ts > MIN_VALID_UNIX_TIMESTAMP:
                 cookie["expires"] = unix_ts
         cookies.append(cookie)
     return cookies

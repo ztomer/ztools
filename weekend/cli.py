@@ -52,6 +52,17 @@ __all__ = [
     # shim-specific
     "main", "parse_args",
 ]
+# CLI parsing and document export constants (Mitchell Hashimoto design)
+MIN_ITEMS_THRESHOLD = 5
+MIN_FIXED_LIST_LEN = 1
+EMPTY_LIST_LIMIT = 0
+MIN_TRANSIENT_LIST_LEN = 2
+FALLBACK_LIST_LEN_HIGH = 3
+FALLBACK_LIST_LEN_LOW = 2
+OUTPUT_DIR_PATH = "~/Documents/"
+PLAN_FILE_PREFIX = "weekend_plan_"
+OUTPUT_FILE_SUFFIX = ".md"
+FILE_WRITE_MODE = "w"
 
 
 def _fetch_data(fri, sun, year, month_name, use_cache):
@@ -92,14 +103,14 @@ def _parse_fixed(json_fixed, actual_model, field_mapping):
     fixed_keys = get_model_top_keys(actual_model).get("fixed", ["fixed_activities", "year_round_fixed_activities", "venues", "places", "activities", "items"])
     name_keys = ["name"] + [k for k, v in field_mapping.items() if v == "name"]
 
-    if isinstance(json_fixed, list) and len(json_fixed) >= 1:
+    if isinstance(json_fixed, list) and len(json_fixed) >= MIN_FIXED_LIST_LEN:
         valid_items = [i for i in json_fixed if isinstance(i, dict) and any(i.get(nk) for nk in name_keys)]
         if valid_items:
             return normalize_llm_items(valid_items, field_mapping=field_mapping)
 
     if isinstance(json_fixed, dict):
         for key in fixed_keys:
-            if json_fixed.get(key) and isinstance(json_fixed.get(key), list) and len(json_fixed.get(key)) > 0:
+            if json_fixed.get(key) and isinstance(json_fixed.get(key), list) and len(json_fixed.get(key)) > EMPTY_LIST_LIMIT:
                 raw = json_fixed[key]
                 valid_items = [i for i in raw if isinstance(i, dict) and any(i.get(nk) for nk in name_keys)]
                 if valid_items:
@@ -111,7 +122,7 @@ def _parse_fixed(json_fixed, actual_model, field_mapping):
             return normalize_llm_items([json_fixed], field_mapping=field_mapping)
 
         for k, v in json_fixed.items():
-            if isinstance(v, list) and len(v) >= 1:
+            if isinstance(v, list) and len(v) >= MIN_FIXED_LIST_LEN:
                 valid_items = [i for i in v if isinstance(i, dict) and i.get("name")]
                 if valid_items:
                     debug_print(f"[DEBUG] Fallback key '{k}': {len(valid_items)} items", flush=True)
@@ -124,7 +135,7 @@ def _parse_transient(json_transient, actual_model, field_mapping):
     name_keys = ["name"] + [k for k, v in field_mapping.items() if v == "name"]
     all_name_keys = name_keys + ["description", "title", "event", "summary", "activity_name"]
 
-    if isinstance(json_transient, list) and len(json_transient) >= 2:
+    if isinstance(json_transient, list) and len(json_transient) >= MIN_TRANSIENT_LIST_LEN:
         filtered = [i for i in json_transient if isinstance(i, dict) and not any(k in i for k in ['temperature', 'condition', 'precipitation'])]
         if not filtered:
             return []
@@ -176,13 +187,13 @@ def _parse_transient(json_transient, actual_model, field_mapping):
             return normalize_llm_items([json_transient], field_mapping=field_mapping)
 
         for k, v in json_transient.items():
-            if isinstance(v, list) and len(v) >= 3:
+            if isinstance(v, list) and len(v) >= FALLBACK_LIST_LEN_HIGH:
                 valid_items = [i for i in v if isinstance(i, dict) and i.get("name")]
                 if valid_items:
                     return normalize_llm_items(valid_items, field_mapping=field_mapping)
 
         for k, v in json_transient.items():
-            if isinstance(v, list) and len(v) >= 2:
+            if isinstance(v, list) and len(v) >= FALLBACK_LIST_LEN_LOW:
                 return normalize_llm_items(v, field_mapping=field_mapping)
 
     return []
@@ -190,7 +201,9 @@ def _parse_transient(json_transient, actual_model, field_mapping):
 
 def main(args=None):
     setup_signals()
-    args = args or type('Args', (), {'use_cache': False, 'model': None, 'skip_web': False, 'debug': False})()
+    if args is None:
+        args = parse_args()
+
     tui.DEBUG = getattr(args, 'debug', False)
     init_config()
 
@@ -223,7 +236,7 @@ def main(args=None):
     fixed_acts = _parse_fixed(json_fixed, actual_model, field_mapping)
     transient_items = _parse_transient(json_transient, actual_model, field_mapping)
 
-    MIN_ITEMS = 5
+    MIN_ITEMS = MIN_ITEMS_THRESHOLD  # MIN_ITEMS = 5
     has_fixed = len(fixed_acts) >= MIN_ITEMS
     has_transient = len(transient_items) >= MIN_ITEMS
 
@@ -236,12 +249,12 @@ def main(args=None):
 
     print_to_cli(final_markdown)
 
-    output_dir = os.path.expanduser("~/Documents/")
+    output_dir = os.path.expanduser(OUTPUT_DIR_PATH)
     os.makedirs(output_dir, exist_ok=True)
     filepath = os.path.join(
-        output_dir, f"weekend_plan_{dates_str.replace(' ', '_').replace(',', '')}.md"
+        output_dir, f"{PLAN_FILE_PREFIX}{dates_str.replace(' ', '_').replace(',', '')}{OUTPUT_FILE_SUFFIX}"
     )
-    with open(filepath, "w") as f:
+    with open(filepath, FILE_WRITE_MODE) as f:
         f.write(final_markdown)
 
     elapsed_time = time.time() - start_time

@@ -53,7 +53,7 @@ class TestWeekendMainFlow:
         import weekend.cli as wp
         with patch("os.path.expanduser", return_value=str(tmp_path)), \
              patch.object(wp, "_fetch_data", return_value=(FAKE_WEATHER, FAKE_EVENTS, FAKE_VENUES, FAKE_DATES)), \
-             patch.object(wp, "get_llm_json", side_effect=[FAKE_TRANSIENT, FAKE_FIXED]):
+             patch.object(wp, "generate_weekend_plan", return_value=(FAKE_TRANSIENT, FAKE_FIXED)):
             wp.main(_make_args())
         captured = capsys.readouterr()
         assert "Spring" in captured.out or "Festival" in captured.out
@@ -63,7 +63,7 @@ class TestWeekendMainFlow:
         import weekend.cli as wp
         with patch("os.path.expanduser", return_value=str(tmp_path)), \
              patch.object(wp, "_fetch_data", return_value=(FAKE_WEATHER, FAKE_EVENTS, FAKE_VENUES, FAKE_DATES)), \
-             patch.object(wp, "get_llm_json", side_effect=[FAKE_TRANSIENT, FAKE_FIXED]):
+             patch.object(wp, "generate_weekend_plan", return_value=(FAKE_TRANSIENT, FAKE_FIXED)):
             wp.main(_make_args())
         out_files = list(tmp_path.iterdir())
         # At least one weekend_plan file written
@@ -77,13 +77,14 @@ class TestWeekendMainFlow:
         try:
             with patch("os.path.expanduser", return_value=str(tmp_path)), \
                  patch.object(wp, "_fetch_data", return_value=(FAKE_WEATHER, FAKE_EVENTS, FAKE_VENUES, FAKE_DATES)), \
-                 patch.object(wp, "get_llm_json", side_effect=[FAKE_TRANSIENT, FAKE_FIXED]) as mock_get:
+                 patch.object(wp, "generate_weekend_plan", return_value=(FAKE_TRANSIENT, FAKE_FIXED)) as mock_gen:
                 wp.main(_make_args(model="custom-model"))
             captured = capsys.readouterr()
             # Model name appears in output (e.g., "Using model: custom-model")
             assert "custom-model" in captured.out
-            # Verify the LLM was called twice (transient + fixed)
-            assert mock_get.call_count == 2
+            # Verify the LLM was called once (both transient + fixed generated in one call)
+            assert mock_gen.call_count == 1
+            assert mock_gen.call_args[0][0] == "custom-model"
         finally:
             if original is not None:
                 os.environ["OLLAMA_MODEL"] = original
@@ -92,7 +93,7 @@ class TestWeekendMainFlow:
         import weekend.cli as wp
         with patch("os.path.expanduser", return_value=str(tmp_path)), \
              patch.object(wp, "_fetch_data", return_value=(FAKE_WEATHER, FAKE_EVENTS, FAKE_VENUES, FAKE_DATES)), \
-             patch.object(wp, "get_llm_json", side_effect=[FAKE_TRANSIENT, FAKE_FIXED]):
+             patch.object(wp, "generate_weekend_plan", return_value=(FAKE_TRANSIENT, FAKE_FIXED)):
             wp.main(_make_args(debug=True))
         # Debug mode should print debug indicators
         captured = capsys.readouterr()
@@ -103,7 +104,7 @@ class TestWeekendMainFlow:
         few_items = {"transient_events": [{"name": "Only One", "location": "Toronto"}]}
         with patch("os.path.expanduser", return_value=str(tmp_path)), \
              patch.object(wp, "_fetch_data", return_value=(FAKE_WEATHER, FAKE_EVENTS, FAKE_VENUES, FAKE_DATES)), \
-             patch.object(wp, "get_llm_json", side_effect=[few_items, {"fixed_activities": []}]):
+             patch.object(wp, "generate_weekend_plan", return_value=(few_items, {"fixed_activities": []})):
             wp.main(_make_args())
         captured = capsys.readouterr()
         assert "Low item count" in captured.out
@@ -112,7 +113,7 @@ class TestWeekendMainFlow:
         import weekend.cli as wp
         with patch("os.path.expanduser", return_value=str(tmp_path)), \
              patch.object(wp, "_fetch_data", return_value=(FAKE_WEATHER, FAKE_EVENTS, FAKE_VENUES, FAKE_DATES)), \
-             patch.object(wp, "get_llm_json", side_effect=[None, None]):
+             patch.object(wp, "generate_weekend_plan", return_value=(None, None)):
             wp.main(_make_args())
         captured = capsys.readouterr()
         # Should not crash, should print something
@@ -122,10 +123,11 @@ class TestWeekendMainFlow:
         import weekend.cli as wp
         with patch("os.path.expanduser", return_value=str(tmp_path)), \
              patch.object(wp, "_fetch_data", return_value=(FAKE_WEATHER, FAKE_EVENTS, FAKE_VENUES, FAKE_DATES)) as mock_fetch, \
-             patch.object(wp, "get_llm_json", side_effect=[FAKE_TRANSIENT, FAKE_FIXED]):
+             patch.object(wp, "generate_weekend_plan", return_value=(FAKE_TRANSIENT, FAKE_FIXED)):
             wp.main(_make_args(use_cache=True))
         mock_fetch.assert_called_once()
         assert mock_fetch.call_args[0][4] is True
+
 
 
 

@@ -7,27 +7,68 @@ import re
 from typing import Optional
 
 
+# Pre-compiled regular expressions for performance (John Carmack optimization)
+THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+GEMMA_THOUGHT_MATCH_RE = re.compile(r"<\|channel>thought.*?<channel\|>", re.DOTALL)
+GEMMA_THOUGHT_UNMATCH_RE = re.compile(r"<channel\|>thought\b[^<]*", re.DOTALL)
+GEMMA_CHANNEL_RE = re.compile(r"<\|channel>.*", re.DOTALL)
+CHANNEL_RE = re.compile(r"<channel\|>")
+THINKING_MARKER_RE = re.compile(r"<\|.*?\|>")
+GEMMA_INTERNAL_RE = re.compile(r"<\|channel\|[^|]*\|>")
+OUTPUT_MARKER_RE = re.compile(
+    r"(?:Output Generation|Output|Final Answer|Response|Proceeds|I will now generate|I'll now generate|Let's draft|Draft)\s*[\.\:]\s*",
+    re.IGNORECASE
+)
+SELF_CORRECTION_RE = re.compile(r"\n?\*?\[?\(?[Ss]elf-[Cc]orrection.*", re.DOTALL)
+JSON_START_RE = re.compile(r'[\[{]')
+TRAILING_STATS_RE = re.compile(r"\n*stats:\d+([;.]\d+)?\s*$")
+
+# Content cleanup limits and indicators (Mitchell Hashimoto design)
+JSON_SEARCH_PREVIEW_LIMIT = 2000
+UNICODE_REPLACEMENT_CHAR = "\ufffe"
+THINKING_END_TAG = "</think>"
+THINKING_PREFIX_MARKER = "Think:"
+
+GEMMA_CORRECTION_LOOP_RE = re.compile(
+    r"(\s*Let'?s? pick [^\n]+\? No\.){3,}",
+    re.IGNORECASE
+)
+BLANK_JSON_START_RE = re.compile(r"\n\s*\n\s*([\[{])")
+
+STATS1_RE = re.compile(r"stats:\d+;[\d.]+")
+STATS2_RE = re.compile(r"\d+;[\d.]+$")
+STATS3_RE = re.compile(r"stats:.*$")
+
+MD_BLOCK1_RE = re.compile(r"```(?:\w+)?\s*\n?")
+MD_BLOCK2_RE = re.compile(r"```\s*")
+
+CODE_BLOCK_RE = re.compile(r"```(?:\w+)?\s*(.*?)```", re.DOTALL)
+
+BACKTICK1_RE = re.compile(r"^`([^`]+)`$")
+BACKTICK2_RE = re.compile(r"^\*+\s*`([^`]+)`")
+
+
 def remove_thinking_blocks(content: str) -> str:
     """Remove <think>, </think>, and similar model thinking tags."""
     if not content:
         return ""
 
     # Remove <think>...</think> blocks
-    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
+    content = THINK_RE.sub("", content)
 
     # Remove Gemma <|channel>thought ... <channel|> loops (matched pairs)
-    content = re.sub(r"<\|channel>thought.*?<channel\|>", "", content, flags=re.DOTALL)
+    content = GEMMA_THOUGHT_MATCH_RE.sub("", content)
     # Remove <channel|>thought\ntext... blocks (unmatched, trailing)
-    content = re.sub(r"<channel\|>thought\b[^<]*", "", content, flags=re.DOTALL)
+    content = GEMMA_THOUGHT_UNMATCH_RE.sub("", content)
     # Remove any remaining bare <channel|> or <|channel> and everything after
-    content = re.sub(r"<\|channel>.*", "", content, flags=re.DOTALL)
-    content = re.sub(r"<channel\|>", "", content)
+    content = GEMMA_CHANNEL_RE.sub("", content)
+    content = CHANNEL_RE.sub("", content)
 
     # Remove other thinking markers: <|xxx|>, etc.
-    content = re.sub(r"<\|.*?\|>", "", content)
+    content = THINKING_MARKER_RE.sub("", content)
 
     # Remove Gemma internal tokens
-    content = re.sub(r"<\|channel\|[^|]*\|>", "", content)
+    content = GEMMA_INTERNAL_RE.sub("", content)
 
     # Remove Qwen 3.6 plaintext thinking: "Here's a thinking process:" or "Thinking Process:"
     for marker in ["Here's a thinking process:", "Thinking Process:", "Here is my thinking process:",
@@ -36,27 +77,24 @@ def remove_thinking_blocks(content: str) -> str:
         if marker_idx < 0:
             continue
         # Try to find explicit output markers after thinking
-        output_match = re.search(
-            r"(?:Output Generation|Output|Final Answer|Response|Proceeds|I will now generate|I'll now generate|Let's draft|Draft)\s*[\.\:]\s*",
-            content, re.IGNORECASE
-        )
+        output_match = OUTPUT_MARKER_RE.search(content)
         if output_match:
             content = content[output_match.end():]
-            content = re.sub(r"\n?\*?\[?\(?[Ss]elf-[Cc]orrection.*", "", content, flags=re.DOTALL)
+            content = SELF_CORRECTION_RE.sub("", content)
         else:
-            json_match = re.search(r'[\[{]', content[marker_idx:])
+            json_match = JSON_START_RE.search(content[marker_idx:])
             if json_match:
                 content = content[marker_idx + json_match.start():]
         break
 
     # Handle </think> tag without matching </think>
-    if "</think>" in content:
-        content = content.split("</think>")[-1]
-    elif "Think:" in content:
-        content = content.split("Think:")[-1]
+    if THINKING_END_TAG in content:
+        content = content.split(THINKING_END_TAG)[-1]
+    elif THINKING_PREFIX_MARKER in content:
+        content = content.split(THINKING_PREFIX_MARKER)[-1]
 
     # Remove trailing stats like "stats:2114;97.2952" or "stats:1234"
-    content = re.sub(r"\n*stats:\d+([;.]\d+)?\s*$", "", content)
+    content = TRAILING_STATS_RE.sub("", content)
 
     return content.strip()
 
@@ -73,24 +111,16 @@ def remove_inline_thinking(content: str) -> str:
         return content
 
     # Pattern 1 – Gemma self-correction loops: collapse "Let's pick X? No." chains
-    # These often appear as lines like: "   Let's pick *Toronto Zoo*? No."
-    content = re.sub(
-        r"(\s*Let'?s? pick [^\n]+\? No\.){3,}",
-        " [reasoning truncated]",
-        content,
-        flags=re.IGNORECASE,
-    )
+    content = GEMMA_CORRECTION_LOOP_RE.sub(" [reasoning truncated]", content)
 
     # Pattern 2 – Qwen inline reasoning: huge block of prose before a JSON object.
-    # If the content has more than 2000 chars before the first { or [,
-    # and there is a JSON block separated by a blank line, skip the preamble.
     first_json = min(
         (content.find(c) for c in "[{" if content.find(c) >= 0),
         default=-1,
     )
-    if first_json > 2000:
+    if first_json > JSON_SEARCH_PREVIEW_LIMIT:
         # Look for a JSON block that starts after a blank line
-        blank_json_match = re.search(r"\n\s*\n\s*([\[{])", content)
+        blank_json_match = BLANK_JSON_START_RE.search(content)
         if blank_json_match:
             content = content[blank_json_match.start(1):]
 
@@ -103,12 +133,12 @@ def remove_stats_tokens(content: str) -> str:
         return ""
 
     # Remove stats tokens: "stats:123;45.67" anywhere in the text
-    content = re.sub(r"stats:\d+;[\d.]+", "", content)
-    content = re.sub(r"\d+;[\d.]+$", "", content)
-    content = re.sub(r"￾stats:.*$", "", content)
+    content = STATS1_RE.sub("", content)
+    content = STATS2_RE.sub("", content)
+    content = STATS3_RE.sub("", content)
 
     # Remove unicode replacement character
-    content = content.replace("\ufffe", "")
+    content = content.replace(UNICODE_REPLACEMENT_CHAR, "")
 
     return content.strip()
 
@@ -119,8 +149,8 @@ def remove_markdown_blocks(content: str) -> str:
         return ""
 
     # Remove markdown code block fences (``` and ``` language identifiers)
-    content = re.sub(r"```(?:\w+)?\s*\n?", "", content)
-    content = re.sub(r"```\s*", "", content)
+    content = MD_BLOCK1_RE.sub("", content)
+    content = MD_BLOCK2_RE.sub("", content)
 
     return content.strip()
 
@@ -131,7 +161,7 @@ def extract_content_from_code_blocks(content: str) -> Optional[str]:
         return None
 
     # Extract from code blocks: ```language ... ```
-    code_blocks = re.findall(r"```(?:\w+)?\s*(.*?)```", content, re.DOTALL)
+    code_blocks = CODE_BLOCK_RE.findall(content)
     if code_blocks:
         return code_blocks[-1].strip()
 
@@ -148,11 +178,11 @@ def strip_backtick_value(content: str) -> str:
         return content
     stripped = content.strip()
     # Single `token` pattern
-    m = re.match(r"^`([^`]+)`$", stripped)
+    m = BACKTICK1_RE.match(stripped)
     if m:
         return m.group(1).strip()
     # Allow leading ** prefix like `** `value``
-    m = re.match(r"^\*+\s*`([^`]+)`", stripped)
+    m = BACKTICK2_RE.match(stripped)
     if m:
         return m.group(1).strip()
     return content

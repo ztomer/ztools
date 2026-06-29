@@ -42,45 +42,38 @@ VLM_QUERY_TIMEOUT = 60
 PKILL_WAIT = 2
 APP_LAUNCH_WAIT = 15
 
+# Connection, path, limit, and status constants (Mitchell Hashimoto design)
+DEFAULT_SERVER_URL = "http://localhost:1337"
+API_CHAT_PATH = "/api/chat"
+TEXT_PREVIEW_LIMIT = 500
+RELEVANCE_CHECK_MODELS = ["qwen3.6-27b-mxfp4", "gemma-4-26b-a4b-it-mxfp4"]
+MIN_CONTENT_LEN = 2
+MAX_FILENAME_WORDS = 6
+MAX_FILENAME_LEN = 35
+HTTP_STATUS_OK = 200
+
 
 def ensure_llm_running() -> bool:
     """Detect crash and restart server if needed."""
-    if check_llm_availability("http://localhost:1337"):
-        return True
+    from lib.osaurus_lib import ensure_server
+    return ensure_server()
 
-    print(f"{WARN} LLM server not responding, restarting...")
-
-    try:
-        subprocess.run(["pkill", "-f", "osaurus"], capture_output=True)
-        time.sleep(PKILL_WAIT)
-    except Exception:
-        pass
-
-    try:
-        subprocess.Popen(["open", "-a", "osaurus"])
-        time.sleep(APP_LAUNCH_WAIT)
-        if check_llm_availability("http://localhost:1337"):
-            return True
-    except Exception:
-        pass
-
-    return False
 
 
 def is_relevant_with_llm(text: str, host: str, api_key: str = "") -> Optional[bool]:
     """Ask LLM if image content is relevant worth keeping."""
-    prompt = RELEVANCE_CHECK_PROMPT.format(text=text[:500])
+    prompt = RELEVANCE_CHECK_PROMPT.format(text=text[:TEXT_PREVIEW_LIMIT])
     messages = [{"role": "user", "content": prompt}]
 
-    for model in ["qwen3.6-27b-mxfp4", "gemma-4-26b-a4b-it-mxfp4"]:
+    for model in RELEVANCE_CHECK_MODELS:
         try:
             with requests.Session() as s:
                 resp = s.post(
-                    f"{host}/api/chat",
+                    f"{host}{API_CHAT_PATH}",
                     json={"model": model, "messages": messages},
                     timeout=RELEVANCE_CHECK_TIMEOUT,
                 )
-            if resp.status_code != 200:
+            if resp.status_code != HTTP_STATUS_OK:
                 continue
             content = ""
             for line in resp.text.split("\n"):
@@ -103,7 +96,7 @@ def is_relevant_with_llm(text: str, host: str, api_key: str = "") -> Optional[bo
 
 
 def query_llm_for_filename(
-    text: str, host: str = "http://localhost:1337", model: str = "", api_key: str = ""
+    text: str, host: str = DEFAULT_SERVER_URL, model: str = "", api_key: str = ""
 ) -> Optional[str]:
     for m in FILENAME_MODELS:
         try:
@@ -112,11 +105,11 @@ def query_llm_for_filename(
 
             with requests.Session() as sess:
                 resp = sess.post(
-                    f"{host}/api/chat",
+                    f"{host}{API_CHAT_PATH}",
                     json={"model": m, "messages": messages},
                     timeout=FILENAME_QUERY_TIMEOUT,
                 )
-            if resp.status_code != 200:
+            if resp.status_code != HTTP_STATUS_OK:
                 continue
 
             content = ""
@@ -130,7 +123,7 @@ def query_llm_for_filename(
                     except Exception:
                         continue
 
-            if content and len(content) >= 2:
+            if content and len(content) >= MIN_CONTENT_LEN:
                 content = content.strip().lower()
 
                 content = _strip_instruction_prefix(content)
@@ -139,9 +132,9 @@ def query_llm_for_filename(
                 if not words:
                     continue
 
-                content = '_'.join(words[:6])
-                if len(content) > 35:
-                    content = content[:35]
+                content = '_'.join(words[:MAX_FILENAME_WORDS])
+                if len(content) > MAX_FILENAME_LEN:
+                    content = content[:MAX_FILENAME_LEN]
 
                 if not re.match(r"^[a-z_]+$", content):
                     continue
@@ -167,7 +160,7 @@ def query_mlx_for_filename(text: str) -> Optional[str]:
         raw = call_mlx(model_path, prompt)
         if raw:
             content = process_mlx_content(raw)
-            if content and len(content) >= 2:
+            if content and len(content) >= MIN_CONTENT_LEN:
                 content = content.strip()
                 content = _strip_instruction_prefix(content)
                 content = re.sub(r"[^\x00-\x7F]", "", content)
@@ -181,7 +174,7 @@ def query_mlx_for_filename(text: str) -> Optional[str]:
         raw = call_mlx(fallback, prompt)
         if raw:
             content = process_mlx_content(raw)
-            if content and len(content) >= 2:
+            if content and len(content) >= MIN_CONTENT_LEN:
                 content = content.strip()
                 content = _strip_instruction_prefix(content)
                 content = re.sub(r"[^\x00-\x7F]", "", content)
@@ -214,13 +207,13 @@ def query_vlm_for_filename(
 
         with requests.Session() as s:
             resp = s.post(
-                f"{host}/api/chat",
+                f"{host}{API_CHAT_PATH}",
                 json={"model": model, "messages": messages},
                 headers=headers,
                 timeout=VLM_QUERY_TIMEOUT,
             )
 
-        if resp.status_code != 200:
+        if resp.status_code != HTTP_STATUS_OK:
             print(f"{FAIL} VLM API Error: {resp.status_code} - {resp.text}")
             return None
 

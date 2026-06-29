@@ -4,10 +4,21 @@ import re
 import json
 from typing import List, Tuple, Any
 
+from lib.validators.constants import (
+    FILENAME_SEPARATORS, MIN_FILENAME_LINE_LEN, MAX_FILENAME_LINE_LEN,
+    DEFAULT_CANDIDATE_FALLBACK_LIMIT, CODE_FENCE_LEN, SPACE_CHAR,
+    MIN_KEYS_FOR_DETAILS,
+)
+
+# Pre-compiled regexes for validation performance (John Carmack optimization)
+TEXT_HEADERS_RE = re.compile(r'^#{2,}\s+\w+', re.MULTILINE)
+WHITESPACE_RE = re.compile(r'\s+')
+JSON_LIST_RE = re.compile(r'\[[\s\S]*\]')
+
 
 def has_text_headers(text: str) -> bool:
     """Check if text has ## or ### headers."""
-    return bool(re.search(r'^#{2,}\s+\w+', text, re.MULTILINE))
+    return bool(TEXT_HEADERS_RE.search(text))
 
 
 def count_content_lines(text: str) -> int:
@@ -25,7 +36,7 @@ def is_valid_filename_char(char: str) -> bool:
 
 def has_filename_format(filename: str) -> bool:
     """Check if filename has good format (separators or extension)."""
-    return any(char in filename for char in ["_", "-", "."])
+    return any(char in filename for char in FILENAME_SEPARATORS)
 
 
 def _extract_best_filename_candidate(text: str) -> str:
@@ -39,9 +50,9 @@ def _extract_best_filename_candidate(text: str) -> str:
         if line.startswith('```') or line.startswith('#'):
             continue
         # Take first valid-looking candidate
-        if 3 < len(line) < 60:
+        if MIN_FILENAME_LINE_LEN < len(line) < MAX_FILENAME_LINE_LEN:
             return line
-    return text.strip()[:50] if text.strip() else ""
+    return text.strip()[:DEFAULT_CANDIDATE_FALLBACK_LIMIT] if text.strip() else ""
 
 
 def strip_backtick_value(value: str) -> str:
@@ -51,9 +62,9 @@ def strip_backtick_value(value: str) -> str:
     text = str(value).strip()
     # Remove markdown code blocks
     if text.startswith('```'):
-        text = text[3:]
+        text = text[CODE_FENCE_LEN:]
         if text.endswith('```'):
-            text = text[:-3]
+            text = text[:-CODE_FENCE_LEN]
     # Remove single backticks
     text = text.strip('`').strip()
     return text
@@ -64,7 +75,7 @@ def normalize_whitespace(text: str) -> str:
     if not text:
         return ""
     # Replace multiple spaces with single space
-    text = re.sub(r'\s+', ' ', text)
+    text = WHITESPACE_RE.sub(SPACE_CHAR, text)
     return text.strip()
 
 
@@ -74,7 +85,7 @@ def extract_json_list(content: str) -> List[dict]:
         return []
     
     # Try to find JSON array
-    match = re.search(r'\[[\s\S]*\]', content)
+    match = JSON_LIST_RE.search(content)
     if match:
         try:
             return json.loads(match.group())
@@ -88,4 +99,4 @@ def has_item_details(item: dict) -> bool:
     """Check if item has sufficient details beyond name only."""
     if not isinstance(item, dict):
         return False
-    return len(item.keys()) > 1
+    return len(item.keys()) > MIN_KEYS_FOR_DETAILS

@@ -7,7 +7,7 @@ from typing import Dict, List, Any, Optional
 from lib.llm.constants import (
     DEFAULT_HOST, DEFAULT_PORT, DEFAULT_TEMPERATURE,
     DEFAULT_MAX_TOKENS, DEFAULT_TIMEOUT,
-    API_GENERATE, API_CHAT,
+    API_GENERATE, API_CHAT, API_TAGS, HTTP_STATUS_OK, TASK_THINK,
 )
 from lib.llm.quirks import apply_model_quirks
 
@@ -41,7 +41,7 @@ def call(
     temperature: float = DEFAULT_TEMPERATURE,
     max_tokens: Optional[int] = None,
     timeout: Optional[int] = None,
-    task: str = "think",
+    task: str = TASK_THINK,
     parse_json: bool = False,
 ) -> dict:
     """Call LLM API. Returns dict with content, parsed, time, error."""
@@ -114,10 +114,10 @@ def is_server_running(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> boo
     try:
         with requests.Session() as s:
             response = s.get(
-                f"{get_api_url(host, port)}/api/tags",
+                f"{get_api_url(host, port)}{API_TAGS}",
                 timeout=SERVER_CHECK_TIMEOUT,
             )
-        return response.status_code == 200
+        return response.status_code == HTTP_STATUS_OK
     except Exception:
         return False
 
@@ -127,7 +127,7 @@ def get_models(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> List[str]:
     try:
         with requests.Session() as s:
             response = s.get(
-                f"{get_api_url(host, port)}/api/tags",
+                f"{get_api_url(host, port)}{API_TAGS}",
                 timeout=LIST_MODELS_TIMEOUT,
             )
         data = response.json()
