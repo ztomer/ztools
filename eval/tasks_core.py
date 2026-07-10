@@ -1,84 +1,22 @@
 #!/usr/bin/env python3
 """
-Core task definitions for model evaluation.
-Contains all hardcoded prompts and the TASKS dict.
+Evaluation tasks and test cases for model evaluation.
+Defines prompts, validators, and test data for all evaluation tasks.
 """
 
 import re
-from typing import Dict, List
+import json
+from typing import List, Dict
+from lib.validators.json_validator import validate_detailed_json, validate_json, validate_mixed_signal
+from lib.validators.text_validator import (
+    validate_filename, validate_summary, validate_file_summary,
+    validate_mixed_summary, validate_mixed_file_summary, validate_mixed_filename,
+)
 
-from lib.validators_lib import validate_detailed_json, validate_summary, validate_filename
-from eval.validate import validate_file_summary
 
-
-def _extract_items_from_text(text: str) -> List[Dict]:
-    """Extract structured items from text output (markdown tables, lists, etc)."""
-    items = []
-
-    table_pattern = r'\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|'
-    tables = re.findall(table_pattern, text)
-    if tables and len(tables) >= 2:
-        header = tables[0]
-
-        is_header_row = (
-            '---' in header[0].lower() or
-            '---' in header[1].lower() or
-            not any(c.isalnum() for c in header[0]) or
-            not any(c.isalnum() for c in header[1])
-        )
-        data_rows = tables[1:] if is_header_row else tables
-
-        if data_rows:
-            key1 = header[0].strip().lower()
-            key2 = header[1].strip().lower()
-
-            header_map = {
-                'name': 'name', 'event': 'name', 'title': 'name', 'activity': 'name',
-                'location': 'location', 'venue': 'location', 'place': 'place', 'where': 'location',
-                'day': 'day', 'date': 'day', 'when': 'day', 'time': 'time',
-            }
-            field1 = header_map.get(key1, 'name')
-            field2 = header_map.get(key2, key2)
-
-            for row in data_rows:
-                if '---' in row[0].lower() or '---' in row[1].lower():
-                    continue
-                if not row[0].strip() or not row[1].strip():
-                    continue
-                row0_clean = row[0].strip().lower()
-                row1_clean = row[1].strip().lower()
-                if row0_clean in ['name', 'event', 'title', 'activity', 'location', 'venue', 'place', 'where'] or row1_clean in ['name', 'event', 'title', 'activity', 'location', 'venue', 'place', 'where']:
-                    continue
-                item = {field1: row[0].strip(), field2: row[1].strip()}
-                items.append(item)
-
-            if items:
-                return items
-
-    bullet_pattern = r'^[•\-]\s*(.+?)(?:\n|$)'
-    bullets = re.findall(bullet_pattern, text, re.MULTILINE)
-    for bullet in bullets:
-        bullet = bullet.strip()
-        if bullet and len(bullet) > 2:
-            parts = bullet.split(':', 1)
-            if len(parts) == 2:
-                key = parts[0].strip()
-                val = parts[1].strip()
-                field_map = {
-                    'name': 'name', 'event': 'name', 'title': 'name', 'activity': 'name',
-                    'location': 'location', 'venue': 'location', 'place': 'location',
-                }
-                field = field_map.get(key.lower(), key.lower())
-                items.append({field: val})
-            else:
-                sep_match = re.match(r'^([^,\-]+)[,\-](.+)$', bullet)
-                if sep_match:
-                    items.append({'name': sep_match.group(1).strip(), 'location': sep_match.group(2).strip()})
-                else:
-                    items.append({'name': bullet})
-
-    return items
-
+# ============================================================
+# WEEKEND PLANNER PROMPTS
+# ============================================================
 
 WEEKEND_SYS_TRANSIENT = """
 Output ONLY valid JSON array. No explanations, no preamble, no markdown.
@@ -151,9 +89,137 @@ Potential Venues and Current Exhibits:
 Execute the task based on the system instructions and the provided context to find 10 year-round fixed activities, prioritizing current exhibits or highly-rated venues from the context. Output ONLY JSON.
 """
 
+def _extract_items_from_text(text: str) -> List[Dict]:
+    """Extract structured items from text output (markdown tables, lists, etc)."""
+    items = []
+
+    table_pattern = r'\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|'
+    tables = re.findall(table_pattern, text)
+    if tables and len(tables) >= 2:
+        header = tables[0]
+
+        is_header_row = (
+            '---' in header[0].lower() or
+            '---' in header[1].lower() or
+            not any(c.isalnum() for c in header[0]) or
+            not any(c.isalnum() for c in header[1])
+        )
+        data_rows = tables[1:] if is_header_row else tables
+
+        if data_rows:
+            key1 = header[0].strip().lower()
+            key2 = header[1].strip().lower()
+
+            header_map = {
+                'name': 'name', 'event': 'name', 'title': 'name', 'activity': 'name',
+                'location': 'location', 'venue': 'location', 'place': 'place', 'where': 'location',
+                'day': 'day', 'date': 'day', 'when': 'day', 'time': 'time',
+            }
+            field1 = header_map.get(key1, 'name')
+            field2 = header_map.get(key2, key2)
+
+            for row in data_rows:
+                if '---' in row[0].lower() or '---' in row[1].lower():
+                    continue
+                if not row[0].strip() or not row[1].strip():
+                    continue
+                row0_clean = row[0].strip().lower()
+                row1_clean = row[1].strip().lower()
+                if row0_clean in ['name', 'event', 'title', 'activity', 'location', 'venue', 'place', 'where'] or row1_clean in ['name', 'event', 'title', 'activity', 'location', 'venue', 'place', 'where']:
+                    continue
+                item = {field1: row[0].strip(), field2: row[1].strip()}
+                items.append(item)
+
+            if items:
+                return items
+
+    bullet_pattern = r'^[•\-]\s*(.+?)(?:\n|$)'
+    bullets = re.findall(bullet_pattern, text, re.MULTILINE)
+    for bullet in bullets:
+        bullet = bullet.strip()
+        if bullet and len(bullet) > 2:
+            parts = bullet.split(':', 1)
+            if len(parts) == 2:
+                key = parts[0].strip()
+                val = parts[1].strip()
+                field_map = {
+                    'name': 'name', 'event': 'name', 'title': 'name', 'activity': 'name',
+                    'location': 'location', 'venue': 'location', 'place': 'location',
+                }
+                field = field_map.get(key.lower(), key.lower())
+                items.append({field: val})
+            else:
+                sep_match = re.match(r'^([^,\-]+)[,\-](.+)$', bullet)
+                if sep_match:
+                    items.append({'name': sep_match.group(1).strip(), 'location': sep_match.group(2).strip()})
+                else:
+                    items.append({'name': bullet})
+
+    return items
+
+# --- MIXED PROMPTS (Base + Noise) ---
+# These test the model's ability to filter signal from noise
+
+WEEKEND_USR_TRANSIENT_MIXED = WEEKEND_USR_TRANSIENT + """
+
+NOISE (Ignore these - test your filtering):
+- Random text: asdfghjkl qwertyuiop zxcvbnm
+- Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor
+- Unrelated event: Underwater basket weaving in Atlantis. April 35. All ages.
+- Malformed: Event without date or location or age
+- Spam: BUY NOW! LIMITED TIME OFFER! CLICK HERE!
+- Nonsense: The quick brown fox jumps over the lazy dog 1234567890
+- Hallucinated venue: Mars Colony Indoor Playground. Indoor. Ages 0-100.
+- Irrelevant: Stock market tips for weekend trading
+"""
+
+WEEKEND_USR_FIXED_MIXED = WEEKEND_USR_FIXED + """
+
+NOISE (Ignore these - test your filtering):
+- Random text: asdfghjkl qwertyuiop zxcvbnm
+- Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor
+- Unrelated venue: Moon Base Alpha Resort. Indoor. All ages.
+- Malformed: Venue without location or age info
+- Spam: BUY NOW! LIMITED TIME OFFER! CLICK HERE!
+- Nonsense: The quick brown fox jumps over the lazy dog 1234567890
+- Hallucinated: Atlantis Underwater Theme Park. Outdoor. Ages 5-99.
+- Irrelevant: Cryptocurrency mining rigs for home use
+"""
+
+
+# ============================================================
+# RENAME / FILENAME PROMPTS
+# ============================================================
+
 RENAME_PROMPT = """Give a short 2-4 word summary of: {text}
 
 Output ONLY the filename string, lowercase with underscores. Max 35 characters."""
+
+RENAME_PROMPT_MIXED = """Rename each text snippet below to a short 2-4 word filename, lowercase with underscores, max 35 chars.
+
+Output a JSON array of filenames in the SAME ORDER as the snippets.
+
+SNIPPETS:
+1. How To Manage Your Underperformers
+2. Scott Adams essays
+3. 10 powerful sentences by Scott Adams navigating failure, ambition, the absurdities of life
+4. 15 years of business lessons in under 500 words
+5. Be delusional. Believe that you have the ability to make it work no matter what
+6. How To Prioritize Like A Pro - Noemi Kis
+7. elon musk: how to win at founding
+8. context engineering template - comprehensive guide for AI prompts
+
+NOISE (Ignore - do NOT produce filenames for these):
+- Random noise: asdfghjkl
+- Spam text: BUY NOW CLICK HERE!!!
+- Nonsense: lorem ipsum dolor sit amet
+- Malformed: incomplete text without meaning
+"""
+
+
+# ============================================================
+# FILE SUMMARY PROMPTS
+# ============================================================
 
 FILE_SUMMARY_PROMPT = """Read the file list below and give one-line summary for each file.
 
@@ -196,12 +262,28 @@ Use ## headers for each file (e.g., ## filename: summary).
 
 Skip .git, __pycache__, benchmarks/, and pycache directories."""
 
+FILE_SUMMARY_PROMPT_MIXED = FILE_SUMMARY_PROMPT + """
+
+NOISE FILES (Ignore - test your filtering):
+/fake/path/nonexistent_file.txt
+/totally/made/up/directory/garbage.log
+/random/asdfghjkl/qwertyuiop.zxc
+/spam/buy_now/click_here.exe
+/irrelevant/crypto_price_predictions.md
+/hallucinated/alien_landing_report.pdf
+"""
+
+
+# ============================================================
+# TWITTER SUMMARIZER PROMPTS
+# ============================================================
+
 TWITTER_PROMPT = """You are an objective news distillation system. Your task is to extract hard facts from the provided chronological Twitter/X timeline.
 
 <instructions>
-1. First, analyze the timeline in your <think> block.
+1. First, analyze the timeline in block.
 2. Identify clusters of related events and synthesize duplicates.
-3. Output ONLY the final briefing after the </think> tag. No introductory text.
+3. Output ONLY the final briefing after the  tag. No introductory text.
 </instructions>
 
 <formatting_rules>
@@ -255,8 +337,25 @@ TWITTER_PROMPT = """You are an objective news distillation system. Your task is 
 [@Bloomberg | 18:00]: Canadian GDP grows 0.5% in Q1, exceeding forecasts.
 </timeline>
 
-Provide the summary (start your response with <think>):"""
+Provide the summary (start your response):"""
 
+TWITTER_PROMPT_MIXED = TWITTER_PROMPT + """
+
+NOISE (Ignore these - test your filtering):
+- Random text: asdfghjkl qwertyuiop zxcvbnm
+- Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor
+- SPAM: BUY NOW! LIMITED TIME OFFER! CLICK HERE!
+- Nonsense: The quick brown fox jumps over the lazy dog 1234567890
+- Irrelevant: Cryptocurrency price prediction for next week
+- Hallucinated: [@FakeNews | 12:00]: Aliens landed in Central Park!
+- Malformed: incomplete tweet without proper format
+- Off-topic: Best pizza recipes for Sunday dinner
+"""
+
+
+# ============================================================
+# TASK DEFINITIONS
+# ============================================================
 
 TASKS = {
     "weekend_transient": {
@@ -276,6 +375,24 @@ TASKS = {
         "validator": validate_detailed_json,
         "parse_json": True,
         "source": WEEKEND_USR_FIXED,
+    },
+    "weekend_transient_mixed": {
+        "messages": [
+            {"role": "system", "content": WEEKEND_SYS_TRANSIENT},
+            {"role": "user", "content": WEEKEND_USR_TRANSIENT_MIXED},
+        ],
+        "validator": validate_mixed_signal,
+        "parse_json": True,
+        "source": WEEKEND_USR_TRANSIENT_MIXED,
+    },
+    "weekend_fixed_mixed": {
+        "messages": [
+            {"role": "system", "content": WEEKEND_SYS_FIXED},
+            {"role": "user", "content": WEEKEND_USR_FIXED_MIXED},
+        ],
+        "validator": validate_mixed_signal,
+        "parse_json": True,
+        "source": WEEKEND_USR_FIXED_MIXED,
     },
     "filename": {
         "messages": [
@@ -313,6 +430,59 @@ TASKS = {
         ],
         "validator": validate_file_summary,
         "parse_json": True,
+    },
+    # --- MIXED VARIANTS ---
+    "rename_mixed": {
+        "messages": [
+            {"role": "user", "content": RENAME_PROMPT_MIXED},
+        ],
+        "validator": validate_mixed_filename,
+        "parse_json": True,
+        "source": RENAME_PROMPT_MIXED,
+    },
+    "summarize_mixed": {
+        "messages": [
+            {"role": "user", "content": TWITTER_PROMPT_MIXED},
+        ],
+        "validator": validate_mixed_summary,
+        "parse_json": False,
+        "source": TWITTER_PROMPT_MIXED,
+    },
+    "file_summary_mixed": {
+        "messages": [
+            {"role": "system", "content": "Output JSON now. No preamble, no markdown.\n\nRequired format: {\"path\": \"description\", ...} OR [{\"path\": \"x\", \"desc\": \"y\"}, ...]\n\nSummarize each file in one line. Be specific - mention actual functionality, not just file type."},
+            {"role": "user", "content": FILE_SUMMARY_PROMPT_MIXED},
+        ],
+        "validator": validate_mixed_file_summary,
+        "parse_json": False,
+        "source": FILE_SUMMARY_PROMPT_MIXED,
+    },
+    "filename_mixed": {
+        "messages": [
+            {"role": "user", "content": RENAME_PROMPT_MIXED},
+        ],
+        "validator": validate_mixed_filename,
+        "parse_json": True,
+        "source": RENAME_PROMPT_MIXED,
+    },
+    "image_rename_mixed": {
+        "description": "Rename images from OCR text with noise - test filtering",
+        "test_cases": [
+            ("How To Manage Your Underperformers", "how_to_manage_underperformers"),
+            ("Scott Adams essays", "scott_adams_essays"),
+            ("10 powerful sentences by Scott Adams navigating failure, ambition, the absurdities of life: 1. Creativity is allowing yourself to make mistakes...", "scott_adams_powerful_sentences"),
+            ("15 years of business lessons in <500 words: 1. Marrying well is the biggest life hack of all. 2. Be the type of person who reaches out to others...", "business_lessons"),
+            ("Be delusional. Believe that you have the ability to make it work no matter what. Believe that regardless of what happens...", "delusional_belief"),
+            ("How To Prioritize Like A Pro - Noemi Kis: Understand Your Values First Time Block Your Schedule Execute Through Habits...", "prioritize_pro"),
+            ("elon musk: how to win at founding - taking risk if things don't work out", "musk_founding_tips"),
+            ("context engineering template - comprehensive guide for AI prompts", "context_engineering"),
+            # Noise cases
+            ("asdfghjkl random noise", ""),
+            ("BUY NOW CLICK HERE SPAM", ""),
+            ("lorem ipsum dolor sit amet", ""),
+        ],
+        "validator": validate_filename,
+        "parse_json": False,
     },
 }
 

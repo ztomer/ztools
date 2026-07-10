@@ -557,11 +557,12 @@ class TestValidateDetailedJson:
     def test_source_match_minimal(self):
         from lib.validators.json_validator import validate_json
         items = [{"name": f"event {i}"} for i in range(10)]
-        # Just 1/10 = 0.1 = minimal tier (but > 0)
+        # Just 1/10 = 0.1 = minimal tier (but > 0). "event 0" is verbatim in the
+        # source, so the substring fallback detects 1 grounded item.
         source = "event 0"
         score, _ = validate_json(items, source_text=source)
-        # Source match contributes ~20 (minimal tier) + base 55 (10 items, unique) = 75
-        assert score == 75
+        # base (10 items, unique) 75 + minimal source tier (25//4 = 6) = 81
+        assert score == 81
 
     def test_source_match_high_score(self):
         from lib.validators.json_validator import validate_json
@@ -637,3 +638,109 @@ class TestValidateDetailedJson:
         score, _ = validate_detailed_json(items, source_text=source)
         # Low source tier
         assert score > 10
+
+
+class TestValidateMixedSignal:
+    def test_perfect_signal_passes(self):
+        from lib.validators.json_validator import validate_mixed_signal, parse_signal_noise
+        from eval.tasks_core import WEEKEND_USR_TRANSIENT_MIXED
+        sig, noise = parse_signal_noise(WEEKEND_USR_TRANSIENT_MIXED)
+        # Output keeps every signal item, excludes all noise.
+        items = [
+            {"name": s, "location": "x", "target_ages": "6-13",
+             "price": "Free", "weather": "indoor"}
+            for s in sig
+        ]
+        score, reason = validate_mixed_signal(items, source_text=WEEKEND_USR_TRANSIENT_MIXED)
+        assert score >= 90, reason
+        assert "noise" not in reason
+
+    def test_noise_included_fails(self):
+        from lib.validators.json_validator import validate_mixed_signal, parse_signal_noise
+        from eval.tasks_core import WEEKEND_USR_TRANSIENT_MIXED
+        sig, noise = parse_signal_noise(WEEKEND_USR_TRANSIENT_MIXED)
+        items = [
+            {"name": s, "location": "x", "target_ages": "6-13",
+             "price": "Free", "weather": "indoor"}
+            for s in sig
+        ]
+        # Append several noise items that must be excluded.
+        for n in noise[:4]:
+            items.append({"name": n, "location": "x", "target_ages": "0-100",
+                          "price": "Free", "weather": "indoor"})
+        score, reason = validate_mixed_signal(items, source_text=WEEKEND_USR_TRANSIENT_MIXED)
+        assert score < 90, reason
+        assert "noise" in reason
+
+    def test_score_capped_at_100(self):
+        from lib.validators.json_validator import validate_mixed_signal, parse_signal_noise
+        from eval.tasks_core import WEEKEND_USR_TRANSIENT_MIXED
+        sig, noise = parse_signal_noise(WEEKEND_USR_TRANSIENT_MIXED)
+        # Duplicate every signal item twice — recall must cap at 1.0, score at 100.
+        items = []
+        for s in sig:
+            for _ in range(2):
+                items.append({"name": s, "location": "x", "target_ages": "6-13",
+                              "price": "Free", "weather": "indoor"})
+        score, _ = validate_mixed_signal(items, source_text=WEEKEND_USR_TRANSIENT_MIXED)
+        assert score <= 100, score
+
+
+class TestValidateMixedSummary:
+    def test_clean_summary_passes(self):
+        from lib.validators.text_validator import validate_mixed_summary
+        from eval.tasks_core import TWITTER_PROMPT_MIXED
+        summary = "@TechCrunch announced GPT-5. @Bloomberg: GDP grew. @LocalNews_TOR reopened CN Tower."
+        score, reason = validate_mixed_summary(summary, TWITTER_PROMPT_MIXED)
+        assert score >= 90, reason
+
+    def test_noise_summary_fails(self):
+        from lib.validators.text_validator import validate_mixed_summary
+        from eval.tasks_core import TWITTER_PROMPT_MIXED
+        summary = (
+            "@FakeNews reported aliens landed in Central Park. "
+            "lorem ipsum dolor sit amet consectetur adipiscing. "
+            "BUY NOW LIMITED TIME OFFER CLICK HERE. "
+            "Cryptocurrency price prediction for next week. "
+            "Also @LocalNews_TOR reopened CN Tower."
+        )
+        score, reason = validate_mixed_summary(summary, TWITTER_PROMPT_MIXED)
+        assert score < 60, reason
+        assert "noise" in reason
+
+
+class TestValidateMixedFileSummary:
+    def test_noise_file_fails(self):
+        from lib.validators.text_validator import validate_mixed_file_summary
+        from eval.tasks_core import FILE_SUMMARY_PROMPT_MIXED
+        out = [
+            {"path": "/Users/ztomer/Projects/ztools/README.md", "desc": "docs"},
+            {"path": "/spam/buy_now/click_here.exe", "desc": "spam"},
+        ]
+        score, reason = validate_mixed_file_summary(out, FILE_SUMMARY_PROMPT_MIXED)
+        assert score < 90, reason
+        assert "noise" in reason
+
+    def test_clean_file_summary_passes(self):
+        from lib.validators.text_validator import validate_mixed_file_summary
+        from eval.tasks_core import FILE_SUMMARY_PROMPT_MIXED
+        out = [{"path": "/Users/ztomer/Projects/ztools/README.md", "desc": "docs"}]
+        score, reason = validate_mixed_file_summary(out, FILE_SUMMARY_PROMPT_MIXED)
+        assert "noise" not in reason
+
+
+class TestValidateMixedFilename:
+    def test_noise_filename_fails(self):
+        from lib.validators.text_validator import validate_mixed_filename
+        from eval.tasks_core import RENAME_PROMPT_MIXED
+        out = ["manage_underperformers", "buy_now_click_here", "context_engineering"]
+        score, reason = validate_mixed_filename(out, RENAME_PROMPT_MIXED)
+        assert score < 90, reason
+        assert "noise" in reason
+
+    def test_clean_filename_passes(self):
+        from lib.validators.text_validator import validate_mixed_filename
+        from eval.tasks_core import RENAME_PROMPT_MIXED
+        out = ["manage_underperformers", "scott_adams_essays", "context_engineering"]
+        score, reason = validate_mixed_filename(out, RENAME_PROMPT_MIXED)
+        assert "noise" not in reason

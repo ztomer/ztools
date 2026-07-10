@@ -163,12 +163,15 @@ class TestRunEvalWithMock:
         with patch.object(er, "call", side_effect=side_effect), \
              patch.object(er, "MAX_RETRIES", 2):
             from eval.tasks_core import TASKS
-            tasks = {"json": TASKS["json"]}
+            # Drop source so the grounding cap does not apply — this test checks
+            # retry logic, not signal-grounding.
+            task = dict(TASKS["json"]); task.pop("source", None)
+            tasks = {"json": task}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
         # Retry happened: exactly 2 calls (first failed, second succeeded with 10 items)
         assert call_count["n"] == 2
         # best_score should be the second (high) score, not the first
-        # 10 items + detailed + paths → ~90 with "not from input" penalty
+        # 10 items + detailed + paths → ~90
         assert results[0]["quality_score"] == 90
         # first_attempt_failed is set when any retry happens
         assert results[0]["first_attempt_failed"] is True
@@ -213,7 +216,10 @@ class TestRunEvalWithMock:
         with patch.object(er, "call", side_effect=counting_call), \
              patch.object(er, "MAX_RETRIES", 5):
             from eval.tasks_core import TASKS
-            tasks = {"json": TASKS["json"]}
+            # Drop source so the grounding cap does not apply — this test checks
+            # the FAIL_CONTENT (prose-before-JSON) early-break, not grounding.
+            task = dict(TASKS["json"]); task.pop("source", None)
+            tasks = {"json": task}
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
         # FAIL_CONTENT → break after first attempt (no retry)
         assert call_count["n"] == 1
@@ -467,7 +473,7 @@ class TestValidateResultBranches:
         from eval.run import _validate_result
 
         task_cfg = {
-            "validator": lambda x: 75,  # returns int
+            "validator": lambda x, **kw: 75,  # returns int; accepts source_text kwarg
             "parse_json": False,
         }
         result = {"content": "good", "parsed": None}

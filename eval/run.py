@@ -153,7 +153,7 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
         failure = "Empty content"
         diagnosis = _classify_failure(result, task_cfg, 0, failure)
         return 0, failure, diagnosis
-    validated = validator(content)
+    validated = validator(content, source_text=source)
 
     if isinstance(validated, tuple):
         score, failure_reason = validated
@@ -331,6 +331,7 @@ def run_eval(
     print_memory_usage()
 
     weekend_tasks = [k for k in tasks.keys() if "weekend" in k]
+    mixed_tasks = [k for k in tasks.keys() if k.endswith("_mixed")]
     if weekend_tasks:
         console.print("")
         console.print("Quality Check Summary:")
@@ -353,5 +354,21 @@ def run_eval(
             if details["unmatched"]:
                 names = [u if isinstance(u, str) else u.get("name", "unnamed") for u in details["unmatched"][:2]]
                 console.print(f"    {WARN} Not from source: {names}")
+
+    if mixed_tasks:
+        console.print("")
+        console.print("Signal/Noise Filtering:")
+        for r in results:
+            task_name = r["task"]
+            if task_name not in mixed_tasks:
+                continue
+            reason = r.get("failure_reason", "")
+            noise_part = ""
+            if "noise" in reason:
+                noise_part = reason
+            elif "missed" in reason or "coverage" in reason:
+                noise_part = reason
+            symbol = WARN if ("included" in reason and "noise" in reason) else STEP
+            console.print(f"  {symbol} {task_name}: {r['quality_score']}% — {noise_part or 'filtered clean'}")
 
     return results

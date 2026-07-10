@@ -240,6 +240,45 @@ summarize: |
 
 ---
 
+## Signal/Noise Filtering (Mixed Eval)
+
+Each eval task has a `*_mixed` variant that injects clearly-labeled NOISE into the
+input and measures whether the model extracts ONLY the signal. Scores are
+precision (noise excluded) + recall (signal kept). A model that dumps noise scores
+lower, and the leakage is named explicitly in the failure reason
+(`included N/M noise items` / `included N/M noise files`).
+
+Sweep (2026-07, all models via `osaurus list`):
+
+| Model | weekend_transient | weekend_fixed | summarize | file_summary | rename | noise leaked? |
+|-------|-------------------|---------------|-----------|--------------|--------|---------------|
+| foundation | 95 | 91 | 88 (1) | 100 | 100 | minor (1 tweet) |
+| qwen3.6-27b-mxfp8-mtp | 100 | 91 | 75 (2) | 100 | 100 | moderate (2 tweets) |
+| qwen3.6-35b-a3b-mxfp8-mtp | 100 | 91 | 88 (1) | 91 (6/6 files) | 100 | **dumps all noise files** |
+| gemma-4-12b-it-mxfp8 | 100 | 91 | 88 (1) | 100 | 100 | minor (1 tweet) |
+| gemma-4-e4b-it-8bit | 100 | 91 | 75 (2) | 100 | 100 | moderate (2 tweets) |
+| diffusiongemma-26b-a4b-it-mxfp8 | 100 | 0 (failed) | 88 (1) | 100 | 100 | minor (1 tweet) |
+| ornith-1.0-35b-mxfp8 | 100 | 91 | 50 (4) | 91 (6/6 files) | 100 | **worst**: 4 tweets + all noise files |
+| qwen-agentworld-35b-a3b-mxfp8 | 100 | 91 | 88 (1) | 25 (missed all) | 100 | barely summarized |
+
+Notes:
+- **Weekend "missed 2/12" is a recall artifact, not noise leakage.** Every weekend
+  task is noise-clean (precision 100%); the model rephrases ~2 item names so the
+  fuzzy name-matcher misses them. Noise exclusion itself works (no model scored
+  noise on weekend).
+- **summarize_mixed** is the most discriminating: models leak 1-4 of 8 noise tweets.
+  ornith (4/8 → 50%) and qwen27b/gemma-e4b (2/8 → 75%) are the worst; foundation /
+  gemma-12b / qwen35b / diffusiongemma / qwen-agentworld leak only 1 (88%).
+- **file_summary_mixed**: qwen35b and ornith INCLUDE all 6 noise files in output
+  (flagged "included 6/6 noise files"); qwen-agentworld barely summarized (25%).
+  All others filter clean (100%).
+- **rename_mixed**: every model filters clean (100%) — the JSON-array format with
+  explicit SNIPPETS/NOISE sections is unambiguous.
+- The single 0-100 pass/fail number is no longer the signal — read the
+  `included N/M noise` failure reason to see actual filtering quality.
+
+---
+
 ## Eval Commands
 
 ```bash

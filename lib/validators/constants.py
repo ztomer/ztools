@@ -85,3 +85,21 @@ DEFAULT_CANDIDATE_FALLBACK_LIMIT = 50
 CODE_FENCE_LEN = 3
 SPACE_CHAR = ' '
 MIN_KEYS_FOR_DETAILS = 1
+
+# Item count thresholds
+MIN_ITEMS_GOOD = 10
+MIN_ITEMS_OK = 5
+
+# Source grounding thresholds for score capping
+SOURCE_THRESHOLD_HIGH = 0.8
+SOURCE_THRESHOLD_MED = 0.5
+SOURCE_THRESHOLD_LOW = 0.3
+
+# Max score caps based on source grounding
+MAX_SCORE_HIGH_SOURCE = 100
+MAX_SCORE_MED_SOURCE = 60
+MAX_SCORE_LOW_SOURCE = 30
+MAX_SCORE_NO_SOURCE = 15
+
+# Max failures to include in error message
+DETAIL_REQUIRED_FIELDS = 3

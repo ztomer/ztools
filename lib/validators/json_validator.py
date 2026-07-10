@@ -5,6 +5,10 @@ from typing import List, Tuple, Any, Dict
 from lib.validators.constants import (
     MAX_SCORE, JSON_ITEMS_WEIGHT, JSON_SCHEMA_WEIGHT,
     JSON_COMPLETENESS_WEIGHT, JSON_QUALITY_WEIGHT,
+    MIN_ITEMS_GOOD, MIN_ITEMS_OK,
+    SOURCE_THRESHOLD_HIGH, SOURCE_THRESHOLD_MED, SOURCE_THRESHOLD_LOW,
+    MAX_SCORE_HIGH_SOURCE, MAX_SCORE_MED_SOURCE, MAX_SCORE_LOW_SOURCE, MAX_SCORE_NO_SOURCE,
+    DETAIL_REQUIRED_FIELDS,
 )
 
 STOPWORDS = {
@@ -33,10 +37,16 @@ DETAIL_PARTIAL_HIGH = DETAILED_QUALITY_WEIGHT * 8 // 10
 DETAIL_PARTIAL_MID = DETAILED_QUALITY_WEIGHT * 5 // 10
 DETAIL_PARTIAL_LOW = DETAILED_QUALITY_WEIGHT * 2 // 10
 
-MIN_ITEMS_GOOD = 10
-MIN_ITEMS_OK = 5
+# Source grounding thresholds for score capping
+SOURCE_THRESHOLD_HIGH = 0.8
+SOURCE_THRESHOLD_MED = 0.5
+SOURCE_THRESHOLD_LOW = 0.3
 
-DETAIL_REQUIRED_FIELDS = 3
+# Max score caps based on source grounding
+MAX_SCORE_HIGH_SOURCE = 100
+MAX_SCORE_MED_SOURCE = 60
+MAX_SCORE_LOW_SOURCE = 30
+MAX_SCORE_NO_SOURCE = 15
 
 NAME_FIELDS = ["name", "event", "title", "activity", "place"]
 DETAIL_FIELDS = [
@@ -122,6 +132,18 @@ def check_source_extraction(items: List[Any], source_text: str) -> float:
         common = item_terms & source_terms
         if len(common) >= 2:
             matches += 1
+            continue
+        # Fallback: short/low-overlap items still match if their primary name
+        # (or full text) appears verbatim in the source.
+        primary = ""
+        if isinstance(item, dict):
+            primary = str(item.get("name") or item.get("event") or item.get("title") or "")
+        if primary:
+            search = _norm_name(primary)
+        else:
+            search = item_text
+        if len(search) >= 4 and search in source_lower:
+            matches += 1
     return matches / len(items) if items else 0.0
 
 
@@ -204,6 +226,104 @@ def validate_json(data: Any, source_text: str = "") -> Tuple[int, str]:
     return min(MAX_SCORE, score), "; ".join(failures)
 
 
+def _norm_name(name: str) -> str:
+    return re.sub(r'[^a-z0-9 ]', '', name.lower()).strip()
+
+
+def _name_tokens(name: str) -> set:
+    norm = re.sub(r'[^a-z0-9 ]', ' ', name.lower()).split()
+    return {t for t in norm if len(t) >= 3 and t not in STOPWORDS}
+
+
+def _names_match(a: str, b: str) -> bool:
+    """Fuzzy match two item names via token overlap or substring containment."""
+    na, nb = _norm_name(a), _norm_name(b)
+    if not na or not nb:
+        return False
+    if na in nb or nb in na:
+        return True
+    ta, tb = _name_tokens(a), _name_tokens(b)
+    if not ta or not tb:
+        return False
+    if len(ta & tb) >= 2:
+        return True
+    # Lenient fallback: longest distinctive token of either contained in the other
+    longest_a = max(ta, key=len)
+    longest_b = max(tb, key=len)
+    return (len(longest_a) >= 5 and longest_a in nb) or (len(longest_b) >= 5 and longest_b in na)
+
+
+def parse_signal_noise(source_text: str) -> Tuple[List[str], List[str]]:
+    """Split a mixed prompt (signal + NOISE section) into (signal_names, noise_names)."""
+    if "NOISE" not in source_text:
+        return [], []
+    signal_part, noise_part = source_text.split("NOISE", 1)
+    return _extract_bullets(signal_part), _extract_bullets(noise_part)
+
+
+def _extract_bullets(text: str) -> List[str]:
+    out = []
+    for line in text.split("\n"):
+        line = line.strip()
+        if line.startswith("- "):
+            content = line[2:].strip()
+            name = content.split(":")[0].strip()
+            if name:
+                out.append(name)
+    return out
+
+
+def validate_mixed_signal(
+    data: Any,
+    source_text: str = "",
+    signal_items: List[str] = None,
+    noise_items: List[str] = None,
+) -> Tuple[int, str]:
+    """Score signal-from-noise filtering via precision (excluded noise) + recall (kept signal)."""
+    if not data:
+        return 0, "empty response"
+    items = extract_list_from_dict(data) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+    if not items:
+        return 0, "no items found"
+
+    if signal_items is None or noise_items is None:
+        signal_items, noise_items = parse_signal_noise(source_text)
+
+    signal_set = signal_items or []
+    noise_set = noise_items or []
+    signal_norm = {_norm_name(s) for s in signal_set}
+    noise_norm = {_norm_name(n) for n in noise_set}
+
+    tp = 0   # output item matched a signal item
+    fp = 0   # output item matched a noise item
+    for item in items:
+        name = (
+            item.get("name", item.get("event", item.get("title", "")))
+            if isinstance(item, dict) else str(item)
+        )
+        if not name:
+            continue
+        matched_signal = any(_names_match(name, s) for s in signal_set)
+        matched_noise = any(_names_match(name, n) for n in noise_set)
+        if matched_signal:
+            tp += 1
+        elif matched_noise:
+            fp += 1
+
+    total_signal = len(signal_set)
+    total_noise = len(noise_set)
+    recall = min(1.0, tp / total_signal) if total_signal else 1.0
+    precision = min(1.0, tp / (tp + fp)) if (tp + fp) else (1.0 if tp == 0 and total_signal == 0 else 0.0)
+
+    score = int(100 * (0.5 * recall + 0.5 * precision))
+    failures = []
+    if fp > 0:
+        failures.append(f"included {fp}/{total_noise} noise items")
+    if tp < total_signal:
+        failures.append(f"missed {total_signal - tp}/{total_signal} signal items")
+    return score, "; ".join(failures)
+
+
 def has_required_fields(item: Dict, required: List[str]) -> bool:
     return all(item.get(field) for field in required)
 
@@ -270,4 +390,18 @@ def validate_detailed_json(data: Any, source_text: str = "") -> Tuple[int, str]:
             score += DETAILED_SOURCE_WEIGHT // 4
         else:
             failures.append("not from input (hallucinated)")
+
+    # Cap max score based on source grounding — no high scores for hallucinated content.
+    # Only applies when a source is provided; without one we cannot assess grounding.
+    if source_text:
+        if source_ratio >= SOURCE_THRESHOLD_HIGH:
+            max_allowed = MAX_SCORE_HIGH_SOURCE
+        elif source_ratio >= SOURCE_THRESHOLD_MED:
+            max_allowed = MAX_SCORE_MED_SOURCE
+        elif source_ratio >= SOURCE_THRESHOLD_LOW:
+            max_allowed = MAX_SCORE_LOW_SOURCE
+        else:
+            max_allowed = MAX_SCORE_NO_SOURCE
+        return min(max_allowed, score), "; ".join(failures[:DETAIL_REQUIRED_FIELDS])
+
     return min(MAX_SCORE, score), "; ".join(failures[:DETAIL_REQUIRED_FIELDS])
