@@ -54,9 +54,11 @@ class TestPrintCrossModelComparison:
         finally:
             eval_report.console = old
         out = buf.getvalue()
-        # Header printed, no rows
+        # Header printed, no task rows (but model names appear in header)
         assert "Cross-Model" in out
-        assert "m1" not in out  # m1 is a screen_name not in task rows
+        assert "Task" in out
+        assert "m1" in out  # model name appears in header
+        assert "m2" in out
 
     def test_full_table(self):
         from eval import report as eval_report

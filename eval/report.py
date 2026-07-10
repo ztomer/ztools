@@ -11,18 +11,28 @@ import statistics
 import time
 from pathlib import Path
 from rich.console import Console
+from rich.table import Table
 
 from lib.tui import STEP
 
 console = Console()
 
 
+def _make_table(columns: list, rows: list, title: str = None, show_header: bool = True) -> Table:
+    """Create a Rich table with consistent styling."""
+    table = Table(show_header=show_header, header_style="bold", show_lines=False, title=title)
+    for col in columns:
+        table.add_column(col["name"], style=col.get("style", ""), justify=col.get("justify", "left"), 
+                         no_wrap=col.get("nowrap", False), min_width=col.get("min_width", 0))
+    for row in rows:
+        table.add_row(*[str(c) for c in row])
+    return table
+
+
 def print_cross_model_comparison(all_results: list) -> None:
-    """Print comparison table across all models."""
+    """Print comparison table across all models using Rich Table."""
     if not all_results:
         return
-
-    console.print(f"\n{STEP} Cross-Model Comparison")
 
     models = [r["model"] for r in all_results]
     if not models:
@@ -30,20 +40,29 @@ def print_cross_model_comparison(all_results: list) -> None:
 
     first_results = all_results[0].get("results", [])
     if not first_results:
+        # Print empty table with header
+        columns = [{"name": "Task", "justify": "left"}]
+        for m in models:
+            columns.append({"name": m[:15], "justify": "right", "style": "dim"})
+        table = Table(show_header=True, header_style="bold", show_lines=False, 
+                      title=f"{STEP} Cross-Model Comparison")
+        for col in columns:
+            table.add_column(col["name"], style=col.get("style", ""), 
+                            justify=col.get("justify", "left"))
+        console.print(table)
         return
 
     tasks = [res["task"] for res in first_results]
     if not tasks:
         return
 
-    header = f"{'Task':<20}"
+    columns = [{"name": "Task", "justify": "left"}]
     for m in models:
-        header += f" | {m[:15]:>15}"
-    console.print(header)
-    console.print("-" * len(header))
+        columns.append({"name": m[:15], "justify": "right", "style": "dim"})
 
+    rows = []
     for task in tasks:
-        row = f"{task:<20}"
+        row = [task]
         task_scores = {}
         for r in all_results:
             score = 0
@@ -52,12 +71,14 @@ def print_cross_model_comparison(all_results: list) -> None:
                     score = res.get("quality_score", 0)
                     break
             task_scores[r["model"]] = score
-            row += f" | {score:>15}"
-
+            row.append(str(score))
         best_model = max(task_scores, key=task_scores.get)
         best_score = task_scores[best_model]
-        row += f" | {best_score:>4}*"
-        console.print(row)
+        row.append(f"{best_score}*")
+        rows.append(row)
+
+    table = _make_table(columns, rows, title=f"{STEP} Cross-Model Comparison")
+    console.print(table)
 
 
 def compute_score_stats(all_results: list) -> dict:
@@ -84,18 +105,26 @@ def compute_score_stats(all_results: list) -> dict:
 
 
 def print_score_stats(stats: dict) -> None:
-    """Print score statistics table."""
+    """Print score statistics table using Rich Table."""
     if not stats:
         return
 
-    console.print("")
-    console.print(f"{'Model':<20} | {'Mean':>6} | {'Med':>6} | {'Stdev':>6} | {'Min':>4} | {'Max':>4}")
+    columns = [
+        {"name": "Model", "justify": "left"},
+        {"name": "Mean", "justify": "right", "style": "cyan"},
+        {"name": "Med", "justify": "right", "style": "cyan"},
+        {"name": "Stdev", "justify": "right", "style": "yellow"},
+        {"name": "Min", "justify": "right", "style": "green"},
+        {"name": "Max", "justify": "right", "style": "green"},
+    ]
 
+    rows = []
     for model, s in sorted(stats.items(), key=lambda x: x[1]["mean"], reverse=True):
-        console.print(
-            f"{model:<20} | {s['mean']:>6.1f} | {s['median']:>6.1f} | "
-            f"{s['stdev']:>6.1f} | {s['min']:>4} | {s['max']:>4}"
-        )
+        rows.append([model, f"{s['mean']:.1f}", f"{s['median']:.1f}", 
+                     f"{s['stdev']:.1f}", str(s['min']), str(s['max'])])
+
+    table = _make_table(columns, rows, title=f"{STEP} Score Statistics")
+    console.print(table)
 
 
 def categorize_failures(all_results: list) -> dict:
@@ -223,15 +252,20 @@ def check_model_history(model: str) -> dict:
 
 
 def print_historical_trends() -> None:
-    """Print historical score trends per model."""
+    """Print historical score trends per model using Rich Table."""
     stats = load_historical_stats()
     if not stats:
         return
 
-    console.print("")
-    console.print(f"{STEP} Historical Trends")
-    console.print(f"{'Model':<20} | {'Runs':>5} | {'Mean':>6} | {'Stdev':>6} | {'Trend'}")
+    columns = [
+        {"name": "Model", "justify": "left"},
+        {"name": "Runs", "justify": "right", "style": "dim"},
+        {"name": "Mean", "justify": "right", "style": "cyan"},
+        {"name": "Stdev", "justify": "right", "style": "yellow"},
+        {"name": "Trend", "justify": "left"},
+    ]
 
+    rows = []
     for model, s in sorted(stats.items(), key=lambda x: x[1]["mean"], reverse=True):
         runs = s.get("runs", 0)
         mean = s.get("mean", 0)
@@ -247,7 +281,10 @@ def print_historical_trends() -> None:
         else:
             trend = "new"
 
-        console.print(f"{model:<20} | {runs:>5} | {mean:>6.0f} | {stdev:>6.1f} | {trend}")
+        rows.append([model, str(runs), f"{mean:.0f}", f"{stdev:.1f}", trend])
+
+    table = _make_table(columns, rows, title=f"{STEP} Historical Trends")
+    console.print(table)
 
 
 def compute_token_estimates(results: list) -> dict:
@@ -287,27 +324,28 @@ def compute_verbosity(all_results: list) -> dict:
 
 
 def print_verbosity(verbosity: dict) -> None:
-    """Print response length per task."""
+    """Print response length per task using Rich Table."""
     if not verbosity:
         return
 
-    console.print("")
-    console.print(f"{STEP} Response Length per Task")
-    first_model = next(iter(verbosity.keys()))
-    tasks = verbosity[first_model].keys()
+    models = list(verbosity.keys())
+    first_model = models[0]
+    tasks = list(verbosity[first_model].keys())
 
-    header = f"{'Task':<20}"
-    for m in verbosity.keys():
-        header += f" | {m[:12]:>12}"
-    console.print(header)
-    console.print("-" * len(header))
+    columns = [{"name": "Task", "justify": "left"}]
+    for m in models:
+        columns.append({"name": m[:12], "justify": "right", "style": "dim"})
 
+    rows = []
     for task in tasks:
-        row = f"{task:<20}"
-        for task_lengths in verbosity.values():
-            length = task_lengths.get(task, 0)
-            row += f" | {length:>12,}"
-        console.print(row)
+        row = [task]
+        for m in models:
+            length = verbosity[m].get(task, 0)
+            row.append(f"{length:,}")
+        rows.append(row)
+
+    table = _make_table(columns, rows, title=f"{STEP} Response Length per Task")
+    console.print(table)
 
 
 def compute_error_rates(all_results: list) -> dict:
@@ -345,20 +383,25 @@ def compute_error_rates(all_results: list) -> dict:
 
 
 def print_error_rates(rates: dict) -> None:
-    """Print error rate breakdown."""
+    """Print error rate breakdown using Rich Table."""
     if not rates:
         return
 
-    console.print("")
-    console.print(f"{STEP} Error Rates")
-    console.print(f"{'Model':<20} | {'Infra':>6} | {'Quality':>8} | {'Success':>8} | {'Rate'}")
+    columns = [
+        {"name": "Model", "justify": "left"},
+        {"name": "Infra", "justify": "right", "style": "red"},
+        {"name": "Quality", "justify": "right", "style": "yellow"},
+        {"name": "Success", "justify": "right", "style": "green"},
+        {"name": "Rate", "justify": "right", "style": "cyan"},
+    ]
 
+    rows = []
     for model, r in sorted(rates.items(), key=lambda x: x[1]["success_rate"], reverse=True):
         rate = r["success_rate"] * 100
-        console.print(
-            f"{model:<20} | {r['infra']:>6} | {r['quality']:>8} | "
-            f"{r['success']:>8} | {rate:>5.0f}%"
-        )
+        rows.append([model, str(r['infra']), str(r['quality']), str(r['success']), f"{rate:.0f}%"])
+
+    table = _make_table(columns, rows, title=f"{STEP} Error Rates")
+    console.print(table)
 
 
 def compute_task_winners(all_results: list) -> dict:
@@ -422,11 +465,10 @@ def diff_from_last_run(all_results: list) -> dict:
 
 
 def print_diff(diffs: dict) -> None:
-    """Print score changes from last run."""
+    """Print score changes from last run using Rich Table."""
     if not diffs:
         return
 
-    console.print("")
     has_changes = False
     for model, changes in diffs.items():
         for task, d in changes.items():
@@ -436,17 +478,25 @@ def print_diff(diffs: dict) -> None:
     if not has_changes:
         return
 
-    console.print(f"{'Model':<18} | {'Task':<18} | {'Prev':>4} | {'Now':>4} | {'Diff'}")
+    columns = [
+        {"name": "Model", "justify": "left", "min_width": 18},
+        {"name": "Task", "justify": "left", "min_width": 18},
+        {"name": "Prev", "justify": "right", "style": "dim"},
+        {"name": "Now", "justify": "right", "style": "cyan"},
+        {"name": "Diff", "justify": "right"},
+    ]
 
+    rows = []
     for model, changes in diffs.items():
         for task, d in changes.items():
             diff = d.get("diff", 0)
             if diff != 0:
-                arrow = "\u2191" if diff > 0 else "\u2193"
-                console.print(
-                    f"{model[:18]:<18} | {task[:18]:<18} | "
-                    f"{d['prev']:>4} | {d['current']:>4} | {arrow}{abs(diff):>3}"
-                )
+                arrow = "↑" if diff > 0 else "↓"
+                rows.append([model[:18], task[:18], str(d['prev']), str(d['current']), f"{arrow}{abs(diff)}"])
+
+    if rows:
+        table = _make_table(columns, rows)
+        console.print(table)
 
 
 def export_to_csv(all_results: list, output_file: str = None) -> None:

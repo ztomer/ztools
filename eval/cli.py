@@ -340,7 +340,13 @@ def main():
         time.sleep(FLUSH_SETTLE_WAIT)
 
     prev_model = None
-    for model, backend in models_to_test:
+    for i, (model, backend) in enumerate(models_to_test):
+        # Visual separator between models
+        if i > 0:
+            console.rule(f"[bold]{model}[/bold]", style="dim")
+        else:
+            console.rule(f"[bold]{model}[/bold]", style="dim")
+
         if prev_model and model != prev_model:
             flush_between_models(prev_model, model)
         prev_model = model
