@@ -94,7 +94,7 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
     source = task_cfg.get("source", "")
 
     if is_parse_json and parsed:
-        validated = validator(parsed, source_text=source)
+        validated = validator(parsed, source_text=source, **task_cfg.get("validator_kwargs", {}))
 
         if isinstance(validated, tuple):
             score, failure_reason = validated
@@ -119,7 +119,7 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
             extracted = _extract_items_from_text(content)
 
         if extracted:
-            validated = validator(extracted, source_text=source)
+            validated = validator(extracted, source_text=source, **task_cfg.get("validator_kwargs", {}))
             items_for_debug = extracted
         elif len(content) > 50:
             validated = validate_summary(content)
@@ -153,7 +153,7 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
         failure = "Empty content"
         diagnosis = _classify_failure(result, task_cfg, 0, failure)
         return 0, failure, diagnosis
-    validated = validator(content, source_text=source)
+    validated = validator(content, source_text=source, **task_cfg.get("validator_kwargs", {}))
 
     if isinstance(validated, tuple):
         score, failure_reason = validated

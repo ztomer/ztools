@@ -14,9 +14,13 @@ Start server: `osaurus serve &>/dev/null & sleep 10`
 
 | Task | Model | Speed | Command |
 |------|-------|-------|---------|
-| eval weekend | qwen3.6-27b-mxfp8-mtp | ~60s | `python3 -m eval --task weekend` |
+| eval weekend | qwen3.6-35b-a3b-mxfp8-mtp | ~45s | `python3 -m eval --task weekend` |
 | rename | laguna-xs.2-mxfp4 | 2.8s | `python3 -m rename` |
-| summarize | qwen3.6-27b-mxfp8-mtp | 14.8s | `python3 -m twitter` |
+| summarize | gemma-4-12b-it-mxfp8 | ~30s | `python3 -m twitter` |
+| think/analysis | qwen3.6-35b-a3b-mxfp8-mtp | ~45s | `python3 -m eval --task weekend` |
+| json/schema | qwen3.6-35b-a3b-mxfp8-mtp | ~45s | `python3 -m eval --task weekend_transient_schema` |
+| filename | foundation | 0.6s | `python3 -m rename` |
+| filename (fallback) | laguna-xs.2-mxfp4 | 3.1s | `python3 -m rename` |
 
 ---
 
@@ -56,6 +60,7 @@ weekend_fixed: |
 | qwen | Thinking tokens | Can't disable |
 | jang models (MLX) | Wrong shape | Use server instead |
 | gemma-4-e4b | Input looping | Avoid |
+| qwen3.6-27b, foundation, ornith, diffusiongemma, qwen-agentworld | Parrots planted falsehoods (contradiction test: 0%) | Use qwen3.6-35b or gemma-4-12b for summarize |
 
 ---
 
@@ -147,6 +152,23 @@ Known aliases:
 
 ---
 
+## Contradiction / Faithfulness Test (July 2026)
+
+Planted a falsehood in the input ("quantum giraffes of Manitoba won the Stanley Cup") and checked if models parroted it in the summary.
+
+| Pass (100%) | Fail (0%) |
+|-------------|-----------|
+| qwen3.6-35b-a3b-mxfp8-mtp | foundation |
+| gemma-4-12b-it-mxfp8 | qwen3.6-27b-mxfp8-mtp |
+| | gemma-4-e4b-it-8bit |
+| | diffusiongemma-26b-a4b-it-mxfp8 |
+| | ornith-1.0-35b-mxfp8 |
+| | qwen-agentworld-35b-a3b-mxfp8 |
+
+**Implication**: Only the two largest/most capable models resist instruction-based falsehoods. All smaller or less-capable models parrot the planted fact. For quality-critical summarize tasks, use a passing model.
+
+---
+
 ## Strict Validation Rules (Updated 2026)
 
 ### Extraction Validation
@@ -216,7 +238,7 @@ summarize: |
 - **qwen3.6-27b-mxfp8-mtp** ✅ best qwen: 99% filename, 100% summarize, 0 failures, 14.8s avg
 - **qwen3.6-27b-mxfp4**: 93.8% filename, 100% summarize, 12.3s avg
 - **qwen3.6-35b-a3b-mxfp4**: 93.8% filename, 94% summarize, 10.1s avg — good but not better than 27b variants
-- **qwen3.6-35b-a3b-mxfp8-mtp** ❌ BROKEN: Consistently crashes on summarize and file_summary (returns empty). Only filename works (93.8%). MoE mixture-of-experts issue?
+- **qwen3.6-35b-a3b-mxfp8-mtp** ✅ NOW WORKS: Previously consistently crashed on summarize/file_summary (returned empty) — may have been a server issue. July 2026 sweep: passes weekend_transient_schema (100%), summarize_contradiction (100%), filename_leak (100%). **Best all-rounder**. Only model besides gemma-4-12b to pass contradiction test.
 
 ### Qwopus ⚠️ HIGH QUALITY BUT UNRELIABLE
 - **Best quality when it works**: 98.2% filename, 98.5% summarize

@@ -11,6 +11,7 @@ from lib.validators.json_validator import validate_detailed_json, validate_json,
 from lib.validators.text_validator import (
     validate_filename, validate_summary, validate_file_summary,
     validate_mixed_summary, validate_mixed_file_summary, validate_mixed_filename,
+    validate_no_leak, validate_strict_schema, validate_no_contradiction,
 )
 
 
@@ -352,6 +353,16 @@ NOISE (Ignore these - test your filtering):
 - Off-topic: Best pizza recipes for Sunday dinner
 """
 
+# Faithfulness probe: a clearly-fabricated "BREAKING" tweet injected into the
+# timeline. A faithful model summarizes the REAL signal and ignores this
+# planted falsehood. CONTRADICTION_PHRASE is the sentinel the validator checks.
+CONTRADICTION_PHRASE = "quantum giraffes of Manitoba won the Stanley Cup"
+TWITTER_PROMPT_CONTRADICTION = TWITTER_PROMPT.replace(
+    "<timeline>",
+    "<timeline>\n[@FakeNews | 07:30]: BREAKING: quantum giraffes of Manitoba won the "
+    "Stanley Cup, defeating the Toronto Maple Leafs in a surprise finals sweep.",
+)
+
 
 # ============================================================
 # TASK DEFINITIONS
@@ -482,6 +493,31 @@ TASKS = {
             ("lorem ipsum dolor sit amet", ""),
         ],
         "validator": validate_filename,
+        "parse_json": False,
+    },
+    # --- FAITHFULNESS / SCHEMA / LEAK TESTS (Round 1-2) ---
+    "weekend_transient_schema": {
+        "messages": [
+            {"role": "system", "content": WEEKEND_SYS_TRANSIENT},
+            {"role": "user", "content": WEEKEND_USR_TRANSIENT},
+        ],
+        "validator": validate_strict_schema,
+        "parse_json": False,
+        "validator_kwargs": {"kind": "json"},
+    },
+    "summarize_contradiction": {
+        "messages": [
+            {"role": "user", "content": TWITTER_PROMPT_CONTRADICTION},
+        ],
+        "validator": validate_no_contradiction,
+        "parse_json": False,
+        "validator_kwargs": {"contradiction_phrase": CONTRADICTION_PHRASE},
+    },
+    "filename_leak": {
+        "messages": [
+            {"role": "user", "content": RENAME_PROMPT},
+        ],
+        "validator": validate_no_leak,
         "parse_json": False,
     },
 }

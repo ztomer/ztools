@@ -80,6 +80,12 @@ def validate_filename(data: Any, source_text: str = "") -> Tuple[int, str]:
         return 0, "empty response"
 
     raw = str(data).strip()
+
+    # Mitigation: reject instruction leakage (nemotron-style "Here is the filename:")
+    leaks = detect_instruction_leak(raw)
+    if leaks:
+        return 0, f"instruction leak: {leaks[0]}"
+
     clean = strip_backtick_value(raw)
 
     if (len(clean) >= FILENAME_LENGTH_MAX
@@ -515,3 +521,79 @@ def validate_mixed_filename(data: Any, source_text: str = "") -> Tuple[int, str]
     if tp < len(signal):
         failures.append(f"missed {len(signal) - tp}/{len(signal)} signal snippets")
     return score, "; ".join(failures)
+
+
+# ============================================================
+# FAITHFULNESS / SCHEMA / LEAK CHECKS (Round 1-2 quality tests)
+# ============================================================
+
+_LEAK_PATTERNS = [
+    re.compile(r"here\s+is\s+(the\s+)?filename", re.I),
+    re.compile(r"here's\s+(the\s+)?filename", re.I),
+    re.compile(r"the\s+filename\s+is", re.I),
+    re.compile(r"filename\s*:", re.I),
+    re.compile(r"here\s+is\s+your\s+(file|output)", re.I),
+]
+
+
+def detect_instruction_leak(text: str) -> List[str]:
+    """Detect nemotron-style leakage where the model echoes the instruction
+    ('Here is the filename: ...') instead of emitting the bare value."""
+    if not text:
+        return []
+    return [p.search(text).group(0) for p in _LEAK_PATTERNS if p.search(text)]
+
+
+def validate_no_leak(text: str, source_text: str = "") -> Tuple[int, str]:
+    """Score 0 if the output leaks instruction text; 100 if clean."""
+    leaks = detect_instruction_leak(text)
+    if leaks:
+        return 0, f"instruction leak: {leaks[0]}"
+    return 100, ""
+
+
+def validate_strict_schema(raw: str, source_text: str = "", kind: str = "json") -> Tuple[int, str]:
+    """Verify the RAW output is exactly the contracted shape — no prose preamble,
+    no markdown fences, no trailing commentary. Gates the prose-before-JSON
+    failure mode (qwen35b / qwopus)."""
+    if not raw or not raw.strip():
+        return 0, "empty response"
+    text = raw.strip()
+    if "```" in text:
+        return 0, "contains code fence (not strict schema)"
+    if kind == "json":
+        brackets = [i for i, c in enumerate(text) if c in "{["]
+        ends = [i for i, c in enumerate(text) if c in "}]"]
+        if not brackets or not ends or max(ends) < min(brackets):
+            return 0, "no JSON object/array found"
+        before = text[: min(brackets)].strip()
+        after = text[max(ends) + 1:].strip()
+        if before or after:
+            return 0, f"prose outside JSON (before={before!r}, after={after!r})"
+        return 100, ""
+    if kind == "filename":
+        if detect_instruction_leak(text):
+            return 0, "instruction leak"
+        if len(text) > 80:
+            return 0, f"filename too long ({len(text)} chars)"
+        return 100, ""
+    # markdown / free-text: accept as-is
+    return 100, ""
+
+
+def validate_no_contradiction(output: str, source_text: str = "",
+                              contradiction_phrase: str = "") -> Tuple[int, str]:
+    """Faithfulness probe: assert the model does NOT parrot a planted falsehood.
+    `contradiction_phrase` is the sentinel fact injected into the source; if it
+    (or its distinctive tokens) appears in the output, the model failed to filter
+    it out."""
+    if not output or not contradiction_phrase:
+        return 100, ""
+    out = output.lower()
+    phrase = contradiction_phrase.lower().strip()
+    if phrase and phrase in out:
+        return 0, f"parrots contradiction: {contradiction_phrase!r}"
+    ptoks = {t for t in re.sub(r'[^a-z0-9 ]', ' ', phrase).split() if len(t) >= 4}
+    if ptoks and sum(1 for t in ptoks if t in out) >= 2:
+        return 0, f"parrots contradiction: {contradiction_phrase!r}"
+    return 100, ""

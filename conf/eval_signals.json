@@ -15,7 +15,44 @@
       "total_retries": 0
     }
   },
+  "diffusiongemma-26b-a4b-it-mxfp8": {
+    "filename_leak": {
+      "p95_latency": 2.1,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "summarize_contradiction": {
+      "p95_latency": 26.8,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient_schema": {
+      "p95_latency": 21.4,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    }
+  },
   "foundation": {
+    "filename_leak": {
+      "p95_latency": 0.3,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "summarize_contradiction": {
+      "p95_latency": 7.9,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
     "weekend_fixed": {
       "p95_latency": 6.0,
       "parse_failures": 0,
@@ -25,6 +62,36 @@
     },
     "weekend_transient": {
       "p95_latency": 8.2,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient_schema": {
+      "p95_latency": 9.4,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    }
+  },
+  "gemma-4-12b-it-mxfp8": {
+    "filename_leak": {
+      "p95_latency": 0.8,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "summarize_contradiction": {
+      "p95_latency": 29.9,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient_schema": {
+      "p95_latency": 35.5,
       "parse_failures": 0,
       "samples": 1,
       "timeout": 900,
@@ -64,6 +131,20 @@
     }
   },
   "gemma-4-e4b-it-8bit": {
+    "filename_leak": {
+      "p95_latency": 0.3,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "summarize_contradiction": {
+      "p95_latency": 14.1,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
     "weekend_fixed": {
       "p95_latency": 39.5,
       "parse_failures": 0,
@@ -73,6 +154,13 @@
     },
     "weekend_transient": {
       "p95_latency": 24.6,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient_schema": {
+      "p95_latency": 9.9,
       "parse_failures": 0,
       "samples": 1,
       "timeout": 900,
@@ -129,6 +217,29 @@
       "total_retries": 126
     }
   },
+  "ornith-1.0-35b-mxfp8": {
+    "filename_leak": {
+      "p95_latency": 39.2,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "summarize_contradiction": {
+      "p95_latency": 80.9,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient_schema": {
+      "p95_latency": 94.1,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    }
+  },
   "potion-base-4m": {
     "weekend_transient": {
       "p95_latency": 0.1,
@@ -138,7 +249,44 @@
       "total_retries": 0
     }
   },
+  "qwen-agentworld-35b-a3b-mxfp8": {
+    "filename_leak": {
+      "p95_latency": 0.5,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "summarize_contradiction": {
+      "p95_latency": 17.3,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient_schema": {
+      "p95_latency": 26.6,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    }
+  },
   "qwen3.6-27b-mxfp8-mtp": {
+    "filename_leak": {
+      "p95_latency": 1.6,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "summarize_contradiction": {
+      "p95_latency": 58.9,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
     "weekend_fixed": {
       "p95_latency": 42.2,
       "parse_failures": 0,
@@ -152,9 +300,30 @@
       "samples": 1,
       "timeout": 900,
       "total_retries": 0
+    },
+    "weekend_transient_schema": {
+      "p95_latency": 77.0,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
     }
   },
   "qwen3.6-35b-a3b-mxfp8-mtp": {
+    "filename_leak": {
+      "p95_latency": 0.5,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "summarize_contradiction": {
+      "p95_latency": 17.3,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
     "weekend_fixed": {
       "p95_latency": 18.5,
       "parse_failures": 0,
@@ -164,6 +333,13 @@
     },
     "weekend_transient": {
       "p95_latency": 35.3,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient_schema": {
+      "p95_latency": 33.8,
       "parse_failures": 0,
       "samples": 1,
       "timeout": 900,

@@ -1,12 +1,12 @@
 llm_url: http://localhost:1337
-default_model: qwen3.6-27b-mxfp8-mtp
+default_model: qwen3.6-35b-a3b-mxfp8-mtp
 
 best_models:
-  think: qwen3.6-27b-mxfp8-mtp
-  json: qwen3.6-27b-mxfp8-mtp
-  summarize: qwen3.6-27b-mxfp8-mtp
-  filename: qwen3.6-27b-mxfp8-mtp
-  vlm: qwen3.6-27b-mxfp8-mtp
+  think: qwen3.6-35b-a3b-mxfp8-mtp
+  json: qwen3.6-35b-a3b-mxfp8-mtp
+  summarize: gemma-4-12b-it-mxfp8
+  filename: foundation
+  vlm: qwen3.6-35b-a3b-mxfp8-mtp
 
 timeouts:
   think: 600
