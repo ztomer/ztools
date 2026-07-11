@@ -440,7 +440,8 @@ def _print_results(all_results, best_scores, best_models_dict):
 
     export_to_csv(all_results)
 
-    eval_dir = Path.home() / ".config" / "ztools"
+    from eval.report import _get_eval_dir
+    eval_dir = _get_eval_dir()
     eval_dir.mkdir(parents=True, exist_ok=True)
     results_file = eval_dir / "eval_results.json"
 

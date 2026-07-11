@@ -11,7 +11,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Check for new config debt
-        shell: python3
+        shell: python3 {0}
         run: |
           import re, subprocess, sys
           from pathlib import Path

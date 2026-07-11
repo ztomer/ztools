@@ -166,7 +166,7 @@ class TestHistoricalFunctions:
     def test_save_and_load_history(self, tmp_path, monkeypatch):
         from eval import report as eval_report
         # Redirect the config dir to tmp_path
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         results = [
             {"model": "m1", "results": [
                 {"task": "t1", "quality_score": 80, "time": 1.5},
@@ -190,7 +190,7 @@ class TestHistoricalFunctions:
 
     def test_save_truncates_to_100(self, tmp_path, monkeypatch):
         from eval import report as eval_report
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         # Generate 110 results for one model
         results = [{"model": "m1", "results": [
             {"task": f"t{i}", "quality_score": 50, "time": 1.0} for i in range(110)
@@ -204,7 +204,7 @@ class TestHistoricalFunctions:
     def test_save_with_invalid_existing_history(self, tmp_path, monkeypatch):
         """Lines 146-150: existing history file has invalid JSON, exception caught."""
         from eval import report as eval_report
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text("{not valid json")
         results = [{"model": "m1", "results": [
@@ -219,13 +219,13 @@ class TestHistoricalFunctions:
 
     def test_load_history_no_file(self, tmp_path, monkeypatch):
         from eval import report as eval_report
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         result = eval_report.load_historical_stats()
         assert result == {}
 
     def test_load_history_invalid_json(self, tmp_path, monkeypatch):
         from eval import report as eval_report
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text("{invalid json")
         result = eval_report.load_historical_stats()
@@ -233,7 +233,7 @@ class TestHistoricalFunctions:
 
     def test_load_history_empty(self, tmp_path, monkeypatch):
         from eval import report as eval_report
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text("{}")
         result = eval_report.load_historical_stats()
@@ -241,7 +241,7 @@ class TestHistoricalFunctions:
 
     def test_load_history_no_scores(self, tmp_path, monkeypatch):
         from eval import report as eval_report
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text(json.dumps({"m1": [{"date": "2024-01-01"}]}))  # no score
         result = eval_report.load_historical_stats()
@@ -249,13 +249,13 @@ class TestHistoricalFunctions:
 
     def test_check_model_history_no_file(self, tmp_path, monkeypatch):
         from eval import report as eval_report
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         result = eval_report.check_model_history("m1")
         assert result == {}
 
     def test_check_model_history_invalid_json(self, tmp_path, monkeypatch):
         from eval import report as eval_report
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text("{not json")
         result = eval_report.check_model_history("m1")
@@ -263,7 +263,7 @@ class TestHistoricalFunctions:
 
     def test_check_model_history_found(self, tmp_path, monkeypatch):
         from eval import report as eval_report
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text(json.dumps({
             "m1": [{"score": 80}, {"score": 90}],
@@ -373,13 +373,13 @@ class TestPrintErrorRates:
 class TestDiffFromLastRun:
     def test_no_prev_file(self, tmp_path, monkeypatch):
         from eval import report as eval_report
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         result = eval_report.diff_from_last_run([])
         assert result == {}
 
     def test_invalid_prev_json(self, tmp_path, monkeypatch):
         from eval import report as eval_report
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         prev = tmp_path / "eval_results.json"
         prev.write_text("{invalid")
         result = eval_report.diff_from_last_run([])
@@ -387,7 +387,7 @@ class TestDiffFromLastRun:
 
     def test_no_models_in_prev(self, tmp_path, monkeypatch):
         from eval import report as eval_report
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         prev = tmp_path / "eval_results.json"
         prev.write_text(json.dumps({}))  # no models key
         result = eval_report.diff_from_last_run([])
@@ -395,7 +395,7 @@ class TestDiffFromLastRun:
 
     def test_no_matching_model(self, tmp_path, monkeypatch):
         from eval import report as eval_report
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         prev = tmp_path / "eval_results.json"
         prev.write_text(json.dumps({"models": [{"model": "other", "results": []}]}))
         result = eval_report.diff_from_last_run([{"model": "m1", "results": []}])
@@ -403,7 +403,7 @@ class TestDiffFromLastRun:
 
     def test_with_diffs(self, tmp_path, monkeypatch):
         from eval import report as eval_report
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         prev = tmp_path / "eval_results.json"
         prev.write_text(json.dumps({
             "models": [{"model": "m1", "results": [
@@ -478,7 +478,7 @@ class TestPrintDiff:
 class TestExportToCsv:
     def test_default_path(self, tmp_path, monkeypatch):
         from eval import report as eval_report
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new
@@ -502,7 +502,7 @@ class TestExportToCsv:
 
     def test_custom_path(self, tmp_path, monkeypatch):
         from eval import report as eval_report
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         old, new, buf = _capture_rich_console()
         try:
             eval_report.console = new

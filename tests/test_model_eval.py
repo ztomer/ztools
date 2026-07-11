@@ -234,7 +234,7 @@ class TestPrintResults:
     def test_basic(self, mock_llm, tmp_path, monkeypatch):
         """Test _print_results saves to file and prints."""
         import eval.cli as model_eval
-        monkeypatch.setattr("os.path.expanduser", lambda p: str(tmp_path) if p.startswith("~") else p)
+        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         old, new, buf = _capture_console()
         try:
             model_eval.console = new
