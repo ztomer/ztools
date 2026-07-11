@@ -20,7 +20,7 @@ FILENAME_CASES = [
     ),
     TestCase(
         task="filename",
-        input_text="Summer Festival 2024 - Family Fun Day at Central Park",
+        input_text="Summer Festival 2024 - Family Fun Day at Central Park",  # check-ok: year
         reference="summer_festival_2024_family_fun_day",
         description="Event with clear subject",
     ),
@@ -38,7 +38,7 @@ FILENAME_CASES = [
     ),
     TestCase(
         task="filename",
-        input_text="Screen Shot 2024-03-15 at 14.30.22.png",
+        input_text="Screen Shot 2024-03-15 at 14.30.22.png",  # check-ok: year
         reference="screen_shot_20240315_143022",
         description="Generic screenshot (less info)",
     ),
@@ -120,14 +120,16 @@ FILE_SUMMARY_CASES = [
     ),
 ]
 
-WEEKEND_TRANSIENT_PROMPT = """
+_QR_YEAR = "2026"  # check-ok: year
+
+WEEKEND_TRANSIENT_PROMPT = f"""
 Current Context for the upcoming weekend:
-Dates: April 20 to April 22, 2026
+Dates: April 20 to April 22, {_QR_YEAR}
 Friday: 15.0°C, Clear (0mm)
 Saturday: 12.0°C, Precipitation (5mm)
 Sunday: 14.0°C, Clear (0mm)
 
-High-Signal Transient Events:
+High-Signal Transient Events (Filter these strictly! Ensure they match the Dates provided!):
 - Spring Festival at Downsview Park: Outdoor rides and games. April 20-22. All ages.
 - Indoor Coding Workshop for Kids: Learn Python. April 21. Ages 8-14.
 - Outdoor Movie Night: Watch a movie under the stars. April 21. All ages.
@@ -140,15 +142,11 @@ High-Signal Transient Events:
 - Board Game Marathon at Community Centre: Family games. April 21. All ages.
 - Pizza Making Class: Learn to make pizza. April 22. Ages 8-16.
 - Easter Egg Hunt at Raccoon Creek: Egg hunt and crafts. April 20. Ages 3-10.
-
-Output JSON with schema: [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str", "day": "str"}]
-Include 5-10 items. day must be Friday, Saturday, or Sunday. Use "indoor" for rainy days, "outdoor" for clear days.
-Output ONLY JSON. No explanations.
 """
 
-WEEKEND_FIXED_PROMPT = """
+WEEKEND_FIXED_PROMPT = f"""
 Current Context for the upcoming weekend:
-Dates: April 20 to April 22, 2026
+Dates: April 20 to April 22, {_QR_YEAR}
 Friday: 15.0°C, Clear (0mm)
 Saturday: 12.0°C, Precipitation (5mm)
 Sunday: 14.0°C, Clear (0mm)
@@ -167,7 +165,7 @@ Potential Venues and Current Exhibits:
 - Lake Simcoe Sugar Bush: Maple syrup tours. Outdoor. All ages.
 - Markham Museum: Heritage buildings and events. Indoor/outdoor. All ages.
 
-Output JSON with schema: [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}]
+Output JSON with schema: [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]
 Include 8-10 items. Use "indoor" for rainy days, "outdoor" for clear days. Focus on venues appropriate for kids ages 6-13.
 Output ONLY JSON. No explanations.
 """

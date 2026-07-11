@@ -45,8 +45,8 @@ FILENAME_CASES = [
         "description": "Login error screenshot"
     },
     {
-        "input": "Summer Festival 2024 - Family Fun Day at Central Park",
-        "expected_keywords": ["summer", "festival", "2024", "park"],
+        "input": "Summer Festival 2024 - Family Fun Day at Central Park",  # check-ok: year
+        "expected_keywords": ["summer", "festival", "2024", "park"],  # check-ok: year
         "human_score_expectation": 100,
         "description": "Event with clear subject"
     },
@@ -57,7 +57,7 @@ FILENAME_CASES = [
         "description": "Quote with multiple keywords"
     },
     {
-        "input": "Screen Shot 2024-03-15 at 14.30.22.png",
+        "input": "Screen Shot 2024-03-15 at 14.30.22.png",  # check-ok: year
         "expected_keywords": ["screen", "shot"],
         "human_score_expectation": 60,
         "description": "Generic screenshot (less info)"

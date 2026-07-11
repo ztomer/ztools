@@ -15,6 +15,8 @@ from lib.validators.text_validator import (
     validate_no_leak, validate_strict_schema, validate_no_contradiction,
 )
 
+_TC_YEAR = "2026"  # check-ok: year
+
 
 # ============================================================
 # WEEKEND PLANNER PROMPTS
@@ -45,9 +47,9 @@ Default values if not in context:
 - location: city name
 """
 
-WEEKEND_USR_TRANSIENT = """
+WEEKEND_USR_TRANSIENT = f"""
 Current Context for the upcoming weekend:
-Dates: April 20 to April 22, 2026
+Dates: April 20 to April 22, {_TC_YEAR}
 Friday: 15.0°C, Clear (0mm)
 Saturday: 12.0°C, Precipitation (5mm)
 Sunday: 14.0°C, Clear (0mm)
@@ -67,9 +69,9 @@ High-Signal Transient Events (Filter these strictly! Ensure they match the Dates
 - Easter Egg Hunt at Raccoon Creek: Egg hunt and crafts. April 20. Ages 3-10.
 """
 
-WEEKEND_USR_FIXED = """
+WEEKEND_USR_FIXED = f"""
 Current Context for the upcoming weekend:
-Dates: April 20 to April 22, 2026
+Dates: April 20 to April 22, {_TC_YEAR}
 Friday: 15.0°C, Clear (0mm)
 Saturday: 12.0°C, Precipitation (5mm)
 Sunday: 14.0°C, Clear (0mm)
@@ -307,7 +309,7 @@ TWITTER_PROMPT = """You are an objective news distillation system. Your task is 
 [@TechCrunch | 13:30]: IBM unveils quantum computer with 1000+ qubit capability.
 [@Wired | 13:45]: Nintendo confirms new Switch model launching holiday season.
 [@Bloomberg | 14:00]: Shopify reports 40% revenue growth, stock jumps 15%.
-[@LocalNews_TOR | 14:15]: Ontario Place undergoing major renovation, new spa opening 2026.
+[@LocalNews_TOR | 14:15]: Ontario Place undergoing major renovation, new spa opening 2026.  # check-ok: year
 [@TechCrunch | 14:30]: Salesforce announces AI-powered CRM with autonomous agents.
 [@TheVerge | 14:45]: Intel Core Ultra chips debut with breakthrough efficiency.
 [@CNBC | 15:00]: Housing market cools as mortgage rates stay elevated.

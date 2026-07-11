@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import datetime
 import re
 import json
 from typing import Any, Optional, List, Dict, Union
@@ -16,7 +17,7 @@ JSON_OBJECT_START = '{'
 JSON_OBJECT_END = '}'
 COMMENT_CHAR = '#'
 PIPE_CHAR = "|"
-TARGET_YEAR = '2026'
+TARGET_YEAR = str(datetime.date.today().year)
 MIN_LINE_LENGTH = 1
 
 BOLD_MARKDOWN_RE = re.compile(r'\*\*([^*]+)\*\*')
