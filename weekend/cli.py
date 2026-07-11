@@ -2,6 +2,7 @@
 import os
 import time
 import argparse
+from pathlib import Path
 
 
 from lib import init_config
@@ -59,7 +60,7 @@ EMPTY_LIST_LIMIT = 0
 MIN_TRANSIENT_LIST_LEN = 2
 FALLBACK_LIST_LEN_HIGH = 3
 FALLBACK_LIST_LEN_LOW = 2
-OUTPUT_DIR_PATH = "~/Documents/"
+OUTPUT_DIR_PATH = str(Path.home() / "Documents")
 PLAN_FILE_PREFIX = "weekend_plan_"
 OUTPUT_FILE_SUFFIX = ".md"
 FILE_WRITE_MODE = "w"

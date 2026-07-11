@@ -329,7 +329,8 @@ def main():
                     try:
                         import requests
                         with requests.Session() as s:
-                            resp = s.get("http://localhost:1337/api/tags", timeout=RESTART_CHECK_TIMEOUT)
+                            _llm_host = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
+                            resp = s.get(f"{_llm_host}/api/tags", timeout=RESTART_CHECK_TIMEOUT)
                         if resp.status_code == 200:
                             console.print(f"{STEP} Server restarted")
                             break
@@ -436,7 +437,7 @@ def _print_results(all_results, best_scores, best_models_dict):
 
     export_to_csv(all_results)
 
-    eval_dir = Path(os.path.expanduser("~/.config/ztools"))
+    eval_dir = Path.home() / ".config" / "ztools"
     eval_dir.mkdir(parents=True, exist_ok=True)
     results_file = eval_dir / "eval_results.json"
 

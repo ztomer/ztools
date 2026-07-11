@@ -38,7 +38,7 @@ try:
 except Exception:
     _RENAME_CFG = {}
 
-MLX_MODELS_DIR = Path(_RENAME_CFG.get("mlx_models_dir", str(Path.home() / "MLXModels")))
+MLX_MODELS_DIR = Path(_RENAME_CFG.get("mlx_models_dir", str(Path.home() / "MLXModels"))).expanduser()
 
 # Timeouts for LLM API calls (seconds)
 RELEVANCE_CHECK_TIMEOUT = 5

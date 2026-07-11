@@ -15,6 +15,7 @@ from rich.table import Table
 
 from lib.tui import STEP
 
+_EVAL_DIR = Path.home() / ".config" / "ztools"
 console = Console()
 
 
@@ -166,9 +167,8 @@ def print_failure_summary(categories: dict) -> None:
 
 def save_historical_results(all_results: list, stats: dict, categories: dict) -> None:
     """Save per-model scores that persist even when models change."""
-    eval_dir = Path(os.path.expanduser("~/.config/ztools"))
-    eval_dir.mkdir(parents=True, exist_ok=True)
-    history_file = eval_dir / "eval_history.json"
+    _EVAL_DIR.mkdir(parents=True, exist_ok=True)
+    history_file = _EVAL_DIR / "eval_history.json"
     history = {}
 
     if history_file.exists():
@@ -202,8 +202,7 @@ def save_historical_results(all_results: list, stats: dict, categories: dict) ->
 
 def load_historical_stats() -> dict:
     """Load per-model historical scores."""
-    eval_dir = Path(os.path.expanduser("~/.config/ztools"))
-    history_file = eval_dir / "eval_history.json"
+    history_file = _EVAL_DIR / "eval_history.json"
     if not history_file.exists():
         return {}
 
@@ -237,8 +236,7 @@ def load_historical_stats() -> dict:
 
 def check_model_history(model: str) -> dict:
     """Check if model has historical data."""
-    eval_dir = Path(os.path.expanduser("~/.config/ztools"))
-    history_file = eval_dir / "eval_history.json"
+    history_file = _EVAL_DIR / "eval_history.json"
     if not history_file.exists():
         return {}
 
@@ -421,8 +419,7 @@ def compute_task_winners(all_results: list) -> dict:
 
 def diff_from_last_run(all_results: list) -> dict:
     """Compare current scores to last run for each model."""
-    eval_dir = Path(os.path.expanduser("~/.config/ztools"))
-    prev_file = eval_dir / "eval_results.json"
+    prev_file = _EVAL_DIR / "eval_results.json"
 
     if not prev_file.exists():
         return {}
@@ -502,8 +499,7 @@ def print_diff(diffs: dict) -> None:
 def export_to_csv(all_results: list, output_file: str = None) -> None:
     """Export results to CSV for reporting."""
     if output_file is None:
-        eval_dir = Path(os.path.expanduser("~/.config/ztools"))
-        output_file = eval_dir / "eval_results.csv"
+        output_file = _EVAL_DIR / "eval_results.csv"
     else:
         output_file = Path(output_file)
 

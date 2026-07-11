@@ -71,7 +71,7 @@ _friday = _today + datetime.timedelta((4 - _today.weekday()) % 7)
 _sunday = _friday + datetime.timedelta(days=2)
 DATES_STR = f"{_friday.strftime('%B %d')} to {_sunday.strftime('%B %d, %Y')}"
 
-MODEL_CONFIG = os.path.expanduser("~/.config/model_eval.json")
+MODEL_CONFIG = str(Path.home() / ".config" / "model_eval.json")
 
 from lib.config import Task
 MODEL_NAME = os.environ.get(

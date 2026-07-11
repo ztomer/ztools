@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+"""Pre-commit hook: block staged changes that introduce config debt."""
+import subprocess, sys, os
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+CHECKER = ROOT / "tools" / "check_config_debt.py"
+if not CHECKER.exists():
+    sys.exit(0)
+
+# Run checker on staged files only
+result = subprocess.run(
+    [sys.executable, str(CHECKER)],
+    capture_output=True, text=True, cwd=str(ROOT),
+)
+if result.returncode != 0:
+    print("❌ Config debt detected in staged changes:")
+    print(result.stdout)
+    print("Fix violations before committing, or use --no-verify to bypass.")
+    sys.exit(1)
+sys.exit(0)

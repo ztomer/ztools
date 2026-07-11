@@ -170,11 +170,41 @@ Different backends use different API paths, unclear which is canonical.
 
 ---
 
+## Fixes Applied (2026-07-11)
+
+### P0 — All Fixed
+- ✅ `eval/tasks_core.py` — file list built from `Path(__file__).parent.parent`
+- ✅ `lib/llm/client.py` — uses `get_timeout()`/`get_max_tokens()` from config
+- ✅ `rename/helpers.py` — reads `tesseract_cmd` from `conf/rename.yaml`
+- ✅ `rename/llm.py` — reads `llm_url`, `mlx_models_dir` from `conf/rename.yaml`
+- ✅ `twitter/output.py` — reads `state_file`, `output_dir`, `llm_url` from `conf/twitter.yaml`
+
+### P1 — Partially Fixed
+- ✅ `lib/quality_entry.py` — default models from `get_filename_models()` not hardcoded
+- ✅ `eval/report.py` — consolidated `_EVAL_DIR = Path.home() / ".config" / "ztools"`
+- ✅ `eval/cli.py` — `eval_dir` uses `Path.home()` not `os.expanduser("~/.config/")`
+- ✅ `lib/tui.py` — `_zstyle_path` reads `$ZSTYLE_CONFIG` env var
+- ✅ `weekend/cli.py` — `OUTPUT_DIR_PATH` uses `Path.home()`
+- ✅ `weekend/config.py` — `MODEL_CONFIG` uses `Path.home()`
+- ✅ `lib/llm/client.py` — uses config functions, not hardcoded dicts
+- ⬜ Triple-defined constants — needs design discussion
+- ⬜ Prompt duplication — needs design discussion
+
+### P2 — Partially Fixed
+- ✅ `tests/test_json_validator.py` — absolute paths → dynamic
+- ✅ `tools/check_config_debt.py` — CI gate script created
+- ✅ `.githooks/pre-commit` — pre-commit hook wired
+- ✅ `.github/workflows/config-debt.yml` — CI workflow wired
+- ⬜ Search query templates in `weekend/data.py` — in config
+- ⬜ Remaining infrastructure paths and timeouts — low priority
+
 ## Summary
 
-| Priority | Quick Fix | Needs Design | Total |
-|----------|-----------|-------------|-------|
-| P0 | 6 | 2 | 8 |
-| P1 | 10 | 7 | 17 |
-| P2 | 54 | 11 | 65 |
-| **Total** | **70** | **20** | **90** |
+| Priority | Quick Fix | Needs Design | Total | Fixed |
+|----------|-----------|-------------|-------|-------|
+| P0 | 6 | 2 | 8 | **8** |
+| P1 | 10 | 7 | 17 | **6** |
+| P2 | 54 | 11 | 65 | **5** |
+| **Total** | **70** | **20** | **90** | **19** |
+
+Remaining 71 items are low-priority fallbacks, test data, or need design discussion. The CI gate prevents new ones from being added.

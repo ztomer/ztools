@@ -8,6 +8,7 @@ Reads the first line of text from each image and uses it as the filename.
 """
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Tuple, Optional
@@ -74,7 +75,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force", "-f", action="store_true", help="Check relevance before rename")
     parser.add_argument("--pattern", "-p", default="*", help="File pattern")
     parser.add_argument("--max-length", "-m", type=int, default=50, help="Max filename length")
-    parser.add_argument("--llm-host", default="http://localhost:1337", help="LLM server URL")
+    parser.add_argument("--llm-host", default=os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337"), help="LLM server URL")
     parser.add_argument("--llm-model", default=FILENAME_MODELS[0] if FILENAME_MODELS else "foundation", help="LLM model")
     parser.add_argument("--vlm-model", default="", help="VLM model to use when no text is found")
     parser.add_argument("--api-key", default="", help="Bearer token for LLM API")

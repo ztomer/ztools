@@ -18,9 +18,9 @@ try:
 except Exception:
     _TWITTER_CFG = {}
 
-STATE_FILE = Path(_TWITTER_CFG.get("state_file", str(Path.home() / ".twitter_summary_state.json")))
+STATE_FILE = Path(_TWITTER_CFG.get("state_file", str(Path.home() / ".twitter_summary_state.json"))).expanduser()
 DEBUG_CACHE_FILE = Path.home() / ".twitter_summary_debug_cache.json"
-DEFAULT_OUTPUT_DIR = Path(_TWITTER_CFG.get("output_dir", str(Path.home() / "Documents" / "twitter_summaries")))
+DEFAULT_OUTPUT_DIR = Path(_TWITTER_CFG.get("output_dir", str(Path.home() / "Documents" / "twitter_summaries"))).expanduser()
 DEFAULT_OLLAMA_URL = _TWITTER_CFG.get("llm_url", "http://localhost:1337")
 
 

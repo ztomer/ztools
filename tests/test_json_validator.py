@@ -713,8 +713,9 @@ class TestValidateMixedFileSummary:
     def test_noise_file_fails(self):
         from lib.validators.text_validator import validate_mixed_file_summary
         from eval.tasks_core import FILE_SUMMARY_PROMPT_MIXED
+        project_root = Path(__file__).parent.parent
         out = [
-            {"path": "/Users/ztomer/Projects/ztools/README.md", "desc": "docs"},
+            {"path": str(project_root / "README.md"), "desc": "docs"},
             {"path": "/spam/buy_now/click_here.exe", "desc": "spam"},
         ]
         score, reason = validate_mixed_file_summary(out, FILE_SUMMARY_PROMPT_MIXED)
@@ -724,7 +725,8 @@ class TestValidateMixedFileSummary:
     def test_clean_file_summary_passes(self):
         from lib.validators.text_validator import validate_mixed_file_summary
         from eval.tasks_core import FILE_SUMMARY_PROMPT_MIXED
-        out = [{"path": "/Users/ztomer/Projects/ztools/README.md", "desc": "docs"}]
+        project_root = Path(__file__).parent.parent
+        out = [{"path": str(project_root / "README.md"), "desc": "docs"}]
         score, reason = validate_mixed_file_summary(out, FILE_SUMMARY_PROMPT_MIXED)
         assert "noise" not in reason
 

@@ -2,7 +2,8 @@ import os
 
 _cfg = {}
 try:
-    with open(os.path.expanduser("~/.config/zstyle")) as f:
+    _zstyle_path = os.environ.get("ZSTYLE_CONFIG", os.path.expanduser("~/.config/zstyle"))
+    with open(_zstyle_path) as f:
         for line in f:
             if "=" in line and not line.startswith("#"):
                 k, v = line.strip().split("=", 1)
