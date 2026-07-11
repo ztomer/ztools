@@ -31,8 +31,8 @@ def main():
     if args.tasks:
         cases = [c for c in cases if c.task in args.tasks]
 
-    models = args.models or ["foundation", "qwopus3.6-27b-v2-mlx-4bit",
-                             "nemotron-3-nano-omni-30b-a3b-mxfp4"]
+    from lib.config import get_filename_models
+    models = args.models or get_filename_models() or ["foundation"]
 
     if args.regression_only:
         baseline = load_baseline()
