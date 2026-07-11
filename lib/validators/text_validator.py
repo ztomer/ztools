@@ -3,7 +3,7 @@
 
 import re
 import json
-from typing import Tuple, Any
+from typing import List, Tuple, Any
 
 from lib.validators.constants import (
     MAX_SCORE, SUMMARY_HEADERS_WEIGHT, SUMMARY_LENGTH_GOOD,
