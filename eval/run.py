@@ -211,21 +211,22 @@ def _quality_results_to_eval_format(scorecards: list, model: str) -> list[dict]:
 
 def run_eval_quick(
     model: str, tasks: dict = None, host: str = "localhost", port: int = 1337, backend: str = "osaurus",
-    verbose: bool = False
+    verbose: bool = False, timeout: int = DEFAULT_EVAL_TIMEOUT, on_complete: callable = None
 ) -> dict:
     """Run evaluation with no retries (quick mode)."""
     global MAX_RETRIES
     orig_retries = MAX_RETRIES
     MAX_RETRIES = 0
     try:
-        return run_eval(model, tasks=tasks, host=host, port=port, backend=backend, verbose=verbose)
+        return run_eval(model, tasks=tasks, host=host, port=port, backend=backend,
+                        verbose=verbose, timeout=timeout, on_complete=on_complete)
     finally:
         MAX_RETRIES = orig_retries
 
 
 def run_eval(
     model: str, tasks: dict = None, host: str = "localhost", port: int = 1337, backend: str = "osaurus",
-    verbose: bool = False
+    verbose: bool = False, timeout: int = DEFAULT_EVAL_TIMEOUT, on_complete: callable = None
 ) -> dict:
     """Run evaluation on model using real-world tasks.
 
@@ -327,8 +328,8 @@ def run_eval(
             if content:
                 console.print(f"  Raw output: {content}")
 
-    from eval.cli import print_memory_usage
-    print_memory_usage()
+    if on_complete:
+        on_complete()
 
     weekend_tasks = [k for k in tasks.keys() if "weekend" in k]
     mixed_tasks = [k for k in tasks.keys() if k.endswith("_mixed")]

@@ -42,15 +42,10 @@ from lib.validators.helpers import (
 )
 
 
+from lib.quality_models import GENERIC_FILENAMES
+
 # Filename validation characters
 FILENAME_VALID_CHARS = set('_.-')
-
-# Generic filenames that indicate the model didn't understand the task
-GENERIC_FILENAMES = {
-    "filename.txt", "file.txt", "text.txt", "output.txt", "document.txt",
-    "note.txt", "image.png", "screenshot.png", "unnamed", "file",
-    "filename", "output", "document", "image", "photo", "screenshot",
-}
 
 # Pre-compiled validation regular expressions (John Carmack optimization)
 USER_MENTIONS_RE = re.compile(r'@?[Uu]ser\s*\d+')

@@ -2,7 +2,7 @@ import json
 import re
 from typing import Any, List, Tuple
 
-from lib.quality_models import Score, ScoreCard, TestCase, _str, _lower
+from lib.quality_models import Score, TestCase, _str, _lower
 
 INDOOR = {"indoor", "inside", "in", "cover", "shelter"}
 OUTDOOR = {"outdoor", "outside", "park", "open-air", "nature", "trail"}

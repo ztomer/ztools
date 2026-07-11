@@ -1,5 +1,12 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, FrozenSet
+
+
+GENERIC_FILENAMES: FrozenSet[str] = frozenset({
+    "filename.txt", "file.txt", "text.txt", "output.txt", "document.txt",
+    "note.txt", "image.png", "screenshot.png", "unnamed", "file",
+    "filename", "output", "document", "image", "photo", "screenshot",
+})
 
 
 @dataclass
@@ -48,6 +55,7 @@ class ScoreCard:
 
 @dataclass
 class TestCase:
+    __test__ = False
     task: str
     input_text: str
     reference: str

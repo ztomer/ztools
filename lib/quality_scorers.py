@@ -2,7 +2,7 @@ import json
 import re
 from typing import Dict, List, Callable
 
-from lib.quality_models import Score, ScoreCard, TestCase, _str, _lower
+from lib.quality_models import Score, ScoreCard, TestCase, _str, _lower, GENERIC_FILENAMES
 from lib.quality_weekend_scorers import TASK_SCORERS_WEEKEND
 
 
@@ -78,9 +78,7 @@ def _score_filename_format(output: str, case: TestCase) -> Score:
     failures = []
     deduction = 0
 
-    GENERIC = {"filename.txt", "file.txt", "text.txt", "output.txt",
-               "document.txt", "note.txt", "screenshot.png", "unnamed", "file"}
-    if _lower(out) in GENERIC:
+    if _lower(out) in GENERIC_FILENAMES:
         return Score("Format", 0, 0.35, failures=["generic filename"])
 
     if "?" in out or "please" in _lower(out):
@@ -467,9 +465,7 @@ def score_output(output: str, task: str, case: TestCase) -> ScoreCard:
         )
 
     if task == "filename":
-        GENERIC = {"filename.txt", "file.txt", "text.txt", "output.txt",
-                   "document.txt", "note.txt", "screenshot.png", "unnamed", "file"}
-        if _lower(out) in GENERIC:
+        if _lower(out) in GENERIC_FILENAMES:
             return ScoreCard(
                 model="", task=task, case_id=case.description,
                 dimensions=[Score("Relevance", 0, 0.40, failures=["generic"]),

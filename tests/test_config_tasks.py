@@ -219,7 +219,6 @@ class TestBuildTasksFromModel:
     def test_build_tasks_file_summary_import_fails(self, mock_llm):
         from lib.config_tasks import build_tasks_from_model
         from lib.config_core import Task
-        from lib.validators_lib import validate_summary
         prompts = {Task.FILE_SUMMARY.value: "Summarize {}"}
         import builtins
         real_import = builtins.__import__
@@ -230,12 +229,8 @@ class TestBuildTasksFromModel:
         with patch("lib.config_tasks.get_model_prompts_all", return_value=prompts), \
              patch("lib.config_tasks.get_eval_input", return_value="x"), \
              patch.object(builtins, "__import__", side_effect=my_import):
-            tasks = build_tasks_from_model("model-x")
-        assert "file_summary" in tasks
-        # Validator is the fallback - call it to cover lines 72-73
-        result = tasks["file_summary"]["validator"]("test data")
-        # Returns the validate_summary tuple: (score, msg)
-        assert result == (10, 'no structure; no user mentions; no timestamps or narrative words; no topic structure')
+            with pytest.raises(ImportError):
+                build_tasks_from_model("model-x")
 
     def test_build_tasks_only_filename(self, mock_llm):
         from lib.config_tasks import build_tasks_from_model

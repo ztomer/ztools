@@ -53,7 +53,6 @@ from eval.failures import (
     _classify_failure,
     _describe_content_failure,
 )
-import eval.run as eval_run
 from eval.run import (
     MAX_RETRIES,
     DEFAULT_EVAL_TIMEOUT,
@@ -229,6 +228,40 @@ def update_config(best_models: dict):
 from lib.signal_handling import setup_signals
 
 
+def flush_between_models(prev_model: str, next_model: str) -> None:
+    import time
+    import subprocess
+    console.print(f"{STEP} Flushing {prev_model} -> {next_model}...")
+    try:
+        r = call(next_model, [{"role": "user", "content": "ok"}], timeout=FLUSH_CALL_TIMEOUT)
+        if r.get("error"):
+            console.print(f"{WARN} Flush failed, attempting restart...")
+            try:
+                subprocess.run(["osascript", "-e", 'quit app "osaurus"'], capture_output=True)
+            except Exception:
+                pass
+            time.sleep(FLUSH_QUIT_WAIT)
+            try:
+                subprocess.run(["open", "-n", "-a", "osaurus"], capture_output=True)
+            except Exception:
+                pass
+            time.sleep(FLUSH_RESTART_WAIT)
+            for _ in range(RESTART_CHECK_RETRIES):
+                try:
+                    import requests
+                    with requests.Session() as s:
+                        _llm_host = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
+                        resp = s.get(f"{_llm_host}/api/tags", timeout=RESTART_CHECK_TIMEOUT)
+                    if resp.status_code == 200:
+                        console.print(f"{STEP} Server restarted")
+                        break
+                except Exception:
+                    time.sleep(FLUSH_SETTLE_WAIT)
+    except Exception as e:
+        console.print(f"{FAIL} Flush error: {e}")
+    time.sleep(FLUSH_SETTLE_WAIT)
+
+
 def main():
     """Main entry point for model evaluation."""
     setup_signals()
@@ -243,8 +276,7 @@ def main():
     parser.add_argument("--timeout", type=int, default=DEFAULT_EVAL_TIMEOUT, help=f"Per-task timeout in seconds (default {DEFAULT_EVAL_TIMEOUT})")
     parser.add_argument("--quality", action="store_true", help="Use quality.py dimension-based scoring instead of old validators")
     args = parser.parse_args()
-
-    eval_run.DEFAULT_EVAL_TIMEOUT = args.timeout
+    timeout = args.timeout
 
     models_to_test = []
 
@@ -298,49 +330,21 @@ def main():
                 tasks=kwargs.get("tasks"),
                 backend=backend,
                 verbose=kwargs.get("verbose", False),
+                timeout=timeout,
+                on_complete=print_memory_usage,
             )
 
         _run_eval = quick_run_eval
     else:
-        _run_eval = run_eval
+        _run_eval = lambda model, backend="osaurus", **kwargs: run_eval(
+            model, tasks=kwargs.get("tasks"), backend=backend,
+            verbose=kwargs.get("verbose", False),
+            timeout=timeout, on_complete=print_memory_usage,
+        )
 
     all_results = []
     best_scores = {task: -1 for task in tasks_to_run.keys()}
     best_models_dict = {task: None for task in tasks_to_run.keys()}
-
-    def flush_between_models(prev_model: str, next_model: str) -> None:
-        import time
-        import subprocess
-        console.print(f"{STEP} Flushing {prev_model} -> {next_model}...")
-
-        try:
-            r = call(next_model, [{"role": "user", "content": "ok"}], timeout=FLUSH_CALL_TIMEOUT)
-            if r.get("error"):
-                console.print(f"{WARN} Flush failed, attempting restart...")
-                try:
-                    subprocess.run(["osascript", "-e", 'quit app "osaurus"'], capture_output=True)
-                except Exception:
-                    pass
-                time.sleep(FLUSH_QUIT_WAIT)
-                try:
-                    subprocess.run(["open", "-n", "-a", "osaurus"], capture_output=True)
-                except Exception:
-                    pass
-                time.sleep(FLUSH_RESTART_WAIT)
-                for _ in range(RESTART_CHECK_RETRIES):
-                    try:
-                        import requests
-                        with requests.Session() as s:
-                            _llm_host = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
-                            resp = s.get(f"{_llm_host}/api/tags", timeout=RESTART_CHECK_TIMEOUT)
-                        if resp.status_code == 200:
-                            console.print(f"{STEP} Server restarted")
-                            break
-                    except Exception:
-                        time.sleep(FLUSH_SETTLE_WAIT)
-        except Exception as e:
-            console.print(f"{FAIL} Flush error: {e}")
-        time.sleep(FLUSH_SETTLE_WAIT)
 
     prev_model = None
     for i, (model, backend) in enumerate(models_to_test):

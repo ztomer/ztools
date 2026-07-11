@@ -5,7 +5,7 @@ from weekend.llm import fetch_scores_for_items
 from weekend.config import AGE_RANGE
 from lib.tui import STEP, WARN, debug_print
 
-console = Console(force_terminal=True, force_interactive=True)
+console = Console()
 
 # Timing, scoring, and layout constants (Mitchell Hashimoto design)
 DEFAULT_SCORE = 0

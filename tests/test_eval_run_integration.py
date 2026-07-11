@@ -254,7 +254,7 @@ class TestQualityResultsToEvalFormat:
     def test_conversion_ok(self, mock_llm):
         from eval.run import _quality_results_to_eval_format
         from lib.quality_models import Score
-        from lib.quality_entry import ScoreCard
+        from lib.quality_models import ScoreCard
 
         sc = ScoreCard("test-model", "json", "test",
                        [Score("format", 95.0, 1.0, [])], "[]", 1.5)
@@ -266,7 +266,7 @@ class TestQualityResultsToEvalFormat:
     def test_conversion_fail(self, mock_llm):
         from eval.run import _quality_results_to_eval_format
         from lib.quality_models import Score
-        from lib.quality_entry import ScoreCard
+        from lib.quality_models import ScoreCard
 
         sc = ScoreCard("test-model", "json", "test",
                        [Score("format", 10.0, 1.0, ["bad"])], "", 0.5)
@@ -655,7 +655,7 @@ class TestQualityResultsFormat:
     def test_partial_status(self):
         from eval.run import _quality_results_to_eval_format
         from lib.quality_models import Score
-        from lib.quality_entry import ScoreCard
+        from lib.quality_models import ScoreCard
 
         sc = ScoreCard("m", "t", "c", [Score("d", 60.0, 1.0, [])], "x", 1.0)
         results = _quality_results_to_eval_format([sc], "m")
@@ -664,7 +664,7 @@ class TestQualityResultsFormat:
     def test_failure_list_joins(self):
         from eval.run import _quality_results_to_eval_format
         from lib.quality_models import Score
-        from lib.quality_entry import ScoreCard
+        from lib.quality_models import ScoreCard
 
         sc = ScoreCard("m", "t", "c", [Score("d", 10.0, 1.0, ["e1", "e2"])], "x", 1.0)
         results = _quality_results_to_eval_format([sc], "m")

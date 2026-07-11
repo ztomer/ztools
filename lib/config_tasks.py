@@ -11,6 +11,10 @@ from .config_getters import get_model_prompts_all
 _eval_inputs_cache: Dict[str, str] = {}
 
 
+def clear_eval_inputs_cache():
+    _eval_inputs_cache.clear()
+
+
 def _load_eval_inputs() -> Dict[str, str]:
     global _eval_inputs_cache
     if _eval_inputs_cache:
@@ -65,12 +69,7 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
         return {}
     tasks = {}
     from lib.validators_lib import validate_detailed_json, validate_summary, validate_filename
-    try:
-        from eval.validate import validate_file_summary
-    except ImportError:
-        def validate_file_summary(data, source_text=""):
-            from lib.validators_lib import validate_summary
-            return validate_summary(data)
+    from eval.validate import validate_file_summary
 
     if Task.WEEKEND_FIXED.value in prompts:
         test_input = get_eval_input("weekend_fixed")
