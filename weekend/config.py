@@ -10,8 +10,9 @@ from lib.osaurus_lib import (
     ensure_server as _osaurus_ensure_server,
 )
 
-DEBUG_EVENTS_FILE = Path.home() / ".weekend_events_debug_cache.json"
-DEBUG_VENUES_FILE = Path.home() / ".weekend_venues_debug_cache.json"
+_cache_dir = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "weekend"
+DEBUG_EVENTS_FILE = _cache_dir / "events_debug_cache.json"
+DEBUG_VENUES_FILE = _cache_dir / "venues_debug_cache.json"
 
 
 def load_events_cache():

@@ -44,23 +44,19 @@ class TestRunBenchmark:
         assert mock_summary.call_count == 2
 
     def test_run_benchmark_default_models(self, mock_llm, capsys):
-        """run_benchmark() with no args uses the default model list."""
+        """run_benchmark() with no args uses get_filename_models() from config."""
         from eval import benchmark_quality as bq
+        from lib import config as lib_config
+        dummy_models = ["model-a", "model-b"]
         with patch.object(bq, "get_model_prompt", return_value=None), \
+             patch.object(lib_config, "get_filename_models", return_value=dummy_models), \
              patch.object(bq, "print_header") as mock_header, \
              patch.object(bq, "print_model_header"), \
              patch.object(bq, "print_model_summary") as mock_summary, \
              patch.object(bq, "print_cross_model_comparison"):
             bq.run_benchmark()
-        # print_header called with default 4 models
         args, _ = mock_header.call_args
-        assert args[0] == [
-            "qwopus3.6-27b-v2-mlx-4bit",
-            "foundation",
-            "nemotron-3-nano-omni-30b-a3b-mxfp4",
-            "gemma-4-31b-it-jang_4m",
-        ]
-        # No models had any prompt → model_count == 0 → no summary
+        assert args[0] == dummy_models
         mock_summary.assert_not_called()
 
     def test_run_benchmark_no_prompt_skips_task(self, mock_llm, capsys):

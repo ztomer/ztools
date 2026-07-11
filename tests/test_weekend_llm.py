@@ -151,11 +151,12 @@ class TestScoreItem:
         score = _score_item(item, weather_str="Sunny", age_range="5-10")
         # 7/7 fields populated → 3.0
         # age 5-10 vs 5-10 → overlap 6 ≥ 2 → +3.0
-        # weather outdoor + Sunny → +2.0
+        # weather outdoor + Sunny → is_outdoor + forecast_sunny → +2.0
         # price $10 (not free) → +0.5
         # location len > 5 → +0.5
-        # raw = 9.0; round(9.0 / 2.0, 1) = 4.5
-        assert score == 4.5
+        # duration "2h" != "2-3 hours" → +0.3
+        # raw = 9.3; round(9.3 / 2.0, 1) = 4.7
+        assert score == 4.7
 
     def test_age_overlap(self, mock_llm):
         from weekend.llm import _score_item
@@ -200,24 +201,21 @@ class TestScoreItem:
         score_match = _score_item(item, weather_str="Sunny and clear")
         score_mismatch = _score_item(item, weather_str="Cloudy with rain")
         # 1/7 fields populated → 0.4286
-        # "outdoor" + Sunny → is_sunny + forecast_sunny → +2.0; raw_match = 2.4286 / 2 = 1.2
-        # "outdoor" + Cloudy → is_sunny True, forecast_sunny False, is_cloudy False → +1.0; raw_mismatch = 1.4286 / 2 = 0.7
+        # "outdoor" + Sunny → is_outdoor + forecast_sunny → +2.0; raw_match = 2.4286 / 2 = 1.2
+        # "outdoor" + Cloudy → is_outdoor + not forecast_sunny → 0 bonus; raw_mismatch = 0.4286 / 2 = 0.2
         assert score_match == 1.2
-        assert score_mismatch == 0.7
+        assert score_mismatch == 0.2
         # Match is greater than mismatch
         assert score_match > score_mismatch
 
     def test_weather_match_cloudy(self, mock_llm):
         from weekend.llm import _score_item
         item = {"weather": "indoor"}
-        score_match = _score_item(item, weather_str="Cloudy and wet")
-        score_mismatch = _score_item(item, weather_str="Sunny and clear")
+        score = _score_item(item, weather_str="Cloudy and wet")
         # 1/7 fields populated → 0.4286
-        # "indoor" + Cloudy → is_cloudy + forecast_cloudy → +2.0; raw_match = 2.4286 / 2 = 1.2
-        # "indoor" + Sunny → is_cloudy True, forecast_cloudy False, is_sunny False → +1.0; raw_mismatch = 1.4286 / 2 = 0.7
-        assert score_match == 1.2
-        assert score_mismatch == 0.7
-        assert score_match > score_mismatch
+        # "indoor" → is_indoor → +1.0 always (indoor is always appropriate)
+        # raw = 1.4286 / 2 = 0.7
+        assert score == 0.7
 
     def test_price_free(self, mock_llm):
         from weekend.llm import _score_item
@@ -255,7 +253,8 @@ class TestFetchScoresForItems:
         fetch_scores_for_items(items, weather_str="Sunny", age_range="5-10")
         assert "score" in items[0]
         assert "score" in items[1]
-        # A: matches age+weather → ~3.1; B: no match → ~0.2
+        # A: 3/7 fields → 1.2857, age overlap 6 → +3.0, outdoor+Sunny → +2.0; raw=6.2857/2=3.1
+        # B: 1/7 fields → 0.4286/2=0.2
         assert items[0]["score"] == 3.1
         assert items[1]["score"] == 0.2
 
@@ -336,13 +335,13 @@ class TestPhaseFunctions:
         import weekend.llm as wl
         mock_json = {"transient_events": [{"name": "Park", "location": "Toronto"}]}
         with patch.object(wl, "_call_llm", return_value=mock_json):
-            result = wl.structure_to_json("1. Park in Toronto", "transient", "5-10")
+            result = wl.structure_to_json("1. Park in Toronto", "transient", "5-10", "Sunny")
         assert result == mock_json
 
     def test_structure_to_json_returns_none_on_failure(self, mock_llm):
         import weekend.llm as wl
         with patch.object(wl, "_call_llm", return_value=None):
-            result = wl.structure_to_json("1. Park in Toronto", "transient", "5-10")
+            result = wl.structure_to_json("1. Park in Toronto", "transient", "5-10", "Sunny")
         assert result is None
 
     def test_generate_weekend_plan_full_pipeline(self, mock_llm):

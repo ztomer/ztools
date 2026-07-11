@@ -1,8 +1,9 @@
 import os
+from pathlib import Path
 
 _cfg = {}
 try:
-    _zstyle_path = os.environ.get("ZSTYLE_CONFIG", os.path.expanduser("~/.config/zstyle"))
+    _zstyle_path = os.environ.get("ZSTYLE_CONFIG", str(Path.home() / ".config" / "zstyle"))
     with open(_zstyle_path) as f:
         for line in f:
             if "=" in line and not line.startswith("#"):

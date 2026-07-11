@@ -3,6 +3,7 @@
 LLM summarization helpers for twitter_summarizer.
 """
 
+import os
 import re
 import shutil
 import textwrap
@@ -21,12 +22,9 @@ from lib.mlx_lib import (
 from lib.llm.fallback import call_with_fallback
 from lib.tui import STEP, WARN
 
-MLX_PREFERRED = [
-    "Qwopus3.6-27B-v2-MLX-4bit",
-    "Qwen3.6",
-    "gemma-4",
-    "MiniMax",
-]
+_mlx_preferred_str = os.environ.get("TWITTER_MLX_PREFERRED",
+    "Qwopus3.6-27B-v2-MLX-4bit,Qwen3.6,gemma-4,MiniMax")
+MLX_PREFERRED = [m.strip() for m in _mlx_preferred_str.split(",") if m.strip()]
 
 _PROMPT_RULES = """
 - Use headers starting with ##
@@ -171,7 +169,8 @@ def summarize_with_llm(
 
     ctx_chars = (OSAURUS_CONTEXT_WINDOW - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN
 
-    fallback_models = list(dict.fromkeys([target_model, "qwen3.6-35b-a3b-mxfp4", "foundation"]))
+    _fallback_names = os.environ.get("TWITTER_FALLBACK_MODELS", "qwen3.6-35b-a3b-mxfp4,foundation").split(",")
+    fallback_models = list(dict.fromkeys([target_model] + [m.strip() for m in _fallback_names if m.strip()]))
 
     def call_fn(m: str) -> Optional[str]:
         return _summarize_with_model(tweets, base_url, api_key, ctx_chars, models, m)

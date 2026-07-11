@@ -136,10 +136,7 @@ def list_mlx_models(mlx_dir: Path = MLX_MODELS_DIR) -> List[str]:
 def normalize_mlx_model_name(mlx_model: str) -> str:
     """Extract base model name from MLX model ID for matching.
 
-    E.g.:
-      "OsaurusAI/Qwen3.6-35B-A3B-mxfp4" -> "qwen3.6-35b-a3b-mxfp4"
-      "mlx-community/Qwen3.5-27B-Claude-4.6-Opus-Distilled-MLX-4bit" -> "qwen3.5-27b-claude-4.6-opus-distilled-mlx-4bit"
-      "gemma-4-26b-a4b-it-4bit" -> "gemma-4-26b-a4b-it-4bit"
+    E.g.: "SomeOrg/SomeModel-mxfp4" -> "somemodel-mxfp4"
     """
     # Remove prefix like "OsaurusAI/" or "mlx-community/"
     if "/" in mlx_model:

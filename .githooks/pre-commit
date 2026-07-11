@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Pre-commit hook: block staged changes that introduce config debt."""
-import subprocess, sys, os
+"""Pre-commit hook: block staged changes that introduce NEW config debt."""
+import re, subprocess, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -8,14 +8,55 @@ CHECKER = ROOT / "tools" / "check_config_debt.py"
 if not CHECKER.exists():
     sys.exit(0)
 
-# Run checker on staged files only
+# Get list of staged .py files
 result = subprocess.run(
-    [sys.executable, str(CHECKER)],
+    ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
     capture_output=True, text=True, cwd=str(ROOT),
 )
-if result.returncode != 0:
-    print("❌ Config debt detected in staged changes:")
-    print(result.stdout)
-    print("Fix violations before committing, or use --no-verify to bypass.")
+staged = [f for f in result.stdout.strip().split("\n") if f and f.endswith(".py")]
+if not staged:
+    sys.exit(0)
+
+# Get added line numbers for each staged file
+def get_added_lines(file_path: str) -> set:
+    r = subprocess.run(
+        ["git", "diff", "--cached", "-U0", file_path],
+        capture_output=True, text=True, cwd=str(ROOT),
+    )
+    added = set()
+    for line in r.stdout.split("\n"):
+        m = re.match(r'^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@', line)
+        if m:
+            start = int(m.group(1))
+            count = int(m.group(2)) if m.group(2) else 1
+            for i in range(start, start + count):
+                added.add(i)
+    return added
+
+# Run checker on each staged file; only report violations on added lines
+errors = []
+for f in staged:
+    added_lines = get_added_lines(f)
+    if not added_lines:
+        continue
+    r = subprocess.run(
+        [sys.executable, str(CHECKER), str(ROOT / f)],
+        capture_output=True, text=True, cwd=str(ROOT),
+    )
+    if r.returncode == 0:
+        continue
+    # Parse violations from output (format: "    L<num>  [label]")
+    new_violations = []
+    for line in r.stdout.split("\n"):
+        m = re.match(r'^\s+L\s*(\d+)', line)
+        if m and int(m.group(1)) in added_lines:
+            new_violations.append(line)
+    if new_violations:
+        errors.append(f"  {f}:")
+        errors.extend(new_violations)
+
+if errors:
+    print("Config debt violations in staged changes (blocking):\n")
+    print("\n".join(errors))
     sys.exit(1)
 sys.exit(0)

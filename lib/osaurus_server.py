@@ -9,16 +9,17 @@ from pathlib import Path
 from .logging_config import osaurus_logger as logger
 from .osaurus_models import is_server_running, get_models, DEFAULT_HOST, DEFAULT_PORT
 
-PID_FILE = Path.home() / ".osaurus.pid"
+_pid_dir = Path(os.environ.get("XDG_RUNTIME_DIR", str(Path.home())))
+PID_FILE = _pid_dir / ".osaurus.pid"
 
 # Configuration constants to prevent magic strings and numbers (Mitchell Hashimoto design)
-RESTART_SLEEP = 1
-SERVER_WAIT = 20
-ENSURE_MAX_RETRIES = 3
-TEST_TIMEOUT = 10
-OSASCRIPT_QUIT_TIMEOUT = 5
+RESTART_SLEEP = int(os.environ.get("OSAURUS_RESTART_SLEEP", "1"))
+SERVER_WAIT = int(os.environ.get("OSAURUS_SERVER_WAIT", "20"))
+ENSURE_MAX_RETRIES = int(os.environ.get("OSAURUS_MAX_RETRIES", "3"))
+TEST_TIMEOUT = int(os.environ.get("OSAURUS_TEST_TIMEOUT", "10"))
+OSASCRIPT_QUIT_TIMEOUT = int(os.environ.get("OSAURUS_QUIT_TIMEOUT", "5"))
 OSASCRIPT_QUIT_CMD = 'quit app "osaurus"'
-DEFAULT_APP_PATH = "/Applications/osaurus.app"
+DEFAULT_APP_PATH = os.environ.get("OSAURUS_APP", "/Applications/osaurus.app")
 GUI_LAUNCHER_CMD = "open"
 CLI_LAUNCHER_CMD = ["osaurus", "serve", "--yes"]
 POLL_SLEEP_SEC = 1
@@ -148,7 +149,8 @@ def test_connection(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, model: s
 
 
 def panic_dump(content: str) -> None:
-    dump_dir = Path.home() / DUMP_DIR_NAME
+    _dump_base = Path(os.environ.get("OSAURUS_DUMP_DIR", str(Path.home())))
+    dump_dir = _dump_base / DUMP_DIR_NAME
     dump_dir.mkdir(exist_ok=True)
     dump_file = dump_dir / f"panic_{int(time.time())}.txt"
     dump_file.write_text(content or "(empty)")

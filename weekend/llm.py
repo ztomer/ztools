@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from pathlib import Path
 
@@ -32,7 +33,8 @@ PHASE_MAX_RETRIES = 3
 PHASE_SIGNALS_PATH = Path(__file__).parent.parent / "conf" / "phase_signals.json"
 
 # Timing, scoring, and source constants (Mitchell Hashimoto & John Carmack design)
-DEFAULT_MLX_FALLBACKS = ["qwen", "llama", "phi"]
+_mlx_fallback_str = os.environ.get("WEEKEND_MLX_FALLBACKS", "qwen,llama,phi")
+DEFAULT_MLX_FALLBACKS = [m.strip() for m in _mlx_fallback_str.split(",") if m.strip()]
 POPULATED_FIELDS_BASE_SCORE = 3.0
 OVERLAP_SCORE_HIGH = 3.0
 OVERLAP_SCORE_LOW = 1.5
@@ -208,8 +210,8 @@ def normalize_llm_items(items, field_mapping=None):
 
 
 def _score_item(item, weather_str="", age_range=""):
-    CLOUD_KEYWORDS = ["cloudy", "overcast", "indoor", "rain", "snow", "storm", "wet", "cold (<10"]
-    SUN_KEYWORDS = ["sunny", "clear", "warm", "sun", "hot", "outdoor", "outside"]
+    CLOUD_KEYWORDS = ["cloudy", "overcast", "rain", "snow", "storm", "wet", "cold (<10", "drizzle", "showers", "thunder"]
+    SUN_KEYWORDS = ["sunny", "clear", "warm", "sun", "hot", "outdoor", "outside", "fair", "dry", "pleasant"]
 
     score = 0.0
 
@@ -231,19 +233,40 @@ def _score_item(item, weather_str="", age_range=""):
         w = item["weather"].lower()
         is_cloudy = any(k in w for k in CLOUD_KEYWORDS)
         is_sunny = any(k in w for k in SUN_KEYWORDS)
+        is_outdoor = "outdoor" in w
+        is_indoor = "indoor" in w and not is_outdoor
         forecast_cloudy = any(k in weather_str.lower() for k in CLOUD_KEYWORDS) if weather_str else False
         forecast_sunny = any(k in weather_str.lower() for k in SUN_KEYWORDS) if weather_str else False
-        if is_cloudy and forecast_cloudy:
+        if is_indoor:
+            score += WEATHER_PARTIAL_BONUS
+        elif is_outdoor and forecast_sunny:
+            score += WEATHER_MATCH_BONUS
+        elif is_outdoor and forecast_cloudy:
+            pass
+        elif is_cloudy and forecast_cloudy:
             score += WEATHER_MATCH_BONUS
         elif is_sunny and forecast_sunny:
             score += WEATHER_MATCH_BONUS
-        elif is_cloudy or is_sunny:
+        elif is_sunny or is_cloudy:
             score += WEATHER_PARTIAL_BONUS
 
     if item.get("price") and item["price"].lower() not in ("", "free", "n/a", "tbd"):
         score += PRICE_MATCH_BONUS
     if item.get("location") and len(item["location"]) > 5:
         score += LOCATION_MATCH_BONUS
+
+    if item.get("name"):
+        name = item["name"]
+        if len(name) > 20:
+            score += 0.3
+        if any(c.isdigit() for c in name):
+            score += 0.2
+        if len(name.split()) >= 3:
+            score += 0.3
+    if item.get("duration") and item["duration"].lower() not in ("", "2-3 hours"):
+        score += 0.3
+    if item.get("weather") and item["weather"].lower() not in ("", "indoor", "outdoor", "both"):
+        score += 0.2
 
     return min(round(score / SCORE_DIVISOR, 1), SCORE_MAX_LIMIT)
 
@@ -337,9 +360,9 @@ def refine_draft(draft_text):
     return result if result else draft_text
 
 
-def structure_to_json(text, source_type, age_range):
+def structure_to_json(text, source_type, age_range, weather_condensed=""):
     from weekend.prompts import build_structure_system_prompt, build_structure_user_prompt
-    sys_prompt = build_structure_system_prompt(source_type, age_range)
+    sys_prompt = build_structure_system_prompt(source_type, age_range, weather_condensed)
     usr_prompt = build_structure_user_prompt(text)
     return _call_llm(sys_prompt, usr_prompt, timeout=PHASE_TIMEOUT_STRUCTURE, parse_json=True, phase_key=f"structure_to_json/{source_type}")
 
@@ -354,7 +377,7 @@ def generate_weekend_plan(model, weather_str, events_str, venues_str, dates_str,
     json_transient = {}
     if draft_transient:
         refined_transient = refine_draft(draft_transient)
-        json_transient = structure_to_json(refined_transient, SOURCE_TYPE_TRANSIENT, age_range) or {}
+        json_transient = structure_to_json(refined_transient, SOURCE_TYPE_TRANSIENT, age_range, condensed_weather) or {}
     else:
         print_warning("Transient draft failed, using monolithic fallback")
         from weekend.prompts import build_transient_system_prompt, build_transient_user_prompt
@@ -367,7 +390,7 @@ def generate_weekend_plan(model, weather_str, events_str, venues_str, dates_str,
     json_fixed = {}
     if draft_fixed:
         refined_fixed = refine_draft(draft_fixed)
-        json_fixed = structure_to_json(refined_fixed, SOURCE_TYPE_FIXED, age_range) or {}
+        json_fixed = structure_to_json(refined_fixed, SOURCE_TYPE_FIXED, age_range, condensed_weather) or {}
     else:
         print_warning("Fixed draft failed, using monolithic fallback")
         from weekend.prompts import build_fixed_system_prompt, build_fixed_user_prompt

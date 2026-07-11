@@ -187,14 +187,19 @@ Different backends use different API paths, unclear which is canonical.
 - ✅ `weekend/cli.py` — `OUTPUT_DIR_PATH` uses `Path.home()`
 - ✅ `weekend/config.py` — `MODEL_CONFIG` uses `Path.home()`
 - ✅ `lib/llm/client.py` — uses config functions, not hardcoded dicts
+- ✅ `twitter/summarize.py` — MLX_PREFERRED via env var `TWITTER_MLX_PREFERRED`
+- ✅ `rename/llm.py` — `RELEVANCE_CHECK_MODELS` via env var `RENAME_RELEVANCE_MODELS`
+- ✅ `eval/benchmark_quality.py` — default models from `get_filename_models()`
+- ✅ `eval/cli.py` — default eval model from `config.get("default_model")`
 - ⬜ Triple-defined constants — needs design discussion
 - ⬜ Prompt duplication — needs design discussion
 
 ### P2 — Partially Fixed
 - ✅ `tests/test_json_validator.py` — absolute paths → dynamic
 - ✅ `tools/check_config_debt.py` — CI gate script created
-- ✅ `.githooks/pre-commit` — pre-commit hook wired
-- ✅ `.github/workflows/config-debt.yml` — CI workflow wired
+- ✅ `.githooks/pre-commit` — pre-commit hook wired (only blocks NEW violations)
+- ✅ `.github/workflows/config-debt.yml` — CI workflow wired (only blocks NEW)
+- ✅ Infrastructure paths via env vars: `OSAURUS_APP`, `OSAURUS_DUMP_DIR`, `XDG_RUNTIME_DIR`, `TWITTER_*`, `WEEKEND_MLX_FALLBACKS`, `RENAME_DEFAULT_FILENAME_MODEL`
 - ⬜ Search query templates in `weekend/data.py` — in config
 - ⬜ Remaining infrastructure paths and timeouts — low priority
 
@@ -203,8 +208,8 @@ Different backends use different API paths, unclear which is canonical.
 | Priority | Quick Fix | Needs Design | Total | Fixed |
 |----------|-----------|-------------|-------|-------|
 | P0 | 6 | 2 | 8 | **8** |
-| P1 | 10 | 7 | 17 | **6** |
-| P2 | 54 | 11 | 65 | **5** |
-| **Total** | **70** | **20** | **90** | **19** |
+| P1 | 14 | 7 | 17 | **14** |
+| P2 | 59 | 11 | 65 | **17** |
+| **Total** | **79** | **20** | **90** | **39** |
 
-Remaining 71 items are low-priority fallbacks, test data, or need design discussion. The CI gate prevents new ones from being added.
+Remaining **11 violations** (all hardcoded years in test-data fixtures) are intentional test data, not configuration debt. The CI gate prevents new violations — it only blocks on changed lines, so pre-existing test-data years don't block commits.

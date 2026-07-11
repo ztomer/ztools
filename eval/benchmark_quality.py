@@ -283,12 +283,8 @@ def query_model(model: str, prompt: str, input_text: str, task: str) -> Optional
 def run_benchmark(models: List[str] = None, verbose: bool = True):
     """Run benchmark against one or more models."""
     if models is None:
-        models = [
-            "qwopus3.6-27b-v2-mlx-4bit",
-            "foundation",
-            "nemotron-3-nano-omni-30b-a3b-mxfp4",
-            "gemma-4-31b-it-jang_4m",
-        ]
+        from lib.config import get_filename_models
+        models = get_filename_models() or ["foundation"]
 
     ALL_CASES = [
         ("filename", Task.FILENAME, FILENAME_CASES, score_filename),

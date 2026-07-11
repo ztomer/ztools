@@ -24,8 +24,8 @@ HTTP_STATUS_NOT_FOUND = 404
 # Model defaults
 DEFAULT_ENV_VAR = "OLLAMA_MODEL"
 FALLBACK_MODEL = "foundation"
-DEFAULT_PREFERRED_MODELS = ["foundation", "qwen", "gemma"]
-DEFAULT_VLM_KEYWORDS = ["vl", "vision", "qwen", "llamavl"]
+DEFAULT_PREFERRED_MODELS = os.environ.get("OSAURUS_PREFERRED_MODELS", "foundation,qwen,gemma").split(",")
+DEFAULT_VLM_KEYWORDS = os.environ.get("OSAURUS_VLM_KEYWORDS", "vl,vision,qwen,llamavl").split(",")
 
 
 def get_api_url(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> str:

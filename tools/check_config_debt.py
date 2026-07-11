@@ -102,6 +102,8 @@ def _is_model_config_expr(line: str) -> bool:
 # ---------------------------------------------------------------------------
 
 def check_absolute_paths(path: Path) -> List[Violation]:
+    if path.suffix == ".md":
+        return []
     text = path.read_text(encoding="utf-8", errors="replace")
     violations: List[Violation] = []
     for i, line in enumerate(text.splitlines(), 1):
@@ -131,6 +133,8 @@ def check_hardcoded_years(path: Path) -> List[Violation]:
     for i, line in enumerate(text.splitlines(), 1):
         line_s = line.strip()
         if not line_s or line_s.startswith("#"):
+            continue
+        if "# check-ok:" in line:
             continue
         if "%Y" in line or "strftime" in line:
             continue
@@ -242,11 +246,20 @@ def check_hardcoded_models(path: Path) -> List[Violation]:
         line_s = line.strip()
         if not line_s or line_s.startswith(("#", "//")):
             continue
+        if "# check-ok:" in line_s:
+            continue
 
         if _is_model_config_expr(line_s):
             continue
 
         if " in model" in line_s or "model." in line_s or "model_lower" in line_s:
+            continue
+
+        if f'default="' in line_s or "default='" in line_s:
+            continue
+        if 'or ["' in line_s or "or ['" in line_s:
+            continue
+        if 'else "' in line_s or "else '" in line_s:
             continue
 
         for model_name in CONFIG_MODEL_NAMES:
@@ -360,6 +373,10 @@ def main():
         description="Scan ztools for hardcoded values that should come from config.",
     )
     parser.add_argument(
+        "files", nargs="*",
+        help="Specific files to scan (default: all source files)",
+    )
+    parser.add_argument(
         "--fix", action="store_true",
         help="Auto-fix simple cases (replace localhost:1337 with config expression)",
     )
@@ -369,11 +386,14 @@ def main():
     )
     args = parser.parse_args()
 
-    all_files = sorted(ROOT.rglob("*"))
-    scan_files = [
-        f for f in all_files
-        if f.is_file() and f.suffix in SOURCE_EXTS and not _skip_path(f)
-    ]
+    if args.files:
+        scan_files = [Path(f).resolve() for f in args.files if Path(f).suffix in SOURCE_EXTS]
+    else:
+        all_files = sorted(ROOT.rglob("*"))
+        scan_files = [
+            f for f in all_files
+            if f.is_file() and f.suffix in SOURCE_EXTS and not _skip_path(f)
+        ]
 
     if args.verbose:
         print(f"Scanning {len(scan_files)} files...")

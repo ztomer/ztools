@@ -272,7 +272,9 @@ def main():
         tasks_to_run = {args.task: TASKS[args.task]}
         console.print(f"{WARN} Running only task: {args.task}")
 
-    config_model = args.model if args.model else "qwen"
+    from lib.config import get_config
+    _default_eval_model = get_config().get("default_model", "foundation")
+    config_model = args.model if args.model else _default_eval_model
     config_tasks = build_tasks_from_model(config_model)
     if config_tasks:
         if args.task:
@@ -354,7 +356,8 @@ def main():
 
         mem_pct = get_memory_percent()
         model_mem_gb = estimate_model_memory(model)
-        avail_mem_gb = (100 - mem_pct) / 100 * 64
+        _total_gb = os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") / (1024**3) if hasattr(os, 'sysconf') else 64
+        avail_mem_gb = (100 - mem_pct) / 100 * _total_gb
 
         if mem_pct > MEMORY_WARNING_THRESHOLD:
             console.print(f"{WARN} Memory at {mem_pct}% - model may be slow")

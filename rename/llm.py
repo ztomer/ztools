@@ -3,6 +3,7 @@ LLM integration for image renaming - server management, relevance checks, and fi
 """
 
 import json
+import os
 import re
 import base64
 import subprocess
@@ -53,7 +54,8 @@ APP_LAUNCH_WAIT = 15
 DEFAULT_SERVER_URL = _RENAME_CFG.get("llm_url", "http://localhost:1337")
 API_CHAT_PATH = "/api/chat"
 TEXT_PREVIEW_LIMIT = 500
-RELEVANCE_CHECK_MODELS = ["qwen3.6-27b-mxfp4", "gemma-4-26b-a4b-it-mxfp4"]
+_relevance_models_str = _RENAME_CFG.get("relevance_check_models") or os.environ.get("RENAME_RELEVANCE_MODELS", "qwen3.6-27b-mxfp4,gemma-4-26b-a4b-it-mxfp4")
+RELEVANCE_CHECK_MODELS = [m.strip() for m in _relevance_models_str.split(",") if m.strip()]
 MIN_CONTENT_LEN = 2
 MAX_FILENAME_WORDS = 6
 MAX_FILENAME_LEN = 35

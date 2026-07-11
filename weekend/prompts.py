@@ -53,8 +53,10 @@ MANDATORY default values:
 - target_ages: "{age_range}"
 - price: $20-30 per child or free
 - duration: "2-3 hours"
-- weather: "indoor"
 - day: Friday/Saturday/Sunday
+
+Weather: {weather_condensed}
+Set weather based on the activity type and forecast above: "outdoor" for outdoor activities (parks, zoo, sports) in nice weather, "indoor" for indoor venues (museums, play centres), "both" for flexible activities.
 
 Never leave any field empty. Output ONLY JSON."""
 
@@ -63,7 +65,9 @@ PHASE_STRUCTURE_FIXED_SYSTEM = """Output JSON now. Use EXACT schema: {{"fixed_ac
 MANDATORY default values:
 - target_ages: "{age_range}"
 - price: $18-35 per child or free
-- weather: "indoor"
+
+Weather: {weather_condensed}
+Set weather based on the activity type and forecast above: "outdoor" for outdoor activities (parks, zoo, sports) in nice weather, "indoor" for indoor venues (museums, play centres), "both" for flexible activities.
 
 Never leave any field empty. Output ONLY JSON."""
 
@@ -92,9 +96,9 @@ def build_refine_prompt(draft_text):
     return PHASE_REFINE.format(draft_text=draft_text)
 
 
-def build_structure_system_prompt(source_type, age_range):
+def build_structure_system_prompt(source_type, age_range, weather_condensed=""):
     template = PHASE_STRUCTURE_TRANSIENT_SYSTEM if source_type == "transient" else PHASE_STRUCTURE_FIXED_SYSTEM
-    return template.format(age_range=age_range)
+    return template.format(age_range=age_range, weather_condensed=weather_condensed)
 
 
 def build_structure_user_prompt(draft_text):
@@ -132,7 +136,8 @@ def build_fixed_system_prompt(model: str = None, location: str = None, age_range
     MANDATORY default values:
     - target_ages: "{age_range}"
     - price: $18-35 per child or free
-    - weather: "indoor"
+
+    Set weather based on activity type: "outdoor" for outdoor activities, "indoor" for indoor venues, "both" for flexible.
 
     Never leave any field empty.
     """
@@ -177,8 +182,9 @@ def build_transient_system_prompt(model: str = None, location: str = None, age_r
     - target_ages: "{age_range}"
     - price: $20-30 per child or free
     - duration: "2-3 hours"
-    - weather: "indoor"
     - day: Friday/Saturday/Sunday
+
+    Set weather based on activity type: "outdoor" for outdoor activities, "indoor" for indoor venues, "both" for flexible.
     """
 
 

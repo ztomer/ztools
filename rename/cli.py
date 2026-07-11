@@ -76,7 +76,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pattern", "-p", default="*", help="File pattern")
     parser.add_argument("--max-length", "-m", type=int, default=50, help="Max filename length")
     parser.add_argument("--llm-host", default=os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337"), help="LLM server URL")
-    parser.add_argument("--llm-model", default=FILENAME_MODELS[0] if FILENAME_MODELS else "foundation", help="LLM model")
+    parser.add_argument("--llm-model", default=FILENAME_MODELS[0] if FILENAME_MODELS else os.environ.get("RENAME_DEFAULT_FILENAME_MODEL", "foundation"), help="LLM model")
     parser.add_argument("--vlm-model", default="", help="VLM model to use when no text is found")
     parser.add_argument("--api-key", default="", help="Bearer token for LLM API")
     parser.add_argument("--test", action="store_true", help="Test connection")

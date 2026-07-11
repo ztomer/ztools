@@ -17,12 +17,12 @@ except Exception:
 from twitter.cookies import get_chrome_cookies
 from lib.tui import STEP, WARN
 
-MAX_SCROLLS = 1200
-SCROLL_PAUSE_MS = 1800
+MAX_SCROLLS = int(os.environ.get("TWITTER_MAX_SCROLLS", "1200"))
+SCROLL_PAUSE_MS = int(os.environ.get("TWITTER_SCROLL_PAUSE_MS", "1800"))
 
 # Timeouts (milliseconds)
-PAGE_LOAD_TIMEOUT_MS = 30000
-CLICK_TIMEOUT_MS = 5000
+PAGE_LOAD_TIMEOUT_MS = int(os.environ.get("TWITTER_PAGE_LOAD_TIMEOUT_MS", "30000"))
+CLICK_TIMEOUT_MS = int(os.environ.get("TWITTER_CLICK_TIMEOUT_MS", "5000"))
 
 # Sleep durations (seconds)
 INITIAL_PAGE_WAIT = 3
@@ -34,7 +34,7 @@ TWITTER_ITEM_TIMELINE_TWEET = "TimelineTweet"
 TWITTER_TYPE_TIMELINE_ADD_ENTRIES = "TimelineAddEntries"
 UNKNOWN_USER = "unknown"
 TWITTER_DATE_FORMAT = "%a %b %d %H:%M:%S +0000 %Y"
-TWITTER_HOME_URL = "https://x.com/home"
+TWITTER_HOME_URL = os.environ.get("TWITTER_HOME_URL", "https://x.com/home")
 SCROLL_INNER_HEIGHT_MULTIPLIER = 2
 MS_PER_SECOND = 1000.0
 EXACT_MATCH_PREVIEW_LIMIT = 80
