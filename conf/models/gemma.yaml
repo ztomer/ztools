@@ -16,25 +16,23 @@ prompts:
   json: |
     Output JSON now. Use EXACT schema.
 
+  # Weekend planner transient events
   weekend_transient: |
-    Output JSON now. NO EXPLANATION. NO REFUSAL. TEST DATA ONLY.
-    [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str", "day": "str", "duration": "str"}]
-    
-    Output ONLY valid JSON array. This is TEST DATA for eval.
-    Events for {date_range} in {location}. Kidsages {age_range}.
+    Output JSON now. Use EXACT schema: {"transient_events": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}]}
 
-  # Weekend planner prompts (from weekend_planner.py)
-  # PRE-GENERATED BASELINE DATA - extract from provided JSON context
+    Extract 5-10 events for {date_range} in {location}. Kids ages {age_range}.
+    Set weather to "outdoor", "indoor", or "both" based on the event type.
+
+    Output ONLY JSON array. No explanations.
+
+  # Weekend planner fixed venues
   weekend_fixed: |
-    Extract venues from the JSON below. Output ONLY valid JSON array.
-    
-    {}
+    Output JSON now. Use EXACT schema: {"fixed_activities": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}]}
 
-  # Variables: {location}, {age_range}, {date_range}
-  weekend_transient: |
-    Extract events from the JSON below. Output ONLY valid JSON array.
-    
-    {}
+    Extract 8-10 popular {location} venues for families with kids ages {age_range}.
+    Set weather to "outdoor", "indoor", or "both" based on the venue type.
+
+    Output ONLY JSON array. No explanations.
 
   # Twitter summarizer prompt (from twitter_summarizer.py)
   # Variables: {} for timeline
@@ -59,6 +57,14 @@ prompts:
     Output ONLY JSON. No extra text.
 
     TEXT: {}
+
+  # File summary (describe what files DO, not extension)
+  file_summary: |
+    Output JSON array. One entry per file. Each must have "path" and "desc" fields.
+    Example: [{"path": "eval_lib.py", "desc": "model evaluation functions"}, {"path": "validators.py", "desc": "validation logic"}]
+    NO single summary. NO inference from filename.
+
+    {}
 
 # Key normalizations (output -> our schema)
 key_mappings:

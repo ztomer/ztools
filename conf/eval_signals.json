@@ -185,41 +185,41 @@
   },
   "m": {
     "json": {
-      "parse_failures": 27,
-      "samples": 77,
-      "total_retries": 77
+      "parse_failures": 28,
+      "samples": 80,
+      "total_retries": 80
     },
     "weekend_debug": {
-      "parse_failures": 27,
-      "samples": 27,
-      "total_retries": 27
+      "parse_failures": 28,
+      "samples": 28,
+      "total_retries": 28
     },
     "weekend_noparsed": {
       "parse_failures": 0,
-      "samples": 27,
-      "total_retries": 27
+      "samples": 28,
+      "total_retries": 28
     },
     "weekend_nosource": {
       "parse_failures": 0,
-      "samples": 27,
-      "total_retries": 27
+      "samples": 28,
+      "total_retries": 28
     },
     "weekend_x": {
       "parse_failures": 0,
-      "samples": 27,
-      "total_retries": 27
+      "samples": 28,
+      "total_retries": 28
     }
   },
   "mock-model": {
     "json": {
       "parse_failures": 0,
-      "samples": 150,
-      "total_retries": 150
+      "samples": 156,
+      "total_retries": 156
     },
     "summarize": {
       "parse_failures": 0,
-      "samples": 4,
-      "total_retries": 4
+      "samples": 5,
+      "total_retries": 5
     }
   },
   "ornith-1.0-35b-mxfp8": {

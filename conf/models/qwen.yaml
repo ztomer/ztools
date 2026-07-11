@@ -35,8 +35,6 @@ prompts:
     - name: official name (NOT description)
     - location: city/neighborhood only
 
-    EXCLUDE these places: {exclusions}
-
     Output ONLY JSON. No extra text.
 
   weekend_transient: |

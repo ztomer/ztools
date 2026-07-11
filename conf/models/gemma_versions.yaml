@@ -25,7 +25,7 @@ models:
         Extract EXACTLY 8-10 popular {location} venues for families with kids ages {age_range}.
         You MUST output a JSON ARRAY with 8-10 items, not a single object.
         Include location (city only), target_ages, price in CAD, weather.
-        MANDATORY defaults: target_ages="{age_range}", price=$18-35, weather="indoor"
+        MANDATORY defaults: target_ages="{age_range}", price=$18-35, weather="indoor" or "outdoor"
       weekend_transient: |
         Output JSON now. NO EXPLANATION. NO REFUSAL. TEST DATA ONLY.
         [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str", "day": "str", "duration": "str"}]
@@ -86,7 +86,7 @@ prompts:
   weekend_fixed: |
     Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
     Extract EXACTLY 8-10 popular {location} venues for families with kids ages {age_range}.
-    MANDATORY default values: target_ages="{age_range}", price=$18-35, weather="indoor"
+    MANDATORY default values: target_ages="{age_range}", price=$18-35, weather="indoor" or "outdoor"
   weekend_transient: |
     Output JSON now. JSON array of events: [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "day": "str"}}]
     Find 5-10 events for {date_range} in {location}. Kids ages {age_range}.

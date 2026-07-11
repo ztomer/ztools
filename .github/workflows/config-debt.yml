@@ -11,64 +11,64 @@ jobs:
         with:
           python-version: "3.13"
       - name: Check for new config debt
+        shell: python3
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.event.pull_request.base.sha }}"
-          else
-            BASE="${{ github.event.before }}"
-          fi
-          python3 -c "
-import re, subprocess, sys
-from pathlib import Path
+          import re, subprocess, sys
+          from pathlib import Path
 
-ROOT = Path('.')
-CHECKER = ROOT / 'tools' / 'check_config_debt.py'
+          ROOT = Path('.')
+          CHECKER = ROOT / 'tools' / 'check_config_debt.py'
 
-# Get changed Python files
-r = subprocess.run(['git', 'diff', '--name-only', BASE, 'HEAD', '--', '*.py'],
-                   capture_output=True, text=True)
-changed = [f for f in r.stdout.strip().split('\n') if f]
-if not changed:
-    sys.exit(0)
+          # Determine base ref
+          event_name = "${{ github.event_name }}"
+          if event_name == "pull_request":
+              BASE = "${{ github.event.pull_request.base.sha }}"
+          else:
+              BASE = "${{ github.event.before }}"
 
-# Get added line numbers for each changed file
-def get_added_lines(file_path: str, base: str) -> set:
-    r = subprocess.run(
-        ['git', 'diff', '-U0', base, 'HEAD', '--', file_path],
-        capture_output=True, text=True,
-    )
-    added = set()
-    for line in r.stdout.split('\n'):
-        m = re.match(r'^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@', line)
-        if m:
-            start = int(m.group(1))
-            count = int(m.group(2)) if m.group(2) else 1
-            for i in range(start, start + count):
-                added.add(i)
-    return added
+          # Get changed Python files
+          r = subprocess.run(['git', 'diff', '--name-only', BASE, 'HEAD', '--', '*.py'],
+                             capture_output=True, text=True)
+          changed = [f for f in r.stdout.strip().split('\n') if f]
+          if not changed:
+              sys.exit(0)
 
-errors = []
-for f in changed:
-    fp = ROOT / f
-    if not fp.exists() or fp.suffix != '.py':
-        continue
-    added_lines = get_added_lines(f, BASE)
-    if not added_lines:
-        continue
-    r = subprocess.run(
-        [sys.executable, str(CHECKER), str(fp)],
-        capture_output=True, text=True,
-    )
-    if r.returncode == 0:
-        continue
-    for line in r.stdout.split('\n'):
-        m = re.match(r'^\s+L\s*(\d+)', line)
-        if m and int(m.group(1)) in added_lines:
-            errors.append(line)
+          def get_added_lines(file_path, base):
+              r = subprocess.run(
+                  ['git', 'diff', '-U0', base, 'HEAD', '--', file_path],
+                  capture_output=True, text=True,
+              )
+              added = set()
+              for line in r.stdout.split('\n'):
+                  m = re.match(r'^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@', line)
+                  if m:
+                      start = int(m.group(1))
+                      count = int(m.group(2)) if m.group(2) else 1
+                      for i in range(start, start + count):
+                          added.add(i)
+              return added
 
-if errors:
-    print('New config debt violations in this change:\n')
-    print('\n'.join(errors))
-    sys.exit(1)
-sys.exit(0)
-"
+          errors = []
+          for f in changed:
+              fp = ROOT / f
+              if not fp.exists() or fp.suffix != '.py':
+                  continue
+              added_lines = get_added_lines(f, BASE)
+              if not added_lines:
+                  continue
+              r = subprocess.run(
+                  [sys.executable, str(CHECKER), str(fp)],
+                  capture_output=True, text=True,
+              )
+              if r.returncode == 0:
+                  continue
+              for line in r.stdout.split('\n'):
+                  m = re.match(r'^\s+L\s*(\d+)', line)
+                  if m and int(m.group(1)) in added_lines:
+                      errors.append(line)
+
+          if errors:
+              print('New config debt violations in this change:\n')
+              print('\n'.join(errors))
+              sys.exit(1)
+          sys.exit(0)
