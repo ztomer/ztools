@@ -3,13 +3,19 @@ Helper utilities for image processing and filename generation.
 """
 
 import re
+import yaml
 from pathlib import Path
 from lib.tui import FAIL
 from typing import Optional
 from PIL import Image
 
-# Point pytesseract at Homebrew's tesseract binary if not on PATH (lazy init)
-_TESSERACT_BREW = "/opt/homebrew/bin/tesseract"
+# Load tesseract path from rename config, fall back to Homebrew default
+_RENAME_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "rename.yaml"
+try:
+    _RENAME_CFG = yaml.safe_load(_RENAME_CONFIG_PATH.read_text()) or {}
+except Exception:
+    _RENAME_CFG = {}
+_TESSERACT_BREW = _RENAME_CFG.get("tesseract_cmd", "/opt/homebrew/bin/tesseract")
 _TESSERACT_INIT = False
 
 # Generic LLM outputs that should be rejected (not real filenames)

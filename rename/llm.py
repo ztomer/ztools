@@ -31,7 +31,14 @@ FILENAME_MODELS = get_filename_models()
 
 PROMPT_TEXT_TO_FILENAME = get_model_prompt(FILENAME_MODELS[0], Task.FILENAME) if FILENAME_MODELS else ""
 
-MLX_MODELS_DIR = Path.home() / "MLXModels"
+# Load rename config for overridable paths
+_RENAME_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "rename.yaml"
+try:
+    _RENAME_CFG = yaml.safe_load(_RENAME_CONFIG_PATH.read_text()) or {}
+except Exception:
+    _RENAME_CFG = {}
+
+MLX_MODELS_DIR = Path(_RENAME_CFG.get("mlx_models_dir", str(Path.home() / "MLXModels")))
 
 # Timeouts for LLM API calls (seconds)
 RELEVANCE_CHECK_TIMEOUT = 5
@@ -43,7 +50,7 @@ PKILL_WAIT = 2
 APP_LAUNCH_WAIT = 15
 
 # Connection, path, limit, and status constants (Mitchell Hashimoto design)
-DEFAULT_SERVER_URL = "http://localhost:1337"
+DEFAULT_SERVER_URL = _RENAME_CFG.get("llm_url", "http://localhost:1337")
 API_CHAT_PATH = "/api/chat"
 TEXT_PREVIEW_LIMIT = 500
 RELEVANCE_CHECK_MODELS = ["qwen3.6-27b-mxfp4", "gemma-4-26b-a4b-it-mxfp4"]

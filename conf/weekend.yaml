@@ -5,13 +5,15 @@ location:
   city: Vaughan
   region: Toronto
   timezone: America/Toronto
+  latitude: 43.8361
+  longitude: -79.5083
 
 children:
-  - age: 13
+  - birthday: 2012-10-05
     gender: girl
-  - age: 10
+  - birthday: 2015-10-02
     gender: boy
-  - age: 6
+  - birthday: 2020-06-01
     gender: boy
 
 # All places to exclude from recommendations (visited + not interested)

@@ -6,6 +6,7 @@ Defines prompts, validators, and test data for all evaluation tasks.
 
 import re
 import json
+from pathlib import Path
 from typing import List, Dict
 from lib.validators.json_validator import validate_detailed_json, validate_json, validate_mixed_signal
 from lib.validators.text_validator import (
@@ -222,7 +223,22 @@ NOISE (Ignore - do NOT produce filenames for these):
 # FILE SUMMARY PROMPTS
 # ============================================================
 
-FILE_SUMMARY_PROMPT = """Read the file list below and give one-line summary for each file.
+_PROJECT_ROOT = Path(__file__).parent.parent
+_FILE_SUMMARY_FILES = [
+    "README.md", "CLAUDE.md", "model_eval.py", "weekend_planner.py",
+    "twitter_summarizer.py", "image_renamer.py", "explore_model_quirks.py",
+    "lib/__init__.py", "lib/osaurus_lib.py", "lib/validators_lib.py",
+    "lib/config.py", "lib/content_processing.py", "lib/mlx_lib.py",
+    "lib/logging_config.py", "conf/config.yaml", "conf/weekend.yaml",
+    "conf/twitter.yaml", "conf/rename.yaml", "conf/models/foundation.yaml",
+    "conf/models/gemma.yaml", "conf/models/qwen.yaml",
+    "docs/MODEL_QUIRKS.md", "docs/PROJECT_MEMORY.md",
+    "tests/test_validators.py", "tests/test_parse.py", "tests/test_config.py",
+    "tests/test_weekend.py", "tests/test_content_processing.py",
+    "tests/test_twitter.py", "pyproject.toml",
+]
+FILE_SUMMARY_FILE_LIST = "\n".join(str(_PROJECT_ROOT / f) for f in _FILE_SUMMARY_FILES)
+FILE_SUMMARY_PROMPT = f"""Read the file list below and give one-line summary for each file.
 
 CRITICAL: DO NOT infer from filename. Describe what each file DOES, not what its filename suggests.
 - Bad: "a python library" (infers from .py extension)
@@ -230,36 +246,7 @@ CRITICAL: DO NOT infer from filename. Describe what each file DOES, not what its
 
 Use ## headers for each file (e.g., ## filename: summary).
 
-/Users/ztomer/Projects/ztools/README.md
-/Users/ztomer/Projects/ztools/CLAUDE.md
-/Users/ztomer/Projects/ztools/model_eval.py
-/Users/ztomer/Projects/ztools/weekend_planner.py
-/Users/ztomer/Projects/ztools/twitter_summarizer.py
-/Users/ztomer/Projects/ztools/image_renamer.py
-/Users/ztomer/Projects/ztools/explore_model_quirks.py
-/Users/ztomer/Projects/ztools/lib/__init__.py
-/Users/ztomer/Projects/ztools/lib/osaurus_lib.py
-/Users/ztomer/Projects/ztools/lib/validators_lib.py
-/Users/ztomer/Projects/ztools/lib/config.py
-/Users/ztomer/Projects/ztools/lib/content_processing.py
-/Users/ztomer/Projects/ztools/lib/mlx_lib.py
-/Users/ztomer/Projects/ztools/lib/logging_config.py
-/Users/ztomer/Projects/ztools/conf/config.yaml
-/Users/ztomer/Projects/ztools/conf/weekend.yaml
-/Users/ztomer/Projects/ztools/conf/twitter.yaml
-/Users/ztomer/Projects/ztools/conf/rename.yaml
-/Users/ztomer/Projects/ztools/conf/models/foundation.yaml
-/Users/ztomer/Projects/ztools/conf/models/gemma.yaml
-/Users/ztomer/Projects/ztools/conf/models/qwen.yaml
-/Users/ztomer/Projects/ztools/docs/MODEL_QUIRKS.md
-/Users/ztomer/Projects/ztools/docs/PROJECT_MEMORY.md
-/Users/ztomer/Projects/ztools/tests/test_validators.py
-/Users/ztomer/Projects/ztools/tests/test_parse.py
-/Users/ztomer/Projects/ztools/tests/test_config.py
-/Users/ztomer/Projects/ztools/tests/test_weekend.py
-/Users/ztomer/Projects/ztools/tests/test_content_processing.py
-/Users/ztomer/Projects/ztools/tests/test_twitter.py
-/Users/ztomer/Projects/ztools/pyproject.toml
+{FILE_SUMMARY_FILE_LIST}
 
 Skip .git, __pycache__, benchmarks/, and pycache directories."""
 

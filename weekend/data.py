@@ -5,6 +5,8 @@ import re
 import requests
 from ddgs import DDGS
 
+from weekend.config import CITY, REGION, LATITUDE, LONGITUDE, TIMEZONE
+
 # HTTP request defaults
 WEATHER_API_TIMEOUT = 10
 
@@ -23,10 +25,7 @@ DAYS_IN_WEEK = 7
 SUNDAY_DELTA_DAYS = 2
 
 WEATHER_API_URL = "https://api.open-meteo.com/v1/forecast"
-DEFAULT_LATITUDE = 43.8361
-DEFAULT_LONGITUDE = -79.5083
 DAILY_METEO_VARS = "temperature_2m_max,precipitation_sum"
-DEFAULT_TIMEZONE = "America/Toronto"
 PRECIPITATION_THRESHOLD = 0.5
 FORECAST_HEADER = "Daily Forecast:\n"
 
@@ -66,10 +65,10 @@ def fetch_weather(friday, sunday):
     try:
         url = WEATHER_API_URL
         params = {
-            "latitude": DEFAULT_LATITUDE,
-            "longitude": DEFAULT_LONGITUDE,
+            "latitude": LATITUDE,
+            "longitude": LONGITUDE,
             "daily": DAILY_METEO_VARS,
-            "timezone": DEFAULT_TIMEZONE,
+            "timezone": TIMEZONE,
             "start_date": friday.strftime("%Y-%m-%d"),
             "end_date": sunday.strftime("%Y-%m-%d"),
         }
@@ -113,11 +112,11 @@ def fetch_transient_events(dates_str, year, month_name):
 
     try:
         queries = [
-            "Ontario Science Centre family workshops April 2026",
-            "Toronto Zoo special events April 2026",
-            "LEGOLAND Discovery Centre Toronto April May 2026",
-            "Royal Ontario Museum ROM family programs April 2026",
-            "Vaughan community centres kids April 2026",
+            f"{REGION} family events {month_name} {year}",
+            f"{REGION} Zoo special events {month_name} {year}",
+            f"kids activities {CITY} {month_name} {year}",
+            f"{REGION} museum family programs {month_name} {year}",
+            f"{CITY} community centres kids {month_name} {year}",
         ]
 
         all_results = []
@@ -134,11 +133,11 @@ def fetch_transient_events(dates_str, year, month_name):
 def fetch_fixed_venues(year, month_name):
     try:
         queries = [
-            "indoor play centre Toronto Vaughan 2026 prices",
-            "trampoline park Toronto kids 2026",
-            "children museum Toronto 2026",
-            "family arcade Vaughan 2026",
-            "playplace Vaughan indoor kids 2026 prices",
+            f"indoor play centre {CITY} {REGION} {year} prices",
+            f"trampoline park {REGION} kids {year}",
+            f"children museum {REGION} {year}",
+            f"family arcade {CITY} {year}",
+            f"playplace {CITY} indoor kids {year} prices",
         ]
 
         all_results = []

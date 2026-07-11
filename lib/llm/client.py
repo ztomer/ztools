@@ -82,8 +82,8 @@ def call(
     # Apply model-specific quirks
     messages = apply_model_quirks(messages, model)
     
-    # Get defaults
-    max_tokens = max_tokens or MAX_TOKENS.get(task, DEFAULT_MAX_TOKENS)
+    # Get defaults from config
+    max_tokens = max_tokens or get_max_tokens_for_task(task)
     
     url = get_api_url(host, port)
     payload = {
@@ -105,7 +105,7 @@ def call(
     }
     
     start = time.time()
-    timeout = timeout or TIMEOUTS.get(task, DEFAULT_TIMEOUT)
+    timeout = timeout or get_timeout(task)
     
     try:
         with _get_session_context() as s:

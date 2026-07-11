@@ -7,14 +7,21 @@ import json
 import shutil
 import subprocess
 import sys
+import yaml
 from datetime import datetime, timezone
 from pathlib import Path
 from lib.tui import STEP, WARN
 
-STATE_FILE = Path.home() / ".twitter_summary_state.json"
+_TWITTER_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "twitter.yaml"
+try:
+    _TWITTER_CFG = yaml.safe_load(_TWITTER_CONFIG_PATH.read_text()) or {}
+except Exception:
+    _TWITTER_CFG = {}
+
+STATE_FILE = Path(_TWITTER_CFG.get("state_file", str(Path.home() / ".twitter_summary_state.json")))
 DEBUG_CACHE_FILE = Path.home() / ".twitter_summary_debug_cache.json"
-DEFAULT_OUTPUT_DIR = Path.home() / "Documents" / "twitter_summaries"
-DEFAULT_OLLAMA_URL = "http://localhost:1337"
+DEFAULT_OUTPUT_DIR = Path(_TWITTER_CFG.get("output_dir", str(Path.home() / "Documents" / "twitter_summaries")))
+DEFAULT_OLLAMA_URL = _TWITTER_CFG.get("llm_url", "http://localhost:1337")
 
 
 def load_state() -> dict:

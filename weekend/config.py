@@ -1,3 +1,4 @@
+import datetime
 import os
 import yaml
 from pathlib import Path
@@ -48,12 +49,27 @@ try:
 except Exception:
     WEEKEND_CONFIG = {}
 EXCLUDE_PLACES = WEEKEND_CONFIG.get("exclude_places", [])
-CHILDREN = WEEKEND_CONFIG.get("children", [])
+_raw_children = WEEKEND_CONFIG.get("children", [])
+CHILDREN = []
+for c in _raw_children:
+    if "birthday" in c:
+        bday = c["birthday"] if isinstance(c["birthday"], datetime.date) else datetime.datetime.strptime(c["birthday"], "%Y-%m-%d").date()
+        _today = datetime.date.today()
+        c["age"] = _today.year - bday.year - ((_today.month, _today.day) < (bday.month, bday.day))
+    CHILDREN.append(c)
 CHILDREN_STR = ", ".join([f"{c['age']}yo {c['gender']}" for c in CHILDREN]) if CHILDREN else "{CHILDREN_STR}"
+LATITUDE = WEEKEND_CONFIG.get("location", {}).get("latitude", 43.8361)
+LONGITUDE = WEEKEND_CONFIG.get("location", {}).get("longitude", -79.5083)
+TIMEZONE = WEEKEND_CONFIG.get("location", {}).get("timezone", "America/Toronto")
 CITY = WEEKEND_CONFIG.get("location", {}).get("city", "Vaughan")
 REGION = WEEKEND_CONFIG.get("location", {}).get("region", "Toronto")
 AGE_RANGE = f"{min(c['age'] for c in CHILDREN)}-{max(c['age'] for c in CHILDREN)}" if CHILDREN else "4-12"
-DATES_STR = "April 24 to April 26"
+
+# Dynamic date fallback for LLM prompts — computed from this week's Friday
+_today = datetime.date.today()
+_friday = _today + datetime.timedelta((4 - _today.weekday()) % 7)
+_sunday = _friday + datetime.timedelta(days=2)
+DATES_STR = f"{_friday.strftime('%B %d')} to {_sunday.strftime('%B %d, %Y')}"
 
 MODEL_CONFIG = os.path.expanduser("~/.config/model_eval.json")
 

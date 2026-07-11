@@ -27,6 +27,14 @@
       "batch_size": 5
     }
   },
+  "qwen3.6-35b-a3b-mxfp8-mtp": {
+    "events": {
+      "batch_size": 5
+    },
+    "venues": {
+      "batch_size": 5
+    }
+  },
   "qwopus3.6-27b-v2-mlx-4bit": {
     "events": {
       "batch_size": 5

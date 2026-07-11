@@ -34,6 +34,7 @@ from rename.llm import (
     PROMPT_TEXT_TO_FILENAME,
     PROMPT_IMAGE_TO_FILENAME,
 )
+from lib.config import get_best_models
 from lib.osaurus_lib import check_llm_availability
 from lib.tui import STEP, FAIL
 from lib.signal_handling import setup_signals
@@ -206,7 +207,7 @@ def main():
 
     active_vlm_model = args.vlm_model
     if not active_vlm_model:
-        active_vlm_model = active_model
+        active_vlm_model = get_best_models().get("vlm") or active_model
 
     stats = {"renamed": 0, "skipped": 0, "errors": 0}
 
