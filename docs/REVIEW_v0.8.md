@@ -291,7 +291,7 @@ machine-written. Everything else should move to TOML.
 
 ---
 
-## Fix Status (v0.8.4)
+## Fix Status (v0.8.4 / v0.8.5)
 
 | # | Finding | Severity | Status |
 |---|---|---|---|
@@ -305,9 +305,9 @@ machine-written. Everything else should move to TOML.
 | 8 | Circular dependency: `print_memory_usage` as callback parameter | MED | FIXED |
 | 9 | Mutable globals: remove `eval.run.DEFAULT_EVAL_TIMEOUT = ...` | HIGH | FIXED |
 | 10 | `flush_between_models()` closure → module-level function | MED | FIXED |
-| 11 | Three `Console()` instances + `_with_console()` boilerplate | HIGH | PENDING |
-| 12 | `TASK_SCORERS` registry decorator pattern | MED | PENDING |
-| 13 | `eval/__init__.py` export surface | LOW | PENDING |
+| 11 | Three `Console()` instances → one shared in `lib/tui.py` + `capture_console()` context manager | HIGH | FIXED |
+| 12 | `TASK_SCORERS` decorator registry + dedup weekend keys | MED | FIXED |
+| 13 | `eval/__init__.py` export surface (trim to public API only) | LOW | FIXED |
 | 14 | Config migration YAML/JSON → TOML | MED | PENDING |
-| 15 | Tests for `quality_weekend_scorers.py` | HIGH | PENDING |
+| 15 | Tests for `quality_weekend_scorers.py` (47 tests, found + fixed 2 bugs) | HIGH | FIXED |
 | 16 | Pre-existing flake: `test_quality_runner.py::test_query_model_success` | LOW | PENDING (test isolation issue)

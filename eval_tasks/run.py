@@ -10,10 +10,7 @@ from eval.run import (
 from eval.tasks_core import TASKS
 from lib.osaurus_lib import is_server_running, get_models
 from lib import init_config
-
-from rich.console import Console
-
-console = Console()
+from lib.tui import console
 
 
 def run_model_eval(model: str, tasks: dict = None, host: str = "localhost", port: int = 1337, backend: str = "osaurus") -> list:

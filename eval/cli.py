@@ -19,8 +19,6 @@ import time
 import argparse
 import os
 from pathlib import Path
-from rich.console import Console
-
 from lib import init_config
 from lib.osaurus_lib import (
     call,
@@ -28,7 +26,7 @@ from lib.osaurus_lib import (
     is_server_running,
 )
 
-from lib.tui import STEP, WARN, FAIL
+from lib.tui import STEP, WARN, FAIL, console
 from lib.config import get_model_prompts_all, build_tasks_from_model
 
 from eval.tasks_core import (
@@ -106,7 +104,6 @@ __all__ = [
     "RENAME_PROMPT", "FILE_SUMMARY_PROMPT", "TWITTER_PROMPT",
 ]
 
-console = Console()
 
 # Default server port
 DEFAULT_SERVER_PORT = 1337

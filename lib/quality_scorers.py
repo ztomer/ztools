@@ -3,18 +3,34 @@ import re
 from typing import Dict, List, Callable
 
 from lib.quality_models import Score, ScoreCard, TestCase, _str, _lower, GENERIC_FILENAMES
-from lib.quality_weekend_scorers import TASK_SCORERS_WEEKEND
+
+
+_scorer_registry: Dict[str, List[Callable]] = {}
+
+
+def register_scorer(*tasks: str):
+    """Decorator that registers a scorer function for one or more task types."""
+    def decorator(func):
+        for task in tasks:
+            _scorer_registry.setdefault(task, []).append(func)
+        return func
+    return decorator
+
+
+def get_scorers(task: str) -> List[Callable]:
+    return list(_scorer_registry.get(task, []))
 
 
 def get_dimension_weights(task: str) -> dict[str, float]:
     """Return {dimension_name: weight} for a task from the registered scorers."""
     weights: dict[str, float] = {}
-    for scorer in TASK_SCORERS.get(task, []):
+    for scorer in get_scorers(task):
         dummy = scorer("", TestCase(task, "", "", ""))
         weights[dummy.name] = dummy.weight
     return weights
 
 
+@register_scorer("filename")
 def _score_filename_relevance(output: str, case: TestCase) -> Score:
     out = _lower(output).strip()
     inp = _lower(case.input_text)
@@ -70,6 +86,7 @@ def _score_filename_relevance(output: str, case: TestCase) -> Score:
     return Score("Relevance", score, 0.40, failures)
 
 
+@register_scorer("filename")
 def _score_filename_format(output: str, case: TestCase) -> Score:
     out = output.strip()
     if not out:
@@ -112,6 +129,7 @@ def _score_filename_format(output: str, case: TestCase) -> Score:
     return Score("Format", score, 0.35, failures)
 
 
+@register_scorer("filename")
 def _score_filename_conciseness(output: str, case: TestCase) -> Score:
     out = output.strip()
     if not out:
@@ -148,6 +166,7 @@ def _score_filename_conciseness(output: str, case: TestCase) -> Score:
     return Score("Conciseness", score, 0.25, failures)
 
 
+@register_scorer("summarize")
 def _score_summarize_completeness(output: str, case: TestCase) -> Score:
     out = _str(output)
     inp = _lower(case.input_text)
@@ -184,6 +203,7 @@ def _score_summarize_completeness(output: str, case: TestCase) -> Score:
     return Score("Completeness", score, 0.30, failures)
 
 
+@register_scorer("summarize")
 def _score_summarize_synthesis(output: str, case: TestCase) -> Score:
     out = _str(output)
     if not out:
@@ -242,6 +262,7 @@ def _score_summarize_synthesis(output: str, case: TestCase) -> Score:
     return Score("Synthesis", score, 0.25, failures)
 
 
+@register_scorer("summarize")
 def _score_summarize_structure(output: str, case: TestCase) -> Score:
     out = _str(output)
     if not out:
@@ -278,6 +299,7 @@ def _score_summarize_structure(output: str, case: TestCase) -> Score:
     return Score("Structure", score, 0.20, failures)
 
 
+@register_scorer("summarize")
 def _score_summarize_specificity(output: str, case: TestCase) -> Score:
     out = _str(output)
     if not out:
@@ -314,6 +336,7 @@ def _score_summarize_specificity(output: str, case: TestCase) -> Score:
     return Score("Specificity", score, 0.25, failures)
 
 
+@register_scorer("file_summary")
 def _score_file_completeness(output: str, case: TestCase) -> Score:
     out = _str(output)
     if not out:
@@ -342,6 +365,7 @@ def _score_file_completeness(output: str, case: TestCase) -> Score:
     return Score("Completeness", score, 0.40, failures)
 
 
+@register_scorer("file_summary")
 def _score_file_accuracy(output: str, case: TestCase) -> Score:
     out = _str(output)
     if not out:
@@ -405,6 +429,7 @@ def _score_file_accuracy(output: str, case: TestCase) -> Score:
     return Score("Accuracy", total_score / count, 0.30, failures)
 
 
+@register_scorer("file_summary")
 def _score_file_format(output: str, case: TestCase) -> Score:
     out = _str(output)
     if not out:
@@ -433,25 +458,9 @@ def _score_file_format(output: str, case: TestCase) -> Score:
     return Score("Format", score, 0.30, failures)
 
 
-TASK_SCORERS: Dict[str, List[Callable]] = {
-    "filename": [
-        _score_filename_relevance,
-        _score_filename_format,
-        _score_filename_conciseness,
-    ],
-    "summarize": [
-        _score_summarize_completeness,
-        _score_summarize_synthesis,
-        _score_summarize_structure,
-        _score_summarize_specificity,
-    ],
-    "file_summary": [
-        _score_file_completeness,
-        _score_file_accuracy,
-        _score_file_format,
-    ],
-    **TASK_SCORERS_WEEKEND,
-}
+# Registry snapshot — built after all decorators fire
+import lib.quality_weekend_scorers as _  # side-effect: registers weekend scorers
+TASK_SCORERS: Dict[str, List[Callable]] = _scorer_registry
 
 
 def score_output(output: str, task: str, case: TestCase) -> ScoreCard:
@@ -474,7 +483,7 @@ def score_output(output: str, task: str, case: TestCase) -> ScoreCard:
                 output=output,
             )
 
-    scorers = TASK_SCORERS.get(task, [])
+    scorers = get_scorers(task)
     dimensions = [scorer(output, case) for scorer in scorers]
     return ScoreCard(
         model="",

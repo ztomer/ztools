@@ -1,11 +1,8 @@
-from rich.console import Console
 from rich.markdown import Markdown
 
 from weekend.llm import fetch_scores_for_items
 from weekend.config import AGE_RANGE
-from lib.tui import STEP, WARN, debug_print
-
-console = Console()
+from lib.tui import STEP, WARN, debug_print, console
 
 # Timing, scoring, and layout constants (Mitchell Hashimoto design)
 DEFAULT_SCORE = 0

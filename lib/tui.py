@@ -1,6 +1,10 @@
 import os
 import sys
+from contextlib import contextmanager
+from io import StringIO
 from pathlib import Path
+
+from rich.console import Console
 
 _NO_COLOR = os.environ.get("NO_COLOR") == "1" or not sys.stdout.isatty()
 
@@ -58,3 +62,13 @@ def hr():
 def debug_print(*args, **kwargs):
     if DEBUG:
         print(*args, **kwargs)
+
+
+console = Console()
+
+
+@contextmanager
+def capture_console():
+    """Yield a Console that writes to a StringIO for testing."""
+    buf = StringIO()
+    yield Console(file=buf), buf

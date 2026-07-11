@@ -7,7 +7,6 @@ Contains the main eval loop, model calling, and validation orchestration.
 import json
 import re
 from pathlib import Path
-from rich.console import Console
 from lib.osaurus_lib import call
 from lib.config import Task, get_timeout
 from eval.tasks_core import TASKS, _extract_items_from_text
@@ -16,7 +15,7 @@ from eval.validate import safe_content
 from lib.validators_lib import validate_summary, get_source_matching_details
 from lib.mlx_lib import call as mlx_call
 from lib.logging_config import osaurus_logger as eval_logger
-from lib.tui import STEP, WARN, FAIL
+from lib.tui import STEP, WARN, FAIL, console
 
 
 MAX_RETRIES = 1
@@ -76,8 +75,6 @@ def _record_signal(model: str, task_name: str, time_taken: float, had_retries: b
             per_task["timeout"] = new_timeout
 
     _save_eval_signals(signals)
-
-console = Console()
 
 
 def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool = False) -> tuple[int, str, dict]:

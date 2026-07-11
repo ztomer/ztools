@@ -3,6 +3,7 @@ import re
 from typing import Any, List, Tuple
 
 from lib.quality_models import Score, TestCase, _str, _lower
+from lib.quality_scorers import register_scorer
 
 INDOOR = {"indoor", "inside", "in", "cover", "shelter"}
 OUTDOOR = {"outdoor", "outside", "park", "open-air", "nature", "trail"}
@@ -61,6 +62,7 @@ def _age_overlap(ta: str, ref_min: int, ref_max: int) -> float:
     return overlap / max(item_span, ref_span)
 
 
+@register_scorer("weekend_transient", "weekend_fixed")
 def _score_weekend_completeness(output: str, case: TestCase) -> Score:
     items, fails = _extract_items(output)
     if fails:
@@ -75,6 +77,7 @@ def _score_weekend_completeness(output: str, case: TestCase) -> Score:
     return Score("Completeness", score, 0.25, failures)
 
 
+@register_scorer("weekend_transient", "weekend_fixed")
 def _score_weekend_weather_match(output: str, case: TestCase) -> Score:
     items, fails = _extract_items(output)
     if fails:
@@ -113,6 +116,7 @@ def _score_weekend_weather_match(output: str, case: TestCase) -> Score:
     return Score("Weather", score, 0.20, failures)
 
 
+@register_scorer("weekend_transient", "weekend_fixed")
 def _score_weekend_age_match(output: str, case: TestCase) -> Score:
     items, fails = _extract_items(output)
     if fails:
@@ -135,19 +139,21 @@ def _score_weekend_age_match(output: str, case: TestCase) -> Score:
     return Score("Age", score, 0.20, failures)
 
 
+@register_scorer("weekend_transient", "weekend_fixed")
 def _score_weekend_source_grounding(output: str, case: TestCase) -> Score:
     items, fails = _extract_items(output)
     if fails:
         return Score("Source", 0, 0.20, fails)
     source = _lower(case.input_text)
-    source_names = _parse_reference(case).get("source_item_names", [])
+    source_names_list = _parse_reference(case).get("source_item_names", [])
+    source_names = [_lower(sn) for sn in source_names_list]
     scored = 0
     for item in items:
         name = _lower(item.get("name", ""))
         if not name:
             continue
         if source_names:
-            if any(sn in name for sn in source_names):
+            if any(sn and sn in name for sn in source_names):
                 scored += 1
         else:
             tokens = set(re.findall(r'[a-z]+', name))
@@ -161,6 +167,7 @@ def _score_weekend_source_grounding(output: str, case: TestCase) -> Score:
     return Score("Source", score, 0.20, failures)
 
 
+@register_scorer("weekend_transient", "weekend_fixed")
 def _score_weekend_exclusions(output: str, case: TestCase) -> Score:
     items, fails = _extract_items(output)
     if fails:
@@ -174,9 +181,9 @@ def _score_weekend_exclusions(output: str, case: TestCase) -> Score:
     for item in items:
         name = _lower(item.get("name", ""))
         loc = _lower(item.get("location", ""))
-        if any(e in name or name in e for e in exclude):
+        if any((name and e in name) or (name and name in e) for e in exclude):
             excluded += 1
-        elif any(e in loc or loc in e for e in exclude):
+        elif any((loc and e in loc) or (loc and loc in e) for e in exclude):
             excluded += 1
     clean = total - excluded
     ratio = clean / total if total else 1.0
@@ -185,21 +192,3 @@ def _score_weekend_exclusions(output: str, case: TestCase) -> Score:
     if excluded > 0:
         failures.append(f"{excluded}/{total} items match excluded places")
     return Score("Exclusions", score, 0.10, failures)
-
-
-TASK_SCORERS_WEEKEND = {
-    "weekend_transient": [
-        _score_weekend_completeness,
-        _score_weekend_weather_match,
-        _score_weekend_age_match,
-        _score_weekend_source_grounding,
-        _score_weekend_exclusions,
-    ],
-    "weekend_fixed": [
-        _score_weekend_completeness,
-        _score_weekend_weather_match,
-        _score_weekend_age_match,
-        _score_weekend_source_grounding,
-        _score_weekend_exclusions,
-    ],
-}

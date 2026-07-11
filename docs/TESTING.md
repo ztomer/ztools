@@ -442,3 +442,36 @@ Before merging a test, verify:
 
 - **`lib/llm/fallback.py`** — shared fallback orchestration (`call_with_fallback`), extracted from the three duplicate implementations in `twitter/summarize.py`, `weekend/llm.py`, `rename/llm.py`.
 - **`lib/llm/protocol.py`** — `LLMClient` protocol class unifying the three call interfaces (`lib.osaurus_lib.call`, `lib.llm/client.call`, `lib.mlx_lib.call`).
+
+---
+
+## Bugs Found While Adding Tests (July 2026)
+
+### 1. Empty string is substring of every string — `_score_weekend_exclusions`
+
+`lib/quality_weekend_scorers.py:_score_weekend_exclusions` checked `loc in e` for
+exclusion matching, where `loc` is the lowered location string from each item.
+If an item had no `"location"` key (or empty location), `loc = ""` and `"" in e`
+is always `True` in Python — causing every item without a location to match
+every exclusion.
+
+**Fix:** guard both sides of the substring check:
+```python
+if any((name and e in name) or (name and name in e) for e in exclude):
+```
+Same pattern applied to the location check and the source-grounding scorer.
+
+### 2. Case mismatch in `_score_weekend_source_grounding` source name comparison
+
+The function lowered item `name` to `_lower(item.get("name", ""))` but compared
+against raw (un-lowered) source names from the reference:
+```python
+source_names = _parse_reference(case).get("source_item_names", [])
+if any(sn in name for sn in source_names): ...
+```
+
+`"Central Park" in "central park visit"` is `False`. Lowered the source names
+at parse time:
+```python
+source_names = [_lower(sn) for sn in source_names_list]
+```
