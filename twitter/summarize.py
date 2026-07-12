@@ -83,7 +83,15 @@ def _build_prompt(
     used = 0
     width = min(TERMINAL_WIDTH_LIMIT, shutil.get_terminal_size().columns) if not for_mlx else 120
     for t in reversed(tweets):
-        prefix = f"[@{t['screen_name']} | {t['created_at'].strftime('%H:%M')}]: "
+        parts = [f"@{t['screen_name']} | {t['created_at'].strftime('%H:%M')}"]
+        fav = t.get("favorite_count", 0)
+        rt = t.get("retweet_count", 0)
+        if fav or rt:
+            parts.append(f"{fav} favs, {rt} RTs")
+        reply_to = t.get("in_reply_to_screen_name")
+        if reply_to:
+            parts.append(f"\u2192 @{reply_to}")
+        prefix = f"[{' | '.join(parts)}]: "
         text = t['text'].strip()
         line = textwrap.fill(
             f"{prefix}{text}",
@@ -100,12 +108,21 @@ def _build_prompt(
 
     prompt_template = get_model_prompt(model, Task.SUMMARIZE)
     if not prompt_template:
-        prompt_template = "Summarize this timeline:\n\n{}\n\nUse ## headers for topics."
+        prompt_template = (
+            "Create a structured summary of this Twitter timeline.\n"
+            "Start with a brief overall paragraph capturing the main narrative.\n"
+            "Then organize events into topic sections with ## headers, using bullet points.\n"
+            "Include who (@user mentions), what happened, and when.\n"
+            "Use connecting phrases and narrative verbs to show how events relate.\n"
+            "After the topic sections, list the 5 most notable tweets "
+            "(highest engagement or most impactful) with their full text and URL.\n"
+        )
+    prompt_template += _PROMPT_RULES
 
     if "{}" in prompt_template:
         prompt = prompt_template.replace("{}", timeline)
     else:
-        prompt = prompt_template
+        prompt = f"{prompt_template}\n<timeline>\n{timeline}\n</timeline>"
 
     return prompt, len(lines)
 

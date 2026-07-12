@@ -65,47 +65,57 @@ class TestBuildPrompt:
     def test_basic(self, mock_llm):
         import twitter.summarize as twit_summarize
         tweets = [
-            {"screen_name": "user1", "text": "Hello world", "created_at": datetime(2024, 1, 1, 12, 0)},
-            {"screen_name": "user2", "text": "Another tweet", "created_at": datetime(2024, 1, 1, 13, 0)},
+            {"screen_name": "user1", "text": "Hello world", "created_at": datetime(2024, 1, 1, 12, 0),
+             "favorite_count": 5, "retweet_count": 2, "reply_count": 0},
+            {"screen_name": "user2", "text": "Another tweet", "created_at": datetime(2024, 1, 1, 13, 0),
+             "favorite_count": 0, "retweet_count": 0, "reply_count": 0},
         ]
         with patch.object(twit_summarize, "get_model_prompt", return_value="Summarize: {}"):
             prompt, n = twit_summarize._build_prompt(tweets, max_chars=10000, model="m1")
         assert n == 2
         assert "user1" in prompt
         assert "Hello world" in prompt
+        assert "5 favs, 2 RTs" in prompt
 
     def test_prompt_without_placeholder(self, mock_llm):
         import twitter.summarize as twit_summarize
-        tweets = [{"screen_name": "u", "text": "t", "created_at": datetime(2024, 1, 1)}]
+        tweets = [{"screen_name": "u", "text": "t", "created_at": datetime(2024, 1, 1),
+                   "favorite_count": 0, "retweet_count": 0, "reply_count": 0}]
         with patch.object(twit_summarize, "get_model_prompt", return_value="Just summarize"):
             prompt, n = twit_summarize._build_prompt(tweets, max_chars=10000)
-        assert prompt == "Just summarize"
+        assert "Just summarize" in prompt
+        assert "<timeline>" in prompt
 
     def test_no_prompt_falls_back(self, mock_llm):
         import twitter.summarize as twit_summarize
-        tweets = [{"screen_name": "u", "text": "t", "created_at": datetime(2024, 1, 1)}]
+        tweets = [{"screen_name": "u", "text": "t", "created_at": datetime(2024, 1, 1),
+                   "favorite_count": 0, "retweet_count": 0, "reply_count": 0}]
         with patch.object(twit_summarize, "get_model_prompt", return_value=None):
             prompt, n = twit_summarize._build_prompt(tweets, max_chars=10000)
-        assert "Summarize this timeline" in prompt
-        assert "{}" not in prompt  # placeholder is filled
+        assert "structured summary" in prompt
+        assert "most notable" in prompt
 
     def test_respects_budget(self, mock_llm):
         import twitter.summarize as twit_summarize
         tweets = [
-            {"screen_name": "u", "text": "x" * 200, "created_at": datetime(2024, 1, 1)},
-            {"screen_name": "u", "text": "x" * 200, "created_at": datetime(2024, 1, 1)},
+            {"screen_name": "u", "text": "x" * 200, "created_at": datetime(2024, 1, 1),
+             "favorite_count": 0, "retweet_count": 0, "reply_count": 0},
+            {"screen_name": "u", "text": "x" * 200, "created_at": datetime(2024, 1, 1),
+             "favorite_count": 0, "retweet_count": 0, "reply_count": 0},
         ]
         with patch.object(twit_summarize, "get_model_prompt", return_value="{}"):
             prompt, n = twit_summarize._build_prompt(tweets, max_chars=300)
-        # 200 chars each + overhead > 300 budget; none fit
+        # Prefix overhead (~16 chars) + 200 text + 1 newline per tweet > 300 budget
         assert n == 0
-        assert prompt == ""
+        # Prompt still contains rules text (timeline is empty)
+        assert "Use headers" in prompt
 
 
 class TestSummarizeWithLlm:
     def _make_tweets(self):
         return [
-            {"screen_name": "u1", "text": "hello", "created_at": datetime(2024, 1, 1, 12, 0)},
+            {"screen_name": "u1", "text": "hello", "created_at": datetime(2024, 1, 1, 12, 0),
+             "favorite_count": 0, "retweet_count": 0, "reply_count": 0},
         ]
 
     def test_success_first_model(self, mock_llm):

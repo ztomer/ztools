@@ -83,6 +83,11 @@ def parse_tweets_from_response(data: dict) -> list[dict]:
                     or user_legacy.get("screen_name")
                     or UNKNOWN_USER
                 )
+                favorite_count = legacy.get("favorite_count", 0)
+                retweet_count = legacy.get("retweet_count", 0)
+                reply_count = legacy.get("reply_count", 0)
+                tweet_id = legacy.get("id_str", "")
+                in_reply_to = legacy.get("in_reply_to_screen_name", "")
 
                 if not full_text or not created_at_str:
                     continue
@@ -95,13 +100,20 @@ def parse_tweets_from_response(data: dict) -> list[dict]:
                 except ValueError:
                     continue
 
-                tweets.append(
-                    {
-                        "screen_name": screen_name,
-                        "text": full_text,
-                        "created_at": created_at,
-                    }
-                )
+                tweet = {
+                    "screen_name": screen_name,
+                    "text": full_text,
+                    "created_at": created_at,
+                    "favorite_count": favorite_count,
+                    "retweet_count": retweet_count,
+                    "reply_count": reply_count,
+                }
+                if tweet_id:
+                    tweet["id_str"] = tweet_id
+                if in_reply_to:
+                    tweet["in_reply_to_screen_name"] = in_reply_to
+
+                tweets.append(tweet)
     except Exception as e:
         if os.environ.get("DEBUG"):
             print(f"Error: {e}")

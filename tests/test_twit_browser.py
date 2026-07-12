@@ -5,7 +5,20 @@ from unittest.mock import patch, MagicMock
 from twitter.browser import parse_tweets_from_response
 
 
-def _make_tweet_data(screen_name, text, date_str, typename="TimelineTweet"):
+def _make_tweet_data(screen_name, text, date_str, typename="TimelineTweet",
+                     fav_count=0, rt_count=0, reply_count=0, id_str="",
+                     in_reply_to=""):
+    legacy = {
+        "full_text": text,
+        "created_at": date_str,
+        "favorite_count": fav_count,
+        "retweet_count": rt_count,
+        "reply_count": reply_count,
+    }
+    if id_str:
+        legacy["id_str"] = id_str
+    if in_reply_to:
+        legacy["in_reply_to_screen_name"] = in_reply_to
     return {
         "data": {
             "home": {
@@ -21,10 +34,7 @@ def _make_tweet_data(screen_name, text, date_str, typename="TimelineTweet"):
                                             "tweet_results": {
                                                 "result": {
                                                     "__typename": typename,
-                                                    "legacy": {
-                                                        "full_text": text,
-                                                        "created_at": date_str,
-                                                    },
+                                                    "legacy": legacy,
                                                     "core": {
                                                         "user_results": {
                                                             "result": {
@@ -66,6 +76,11 @@ class TestParseTweetsFromResponse:
         assert len(tweets) == 1
         assert tweets[0]["screen_name"] == "user1"
         assert tweets[0]["text"] == "hello world"
+        assert tweets[0]["favorite_count"] == 0
+        assert tweets[0]["retweet_count"] == 0
+        assert tweets[0]["reply_count"] == 0
+        assert "id_str" not in tweets[0]
+        assert "in_reply_to_screen_name" not in tweets[0]
 
     def test_datetime_parsed(self):
         data = _make_tweet_data(
