@@ -27,6 +27,24 @@ class TestCacheFunctions:
         save_events_cache('["saved"]')
         assert cache_file.read_text() == '["saved"]'
 
+    def test_save_events_cache_creates_dir(self, tmp_path, monkeypatch):
+        """Cache save must create parent dir if missing (regression)."""
+        from weekend.config import save_events_cache
+        cache_file = tmp_path / "nonexistent" / "subdir" / "events.json"
+        assert not cache_file.parent.exists()
+        monkeypatch.setattr("weekend.config.DEBUG_EVENTS_FILE", cache_file)
+        save_events_cache('["data"]')
+        assert cache_file.read_text() == '["data"]'
+
+    def test_save_venues_cache_creates_dir(self, tmp_path, monkeypatch):
+        """Venues cache save must create parent dir if missing (regression)."""
+        from weekend.config import save_venues_cache
+        cache_file = tmp_path / "nonexistent" / "subdir" / "venues.json"
+        assert not cache_file.parent.exists()
+        monkeypatch.setattr("weekend.config.DEBUG_VENUES_FILE", cache_file)
+        save_venues_cache('["data"]')
+        assert cache_file.read_text() == '["data"]'
+
     def test_load_venues_cache_exists(self, tmp_path, monkeypatch):
         from weekend.config import load_venues_cache
         cache_file = tmp_path / ".weekend_venues_debug_cache.json"
@@ -116,3 +134,134 @@ class TestConstants:
         assert OSAURUS_BASE_URL.startswith("http")
         assert OSAURUS_APP.endswith(".app")
         assert DATES_STR  # Non-empty
+
+
+class TestFetchDataIntegration:
+    def test_fetch_data_creates_cache_dirs(self, tmp_path, monkeypatch):
+        """_fetch_data creates cache dirs and doesn't crash when all mocked."""
+        with monkeypatch.context() as m:
+            m.setattr("weekend.cli.ensure_server", lambda: None)
+            m.setattr("weekend.cli.get_weekend_dates_string",
+                      lambda *a: "Jul 17-19, 2026")
+            m.setattr("weekend.cli.fetch_weather",
+                      lambda *a: "Daily Forecast: 24C Clear")
+            m.setattr("weekend.cli.fetch_transient_events",
+                      lambda *a: 'Mock events data')
+            m.setattr("weekend.cli.fetch_fixed_venues",
+                      lambda *a: 'Mock venues data')
+
+            cache_dir = tmp_path / ".cache" / "weekend"
+            m.setattr("weekend.config.DEBUG_EVENTS_FILE",
+                      cache_dir / "events_debug_cache.json")
+            m.setattr("weekend.config.DEBUG_VENUES_FILE",
+                      cache_dir / "venues_debug_cache.json")
+
+            from weekend.cli import _fetch_data
+            import datetime
+            fri = datetime.date(2026, 7, 17)
+            sun = datetime.date(2026, 7, 19)
+            weather, events, venues, dates = _fetch_data(fri, sun, "2026", "July", use_cache=False)
+
+        assert cache_dir.exists()
+        assert weather == "Daily Forecast: 24C Clear"
+        assert events == "Mock events data"
+        assert venues == "Mock venues data"
+        assert dates == "Jul 17-19, 2026"
+
+    def test_fetch_data_with_cache_uses_cached(self, tmp_path, monkeypatch):
+        """With use_cache=True, cached data is returned without re-fetching."""
+        with monkeypatch.context() as m:
+            m.setattr("weekend.cli.ensure_server", lambda: None)
+            m.setattr("weekend.cli.get_weekend_dates_string",
+                      lambda *a: "Jul 17-19, 2026")
+            m.setattr("weekend.cli.fetch_weather",
+                      lambda *a: "Daily Forecast: 24C Clear")
+            m.setattr("weekend.cli.fetch_transient_events",
+                      lambda *a: 'Mock events data')
+            m.setattr("weekend.cli.fetch_fixed_venues",
+                      lambda *a: 'Mock venues data')
+
+            cache_dir = tmp_path / ".cache" / "weekend"
+            # Pre-populate cache
+            cache_dir.mkdir(parents=True)
+            (cache_dir / "events_debug_cache.json").write_text("Cached events")
+            (cache_dir / "venues_debug_cache.json").write_text("Cached venues")
+            m.setattr("weekend.config.DEBUG_EVENTS_FILE",
+                      cache_dir / "events_debug_cache.json")
+            m.setattr("weekend.config.DEBUG_VENUES_FILE",
+                      cache_dir / "venues_debug_cache.json")
+
+            from weekend.cli import _fetch_data
+            import datetime
+            fri = datetime.date(2026, 7, 17)
+            sun = datetime.date(2026, 7, 19)
+            weather, events, venues, dates = _fetch_data(fri, sun, "2026", "July", use_cache=True)
+
+        assert events == "Cached events"
+        assert venues == "Cached venues"
+
+
+class TestMainIntegration:
+    def test_main_runs_with_mocked_deps(self, tmp_path, monkeypatch):
+        """Full main() flow doesn't crash when external deps are mocked."""
+        import datetime
+
+        mock_events = [
+            {"name": "Kids Coding Workshop", "location": "Vaughan",
+             "target_ages": "8-14", "price": "$25", "weather": "indoor", "day": "Saturday"},
+            {"name": "Nature Walk", "location": "Toronto",
+             "target_ages": "All", "price": "Free", "weather": "outdoor", "day": "Sunday"},
+            {"name": "Swimming", "location": "Richmond Hill",
+             "target_ages": "5-12", "price": "$10", "weather": "indoor", "day": "Saturday"},
+            {"name": "Art Class", "location": "Markham",
+             "target_ages": "6-10", "price": "$15", "weather": "indoor", "day": "Sunday"},
+            {"name": "Bike Trail", "location": "Thornhill",
+             "target_ages": "All", "price": "Free", "weather": "outdoor", "day": "Saturday"},
+        ]
+        mock_fixed = [
+            {"name": "Canada's Wonderland", "location": "Vaughan",
+             "target_ages": "All", "price": "$$$", "weather": "outdoor"},
+            {"name": "Science Centre", "location": "Toronto",
+             "target_ages": "All", "price": "$25", "weather": "indoor"},
+            {"name": "Adventure Park", "location": "Vaughan",
+             "target_ages": "6-14", "price": "$30", "weather": "outdoor"},
+            {"name": "Indoor Playground", "location": "Richmond Hill",
+             "target_ages": "2-10", "price": "$12", "weather": "indoor"},
+            {"name": "Library Story Time", "location": "Thornhill",
+             "target_ages": "3-7", "price": "Free", "weather": "indoor"},
+        ]
+
+        with monkeypatch.context() as m:
+            m.setattr("weekend.cli.setup_signals", lambda: None)
+            m.setattr("weekend.cli.init_config", lambda: None)
+            m.setattr("weekend.cli.ensure_server", lambda: None)
+            m.setattr("weekend.cli.get_best_model", lambda *a: "mock-model")
+            m.setattr("weekend.cli.get_weekend_date_objects",
+                      lambda: (datetime.date(2026, 7, 17), datetime.date(2026, 7, 19)))
+            m.setattr("weekend.cli._fetch_data",
+                      lambda *a: ("24C Clear", 'mock events', 'mock venues', 'Jul 17-19'))
+            m.setattr("weekend.cli.get_model_field_mapping",
+                      lambda *a: {"name": "name", "location": "location"})
+            m.setattr("weekend.cli.generate_weekend_plan",
+                      lambda *a, **kw: ({"transient_events": mock_events},
+                                  {"fixed_activities": mock_fixed}))
+            m.setattr("weekend.config.DEBUG_EVENTS_FILE",
+                      tmp_path / "events_debug_cache.json")
+            m.setattr("weekend.config.DEBUG_VENUES_FILE",
+                      tmp_path / "venues_debug_cache.json")
+            m.setattr("weekend.cli.OUTPUT_DIR_PATH", str(tmp_path))
+
+            m.setenv("OLLAMA_MODEL", "mock-model")
+
+            from weekend.cli import main
+            import argparse
+            ns = argparse.Namespace(use_cache=False, model="mock-model",
+                                    skip_web=False, debug=False)
+            main(ns)
+
+        # Output file was written
+        out_files = list(tmp_path.glob("weekend_plan_*.md"))
+        assert len(out_files) == 1
+        content = out_files[0].read_text()
+        assert "Kids Coding Workshop" in content
+        assert "Canada's Wonderland" in content

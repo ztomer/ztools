@@ -22,6 +22,7 @@ def load_events_cache():
 
 
 def save_events_cache(events_str):
+    DEBUG_EVENTS_FILE.parent.mkdir(parents=True, exist_ok=True)
     DEBUG_EVENTS_FILE.write_text(events_str)
 
 
@@ -32,6 +33,7 @@ def load_venues_cache():
 
 
 def save_venues_cache(venues_str):
+    DEBUG_VENUES_FILE.parent.mkdir(parents=True, exist_ok=True)
     DEBUG_VENUES_FILE.write_text(venues_str)
 
 
