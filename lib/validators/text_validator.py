@@ -237,6 +237,10 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
     if not items:
         return 0, "no items"
 
+    # Guard against list-of-strings responses — convert to dicts
+    # (models sometimes return ["path1.py", "path2.py"] instead of [{...}, ...])
+    items = [item if isinstance(item, dict) else {"path": str(item), "desc": ""} for item in items]
+
     failures = []
     score = 0
 

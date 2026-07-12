@@ -401,21 +401,6 @@ TASKS = {
         "validator": validate_filename,
         "parse_json": False,
     },
-    "image_rename": {
-        "description": "Rename images from OCR text - test multiple cases",
-        "test_cases": [
-            ("How To Manage Your Underperformers", "how_to_manage_underperformers"),
-            ("Scott Adams essays", "scott_adams_essays"),
-            ("10 powerful sentences by Scott Adams navigating failure, ambition, the absurdities of life: 1. Creativity is allowing yourself to make mistakes...", "scott_adams_powerful_sentences"),
-            ("15 years of business lessons in <500 words: 1. Marrying well is the biggest life hack of all. 2. Be the type of person who reaches out to others...", "business_lessons"),
-            ("Be delusional. Believe that you have the ability to make it work no matter what. Believe that regardless of what happens...", "delusional_belief"),
-            ("How To Prioritize Like A Pro - Noemi Kis: Understand Your Values First Time Block Your Schedule Execute Through Habits...", "prioritize_pro"),
-            ("elon musk: how to win at founding - taking risk if things don't work out", "musk_founding_tips"),
-            ("context engineering template - comprehensive guide for AI prompts", "context_engineering"),
-        ],
-        "validator": validate_filename,
-        "parse_json": False,
-    },
     "summarize": {
         "messages": [
             {"role": "user", "content": TWITTER_PROMPT},
@@ -464,25 +449,6 @@ TASKS = {
         "validator": validate_mixed_filename,
         "parse_json": True,
         "source": RENAME_PROMPT_MIXED,
-    },
-    "image_rename_mixed": {
-        "description": "Rename images from OCR text with noise - test filtering",
-        "test_cases": [
-            ("How To Manage Your Underperformers", "how_to_manage_underperformers"),
-            ("Scott Adams essays", "scott_adams_essays"),
-            ("10 powerful sentences by Scott Adams navigating failure, ambition, the absurdities of life: 1. Creativity is allowing yourself to make mistakes...", "scott_adams_powerful_sentences"),
-            ("15 years of business lessons in <500 words: 1. Marrying well is the biggest life hack of all. 2. Be the type of person who reaches out to others...", "business_lessons"),
-            ("Be delusional. Believe that you have the ability to make it work no matter what. Believe that regardless of what happens...", "delusional_belief"),
-            ("How To Prioritize Like A Pro - Noemi Kis: Understand Your Values First Time Block Your Schedule Execute Through Habits...", "prioritize_pro"),
-            ("elon musk: how to win at founding - taking risk if things don't work out", "musk_founding_tips"),
-            ("context engineering template - comprehensive guide for AI prompts", "context_engineering"),
-            # Noise cases
-            ("asdfghjkl random noise", ""),
-            ("BUY NOW CLICK HERE SPAM", ""),
-            ("lorem ipsum dolor sit amet", ""),
-        ],
-        "validator": validate_filename,
-        "parse_json": False,
     },
     # --- FAITHFULNESS / SCHEMA / LEAK TESTS (Round 1-2) ---
     "weekend_transient_schema": {

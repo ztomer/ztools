@@ -72,6 +72,14 @@ filename (lowercase, underscores)."` The model got no input to process.
 
 **Fix**: Added `TEXT: {}` placeholder and standardized with other configs.
 
+### Fixed: `file_summary` validator crashes on list-of-strings
+
+Models returning `["path1.py", "path2.py"]` instead of `[{"path": "...", "desc": "..."}, ...]` would crash `validate_file_summary` with `'str' object has no attribute 'get'` (an INFRA error). Now converts string items to dicts automatically — the score degrades gracefully (low path realism, missing descriptions) instead of crashing.
+
+### Fixed: Dead `image_rename` tasks removed from TASKS
+
+`image_rename` and `image_rename_mixed` had `test_cases` instead of `messages` keys, so the eval runner silently skipped them every run. Removed from TASKS dict — these were stubs for a never-wired-up multi-case runner.
+
 ### Fixed: Non-LLM models skipped during discovery
 
 potion-base-4m (Model2Vec static embedding) was causing HTTP 500 errors on
@@ -94,17 +102,24 @@ every task. Added filter in `eval/cli.py` that skips models with keywords
 
 ### Default (18 tasks, hardcoded prompts)
 
-| Model | detailed_json | json | filename | summarize | file_summary | summarize_contradiction | filename_leak |
-|-------|:------------:|:----:|:--------:|:---------:|:------------:|:----------------------:|:-------------:|
-| foundation | 100 | 90 | 30 | 55 | 30 | **0** | 100 |
-| qwen3.6-35b-a3b-mxfp8-mtp | — | — | 55 | — | — | **100** | 100 |
+Full sweep across all 8 applicable models (potion-base-4m excluded):
 
-Foundation parrots the planted falsehood in summarize_contradiction (0% =
-includes "quantum giraffes of Manitoba won the Stanley Cup"). Qwen 3.6
-resists it (100%). This is the strongest discriminator in the suite:
-models that are more instruction-following than critical get tricked.
+| Model | Mean | summarize_contradiction | file_summary | weekend_transient_schema | summarize | filename |
+|-------|:----:|:----------------------:|:------------:|:------------------------:|:---------:|:--------:|
+| diffusiongemma-26b | **93.4** | **100** | 100 | 100 | 65 | 55 |
+| foundation | 84.9 | **0** | 30 | 100 | 55 | 30 |
+| qwen-agentworld-35b | 82.8 | **100** | 60 | 100 | 65 | 55 |
+| gemma-4-12b | 81.2 | **0** | 60 | 100 | 65 | 55 |
+| qwen3.6-35b-a3b | 80.6 | **0** | 60 | 100 | 65 | 55 |
+| qwen3.6-27b | 79.6 | **0** | 60 | 100 | 65 | 30 |
+| gemma-4-e4b | 76.6 | **100** | 30 | 0 | 65 | 55 |
+| ornith-1.0-35b | 73.6 | **0** | 60 | 100 | 53 | 0 |
 
-filename also separates: foundation 30% vs qwen 55% (better format).
+Key discriminators:
+- **summarize_contradiction**: 4 models (foundation, gemma-4-12b, qwen3.6-27b, qwen3.6-35b, ornith) parrot the falsehood (0%), 3 resist (100%). Tracks instruction-following vs critical reasoning.
+- **weekend_transient_schema**: gemma-4-e4b scores 0% — outputs markdown tables instead of JSON. Can't follow structured output instructions.
+- **file_summary** (now INFRA-safe): diffusiongemma-26b draws 100% (specific descriptions), others 30-60% (generic).
+- **filename**: foundation and qwen3.6-27b at 30%; others 55%; ornith 0% (empty response quirk).
 
 ---
 
@@ -174,10 +189,9 @@ Latency varies **5-55x** across models.
 
 ## Recommendations (Remaining)
 
-1. **Full multi-model sweep** with 18-task suite to get real discrimination data
-2. **Add long-context needle test** — models vary wildly on 256K retrieval
-3. **Score latency and verbosity as formal metrics**
-4. **Probe foundation's backend identity**
+1. **Add long-context needle test** — models vary wildly on 256K retrieval
+2. **Score latency and verbosity as formal metrics**
+3. **Probe foundation's backend identity** (0% on summarize_contradiction + worst filename score suggests weak instruction following for a 100% on weekend content tasks)
 
 ## Raw Data
 

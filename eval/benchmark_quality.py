@@ -227,6 +227,9 @@ def score_file_summary(output: str, case: dict) -> Tuple[int, List[str]]:
     if not isinstance(data, list):
         return 0, ["not a list"]
 
+    # Guard against list-of-strings responses — convert to dicts
+    data = [item if isinstance(item, dict) else {"path": str(item), "desc": ""} for item in data]
+
     # Check paths match expected (50 pts)
     paths = case["expected_paths"]
     found_paths = sum(1 for p in paths if any(p in str(item.get("path", "")) for item in data))
