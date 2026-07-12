@@ -93,8 +93,9 @@ class TestMainFlow:
         assert e.value.code == 1
 
     def test_config_tasks_loaded(self, mock_llm, monkeypatch, capsys):
-        """When build_tasks_from_model returns tasks, use them."""
+        """Without --config-tasks, hardcoded TASKS are used."""
         import eval.cli as model_eval
+        from eval.tasks_core import TASKS
         monkeypatch.setattr(sys, "argv", ["eval.cli"])
         config_tasks = {"t1": {"prompt": "P"}, "t2": {"prompt": "P"}}
         with patch.object(model_eval, "init_config"), \
@@ -107,11 +108,29 @@ class TestMainFlow:
              patch.object(model_eval, "estimate_model_memory", return_value=4), \
              patch.object(model_eval, "get_memory_percent", return_value=50.0):
             model_eval.main()
-        # run_eval was called with the config_tasks
+        # Without --config-tasks, hardcoded TASKS are used, not config_tasks
+        called_tasks = mock_run.call_args.kwargs.get("tasks", {})
+        assert called_tasks == TASKS
+        out = capsys.readouterr().out
+        assert "hardcoded TASKS" in out
+
+    def test_config_tasks_flag_uses_config_tasks(self, mock_llm, monkeypatch):
+        """With --config-tasks, config tasks are used instead of hardcoded TASKS."""
+        import eval.cli as model_eval
+        monkeypatch.setattr(sys, "argv", ["eval.cli", "--config-tasks"])
+        config_tasks = {"t1": {"prompt": "P"}, "t2": {"prompt": "P"}}
+        with patch.object(model_eval, "init_config"), \
+             patch.object(model_eval, "is_server_running", return_value=True), \
+             patch.object(model_eval, "get_models", return_value=["m1"]), \
+             patch.object(model_eval, "build_tasks_from_model", return_value=config_tasks), \
+             patch.object(model_eval, "run_eval", return_value=[]) as mock_run, \
+             patch.object(model_eval, "_print_results"), \
+             patch.object(model_eval, "is_server_responsive", return_value=True), \
+             patch.object(model_eval, "estimate_model_memory", return_value=4), \
+             patch.object(model_eval, "get_memory_percent", return_value=50.0):
+            model_eval.main()
         called_tasks = mock_run.call_args.kwargs.get("tasks", {})
         assert called_tasks == config_tasks
-        out = capsys.readouterr().out
-        assert "0 tasks" in out
 
     def test_config_tasks_with_specific_task_match(self, mock_llm, monkeypatch):
         """--task matching config task uses that task only."""
@@ -133,13 +152,10 @@ class TestMainFlow:
         assert task_name in called_tasks
         assert len(called_tasks) == 1
 
-    def test_config_tasks_with_specific_task_no_match(self, mock_llm, monkeypatch, capsys):
-        """--task not in config_tasks prints FAIL but keeps using the original TASKS dict."""
+    def test_config_tasks_with_specific_task_no_match_config(self, mock_llm, monkeypatch, capsys):
+        """--task + --config-tasks with no overlap prints FAIL and exits."""
         import eval.cli as model_eval
-        from eval.tasks_core import TASKS
-        task_name = next(iter(TASKS.keys()))
-        monkeypatch.setattr(sys, "argv", ["eval.cli", "--task", task_name])
-        # config_tasks has different tasks (no overlap with --task)
+        monkeypatch.setattr(sys, "argv", ["eval.cli", "--config-tasks", "--task", "nonexistent"])
         config_tasks = {"other1": {"prompt": "P"}, "other2": {"prompt": "P"}}
         with patch.object(model_eval, "init_config"), \
              patch.object(model_eval, "is_server_running", return_value=True), \
@@ -150,16 +166,9 @@ class TestMainFlow:
              patch.object(model_eval, "is_server_responsive", return_value=True), \
              patch.object(model_eval, "estimate_model_memory", return_value=4), \
              patch.object(model_eval, "get_memory_percent", return_value=50.0):
-            model_eval.main()
-        # main() still runs run_eval — it just doesn't substitute the task from config
-        mock_run.assert_called_once()
-        called_tasks = mock_run.call_args.kwargs["tasks"]
-        # The --task wasn't in config_tasks, so tasks_to_run keeps the {task: TASKS[task]} subset
-        # (set by the earlier args.task branch — config branch didn't override it)
-        assert task_name in called_tasks
-        assert len(called_tasks) == 1
+            with pytest.raises(SystemExit):
+                model_eval.main()
         out = capsys.readouterr().out
-        # The not-in-config error message is printed
         assert "not in config" in out
 
     def test_quick_mode(self, mock_llm, monkeypatch, capsys):

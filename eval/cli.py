@@ -294,29 +294,33 @@ def main():
     console.print(f"{STEP} Found {len(models_to_test)} models to test")
 
     tasks_to_run = TASKS
-    if args.task:
-        if args.task not in TASKS:
-            console.print(f"{FAIL} Unknown task: {args.task}. Available: {list(TASKS.keys())}")
-            sys.exit(1)
-        tasks_to_run = {args.task: TASKS[args.task]}
-        console.print(f"{WARN} Running only task: {args.task}")
-
     from lib.config import get_config
     _default_eval_model = get_config().get("default_model", "foundation")
     config_model = args.model if args.model else _default_eval_model
-    config_tasks = build_tasks_from_model(config_model)
-    if config_tasks:
-        if args.task:
-            if args.task in config_tasks:
-                tasks_to_run = {args.task: config_tasks[args.task]}
-                console.print(f"{STEP} Using config task: {args.task}")
-            else:
-                console.print(f"{FAIL} Task '{args.task}' not in config")
+
+    if args.config_tasks:
+        config_tasks = build_tasks_from_model(config_model)
+        if not config_tasks:
+            console.print(f"{WARN} Config loading failed, falling back to hardcoded tasks")
         else:
-            tasks_to_run = config_tasks
-        console.print(f"{STEP} Loaded {len(tasks_to_run)} tasks from config")
+            if args.task:
+                if args.task in config_tasks:
+                    tasks_to_run = {args.task: config_tasks[args.task]}
+                    console.print(f"{STEP} Using config task: {args.task}")
+                else:
+                    console.print(f"{FAIL} Task '{args.task}' not in config. Available: {list(config_tasks.keys())}")
+                    sys.exit(1)
+            else:
+                tasks_to_run = config_tasks
+            console.print(f"{STEP} Loaded {len(tasks_to_run)} tasks from config")
     else:
-        console.print(f"{WARN} Config loading failed, using minimal tasks")
+        if args.task:
+            if args.task not in TASKS:
+                console.print(f"{FAIL} Unknown task: {args.task}. Available: {list(TASKS.keys())}")
+                sys.exit(1)
+            tasks_to_run = {args.task: TASKS[args.task]}
+            console.print(f"{WARN} Running only task: {args.task}")
+        console.print(f"{STEP} Loaded {len(tasks_to_run)} tasks from hardcoded TASKS")
 
     if args.quick:
         console.print(f"{STEP} Quick mode: single run, no retries")
