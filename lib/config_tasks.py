@@ -78,6 +78,7 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
             "messages": [{"role": "user", "content": prompt}],
             "validator": validate_detailed_json,
             "parse_json": True,
+            "source": test_input,
         }
     if Task.WEEKEND_TRANSIENT.value in prompts:
         test_input = get_eval_input("weekend_transient")
