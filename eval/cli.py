@@ -277,9 +277,15 @@ def main():
 
     models_to_test = []
 
+    NON_LLM_KEYWORDS = ["model2vec", "potion", "embedding", "sentence-transform"]
+
     if is_server_running():
         osaurus_models = get_models()
         for m in osaurus_models:
+            m_lower = m.lower()
+            if any(kw in m_lower for kw in NON_LLM_KEYWORDS):
+                console.print(f"{WARN} Skipping {m} (non-LLM model)")
+                continue
             models_to_test.append((m, "osaurus"))
     else:
         console.print(f"{WARN} Osaurus server not running")

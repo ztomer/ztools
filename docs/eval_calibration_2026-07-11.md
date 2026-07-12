@@ -72,6 +72,13 @@ filename (lowercase, underscores)."` The model got no input to process.
 
 **Fix**: Added `TEXT: {}` placeholder and standardized with other configs.
 
+### Fixed: Non-LLM models skipped during discovery
+
+potion-base-4m (Model2Vec static embedding) was causing HTTP 500 errors on
+every task. Added filter in `eval/cli.py` that skips models with keywords
+`model2vec`, `potion`, `embedding` in their name. The eval now prints
+"Skipping potion-base-4m (non-LLM model)" during discovery.
+
 ### Fixed: `_safe_format_prompt` robustness
 
 **Before**: Couldn't handle `{}` alongside `{location}`/`{age_range}`. Tried
@@ -87,19 +94,17 @@ filename (lowercase, underscores)."` The model got no input to process.
 
 ### Default (18 tasks, hardcoded prompts)
 
-| Model | detailed_json | json | filename | summarize | file_summary | summarize_contradiction | Mean* |
-|-------|:------------:|:----:|:--------:|:---------:|:------------:|:----------------------:|:----:|
-| foundation | 100 | 90 | 30 | 55 | 30 | 0 | — |
+| Model | detailed_json | json | filename | summarize | file_summary | summarize_contradiction | filename_leak |
+|-------|:------------:|:----:|:--------:|:---------:|:------------:|:----------------------:|:-------------:|
+| foundation | 100 | 90 | 30 | 55 | 30 | **0** | 100 |
+| qwen3.6-35b-a3b-mxfp8-mtp | — | — | 55 | — | — | **100** | 100 |
 
-*Single model only; full multi-model run pending (18 tasks × 9 models = high
-time cost).
+Foundation parrots the planted falsehood in summarize_contradiction (0% =
+includes "quantum giraffes of Manitoba won the Stanley Cup"). Qwen 3.6
+resists it (100%). This is the strongest discriminator in the suite:
+models that are more instruction-following than critical get tricked.
 
-#### Discrimination improvement
-
-The hardcoded filename task drops from 100% (easy config prompt) to **30%**
-(harder format). The contradiction probe reveals foundation **parrots planted
-falsehoods** (0%). These are real quality signals that the 5 config tasks
-couldn't capture.
+filename also separates: foundation 30% vs qwen 55% (better format).
 
 ---
 
@@ -124,7 +129,8 @@ where the model produced generic but valid filenames like "output_file".
 ### A4. potion-base-4m Not an LLM
 
 HTTP 500: `"Unsupported model type: model2vec"` — static embedding model,
-cannot generate text. Should be excluded from generation evals.
+cannot generate text. Now skipped during model discovery (eval/cli.py checks
+for `model2vec`, `potion`, `embedding` keywords).
 
 ### A6. Score discrimination (partially improved)
 
@@ -168,11 +174,10 @@ Latency varies **5-55x** across models.
 
 ## Recommendations (Remaining)
 
-1. **Exclude potion-base-4m** from generation evals (classify before running)
-2. **Full multi-model sweep** with 18-task suite to get real discrimination data
-3. **Add long-context needle test** — models vary wildly on 256K retrieval
-4. **Score latency and verbosity as metrics**
-5. **Probe foundation's backend identity**
+1. **Full multi-model sweep** with 18-task suite to get real discrimination data
+2. **Add long-context needle test** — models vary wildly on 256K retrieval
+3. **Score latency and verbosity as formal metrics**
+4. **Probe foundation's backend identity**
 
 ## Raw Data
 
