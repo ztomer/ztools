@@ -13,6 +13,7 @@ from lib.validators.text_validator import (
     validate_filename, validate_summary, validate_file_summary,
     validate_mixed_summary, validate_mixed_file_summary, validate_mixed_filename,
     validate_no_leak, validate_strict_schema, validate_no_contradiction,
+    validate_factual_accuracy, validate_factual_coverage,
 )
 
 _TC_YEAR = "2026"  # check-ok: year
@@ -388,6 +389,44 @@ TWITTER_PROMPT_CONTRADICTION = TWITTER_PROMPT.replace(
     "Stanley Cup, defeating the Toronto Maple Leafs in a surprise finals sweep.",
 )
 
+# Multi-falsehood probe: 3 planted falsehoods at different levels of absurdity.
+# Tests ability to discriminate real news from fabricated content.
+FALSEHOOD_TWEET_1 = "[@FakeNews | 07:30]: BREAKING: quantum giraffes of Manitoba won the Stanley Cup, defeating the Toronto Maple Leafs in a surprise finals sweep."
+FALSEHOOD_TWEET_2 = "[@BSNews | 14:45]: BREAKING: NVIDIA CEO Jensen Huang arrested for insider trading, stock plunges 30% after hours."
+FALSEHOOD_TWEET_3 = "[@HoaxWire | 06:00]: BREAKING: Google announces layoffs of 100,000 employees, entire search division restructured."
+
+TWITTER_PROMPT_ACCURACY = TWITTER_PROMPT.replace(
+    "<timeline>",
+    f"<timeline>\n{FALSEHOOD_TWEET_1}\n{FALSEHOOD_TWEET_2}\n{FALSEHOOD_TWEET_3}",
+)
+
+FALSEHOOD_PHRASES = [CONTRADICTION_PHRASE,
+                     "CEO Jensen Huang arrested for insider trading",
+                     "layoffs of 100,000 employees"]
+
+# Key verifiable facts from the timeline for coverage scoring.
+# Each is a unique, specific detail a faithful summary should include.
+KEY_FACTS = [
+    "GPT-5",
+    "Apple Vision Pro 2",
+    "Gemini 2.5 Pro",
+    "NVIDIA stock hits all-time high",
+    "Microsoft acquires AI startup for $2B",
+    "Samsung Galaxy S25 Ultra",
+    "Meta announces Llama 4",
+    "IBM unveils quantum computer with 1000+ qubit",
+    "Shopify reports 40% revenue growth",
+    "Bitcoin surges past $75K",
+    "Databricks IPO values company at $60B",
+    "Amazon launches drone delivery in Toronto",
+    "Uber launches autonomous taxi service in Phoenix",
+    "Canadian GDP grows 0.5%",
+    "TD Bank reports strong Q2 earnings",
+    "Adobe acquires Figma for $20B",
+    "Intel Core Ultra chips debut",
+    "Tesla Cybertruck production ramps up",
+]
+
 
 # ============================================================
 # TASK DEFINITIONS
@@ -526,6 +565,23 @@ TASKS = {
         ],
         "validator": validate_no_leak,
         "parse_json": False,
+    },
+    # --- MULTI-FALSEHOOD FACTUAL ACCURACY (v0.9.5) ---
+    "summarize_factual_accuracy": {
+        "messages": [
+            {"role": "user", "content": TWITTER_PROMPT_ACCURACY},
+        ],
+        "validator": validate_factual_accuracy,
+        "parse_json": False,
+        "validator_kwargs": {"falsehood_phrases": FALSEHOOD_PHRASES},
+    },
+    "summarize_factual_coverage": {
+        "messages": [
+            {"role": "user", "content": TWITTER_PROMPT},
+        ],
+        "validator": validate_factual_coverage,
+        "parse_json": False,
+        "validator_kwargs": {"key_facts": KEY_FACTS},
     },
 }
 

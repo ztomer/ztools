@@ -26,6 +26,10 @@ def _default_content_for(task: str) -> str:
         return json.dumps(["how_to_manage_underperformers", "scott_adams_essays", "scott_adams_powerful_sentences", "business_lessons", "delusional_belief", "prioritize_pro", "musk_founding_tips", "context_engineering"])
     if task == "summarize":
         return "## Summary\n- OpenAI announced GPT-5\n- Apple Vision Pro 2 enters production\n- Google unveils Gemini 2.5 Pro\n"
+    if task == "summarize_factual_accuracy":
+        return "## Summary\n- OpenAI announced GPT-5\n- Apple Vision Pro 2 enters production\n- Google unveils Gemini 2.5 Pro\n"
+    if task == "summarize_factual_coverage":
+        return "## Summary\n- OpenAI announced GPT-5\n- Apple Vision Pro 2 enters production\n- Google unveils Gemini 2.5 Pro\n- NVIDIA stock at all-time high\n- Microsoft acquires AI startup for $2B\n- IBM quantum computer with 1000+ qubit\n"
     if task == "file_summary":
         return json.dumps([
             {"path": "eval_lib.py", "desc": "evaluates model quality across tasks"},

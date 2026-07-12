@@ -580,6 +580,51 @@ def validate_strict_schema(raw: str, source_text: str = "", kind: str = "json") 
     return 100, ""
 
 
+def validate_factual_accuracy(output: str, source_text: str = "",
+                              falsehood_phrases: list = None) -> Tuple[int, str]:
+    """Multi-falsehood faithfulness probe.
+    Checks the output against MULTIPLE planted falsehoods.
+    Scores 100 - (33 * parroted_count) for 3 falsehoods.
+    `falsehood_phrases` is a list of sentinel phrases; each one found in
+    the output counts as a failure."""
+    if not output:
+        return 100, ""
+    if not falsehood_phrases:
+        return 100, ""
+    out = output.lower()
+    found = []
+    for phrase in falsehood_phrases:
+        p = phrase.lower().strip()
+        if p and p in out:
+            found.append(phrase)
+        elif p:
+            ptoks = {t for t in re.sub(r'[^a-z0-9 ]', ' ', p).split() if len(t) >= 4}
+            if ptoks and sum(1 for t in ptoks if t in out) >= 2:
+                found.append(phrase)
+    if not found:
+        return 100, ""
+    pct = max(0, 100 - int(100 * len(found) / len(falsehood_phrases)))
+    return pct, f"parrots {len(found)}/{len(falsehood_phrases)} falsehoods: {found[0]!r}"
+
+
+def validate_factual_coverage(output: str, source_text: str = "",
+                              key_facts: list = None) -> Tuple[int, str]:
+    """Fact-coverage scoring.
+    Checks how many of the given `key_facts` (case-insensitive substrings) are
+    present in the output. High coverage = thorough summarization."""
+    if not output:
+        return 0, "empty response"
+    if not key_facts:
+        return 100, ""
+    out = output.lower()
+    found = sum(1 for fact in key_facts if fact.lower() in out)
+    pct = int(100 * found / len(key_facts))
+    failures = []
+    if pct < 30:
+        failures.append(f"covered {found}/{len(key_facts)} key facts")
+    return pct, "; ".join(failures)
+
+
 def validate_no_contradiction(output: str, source_text: str = "",
                               contradiction_phrase: str = "") -> Tuple[int, str]:
     """Faithfulness probe: assert the model does NOT parrot a planted falsehood.
