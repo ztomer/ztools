@@ -128,7 +128,7 @@ def validate_filename(data: Any, source_text: str = "") -> Tuple[int, str]:
     return min(MAX_SCORE, score), "; ".join(failures)
 
 
-def validate_summary(data: Any) -> Tuple[int, str]:
+def validate_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
     """Score summaries based on quality signals: structure, user mentions, content depth."""
     if not data:
         return 0, "empty response"

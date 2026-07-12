@@ -10,7 +10,7 @@ def validate_detailed_json(data: Any, source_text: str = "") -> Tuple[int, str]:
     return _vd(data, source_text)
 
 
-def validate_summary(data: Any) -> Tuple[int, str]:
+def validate_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
     """Score summaries based on structure and content quality."""
     from lib.validators_lib import validate_summary as _vs
     return _vs(data)
