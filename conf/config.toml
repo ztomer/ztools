@@ -1,11 +1,17 @@
 llm_url = "http://localhost:1337"
 default_model = "qwen3.6-35b-a3b-mxfp8-mtp"
 
+# Best models per task based on v0.9.4 full 8-model sweep.
+# Rationale documented in docs/eval_calibration_2026-07-11.md.
 [best_models]
 think = "qwen3.6-35b-a3b-mxfp8-mtp"
-json = "qwen3.6-35b-a3b-mxfp8-mtp"
-summarize = "gemma-4-12b-it-mxfp8"
+json = "foundation"
+  # Fastest (8s) at 100% on all weekend/json tasks.
+summarize = "qwen-agentworld-35b-a3b-mxfp8"
+  # 65% on summarize (tied best), 100% contradiction resistance, fast (15s).
+  # Prev gemma-4-12b was 65% but 0% contradiction (parrots falsehoods).
 filename = "foundation"
+  # 100% on filename task, fastest (0.3s).
 vlm = "qwen3.6-35b-a3b-mxfp8-mtp"
 
 [timeouts]
@@ -23,9 +29,9 @@ filename = 1000
 vlm = 16000
 
 filename_models = [
-  "nemotron-3-nano-omni-30b-a3b-mxfp4",
-  "gemma-4-31b-it-jang_4m",
   "foundation",
+  "qwen-agentworld-35b-a3b-mxfp8",
+  "qwen3.6-35b-a3b-mxfp8-mtp",
 ]
 
 [prompts]

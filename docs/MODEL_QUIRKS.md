@@ -60,7 +60,7 @@ weekend_fixed: |
 | qwen | Thinking tokens | Can't disable |
 | jang models (MLX) | Wrong shape | Use server instead |
 | gemma-4-e4b | Input looping | Avoid |
-| qwen3.6-27b, foundation, ornith, diffusiongemma, qwen-agentworld | Parrots planted falsehoods (contradiction test: 0%) | Use qwen3.6-35b or gemma-4-12b for summarize |
+| foundation, gemma-4-12b, gemma-4-e4b, ornith, qwen3.6-27b, qwen3.6-35b (67%), qwen-agentworld | Parrots planted falsehoods (contradiction test: 0%) | Use diffusiongemma-26b for contradiction-safe summarization |
 
 ---
 
@@ -238,7 +238,7 @@ summarize: |
 - **qwen3.6-27b-mxfp8-mtp** ✅ best qwen: 99% filename, 100% summarize, 0 failures, 14.8s avg
 - **qwen3.6-27b-mxfp4**: 93.8% filename, 100% summarize, 12.3s avg
 - **qwen3.6-35b-a3b-mxfp4**: 93.8% filename, 94% summarize, 10.1s avg — good but not better than 27b variants
-- **qwen3.6-35b-a3b-mxfp8-mtp** ✅ NOW WORKS: Previously consistently crashed on summarize/file_summary (returned empty) — may have been a server issue. July 2026 sweep: passes weekend_transient_schema (100%), summarize_contradiction (100%), filename_leak (100%). **Best all-rounder**. Only model besides gemma-4-12b to pass contradiction test.
+- **qwen3.6-35b-a3b-mxfp8-mtp** ✅ NOW WORKS: Previously consistently crashed on summarize/file_summary (returned empty) — may have been a server issue. July 2026 sweep: passes weekend_transient_schema (100%), filename_leak (100%). **Best all-rounder** (92% mean). NOTE: summarize_contradiction is **stochastic** (~33% pass rate) — sometimes resists falsehood, sometimes parrots. Not deterministic for truthfulness.
 
 ### Qwopus ⚠️ HIGH QUALITY BUT UNRELIABLE
 - **Best quality when it works**: 98.2% filename, 98.5% summarize

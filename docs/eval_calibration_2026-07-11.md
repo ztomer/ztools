@@ -104,22 +104,26 @@ every task. Added filter in `eval/cli.py` that skips models with keywords
 
 Full sweep across all 8 applicable models (potion-base-4m excluded):
 
-| Model | Mean | summarize_contradiction | file_summary | weekend_transient_schema | summarize | filename |
-|-------|:----:|:----------------------:|:------------:|:------------------------:|:---------:|:--------:|
-| diffusiongemma-26b | **93.4** | **100** | 100 | 100 | 65 | 55 |
-| foundation | 84.9 | **0** | 30 | 100 | 55 | 30 |
-| qwen-agentworld-35b | 82.8 | **100** | 60 | 100 | 65 | 55 |
-| gemma-4-12b | 81.2 | **0** | 60 | 100 | 65 | 55 |
-| qwen3.6-35b-a3b | 80.6 | **0** | 60 | 100 | 65 | 55 |
-| qwen3.6-27b | 79.6 | **0** | 60 | 100 | 65 | 30 |
-| gemma-4-e4b | 76.6 | **100** | 30 | 0 | 65 | 55 |
-| ornith-1.0-35b | 73.6 | **0** | 60 | 100 | 53 | 0 |
+| Model | Mean | summarize_contradiction | file_summary | weekend_transient_schema | summarize | filename | image_rename |
+|-------|:----:|:----------------------:|:------------:|:------------------------:|:---------:|:--------:|:-----------:|
+| diffusiongemma-26b | 93.4 | **100** | 100 | 100 | 65 | 55 | 100 |
+| qwen3.6-35b-a3b* | 92.4 | **50†** | 60 | 100 | 65 | 55 | 100 |
+| foundation | 87.0 | **0** | 30 | 100 | 55 | 30 | 100 |
+| gemma-4-12b | 85.0 | **0** | 60 | 100 | 65 | 25 | 100 |
+| qwen-agentworld-35b | 82.8 | **100** | 60 | 100 | 65 | 55 | 100 |
+| ornith-1.0-35b | 81.6 | **0** | 60 | 100 | 65 | 0 | 100 |
+| qwen3.6-27b | 79.6 | **0** | 60 | 100 | 65 | 30 | 100 |
+| gemma-4-e4b | 76.1 | **100** | 30 | 0 | 65 | 55 | 100 |
+
+† qwen3.6-35b summarize_contradiction is **stochastic** — 1/3 passes, 2/3 parrots. See quirk below.
+* qwen3.6-35b mean recalculated from v0.9.4 sweep (18 tasks, excluding image_rename which was re-added after).
 
 Key discriminators:
-- **summarize_contradiction**: 4 models (foundation, gemma-4-12b, qwen3.6-27b, qwen3.6-35b, ornith) parrot the falsehood (0%), 3 resist (100%). Tracks instruction-following vs critical reasoning.
-- **weekend_transient_schema**: gemma-4-e4b scores 0% — outputs markdown tables instead of JSON. Can't follow structured output instructions.
+- **summarize_contradiction**: 3 models reliably resist (diffusiongemma-26b, qwen-agentworld, gemma-4-e4b). qwen3.6-35b is stochastic (33%). Rest parrot the falsehood.
+- **weekend_transient_schema**: gemma-4-e4b scores 0% — outputs markdown tables instead of JSON.
 - **file_summary** (now INFRA-safe): diffusiongemma-26b draws 100% (specific descriptions), others 30-60% (generic).
-- **filename**: foundation and qwen3.6-27b at 30%; others 55%; ornith 0% (empty response quirk).
+- **filename**: foundation 30%, qwen3.6-27b 30%; others 55%+; ornith 0% (empty).
+- **image_rename**: **100% across all 8 models** — task discriminates poorly but is now properly wired.
 
 ---
 
@@ -141,13 +145,23 @@ where the model produced generic but valid filenames like "output_file".
 
 **Verdict**: Model quirk — appears to refuse non-coding requests entirely.
 
-### A4. potion-base-4m Not an LLM
+### A4. qwen3.6-35b summarize_contradiction stochastic
+
+qwen3.6-35b-a3b-mxfp8-mtp passes `summarize_contradiction` **~33% of runs**.
+It sometimes resists the planted falsehood ("quantum giraffes of Manitoba won
+the Stanley Cup") and sometimes includes it. This suggests the model is at the
+decision boundary — its critical reasoning is not deterministic.
+
+**Verdict**: Stochastic behavior — not suitable for applications requiring
+consistent truthfulness. Documented in `docs/MODEL_QUIRKS.md`.
+
+### A5. potion-base-4m Not an LLM
 
 HTTP 500: `"Unsupported model type: model2vec"` — static embedding model,
 cannot generate text. Now skipped during model discovery (eval/cli.py checks
 for `model2vec`, `potion`, `embedding` keywords).
 
-### A6. Score discrimination (partially improved)
+### A6. Score discrimination (partially improved) [RESOLVED]
 
 Hardcoded TASKS now provide better separation on individual tasks (filename
 100%→30%, summarize 90%→55%, file_summary 100%→30%). Full multi-model
@@ -186,6 +200,13 @@ Latency varies **5-55x** across models.
 | qwen3.6-35b-a3b | 1001 chars | 42 | 1134 |
 
 ---
+
+## Config Updates (v0.9.4)
+
+Based on sweep data:
+- `best_models.json` → `foundation` (100%, fastest at 8s)
+- `best_models.summarize` → `qwen-agentworld-35b-a3b-mxfp8` (65% + 100% contradiction resistance, 15s)
+- `filename_models` → `[foundation, qwen-agentworld, qwen3.6-35b]` (removed stale nemotron/gemma-4-31b)
 
 ## Recommendations (Remaining)
 
