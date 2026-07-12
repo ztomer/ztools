@@ -21,10 +21,11 @@ Output ONLY JSON array. No explanations.
 weekend_fixed = """
 Output JSON now. Use EXACT schema: {"fixed_activities": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}]}
 
-Extract 8-10 popular {location} venues for families with kids ages {age_range}.
-Set weather to "outdoor", "indoor", or "both" based on the venue type.
+Extract and format the family-friendly venues from this list as JSON. Return ALL venues.
 
-Output ONLY JSON array. No explanations.
+{}
+
+Use the values from the source data as-is. Output ONLY JSON array. No explanations.
 """
 
 summarize = """

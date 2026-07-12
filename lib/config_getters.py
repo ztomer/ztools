@@ -102,10 +102,10 @@ def get_model_config(model: str) -> Dict:
             "timeout": 300,
             "prompts": {
                 "json": "Output JSON now. Use EXACT schema.",
-                "weekend_fixed": "Output JSON now. Use EXACT schema: {\"fixed_activities\": [{\"name\": \"str\", \"location\": \"str\", \"target_ages\": \"str\", \"price\": \"str\", \"weather\": \"str\"}]}\n\nExtract venues. Use exact fields. Output ONLY JSON.",
+                "weekend_fixed": "Output JSON now. Use EXACT schema: {\"fixed_activities\": [{\"name\": \"str\", \"location\": \"str\", \"target_ages\": \"str\", \"price\": \"str\", \"weather\": \"str\"}]}\n\nExtract and format the family-friendly venues from this list as JSON. Return ALL venues.\n\n{}\n\nUse the values from the source data as-is. Output ONLY JSON. No extra text.",
                 "weekend_transient": "Output JSON now. Schema: {\"transient_events\": [{\"name\": \"str\", \"location\": \"str\", \"target_ages\": \"str\", \"price\": \"str\", \"duration\": \"str\", \"weather\": \"str\", \"day\": \"str\"]}\n\nFind events. Use exact fields. Output ONLY JSON.",
                 "summarize": "Create a structured summary of this timeline. Start with a brief TL;DR paragraph that captures the overall narrative. Then organize events into topic sections with ## headers, using bullet points. Include who (@user mentions), what happened, and when. Use natural connecting language between related events.\n\n{}\n",
-                "filename": "Output ONLY the filename (lowercase, underscores).",
+                "filename": "Output ONLY the filename string (no JSON, no code blocks). Use lowercase, underscores for spaces, no special characters. Keep it under 50 characters.\n\nTEXT: {}",
                 "file_summary": "Output JSON array with path and desc fields.",
             },
             "key_mappings": {

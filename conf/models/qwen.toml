@@ -14,16 +14,11 @@ json = "Output JSON now. Use EXACT schema."
 weekend_fixed = """
 Output JSON now. Use EXACT schema: {"fixed_activities": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}]}
 
-Extract 8-10 popular {location} venues for families with kids ages {age_range}.
+Extract and format the family-friendly venues from this list as JSON. Return ALL venues.
 
-CRITICAL: Each item MUST have these exact fields:
-- target_ages: "{age_range}" (NOT category, NOT type)
-- price: "$18-35 per child" or "$25-35 per family" (NOT context_highlight, NOT description)
-- weather: "indoor" or "outdoor" (NOT setting, NOT category)
-- name: official name (NOT description)
-- location: city/neighborhood only
+{}
 
-Output ONLY JSON. No extra text.
+Use the values from the source data as-is. Output ONLY JSON. No extra text.
 """
 
 weekend_transient = """

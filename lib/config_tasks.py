@@ -38,29 +38,30 @@ def get_eval_input(task: str) -> str:
 
 
 def _safe_format_prompt(prompt_template: str, test_input: str) -> str:
-    if "{}" in prompt_template:
-        try:
-            return prompt_template.format(test_input)
-        except (KeyError, ValueError):
-            return prompt_template.replace("{}", test_input)
-    if test_input and ("{" in prompt_template or "}" in prompt_template):
-        import json
-        try:
-            data = json.loads(test_input)
-            if data and len(data) > 0:
-                first_item = data[0]
-                location = first_item.get("location", "")
-                target_ages = first_item.get("target_ages", "")
-                result = prompt_template
-                if location:
-                    result = result.replace("{location}", location)
-                if target_ages:
-                    result = result.replace("{age_range}", target_ages)
-                    result = result.replace("{age_range}", target_ages)
-                return result
-        except Exception:
-            pass
-    return prompt_template
+    result = prompt_template
+
+    import json
+    location = ""
+    target_ages = ""
+    try:
+        data = json.loads(test_input)
+        if data:
+            first = data[0] if isinstance(data, list) else data
+            location = first.get("location", "")
+            target_ages = first.get("target_ages", "")
+    except Exception:
+        pass
+
+    if "{location}" in result and location:
+        result = result.replace("{location}", location)
+    if "{age_range}" in result and target_ages:
+        result = result.replace("{age_range}", target_ages)
+    if "{date_range}" in result:
+        result = result.replace("{date_range}", "this weekend")
+    if "{}" in result:
+        result = result.replace("{}", test_input)
+
+    return result
 
 
 def build_tasks_from_model(model: str) -> Dict[str, Any]:
