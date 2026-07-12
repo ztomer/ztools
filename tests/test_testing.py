@@ -23,7 +23,9 @@ class TestDefaultContentFor:
     def test_image_rename(self):
         from lib.testing import _default_content_for
         result = _default_content_for("image_rename")
-        assert "mock_test_filename" in result
+        assert "how_to_manage_underperformers" in result
+        result_mixed = _default_content_for("image_rename_mixed")
+        assert "how_to_manage_underperformers" in result_mixed
 
     def test_summarize(self):
         from lib.testing import _default_content_for

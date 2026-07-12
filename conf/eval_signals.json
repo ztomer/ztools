@@ -172,6 +172,20 @@
       "timeout": 900,
       "total_retries": 0
     },
+    "image_rename": {
+      "p95_latency": 2.6,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "image_rename_mixed": {
+      "p95_latency": 1.7,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
     "json": {
       "p95_latency": 9.2,
       "parse_failures": 0,
@@ -521,36 +535,36 @@
   },
   "m": {
     "json": {
-      "parse_failures": 86,
-      "samples": 254,
-      "total_retries": 254
+      "parse_failures": 88,
+      "samples": 260,
+      "total_retries": 260
     },
     "weekend_debug": {
-      "parse_failures": 86,
-      "samples": 86,
-      "total_retries": 86
+      "parse_failures": 88,
+      "samples": 88,
+      "total_retries": 88
     },
     "weekend_noparsed": {
       "parse_failures": 0,
-      "samples": 86,
-      "total_retries": 86
+      "samples": 88,
+      "total_retries": 88
     },
     "weekend_nosource": {
       "parse_failures": 0,
-      "samples": 86,
-      "total_retries": 86
+      "samples": 88,
+      "total_retries": 88
     },
     "weekend_x": {
       "parse_failures": 0,
-      "samples": 86,
-      "total_retries": 86
+      "samples": 88,
+      "total_retries": 88
     }
   },
   "mock-model": {
     "json": {
       "parse_failures": 0,
-      "samples": 504,
-      "total_retries": 504
+      "samples": 516,
+      "total_retries": 516
     },
     "summarize": {
       "parse_failures": 0,
@@ -976,6 +990,13 @@
       "p95_latency": 2.4,
       "parse_failures": 0,
       "samples": 2,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "image_rename": {
+      "p95_latency": 13.1,
+      "parse_failures": 0,
+      "samples": 1,
       "timeout": 900,
       "total_retries": 0
     },

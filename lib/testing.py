@@ -20,8 +20,10 @@ def _default_content_for(task: str) -> str:
             {"name": "Indoor Coding Workshop", "location": "Vaughan", "target_ages": "8-14",
              "price": "$25", "weather": "indoor", "day": "Sunday"},
         ])
-    if task in ("filename", "image_rename"):
+    if task == "filename":
         return "mock_test_filename"
+    if task in ("image_rename", "image_rename_mixed"):
+        return json.dumps(["how_to_manage_underperformers", "scott_adams_essays", "scott_adams_powerful_sentences", "business_lessons", "delusional_belief", "prioritize_pro", "musk_founding_tips", "context_engineering"])
     if task == "summarize":
         return "## Summary\n- OpenAI announced GPT-5\n- Apple Vision Pro 2 enters production\n- Google unveils Gemini 2.5 Pro\n"
     if task == "file_summary":
@@ -44,7 +46,7 @@ def _default_content_for(task: str) -> str:
 def _default_parsed_for(task: str) -> Optional[Any]:
     if task in ("json", "weekend_transient", "weekend_fixed", "detailed_json"):
         return json.loads(_default_content_for(task))
-    if task == "file_summary":
+    if task in ("file_summary", "image_rename", "image_rename_mixed"):
         return json.loads(_default_content_for(task))
     return None
 

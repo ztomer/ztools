@@ -220,6 +220,42 @@ NOISE (Ignore - do NOT produce filenames for these):
 - Malformed: incomplete text without meaning
 """
 
+IMAGE_RENAME_PROMPT = """Convert each OCR text to a short descriptive filename, lowercase with underscores, max 35 chars.
+
+Output a JSON array of filenames in the SAME ORDER.
+
+TEXTS:
+1. How To Manage Your Underperformers
+2. Scott Adams essays
+3. 10 powerful sentences by Scott Adams navigating failure, ambition, the absurdities of life
+4. 15 years of business lessons in under 500 words: Marrying well is the biggest life hack of all
+5. Be delusional. Believe that you have the ability to make it work no matter what
+6. How To Prioritize Like A Pro - Noemi Kis: Understand Your Values First
+7. elon musk: how to win at founding - taking risk if things don't work out
+8. context engineering template - comprehensive guide for AI prompts
+"""
+
+IMAGE_RENAME_PROMPT_MIXED = """Convert each OCR text to a short descriptive filename, lowercase with underscores, max 35 chars.
+
+Output a JSON array of filenames in the SAME ORDER.
+
+TEXTS:
+1. How To Manage Your Underperformers
+2. Scott Adams essays
+3. 10 powerful sentences by Scott Adams navigating failure, ambition, the absurdities of life
+4. 15 years of business lessons in under 500 words: Marrying well is the biggest life hack of all
+5. Be delusional. Believe that you have the ability to make it work no matter what
+6. How To Prioritize Like A Pro - Noemi Kis: Understand Your Values First
+7. elon musk: how to win at founding - taking risk if things don't work out
+8. context engineering template - comprehensive guide for AI prompts
+
+NOISE (Ignore - do NOT produce filenames for these):
+- Random noise: asdfghjkl noise
+- Spam text: BUY NOW CLICK HERE SPAM
+- Nonsense: lorem ipsum dolor sit amet
+- Malformed: incomplete without meaning
+"""
+
 
 # ============================================================
 # FILE SUMMARY PROMPTS
@@ -401,6 +437,14 @@ TASKS = {
         "validator": validate_filename,
         "parse_json": False,
     },
+    "image_rename": {
+        "messages": [
+            {"role": "user", "content": IMAGE_RENAME_PROMPT},
+        ],
+        "validator": validate_mixed_filename,
+        "parse_json": True,
+        "source": IMAGE_RENAME_PROMPT,
+    },
     "summarize": {
         "messages": [
             {"role": "user", "content": TWITTER_PROMPT},
@@ -449,6 +493,14 @@ TASKS = {
         "validator": validate_mixed_filename,
         "parse_json": True,
         "source": RENAME_PROMPT_MIXED,
+    },
+    "image_rename_mixed": {
+        "messages": [
+            {"role": "user", "content": IMAGE_RENAME_PROMPT_MIXED},
+        ],
+        "validator": validate_mixed_filename,
+        "parse_json": True,
+        "source": IMAGE_RENAME_PROMPT_MIXED,
     },
     # --- FAITHFULNESS / SCHEMA / LEAK TESTS (Round 1-2) ---
     "weekend_transient_schema": {
