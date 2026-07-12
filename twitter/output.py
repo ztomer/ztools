@@ -7,16 +7,13 @@ import json
 import shutil
 import subprocess
 import sys
-import yaml
 from datetime import datetime, timezone
 from pathlib import Path
 from lib.tui import STEP, WARN
+from lib.config_toml import load_config
 
-_TWITTER_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "twitter.yaml"
-try:
-    _TWITTER_CFG = yaml.safe_load(_TWITTER_CONFIG_PATH.read_text()) or {}
-except Exception:
-    _TWITTER_CFG = {}
+_TWITTER_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "twitter.toml"
+_TWITTER_CFG = load_config(_TWITTER_CONFIG_PATH) or {}
 
 STATE_FILE = Path(_TWITTER_CFG.get("state_file", str(Path.home() / ".twitter_summary_state.json"))).expanduser()
 DEBUG_CACHE_FILE = Path.home() / ".twitter_summary_debug_cache.json"

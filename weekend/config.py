@@ -1,8 +1,8 @@
 import datetime
 import os
-import yaml
 from pathlib import Path
 
+from lib.config_toml import load_config
 from lib.osaurus_lib import (
     restart_server,
     get_best_model,
@@ -36,13 +36,8 @@ def save_venues_cache(venues_str):
 
 
 def load_weekend_config():
-    config_path = Path(__file__).parent.parent / "conf" / "weekend.yaml"
-    try:
-        with open(config_path) as f:
-            return yaml.safe_load(f)
-    except Exception as e:
-        print(f"Failed to load weekend.yaml: {e}")
-        return {}
+    config_path = Path(__file__).parent.parent / "conf" / "weekend.toml"
+    return load_config(config_path)
 
 
 try:

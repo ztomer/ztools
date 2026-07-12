@@ -3,18 +3,15 @@ Helper utilities for image processing and filename generation.
 """
 
 import re
-import yaml
 from pathlib import Path
 from lib.tui import FAIL
 from typing import Optional
+from lib.config_toml import load_config
 from PIL import Image
 
 # Load tesseract path from rename config, fall back to Homebrew default
-_RENAME_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "rename.yaml"
-try:
-    _RENAME_CFG = yaml.safe_load(_RENAME_CONFIG_PATH.read_text()) or {}
-except Exception:
-    _RENAME_CFG = {}
+_RENAME_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "rename.toml"
+_RENAME_CFG = load_config(_RENAME_CONFIG_PATH) or {}
 _TESSERACT_BREW = _RENAME_CFG.get("tesseract_cmd", "/opt/homebrew/bin/tesseract")
 _TESSERACT_INIT = False
 

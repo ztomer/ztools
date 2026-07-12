@@ -2,12 +2,13 @@
 
 from pathlib import Path
 from typing import Dict, List
-import yaml
 
 from .config_core import (
     _auto_load, _config, _model_configs_cache, Task,
     _FALLBACK_TIMEOUT, _FALLBACK_MAX_TOKENS, _FALLBACK_MODEL,
 )
+from .config_toml import load_config as _load_config_toml
+
 
 
 def get_timeouts() -> Dict[str, int]:
@@ -80,23 +81,21 @@ def get_model_config(model: str) -> Dict:
                 merged["version"] = version
                 return merged
         return family_config
-    version_config_path = Path(__file__).parent.parent / "conf" / "models" / f"{family}_versions.yaml"
-    config_path = Path(__file__).parent.parent / "conf" / "models" / f"{family}.yaml"
+    version_config_path = Path(__file__).parent.parent / "conf" / "models" / f"{family}_versions.toml"
+    config_path = Path(__file__).parent.parent / "conf" / "models" / f"{family}.toml"
     if version_config_path.exists():
-        with open(version_config_path) as f:
-            loaded = yaml.safe_load(f) or {}
-            _model_configs_cache[family] = loaded
-            if "models" in loaded:
-                version_specific = loaded["models"].get(model, {})
-                if version_specific:
-                    merged = {k: v for k, v in loaded.items() if k != "models"}
-                    merged.update(version_specific)
-                    merged["version"] = version
-                    return merged
-            return loaded
+        loaded = _load_config_toml(version_config_path) or {}
+        _model_configs_cache[family] = loaded
+        if "models" in loaded:
+            version_specific = loaded["models"].get(model, {})
+            if version_specific:
+                merged = {k: v for k, v in loaded.items() if k != "models"}
+                merged.update(version_specific)
+                merged["version"] = version
+                return merged
+        return loaded
     elif config_path.exists():
-        with open(config_path) as f:
-            _model_configs_cache[family] = yaml.safe_load(f) or {}
+        _model_configs_cache[family] = _load_config_toml(config_path) or {}
     else:
         _model_configs_cache[family] = {
             "name": family,

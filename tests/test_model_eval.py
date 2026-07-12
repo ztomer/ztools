@@ -181,11 +181,11 @@ class TestUpdateConfig:
 
     def test_updates_config(self, mock_llm, tmp_path, monkeypatch):
         import eval.cli as model_eval
-        # Create conf/config.yaml
+        # Create conf/config.toml
         conf_dir = tmp_path / "conf"
         conf_dir.mkdir()
-        config_file = conf_dir / "config.yaml"
-        config_file.write_text("existing_key: value\n")
+        config_file = conf_dir / "config.toml"
+        config_file.write_text('existing_key = "value"\n')
         old, new, buf = _capture_console()
         try:
             model_eval.console = new
@@ -200,8 +200,8 @@ class TestUpdateConfig:
         import eval.cli as model_eval
         conf_dir = tmp_path / "conf"
         conf_dir.mkdir()
-        config_file = conf_dir / "config.yaml"
-        config_file.write_text("best_models:\n  task1: old_model\n")
+        config_file = conf_dir / "config.toml"
+        config_file.write_text("[best_models]\ntask1 = \"old_model\"\n")
         old, new, buf = _capture_console()
         try:
             model_eval.console = new
@@ -217,8 +217,8 @@ class TestUpdateConfig:
         import eval.cli as model_eval
         conf_dir = tmp_path / "conf"
         conf_dir.mkdir()
-        config_file = conf_dir / "config.yaml"
-        config_file.write_text("original: value\n")
+        config_file = conf_dir / "config.toml"
+        config_file.write_text('original = "value"\n')
         old, new, buf = _capture_console()
         try:
             model_eval.console = new

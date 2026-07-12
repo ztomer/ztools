@@ -61,15 +61,12 @@ class TestLoadWeekendConfig:
         import builtins
         real_open = builtins.open
         def fake_open(*args, **kwargs):
-            # Only fail for the weekend.yaml file
-            if "weekend.yaml" in str(args[0]):
-                raise Exception("file missing")
+            if "weekend" in str(args[0]):
+                raise FileNotFoundError("file missing")
             return real_open(*args, **kwargs)
         with patch("builtins.open", side_effect=fake_open):
             result = load_weekend_config()
         assert result == {}
-        out = capsys.readouterr()
-        assert "Failed to load weekend.yaml" in out.out
 
 
 class TestServerHelpers:

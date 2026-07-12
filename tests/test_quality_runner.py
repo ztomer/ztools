@@ -52,14 +52,16 @@ class TestQueryModel:
 
     def test_query_model_exception(self, mock_llm):
         from lib import quality_runner as qr
-        with patch.object(qr, "llm_call", side_effect=Exception("boom")):
+        from lib import osaurus_lib
+        with patch.object(osaurus_lib, "call", side_effect=Exception("boom")):
             result = qr.query_model("test-model", "Hi {text}", "world", "think")
         assert result is None
 
     def test_query_model_no_content(self, mock_llm):
         from lib import quality_runner as qr
+        from lib import osaurus_lib
         mock_result = {"content": None}
-        with patch.object(qr, "llm_call", return_value=mock_result):
+        with patch.object(osaurus_lib, "call", return_value=mock_result):
             result = qr.query_model("test-model", "Hi {text}", "world", "think")
         assert result == ""
 

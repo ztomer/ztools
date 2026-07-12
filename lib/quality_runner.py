@@ -3,7 +3,7 @@ import time
 from typing import List, Optional
 
 from lib.config import get_model_prompt, Task, _safe_format_prompt
-from lib.osaurus_lib import call as llm_call
+from lib import osaurus_lib
 from lib.quality_models import TestCase, ScoreCard, _str
 from lib.quality_scorers import score_output
 from lib.tui import STEP, WARN, FAIL
@@ -215,7 +215,7 @@ ALL_TEST_CASES = FILENAME_CASES + SUMMARIZE_CASES + FILE_SUMMARY_CASES + WEEKEND
 def query_model(model: str, prompt: str, input_text: str, task: str) -> Optional[str]:
     try:
         filled = _safe_format_prompt(prompt, input_text)
-        result = llm_call(
+        result = osaurus_lib.call(
             model=model,
             messages=[{"role": "user", "content": filled}],
             timeout=LLM_TIMEOUT,
@@ -228,7 +228,7 @@ def query_model(model: str, prompt: str, input_text: str, task: str) -> Optional
 
 def query_model_direct(model: str, full_prompt: str) -> Optional[str]:
     try:
-        result = llm_call(
+        result = osaurus_lib.call(
             model=model,
             messages=[{"role": "user", "content": full_prompt}],
             timeout=LLM_TIMEOUT,

@@ -89,11 +89,11 @@ def test_init_config_missing_file():
 
 
 def test_init_config_invalid_yaml(tmp_path):
-    """Test init_config raises ConfigurationError for corrupt YAML file."""
+    """Test init_config raises ConfigurationError for corrupt TOML file."""
     from lib.config import init_config, ConfigurationError
-    invalid_file = tmp_path / "invalid_config.yaml"
-    invalid_file.write_text("invalid: yaml: : content")  # Invalid YAML syntax
-    
+    invalid_file = tmp_path / "invalid_config.toml"
+    invalid_file.write_text("[[[")  # Invalid TOML syntax
+
     with pytest.raises(ConfigurationError) as excinfo:
         init_config(str(invalid_file))
-    assert "Failed to parse YAML configuration file" in str(excinfo.value)
+    assert "Failed to read configuration file" in str(excinfo.value)

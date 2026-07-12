@@ -25,19 +25,15 @@ def reset_cache():
 
 class TestLoadEvalInputs:
     def test_load_eval_inputs_via_fixture(self, tmp_path, mock_llm):
-        """Test via patching the open() call to return yaml content."""
+        """Test via patching the Path to create a real toml file."""
         import lib.config_tasks as ct
-        yaml_content = "test_inputs:\n  task_a: input1\n  task_b: input2\n"
-        real_yaml = tmp_path / "eval_inputs.yaml"
-        real_yaml.write_text(yaml_content)
+        toml_content = '[test_inputs]\ntask_a = "input1"\ntask_b = "input2"\n'
+        conf_dir = tmp_path / "conf"
+        conf_dir.mkdir()
+        real_toml = conf_dir / "eval_inputs.toml"
+        real_toml.write_text(toml_content)
         with patch("lib.config_tasks.Path") as mock_path_class:
             instance = MagicMock()
-            # Chain: Path(__file__).parent.parent / "conf" / "eval_inputs.yaml"
-            # First / returns a real path so second / also works
-            conf_dir = tmp_path / "conf"
-            conf_dir.mkdir()
-            real_yaml2 = conf_dir / "eval_inputs.yaml"
-            real_yaml2.write_text(yaml_content)
             instance.parent.parent.__truediv__.return_value = conf_dir
             mock_path_class.return_value = instance
             inputs = ct._load_eval_inputs()
@@ -45,11 +41,11 @@ class TestLoadEvalInputs:
 
     def test_load_eval_inputs_caches(self, tmp_path, mock_llm):
         import lib.config_tasks as ct
-        yaml_content = "test_inputs:\n  x: y\n"
+        toml_content = '[test_inputs]\nx = "y"\n'
         conf_dir = tmp_path / "conf"
         conf_dir.mkdir()
-        real_yaml = conf_dir / "eval_inputs.yaml"
-        real_yaml.write_text(yaml_content)
+        real_toml = conf_dir / "eval_inputs.toml"
+        real_toml.write_text(toml_content)
         with patch("lib.config_tasks.Path") as mock_path_class:
             instance = MagicMock()
             instance.parent.parent.__truediv__.return_value = conf_dir
@@ -77,8 +73,8 @@ class TestLoadEvalInputs:
         import lib.config_tasks as ct
         conf_dir = tmp_path / "conf"
         conf_dir.mkdir()
-        real_yaml = conf_dir / "eval_inputs.yaml"
-        real_yaml.write_text("test_inputs: {}\n")
+        real_toml = conf_dir / "eval_inputs.toml"
+        real_toml.write_text('[test_inputs]\n')
         with patch("lib.config_tasks.Path") as mock_path_class:
             instance = MagicMock()
             instance.parent.parent.__truediv__.return_value = conf_dir
@@ -90,8 +86,8 @@ class TestLoadEvalInputs:
         import lib.config_tasks as ct
         conf_dir = tmp_path / "conf"
         conf_dir.mkdir()
-        real_yaml = conf_dir / "eval_inputs.yaml"
-        real_yaml.write_text("")
+        real_toml = conf_dir / "eval_inputs.toml"
+        real_toml.write_text("")
         with patch("lib.config_tasks.Path") as mock_path_class:
             instance = MagicMock()
             instance.parent.parent.__truediv__.return_value = conf_dir

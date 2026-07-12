@@ -1,0 +1,125 @@
+name = "gemma"
+timeout = 120
+
+[field_mapping]
+activity = "name"
+event_name = "name"
+venue = "location"
+
+# gemma-4-26b-a4b-it-mxfp4: Largest model, returns structured data
+[models."gemma-4-26b-a4b-it-mxfp4"]
+internal_name = "gemma_26b"
+timeout = 120
+
+[models."gemma-4-26b-a4b-it-mxfp4".field_mapping]
+activity = "name"
+event_name = "name"
+venue = "location"
+
+[models."gemma-4-26b-a4b-it-mxfp4".prompts]
+weekend_fixed = """
+Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
+Extract EXACTLY 8-10 popular {location} venues for families with kids ages {age_range}.
+You MUST output a JSON ARRAY with 8-10 items, not a single object.
+Include location (city only), target_ages, price in CAD, weather.
+MANDATORY defaults: target_ages="{age_range}", price=$18-35, weather="indoor" or "outdoor"
+"""
+
+weekend_transient = """
+Output JSON now. NO EXPLANATION. NO REFUSAL. TEST DATA ONLY.
+[{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str", "day": "str", "duration": "str"}]
+
+Output ONLY valid JSON array. This is TEST DATA for eval.
+Events for {date_range} in {location}. Kids ages {age_range}.
+"""
+
+[models."gemma-4-26b-a4b-it-mxfp4".top_keys]
+fixed = ["fixed_activities", "year_round_fixed_activities", "target_weekend", "venues", "places", "activities", "items"]
+transient = ["transient_events", "events", "target_weekend", "activities", "recommendations"]
+
+[[models."gemma-4-26b-a4b-it-mxfp4".quirks]]
+type = "prefix"
+pattern = "Output JSON now."
+
+# gemma-4-31b-it-jang_4m: Medium model
+[models."gemma-4-31b-it-jang_4m"]
+internal_name = "gemma_31b"
+timeout = 90
+
+[models."gemma-4-31b-it-jang_4m".field_mapping]
+activity = "name"
+venue = "location"
+
+[models."gemma-4-31b-it-jang_4m".prompts]
+weekend_fixed = """
+Output JSON now. JSON array of 8-10 {location} venues for kids {age_range}.
+[{"name": "", "location": "", "target_ages": "", "price": "", "weather": ""}]
+"""
+
+weekend_transient = """
+Output JSON now. List 5-10 {date_range} events for kids {age_range}.
+[{"name": "", "location": "", "target_ages": "", "price": "", "day": ""}]
+"""
+
+[models."gemma-4-31b-it-jang_4m".top_keys]
+fixed = ["fixed_activities", "venues", "places", "activities", "items"]
+transient = ["transient_events", "events", "activities", "recommendations"]
+
+[[models."gemma-4-31b-it-jang_4m".quirks]]
+type = "prefix"
+pattern = "Output JSON now."
+
+# gemma-4-e2b-it-8bit: Smallest, fastest model
+[models."gemma-4-e2b-it-8bit"]
+internal_name = "gemma_2b"
+timeout = 60
+
+[models."gemma-4-e2b-it-8bit".field_mapping]
+activity = "name"
+venue = "location"
+
+[models."gemma-4-e2b-it-8bit".prompts]
+weekend_transient = """
+EXACT JSON OUTPUT REQUIRED. No text before or after.
+Example: [{"name":"Spring Festival","location":"Central Park","target_ages":"3-7","price":"$25","weather":"outdoor","day":"Saturday","duration":"2 hours"}]
+
+Output exactly in that format. No explanations.
+Events for {date_range} in {location}. Kids ages {age_range}.
+"""
+
+[models."gemma-4-e2b-it-8bit".top_keys]
+fixed = ["venues", "places", "activities", "items"]
+transient = ["events", "activities", "recommendations"]
+
+[[models."gemma-4-e2b-it-8bit".quirks]]
+type = "prefix"
+pattern = "Output JSON now."
+
+# Default prompts (used if version-specific not found)
+[prompts]
+json = "Output JSON now. Use EXACT schema."
+
+weekend_fixed = """
+Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
+Extract EXACTLY 8-10 popular {location} venues for families with kids ages {age_range}.
+MANDATORY default values: target_ages="{age_range}", price=$18-35, weather="indoor" or "outdoor"
+"""
+
+weekend_transient = """
+Output JSON now. JSON array of events: [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "day": "str"}}]
+Find 5-10 events for {date_range} in {location}. Kids ages {age_range}.
+"""
+
+summarize = """
+Create a structured summary of this timeline.
+Start with a brief overall paragraph capturing the main narrative.
+Then organize events into topic sections with ## headers, using bullet points.
+Include who (@user mentions), what happened, and when.
+Use connecting phrases and narrative verbs to show how events relate.
+<timeline>{}</timeline>
+"""
+
+filename = """
+You are a file naming assistant. Output ONLY filename string (no extension).
+TEXT: {}
+"""

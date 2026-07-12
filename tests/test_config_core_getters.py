@@ -64,15 +64,15 @@ class TestAutoLoad:
 
     def test_auto_load_with_config(self, tmp_path):
         import lib.config_core as cc
-        yaml_file = tmp_path / "config.yaml"
-        yaml_file.write_text("timeouts:\n  json: 100\n")
+        toml_file = tmp_path / "config.toml"
+        toml_file.write_text('[timeouts]\njson = 100\n')
         with patch("lib.config_core.Path") as mock_path:
             instance = MagicMock()
             # We need a real path-like that exists() returns True on the final result
             conf_dir = tmp_path / "conf"
             conf_dir.mkdir()
-            real_yaml = conf_dir / "config.yaml"
-            real_yaml.write_text("timeouts:\n  json: 100\n")
+            real_toml = conf_dir / "config.toml"
+            real_toml.write_text('[timeouts]\njson = 100\n')
             instance.parent.parent.__truediv__.return_value = conf_dir
             mock_path.return_value = instance
             cc._auto_load()
@@ -90,14 +90,13 @@ class TestAutoLoad:
 
     def test_auto_load_yaml_non_dict(self, tmp_path):
         import lib.config_core as cc
-        yaml_file = tmp_path / "config.yaml"
-        yaml_file.write_text("just_a_list")
+        toml_file = tmp_path / "config.toml"
+        toml_file.write_text("not_a_dict_key\n")
         with patch("lib.config_core.Path") as mock_path:
             instance = MagicMock()
-            instance.parent.parent.__truediv__.return_value = yaml_file
+            instance.parent.parent.__truediv__.return_value = toml_file
             mock_path.return_value = instance
             cc._auto_load()
-        # Should be empty dict (not the list)
         assert cc._config == {}
 
 
@@ -113,32 +112,32 @@ class TestInitConfig:
 
     def test_init_config_explicit_path(self, tmp_path):
         import lib.config_core as cc
-        yaml_file = tmp_path / "test_config.yaml"
-        yaml_file.write_text("timeouts:\n  json: 200\n")
-        cc.init_config(str(yaml_file))
+        toml_file = tmp_path / "test_config.toml"
+        toml_file.write_text('[timeouts]\njson = 200\n')
+        cc.init_config(str(toml_file))
         assert cc._config.get("timeouts", {}).get("json") == 200
 
     def test_init_config_yaml_null(self, tmp_path):
         import lib.config_core as cc
-        yaml_file = tmp_path / "null.yaml"
-        yaml_file.write_text("")
-        cc.init_config(str(yaml_file))
+        toml_file = tmp_path / "null.toml"
+        toml_file.write_text("")
+        cc.init_config(str(toml_file))
         assert cc._config == {}
 
     def test_init_config_yaml_not_dict(self, tmp_path):
         import lib.config_core as cc
-        yaml_file = tmp_path / "list.yaml"
-        yaml_file.write_text("- 1\n- 2\n")
-        with pytest.raises(ValueError):
-            cc.init_config(str(yaml_file))
+        toml_file = tmp_path / "list.toml"
+        toml_file.write_text("invalid toml content here")
+        with pytest.raises(cc.ConfigurationError):
+            cc.init_config(str(toml_file))
 
     def test_init_config_replaces_existing(self, tmp_path):
         import lib.config_core as cc
         cc._config = {"old": "data"}
         cc._config_loaded = True
-        yaml_file = tmp_path / "new.yaml"
-        yaml_file.write_text("new: data\n")
-        cc.init_config(str(yaml_file))
+        toml_file = tmp_path / "new.toml"
+        toml_file.write_text('new = "data"\n')
+        cc.init_config(str(toml_file))
         assert "old" not in cc._config
         assert cc._config["new"] == "data"
 
@@ -350,21 +349,18 @@ class TestGetModelConfig:
 
     def test_get_model_config_with_version_yaml(self, tmp_path):
         import lib.config_getters as cg
-        # Create tmp/conf/models/qwen_versions.yaml
+        # Create tmp/conf/models/qwen_versions.toml
         conf_dir = tmp_path / "conf"
         conf_dir.mkdir()
         models_dir = conf_dir / "models"
         models_dir.mkdir()
-        version_yaml = models_dir / "qwen_versions.yaml"
-        version_yaml.write_text("name: qwen\nmodels:\n  qwen2.5-7b:\n    extra: 1\n")
+        version_toml = models_dir / "qwen_versions.toml"
+        version_toml.write_text('name = "qwen"\n[models."qwen2.5-7b"]\nextra = 1\n')
         with patch("lib.config_getters.Path") as mock_path:
-            # Path(__file__).parent.parent / "conf" should equal tmp_path/conf
-            # so that / "models" / "qwen_versions.yaml" gives the real path
             instance = MagicMock()
             instance.parent.parent.__truediv__.return_value = conf_dir
             mock_path.return_value = instance
             result = cg.get_model_config("qwen2.5-7b")
-        # The version_specific merge uses model name
         assert "extra" in result
         assert result.get("name") == "qwen"
 
@@ -390,8 +386,8 @@ class TestGetModelConfig:
         conf_dir.mkdir()
         models_dir = conf_dir / "models"
         models_dir.mkdir()
-        family_yaml = models_dir / "qwen.yaml"
-        family_yaml.write_text("name: qwen\ntimeout: 500\n")
+        family_toml = models_dir / "qwen.toml"
+        family_toml.write_text('name = "qwen"\ntimeout = 500\n')
         with patch("lib.config_getters.Path") as mock_path:
             instance = MagicMock()
             instance.parent.parent.__truediv__.return_value = conf_dir

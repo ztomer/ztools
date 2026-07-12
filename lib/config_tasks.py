@@ -2,10 +2,11 @@
 
 from pathlib import Path
 from typing import Dict, Any
-import yaml
 
 from .config_core import Task
 from .config_getters import get_model_prompts_all
+from .config_toml import load_config
+
 
 
 _eval_inputs_cache: Dict[str, str] = {}
@@ -19,12 +20,11 @@ def _load_eval_inputs() -> Dict[str, str]:
     global _eval_inputs_cache
     if _eval_inputs_cache:
         return _eval_inputs_cache
-    inputs_path = Path(__file__).parent.parent / "conf" / "eval_inputs.yaml"
+    inputs_path = Path(__file__).parent.parent / "conf" / "eval_inputs.toml"
     if not inputs_path.exists():
         raise FileNotFoundError(f"Missing eval inputs: {inputs_path}")
-    with open(inputs_path) as f:
-        data = yaml.safe_load(f) or {}
-        _eval_inputs_cache = data.get("test_inputs", {})
+    data = load_config(inputs_path) or {}
+    _eval_inputs_cache = data.get("test_inputs", {})
     if not _eval_inputs_cache:
         raise ValueError(f"Empty test_inputs in {inputs_path}")
     return _eval_inputs_cache

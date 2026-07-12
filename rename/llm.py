@@ -13,6 +13,7 @@ from typing import Optional
 import requests
 
 from lib.config import get_filename_models, get_model_prompt, Task
+from lib.config_toml import load_config
 from lib.osaurus_lib import check_llm_availability
 from lib.mlx_lib import find_mlx_model, find_any_working_mlx_model, process_mlx_content, call_mlx
 from lib.tui import WARN, FAIL
@@ -33,11 +34,8 @@ FILENAME_MODELS = get_filename_models()
 PROMPT_TEXT_TO_FILENAME = get_model_prompt(FILENAME_MODELS[0], Task.FILENAME) if FILENAME_MODELS else ""
 
 # Load rename config for overridable paths
-_RENAME_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "rename.yaml"
-try:
-    _RENAME_CFG = yaml.safe_load(_RENAME_CONFIG_PATH.read_text()) or {}
-except Exception:
-    _RENAME_CFG = {}
+_RENAME_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "rename.toml"
+_RENAME_CFG = load_config(_RENAME_CONFIG_PATH) or {}
 
 MLX_MODELS_DIR = Path(_RENAME_CFG.get("mlx_models_dir", str(Path.home() / "MLXModels"))).expanduser()
 

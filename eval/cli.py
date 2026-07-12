@@ -199,15 +199,17 @@ def load_tasks_from_config(model: str):
 
 
 def update_config(best_models: dict):
-    """Update config.yaml with best models per task."""
-    import yaml
-    config_path = Path(__file__).parent.parent / "conf" / "config.yaml"
-    if not config_path.exists():
+    """Update config with best models per task."""
+    import tomllib
+    import tomli_w
+    config_path = Path(__file__).parent.parent / "conf" / "config.toml"
+    toml_path = config_path
+    if not toml_path.exists():
         console.print(f"{WARN} Config file not found, skipping update.")
         return
 
-    with open(config_path, "r") as f:
-        config = yaml.safe_load(f) or {}
+    with open(toml_path, "rb") as f:
+        config = tomllib.load(f)
 
     if "best_models" not in config:
         config["best_models"] = {}
@@ -216,10 +218,8 @@ def update_config(best_models: dict):
         if model:
             config["best_models"][task] = model
 
-    with open(config_path, "w") as f:
-        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-
-    console.print(f"{STEP} Updated conf/config.yaml with best models.")
+    with open(toml_path, "wb") as f:
+        tomli_w.dump(config, f)
 
 
 from lib.signal_handling import setup_signals

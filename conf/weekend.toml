@@ -1,0 +1,39 @@
+# Weekend Planner Configuration
+
+[location]
+city = "Vaughan"
+region = "Toronto"
+timezone = "America/Toronto"
+latitude = 43.8361
+longitude = -79.5083
+
+[[children]]
+birthday = "2012-10-05"
+gender = "girl"
+
+[[children]]
+birthday = "2015-10-02"
+gender = "boy"
+
+[[children]]
+birthday = "2020-06-01"
+gender = "boy"
+
+exclude_places = [
+  "Canada's Wonderland",
+  "Ontario Science Centre",
+  "Toronto Zoo",
+  "The Art of the Brick",
+  "Reptilia",
+  "ROM",
+  "Ripley's",
+  "Little Canada",
+  "LEGOLAND",
+  "CN Tower",
+  "Museum of Illusions",
+  "Royal Ontario Museum (ROM)",
+  "Toronto Islands",
+  "Sky Zone Toronto",
+  "LEGOLAND Discovery Centre Toronto",
+  "LEGOLAND Discovery Centre Toronto (Vaughan Mills)",
+]

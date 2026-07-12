@@ -1,10 +1,11 @@
 """Config core - shared state, Task enum, init/reset."""
 
 import threading
-import yaml
 from pathlib import Path
 from typing import Dict, Any, Optional
 import enum
+
+from .config_toml import load_config
 
 
 class ConfigurationError(Exception):
@@ -39,17 +40,15 @@ def _auto_load():
     with _config_lock:
         if _config_loaded:
             return
-        config_path = Path(__file__).parent.parent / "conf" / "config.yaml"
+        base = Path(__file__).parent.parent / "conf"
+        config_path = base / "config.toml"
         if not config_path.exists():
-            print(f"Config file not found: {config_path}, using fallback defaults")
+            print(f"Config file not found, using fallback defaults")
             _config_loaded = True
             return
         try:
-            with open(config_path, 'r') as f:
-                loaded = yaml.safe_load(f)
-        except yaml.YAMLError as e:
-            raise ConfigurationError(f"Failed to parse YAML configuration file '{config_path}': {e}") from e
-        except OSError as e:
+            loaded = load_config(config_path)
+        except Exception as e:
             raise ConfigurationError(f"Failed to read configuration file '{config_path}': {e}") from e
         _config.clear()
         _config.update(loaded if isinstance(loaded, dict) else {})
@@ -59,16 +58,13 @@ def _auto_load():
 def init_config(config_path: Optional[str] = None) -> bool:
     global _config_loaded, _config
     if config_path is None:
-        config_path = Path(__file__).parent.parent / "conf" / "config.yaml"
+        config_path = Path(__file__).parent.parent / "conf" / "config.toml"
     config_file = Path(config_path)
     if not config_file.exists():
         raise FileNotFoundError(f"Config file not found: {config_file}")
     try:
-        with open(config_file, 'r') as f:
-            loaded = yaml.safe_load(f)
-    except yaml.YAMLError as e:
-        raise ConfigurationError(f"Failed to parse YAML configuration file '{config_file}': {e}") from e
-    except OSError as e:
+        loaded = load_config(config_file)
+    except Exception as e:
         raise ConfigurationError(f"Failed to read configuration file '{config_file}': {e}") from e
     if loaded is None:
         loaded = {}
