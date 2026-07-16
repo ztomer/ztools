@@ -11,10 +11,11 @@ dependencies = [
     "requests>=2.33.0",
     "rich>=14.0.0",
     "tomli-w>=1.2.0",
+    "textual>=0.50.0",
 ]
 
 [tool.setuptools.packages.find]
-include = ["lib*", "twitter*", "weekend*", "rename*", "eval*", "conf*"]
+include = ["lib*", "twitter*", "weekend*", "rename*", "eval*", "conf*", "tui*"]
 
 [tool.setuptools.package-data]
 conf = ["*.toml", "*.json", "models/*.toml", "models/*.json"]
@@ -35,6 +36,9 @@ vision = [
 foundation = [
     "apple-fm-sdk",
 ]
+tui = [
+    "textual>=0.50.0",
+]
 mlx = [
     "mlx-lm",
     "mlx-vlm",
@@ -48,6 +52,7 @@ all = [
     "pytesseract>=0.3.10",
     "mlx-lm",
     "mlx-vlm",
+    "textual>=0.50.0",
 ]
 
 # Per-tool extrasets map a tool to the optional dependencies it needs.
@@ -63,6 +68,7 @@ ev = "eval.cli:main"
 weekend = "weekend.cli:main"
 twitter = "twitter.cli:main"
 oeval = "eval.cli:main"
+ztools = "tui.app:main"
 
 [tool.rtk]
 python = "3.14"
