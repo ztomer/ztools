@@ -35,6 +35,9 @@ Installs five `PATH` commands behind a `uv`-managed venv:
 ## Quick Start (from a checkout)
 
 ```bash
+# Dashboard (TUI)
+./ztools                           # or: uv run python3 -m tui.app
+
 # Weekend planner
 python3 -m weekend
 
@@ -99,7 +102,8 @@ OCR (pytesseract) or Vision LLM → snake_case filename.
 ### Dashboard (TUI)
 
 ```bash
-ztools
+ztools                    # installed via Homebrew
+./ztools                  # from a checkout (project root)
 ```
 
 Textual TUI wrapping all four tools. `Tab` between panes, `Enter` to run, `Ctrl+C` to quit.

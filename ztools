@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Top-level dev wrapper: runs the ztools dashboard from a checkout.
+set -euo pipefail
+exec uv run --with pillow python3 -m tui.app "$@"
