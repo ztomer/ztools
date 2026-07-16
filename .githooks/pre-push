@@ -24,11 +24,17 @@ def main():
         print("❌ Ruff linting failed! Please fix all errors before pushing.")
         return 1
 
-    # 2. Pytest suite with coverage gate
+    # 2. Pytest suite with coverage gate (runs with isolated environment variables to match CI/GHA)
     print("Running tests with coverage gate...")
+    import os
+    env = dict(os.environ)
+    env["OLLAMA_BASE_URL"] = "http://127.0.0.1:1"
+    env["MLX_MODELS_DIR"] = "/tmp/nonexistent-mlx-models-dir-for-testing"
+
     pytest_proc = subprocess.run(
-        [pytest_cmd, "--cov", "--cov-fail-under=95", "."],
-        cwd=str(ROOT)
+        [pytest_cmd, "--cov", "--cov-report=term-missing", "--cov-fail-under=95", "."],
+        cwd=str(ROOT),
+        env=env
     )
     if pytest_proc.returncode != 0:
         print("❌ Tests failed or coverage fell below 95%! Please fix before pushing.")
