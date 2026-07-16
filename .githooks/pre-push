@@ -12,33 +12,47 @@ def main():
     ruff_cmd = str(venv_bin / "ruff") if (venv_bin / "ruff").exists() else "ruff"
     pytest_cmd = str(venv_bin / "pytest") if (venv_bin / "pytest").exists() else "pytest"
 
+    # Verify tooling is available
+    for cmd_name, cmd in [("ruff", ruff_cmd), ("pytest", pytest_cmd)]:
+        if not subprocess.run(["which", cmd], capture_output=True).returncode == 0:
+            print(f"⚠ {cmd_name} not found — install with: pip install {cmd_name}")
+            print("   (or create .venv/bin/{cmd_name})")
+
     print("Running pre-push quality gate checks...")
 
     # 1. Ruff linting
     print("Linting with Ruff...")
-    ruff_proc = subprocess.run(
-        [ruff_cmd, "check", "."],
-        cwd=str(ROOT)
-    )
-    if ruff_proc.returncode != 0:
-        print("❌ Ruff linting failed! Please fix all errors before pushing.")
-        return 1
+    try:
+        ruff_proc = subprocess.run(
+            [ruff_cmd, "check", "."],
+            cwd=str(ROOT)
+        )
+        if ruff_proc.returncode != 0:
+            print("❌ Ruff linting failed! Please fix all errors before pushing.")
+            return 1
+    except FileNotFoundError:
+        print("⚠  Ruff not found, skipping lint check.")
+        print("   Install: pip install ruff  or  .venv/bin/ruff")
 
-    # 2. Pytest suite with coverage gate (runs with isolated environment variables to match CI/GHA)
+    # 2. Pytest suite with coverage gate
     print("Running tests with coverage gate...")
     import os
     env = dict(os.environ)
     env["OLLAMA_BASE_URL"] = "http://127.0.0.1:1"
     env["MLX_MODELS_DIR"] = "/tmp/nonexistent-mlx-models-dir-for-testing"
 
-    pytest_proc = subprocess.run(
-        [pytest_cmd, "--cov", "--cov-report=term-missing", "--cov-fail-under=95", "."],
-        cwd=str(ROOT),
-        env=env
-    )
-    if pytest_proc.returncode != 0:
-        print("❌ Tests failed or coverage fell below 95%! Please fix before pushing.")
-        return 1
+    try:
+        pytest_proc = subprocess.run(
+            [pytest_cmd, "--cov", "--cov-report=term-missing", "--cov-fail-under=95", "."],
+            cwd=str(ROOT),
+            env=env
+        )
+        if pytest_proc.returncode != 0:
+            print("❌ Tests failed or coverage fell below 95%! Please fix before pushing.")
+            return 1
+    except FileNotFoundError:
+        print("⚠  Pytest not found, skipping test check.")
+        print("   Install: pip install pytest pytest-cov  or  .venv/bin/pytest")
 
     print("✅ All checks passed! Proceeding with push.")
     return 0

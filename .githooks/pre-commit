@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
-"""Pre-commit hook: block staged changes that introduce NEW config debt."""
-import re, subprocess, sys
+"""Pre-commit hook: fast local checks before allowing a commit.
+
+Runs in under 2s for typical changes:
+1. Config-debt gate: block NEW hardcoded paths/URLs/emails.
+2. ruff check on staged .py files.
+3. Python syntax check (py_compile) on staged .py files.
+"""
+
+import re
+import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CHECKER = ROOT / "tools" / "check_config_debt.py"
-if not CHECKER.exists():
-    sys.exit(0)
 
-# Get list of staged .py files
+venv_bin = ROOT / ".venv" / "bin"
+ruff_cmd = str(venv_bin / "ruff") if (venv_bin / "ruff").exists() else "ruff"
+
 result = subprocess.run(
     ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
     capture_output=True, text=True, cwd=str(ROOT),
@@ -17,7 +25,7 @@ staged = [f for f in result.stdout.strip().split("\n") if f and f.endswith(".py"
 if not staged:
     sys.exit(0)
 
-# Get added line numbers for each staged file
+
 def get_added_lines(file_path: str) -> set:
     r = subprocess.run(
         ["git", "diff", "--cached", "-U0", file_path],
@@ -33,30 +41,56 @@ def get_added_lines(file_path: str) -> set:
                 added.add(i)
     return added
 
-# Run checker on each staged file; only report violations on added lines
+
 errors = []
-for f in staged:
-    added_lines = get_added_lines(f)
-    if not added_lines:
-        continue
-    r = subprocess.run(
-        [sys.executable, str(CHECKER), str(ROOT / f)],
+
+# --- 1. Config-debt gate ---
+CHECKER = ROOT / "tools" / "check_config_debt.py"
+if CHECKER.exists():
+    for f in staged:
+        added_lines = get_added_lines(f)
+        if not added_lines:
+            continue
+        r = subprocess.run(
+            [sys.executable, str(CHECKER), str(ROOT / f)],
+            capture_output=True, text=True, cwd=str(ROOT),
+        )
+        if r.returncode == 0:
+            continue
+        new_violations = []
+        for line in r.stdout.split("\n"):
+            m = re.match(r'^\s+L\s*(\d+)', line)
+            if m and int(m.group(1)) in added_lines:
+                new_violations.append(line)
+        if new_violations:
+            errors.append(f"  Config debt in {f}:")
+            errors.extend(new_violations)
+
+# --- 2. ruff check on staged files ---
+try:
+    ruff_proc = subprocess.run(
+        [ruff_cmd, "check", *staged],
         capture_output=True, text=True, cwd=str(ROOT),
     )
-    if r.returncode == 0:
-        continue
-    # Parse violations from output (format: "    L<num>  [label]")
-    new_violations = []
-    for line in r.stdout.split("\n"):
-        m = re.match(r'^\s+L\s*(\d+)', line)
-        if m and int(m.group(1)) in added_lines:
-            new_violations.append(line)
-    if new_violations:
-        errors.append(f"  {f}:")
-        errors.extend(new_violations)
+    if ruff_proc.returncode != 0:
+        errors.append("  Ruff linting errors:")
+        for line in ruff_proc.stdout.split("\n"):
+            if line.strip():
+                errors.append(f"    {line.strip()}")
+except FileNotFoundError:
+    pass
+
+# --- 3. Python syntax check ---
+for f in staged:
+    r = subprocess.run(
+        [sys.executable, "-m", "py_compile", str(ROOT / f)],
+        capture_output=True, text=True, cwd=str(ROOT),
+    )
+    if r.returncode != 0:
+        errors.append(f"  Syntax error in {f}: {r.stderr.strip()}")
 
 if errors:
-    print("Config debt violations in staged changes (blocking):\n")
+    print("Pre-commit checks FAILED:\n")
     print("\n".join(errors))
+    print("\nUse --no-verify to bypass (not recommended).")
     sys.exit(1)
-sys.exit(0)
