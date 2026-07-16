@@ -117,8 +117,8 @@ Different backends use different API paths, unclear which is canonical.
 | `weekend/config.py` | 74 | `~/.config/model_eval.json` | Env var or config key — ✅ uses `Path.home()` |
 | `weekend/config.py` | 81 | `/Applications/osaurus.app` | Same as above — ✅ now uses `OSAURUS_APP` env var |
 | `weekend/cli.py` | 62 | `~/Documents/` | Config key `output_dir` |
-| `eval/report.py` | 169,205,240,424,505 | `~/.config/ztools` | Extract to constant |
-| `lib/tui.py` | 5 | `~/.config/zstyle` | Env var `ZSTYLE_CONFIG` |
+| `eval/report.py` | 169,205,240,424,505 | `~/.config/ztools` | Extract to constant — ✅ uses `_EVAL_DIR` module constant |
+| `lib/tui.py` | 5 | `~/.config/zstyle` | Env var `ZSTYLE_CONFIG` — ✅ uses `$ZSTYLE_CONFIG` |
 | `lib/mlx_lib.py` | 174 | `/tmp/mlx_debug` | Config key or env var |
 
 ### P2.2 — Hardcoded URLs (non-critical)
@@ -126,7 +126,7 @@ Different backends use different API paths, unclear which is canonical.
 | File | Line | URL | Suggestion |
 |------|------|-----|------------|
 | `weekend/data.py` | 27 | `api.open-meteo.com/v1/forecast` | Config key — ✅ now uses `WEATHER_API_URL` env var |
-| `twitter/browser.py` | 37 | `https://x.com/home` | Config key |
+| `twitter/browser.py` | 37 | `https://x.com/home` | Config key — ✅ uses `TWITTER_HOME_URL` env var |
 | `eval/cli.py` | 332 | `http://localhost:1337/api/tags` | Use config constant |
 
 ### P2.3 — Hardcoded model names
@@ -145,10 +145,10 @@ Different backends use different API paths, unclear which is canonical.
 | `eval/explore_quirks.py` | 13–15 | 30, 60, 90s | Config keys |
 | `eval/cli.py` | 116–126 | 5, 2, 30, 3, 8, 2s + 5 retries | Config keys |
 | `eval/cli.py` | 356 | 64 GB (machine-dependent) | Detect dynamically |
-| `lib/osaurus_server.py` | 14–19 | 1, 20, 3, 10, 5, 2 | Config keys |
+| `lib/osaurus_server.py` | 14–19 | 1, 20, 3, 10, 5, 2 | Config keys — ✅ via `OSAURUS_*` env vars |
 | `lib/osaurus_server.py` | 23–24 | `["osaurus", "serve", "--yes"]` | Config key |
-| `twitter/summarize.py` | 37–52 | token estimates, timeouts, thresholds | Config keys |
-| `twitter/browser.py` | 21,24–25,38 | 1800, 30000, 5000ms, multiplier 2 | Config keys |
+| `twitter/summarize.py` | 37–52 | token estimates, timeouts, thresholds | Config keys — ✅ via `TWITTER_*` env vars |
+| `twitter/browser.py` | 21,24–25,38,29–30 | scrolls, pauses, timeouts, waits | Config keys — ✅ via `TWITTER_*` env vars |
 | `twitter/browser.py` | 179–181 | `"Following"` tab selector | Config key (fragile) |
 
 ### P2.5 — Search query templates
@@ -200,6 +200,8 @@ Different backends use different API paths, unclear which is canonical.
 - ✅ `.githooks/pre-commit` — pre-commit hook wired (only blocks NEW violations)
 - ✅ `.github/workflows/config-debt.yml` — CI workflow wired (only blocks NEW)
 - ✅ Infrastructure paths via env vars: `OSAURUS_APP`, `OSAURUS_DUMP_DIR`, `XDG_RUNTIME_DIR`, `TWITTER_*`, `WEEKEND_MLX_FALLBACKS`, `RENAME_DEFAULT_FILENAME_MODEL`, `WEATHER_API_URL`
+- ✅ Twitter timeouts/constants via `TWITTER_*` env vars: scrolls, pauses, page load, click timeout, chars per token, output reserve, context window
+- ✅ weekday/llm.py timeouts via `WEEKEND_*` env vars: `WEEKEND_LLM_TIMEOUT`, `WEEKEND_PHASE_TIMEOUT`, `WEEKEND_LLM_MAX_RETRIES`, `WEEKEND_PHASE_MAX_RETRIES`
 - ⬜ Search query templates in `weekend/data.py` — in config
 - ⬜ Remaining infrastructure paths and timeouts — low priority
 
@@ -209,7 +211,7 @@ Different backends use different API paths, unclear which is canonical.
 |----------|-----------|-------------|-------|-------|
 | P0 | 6 | 2 | 8 | **8** |
 | P1 | 14 | 7 | 17 | **15** |
-| P2 | 59 | 11 | 65 | **19** |
-| **Total** | **79** | **20** | **90** | **42** |
+| P2 | 59 | 11 | 65 | **25** |
+| **Total** | **79** | **20** | **90** | **48** |
 
 Remaining **11 violations** (all hardcoded years in test-data fixtures) are intentional test data, not configuration debt. The CI gate prevents new violations — it only blocks on changed lines, so pre-existing test-data years don't block commits.
