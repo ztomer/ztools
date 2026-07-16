@@ -211,6 +211,7 @@ class TestMainEntry:
         with (
             patch("weekend.cli._fetch_data", return_value=("Sunny", "- E1", "- F1", "June 5-7")),
             patch("weekend.cli.init_config"),
+            patch("weekend.cli.check_server_or_die"),
             patch(
                 "weekend.cli.generate_weekend_plan",
                 return_value=(

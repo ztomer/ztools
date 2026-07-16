@@ -299,6 +299,7 @@ class TestMainIntegration:
             m.setattr("weekend.cli.setup_signals", lambda: None)
             m.setattr("weekend.cli.init_config", lambda: None)
             m.setattr("weekend.cli.ensure_server", lambda: None)
+            m.setattr("weekend.cli.check_server_or_die", lambda *a: None)
             m.setattr("weekend.cli.get_best_model", lambda *a: "mock-model")
             m.setattr(
                 "weekend.cli.get_weekend_date_objects",
