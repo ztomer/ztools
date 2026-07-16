@@ -20,6 +20,8 @@ from lib.llm.quirks import apply_model_quirks
 SERVER_CHECK_TIMEOUT = 5
 LIST_MODELS_TIMEOUT = 10
 
+GLOBAL_OVERRIDES = {}
+
 
 class SessionContext:
     """Helper to reuse connection pool in with blocks without closing it (Carmack optimization)"""
@@ -112,6 +114,12 @@ def call(
 
     # Get defaults from config
     max_tokens = max_tokens or get_max_tokens_for_task(task)
+
+    # Apply global overrides
+    if "temperature" in GLOBAL_OVERRIDES and temperature == DEFAULT_TEMPERATURE:
+        temperature = GLOBAL_OVERRIDES["temperature"]
+    if "max_tokens" in GLOBAL_OVERRIDES:
+        max_tokens = GLOBAL_OVERRIDES["max_tokens"]
 
     url = get_api_url(host, port)
     payload = {

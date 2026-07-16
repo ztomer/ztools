@@ -27,6 +27,8 @@ from rich.text import Text
 from rich.panel import Panel
 
 # Import backend methods
+import lib.llm.client as llm_client
+import lib.osaurus_lib as osaurus_lib
 from lib.llm.client import get_models, is_server_running
 from lib.tui import STEP, WARN, OK, FAIL
 from weekend.cli import _fetch_data, _parse_fixed, _parse_transient
@@ -81,6 +83,7 @@ class Sidebar(Vertical):
             ListItem(Label("📊 Model Evaluator"), id="nav-eval"),
             ListItem(Label("🖼️ Image Renamer"), id="nav-rename"),
             ListItem(Label("📂 History Archive"), id="nav-history"),
+            ListItem(Label("⚙️ Model Parameters"), id="nav-params"),
             id="nav-list"
         )
         yield Static(id="server-status-box")
@@ -192,6 +195,24 @@ class HistoryArchiveView(Vertical):
                 yield ListView(id="hist-list")
             with Vertical(id="hist-viewer-panel"):
                 yield VerticalScroll(id="hist-viewer")
+
+
+class ModelParametersView(Vertical):
+    """TUI view for customizing global model generation parameters."""
+
+    def compose(self) -> ComposeResult:
+        yield Label("[bold cyan]⚙️ Model Parameters[/bold cyan]", classes="section-title")
+        with Vertical(classes="form-container"):
+            with Horizontal(classes="form-row"):
+                yield Label("Temperature (0.0 to 2.0):", classes="form-label")
+                yield Input(value="0.1", placeholder="0.1", id="param-temp")
+            with Horizontal(classes="form-row"):
+                yield Label("Max Tokens (positive int):", classes="form-label")
+                yield Input(value="16000", placeholder="16000", id="param-max-tokens")
+            with Horizontal(classes="form-row"):
+                yield Button("Apply Parameters", variant="success", id="btn-param-apply")
+                yield Button("Reset Defaults", variant="primary", id="btn-param-reset")
+            yield Label("", id="param-status")
 
 
 class ZToolsApp(App):
@@ -337,6 +358,10 @@ class ZToolsApp(App):
         padding: 1;
         height: 1fr;
     }
+    #param-status {
+        margin-top: 1;
+        padding-left: 2;
+    }
     """
 
     TITLE = "ZTools Terminal Hub"
@@ -354,6 +379,7 @@ class ZToolsApp(App):
             yield ModelEvaluatorView(id="eval")
             yield ImageRenamerView(id="rename")
             yield HistoryArchiveView(id="history")
+            yield ModelParametersView(id="params")
         yield Footer()
 
     async def on_mount(self) -> None:
@@ -398,6 +424,8 @@ class ZToolsApp(App):
             elif event.item.id == "nav-history":
                 switcher.current = "history"
                 self.run_worker(self.refresh_history_archive())
+            elif event.item.id == "nav-params":
+                switcher.current = "params"
         elif event.list_view.id == "hist-list":
             self.run_worker(self.load_history_item(event.item))
 
@@ -415,6 +443,10 @@ class ZToolsApp(App):
             await self.load_image_preview()
         elif event.button.id == "btn-hist-refresh":
             self.run_worker(self.refresh_history_archive())
+        elif event.button.id == "btn-param-apply":
+            self.apply_model_parameters()
+        elif event.button.id == "btn-param-reset":
+            self.reset_model_parameters()
 
     def _update_status(self, container_id: str, lines: List[str], message: str) -> None:
         lines.append(message)
@@ -725,6 +757,47 @@ class ZToolsApp(App):
             viewer.mount(Markdown(content))
         except Exception as e:
             viewer.mount(Label(f"[red]Failed to load file: {e}[/red]"))
+
+    def apply_model_parameters(self) -> None:
+        status = self.query_one("#param-status")
+        try:
+            temp_str = self.query_one("#param-temp").value
+            max_tokens_str = self.query_one("#param-max-tokens").value
+            
+            try:
+                temp = float(temp_str)
+                if not (0.0 <= temp <= 2.0):
+                    raise ValueError()
+            except ValueError:
+                status.update("[red]Error: Temperature must be a float between 0.0 and 2.0[/red]")
+                return
+                
+            try:
+                max_tokens = int(max_tokens_str)
+                if max_tokens <= 0:
+                    raise ValueError()
+            except ValueError:
+                status.update("[red]Error: Max Tokens must be a positive integer[/red]")
+                return
+                
+            llm_client.GLOBAL_OVERRIDES["temperature"] = temp
+            llm_client.GLOBAL_OVERRIDES["max_tokens"] = max_tokens
+            osaurus_lib.GLOBAL_OVERRIDES["temperature"] = temp
+            osaurus_lib.GLOBAL_OVERRIDES["max_tokens"] = max_tokens
+            
+            status.update(f"[green]🟢 Applied successfully: Temp={temp}, Max Tokens={max_tokens}[/green]")
+        except Exception as e:
+            status.update(f"[red]Error: {e}[/red]")
+
+    def reset_model_parameters(self) -> None:
+        status = self.query_one("#param-status")
+        self.query_one("#param-temp").value = "0.1"
+        self.query_one("#param-max-tokens").value = "16000"
+        
+        llm_client.GLOBAL_OVERRIDES.clear()
+        osaurus_lib.GLOBAL_OVERRIDES.clear()
+        
+        status.update("[green]🟢 Reset to default values[/green]")
 
 
 def main():

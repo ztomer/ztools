@@ -56,6 +56,8 @@ from lib.llm.constants import (
 )
 ERROR_TRUNCATE_LEN = 200
 
+GLOBAL_OVERRIDES = {}
+
 
 class SessionContext:
     """Helper to reuse connection pool in with blocks without closing it (Carmack optimization)"""
@@ -200,6 +202,13 @@ def call(
     logger.debug(f"Calling {model} for task '{task}' at {host}:{port}")
     messages = apply_model_quirks(messages, model)
     max_tokens = max_tokens or get_max_tokens_for_task(task)
+
+    # Apply global overrides
+    if "temperature" in GLOBAL_OVERRIDES and temperature == DEFAULT_TEMPERATURE:
+        temperature = GLOBAL_OVERRIDES["temperature"]
+    if "max_tokens" in GLOBAL_OVERRIDES:
+        max_tokens = GLOBAL_OVERRIDES["max_tokens"]
+
     url = get_api_url(host, port)
     payload = {
         "model": model,
