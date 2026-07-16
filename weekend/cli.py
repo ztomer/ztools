@@ -56,8 +56,8 @@ from weekend.output import (
     print_step,
     print_summary,
     print_to_cli,
-    print_warning,
     print_to_cli_gorgeous,
+    print_warning,
 )
 
 __all__ = [

@@ -96,7 +96,8 @@ def get_chrome_cookies(
                 cookie_paths.append(p)
 
     if not cookie_paths:
-        print(f"{WARN} Chrome Cookies DB not found at {CHROME_COOKIES_DB} or any Profile directories")
+        msg_err = f"{WARN} Chrome Cookies DB not found at {CHROME_COOKIES_DB} or Profile dirs"
+        print(msg_err)
         sys.exit(EXIT_ERROR)
 
     try:
@@ -145,7 +146,7 @@ def get_chrome_cookies(
                 if unix_ts > MIN_VALID_UNIX_TIMESTAMP:
                     cookie["expires"] = unix_ts
             cookies.append(cookie)
-        
+
         if cookies:
             return cookies
 

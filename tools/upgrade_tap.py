@@ -47,8 +47,8 @@ def update_formula_content(file_path: Path, version: str, sha256: str) -> bool:
 
     if url_count == 0 or sha_count == 0:
         print_info("Standard URL/SHA256 patterns not matched. Retrying with generic patterns...")
-        # Fallback to generic url/sha256 replacement if structure is different
-        updated_content = re.sub(r'url\s+"[^"]+"', f'url "https://github.com/ztomer/ztools/archive/refs/tags/v{version}.tar.gz"', content)
+        tar_url = f"https://github.com/ztomer/ztools/archive/refs/tags/v{version}.tar.gz"
+        updated_content = re.sub(r'url\s+"[^"]+"', f'url "{tar_url}"', content)
         updated_content = re.sub(r'sha256\s+"[^"]+"', f'sha256 "{sha256}"', updated_content)
 
     file_path.write_text(updated_content)
@@ -104,9 +104,10 @@ end
 
         # Commit and push
         run_cmd(["git", "config", "user.name", "github-actions[bot]"], cwd=repo_dir)
-        run_cmd(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=repo_dir)
+        bot_email = "github-actions[bot]@users.noreply.github.com"
+        run_cmd(["git", "config", "user.email", bot_email], cwd=repo_dir)
         run_cmd(["git", "add", "."], cwd=repo_dir)
-        
+
         # Check if anything changed
         status = run_cmd(["git", "status", "--porcelain"], cwd=repo_dir).stdout.strip()
         if not status:
@@ -122,9 +123,15 @@ end
 
 def main():
     parser = argparse.ArgumentParser(description="Upgrade Homebrew Tap formula for ztools")
-    parser.add_argument("--version", required=True, help="New version (e.g. 0.9.7)")
-    parser.add_argument("--sha256", required=True, help="SHA256 checksum of the release source tarball")
-    parser.add_argument("--tap-dir", help="Path to local homebrew-tap repository clone (if updating locally)")
+    parser.add_argument(
+        "--version", required=True, help="New version (e.g. 0.9.7)"
+    )
+    parser.add_argument(
+        "--sha256", required=True, help="SHA256 checksum of the release source tarball"
+    )
+    parser.add_argument(
+        "--tap-dir", help="Path to local homebrew-tap repository clone (if updating locally)"
+    )
     parser.add_argument("--token", help="GitHub Personal Access Token for remote upgrade")
 
     args = parser.parse_args()
@@ -145,7 +152,11 @@ def main():
         # Remote upgrade using token
         token = args.token or os.environ.get("HOMEBREW_TAP_TOKEN")
         if not token:
-            print_err("GitHub token required for remote upgrade. Specify --token or set HOMEBREW_TAP_TOKEN.")
+            msg_err = (
+                "GitHub token required for remote upgrade. "
+                "Specify --token or set HOMEBREW_TAP_TOKEN."
+            )
+            print_err(msg_err)
             sys.exit(1)
         try:
             upgrade_remote(version, args.sha256, token)

@@ -1,48 +1,44 @@
 import asyncio
 import os
-import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List
 
-from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical, ScrollableContainer, VerticalScroll
-from textual.widgets import (
-    Header,
-    Footer,
-    Input,
-    Checkbox,
-    Select,
-    Button,
-    RichLog,
-    Label,
-    Static,
-    ListView,
-    ListItem,
-    ContentSwitcher,
-    Collapsible,
-    Markdown,
-)
+from PIL import Image
 from rich.text import Text
-from rich.panel import Panel
+from textual.app import App, ComposeResult
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.widgets import (
+    Button,
+    Checkbox,
+    Collapsible,
+    ContentSwitcher,
+    Footer,
+    Header,
+    Input,
+    Label,
+    ListItem,
+    ListView,
+    Markdown,
+    Select,
+    Static,
+)
 
 # Import backend methods
 import lib.llm.client as llm_client
 import lib.osaurus_lib as osaurus_lib
 from lib.llm.client import get_models, is_server_running
-from lib.tui import STEP, WARN, OK, FAIL
+from lib.quality_entry import compare_to_baseline, get_dimension_weights, load_baseline
+from lib.quality_models import Score, ScoreCard
+from rename.cli import image_extensions, rename_image
+from twitter.browser import collect_tweets_via_browser
+from twitter.summarize import summarize_with_llm
 from weekend.cli import _fetch_data, _parse_fixed, _parse_transient
 from weekend.llm import generate_weekend_plan
 from weekend.output import build_markdown_tables
-from twitter.browser import collect_tweets_via_browser
-from twitter.summarize import summarize_with_llm
-from lib.quality_entry import load_baseline, compare_to_baseline, get_dimension_weights
-from lib.quality_models import Score, ScoreCard
-from rename.cli import rename_image, clean_filename, image_extensions
 
 DEFAULT_MODELS = [("foundation", "foundation"), ("qwen", "qwen"), ("gemma", "gemma")]
 
-from PIL import Image
 
 def image_to_ansi(image_path: Path, width: int = 24) -> str:
     try:
@@ -55,10 +51,10 @@ def image_to_ansi(image_path: Path, width: int = 24) -> str:
             if height > 24:
                 height = 24
                 width = int((w / h) * height)
-                
+
             img = img.resize((width, height), Image.Resampling.BILINEAR)
             pixels = img.load()
-            
+
             lines = []
             for y in range(0, height, 2):
                 line_parts = []
@@ -95,11 +91,15 @@ class WeekendPlannerView(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Label("[bold green]📅 Weekend Planner[/bold green]", classes="section-title")
-        
+
         with Horizontal(classes="form-row"):
             yield Label("Location:", classes="form-label")
-            yield Input(placeholder="City/Region (e.g. Toronto/ON)", value="Toronto/ON", id="wk-location")
-            
+            yield Input(
+                placeholder="City/Region (e.g. Toronto/ON)",
+                value="Toronto/ON",
+                id="wk-location"
+            )
+
         with Horizontal(classes="form-row"):
             yield Label("Model:", classes="form-label")
             yield Select(options=DEFAULT_MODELS, id="wk-model", prompt="Select LLM Model")
@@ -116,12 +116,13 @@ class TwitterSummarizerView(Vertical):
     """TUI Form for summarizing Twitter timeline."""
 
     def compose(self) -> ComposeResult:
-        yield Label("[bold purple]🐦 Twitter Timeline Summarizer[/bold purple]", classes="section-title")
-        
+        msg = "[bold purple]🐦 Twitter Timeline Summarizer[/bold purple]"
+        yield Label(msg, classes="section-title")
+
         with Horizontal(classes="form-row"):
             yield Label("Since (Relative):", classes="form-label")
             yield Input(placeholder="e.g. 24h, 48h, 7d", value="24h", id="tw-since")
-            
+
         with Horizontal(classes="form-row"):
             yield Label("Model:", classes="form-label")
             yield Select(options=DEFAULT_MODELS, id="tw-model", prompt="Select LLM Model")
@@ -137,17 +138,22 @@ class ModelEvaluatorView(Vertical):
     """TUI Form for running quality evaluations."""
 
     def compose(self) -> ComposeResult:
-        yield Label("[bold yellow]📊 Model Quality Evaluator[/bold yellow]", classes="section-title")
-        
+        msg = "[bold yellow]📊 Model Quality Evaluator[/bold yellow]"
+        yield Label(msg, classes="section-title")
+
         with Horizontal(classes="form-row"):
             yield Label("Task:", classes="form-label")
             yield Select(
-                options=[("filename", "filename"), ("summarize", "summarize"), ("file_summary", "file_summary")],
+                options=[
+                    ("filename", "filename"),
+                    ("summarize", "summarize"),
+                    ("file_summary", "file_summary")
+                ],
                 id="ev-task",
                 value="filename",
                 prompt="Select Task"
             )
-            
+
         with Horizontal(classes="form-row"):
             yield Label("Model:", classes="form-label")
             yield Select(options=DEFAULT_MODELS, id="ev-model", prompt="Select LLM Model")
@@ -160,14 +166,19 @@ class ImageRenamerView(Vertical):
     """TUI Form for renaming screenshot files."""
 
     def compose(self) -> ComposeResult:
-        yield Label("[bold magenta]🖼️ Screenshot Image Renamer[/bold magenta]", classes="section-title")
-        
+        msg = "[bold magenta]🖼️ Screenshot Image Renamer[/bold magenta]"
+        yield Label(msg, classes="section-title")
+
         with Horizontal(id="rn-layout"):
             with Vertical(id="rn-form-panel"):
                 with Horizontal(classes="form-row"):
                     yield Label("Directory Path:", classes="form-label")
-                    yield Input(placeholder="Absolute path to folder", value=os.getcwd(), id="rn-dir")
-                    
+                    yield Input(
+                        placeholder="Absolute path to folder",
+                        value=os.getcwd(),
+                        id="rn-dir"
+                    )
+
                 with Horizontal(classes="form-row"):
                     yield Label("Model:", classes="form-label")
                     yield Select(options=DEFAULT_MODELS, id="rn-model", prompt="Select LLM Model")
@@ -180,7 +191,7 @@ class ImageRenamerView(Vertical):
                     yield Button("Rename Screenshots", variant="error", id="btn-rn-generate")
                     yield Button("Load Preview", variant="primary", id="btn-rn-preview")
                 yield VerticalScroll(id="rn-result-area", classes="result-area")
-                
+
             with Vertical(id="rn-preview-panel"):
                 yield Label("[bold white]Preview Window[/bold white]")
                 yield Static(id="rn-preview-box")
@@ -251,7 +262,7 @@ class TaskSchedulerView(Vertical):
                     )
                 yield Button("Schedule Task", variant="success", id="btn-sched-add")
                 yield Label("", id="sched-form-status")
-                
+
             with Vertical(id="sched-list-panel"):
                 yield Label("[bold white]Active Background Tasks[/bold white]")
                 yield VerticalScroll(id="sched-list")
@@ -471,10 +482,9 @@ class ZToolsApp(App):
         """Query models from Osaurus server in background."""
         status_box = self.query_one("#server-status-box")
         status_box.update("[yellow]Checking Osaurus...[/yellow]")
-        
-        host = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
+
         is_running = await asyncio.to_thread(is_server_running)
-        
+
         if is_running:
             status_box.update("[green]🟢 Server Online[/green]")
             models = await asyncio.to_thread(get_models)
@@ -547,7 +557,7 @@ class ZToolsApp(App):
     async def run_weekend_planner(self) -> None:
         lines = []
         self._update_status("#wk-result-area", lines, "⏳ Bounding dates and fetching forecast...")
-        
+
         location = self.query_one("#wk-location").value
         model = self.query_one("#wk-model").value
         use_cache = self.query_one("#wk-cache").value
@@ -555,23 +565,24 @@ class ZToolsApp(App):
 
         # Setup configs/arguments
         os.environ["OLLAMA_MODEL"] = model or ""
-        
+
         try:
             # Shift variables for execution
             fri = datetime.now()
             while fri.weekday() != 4:  # Find Friday
                 fri += timedelta(days=1)
             sun = fri + timedelta(days=2)
-            
+
             year = fri.strftime("%Y")
             month_name = fri.strftime("%B")
-            
+
             # Fetch weather, events, and venues
             weather, events, venues, dates = await asyncio.to_thread(
                 _fetch_data, fri, sun, year, month_name, use_cache
             )
-            
-            self._update_status("#wk-result-area", lines, f"⏳ Bounded dates: {dates}\nInvoking Osaurus pipeline...")
+
+            msg = f"⏳ Bounded dates: {dates}\nInvoking Osaurus pipeline..."
+            self._update_status("#wk-result-area", lines, msg)
 
             # Run LLM pipeline
             json_trans, json_fixed = await asyncio.to_thread(
@@ -591,8 +602,10 @@ class ZToolsApp(App):
             fixed_acts = _parse_fixed(json_fixed, model, {})
             transient_items = _parse_transient(json_trans, model, {})
 
-            plan_md = build_markdown_tables(dates, weather, {"transient_events": transient_items}, fixed_acts)
-            
+            plan_md = build_markdown_tables(
+                dates, weather, {"transient_events": transient_items}, fixed_acts
+            )
+
             # Mount final result
             container = self.query_one("#wk-result-area")
             for child in list(container.children):
@@ -604,12 +617,12 @@ class ZToolsApp(App):
 
     async def run_twitter_summarizer(self) -> None:
         lines = []
-        self._update_status("#tw-result-area", lines, "⏳ Initializing Playwright and loading Chrome cookies...")
+        msg_init = "⏳ Initializing Playwright and loading Chrome cookies..."
+        self._update_status("#tw-result-area", lines, msg_init)
 
         since = self.query_one("#tw-since").value
         model = self.query_one("#tw-model").value
-        use_cache = self.query_one("#tw-cache").value
-        
+
         try:
             # Parse since time
             since_time = datetime.now(timezone.utc) - timedelta(hours=24)
@@ -619,25 +632,29 @@ class ZToolsApp(App):
                 since_time = datetime.now(timezone.utc) - timedelta(days=int(since[:-1]))
 
             # Fetch tweets via browser
-            self._update_status("#tw-result-area", lines, f"⏳ Scraping tweets since: {since_time.strftime('%Y-%m-%d %H:%M:%S UTC')}...")
-            
+            fmt_time = since_time.strftime('%Y-%m-%d %H:%M:%S UTC')
+            msg_scraping = f"⏳ Scraping tweets since: {fmt_time}..."
+            self._update_status("#tw-result-area", lines, msg_scraping)
+
             tweets = await asyncio.to_thread(
                 collect_tweets_via_browser,
                 since_time,
                 debug=False
             )
-            
+
             if not tweets:
-                self._update_status("#tw-result-area", lines, "⏳ No tweets scraped. Using fallback cache...")
+                msg_fallback = "⏳ No tweets scraped. Using fallback cache..."
+                self._update_status("#tw-result-area", lines, msg_fallback)
                 from twitter.output import load_debug_cache
                 tweets = load_debug_cache() or []
-                
+
             if not tweets:
                 self._update_status("#tw-result-area", lines, "❌ No timeline data available.")
                 return
 
-            self._update_status("#tw-result-area", lines, f"⏳ Scraped {len(tweets)} tweets. Summarizing timeline with {model}...")
-            
+            msg_sum = f"⏳ Scraped {len(tweets)} tweets. Summarizing timeline with {model}..."
+            self._update_status("#tw-result-area", lines, msg_sum)
+
             # Summarize timeline
             host = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
             summary = await asyncio.to_thread(
@@ -647,13 +664,15 @@ class ZToolsApp(App):
                 model,
                 ""
             )
-            
+
             # Extract thinking block
             import re
             thinking_match = re.search(r"<thinking>(.*?)</thinking>", summary, re.DOTALL)
             if thinking_match:
                 thinking_text = thinking_match.group(1).strip()
-                clean_summary = re.sub(r"<thinking>.*?</thinking>", "", summary, flags=re.DOTALL).strip()
+                clean_summary = re.sub(
+                    r"<thinking>.*?</thinking>", "", summary, flags=re.DOTALL
+                ).strip()
             else:
                 thinking_text = None
                 clean_summary = summary.strip()
@@ -662,12 +681,16 @@ class ZToolsApp(App):
             container = self.query_one("#tw-result-area")
             for child in list(container.children):
                 child.remove()
-                
+
             if thinking_text:
-                container.mount(Collapsible(Markdown(thinking_text), title="💡 Show LLM Reasoning Block", collapsed=True))
-            
+                container.mount(Collapsible(
+                    Markdown(thinking_text),
+                    title="💡 Show LLM Reasoning Block",
+                    collapsed=True
+                ))
+
             container.mount(Markdown(clean_summary))
-            
+
         except Exception as e:
             self._update_status("#tw-result-area", lines, f"❌ Error: {e}")
 
@@ -677,17 +700,21 @@ class ZToolsApp(App):
 
         task = self.query_one("#ev-task").value
         model = self.query_one("#ev-model").value
-        
+
         try:
             baseline = await asyncio.to_thread(load_baseline)
             if not baseline:
-                self._update_status("#ev-result-area", lines, "❌ No baseline found to run evaluation against.")
+                self._update_status(
+                    "#ev-result-area",
+                    lines,
+                    "❌ No baseline found to run evaluation against."
+                )
                 return
 
             # Run mock scorecard match
             scorecards = []
             dim_weights = get_dimension_weights(task)
-            
+
             for key, prev in baseline.items():
                 parts = key.split("::", 2)
                 if len(parts) == 3:
@@ -701,16 +728,16 @@ class ZToolsApp(App):
                         scorecards.append(sc)
 
             warnings = compare_to_baseline(scorecards)
-            
+
             container = self.query_one("#ev-result-area")
             for child in list(container.children):
                 child.remove()
-                
+
             if warnings:
                 container.mount(Markdown("\n".join(f"- ⚠ {w}" for w in warnings)))
             else:
                 container.mount(Markdown("### ✔ No regressions detected against baseline."))
-                
+
         except Exception as e:
             self._update_status("#ev-result-area", lines, f"❌ Error: {e}")
 
@@ -731,18 +758,21 @@ class ZToolsApp(App):
         image_files = []
         for ext in image_extensions:
             image_files.extend(directory.glob(f"*{ext}"))
-            
-        image_files = list(set([f for f in image_files if f.suffix.lower() in image_extensions]))
+
+        image_files = list(set(
+            [f for f in image_files if f.suffix.lower() in image_extensions]
+        ))
 
         if not image_files:
             self._update_status("#rn-result-area", lines, "❌ No images found.")
             return
 
-        self._update_status("#rn-result-area", lines, f"⏳ Renaming {len(image_files)} images with {model}...")
-        
+        msg = f"⏳ Renaming {len(image_files)} images with {model}..."
+        self._update_status("#rn-result-area", lines, msg)
+
         host = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
         results = []
-        
+
         for image_path in sorted(image_files):
             success, message = await asyncio.to_thread(
                 rename_image,
@@ -768,39 +798,41 @@ class ZToolsApp(App):
         directory_str = self.query_one("#rn-dir").value
         preview_box = self.query_one("#rn-preview-box")
         preview_info = self.query_one("#rn-preview-info")
-        
+
         preview_box.update("⏳ Loading...")
-        
+
         try:
             directory = Path(directory_str)
             if not directory.exists() or not directory.is_dir():
                 preview_box.update("[red]Invalid Dir[/red]")
                 return
-                
+
             image_files = []
             for ext in image_extensions:
                 image_files.extend(directory.glob(f"*{ext}"))
-            image_files = list(set([f for f in image_files if f.suffix.lower() in image_extensions]))
-            
+            image_files = list(set(
+                [f for f in image_files if f.suffix.lower() in image_extensions]
+            ))
+
             if not image_files:
                 preview_box.update("[yellow]No images[/yellow]")
                 preview_info.update("")
                 return
-                
+
             first_image = sorted(image_files)[0]
-            
+
             # Generate ANSI preview in thread
             ansi_preview = await asyncio.to_thread(image_to_ansi, first_image, 24)
-            
+
             preview_box.update(Text.from_ansi(ansi_preview))
-            
+
             # Read dimensions
             with Image.open(first_image) as img:
                 w, h = img.size
                 size_kb = os.path.getsize(first_image) / 1024
-                
+
             preview_info.update(f"{first_image.name}\n{w}x{h} px | {size_kb:.1f} KB")
-            
+
         except Exception as e:
             preview_box.update(f"[red]Error: {e}[/red]")
             preview_info.update("")
@@ -808,24 +840,26 @@ class ZToolsApp(App):
     async def refresh_history_archive(self) -> None:
         hist_list = self.query_one("#hist-list")
         hist_list.clear()
-        
+
         doc_dir = Path.home() / "Documents"
         if not doc_dir.exists() or not doc_dir.is_dir():
             return
-            
+
         files = []
         for p in doc_dir.glob("*.md"):
             if p.name.startswith("weekend_plan_") or ("_to_" in p.name and len(p.name) > 20):
                 files.append(p)
-                
+
         files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-        
+
         for f in files:
             if f.name.startswith("weekend_plan_"):
-                label = f"📅 {f.name.replace('weekend_plan_', '').replace('.md', '').replace('_', ' ')}"
+                name_clean = f.name.replace('weekend_plan_', '')
+                name_clean = name_clean.replace('.md', '').replace('_', ' ')
+                label = f"📅 {name_clean}"
             else:
                 label = f"🐦 Summary: {f.name.replace('.md', '').replace('_', ' ')}"
-                
+
             item = ListItem(Label(label))
             item.filepath = f
             hist_list.append(item)
@@ -833,14 +867,14 @@ class ZToolsApp(App):
     async def load_history_item(self, item: ListItem) -> None:
         filepath = getattr(item, "filepath", None)
         viewer = self.query_one("#hist-viewer")
-        
+
         for child in list(viewer.children):
             child.remove()
-            
+
         if not filepath or not filepath.exists():
             viewer.mount(Label("[red]File not found[/red]"))
             return
-            
+
         try:
             content = await asyncio.to_thread(filepath.read_text)
             viewer.mount(Markdown(content))
@@ -852,7 +886,7 @@ class ZToolsApp(App):
         try:
             temp_str = self.query_one("#param-temp").value
             max_tokens_str = self.query_one("#param-max-tokens").value
-            
+
             try:
                 temp = float(temp_str)
                 if not (0.0 <= temp <= 2.0):
@@ -860,7 +894,7 @@ class ZToolsApp(App):
             except ValueError:
                 status.update("[red]Error: Temperature must be a float between 0.0 and 2.0[/red]")
                 return
-                
+
             try:
                 max_tokens = int(max_tokens_str)
                 if max_tokens <= 0:
@@ -868,13 +902,14 @@ class ZToolsApp(App):
             except ValueError:
                 status.update("[red]Error: Max Tokens must be a positive integer[/red]")
                 return
-                
+
             llm_client.GLOBAL_OVERRIDES["temperature"] = temp
             llm_client.GLOBAL_OVERRIDES["max_tokens"] = max_tokens
             osaurus_lib.GLOBAL_OVERRIDES["temperature"] = temp
             osaurus_lib.GLOBAL_OVERRIDES["max_tokens"] = max_tokens
-            
-            status.update(f"[green]🟢 Applied successfully: Temp={temp}, Max Tokens={max_tokens}[/green]")
+
+            msg = f"[green]🟢 Applied successfully: Temp={temp}, Max Tokens={max_tokens}[/green]"
+            status.update(msg)
         except Exception as e:
             status.update(f"[red]Error: {e}[/red]")
 
@@ -882,10 +917,10 @@ class ZToolsApp(App):
         status = self.query_one("#param-status")
         self.query_one("#param-temp").value = "0.1"
         self.query_one("#param-max-tokens").value = "16000"
-        
+
         llm_client.GLOBAL_OVERRIDES.clear()
         osaurus_lib.GLOBAL_OVERRIDES.clear()
-        
+
         status.update("[green]🟢 Reset to default values[/green]")
 
     async def scheduler_loop(self) -> None:
@@ -917,21 +952,21 @@ class ZToolsApp(App):
             container = self.query_one("#sched-list")
         except Exception:
             return
-            
+
         for child in list(container.children):
             child.remove()
-            
+
         if not self.active_schedules:
             container.mount(Label("[yellow]No scheduled tasks configured.[/yellow]"))
             return
-            
+
         for sched in self.active_schedules:
             task_type_label = {
                 "twitter": "🐦 Twitter Summarizer",
                 "rename": "🖼️ Screenshot Renamer",
                 "weekend": "📅 Weekend Planner"
             }.get(sched["task_type"], sched["task_type"])
-            
+
             interval_sec = sched["interval_seconds"]
             if interval_sec == 10:
                 interval_str = "Every 10 seconds"
@@ -940,19 +975,22 @@ class ZToolsApp(App):
             else:
                 hours = interval_sec // 3600
                 interval_str = f"Every {hours} hour" + ("s" if hours > 1 else "")
-                
+
             status_text = sched["last_run_status"]
             next_run_str = sched["next_run"].strftime("%H:%M:%S")
-            
+
             card_content = (
                 f"[bold white]{task_type_label}[/bold white]\n"
                 f"Interval: {interval_str} | Status: {status_text} | Next Run: {next_run_str}"
             )
-            
+
             card_row = Horizontal(classes="sched-card")
             card_row.mount(Label(card_content, classes="sched-card-info"))
-            card_row.mount(Button("Delete", variant="error", id=f"btn-sched-del-{sched['id']}", classes="sched-card-btn"))
-            
+            btn_id = f"btn-sched-del-{sched['id']}"
+            card_row.mount(Button(
+                "Delete", variant="error", id=btn_id, classes="sched-card-btn"
+            ))
+
             container.mount(card_row)
 
     def add_scheduler_task(self) -> None:
@@ -960,19 +998,19 @@ class ZToolsApp(App):
         try:
             task_type = self.query_one("#sched-task-type").value
             interval_str = self.query_one("#sched-interval").value
-            
+
             if not task_type or not interval_str:
                 status.update("[red]Error: Please select both task type and interval.[/red]")
                 return
-                
+
             interval = int(interval_str)
             task_id = str(len(self.active_schedules) + 1)
-            
+
             for s in self.active_schedules:
                 if s["task_type"] == task_type:
                     status.update(f"[red]Error: {task_type} is already scheduled.[/red]")
                     return
-                    
+
             sched = {
                 "id": task_id,
                 "task_type": task_type,

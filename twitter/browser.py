@@ -195,7 +195,7 @@ def collect_tweets_via_browser(since_time: datetime, debug: bool) -> list[dict]:
                 if loc.count() > 0:
                     following_tab = loc
                     break
-            
+
             if following_tab is None:
                 tabs = page.locator('[role="tab"]')
                 if tabs.count() > 1:
@@ -210,10 +210,17 @@ def collect_tweets_via_browser(since_time: datetime, debug: bool) -> list[dict]:
                     )
                 except Exception:
                     pass
-            else:
-                print(f"{WARN} Could not locate 'Following' tab (defaulting to current view).", file=sys.stderr)
+                msg_warn = (
+                    f"{WARN} Could not locate 'Following' tab "
+                    "(defaulting to current view)."
+                )
+                print(msg_warn, file=sys.stderr)
         except Exception as e:
-            print(f"{WARN} Failed to switch to 'Following' tab: {e}. Defaulting to current view.", file=sys.stderr)
+            msg_fail = (
+                f"{WARN} Failed to switch to 'Following' tab: {e}. "
+                "Defaulting to current view."
+            )
+            print(msg_fail, file=sys.stderr)
 
         print(f"{STEP} Scrolling timeline (collecting tweets since {since_time.isoformat()}) ...")
         scrolls = 0

@@ -11,6 +11,11 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from lib.llm.constants import (
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_TEMPERATURE,
+    DEFAULT_TIMEOUT,
+)
 from lib.llm.quirks import apply_model_quirks
 
 from .config import get_max_tokens_for_task, get_timeout
@@ -49,11 +54,6 @@ from .osaurus_server import (
     test_connection,
 )
 
-from lib.llm.constants import (
-    DEFAULT_TEMPERATURE,
-    DEFAULT_MAX_TOKENS,
-    DEFAULT_TIMEOUT,
-)
 ERROR_TRUNCATE_LEN = 200
 
 GLOBAL_OVERRIDES = {}

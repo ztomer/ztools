@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""Pre-push hook: run ruff check and pytest coverage before pushing."""
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+def main():
+    # Use venv binaries if available
+    venv_bin = ROOT / ".venv" / "bin"
+    ruff_cmd = str(venv_bin / "ruff") if (venv_bin / "ruff").exists() else "ruff"
+    pytest_cmd = str(venv_bin / "pytest") if (venv_bin / "pytest").exists() else "pytest"
+
+    print("Running pre-push quality gate checks...")
+
+    # 1. Ruff linting
+    print("Linting with Ruff...")
+    ruff_proc = subprocess.run(
+        [ruff_cmd, "check", "."],
+        cwd=str(ROOT)
+    )
+    if ruff_proc.returncode != 0:
+        print("❌ Ruff linting failed! Please fix all errors before pushing.")
+        return 1
+
+    # 2. Pytest suite with coverage gate
+    print("Running tests with coverage gate...")
+    pytest_proc = subprocess.run(
+        [pytest_cmd, "--cov", "--cov-fail-under=95", "."],
+        cwd=str(ROOT)
+    )
+    if pytest_proc.returncode != 0:
+        print("❌ Tests failed or coverage fell below 95%! Please fix before pushing.")
+        return 1
+
+    print("✅ All checks passed! Proceeding with push.")
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())

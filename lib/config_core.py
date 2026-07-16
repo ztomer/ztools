@@ -5,6 +5,16 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from lib.llm.constants import (
+    DEFAULT_MAX_TOKENS as _FALLBACK_MAX_TOKENS,  # noqa: F401
+)
+from lib.llm.constants import (
+    DEFAULT_MODEL as _FALLBACK_MODEL,  # noqa: F401
+)
+from lib.llm.constants import (
+    DEFAULT_TIMEOUT as _FALLBACK_TIMEOUT,  # noqa: F401
+)
+
 from .config_toml import load_config
 
 
@@ -26,11 +36,6 @@ class Task(enum.Enum):
 
 TaskKeys = Task
 
-from lib.llm.constants import (
-    DEFAULT_TIMEOUT as _FALLBACK_TIMEOUT,
-    DEFAULT_MAX_TOKENS as _FALLBACK_MAX_TOKENS,
-    DEFAULT_MODEL as _FALLBACK_MODEL,
-)
 
 _config_loaded = False
 _config: Dict[str, Any] = {}
