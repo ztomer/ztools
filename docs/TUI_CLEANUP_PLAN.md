@@ -43,18 +43,18 @@ Normalize all logger and output statements across CLI scripts to use the `·`, `
 ### Phase 2: Eliminate Console Decorative Borders & Banners
 Remove visual clutter and character-printed lines from stdout runs.
 
-*   [ ] **`eval/run.py` (Lines 170-172):** Remove `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` banner.
-*   [ ] **`twitter/cli.py` (Lines 218, 220):** Remove `"-" * 40` separators.
-*   [ ] **`eval/benchmark_quality.py`:** Remove `====` and `──` borders.
-*   [ ] **`weekend/cli.py`:** Remove `=== Weekend Generator Started ===` and similar decorative header lines.
+*   [x] **`lib/signal_handling.py`:** Replaced `=== Interrupted — shutting down ===` with `! Interrupted — shutting down`.
+*   [ ] ~~`eval/run.py` (Lines 170-172):~~ Already clean — no stdout banners.
+*   [ ] ~~`twitter/cli.py` (Lines 218, 220):~~ Already clean — no `"-" * 40` in current code.
+*   [ ] ~~`eval/benchmark_quality.py`:~~ `====` and `──` are code-comment section dividers, not stdout output.
+*   [ ] ~~`weekend/cli.py`:~~ `print_step("Weekend Generator Started")` outputs `· Weekend Generator Started` — uses STEP prefix, not a banner.
 
 ---
 
 ### Phase 3: Emoji Sanitization
-Replace terminal-dependent emojis with high-fidelity unicode or standard prefixes.
+Replace terminal-dependent emojis with standard prefixes.
 
-*   [ ] **`eval/run.py` (Line 183):** Replace `⚠️` with `!`.
-*   [ ] **`eval/cli.py`:** Replace `⚠️` with `!`.
+*   [x] Already clean — no `⚠️` in codebase.
 
 ---
 
@@ -65,18 +65,17 @@ Replace terminal-dependent emojis with high-fidelity unicode or standard prefixe
 - **Fix:** Align text body cleanly after the `@name` column and prevent mid-word wrapping.
 
 #### 4.2 Weekend Planner Output Polish
-- **Weather Dump:** Instead of dumping raw data on a single long line, format it as a readable sentence: `"Fri 27°C (rain), Sat 20°C (heavy rain), Sun 18°C (rain)"`.
-- **Dangling Progress Spinners:** Replace the timing-heavy `⠏ ✓` spinners in `weekend/cli.py` with simple `·` prefixed lines that complete in-place.
-- **Table Scores:** Remove the score column if it defaults to `N/A`, or implement actual scoring metrics.
+- **Weather Dump:** ~~Instead of dumping raw data on a single long line, format it as a readable sentence:~~ Done via `_format_weather_display()` in `weekend/cli.py`.
+- **Dangling Progress Spinners:** ~~Replace the timing-heavy `⠏ ✓` spinners~~ Already using `tui.status()` — prints `· Fetching... done`.
+- **Table Scores:** Score column uses actual values from `_score_item()` — no N/A column present.
 
 #### 4.3 Image Renamer Output Compactness
-- **Issue:** Printing long `old_name.png -> new_name.png` lines on every file creates cluttered terminal outputs.
-- **Fix:** Print only the filename difference/renamed output concisely (e.g. showing just the changes).
+- ~~Issue: Printing long `old_name.png -> new_name.png` lines~~ Already compact — success returns silently with only a final summary line (`· N renamed, M skipped, 0 errors`). Errors/skips print one line each.
 
 ---
 
 ### Phase 5: Print System Unification
 Pick a single printing interface per file to avoid mixed terminal formats.
 
-*   [ ] **`twitter/cli.py`:** Standardize on standard `print` or `console.print` exclusively (currently mixes both).
-*   [ ] **`weekend/cli.py`:** Standardize console print format (removes inline mixed Rich markup).
+*   [x] **`twitter/cli.py`:** Uses `print()` consistently — no `console.print()` calls.
+*   [x] **`weekend/cli.py`:** Uses `print_*` wrappers and `tui.status()` — no direct mixed calls.

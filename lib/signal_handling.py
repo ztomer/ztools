@@ -8,6 +8,8 @@ import sys
 import threading
 from typing import Callable, List, Optional
 
+from lib.tui import WARN
+
 _cleanup_callbacks: List[Callable] = []
 _shutdown_requested = False
 _shutdown_lock = threading.Lock()
@@ -33,7 +35,7 @@ def _signal_handler(signum: int, frame: Optional[object]) -> None:
         if _shutdown_requested:
             sys.exit(130)
         _shutdown_requested = True
-    print("\n=== Interrupted — shutting down ===", flush=True)
+    print(f"{WARN} Interrupted — shutting down", flush=True)
     _run_cleanup()
     sys.exit(130)
 
