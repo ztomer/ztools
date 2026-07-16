@@ -32,7 +32,7 @@ async def test_scheduler_add_remove():
         assert len(app.active_schedules) == 1
         assert app.active_schedules[0]["task_type"] == "twitter"
         assert app.active_schedules[0]["interval_seconds"] == 60
-        mock_status.update.assert_any_call("[green]🟢 Task scheduled successfully.[/green]")
+        mock_status.update.assert_any_call("[green]Task scheduled successfully.[/green]")
 
         mock_status.reset_mock()
         app.add_scheduler_task()

@@ -28,7 +28,7 @@ def main():
             cwd=str(ROOT)
         )
         if ruff_proc.returncode != 0:
-            print("❌ Ruff linting failed! Please fix all errors before pushing.")
+            print("✗ Ruff linting failed! Please fix all errors before pushing.")
             return 1
     except FileNotFoundError:
         print("⚠  Ruff not found, skipping lint check.")
@@ -48,13 +48,13 @@ def main():
             env=env
         )
         if pytest_proc.returncode != 0:
-            print("❌ Tests failed or coverage fell below 95%! Please fix before pushing.")
+            print("✗ Tests failed or coverage fell below 95%! Please fix before pushing.")
             return 1
     except FileNotFoundError:
         print("⚠  Pytest not found, skipping test check.")
         print("   Install: pip install pytest pytest-cov  or  .venv/bin/pytest")
 
-    print("✅ All checks passed! Proceeding with push.")
+    print("✓ All checks passed! Proceeding with push.")
     return 0
 
 if __name__ == "__main__":

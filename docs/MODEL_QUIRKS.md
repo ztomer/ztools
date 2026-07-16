@@ -215,21 +215,21 @@ summarize: |
 
 ## Model Quirks
 
-### Foundation ✅ WORKS RELIABLY
+### Foundation ✓ WORKS RELIABLY
 - **Fast**: 8-15s for tasks
 - **Clean JSON**: No markdown, no thinking
 - **Source matching**: 100% (risky - may copy directly from input)
 - **Synthesis weakness**: Scores only 52-58% on synthesis (no connecting narrative, no TL;DR). Despite unified summarization prompt, it still lists events without relationship language
 - **Filename**: 97% quality, 0.6s avg — best speed-to-quality ratio
 
-### Laguna-xs.2-mxfp4 ✅ BEST BALANCE
+### Laguna-xs.2-mxfp4 ✓ BEST BALANCE
 - **Emerges as top pick** from full quality eval (May 2026)
 - **Filename**: 98% quality, 3.1s avg
 - **Summarize**: 92% quality — best Synthesis of non-qwopus models
 - **No failures**: 0 crashes across all 8 test cases
 - **Note**: Relatively unknown model but beats qwen and nemotron on consistency
 
-### Nemotron-3-nano-omni ⚠️ INSTRUCTION LEAK
+### Nemotron-3-nano-omni ⚠ INSTRUCTION LEAK
 - **Instruction leak**: Often outputs `"Here is the filename: ..."` instead of the filename alone. Score drops to 50-74% on affected cases
 - **Filename**: 84% avg (dragged down by leak), 3.3s avg
 - **Summarize**: 89.5% — similar Synthesis weakness to foundation
@@ -239,12 +239,12 @@ summarize: |
 - **Requires**: "Output JSON now" trigger (for weekend tasks)
 - **Thinking**: Plaintext blocks - handled by stripping
 - **Key quirks**: Uses `category` → `target_ages`
-- **qwen3.6-27b-mxfp8-mtp** ✅ best qwen: 99% filename, 100% summarize, 0 failures, 14.8s avg
+- **qwen3.6-27b-mxfp8-mtp** ✓ best qwen: 99% filename, 100% summarize, 0 failures, 14.8s avg
 - **qwen3.6-27b-mxfp4**: 93.8% filename, 100% summarize, 12.3s avg
 - **qwen3.6-35b-a3b-mxfp4**: 93.8% filename, 94% summarize, 10.1s avg — good but not better than 27b variants
-- **qwen3.6-35b-a3b-mxfp8-mtp** ✅ NOW WORKS: Previously consistently crashed on summarize/file_summary (returned empty) — may have been a server issue. July 2026 sweep: passes weekend_transient_schema (100%), filename_leak (100%). **Best all-rounder** (92% mean). NOTE: summarize_contradiction is **stochastic** (~33% pass rate) — sometimes resists falsehood, sometimes parrots. Not deterministic for truthfulness.
+- **qwen3.6-35b-a3b-mxfp8-mtp** ✓ NOW WORKS: Previously consistently crashed on summarize/file_summary (returned empty) — may have been a server issue. July 2026 sweep: passes weekend_transient_schema (100%), filename_leak (100%). **Best all-rounder** (92% mean). NOTE: summarize_contradiction is **stochastic** (~33% pass rate) — sometimes resists falsehood, sometimes parrots. Not deterministic for truthfulness.
 
-### Qwopus ⚠️ HIGH QUALITY BUT UNRELIABLE
+### Qwopus ⚠ HIGH QUALITY BUT UNRELIABLE
 - **Best quality when it works**: 98.2% filename, 98.5% summarize
 - **Only model with good synthesis (94%)**: Adds rich connecting narrative
 - **BUT 40% failure rate on cold start**: Produces empty output randomly
@@ -252,13 +252,13 @@ summarize: |
 - **Inconsistent**: Same model, same prompt, same case scored 96.2% in one run, 0% in another
 - **Recommendation**: Only use for quality-critical batch work where failures are acceptable
 
-### Gemma ❌ NOT SUITABLE FOR WEEKEND
+### Gemma ✗ NOT SUITABLE FOR WEEKEND
 - Returns weather data instead of events
 - 0 items with details in tests
 - Flat dicts instead of nested structure
 - **gemma-4-e4b-it-4bit/8bit**: All tasks return empty — MLX backend may not support these model formats
 
-### Minimax-m2.7-small-jangtq ❌ UNUSABLE
+### Minimax-m2.7-small-jangtq ✗ UNUSABLE
 - **Extremely slow**: 400s+ per single filename call
 - **Generic outputs**: 3/5 filename cases return "filename.txt" or similar
 - **Complex tasks**: 100% failure on summarize and file_summary

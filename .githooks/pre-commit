@@ -2,9 +2,11 @@
 """Pre-commit hook: fast local checks before allowing a commit.
 
 Runs in under 2s for typical changes:
-1. Config-debt gate: block NEW hardcoded paths/URLs/emails.
-2. ruff check on staged .py files.
-3. Python syntax check (py_compile) on staged .py files.
+1. Emoji gate — only Kare icon set (→ ✓ ✗ ⚠ ↔ ↑ ↓) is permitted.
+2. Config-debt gate — block NEW hardcoded paths/URLs/emails.
+3. ruff check on staged .py files.
+4. Python syntax check (py_compile) on staged .py files.
+5. File size gate — reject new files over 500 lines.
 """
 
 import re
@@ -14,26 +16,27 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-venv_bin = ROOT / ".venv" / "bin"
-ruff_cmd = str(venv_bin / "ruff") if (venv_bin / "ruff").exists() else "ruff"
 
-result = subprocess.run(
-    ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
-    capture_output=True, text=True, cwd=str(ROOT),
-)
-staged = [f for f in result.stdout.strip().split("\n") if f and f.endswith(".py")]
-if not staged:
-    sys.exit(0)
+def get_staged() -> list[str]:
+    r = subprocess.run(
+        ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+        capture_output=True, text=True, cwd=str(ROOT),
+    )
+    return [f for f in r.stdout.strip().split("\n") if f]
 
 
-def get_added_lines(file_path: str) -> set:
+def get_staged_py() -> list[str]:
+    return [f for f in get_staged() if f.endswith(".py")]
+
+
+def get_added_lines(file_path: str) -> set[int]:
     r = subprocess.run(
         ["git", "diff", "--cached", "-U0", file_path],
         capture_output=True, text=True, cwd=str(ROOT),
     )
     added = set()
     for line in r.stdout.split("\n"):
-        m = re.match(r'^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@', line)
+        m = re.match(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", line)
         if m:
             start = int(m.group(1))
             count = int(m.group(2)) if m.group(2) else 1
@@ -42,12 +45,41 @@ def get_added_lines(file_path: str) -> set:
     return added
 
 
+venv_bin = ROOT / ".venv" / "bin"
+ruff_cmd = str(venv_bin / "ruff") if (venv_bin / "ruff").exists() else "ruff"
+
+staged_files = get_staged()
+staged_py = get_staged_py()
 errors = []
 
-# --- 1. Config-debt gate ---
+# --- 1. Emoji gate ---
+EMOJI_CHECKER = ROOT / "tools" / "check_no_emoji.py"
+if EMOJI_CHECKER.exists():
+    r = subprocess.run(
+        [sys.executable, str(EMOJI_CHECKER), "--staged"],
+        capture_output=True, text=True, cwd=str(ROOT),
+    )
+    if r.returncode != 0:
+        errors.append("  Emoji gate FAILED:")
+        for line in r.stdout.strip().split("\n"):
+            if line.strip():
+                errors.append(f"    {line}")
+
+# --- 2. File size gate (500-line limit) ---
+MAX_LINES = 500
+for f in staged_files:
+    filepath = ROOT / f
+    if not filepath.exists() or not f.endswith(".py"):
+        continue
+    with open(filepath) as fh:
+        line_count = sum(1 for _ in fh)
+    if line_count > MAX_LINES:
+        errors.append(f"  File exceeds {MAX_LINES} lines: {f} ({line_count} lines)")
+
+# --- 3. Config-debt gate ---
 CHECKER = ROOT / "tools" / "check_config_debt.py"
 if CHECKER.exists():
-    for f in staged:
+    for f in staged_py:
         added_lines = get_added_lines(f)
         if not added_lines:
             continue
@@ -59,29 +91,30 @@ if CHECKER.exists():
             continue
         new_violations = []
         for line in r.stdout.split("\n"):
-            m = re.match(r'^\s+L\s*(\d+)', line)
+            m = re.match(r"^\s+L\s*(\d+)", line)
             if m and int(m.group(1)) in added_lines:
                 new_violations.append(line)
         if new_violations:
             errors.append(f"  Config debt in {f}:")
             errors.extend(new_violations)
 
-# --- 2. ruff check on staged files ---
-try:
-    ruff_proc = subprocess.run(
-        [ruff_cmd, "check", *staged],
-        capture_output=True, text=True, cwd=str(ROOT),
-    )
-    if ruff_proc.returncode != 0:
-        errors.append("  Ruff linting errors:")
-        for line in ruff_proc.stdout.split("\n"):
-            if line.strip():
-                errors.append(f"    {line.strip()}")
-except FileNotFoundError:
-    pass
+# --- 4. ruff check on staged files ---
+if staged_py:
+    try:
+        ruff_proc = subprocess.run(
+            [ruff_cmd, "check", *staged_py],
+            capture_output=True, text=True, cwd=str(ROOT),
+        )
+        if ruff_proc.returncode != 0:
+            errors.append("  Ruff linting errors:")
+            for line in ruff_proc.stdout.split("\n"):
+                if line.strip():
+                    errors.append(f"    {line.strip()}")
+    except FileNotFoundError:
+        pass
 
-# --- 3. Python syntax check ---
-for f in staged:
+# --- 5. Python syntax check ---
+for f in staged_py:
     r = subprocess.run(
         [sys.executable, "-m", "py_compile", str(ROOT / f)],
         capture_output=True, text=True, cwd=str(ROOT),

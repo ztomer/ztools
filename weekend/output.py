@@ -38,7 +38,7 @@ def print_summary(status, fixed_count, transient_count, filepath, elapsed_time):
 
 def _fmt_score(item):
     score = item.get("score", DEFAULT_SCORE)
-    return f"⭐ {score}/{MAX_RATING_SCALE}" if score > DEFAULT_SCORE else ""
+    return f"* {score}/{MAX_RATING_SCALE}" if score > DEFAULT_SCORE else ""
 
 
 def _build_fixed_table(fixed):
@@ -213,7 +213,7 @@ def print_to_cli_gorgeous(dates_str, weather_str, fixed_activities, transient_ev
 
         for item in fixed_activities:
             score = item.get("score", DEFAULT_SCORE)
-            score_str = f"⭐ {score}/{MAX_RATING_SCALE}" if score > DEFAULT_SCORE else "—"
+            score_str = f"* {score}/{MAX_RATING_SCALE}" if score > DEFAULT_SCORE else "—"
             name = (
                 item.get("name")
                 or item.get("activity")
@@ -256,7 +256,7 @@ def print_to_cli_gorgeous(dates_str, weather_str, fixed_activities, transient_ev
 
         for item in transient_events:
             score = item.get("score", DEFAULT_SCORE)
-            score_str = f"⭐ {score}/{MAX_RATING_SCALE}" if score > DEFAULT_SCORE else "—"
+            score_str = f"* {score}/{MAX_RATING_SCALE}" if score > DEFAULT_SCORE else "—"
             name = (
                 item.get("name")
                 or item.get("event")

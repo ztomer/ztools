@@ -94,7 +94,7 @@ class TestFmtScore:
     def test_positive_score(self):
         from weekend.output import _fmt_score
 
-        assert _fmt_score({"score": 4.5}) == "⭐ 4.5/5"
+        assert _fmt_score({"score": 4.5}) == "* 4.5/5"
 
     def test_zero_score(self):
         from weekend.output import _fmt_score

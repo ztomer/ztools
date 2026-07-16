@@ -44,6 +44,9 @@ _model_configs_cache: Dict[str, Dict] = {}
 _config_lock = threading.Lock()
 
 
+USER_CONFIG_PATH = Path.home() / ".config" / "ztools" / "config.toml"
+
+
 def _auto_load():
     global _config_loaded, _config
     with _config_lock:
@@ -64,6 +67,14 @@ def _auto_load():
         _config.clear()
         _config.update(loaded if isinstance(loaded, dict) else {})
         _config_loaded = True
+        # User config overlay — ~/.config/ztools/config.toml overrides defaults
+        if USER_CONFIG_PATH.exists():
+            try:
+                user_loaded = load_config(USER_CONFIG_PATH)
+                if isinstance(user_loaded, dict):
+                    _config.update(user_loaded)
+            except Exception as e:
+                print(f"{WARN} Failed to read user config '{USER_CONFIG_PATH}': {e}")
 
 
 def init_config(config_path: Optional[str] = None) -> bool:
