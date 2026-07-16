@@ -12,6 +12,8 @@ from lib.osaurus_lib import (
     is_server_running,
     restart_server,
 )
+from lib.osaurus_server import ENSURE_MAX_RETRIES
+from lib.osaurus_server import SERVER_WAIT as RESTART_WAIT
 
 _cache_dir = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "weekend"
 DEBUG_EVENTS_FILE = _cache_dir / "events_debug_cache.json"
@@ -82,13 +84,10 @@ DATES_STR = f"{_friday.strftime('%B %d')} to {_sunday.strftime('%B %d, %Y')}"
 
 MODEL_CONFIG = str(Path.home() / ".config" / "model_eval.json")
 
-MODEL_NAME = os.environ.get("OLLAMA_MODEL", get_best_model(Task.JSON) or "gemma-4-26b-a4b-it-4bit")
+_fallback_model = os.environ.get("WEEKEND_FALLBACK_MODEL", "gemma-4-26b-a4b-it-4bit")
+MODEL_NAME = os.environ.get("OLLAMA_MODEL", get_best_model(Task.JSON) or _fallback_model)
 OSAURUS_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
 OSAURUS_APP = os.environ.get("OSAURUS_APP", "/Applications/osaurus.app")
-
-# Defaults for server management
-RESTART_WAIT = 20
-ENSURE_MAX_RETRIES = 3
 
 
 def is_server_running_ours():
