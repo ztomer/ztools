@@ -40,6 +40,35 @@ from rename.cli import rename_image, clean_filename, image_extensions
 
 DEFAULT_MODELS = [("foundation", "foundation"), ("qwen", "qwen"), ("gemma", "gemma")]
 
+from PIL import Image
+
+def image_to_ansi(image_path: Path, width: int = 24) -> str:
+    try:
+        with Image.open(image_path) as img:
+            img = img.convert("RGB")
+            w, h = img.size
+            height = int((h / w) * width)
+            if height % 2 != 0:
+                height += 1
+            if height > 24:
+                height = 24
+                width = int((w / h) * height)
+                
+            img = img.resize((width, height), Image.Resampling.BILINEAR)
+            pixels = img.load()
+            
+            lines = []
+            for y in range(0, height, 2):
+                line_parts = []
+                for x in range(width):
+                    r1, g1, b1 = pixels[x, y]
+                    r2, g2, b2 = pixels[x, y + 1] if y + 1 < height else (0, 0, 0)
+                    line_parts.append(f"\033[48;2;{r1};{g1};{b1}m\033[38;2;{r2};{g2};{b2}m▄\033[0m")
+                lines.append("".join(line_parts))
+            return "\n".join(lines)
+    except Exception as e:
+        return f"[red]Failed to render preview: {e}[/red]"
+
 
 class Sidebar(Vertical):
     """Left sidebar navigation panel."""
@@ -128,20 +157,29 @@ class ImageRenamerView(Vertical):
     def compose(self) -> ComposeResult:
         yield Label("[bold magenta]🖼️ Screenshot Image Renamer[/bold magenta]", classes="section-title")
         
-        with Horizontal(classes="form-row"):
-            yield Label("Directory Path:", classes="form-label")
-            yield Input(placeholder="Absolute path to folder", value=os.getcwd(), id="rn-dir")
-            
-        with Horizontal(classes="form-row"):
-            yield Label("Model:", classes="form-label")
-            yield Select(options=DEFAULT_MODELS, id="rn-model", prompt="Select LLM Model")
+        with Horizontal(id="rn-layout"):
+            with Vertical(id="rn-form-panel"):
+                with Horizontal(classes="form-row"):
+                    yield Label("Directory Path:", classes="form-label")
+                    yield Input(placeholder="Absolute path to folder", value=os.getcwd(), id="rn-dir")
+                    
+                with Horizontal(classes="form-row"):
+                    yield Label("Model:", classes="form-label")
+                    yield Select(options=DEFAULT_MODELS, id="rn-model", prompt="Select LLM Model")
 
-        with Horizontal(classes="form-row"):
-            yield Checkbox("Dry Run (Preview)", value=True, id="rn-dry-run")
-            yield Checkbox("Force Relevance Check", value=False, id="rn-force")
+                with Horizontal(classes="form-row"):
+                    yield Checkbox("Dry Run (Preview)", value=True, id="rn-dry-run")
+                    yield Checkbox("Force Relevance Check", value=False, id="rn-force")
 
-        yield Button("Rename Screenshots", variant="error", id="btn-rn-generate")
-        yield VerticalScroll(id="rn-result-area", classes="result-area")
+                with Horizontal(classes="form-row"):
+                    yield Button("Rename Screenshots", variant="error", id="btn-rn-generate")
+                    yield Button("Load Preview", variant="primary", id="btn-rn-preview")
+                yield VerticalScroll(id="rn-result-area", classes="result-area")
+                
+            with Vertical(id="rn-preview-panel"):
+                yield Label("[bold white]Preview Window[/bold white]")
+                yield Static(id="rn-preview-box")
+                yield Label("", id="rn-preview-info")
 
 
 class ZToolsApp(App):
@@ -235,6 +273,34 @@ class ZToolsApp(App):
         border: solid #334155;
         margin-bottom: 1;
     }
+    #rn-layout {
+        height: 1fr;
+    }
+    #rn-form-panel {
+        width: 1fr;
+    }
+    #rn-preview-panel {
+        width: 32;
+        background: #1c2538;
+        border-left: solid #334155;
+        padding: 1;
+        align: center middle;
+    }
+    #rn-preview-box {
+        width: auto;
+        height: auto;
+        margin-top: 1;
+        margin-bottom: 1;
+        background: #090d16;
+        color: #e2e8f0;
+        border: solid #334155;
+        text-align: center;
+    }
+    #rn-preview-info {
+        color: #94a3b8;
+        font-size: 8;
+        text-align: center;
+    }
     """
 
     TITLE = "ZTools Terminal Hub"
@@ -302,6 +368,8 @@ class ZToolsApp(App):
             await self.run_model_evaluator()
         elif event.button.id == "btn-rn-generate":
             await self.run_image_renamer()
+        elif event.button.id == "btn-rn-preview":
+            await self.load_image_preview()
 
     def _update_status(self, container_id: str, lines: List[str], message: str) -> None:
         lines.append(message)
@@ -529,6 +597,47 @@ class ZToolsApp(App):
         for child in list(container.children):
             child.remove()
         container.mount(Markdown("\n".join(results)))
+
+    async def load_image_preview(self) -> None:
+        directory_str = self.query_one("#rn-dir").value
+        preview_box = self.query_one("#rn-preview-box")
+        preview_info = self.query_one("#rn-preview-info")
+        
+        preview_box.update("⏳ Loading...")
+        
+        try:
+            directory = Path(directory_str)
+            if not directory.exists() or not directory.is_dir():
+                preview_box.update("[red]Invalid Dir[/red]")
+                return
+                
+            image_files = []
+            for ext in image_extensions:
+                image_files.extend(directory.glob(f"*{ext}"))
+            image_files = list(set([f for f in image_files if f.suffix.lower() in image_extensions]))
+            
+            if not image_files:
+                preview_box.update("[yellow]No images[/yellow]")
+                preview_info.update("")
+                return
+                
+            first_image = sorted(image_files)[0]
+            
+            # Generate ANSI preview in thread
+            ansi_preview = await asyncio.to_thread(image_to_ansi, first_image, 24)
+            
+            preview_box.update(Text.from_ansi(ansi_preview))
+            
+            # Read dimensions
+            with Image.open(first_image) as img:
+                w, h = img.size
+                size_kb = os.path.getsize(first_image) / 1024
+                
+            preview_info.update(f"{first_image.name}\n{w}x{h} px | {size_kb:.1f} KB")
+            
+        except Exception as e:
+            preview_box.update(f"[red]Error: {e}[/red]")
+            preview_info.update("")
 
 
 def main():
