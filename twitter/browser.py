@@ -26,8 +26,8 @@ PAGE_LOAD_TIMEOUT_MS = int(os.environ.get("TWITTER_PAGE_LOAD_TIMEOUT_MS", "30000
 CLICK_TIMEOUT_MS = int(os.environ.get("TWITTER_CLICK_TIMEOUT_MS", "5000"))
 
 # Sleep durations (seconds)
-INITIAL_PAGE_WAIT = 3
-TAB_SWITCH_WAIT = 2
+INITIAL_PAGE_WAIT = int(os.environ.get("TWITTER_INITIAL_PAGE_WAIT", "3"))
+TAB_SWITCH_WAIT = int(os.environ.get("TWITTER_TAB_SWITCH_WAIT", "2"))
 
 # Constants to eliminate magic numbers/strings (Mitchell Hashimoto design)
 TWITTER_TYPENAME_VISIBILITY = "TweetWithVisibilityResults"

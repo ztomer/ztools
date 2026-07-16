@@ -42,13 +42,13 @@ _PROMPT_RULES = """
 - Keep it concise and factual
 """
 
-CHARS_PER_TOKEN = 3
-OUTPUT_RESERVE_TOKENS = 4096
-COLD_START_BASE = 120
-MAX_TIMEOUT = 600
+CHARS_PER_TOKEN = int(os.environ.get("TWITTER_CHARS_PER_TOKEN", "3"))
+OUTPUT_RESERVE_TOKENS = int(os.environ.get("TWITTER_OUTPUT_RESERVE", "4096"))
+COLD_START_BASE = int(os.environ.get("TWITTER_COLD_START_BASE", "120"))
+MAX_TIMEOUT = int(os.environ.get("TWITTER_MAX_TIMEOUT", "600"))
 
 # Default context window size for Osaurus models (tokens)
-OSAURUS_CONTEXT_WINDOW = 8192
+OSAURUS_CONTEXT_WINDOW = int(os.environ.get("TWITTER_CONTEXT_WINDOW", "8192"))
 
 # Timeout estimation: chars per second processing rate
 CHARS_PER_SECOND = 25
