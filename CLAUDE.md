@@ -13,7 +13,8 @@
   - `image_renamer.py` → `img_helpers.py`, `img_llm.py`, `img_renamer.py`
   - `twitter_summarizer.py` → `twit_cookies.py`, `twit_browser.py`, `twit_summarize.py`, `twit_output.py`, `twit_main.py`
   - `weekend_planner.py` → `weekend_config.py`, `weekend_data.py`, `weekend_prompts.py`, `weekend_llm.py`, `weekend_output.py`, `weekend_main.py`
-  - `model_eval.py` → `eval_tasks.py`, `eval_run.py`, `eval_report.py`, `eval_failures.py`, `eval_validate.py`, `eval_main.py`
+   - `model_eval.py` → `eval_tasks.py`, `eval_run.py`, `eval_report.py`, `eval_failures.py`, `eval_validate.py`, `eval_main.py`
+   - `eval/tasks_core.py` → `eval/tasks_prompts.py` + shim
 
 ### Model Evals
 - Use quick mode for iteration: `--quick --task <task>`

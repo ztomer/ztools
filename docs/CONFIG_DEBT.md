@@ -192,7 +192,7 @@ Different backends use different API paths, unclear which is canonical.
 - ✅ `eval/benchmark_quality.py` — default models from `get_filename_models()`
 - ✅ `eval/cli.py` — default eval model from `config.get("default_model")`
 - ✅ Triple-defined constants — consolidated; dead TIMEOUTS/MAX_TOKENS dicts removed from `lib/llm/constants.py`
-- ⬜ Prompt duplication — needs design discussion
+- ✅ Prompt duplication — extracted shared weekend prompts + test cases to `lib/eval_data.py`; `eval/tasks_core.py` and `lib/quality_runner.py` both import from there
 
 ### P2 — Partially Fixed
 - ✅ `tests/test_json_validator.py` — absolute paths → dynamic
@@ -210,8 +210,8 @@ Different backends use different API paths, unclear which is canonical.
 | Priority | Quick Fix | Needs Design | Total | Fixed |
 |----------|-----------|-------------|-------|-------|
 | P0 | 6 | 2 | 8 | **8** |
-| P1 | 14 | 7 | 17 | **15** |
+| P1 | 14 | 7 | 17 | **16** |
 | P2 | 59 | 11 | 65 | **25** |
-| **Total** | **79** | **20** | **90** | **48** |
+| **Total** | **79** | **20** | **90** | **49** |
 
 Remaining **11 violations** (all hardcoded years in test-data fixtures) are intentional test data, not configuration debt. The CI gate prevents new violations — it only blocks on changed lines, so pre-existing test-data years don't block commits.

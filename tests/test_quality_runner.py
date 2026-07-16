@@ -17,7 +17,7 @@ def mock_llm():
 
 class TestTestCases:
     def test_filename_cases_count(self, mock_llm):
-        from lib.quality_runner import FILENAME_CASES
+        from lib.eval_data import FILENAME_CASES
 
         # 5 cases covering keyword, no-match, format variations
         assert len(FILENAME_CASES) == 5
@@ -27,7 +27,7 @@ class TestTestCases:
             assert case.reference
 
     def test_summarize_cases_count(self, mock_llm):
-        from lib.quality_runner import SUMMARIZE_CASES
+        from lib.eval_data import SUMMARIZE_CASES
 
         # 2 summarize cases
         assert len(SUMMARIZE_CASES) == 2
@@ -35,7 +35,7 @@ class TestTestCases:
             assert case.task == "summarize"
 
     def test_file_summary_cases_count(self, mock_llm):
-        from lib.quality_runner import FILE_SUMMARY_CASES
+        from lib.eval_data import FILE_SUMMARY_CASES
 
         # 1 file_summary case
         assert len(FILE_SUMMARY_CASES) == 1
@@ -43,7 +43,7 @@ class TestTestCases:
             assert case.task == "file_summary"
 
     def test_all_test_cases_combined(self, mock_llm):
-        from lib.quality_runner import (
+        from lib.eval_data import (
             ALL_TEST_CASES,
             FILE_SUMMARY_CASES,
             FILENAME_CASES,

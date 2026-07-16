@@ -1,3 +1,4 @@
+from lib.eval_data import ALL_TEST_CASES
 from lib.quality_models import Score, ScoreCard
 from lib.quality_report import (
     BASELINE_PATH,
@@ -6,7 +7,7 @@ from lib.quality_report import (
     load_baseline,
     save_baseline,
 )
-from lib.quality_runner import ALL_TEST_CASES, run_suite
+from lib.quality_runner import run_suite
 from lib.quality_scorers import get_dimension_weights
 
 

@@ -6,6 +6,12 @@ Composite score = weighted average of dimensions.
 Scorers are calibrated against human-judged reference outputs.
 """
 
+from lib.eval_data import (  # noqa: F401
+    ALL_TEST_CASES,
+    FILE_SUMMARY_CASES,
+    FILENAME_CASES,
+    SUMMARIZE_CASES,
+)
 from lib.quality_entry import main  # noqa: F401
 from lib.quality_models import Score, ScoreCard, TestCase, _lower, _str  # noqa: F401
 from lib.quality_report import (  # noqa: F401
@@ -16,10 +22,6 @@ from lib.quality_report import (  # noqa: F401
     save_baseline,
 )
 from lib.quality_runner import (  # noqa: F401
-    ALL_TEST_CASES,
-    FILE_SUMMARY_CASES,
-    FILENAME_CASES,
-    SUMMARIZE_CASES,
     query_model,
     run_suite,
 )
