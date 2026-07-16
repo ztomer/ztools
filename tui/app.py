@@ -84,6 +84,7 @@ class Sidebar(Vertical):
             ListItem(Label("🖼️ Image Renamer"), id="nav-rename"),
             ListItem(Label("📂 History Archive"), id="nav-history"),
             ListItem(Label("⚙️ Model Parameters"), id="nav-params"),
+            ListItem(Label("⏱️ Task Scheduler"), id="nav-scheduler"),
             id="nav-list"
         )
         yield Static(id="server-status-box")
@@ -213,6 +214,47 @@ class ModelParametersView(Vertical):
                 yield Button("Apply Parameters", variant="success", id="btn-param-apply")
                 yield Button("Reset Defaults", variant="primary", id="btn-param-reset")
             yield Label("", id="param-status")
+
+
+class TaskSchedulerView(Vertical):
+    """TUI view for defining and monitoring background automation tasks."""
+
+    def compose(self) -> ComposeResult:
+        yield Label("[bold cyan]⏱️ Task Scheduler[/bold cyan]", classes="section-title")
+        with Horizontal(id="sched-layout"):
+            with Vertical(id="sched-form-panel"):
+                yield Label("[bold white]Create New Task Schedule[/bold white]")
+                with Horizontal(classes="form-row"):
+                    yield Label("Task Type:", classes="form-label")
+                    yield Select(
+                        options=[
+                            ("Twitter Summarizer", "twitter"),
+                            ("Screenshot Renamer", "rename"),
+                            ("Weekend Planner", "weekend")
+                        ],
+                        id="sched-task-type",
+                        prompt="Select Task"
+                    )
+                with Horizontal(classes="form-row"):
+                    yield Label("Interval:", classes="form-label")
+                    yield Select(
+                        options=[
+                            ("Every 10 seconds (Demo)", "10"),
+                            ("Every 1 minute (Demo)", "60"),
+                            ("Every 1 hour", "3600"),
+                            ("Every 6 hours", "21600"),
+                            ("Every 12 hours", "43200"),
+                            ("Every 24 hours", "86400")
+                        ],
+                        id="sched-interval",
+                        prompt="Select Interval"
+                    )
+                yield Button("Schedule Task", variant="success", id="btn-sched-add")
+                yield Label("", id="sched-form-status")
+                
+            with Vertical(id="sched-list-panel"):
+                yield Label("[bold white]Active Background Tasks[/bold white]")
+                yield VerticalScroll(id="sched-list")
 
 
 class ZToolsApp(App):
@@ -362,6 +404,42 @@ class ZToolsApp(App):
         margin-top: 1;
         padding-left: 2;
     }
+    #sched-layout {
+        height: 1fr;
+    }
+    #sched-form-panel {
+        width: 1fr;
+        padding: 1;
+    }
+    #sched-form-status {
+        margin-top: 1;
+        padding-left: 2;
+    }
+    #sched-list-panel {
+        width: 50;
+        background: #1c2538;
+        border-left: solid #334155;
+        padding: 1;
+    }
+    #sched-list {
+        background: transparent;
+        height: 1fr;
+        margin-top: 1;
+    }
+    .sched-card {
+        height: auto;
+        background: #090d16;
+        border: solid #334155;
+        margin-bottom: 1;
+        padding: 1;
+        align: middle;
+    }
+    .sched-card-info {
+        width: 1fr;
+    }
+    .sched-card-btn {
+        width: 12;
+    }
     """
 
     TITLE = "ZTools Terminal Hub"
@@ -380,10 +458,13 @@ class ZToolsApp(App):
             yield ImageRenamerView(id="rename")
             yield HistoryArchiveView(id="history")
             yield ModelParametersView(id="params")
+            yield TaskSchedulerView(id="scheduler")
         yield Footer()
 
     async def on_mount(self) -> None:
         """Trigger dynamic models load on start."""
+        self.active_schedules = []
+        self.run_worker(self.scheduler_loop())
         await self.action_refresh_models()
 
     async def action_refresh_models(self) -> None:
@@ -426,6 +507,9 @@ class ZToolsApp(App):
                 self.run_worker(self.refresh_history_archive())
             elif event.item.id == "nav-params":
                 switcher.current = "params"
+            elif event.item.id == "nav-scheduler":
+                switcher.current = "scheduler"
+                self.refresh_scheduler_display()
         elif event.list_view.id == "hist-list":
             self.run_worker(self.load_history_item(event.item))
 
@@ -447,6 +531,11 @@ class ZToolsApp(App):
             self.apply_model_parameters()
         elif event.button.id == "btn-param-reset":
             self.reset_model_parameters()
+        elif event.button.id == "btn-sched-add":
+            self.add_scheduler_task()
+        elif event.button.id and event.button.id.startswith("btn-sched-del-"):
+            task_id = event.button.id.replace("btn-sched-del-", "")
+            self.remove_scheduler_task(task_id)
 
     def _update_status(self, container_id: str, lines: List[str], message: str) -> None:
         lines.append(message)
@@ -798,6 +887,109 @@ class ZToolsApp(App):
         osaurus_lib.GLOBAL_OVERRIDES.clear()
         
         status.update("[green]🟢 Reset to default values[/green]")
+
+    async def scheduler_loop(self) -> None:
+        """Daemon loop to run scheduled tasks in background."""
+        while True:
+            await asyncio.sleep(1)
+            # Make a copy to avoid concurrent modification issues
+            for sched in list(self.active_schedules):
+                if sched["next_run"] <= datetime.now() and not sched["is_running"]:
+                    sched["is_running"] = True
+                    self.run_worker(self.run_scheduled_task(sched))
+
+    async def run_scheduled_task(self, sched: dict) -> None:
+        try:
+            sched["last_run_status"] = "⏳ Running"
+            self.refresh_scheduler_display()
+            # Do nothing / simulate task run for demo tasks
+            await asyncio.sleep(2)
+            sched["last_run_status"] = "✅ Success"
+        except Exception as e:
+            sched["last_run_status"] = f"❌ Failed: {e}"
+        finally:
+            sched["is_running"] = False
+            sched["next_run"] = datetime.now() + timedelta(seconds=sched["interval_seconds"])
+            self.refresh_scheduler_display()
+
+    def refresh_scheduler_display(self) -> None:
+        try:
+            container = self.query_one("#sched-list")
+        except Exception:
+            return
+            
+        for child in list(container.children):
+            child.remove()
+            
+        if not self.active_schedules:
+            container.mount(Label("[yellow]No scheduled tasks configured.[/yellow]"))
+            return
+            
+        for sched in self.active_schedules:
+            task_type_label = {
+                "twitter": "🐦 Twitter Summarizer",
+                "rename": "🖼️ Screenshot Renamer",
+                "weekend": "📅 Weekend Planner"
+            }.get(sched["task_type"], sched["task_type"])
+            
+            interval_sec = sched["interval_seconds"]
+            if interval_sec == 10:
+                interval_str = "Every 10 seconds"
+            elif interval_sec == 60:
+                interval_str = "Every 1 minute"
+            else:
+                hours = interval_sec // 3600
+                interval_str = f"Every {hours} hour" + ("s" if hours > 1 else "")
+                
+            status_text = sched["last_run_status"]
+            next_run_str = sched["next_run"].strftime("%H:%M:%S")
+            
+            card_content = (
+                f"[bold white]{task_type_label}[/bold white]\n"
+                f"Interval: {interval_str} | Status: {status_text} | Next Run: {next_run_str}"
+            )
+            
+            card_row = Horizontal(classes="sched-card")
+            card_row.mount(Label(card_content, classes="sched-card-info"))
+            card_row.mount(Button("Delete", variant="error", id=f"btn-sched-del-{sched['id']}", classes="sched-card-btn"))
+            
+            container.mount(card_row)
+
+    def add_scheduler_task(self) -> None:
+        status = self.query_one("#sched-form-status")
+        try:
+            task_type = self.query_one("#sched-task-type").value
+            interval_str = self.query_one("#sched-interval").value
+            
+            if not task_type or not interval_str:
+                status.update("[red]Error: Please select both task type and interval.[/red]")
+                return
+                
+            interval = int(interval_str)
+            task_id = str(len(self.active_schedules) + 1)
+            
+            for s in self.active_schedules:
+                if s["task_type"] == task_type:
+                    status.update(f"[red]Error: {task_type} is already scheduled.[/red]")
+                    return
+                    
+            sched = {
+                "id": task_id,
+                "task_type": task_type,
+                "interval_seconds": interval,
+                "next_run": datetime.now() + timedelta(seconds=interval),
+                "last_run_status": "Idle",
+                "is_running": False
+            }
+            self.active_schedules.append(sched)
+            status.update("[green]🟢 Task scheduled successfully.[/green]")
+            self.refresh_scheduler_display()
+        except Exception as e:
+            status.update(f"[red]Error: {e}[/red]")
+
+    def remove_scheduler_task(self, task_id: str) -> None:
+        self.active_schedules = [s for s in self.active_schedules if s["id"] != task_id]
+        self.refresh_scheduler_display()
 
 
 def main():
