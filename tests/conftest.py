@@ -31,11 +31,11 @@ def reset_global_sessions():
     import lib.llm.client
     import lib.osaurus_lib
 
-    lib.llm.client._session = None
-    lib.osaurus_lib._session = None
+    lib.llm.client.reset_session()
+    lib.osaurus_lib.reset_session()
     yield
-    lib.llm.client._session = None
-    lib.osaurus_lib._session = None
+    lib.llm.client.reset_session()
+    lib.osaurus_lib.reset_session()
 
 
 @pytest.fixture

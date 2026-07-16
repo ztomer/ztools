@@ -55,6 +55,16 @@ def _get_session_context():
     return SessionContext(_session, close_on_exit=False)
 
 
+def reset_session():
+    global _session
+    if _session is not None:
+        try:
+            _session.close()
+        except Exception:
+            pass
+        _session = None
+
+
 def get_api_url(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> str:
     """Get API URL for host:port.
 
@@ -151,6 +161,7 @@ def call(
     except requests.exceptions.Timeout:
         result["error"] = "Timeout"
     except requests.exceptions.ConnectionError:
+        reset_session()
         result["error"] = "Connection failed"
     except Exception as e:
         result["error"] = str(e)
@@ -167,6 +178,9 @@ def is_server_running(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> boo
                 timeout=SERVER_CHECK_TIMEOUT,
             )
         return response.status_code == HTTP_STATUS_OK
+    except requests.exceptions.ConnectionError:
+        reset_session()
+        return False
     except Exception:
         return False
 
@@ -181,5 +195,8 @@ def get_models(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> List[str]:
             )
         data = response.json()
         return [m["model"] for m in data.get("models", [])]
+    except requests.exceptions.ConnectionError:
+        reset_session()
+        return []
     except Exception:
         return []

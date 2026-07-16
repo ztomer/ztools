@@ -4,8 +4,7 @@ from typing import List, Optional
 
 import requests
 
-DEFAULT_HOST = "localhost"
-DEFAULT_PORT = 1337
+from lib.llm.constants import DEFAULT_HOST, DEFAULT_PORT
 
 # Timeouts for HTTP requests (seconds)
 HTTP_READ_TIMEOUT = 10

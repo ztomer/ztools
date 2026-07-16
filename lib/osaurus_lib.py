@@ -49,10 +49,11 @@ from .osaurus_server import (
     test_connection,
 )
 
-# Default parameter values
-DEFAULT_TEMPERATURE = 0.1
-DEFAULT_MAX_TOKENS = 16000
-DEFAULT_TIMEOUT = 600
+from lib.llm.constants import (
+    DEFAULT_TEMPERATURE,
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_TIMEOUT,
+)
 ERROR_TRUNCATE_LEN = 200
 
 
@@ -87,7 +88,18 @@ def _get_session_context():
     return SessionContext(_session, close_on_exit=False)
 
 
+def reset_session():
+    global _session
+    if _session is not None:
+        try:
+            _session.close()
+        except Exception:
+            pass
+        _session = None
+
+
 __all__ = [
+    "reset_session",
     "DEFAULT_HOST",
     "DEFAULT_PORT",
     "DEFAULT_TEMPERATURE",
@@ -241,6 +253,7 @@ def call(
         logger.warning(f"Request timed out after {timeout}s")
     except requests.exceptions.ConnectionError:
         logger.warning(f"Connection error to {url}")
+        reset_session()
         if _try_foundation(use_foundation, messages, parse_json, result):
             return result
         result["error"] = "Connection failed - is server running?"
@@ -369,6 +382,8 @@ def call_llm_api(
             "model": data.get("model", model),
         }
     except Exception as e:
+        if isinstance(e, requests.exceptions.ConnectionError):
+            reset_session()
         return {"error": str(e)}
 
 

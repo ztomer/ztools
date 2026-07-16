@@ -168,7 +168,14 @@ def collect_tweets_via_browser(since_time: datetime, debug: bool) -> list[dict]:
         except PWTimeout:
             pass
 
-        time.sleep(INITIAL_PAGE_WAIT)
+        try:
+            page.wait_for_selector(
+                '[data-testid="primaryColumn"], [role="tablist"], [autocomplete="username"]',
+                timeout=INITIAL_PAGE_WAIT * MS_PER_SECOND,
+            )
+        except Exception:
+            pass
+
         is_login_page = any(kw in page.title().lower() for kw in LOGIN_KEYWORDS) or any(
             kw in page.url.lower() for kw in ("/login", "/signin", "/i/flow/login")
         )
@@ -196,7 +203,13 @@ def collect_tweets_via_browser(since_time: datetime, debug: bool) -> list[dict]:
 
             if following_tab:
                 following_tab.click(timeout=CLICK_TIMEOUT_MS)
-                time.sleep(TAB_SWITCH_WAIT)
+                try:
+                    page.wait_for_selector(
+                        '[role="tab"][aria-selected="true"]',
+                        timeout=TAB_SWITCH_WAIT * MS_PER_SECOND,
+                    )
+                except Exception:
+                    pass
             else:
                 print(f"{WARN} Could not locate 'Following' tab (defaulting to current view).", file=sys.stderr)
         except Exception as e:

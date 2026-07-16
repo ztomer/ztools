@@ -26,9 +26,11 @@ class Task(enum.Enum):
 
 TaskKeys = Task
 
-_FALLBACK_TIMEOUT = 600
-_FALLBACK_MAX_TOKENS = 16000
-_FALLBACK_MODEL = "foundation"
+from lib.llm.constants import (
+    DEFAULT_TIMEOUT as _FALLBACK_TIMEOUT,
+    DEFAULT_MAX_TOKENS as _FALLBACK_MAX_TOKENS,
+    DEFAULT_MODEL as _FALLBACK_MODEL,
+)
 
 _config_loaded = False
 _config: Dict[str, Any] = {}
