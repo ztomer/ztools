@@ -84,7 +84,7 @@ MODEL_CONFIG = str(Path.home() / ".config" / "model_eval.json")
 
 MODEL_NAME = os.environ.get("OLLAMA_MODEL", get_best_model(Task.JSON) or "gemma-4-26b-a4b-it-4bit")
 OSAURUS_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
-OSAURUS_APP = "/Applications/osaurus.app"
+OSAURUS_APP = os.environ.get("OSAURUS_APP", "/Applications/osaurus.app")
 
 # Defaults for server management
 RESTART_WAIT = 20

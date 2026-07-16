@@ -13,12 +13,9 @@ _NO_COLOR = os.environ.get("NO_COLOR") == "1" or not sys.stdout.isatty()
 
 @contextmanager
 def status(message):
-    if _NO_COLOR:
-        print(f"{STEP} {message}")
-        yield
-    else:
-        with console.status(f"[bold cyan]{message}[/bold cyan]", spinner="dots"):
-            yield
+    print(f"{STEP} {message} ...", end="", flush=True)
+    yield
+    print(" done")
 
 _cfg = {}
 _zstyle_path = os.environ.get("ZSTYLE_CONFIG", str(Path.home() / ".config" / "zstyle"))
@@ -32,7 +29,7 @@ except OSError:
     pass
 
 STEP = _cfg.get("ICON_STEP", "·")
-WARN = _cfg.get("ICON_WARN", "⚠")
+WARN = _cfg.get("ICON_WARN", "!")
 FAIL = _cfg.get("ICON_ERR", "✗")
 OK = _cfg.get("ICON_OK", "✓")
 DEBUG = False

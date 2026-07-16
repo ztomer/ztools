@@ -27,9 +27,7 @@ class TestConstants:
             DEFAULT_PORT,
             DEFAULT_TEMPERATURE,
             DEFAULT_TIMEOUT,
-            MAX_TOKENS,
             MODEL_FAMILIES,
-            TIMEOUTS,
         )
 
         assert DEFAULT_HOST == "localhost"
@@ -43,8 +41,6 @@ class TestConstants:
         assert API_CHAT == "/api/chat"
         assert "qwen" in MODEL_FAMILIES
         assert "gemma" in MODEL_FAMILIES
-        assert "think" in TIMEOUTS
-        assert "json" in MAX_TOKENS
 
 
 class TestClient:

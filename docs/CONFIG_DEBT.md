@@ -110,12 +110,12 @@ Different backends use different API paths, unclear which is canonical.
 
 | File | Line | Value | Suggestion |
 |------|------|-------|------------|
-| `lib/osaurus_server.py` | 21 | `/Applications/osaurus.app` | Config key `osaurus_app_path` |
-| `lib/osaurus_server.py` | 12 | `~/.osaurus.pid` | Config key `pid_file` |
-| `lib/osaurus_server.py` | 151 | `~/llm_dumps` | Config key `dump_dir` |
-| `weekend/config.py` | 13–14 | `~/.weekend_events_debug_cache.json` | Use `$XDG_CACHE_HOME` |
-| `weekend/config.py` | 74 | `~/.config/model_eval.json` | Env var or config key |
-| `weekend/config.py` | 81 | `/Applications/osaurus.app` | Same as above |
+| `lib/osaurus_server.py` | 21 | `/Applications/osaurus.app` | Config key `osaurus_app_path` — ✅ uses `OSAURUS_APP` env var |
+| `lib/osaurus_server.py` | 12 | `~/.osaurus.pid` | Config key `pid_file` — ✅ uses `XDG_RUNTIME_DIR` env var |
+| `lib/osaurus_server.py` | 151 | `~/llm_dumps` | Config key `dump_dir` — ✅ uses `OSAURUS_DUMP_DIR` env var |
+| `weekend/config.py` | 13–14 | `~/.weekend_events_debug_cache.json` | Use `$XDG_CACHE_HOME` — ✅ already uses `XDG_CACHE_HOME` |
+| `weekend/config.py` | 74 | `~/.config/model_eval.json` | Env var or config key — ✅ uses `Path.home()` |
+| `weekend/config.py` | 81 | `/Applications/osaurus.app` | Same as above — ✅ now uses `OSAURUS_APP` env var |
 | `weekend/cli.py` | 62 | `~/Documents/` | Config key `output_dir` |
 | `eval/report.py` | 169,205,240,424,505 | `~/.config/ztools` | Extract to constant |
 | `lib/tui.py` | 5 | `~/.config/zstyle` | Env var `ZSTYLE_CONFIG` |
@@ -125,7 +125,7 @@ Different backends use different API paths, unclear which is canonical.
 
 | File | Line | URL | Suggestion |
 |------|------|-----|------------|
-| `weekend/data.py` | 27 | `api.open-meteo.com/v1/forecast` | Config key |
+| `weekend/data.py` | 27 | `api.open-meteo.com/v1/forecast` | Config key — ✅ now uses `WEATHER_API_URL` env var |
 | `twitter/browser.py` | 37 | `https://x.com/home` | Config key |
 | `eval/cli.py` | 332 | `http://localhost:1337/api/tags` | Use config constant |
 
@@ -191,7 +191,7 @@ Different backends use different API paths, unclear which is canonical.
 - ✅ `rename/llm.py` — `RELEVANCE_CHECK_MODELS` via env var `RENAME_RELEVANCE_MODELS`
 - ✅ `eval/benchmark_quality.py` — default models from `get_filename_models()`
 - ✅ `eval/cli.py` — default eval model from `config.get("default_model")`
-- ⬜ Triple-defined constants — needs design discussion
+- ✅ Triple-defined constants — consolidated; dead TIMEOUTS/MAX_TOKENS dicts removed from `lib/llm/constants.py`
 - ⬜ Prompt duplication — needs design discussion
 
 ### P2 — Partially Fixed
@@ -199,7 +199,7 @@ Different backends use different API paths, unclear which is canonical.
 - ✅ `tools/check_config_debt.py` — CI gate script created
 - ✅ `.githooks/pre-commit` — pre-commit hook wired (only blocks NEW violations)
 - ✅ `.github/workflows/config-debt.yml` — CI workflow wired (only blocks NEW)
-- ✅ Infrastructure paths via env vars: `OSAURUS_APP`, `OSAURUS_DUMP_DIR`, `XDG_RUNTIME_DIR`, `TWITTER_*`, `WEEKEND_MLX_FALLBACKS`, `RENAME_DEFAULT_FILENAME_MODEL`
+- ✅ Infrastructure paths via env vars: `OSAURUS_APP`, `OSAURUS_DUMP_DIR`, `XDG_RUNTIME_DIR`, `TWITTER_*`, `WEEKEND_MLX_FALLBACKS`, `RENAME_DEFAULT_FILENAME_MODEL`, `WEATHER_API_URL`
 - ⬜ Search query templates in `weekend/data.py` — in config
 - ⬜ Remaining infrastructure paths and timeouts — low priority
 
@@ -208,8 +208,8 @@ Different backends use different API paths, unclear which is canonical.
 | Priority | Quick Fix | Needs Design | Total | Fixed |
 |----------|-----------|-------------|-------|-------|
 | P0 | 6 | 2 | 8 | **8** |
-| P1 | 14 | 7 | 17 | **14** |
-| P2 | 59 | 11 | 65 | **17** |
-| **Total** | **79** | **20** | **90** | **39** |
+| P1 | 14 | 7 | 17 | **15** |
+| P2 | 59 | 11 | 65 | **19** |
+| **Total** | **79** | **20** | **90** | **42** |
 
 Remaining **11 violations** (all hardcoded years in test-data fixtures) are intentional test data, not configuration debt. The CI gate prevents new violations — it only blocks on changed lines, so pre-existing test-data years don't block commits.

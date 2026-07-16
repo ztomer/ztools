@@ -6,13 +6,13 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from lib.llm.constants import (
-    DEFAULT_MAX_TOKENS as _FALLBACK_MAX_TOKENS,  # noqa: F401
+    DEFAULT_MAX_TOKENS as _FALLBACK_MAX_TOKENS,
 )
 from lib.llm.constants import (
-    DEFAULT_MODEL as _FALLBACK_MODEL,  # noqa: F401
+    DEFAULT_MODEL as _FALLBACK_MODEL,
 )
 from lib.llm.constants import (
-    DEFAULT_TIMEOUT as _FALLBACK_TIMEOUT,  # noqa: F401
+    DEFAULT_TIMEOUT as _FALLBACK_TIMEOUT,
 )
 
 from .config_toml import load_config

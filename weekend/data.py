@@ -1,4 +1,5 @@
 import datetime
+import os
 import re
 import sys
 import time
@@ -26,7 +27,9 @@ FRIDAY_WEEKDAY_INDEX = 4
 DAYS_IN_WEEK = 7
 SUNDAY_DELTA_DAYS = 2
 
-WEATHER_API_URL = "https://api.open-meteo.com/v1/forecast"
+WEATHER_API_URL = os.environ.get(
+    "WEATHER_API_URL", "https://api.open-meteo.com/v1/forecast"
+)
 DAILY_METEO_VARS = "temperature_2m_max,precipitation_sum"
 PRECIPITATION_THRESHOLD = 0.5
 FORECAST_HEADER = "Daily Forecast:\n"

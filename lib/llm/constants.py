@@ -20,24 +20,6 @@ DEFAULT_TIMEOUT = 600
 # Model families for quirks
 MODEL_FAMILIES = ["qwopus", "qwen", "gemma", "nemotron", "laguna", "foundation"]
 
-# Timeouts per task type
-TIMEOUTS = {
-    "think": 600,
-    "json": 600,
-    "summarize": 300,
-    "filename": 120,
-    "vlm": 600,
-}
-
-# Max tokens per task
-MAX_TOKENS = {
-    "think": 16000,
-    "json": 16000,
-    "summarize": 16000,
-    "filename": 1000,
-    "vlm": 16000,
-}
-
 # Client type constants
 DEFAULT_CLIENT_TYPE = "osaurus"
 CLIENT_TYPE_OSAURUS = "osaurus"
