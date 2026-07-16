@@ -37,7 +37,7 @@ TASKS["new_task"] = {
 
 ## Model Prompts
 
-Prompts come from `conf/models/{model}.yaml`. Key tasks:
+Prompts come from `conf/models/{model}.toml`. Key tasks:
 - `weekend_fixed` / `weekend_transient` - Must output JSON array with 8-10 items
 - `filename` - Must output JSON: {"filename": "str"}
 - `summarize` - Bullet points with ## headers
@@ -118,7 +118,7 @@ for r in results:
 
 - `model_eval.py` - Main eval runner (1695 lines)
 - `lib/validators_lib.py` - Core validators
-- `conf/models/*.yaml` - Model prompts
+- `conf/models/*.toml` - Model prompts
 
 ## Common Issues
 

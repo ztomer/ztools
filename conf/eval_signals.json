@@ -633,36 +633,36 @@
   },
   "m": {
     "json": {
-      "parse_failures": 129,
-      "samples": 383,
-      "total_retries": 383
+      "parse_failures": 150,
+      "samples": 446,
+      "total_retries": 446
     },
     "weekend_debug": {
-      "parse_failures": 129,
-      "samples": 129,
-      "total_retries": 129
+      "parse_failures": 150,
+      "samples": 150,
+      "total_retries": 150
     },
     "weekend_noparsed": {
       "parse_failures": 0,
-      "samples": 129,
-      "total_retries": 129
+      "samples": 150,
+      "total_retries": 150
     },
     "weekend_nosource": {
       "parse_failures": 0,
-      "samples": 129,
-      "total_retries": 129
+      "samples": 150,
+      "total_retries": 150
     },
     "weekend_x": {
       "parse_failures": 0,
-      "samples": 129,
-      "total_retries": 129
+      "samples": 150,
+      "total_retries": 150
     }
   },
   "mock-model": {
     "json": {
       "parse_failures": 0,
-      "samples": 762,
-      "total_retries": 762
+      "samples": 888,
+      "total_retries": 888
     },
     "summarize": {
       "parse_failures": 0,

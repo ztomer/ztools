@@ -70,8 +70,8 @@ weekend_fixed: |
 
 ## Config Location
 
-- `conf/config.yaml` — models, timeouts, prompts
-- `conf/models/*.yaml` — per-model config
+- `conf/config.toml` — models, timeouts, prompts
+- `conf/models/*.toml` — per-model config
 - `lib/config_core.py` — load functions (shim at `lib/config.py`)
 
 ---
@@ -189,9 +189,9 @@ Planted a falsehood in the input ("quantum giraffes of Manitoba won the Stanley 
 
 ## Model-Specific Prompts
 
-All prompts in `conf/models/{model}.yaml` must include:
+All prompts in `conf/models/{model}.toml` must include:
 
-```yaml
+```toml
 # Required for JSON output
 weekend_fixed: |
   Output JSON now. CRITICAL: Use EXACT schema: {schema}
@@ -330,15 +330,15 @@ python3 -m eval.benchmark_quality
 - `eval/run.py` - Eval loop
 - `lib/quality_models.py` / `lib/quality_scorers.py` - Quality evaluation
 - `lib/validators/` - Validator implementations
-- `conf/models/*.yaml` - Model prompts
+- `conf/models/*.toml` - Model prompts
 
 ---
 
 ## Filename / Rename Task
 
-Config-driven via `conf/config.yaml`:
-```yaml
-filename_models: [laguna-xs.2-mxfp4, foundation]
+Config-driven via `conf/config.toml`:
+```toml
+filename_models = ["laguna-xs.2-mxfp4", "foundation"]
 prompts:
   filename: "Output ONLY the filename string (no JSON, no code blocks).
   Use lowercase, underscores for spaces, no special characters.

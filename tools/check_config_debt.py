@@ -42,7 +42,7 @@ SKIP_FILES = frozenset(
     }
 )
 
-SOURCE_EXTS = frozenset({".py", ".yaml", ".yml", ".json", ".sh", ".md"})
+SOURCE_EXTS = frozenset({".py", ".json", ".sh", ".md"})
 
 CONFIG_FILE_NAMES = frozenset(
     {
