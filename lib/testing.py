@@ -196,6 +196,7 @@ class MockLLM:
 
     def patch_osaurus(self):
         import lib.osaurus_lib as m
+        import lib.osaurus_server as s
 
         self._patch_obj(m, "call", self.call)
         self._patch_obj(m, "call_llm_api", self.call_llm_api)
@@ -206,6 +207,10 @@ class MockLLM:
         self._patch_obj(m, "ensure_server", self.ensure_server)
         self._patch_obj(m, "panic_dump", lambda *a, **kw: None)
         self._patch_obj(m, "_extract_json_only", lambda c, **kw: json.loads(c) if c else None)
+
+        self._patch_obj(s, "is_server_running", self.is_server_running)
+        self._patch_obj(s, "check_server_or_die", lambda *a, **kw: None)
+        self._patch_obj(s, "get_models", self.get_models)
 
     def patch_mlx(self):
         import lib.mlx_lib as m

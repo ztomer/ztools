@@ -68,6 +68,7 @@ def _kill_osaurus():
         logger.debug(f"Failed to quit osaurus app via osascript: {e}")
 
     if PID_FILE.exists():
+        pid = None
         try:
             pid = int(PID_FILE.read_text().strip())
             if _is_osaurus_process(pid):

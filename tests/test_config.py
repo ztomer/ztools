@@ -75,7 +75,11 @@ def test_get_model_quirks_gemma():
 
 def test_osaurus_port():
     """Test osaurus server port is 1337 (not 8000)."""
+    import shutil
     import subprocess
+
+    if not shutil.which("osaurus"):
+        pytest.skip("osaurus binary not found on PATH")
 
     result = subprocess.run(["osaurus", "status"], capture_output=True, text=True)
     assert result.returncode == 0

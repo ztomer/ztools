@@ -81,6 +81,8 @@ def find_best_mlx_model(preferred: List[str]) -> Optional[Path]:
 
 def find_any_working_mlx_model() -> Optional[Path]:
     """Find any MLX model that's compatible with the installed mlx_lm."""
+    if not MLX_MODELS_DIR.exists():
+        return None
     for item in MLX_MODELS_DIR.iterdir():
         if not item.is_dir():
             continue
