@@ -7,21 +7,6 @@ _extract_items_from_text helper.
 import re
 from typing import Dict, List
 
-from lib.eval_data import WEEKEND_SYS_FIXED, WEEKEND_SYS_TRANSIENT, WEEKEND_USR_FIXED, WEEKEND_USR_TRANSIENT
-from lib.validators.json_validator import validate_detailed_json, validate_mixed_signal
-from lib.validators.text_validator import (
-    validate_factual_accuracy,
-    validate_factual_coverage,
-    validate_file_summary,
-    validate_filename,
-    validate_mixed_file_summary,
-    validate_mixed_filename,
-    validate_mixed_summary,
-    validate_no_contradiction,
-    validate_no_leak,
-    validate_strict_schema,
-    validate_summary,
-)
 from eval.tasks_prompts import (
     CONTRADICTION_PHRASE,
     FALSEHOOD_PHRASES,
@@ -38,6 +23,29 @@ from eval.tasks_prompts import (
     TWITTER_PROMPT_MIXED,
     WEEKEND_USR_FIXED_MIXED,
     WEEKEND_USR_TRANSIENT_MIXED,
+)
+from lib.eval_data import (
+    WEEKEND_SYS_FIXED,
+    WEEKEND_SYS_TRANSIENT,
+    WEEKEND_USR_FIXED,
+    WEEKEND_USR_TRANSIENT,
+)
+from lib.validators.json_validator import (
+    validate_detailed_json,
+    validate_mixed_signal,
+)
+from lib.validators.text_validator import (
+    validate_factual_accuracy,
+    validate_factual_coverage,
+    validate_file_summary,
+    validate_filename,
+    validate_mixed_file_summary,
+    validate_mixed_filename,
+    validate_mixed_summary,
+    validate_no_contradiction,
+    validate_no_leak,
+    validate_strict_schema,
+    validate_summary,
 )
 
 
@@ -72,7 +80,10 @@ def _extract_items_from_text(text: str) -> List[Dict]:
                     continue
                 row0_clean = row[0].strip().lower()
                 row1_clean = row[1].strip().lower()
-                header_names = {"name", "event", "title", "activity", "location", "venue", "place", "where"}
+                header_names = {
+                    "name", "event", "title", "activity",
+                    "location", "venue", "place", "where",
+                }
                 if row0_clean in header_names or row1_clean in header_names:
                     continue
                 item = {field1: row[0].strip(), field2: row[1].strip()}
@@ -97,7 +108,10 @@ def _extract_items_from_text(text: str) -> List[Dict]:
             else:
                 sep_match = re.match(r"^([^,\-]+)[,\-](.+)$", bullet)
                 if sep_match:
-                    items.append({"name": sep_match.group(1).strip(), "location": sep_match.group(2).strip()})
+                    items.append({
+                        "name": sep_match.group(1).strip(),
+                        "location": sep_match.group(2).strip(),
+                    })
                 else:
                     items.append({"name": bullet})
     return items
