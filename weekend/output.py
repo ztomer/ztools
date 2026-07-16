@@ -1,4 +1,6 @@
 from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.table import Table
 
 from lib.tui import STEP, WARN, console, debug_print
 from weekend.config import AGE_RANGE
@@ -176,3 +178,91 @@ def print_to_cli(markdown_content):
     console.print(NEWLINE)
     console.print(Markdown(markdown_content))
     console.print(NEWLINE)
+
+
+def print_to_cli_gorgeous(dates_str, weather_str, fixed_activities, transient_events):
+    # Print a beautiful header panel
+    console.print()
+    console.print(Panel(
+        f"[bold cyan]Weekend Plan: {dates_str}[/bold cyan]\n\n[italic white]{weather_str}[/italic white]",
+        border_style="cyan",
+        title="[bold white]ZTools Plan[/bold white]",
+        title_align="center"
+    ))
+    console.print()
+    
+    # 1. Render Fixed Activities Table
+    if fixed_activities:
+        table_fixed = Table(title="[bold green]Fixed / Year-Round Activities[/bold green]", border_style="dim green")
+        has_scores = any(item.get("score", DEFAULT_SCORE) > DEFAULT_SCORE for item in fixed_activities)
+        if has_scores:
+            table_fixed.add_column("Score", justify="center", style="yellow")
+        table_fixed.add_column("Activity & Location", style="bold white")
+        table_fixed.add_column("Ages", justify="center")
+        table_fixed.add_column("Price (CAD)", justify="right", style="magenta")
+        table_fixed.add_column("Weather Appropriateness", style="italic")
+        
+        for item in fixed_activities:
+            score = item.get("score", DEFAULT_SCORE)
+            score_str = f"⭐ {score}/{MAX_RATING_SCALE}" if score > DEFAULT_SCORE else "—"
+            name = (
+                item.get("name")
+                or item.get("activity")
+                or item.get("title")
+                or item.get("activity_name")
+                or "Unknown"
+            ).replace("**", "")
+            loc = item.get("location") or item.get("address") or ""
+            loc_str = f"{name} ({loc})" if loc else name
+            age = item.get("target_ages") or item.get("age_group") or "—"
+            price = item.get("price") or item.get("cost") or "—"
+            weather = item.get("weather") or item.get("weather_appropriateness") or "—"
+            
+            row = []
+            if has_scores:
+                row.append(score_str)
+            row.extend([loc_str, age, price, weather])
+            table_fixed.add_row(*row)
+            
+        console.print(table_fixed)
+        console.print()
+
+    # 2. Render Transient Events Table
+    if transient_events:
+        table_transient = Table(title="[bold purple]Transient / Limited-Time Events[/bold purple]", border_style="dim purple")
+        has_scores = any(item.get("score", DEFAULT_SCORE) > DEFAULT_SCORE for item in transient_events)
+        if has_scores:
+            table_transient.add_column("Score", justify="center", style="yellow")
+        table_transient.add_column("Event & Location", style="bold white")
+        table_transient.add_column("Ages", justify="center")
+        table_transient.add_column("Price", justify="right", style="magenta")
+        table_transient.add_column("Duration / End Date")
+        table_transient.add_column("Day", style="bold blue")
+        table_transient.add_column("Weather", style="italic")
+        
+        for item in transient_events:
+            score = item.get("score", DEFAULT_SCORE)
+            score_str = f"⭐ {score}/{MAX_RATING_SCALE}" if score > DEFAULT_SCORE else "—"
+            name = (
+                item.get("name")
+                or item.get("event")
+                or item.get("title")
+                or item.get("event_name")
+                or "Unknown"
+            ).replace("**", "")
+            loc = item.get("location") or item.get("address") or ""
+            loc_str = f"{name} ({loc})" if loc else name
+            age = item.get("target_ages") or item.get("age_group") or "—"
+            price = item.get("price") or item.get("cost") or "—"
+            duration = item.get("duration") or item.get("end_date") or "—"
+            day = _fmt_missing(item.get("day") or item.get("dates") or item.get("date"))
+            weather = item.get("weather") or item.get("weather_appropriateness") or "—"
+            
+            row = []
+            if has_scores:
+                row.append(score_str)
+            row.extend([loc_str, age, price, duration, day, weather])
+            table_transient.add_row(*row)
+            
+        console.print(table_transient)
+        console.print()

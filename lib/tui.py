@@ -6,7 +6,19 @@ from pathlib import Path
 
 from rich.console import Console
 
+console = Console()
+
 _NO_COLOR = os.environ.get("NO_COLOR") == "1" or not sys.stdout.isatty()
+
+
+@contextmanager
+def status(message):
+    if _NO_COLOR:
+        print(f"{STEP} {message}")
+        yield
+    else:
+        with console.status(f"[bold cyan]{message}[/bold cyan]", spinner="dots"):
+            yield
 
 _cfg = {}
 _zstyle_path = os.environ.get("ZSTYLE_CONFIG", str(Path.home() / ".config" / "zstyle"))
@@ -63,8 +75,6 @@ def debug_print(*args, **kwargs):
     if DEBUG:
         print(*args, **kwargs)
 
-
-console = Console()
 
 
 @contextmanager

@@ -57,6 +57,7 @@ from weekend.output import (
     print_summary,
     print_to_cli,
     print_warning,
+    print_to_cli_gorgeous,
 )
 
 __all__ = [
@@ -125,31 +126,30 @@ def _fetch_data(fri, sun, year, month_name, use_cache):
     dates_str = get_weekend_dates_string(fri, sun)
     print_info("Bounding Dates", dates_str)
 
-    weather_str = fetch_weather(fri, sun)
+    with tui.status("Fetching weather forecast..."):
+        weather_str = fetch_weather(fri, sun)
     weather_clean = weather_str.replace("Daily Forecast:", "").strip().replace("\n", " ")
     print_info("Weather", weather_clean)
 
-    print_step("Fetching events...")
-    if use_cache:
-        events_str = load_events_cache()
-        if not events_str:
+    with tui.status("Fetching weekend events..."):
+        if use_cache:
+            events_str = load_events_cache()
+            if not events_str:
+                events_str = fetch_transient_events(dates_str, year, month_name)
+                save_events_cache(events_str)
+        else:
             events_str = fetch_transient_events(dates_str, year, month_name)
             save_events_cache(events_str)
-    else:
-        events_str = fetch_transient_events(dates_str, year, month_name)
-        save_events_cache(events_str)
-    print_step("Fetched events")
 
-    print_step("Fetching venues...")
-    if use_cache:
-        venues_str = load_venues_cache()
-        if not venues_str:
+    with tui.status("Fetching fixed venues..."):
+        if use_cache:
+            venues_str = load_venues_cache()
+            if not venues_str:
+                venues_str = fetch_fixed_venues(year, month_name)
+                save_venues_cache(venues_str)
+        else:
             venues_str = fetch_fixed_venues(year, month_name)
             save_venues_cache(venues_str)
-    else:
-        venues_str = fetch_fixed_venues(year, month_name)
-        save_venues_cache(venues_str)
-    print_step("Fetched venues")
 
     return weather_str, events_str, venues_str, dates_str
 
@@ -327,19 +327,18 @@ def main(args=None):
     actual_model = os.environ.get("OLLAMA_MODEL") or get_best_model(Task.JSON)
     field_mapping = get_model_field_mapping(actual_model)
 
-    print_step("Generating weekend plan...")
-    json_transient, json_fixed = generate_weekend_plan(
-        actual_model,
-        weather_str,
-        events_str,
-        venues_str,
-        dates_str,
-        location=f"{CITY}/{REGION}",
-        age_range=AGE_RANGE,
-        date_range=dates_str,
-        use_foundation=use_foundation,
-    )
-    print_step("Generated weekend plan")
+    with tui.status("Generating weekend plan..."):
+        json_transient, json_fixed = generate_weekend_plan(
+            actual_model,
+            weather_str,
+            events_str,
+            venues_str,
+            dates_str,
+            location=f"{CITY}/{REGION}",
+            age_range=AGE_RANGE,
+            date_range=dates_str,
+            use_foundation=use_foundation,
+        )
 
     fixed_acts = _parse_fixed(json_fixed, actual_model, field_mapping)
     transient_items = _parse_transient(json_transient, actual_model, field_mapping)
@@ -358,7 +357,7 @@ def main(args=None):
     )
     print_step("Formatted output")
 
-    print_to_cli(final_markdown)
+    print_to_cli_gorgeous(dates_str, weather_str, fixed_acts, transient_items)
 
     output_dir = os.path.expanduser(OUTPUT_DIR_PATH)
     os.makedirs(output_dir, exist_ok=True)
