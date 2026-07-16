@@ -80,6 +80,7 @@ class Sidebar(Vertical):
             ListItem(Label("🐦 Twitter Summarizer"), id="nav-twitter"),
             ListItem(Label("📊 Model Evaluator"), id="nav-eval"),
             ListItem(Label("🖼️ Image Renamer"), id="nav-rename"),
+            ListItem(Label("📂 History Archive"), id="nav-history"),
             id="nav-list"
         )
         yield Static(id="server-status-box")
@@ -180,6 +181,17 @@ class ImageRenamerView(Vertical):
                 yield Label("[bold white]Preview Window[/bold white]")
                 yield Static(id="rn-preview-box")
                 yield Label("", id="rn-preview-info")
+class HistoryArchiveView(Vertical):
+    """TUI view for browsing and viewing historical plans/summaries."""
+
+    def compose(self) -> ComposeResult:
+        yield Label("[bold cyan]📂 History Archive[/bold cyan]", classes="section-title")
+        with Horizontal(id="hist-layout"):
+            with Vertical(id="hist-list-panel"):
+                yield Button("Refresh History", variant="primary", id="btn-hist-refresh")
+                yield ListView(id="hist-list")
+            with Vertical(id="hist-viewer-panel"):
+                yield VerticalScroll(id="hist-viewer")
 
 
 class ZToolsApp(App):
@@ -301,6 +313,30 @@ class ZToolsApp(App):
         font-size: 8;
         text-align: center;
     }
+    #hist-layout {
+        height: 1fr;
+    }
+    #hist-list-panel {
+        width: 35;
+        background: #1c2538;
+        border-right: solid #334155;
+        padding: 1;
+    }
+    #hist-list {
+        background: transparent;
+        height: 1fr;
+        margin-top: 1;
+    }
+    #hist-viewer-panel {
+        width: 1fr;
+        padding: 1;
+    }
+    #hist-viewer {
+        background: #090d16;
+        border: solid #1e293b;
+        padding: 1;
+        height: 1fr;
+    }
     """
 
     TITLE = "ZTools Terminal Hub"
@@ -317,6 +353,7 @@ class ZToolsApp(App):
             yield TwitterSummarizerView(id="twitter")
             yield ModelEvaluatorView(id="eval")
             yield ImageRenamerView(id="rename")
+            yield HistoryArchiveView(id="history")
         yield Footer()
 
     async def on_mount(self) -> None:
@@ -347,16 +384,22 @@ class ZToolsApp(App):
             status_box.update("[red]🔴 Server Offline[/red]")
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
-        """Handle sidebar navigation switcher."""
-        switcher = self.query_one(ContentSwitcher)
-        if event.item.id == "nav-weekend":
-            switcher.current = "weekend"
-        elif event.item.id == "nav-twitter":
-            switcher.current = "twitter"
-        elif event.item.id == "nav-eval":
-            switcher.current = "eval"
-        elif event.item.id == "nav-rename":
-            switcher.current = "rename"
+        """Handle list view item selection."""
+        if event.list_view.id == "nav-list":
+            switcher = self.query_one(ContentSwitcher)
+            if event.item.id == "nav-weekend":
+                switcher.current = "weekend"
+            elif event.item.id == "nav-twitter":
+                switcher.current = "twitter"
+            elif event.item.id == "nav-eval":
+                switcher.current = "eval"
+            elif event.item.id == "nav-rename":
+                switcher.current = "rename"
+            elif event.item.id == "nav-history":
+                switcher.current = "history"
+                self.run_worker(self.refresh_history_archive())
+        elif event.list_view.id == "hist-list":
+            self.run_worker(self.load_history_item(event.item))
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Route button run events to correct workers."""
@@ -370,6 +413,8 @@ class ZToolsApp(App):
             await self.run_image_renamer()
         elif event.button.id == "btn-rn-preview":
             await self.load_image_preview()
+        elif event.button.id == "btn-hist-refresh":
+            self.run_worker(self.refresh_history_archive())
 
     def _update_status(self, container_id: str, lines: List[str], message: str) -> None:
         lines.append(message)
@@ -638,6 +683,48 @@ class ZToolsApp(App):
         except Exception as e:
             preview_box.update(f"[red]Error: {e}[/red]")
             preview_info.update("")
+
+    async def refresh_history_archive(self) -> None:
+        hist_list = self.query_one("#hist-list")
+        hist_list.clear()
+        
+        doc_dir = Path.home() / "Documents"
+        if not doc_dir.exists() or not doc_dir.is_dir():
+            return
+            
+        files = []
+        for p in doc_dir.glob("*.md"):
+            if p.name.startswith("weekend_plan_") or ("_to_" in p.name and len(p.name) > 20):
+                files.append(p)
+                
+        files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+        
+        for f in files:
+            if f.name.startswith("weekend_plan_"):
+                label = f"📅 {f.name.replace('weekend_plan_', '').replace('.md', '').replace('_', ' ')}"
+            else:
+                label = f"🐦 Summary: {f.name.replace('.md', '').replace('_', ' ')}"
+                
+            item = ListItem(Label(label))
+            item.filepath = f
+            hist_list.append(item)
+
+    async def load_history_item(self, item: ListItem) -> None:
+        filepath = getattr(item, "filepath", None)
+        viewer = self.query_one("#hist-viewer")
+        
+        for child in list(viewer.children):
+            child.remove()
+            
+        if not filepath or not filepath.exists():
+            viewer.mount(Label("[red]File not found[/red]"))
+            return
+            
+        try:
+            content = await asyncio.to_thread(filepath.read_text)
+            viewer.mount(Markdown(content))
+        except Exception as e:
+            viewer.mount(Label(f"[red]Failed to load file: {e}[/red]"))
 
 
 def main():
