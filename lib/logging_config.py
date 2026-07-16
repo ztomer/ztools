@@ -4,6 +4,7 @@ Provides structured logging with optional file output.
 """
 
 import logging
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -73,13 +74,31 @@ def get_logger(
     return logger
 
 
-# Define a central log file in the project root
-LOG_FILE = Path(__file__).parent.parent / "logs" / "debug.log"
+# Define a central log file under the user cache dir (never under the install
+# prefix, which is read-only when installed via Homebrew/uv into a Cellar).
+def _log_file() -> Path:
+    base = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+    return base / "ztools" / "debug.log"
+
+
+LOG_FILE = _log_file()
 DEBUG_MODE = "--debug" in sys.argv
 
-# Module-level loggers for common use
-lib_logger = get_logger("lib", level="DEBUG" if DEBUG_MODE else "INFO", log_file=LOG_FILE, console_output=DEBUG_MODE)
-osaurus_logger = get_logger("lib.osaurus", level="DEBUG" if DEBUG_MODE else "INFO", log_file=LOG_FILE, console_output=DEBUG_MODE)
-mlx_logger = get_logger("lib.mlx", level="DEBUG" if DEBUG_MODE else "INFO", log_file=LOG_FILE, console_output=DEBUG_MODE)
-validators_logger = get_logger("lib.validators", level="DEBUG" if DEBUG_MODE else "INFO", log_file=LOG_FILE, console_output=DEBUG_MODE)
-content_logger = get_logger("lib.content", level="DEBUG" if DEBUG_MODE else "INFO", log_file=LOG_FILE, console_output=DEBUG_MODE)
+
+# Module-level loggers for common use. The file handler is only attached in
+# debug mode so a normal run never touches disk under a read-only install.
+def _make_logger(name: str) -> logging.Logger:
+    log_file = LOG_FILE if DEBUG_MODE else None
+    return get_logger(
+        name,
+        level="DEBUG" if DEBUG_MODE else "INFO",
+        log_file=log_file,
+        console_output=DEBUG_MODE,
+    )
+
+
+lib_logger = _make_logger("lib")
+osaurus_logger = _make_logger("lib.osaurus")
+mlx_logger = _make_logger("lib.mlx")
+validators_logger = _make_logger("lib.validators")
+content_logger = _make_logger("lib.content")

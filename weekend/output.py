@@ -1,8 +1,8 @@
 from rich.markdown import Markdown
 
-from weekend.llm import fetch_scores_for_items
+from lib.tui import STEP, WARN, console, debug_print
 from weekend.config import AGE_RANGE
-from lib.tui import STEP, WARN, debug_print, console
+from weekend.llm import fetch_scores_for_items
 
 # Timing, scoring, and layout constants (Mitchell Hashimoto design)
 DEFAULT_SCORE = 0
@@ -48,12 +48,27 @@ def _build_fixed_table(fixed):
         heading += " (Ranked by Review Score)"
     heading += "\n"
     if has_scores:
-        md = heading + "| Score | Activity & Location | Target Age(s) | Estimated Price (CAD) | Weather Appropriateness |\n| :--- | :--- | :--- | :--- | :--- |\n"
+        md = (
+            heading
+            + "| Score | Activity & Location | Target Age(s) | Estimated Price "
+            "(CAD) | Weather Appropriateness |\n| :--- | :--- | :--- | :--- | "
+            ":--- |\n"
+        )
     else:
-        md = heading + "| Activity & Location | Target Age(s) | Estimated Price (CAD) | Weather Appropriateness |\n| :--- | :--- | :--- | :--- |\n"
+        md = (
+            heading
+            + "| Activity & Location | Target Age(s) | Estimated Price (CAD) | "
+            "Weather Appropriateness |\n| :--- | :--- | :--- | :--- |\n"
+        )
     for item in fixed:
         score_str = _fmt_score(item)
-        name = (item.get("name") or item.get("activity") or item.get("title") or item.get("activity_name") or "Unknown").replace("**", "")
+        name = (
+            item.get("name")
+            or item.get("activity")
+            or item.get("title")
+            or item.get("activity_name")
+            or "Unknown"
+        ).replace("**", "")
         loc = item.get("location") or item.get("address") or ""
         age = item.get("target_ages") or item.get("age_group") or ""
         price = item.get("price") or item.get("cost") or ""
@@ -72,18 +87,36 @@ def _fmt_missing(value):
 def _build_transient_table(grouped_transient_list):
     if not grouped_transient_list:
         return ""
-    has_scores = any(item.get("score", DEFAULT_SCORE) > DEFAULT_SCORE for item in grouped_transient_list)
+    has_scores = any(
+        item.get("score", DEFAULT_SCORE) > DEFAULT_SCORE for item in grouped_transient_list
+    )
     heading = "### Transient / Limited-Time Events"
     if has_scores:
         heading += " (Ranked by Review Score)"
     heading += "\n"
     if has_scores:
-        md = heading + "| Score | Event & Location | Target Age(s) | Est. Price | Duration / End Date | Day | Weather Appr. |\n| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
+        md = (
+            heading
+            + "| Score | Event & Location | Target Age(s) | Est. Price | "
+            "Duration / End Date | Day | Weather Appr. |\n| :--- | :--- | "
+            ":--- | :--- | :--- | :--- | :--- |\n"
+        )
     else:
-        md = heading + "| Event & Location | Target Age(s) | Est. Price | Duration / End Date | Day | Weather Appr. |\n| :--- | :--- | :--- | :--- | :--- | :--- |\n"
+        md = (
+            heading
+            + "| Event & Location | Target Age(s) | Est. Price | Duration / "
+            "End Date | Day | Weather Appr. |\n| :--- | :--- | :--- | :--- | "
+            ":--- | :--- |\n"
+        )
     for item in grouped_transient_list:
         score_str = _fmt_score(item)
-        name = item.get("name") or item.get("event") or item.get("title") or item.get("event_name") or "Unknown"
+        name = (
+            item.get("name")
+            or item.get("event")
+            or item.get("title")
+            or item.get("event_name")
+            or "Unknown"
+        )
         name = name.replace("**", "")
         loc = item.get("location") or item.get("address") or ""
         age = item.get("target_ages") or item.get("age_group") or ""
@@ -92,7 +125,10 @@ def _build_transient_table(grouped_transient_list):
         day = _fmt_missing(item.get("day") or item.get("dates") or item.get("date"))
         weather = item.get("weather") or item.get("weather_appropriateness") or ""
         if has_scores:
-            md += f"| {score_str} | **{name}** ({loc}) | {age} | {price} | {duration} | {day} | {weather} |\n"
+            md += (
+                f"| {score_str} | **{name}** ({loc}) | {age} | {price} | "
+                f"{duration} | {day} | {weather} |\n"
+            )
         else:
             md += f"| **{name}** ({loc}) | {age} | {price} | {duration} | {day} | {weather} |\n"
     return md
@@ -111,10 +147,12 @@ def build_markdown_tables(dates_str, weather_str, structured_data, fixed_activit
     if isinstance(structured_data, list):
         transient = structured_data
     else:
-        transient = (structured_data.get("transient_events") or
-                    structured_data.get("events") or
-                    structured_data.get("activities") or
-                    [])
+        transient = (
+            structured_data.get("transient_events")
+            or structured_data.get("events")
+            or structured_data.get("activities")
+            or []
+        )
 
     grouped_transient = {}
     for item in transient:

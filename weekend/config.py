@@ -2,12 +2,15 @@ import datetime
 import os
 from pathlib import Path
 
+from lib.config import Task
 from lib.config_toml import load_config
 from lib.osaurus_lib import (
-    restart_server,
+    ensure_server as _osaurus_ensure_server,
+)
+from lib.osaurus_lib import (
     get_best_model,
     is_server_running,
-    ensure_server as _osaurus_ensure_server,
+    restart_server,
 )
 
 _cache_dir = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "weekend"
@@ -51,17 +54,25 @@ _raw_children = WEEKEND_CONFIG.get("children", [])
 CHILDREN = []
 for c in _raw_children:
     if "birthday" in c:
-        bday = c["birthday"] if isinstance(c["birthday"], datetime.date) else datetime.datetime.strptime(c["birthday"], "%Y-%m-%d").date()
+        bday = (
+            c["birthday"]
+            if isinstance(c["birthday"], datetime.date)
+            else datetime.datetime.strptime(c["birthday"], "%Y-%m-%d").date()
+        )
         _today = datetime.date.today()
         c["age"] = _today.year - bday.year - ((_today.month, _today.day) < (bday.month, bday.day))
     CHILDREN.append(c)
-CHILDREN_STR = ", ".join([f"{c['age']}yo {c['gender']}" for c in CHILDREN]) if CHILDREN else "{CHILDREN_STR}"
+CHILDREN_STR = (
+    ", ".join([f"{c['age']}yo {c['gender']}" for c in CHILDREN]) if CHILDREN else "{CHILDREN_STR}"
+)
 LATITUDE = WEEKEND_CONFIG.get("location", {}).get("latitude", 43.8361)
 LONGITUDE = WEEKEND_CONFIG.get("location", {}).get("longitude", -79.5083)
 TIMEZONE = WEEKEND_CONFIG.get("location", {}).get("timezone", "America/Toronto")
 CITY = WEEKEND_CONFIG.get("location", {}).get("city", "Vaughan")
 REGION = WEEKEND_CONFIG.get("location", {}).get("region", "Toronto")
-AGE_RANGE = f"{min(c['age'] for c in CHILDREN)}-{max(c['age'] for c in CHILDREN)}" if CHILDREN else "4-12"
+AGE_RANGE = (
+    f"{min(c['age'] for c in CHILDREN)}-{max(c['age'] for c in CHILDREN)}" if CHILDREN else "4-12"
+)
 
 # Dynamic date fallback for LLM prompts — computed from this week's Friday
 _today = datetime.date.today()
@@ -71,10 +82,7 @@ DATES_STR = f"{_friday.strftime('%B %d')} to {_sunday.strftime('%B %d, %Y')}"
 
 MODEL_CONFIG = str(Path.home() / ".config" / "model_eval.json")
 
-from lib.config import Task
-MODEL_NAME = os.environ.get(
-    "OLLAMA_MODEL", get_best_model(Task.JSON) or "gemma-4-26b-a4b-it-4bit"
-)
+MODEL_NAME = os.environ.get("OLLAMA_MODEL", get_best_model(Task.JSON) or "gemma-4-26b-a4b-it-4bit")
 OSAURUS_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
 OSAURUS_APP = "/Applications/osaurus.app"
 

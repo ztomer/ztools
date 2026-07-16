@@ -3,19 +3,23 @@ import os
 import re
 from pathlib import Path
 
-from weekend.config import OSAURUS_BASE_URL, ensure_server
-
-from lib.osaurus_lib import (
-    get_best_model,
-    call_llm_api,
-    strip_thinking,
-    panic_dump,
-    apply_model_quirks,
-    _extract_json_only,
-)
-from lib.llm.fallback import call_with_fallback
 from lib.config import Task
-from lib.tui import debug_print, WARN
+from lib.llm.fallback import call_with_fallback
+from lib.mlx_lib import (
+    call_mlx,
+    find_text_mlx_model,
+    process_mlx_content,
+)
+from lib.osaurus_lib import (
+    _extract_json_only,
+    apply_model_quirks,
+    call_llm_api,
+    get_best_model,
+    panic_dump,
+    strip_thinking,
+)
+from lib.tui import WARN, debug_print
+from weekend.config import OSAURUS_BASE_URL, ensure_server
 
 # LLM API defaults
 LLM_TEMPERATURE = 0.1
@@ -51,12 +55,6 @@ SOURCE_TYPE_VENUES = "venues"
 WEATHER_PREVIEW_LIMIT = 200
 BATCH_GROWTH_STREAK_LIMIT = 3
 
-from lib.mlx_lib import (
-    find_text_mlx_model,
-    call_mlx,
-    process_mlx_content,
-    )
-
 
 def _load_phase_signals():
     try:
@@ -72,7 +70,15 @@ def _save_phase_signals(signals):
     PHASE_SIGNALS_PATH.write_text(json.dumps(signals, indent=2, sort_keys=True))
 
 
-def _call_llm(system_prompt, user_prompt, timeout, max_retries=PHASE_MAX_RETRIES, parse_json=False, phase_key=None):
+def _call_llm(
+    system_prompt,
+    user_prompt,
+    timeout,
+    max_retries=PHASE_MAX_RETRIES,
+    parse_json=False,
+    phase_key=None,
+    use_foundation=False,
+):
     target_model = get_best_model(Task.JSON)
     last_content = None
     _attempt = [0]
@@ -81,9 +87,10 @@ def _call_llm(system_prompt, user_prompt, timeout, max_retries=PHASE_MAX_RETRIES
     model_signals = signals.setdefault(target_model, {}) if phase_key else {}
     phase_signals = model_signals.get(phase_key, {}) if phase_key else {}
     base_timeout = phase_signals.get("timeout", timeout) if phase_key else timeout
+    current_timeout = base_timeout
 
     def call_fn(model_name):
-        nonlocal last_content
+        nonlocal last_content, current_timeout
         _attempt[0] += 1
         current_timeout = base_timeout
         messages = [
@@ -92,8 +99,16 @@ def _call_llm(system_prompt, user_prompt, timeout, max_retries=PHASE_MAX_RETRIES
         ]
         messages = apply_model_quirks(messages, model_name)
 
-        debug_print(f"[llm] _call_llm: phase={phase_key}, attempt={_attempt[0]}, base={base_timeout}, timeout={current_timeout}", flush=True)
-        debug_print(f"[llm] system={len(messages[0]['content'])} chars, user={len(messages[1]['content'])} chars", flush=True)
+        debug_print(
+            f"[llm] _call_llm: phase={phase_key}, attempt={_attempt[0]}, "
+            f"base={base_timeout}, timeout={current_timeout}",
+            flush=True,
+        )
+        debug_print(
+            f"[llm] system={len(messages[0]['content'])} chars, "
+            f"user={len(messages[1]['content'])} chars",
+            flush=True,
+        )
 
         result = call_llm_api(
             OSAURUS_BASE_URL.rstrip("/"),
@@ -135,7 +150,9 @@ def _call_llm(system_prompt, user_prompt, timeout, max_retries=PHASE_MAX_RETRIES
                     {"role": "user", "content": user_prompt},
                 ]
                 messages = apply_model_quirks(messages, getattr(mlx_model, "name", str(mlx_model)))
-                mlx_sys = next((m["content"] for m in messages if m["role"] == "system"), system_prompt)
+                mlx_sys = next(
+                    (m["content"] for m in messages if m["role"] == "system"), system_prompt
+                )
                 mlx_usr = next((m["content"] for m in messages if m["role"] == "user"), user_prompt)
                 raw = call_mlx(mlx_model, f"System: {mlx_sys}\n\nUser: {mlx_usr}")
                 if raw:
@@ -150,10 +167,43 @@ def _call_llm(system_prompt, user_prompt, timeout, max_retries=PHASE_MAX_RETRIES
                 print(f"[llm] MLX failed: {e}")
         return None
 
+    def foundation_fn():
+        from lib.foundation_lib import call_foundation, foundation_available
+
+        if not foundation_available():
+            return None
+        print("[llm] On-device Foundation Models fallback")
+        try:
+            raw = call_foundation(system_prompt, user_prompt, parse_json=parse_json)
+        except Exception as e:
+            print(f"[llm] Foundation failed: {e}")
+            return None
+        if raw is None:
+            return None
+        if parse_json:
+            json_str = _extract_json_only(raw)
+            if json_str is not None:
+                return json.loads(json_str)
+            print("[llm] Foundation returned no valid JSON")
+            return None
+        return raw
+
+    # Forced Foundation mode: skip the server entirely and use the on-device
+    # model as the primary path.
+    if use_foundation:
+        foundation_result = foundation_fn()
+        if foundation_result is not None:
+            return foundation_result
+        print(f"{WARN} --use-foundation requested but Foundation Models unavailable")
+
     result = call_with_fallback(
-        [target_model], call_fn,
-        restart_fn=ensure_server, mlx_fn=mlx_fn,
-        max_server_retries=max_retries - 1, label="Osaurus",
+        [target_model],
+        call_fn,
+        restart_fn=ensure_server,
+        mlx_fn=mlx_fn,
+        foundation_fn=foundation_fn,
+        max_server_retries=max_retries - 1,
+        label="Osaurus",
     )
 
     if result is not None and phase_key and _attempt[0] > 1:
@@ -167,8 +217,15 @@ def _call_llm(system_prompt, user_prompt, timeout, max_retries=PHASE_MAX_RETRIES
     return result
 
 
-def get_llm_json(system_prompt, user_prompt, max_retries=LLM_MAX_RETRIES):
-    result = _call_llm(system_prompt, user_prompt, timeout=LLM_API_TIMEOUT, max_retries=max_retries, parse_json=True)
+def get_llm_json(system_prompt, user_prompt, max_retries=LLM_MAX_RETRIES, use_foundation=False):
+    result = _call_llm(
+        system_prompt,
+        user_prompt,
+        timeout=LLM_API_TIMEOUT,
+        max_retries=max_retries,
+        parse_json=True,
+        use_foundation=use_foundation,
+    )
     if result is None:
         print("[llm] WARNING: Failed to parse JSON, returning empty result")
     return result
@@ -196,9 +253,15 @@ def normalize_llm_items(items, field_mapping=None):
                     if model_field in item and standard_field not in item:
                         item[standard_field] = item[model_field]
 
-            for keys, std in [(NAME_KEYS, "name"), (LOC_KEYS, "location"),
-                          (AGE_KEYS, "target_ages"), (PRICE_KEYS, "price"),
-                          (WEATHER_KEYS, "weather"), (DAY_KEYS, "day"), (DUR_KEYS, "duration")]:
+            for keys, std in [
+                (NAME_KEYS, "name"),
+                (LOC_KEYS, "location"),
+                (AGE_KEYS, "target_ages"),
+                (PRICE_KEYS, "price"),
+                (WEATHER_KEYS, "weather"),
+                (DAY_KEYS, "day"),
+                (DUR_KEYS, "duration"),
+            ]:
                 if std not in item:
                     for k in keys:
                         if k in item:
@@ -210,8 +273,30 @@ def normalize_llm_items(items, field_mapping=None):
 
 
 def _score_item(item, weather_str="", age_range=""):
-    CLOUD_KEYWORDS = ["cloudy", "overcast", "rain", "snow", "storm", "wet", "cold (<10", "drizzle", "showers", "thunder"]
-    SUN_KEYWORDS = ["sunny", "clear", "warm", "sun", "hot", "outdoor", "outside", "fair", "dry", "pleasant"]
+    CLOUD_KEYWORDS = [
+        "cloudy",
+        "overcast",
+        "rain",
+        "snow",
+        "storm",
+        "wet",
+        "cold (<10",
+        "drizzle",
+        "showers",
+        "thunder",
+    ]
+    SUN_KEYWORDS = [
+        "sunny",
+        "clear",
+        "warm",
+        "sun",
+        "hot",
+        "outdoor",
+        "outside",
+        "fair",
+        "dry",
+        "pleasant",
+    ]
 
     score = 0.0
 
@@ -220,10 +305,12 @@ def _score_item(item, weather_str="", age_range=""):
     score += (populated / len(fields)) * POPULATED_FIELDS_BASE_SCORE
 
     if age_range and item.get("target_ages"):
-        age_nums = sorted(set(int(n) for n in re.findall(r'\d+', str(age_range))))
-        target_nums = sorted(set(int(n) for n in re.findall(r'\d+', str(item["target_ages"]))))
+        age_nums = sorted(set(int(n) for n in re.findall(r"\d+", str(age_range))))
+        target_nums = sorted(set(int(n) for n in re.findall(r"\d+", str(item["target_ages"]))))
         if age_nums and target_nums:
-            overlap = max(0, min(age_nums[-1], target_nums[-1]) - max(age_nums[0], target_nums[0]) + 1)
+            overlap = max(
+                0, min(age_nums[-1], target_nums[-1]) - max(age_nums[0], target_nums[0]) + 1
+            )
             if overlap >= 2:
                 score += OVERLAP_SCORE_HIGH
             elif overlap == 1:
@@ -235,8 +322,12 @@ def _score_item(item, weather_str="", age_range=""):
         is_sunny = any(k in w for k in SUN_KEYWORDS)
         is_outdoor = "outdoor" in w
         is_indoor = "indoor" in w and not is_outdoor
-        forecast_cloudy = any(k in weather_str.lower() for k in CLOUD_KEYWORDS) if weather_str else False
-        forecast_sunny = any(k in weather_str.lower() for k in SUN_KEYWORDS) if weather_str else False
+        forecast_cloudy = (
+            any(k in weather_str.lower() for k in CLOUD_KEYWORDS) if weather_str else False
+        )
+        forecast_sunny = (
+            any(k in weather_str.lower() for k in SUN_KEYWORDS) if weather_str else False
+        )
         if is_indoor:
             score += WEATHER_PARTIAL_BONUS
         elif is_outdoor and forecast_sunny:
@@ -278,7 +369,13 @@ def fetch_scores_for_items(items, weather_str="", age_range=""):
 
 def condense_weather(weather_str):
     from weekend.prompts import build_weather_condense_prompt
-    result = _call_llm("", build_weather_condense_prompt(weather_str), timeout=PHASE_TIMEOUT_WEATHER, phase_key="condense_weather")
+
+    result = _call_llm(
+        "",
+        build_weather_condense_prompt(weather_str),
+        timeout=PHASE_TIMEOUT_WEATHER,
+        phase_key="condense_weather",
+    )
     return result if result else weather_str[:WEATHER_PREVIEW_LIMIT]
 
 
@@ -303,16 +400,17 @@ def _save_extract_signals(signals):
 
 def _extract_group_prompt(lines, source_type):
     from weekend.prompts import build_source_extract_prompt
+
     return build_source_extract_prompt("\n".join(lines), source_type)
 
 
-def extract_sources(raw_text, source_type, model_name="default"):
+def extract_sources(raw_text, source_type, model_name="default", use_foundation=False):
     signals = _load_extract_signals()
     per_type = signals.setdefault(model_name or "default", {}).setdefault(source_type, {})
     batch_size = per_type.get("batch_size", DEFAULT_BATCH_SIZE)
     phase_key = f"extract_sources/{source_type}"
 
-    lines = [l for l in raw_text.split("\n") if l.startswith("- ")]
+    lines = [line for line in raw_text.split("\n") if line.startswith("- ")]
     if not lines:
         return raw_text
 
@@ -320,9 +418,15 @@ def extract_sources(raw_text, source_type, model_name="default"):
     streak = 0
     i = 0
     while i < len(lines):
-        chunk = lines[i:i + batch_size]
+        chunk = lines[i : i + batch_size]
         prompt = _extract_group_prompt(chunk, source_type)
-        result = _call_llm("", prompt, timeout=PHASE_TIMEOUT_EXTRACT, phase_key=phase_key)
+        result = _call_llm(
+            "",
+            prompt,
+            timeout=PHASE_TIMEOUT_EXTRACT,
+            phase_key=phase_key,
+            use_foundation=use_foundation,
+        )
 
         if result:
             results.append(result)
@@ -348,54 +452,127 @@ def extract_sources(raw_text, source_type, model_name="default"):
     return "\n".join(results)
 
 
-def draft_activities(weather_condensed, cleaned_sources, source_type, location, age_range, date_range):
+def draft_activities(
+    weather_condensed,
+    cleaned_sources,
+    source_type,
+    location,
+    age_range,
+    date_range,
+    use_foundation=False,
+):
     from weekend.prompts import build_draft_prompt
-    prompt = build_draft_prompt(weather_condensed, cleaned_sources, source_type, location, age_range, date_range)
-    return _call_llm("", prompt, timeout=PHASE_TIMEOUT_DRAFT, phase_key=f"draft_activities/{source_type}")
+
+    prompt = build_draft_prompt(
+        weather_condensed, cleaned_sources, source_type, location, age_range, date_range
+    )
+    return _call_llm(
+        "",
+        prompt,
+        timeout=PHASE_TIMEOUT_DRAFT,
+        phase_key=f"draft_activities/{source_type}",
+        use_foundation=use_foundation,
+    )
 
 
-def refine_draft(draft_text):
+def refine_draft(draft_text, use_foundation=False):
     from weekend.prompts import build_refine_prompt
-    result = _call_llm("", build_refine_prompt(draft_text), timeout=PHASE_TIMEOUT_REFINE, phase_key="refine_draft")
+
+    result = _call_llm(
+        "",
+        build_refine_prompt(draft_text),
+        timeout=PHASE_TIMEOUT_REFINE,
+        phase_key="refine_draft",
+        use_foundation=use_foundation,
+    )
     return result if result else draft_text
 
 
-def structure_to_json(text, source_type, age_range, weather_condensed=""):
+def structure_to_json(text, source_type, age_range, weather_condensed="", use_foundation=False):
     from weekend.prompts import build_structure_system_prompt, build_structure_user_prompt
+
     sys_prompt = build_structure_system_prompt(source_type, age_range, weather_condensed)
     usr_prompt = build_structure_user_prompt(text)
-    return _call_llm(sys_prompt, usr_prompt, timeout=PHASE_TIMEOUT_STRUCTURE, parse_json=True, phase_key=f"structure_to_json/{source_type}")
+    return _call_llm(
+        sys_prompt,
+        usr_prompt,
+        timeout=PHASE_TIMEOUT_STRUCTURE,
+        parse_json=True,
+        phase_key=f"structure_to_json/{source_type}",
+        use_foundation=use_foundation,
+    )
 
 
-def generate_weekend_plan(model, weather_str, events_str, venues_str, dates_str, location, age_range, date_range):
-    from weekend.output import print_step, print_warning
+def generate_weekend_plan(
+    model,
+    weather_str,
+    events_str,
+    venues_str,
+    dates_str,
+    location,
+    age_range,
+    date_range,
+    use_foundation=False,
+):
+    from weekend.output import print_warning
 
     condensed_weather = condense_weather(weather_str)
 
-    cleaned_events = extract_sources(events_str, SOURCE_TYPE_EVENTS, model_name=model)
-    draft_transient = draft_activities(condensed_weather or weather_str[:WEATHER_PREVIEW_LIMIT], cleaned_events, SOURCE_TYPE_TRANSIENT, location, age_range, date_range)
+    cleaned_events = extract_sources(
+        events_str, SOURCE_TYPE_EVENTS, model_name=model, use_foundation=use_foundation
+    )
+    draft_transient = draft_activities(
+        condensed_weather or weather_str[:WEATHER_PREVIEW_LIMIT],
+        cleaned_events,
+        SOURCE_TYPE_TRANSIENT,
+        location,
+        age_range,
+        date_range,
+        use_foundation=use_foundation,
+    )
     json_transient = {}
     if draft_transient:
         refined_transient = refine_draft(draft_transient)
-        json_transient = structure_to_json(refined_transient, SOURCE_TYPE_TRANSIENT, age_range, condensed_weather) or {}
+        json_transient = (
+            structure_to_json(
+                refined_transient, SOURCE_TYPE_TRANSIENT, age_range, condensed_weather
+            )
+            or {}
+        )
     else:
         print_warning("Transient draft failed, using monolithic fallback")
         from weekend.prompts import build_transient_system_prompt, build_transient_user_prompt
-        sys_t = build_transient_system_prompt(model, location=location, age_range=age_range, date_range=date_range)
-        usr_t = build_transient_user_prompt(dates_str, weather_str, events_str)
-        json_transient = get_llm_json(sys_t, usr_t) or {}
 
-    cleaned_venues = extract_sources(venues_str, SOURCE_TYPE_VENUES, model_name=model)
-    draft_fixed = draft_activities(condensed_weather or weather_str[:WEATHER_PREVIEW_LIMIT], cleaned_venues, SOURCE_TYPE_FIXED, location, age_range, date_range)
+        sys_t = build_transient_system_prompt(
+            model, location=location, age_range=age_range, date_range=date_range
+        )
+        usr_t = build_transient_user_prompt(dates_str, weather_str, events_str)
+        json_transient = get_llm_json(sys_t, usr_t, use_foundation=use_foundation) or {}
+
+    cleaned_venues = extract_sources(
+        venues_str, SOURCE_TYPE_VENUES, model_name=model, use_foundation=use_foundation
+    )
+    draft_fixed = draft_activities(
+        condensed_weather or weather_str[:WEATHER_PREVIEW_LIMIT],
+        cleaned_venues,
+        SOURCE_TYPE_FIXED,
+        location,
+        age_range,
+        date_range,
+        use_foundation=use_foundation,
+    )
     json_fixed = {}
     if draft_fixed:
         refined_fixed = refine_draft(draft_fixed)
-        json_fixed = structure_to_json(refined_fixed, SOURCE_TYPE_FIXED, age_range, condensed_weather) or {}
+        json_fixed = (
+            structure_to_json(refined_fixed, SOURCE_TYPE_FIXED, age_range, condensed_weather) or {}
+        )
     else:
         print_warning("Fixed draft failed, using monolithic fallback")
         from weekend.prompts import build_fixed_system_prompt, build_fixed_user_prompt
+
         sys_f = build_fixed_system_prompt(model, location=location, age_range=age_range)
         usr_f = build_fixed_user_prompt(dates_str, weather_str, venues_str)
-        json_fixed = get_llm_json(sys_f, usr_f) or {}
+        json_fixed = get_llm_json(sys_f, usr_f, use_foundation=use_foundation) or {}
 
     return json_transient, json_fixed

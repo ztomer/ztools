@@ -1,30 +1,34 @@
 #!/usr/bin/env python3
 import datetime
-import re
 import json
-from typing import Any, Optional, List, Dict, Union
+import re
+from typing import Any, Dict, List, Optional, Union
 
-from .content_processing import clean_model_output, extract_content_from_code_blocks, remove_inline_thinking
 from .config_getters import get_model_config
+from .content_processing import (
+    clean_model_output,
+    extract_content_from_code_blocks,
+    remove_inline_thinking,
+)
 
 clean_output = clean_model_output
 
 # Extraction and normalization constants to avoid magic numbers and strings
 MAX_JSON_SEARCH_BOUND = 15
-JSON_ARRAY_START = '['
-JSON_ARRAY_END = ']'
-JSON_OBJECT_START = '{'
-JSON_OBJECT_END = '}'
-COMMENT_CHAR = '#'
+JSON_ARRAY_START = "["
+JSON_ARRAY_END = "]"
+JSON_OBJECT_START = "{"
+JSON_OBJECT_END = "}"
+COMMENT_CHAR = "#"
 PIPE_CHAR = "|"
 TARGET_YEAR = str(datetime.date.today().year)
 MIN_LINE_LENGTH = 1
 
-BOLD_MARKDOWN_RE = re.compile(r'\*\*([^*]+)\*\*')
-TABLE_DIVIDER_RE = re.compile(r'\|[:\-]+\|')
+BOLD_MARKDOWN_RE = re.compile(r"\*\*([^*]+)\*\*")
+TABLE_DIVIDER_RE = re.compile(r"\|[:\-]+\|")
 LIST_ITEM_RE = re.compile(r"^\d+[\.\)]\s+(.+)$|^- (.+)$")
-YEAR_RE_2626 = re.compile(r'\b2626\b')
-YEAR_RE_26 = re.compile(r'\b26(?!\d)')
+YEAR_RE_2626 = re.compile(r"\b2626\b")
+YEAR_RE_26 = re.compile(r"\b26(?!\d)")
 TEXT_NORM_RE_1 = re.compile(r"^\d+[\.\)]\s*([^\-:?]+)(?:\s*[-:]\s*(.+))?$")
 TEXT_NORM_RE_2 = re.compile(r"^-\s*([^\-:?]+)(?:\s*[-:]\s*(.+))?$")
 DETAILS_SPLIT_RE = re.compile(r"[-:,]")
@@ -32,7 +36,6 @@ DETAILS_SPLIT_RE = re.compile(r"[-:,]")
 FILTER_START_KEYWORDS = ("based on", "note:")
 FILTER_EXCLUDE_STRINGS = ("", "-", ":", None, " | ", "|", "---", "----")
 WEATHER_KEYWORDS = ("temperature", "conditions")
-
 
 
 def _extract_json_only(content: str) -> Optional[str]:
@@ -54,7 +57,7 @@ def _extract_json_only(content: str) -> Optional[str]:
         for s in starts[:MAX_JSON_SEARCH_BOUND]:
             for e in ends[:MAX_JSON_SEARCH_BOUND]:
                 if e > s:
-                    candidate = content[s:e+1]
+                    candidate = content[s : e + 1]
                     try:
                         json.loads(candidate)
                         return candidate
@@ -73,8 +76,8 @@ def _extract_json_only(content: str) -> Optional[str]:
 
 def extract_json(content: str, model: str = None) -> Union[Dict[str, Any], List[Any], None]:
     if content:
-        content = BOLD_MARKDOWN_RE.sub(r'\1', content)
-        content = TABLE_DIVIDER_RE.sub('', content)
+        content = BOLD_MARKDOWN_RE.sub(r"\1", content)
+        content = TABLE_DIVIDER_RE.sub("", content)
     json_str = _extract_json_only(content)
     if json_str:
         try:
@@ -219,7 +222,11 @@ def filter_json_items(items: List[Any]) -> List[Any]:
             filtered.append(item)
         elif isinstance(item, str):
             text = item.strip().lower()
-            if text.startswith(PIPE_CHAR) or text.startswith(":") or any(text.startswith(kw) for kw in FILTER_START_KEYWORDS):
+            if (
+                text.startswith(PIPE_CHAR)
+                or text.startswith(":")
+                or any(text.startswith(kw) for kw in FILTER_START_KEYWORDS)
+            ):
                 continue
             if text in FILTER_EXCLUDE_STRINGS:
                 continue
@@ -264,7 +271,11 @@ def normalize_text_output(text_output: str) -> List[Dict[str, Any]]:
             details = (match.group(2) or "").strip() if match.lastindex and match.group(2) else ""
             if name and not name.startswith("*"):
                 item = {"name": name}
-                parts = [p.strip() for p in DETAILS_SPLIT_RE.split(details) if p.strip()] if details else []
+                parts = (
+                    [p.strip() for p in DETAILS_SPLIT_RE.split(details) if p.strip()]
+                    if details
+                    else []
+                )
                 if len(parts) > 0 and parts[0]:
                     item["location"] = parts[0]
                 if len(parts) > 1 and parts[1]:

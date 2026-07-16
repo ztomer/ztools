@@ -1,6 +1,6 @@
 """Tests for weekend_llm: get_llm_json, normalize_llm_items, _score_item, fetch_scores_for_items, phase pipeline."""
-import pytest
-from unittest.mock import patch, MagicMock
+
+from unittest.mock import patch
 
 
 class TestGetLlmJsonHappy:
@@ -8,9 +8,14 @@ class TestGetLlmJsonHappy:
 
     def test_first_attempt_succeeds(self, mock_llm):
         import weekend.llm as wl
-        with patch.object(wl, "call_llm_api", return_value={"content": '{"items": [1, 2]}'}) as mock_call, \
-             patch.object(wl, "strip_thinking", return_value='{"items": [1, 2]}'), \
-             patch.object(wl, "_extract_json_only", return_value='{"items": [1, 2]}'):
+
+        with (
+            patch.object(
+                wl, "call_llm_api", return_value={"content": '{"items": [1, 2]}'}
+            ) as mock_call,
+            patch.object(wl, "strip_thinking", return_value='{"items": [1, 2]}'),
+            patch.object(wl, "_extract_json_only", return_value='{"items": [1, 2]}'),
+        ):
             result = wl.get_llm_json("sys", "user")
         assert result == {"items": [1, 2]}
         assert mock_call.call_count == 1
@@ -18,8 +23,11 @@ class TestGetLlmJsonHappy:
     def test_result_not_dict_debug(self, mock_llm):
         """When result is not a dict, debug_print still works."""
         import weekend.llm as wl
-        with patch.object(wl, "call_llm_api", return_value=[1, 2, 3]), \
-             patch.object(wl, "_extract_json_only", return_value=None):
+
+        with (
+            patch.object(wl, "call_llm_api", return_value=[1, 2, 3]),
+            patch.object(wl, "_extract_json_only", return_value=None),
+        ):
             result = wl.get_llm_json("sys", "user", max_retries=1)
         assert result is None
 
@@ -29,25 +37,35 @@ class TestGetLlmJsonRetries:
 
     def test_retry_with_value_error(self, mock_llm):
         import weekend.llm as wl
+
         # First call returns content that fails JSON parse, second succeeds
-        with patch.object(wl, "call_llm_api", side_effect=[
-            {"content": "not json"},
-            {"content": '{"ok": true}'},
-        ]), \
-             patch.object(wl, "strip_thinking", side_effect=lambda x: x), \
-             patch.object(wl, "_extract_json_only", side_effect=[None, '{"ok": true}']), \
-             patch.object(wl, "ensure_server"):
+        with (
+            patch.object(
+                wl,
+                "call_llm_api",
+                side_effect=[
+                    {"content": "not json"},
+                    {"content": '{"ok": true}'},
+                ],
+            ),
+            patch.object(wl, "strip_thinking", side_effect=lambda x: x),
+            patch.object(wl, "_extract_json_only", side_effect=[None, '{"ok": true}']),
+            patch.object(wl, "ensure_server"),
+        ):
             result = wl.get_llm_json("sys", "user", max_retries=2)
         assert result == {"ok": True}
 
     def test_max_retries_exhausted(self, mock_llm):
         """All retries fail, panic_dump is called."""
         import weekend.llm as wl
-        with patch.object(wl, "call_llm_api", return_value={"content": "bad"}), \
-             patch.object(wl, "strip_thinking", return_value="bad"), \
-             patch.object(wl, "_extract_json_only", return_value=None), \
-             patch.object(wl, "panic_dump") as mock_dump, \
-             patch.object(wl, "ensure_server"):
+
+        with (
+            patch.object(wl, "call_llm_api", return_value={"content": "bad"}),
+            patch.object(wl, "strip_thinking", return_value="bad"),
+            patch.object(wl, "_extract_json_only", return_value=None),
+            patch.object(wl, "panic_dump") as mock_dump,
+            patch.object(wl, "ensure_server"),
+        ):
             result = wl.get_llm_json("sys", "user", max_retries=2)
         assert result is None
         assert mock_dump.call_count == 1
@@ -55,8 +73,11 @@ class TestGetLlmJsonRetries:
     def test_no_content_in_result(self, mock_llm):
         """Result has no 'content' key."""
         import weekend.llm as wl
-        with patch.object(wl, "call_llm_api", return_value={"status": "ok"}), \
-             patch.object(wl, "ensure_server"):
+
+        with (
+            patch.object(wl, "call_llm_api", return_value={"status": "ok"}),
+            patch.object(wl, "ensure_server"),
+        ):
             result = wl.get_llm_json("sys", "user", max_retries=1)
         assert result is None
 
@@ -66,16 +87,19 @@ class TestNormalizeLlmItems:
 
     def test_empty_items(self, mock_llm):
         from weekend.llm import normalize_llm_items
+
         assert normalize_llm_items([]) == []
         assert normalize_llm_items(None) is None
 
     def test_string_item(self, mock_llm):
         from weekend.llm import normalize_llm_items
+
         result = normalize_llm_items(["Just a name"])
         assert result == [{"name": "Just a name"}]
 
     def test_dict_with_field_mapping(self, mock_llm):
         from weekend.llm import normalize_llm_items
+
         items = [{"custom_name": "Foo", "location": "Bar"}]
         result = normalize_llm_items(items, field_mapping={"custom_name": "name"})
         assert result[0]["name"] == "Foo"
@@ -84,12 +108,14 @@ class TestNormalizeLlmItems:
     def test_field_mapping_already_has_standard(self, mock_llm):
         """If standard_field already exists, don't overwrite."""
         from weekend.llm import normalize_llm_items
+
         items = [{"custom_name": "Foo", "name": "Bar"}]
         result = normalize_llm_items(items, field_mapping={"custom_name": "name"})
         assert result[0]["name"] == "Bar"
 
     def test_dict_with_alt_keys(self, mock_llm):
         from weekend.llm import normalize_llm_items
+
         items = [{"activity": "My Activity", "place": "My Place", "ages": "5-10"}]
         result = normalize_llm_items(items)
         assert result[0]["name"] == "My Activity"
@@ -98,36 +124,42 @@ class TestNormalizeLlmItems:
 
     def test_dict_with_price_alt(self, mock_llm):
         from weekend.llm import normalize_llm_items
+
         items = [{"name": "X", "cost": "Free"}]
         result = normalize_llm_items(items)
         assert result[0]["price"] == "Free"
 
     def test_dict_with_weather_alt(self, mock_llm):
         from weekend.llm import normalize_llm_items
+
         items = [{"name": "X", "indoor_outdoor": "outdoor"}]
         result = normalize_llm_items(items)
         assert result[0]["weather"] == "outdoor"
 
     def test_dict_with_day_alt(self, mock_llm):
         from weekend.llm import normalize_llm_items
+
         items = [{"name": "X", "event_date": "Saturday"}]
         result = normalize_llm_items(items)
         assert result[0]["day"] == "Saturday"
 
     def test_dict_with_dur_alt(self, mock_llm):
         from weekend.llm import normalize_llm_items
+
         items = [{"name": "X", "time": "2pm"}]
         result = normalize_llm_items(items)
         assert result[0]["duration"] == "2pm"
 
     def test_dict_with_no_matching_keys(self, mock_llm):
         from weekend.llm import normalize_llm_items
+
         items = [{"foo": "bar"}]
         result = normalize_llm_items(items)
         assert result == [{"foo": "bar"}]
 
     def test_mixed_types(self, mock_llm):
         from weekend.llm import normalize_llm_items
+
         items = ["Str Item", {"name": "Dict Item"}, 42, None]
         result = normalize_llm_items(items)
         assert result == [{"name": "Str Item"}, {"name": "Dict Item"}]
@@ -138,15 +170,22 @@ class TestScoreItem:
 
     def test_basic_score_no_fields(self, mock_llm):
         from weekend.llm import _score_item
+
         score = _score_item({})
         # No fields populated → populated/len*3.0 = 0; normalized round(0/2, 1) = 0
         assert score == 0.0
 
     def test_full_score_with_match(self, mock_llm):
         from weekend.llm import _score_item
+
         item = {
-            "name": "X", "location": "Somewhere", "price": "$10",
-            "target_ages": "5-10", "weather": "outdoor", "day": "Sat", "duration": "2h",
+            "name": "X",
+            "location": "Somewhere",
+            "price": "$10",
+            "target_ages": "5-10",
+            "weather": "outdoor",
+            "day": "Sat",
+            "duration": "2h",
         }
         score = _score_item(item, weather_str="Sunny", age_range="5-10")
         # 7/7 fields populated → 3.0
@@ -160,6 +199,7 @@ class TestScoreItem:
 
     def test_age_overlap(self, mock_llm):
         from weekend.llm import _score_item
+
         item = {"target_ages": "5-10"}
         score_overlap = _score_item(item, age_range="5-12")
         score_no_overlap = _score_item(item, age_range="20-30")
@@ -175,6 +215,7 @@ class TestScoreItem:
     def test_age_overlap_one_year(self, mock_llm):
         """Single year overlap — line 162 score += 1.5."""
         from weekend.llm import _score_item
+
         # age_range=5-10 → range(5, 11); target=10-15 → range(10, 16); overlap={10}, len=1
         item = {"target_ages": "10-15"}
         score_one = _score_item(item, age_range="5-10")
@@ -189,6 +230,7 @@ class TestScoreItem:
 
     def test_age_no_nums(self, mock_llm):
         from weekend.llm import _score_item
+
         item = {"target_ages": "all"}
         score = _score_item(item, age_range="5-10")
         # No digits → age range block skipped
@@ -197,6 +239,7 @@ class TestScoreItem:
 
     def test_weather_match_sunny(self, mock_llm):
         from weekend.llm import _score_item
+
         item = {"weather": "outdoor"}
         score_match = _score_item(item, weather_str="Sunny and clear")
         score_mismatch = _score_item(item, weather_str="Cloudy with rain")
@@ -210,6 +253,7 @@ class TestScoreItem:
 
     def test_weather_match_cloudy(self, mock_llm):
         from weekend.llm import _score_item
+
         item = {"weather": "indoor"}
         score = _score_item(item, weather_str="Cloudy and wet")
         # 1/7 fields populated → 0.4286
@@ -219,6 +263,7 @@ class TestScoreItem:
 
     def test_price_free(self, mock_llm):
         from weekend.llm import _score_item
+
         item = {"price": "Free"}
         score = _score_item(item)
         # 1/7 fields populated → 0.4286
@@ -228,6 +273,7 @@ class TestScoreItem:
 
     def test_price_paid(self, mock_llm):
         from weekend.llm import _score_item
+
         item = {"price": "$20"}
         score_paid = _score_item(item)
         item2 = {"price": "Free"}
@@ -236,6 +282,7 @@ class TestScoreItem:
 
     def test_long_location_bonus(self, mock_llm):
         from weekend.llm import _score_item
+
         item1 = {"location": "A" * 10}
         item2 = {"location": "X"}
         assert _score_item(item1) > _score_item(item2)
@@ -246,6 +293,7 @@ class TestFetchScoresForItems:
 
     def test_assigns_scores(self, mock_llm):
         from weekend.llm import fetch_scores_for_items
+
         items = [
             {"name": "A", "target_ages": "5-10", "weather": "outdoor"},
             {"name": "B"},
@@ -264,68 +312,88 @@ class TestPhaseFunctions:
 
     def test_condense_weather_returns_api_content(self, mock_llm):
         import weekend.llm as wl
+
         with patch.object(wl, "_call_llm", return_value="Fri 25°C, Sat 28°C, Sun 19°C"):
             result = wl.condense_weather("Forecast: ...")
         assert result == "Fri 25°C, Sat 28°C, Sun 19°C"
 
     def test_condense_weather_fallback_on_none(self, mock_llm):
         import weekend.llm as wl
+
         with patch.object(wl, "_call_llm", return_value=None):
             result = wl.condense_weather("Daily Forecast:\nFri: 25°C")
         assert "25°C" in result
 
     def test_extract_sources_returns_api_content(self, mock_llm):
         import weekend.llm as wl
-        with patch.object(wl, "_call_llm", return_value="- Event A: details"), \
-             patch.object(wl, "_load_extract_signals", return_value={}), \
-             patch.object(wl, "_save_extract_signals"):
+
+        with (
+            patch.object(wl, "_call_llm", return_value="- Event A: details"),
+            patch.object(wl, "_load_extract_signals", return_value={}),
+            patch.object(wl, "_save_extract_signals"),
+        ):
             result = wl.extract_sources("- raw result", "events")
         assert "Event A" in result
 
     def test_extract_sources_fallback_on_none(self, mock_llm):
         import weekend.llm as wl
+
         raw = "- raw result 1\n- raw result 2"
-        with patch.object(wl, "_call_llm", return_value=None), \
-             patch.object(wl, "_load_extract_signals", return_value={}), \
-             patch.object(wl, "_save_extract_signals"):
+        with (
+            patch.object(wl, "_call_llm", return_value=None),
+            patch.object(wl, "_load_extract_signals", return_value={}),
+            patch.object(wl, "_save_extract_signals"),
+        ):
             result = wl.extract_sources(raw, "events")
         # With batch_size=1 fallback, results are raw lines
         assert "- raw result" in result
 
     def test_extract_sources_returns_raw_on_no_lines(self, mock_llm):
         import weekend.llm as wl
+
         result = wl.extract_sources("not a dash line", "events")
         assert result == "not a dash line"
 
     def test_extract_sources_reduces_batch_on_timeout(self, mock_llm):
         import weekend.llm as wl
-        with patch.object(wl, "_call_llm", side_effect=[None, "- Event B: details"]), \
-             patch.object(wl, "_load_extract_signals", return_value={}), \
-             patch.object(wl, "_save_extract_signals"):
+
+        with (
+            patch.object(wl, "_call_llm", side_effect=[None, "- Event B: details"]),
+            patch.object(wl, "_load_extract_signals", return_value={}),
+            patch.object(wl, "_save_extract_signals"),
+        ):
             result = wl.extract_sources("- r1\n- r2", "events")
         # First call with batch=5 fails → batch halves to 2 → retries both items → succeeds
         assert "Event B" in result
 
     def test_draft_activities_returns_content(self, mock_llm):
         import weekend.llm as wl
+
         with patch.object(wl, "_call_llm", return_value="1. Go to park\n2. Visit museum"):
-            result = wl.draft_activities("Sunny", "- Park", "transient", "Toronto", "5-10", "June 5-7")
+            result = wl.draft_activities(
+                "Sunny", "- Park", "transient", "Toronto", "5-10", "June 5-7"
+            )
         assert result == "1. Go to park\n2. Visit museum"
 
     def test_draft_activities_returns_none_on_failure(self, mock_llm):
         import weekend.llm as wl
+
         with patch.object(wl, "_call_llm", return_value=None):
-            result = wl.draft_activities("Sunny", "- Park", "transient", "Toronto", "5-10", "June 5-7")
+            result = wl.draft_activities(
+                "Sunny", "- Park", "transient", "Toronto", "5-10", "June 5-7"
+            )
         assert result is None
 
     def test_refine_draft_returns_api_content(self, mock_llm):
         import weekend.llm as wl
+
         with patch.object(wl, "_call_llm", return_value="1. Park\n2. Museum"):
             result = wl.refine_draft("1. Go to big park\n2. Visit the museum")
         assert result == "1. Park\n2. Museum"
 
     def test_refine_draft_fallback_on_none(self, mock_llm):
         import weekend.llm as wl
+
         draft = "1. Go to park\n2. Visit museum"
         with patch.object(wl, "_call_llm", return_value=None):
             result = wl.refine_draft(draft)
@@ -333,6 +401,7 @@ class TestPhaseFunctions:
 
     def test_structure_to_json_returns_parsed(self, mock_llm):
         import weekend.llm as wl
+
         mock_json = {"transient_events": [{"name": "Park", "location": "Toronto"}]}
         with patch.object(wl, "_call_llm", return_value=mock_json):
             result = wl.structure_to_json("1. Park in Toronto", "transient", "5-10", "Sunny")
@@ -340,48 +409,61 @@ class TestPhaseFunctions:
 
     def test_structure_to_json_returns_none_on_failure(self, mock_llm):
         import weekend.llm as wl
+
         with patch.object(wl, "_call_llm", return_value=None):
             result = wl.structure_to_json("1. Park in Toronto", "transient", "5-10", "Sunny")
         assert result is None
 
     def test_generate_weekend_plan_full_pipeline(self, mock_llm):
         import weekend.llm as wl
+
         mock_transient = {"transient_events": [{"name": "E1"}]}
         mock_fixed = {"fixed_activities": [{"name": "F1"}]}
-        with patch.object(wl, "condense_weather", return_value="Sunny"), \
-             patch.object(wl, "extract_sources", side_effect=["cleaned events", "cleaned venues"]), \
-             patch.object(wl, "draft_activities", side_effect=["draft text", "draft fixed"]), \
-             patch.object(wl, "refine_draft", side_effect=["refined text", "refined fixed"]), \
-             patch.object(wl, "structure_to_json", side_effect=[mock_transient, mock_fixed]):
-            t, f = wl.generate_weekend_plan("model", "weather", "events", "venues", "June 5-7",
-                                              "Toronto", "5-10", "June 5-7")
+        with (
+            patch.object(wl, "condense_weather", return_value="Sunny"),
+            patch.object(wl, "extract_sources", side_effect=["cleaned events", "cleaned venues"]),
+            patch.object(wl, "draft_activities", side_effect=["draft text", "draft fixed"]),
+            patch.object(wl, "refine_draft", side_effect=["refined text", "refined fixed"]),
+            patch.object(wl, "structure_to_json", side_effect=[mock_transient, mock_fixed]),
+        ):
+            t, f = wl.generate_weekend_plan(
+                "model", "weather", "events", "venues", "June 5-7", "Toronto", "5-10", "June 5-7"
+            )
         assert t == mock_transient
         assert f == mock_fixed
 
     def test_generate_weekend_plan_transient_draft_fails(self, mock_llm):
         import weekend.llm as wl
+
         mock_fixed = {"fixed_activities": [{"name": "F1"}]}
-        with patch.object(wl, "condense_weather", return_value="Sunny"), \
-             patch.object(wl, "extract_sources", side_effect=["cleaned events", "cleaned venues"]), \
-             patch.object(wl, "draft_activities", side_effect=[None, "draft fixed"]), \
-             patch.object(wl, "refine_draft", return_value="refined"), \
-             patch.object(wl, "structure_to_json", return_value=mock_fixed), \
-             patch.object(wl, "get_llm_json", return_value=None):
-            t, f = wl.generate_weekend_plan("model", "weather", "events", "venues", "June 5-7",
-                                              "Toronto", "5-10", "June 5-7")
+        with (
+            patch.object(wl, "condense_weather", return_value="Sunny"),
+            patch.object(wl, "extract_sources", side_effect=["cleaned events", "cleaned venues"]),
+            patch.object(wl, "draft_activities", side_effect=[None, "draft fixed"]),
+            patch.object(wl, "refine_draft", return_value="refined"),
+            patch.object(wl, "structure_to_json", return_value=mock_fixed),
+            patch.object(wl, "get_llm_json", return_value=None),
+        ):
+            t, f = wl.generate_weekend_plan(
+                "model", "weather", "events", "venues", "June 5-7", "Toronto", "5-10", "June 5-7"
+            )
         assert t == {}
         assert f == mock_fixed
 
     def test_generate_weekend_plan_fixed_draft_fails(self, mock_llm):
         import weekend.llm as wl
+
         mock_transient = {"transient_events": [{"name": "E1"}]}
-        with patch.object(wl, "condense_weather", return_value="Sunny"), \
-             patch.object(wl, "extract_sources", side_effect=["cleaned events", "cleaned venues"]), \
-             patch.object(wl, "draft_activities", side_effect=["draft text", None]), \
-             patch.object(wl, "refine_draft", return_value="refined"), \
-             patch.object(wl, "structure_to_json", return_value=mock_transient), \
-             patch.object(wl, "get_llm_json", return_value=None):
-            t, f = wl.generate_weekend_plan("model", "weather", "events", "venues", "June 5-7",
-                                              "Toronto", "5-10", "June 5-7")
+        with (
+            patch.object(wl, "condense_weather", return_value="Sunny"),
+            patch.object(wl, "extract_sources", side_effect=["cleaned events", "cleaned venues"]),
+            patch.object(wl, "draft_activities", side_effect=["draft text", None]),
+            patch.object(wl, "refine_draft", return_value="refined"),
+            patch.object(wl, "structure_to_json", return_value=mock_transient),
+            patch.object(wl, "get_llm_json", return_value=None),
+        ):
+            t, f = wl.generate_weekend_plan(
+                "model", "weather", "events", "venues", "June 5-7", "Toronto", "5-10", "June 5-7"
+            )
         assert t == mock_transient
         assert f == {}

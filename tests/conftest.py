@@ -3,9 +3,9 @@ Pytest configuration: shared fixtures for all tests.
 """
 
 import sys
-import os
-import pytest
 from pathlib import Path
+
+import pytest
 
 from lib.testing import MockLLM
 
@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Capture references to lib.mlx_lib functions at conftest load time.
 # This MUST happen before any mock patches them.
 import lib.mlx_lib  # noqa: E402
+
 _REAL_MLX_FUNCTIONS = {
     "call": lib.mlx_lib.call,
     "call_mlx": lib.mlx_lib.call_mlx,
@@ -29,6 +30,7 @@ def reset_global_sessions():
     """Reset persistent session variables in client and osaurus_lib before and after each test."""
     import lib.llm.client
     import lib.osaurus_lib
+
     lib.llm.client._session = None
     lib.osaurus_lib._session = None
     yield
@@ -73,6 +75,59 @@ def mock_llm_osaurus():
 
 # Legacy fixtures used by existing test files
 
+import json  # noqa: E402
+import threading  # noqa: E402
+from http.server import BaseHTTPRequestHandler, HTTPServer  # noqa: E402
+
+
+class _MockOsaurusHandler(BaseHTTPRequestHandler):
+    def log_message(self, *args, **kwargs):  # silence
+        pass
+
+    def _send(self, payload, status=200):
+        body = json.dumps(payload).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        if self.path.endswith("/v1/models"):
+            self._send({"data": [{"id": "foundation"}]})
+        else:
+            self._send({"error": "not found"}, status=404)
+
+    def do_POST(self):
+        if self.path.endswith("/v1/chat/completions"):
+            raw = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            try:
+                req = json.loads(raw)
+            except Exception:
+                req = {}
+            content = json.dumps({"ok": True, "model": req.get("model", "foundation")})
+            self._send(
+                {
+                    "choices": [{"message": {"content": content, "role": "assistant"}}],
+                    "model": req.get("model", "foundation"),
+                    "usage": {},
+                }
+            )
+        else:
+            self._send({"error": "not found"}, status=404)
+
+
+@pytest.fixture
+def mock_osaurus_server():
+    """Yield base URLs for a running mock Osaurus server (and a down-port)."""
+    server = HTTPServer(("127.0.0.1", 0), _MockOsaurusHandler)
+    port = server.server_address[1]
+    t = threading.Thread(target=server.serve_forever, daemon=True)
+    t.start()
+    yield {"up": f"http://127.0.0.1:{port}", "down": "http://127.0.0.1:1"}
+    server.shutdown()
+
+
 @pytest.fixture
 def mock_llm_response():
     return {
@@ -84,7 +139,13 @@ def mock_llm_response():
         },
         "json_with_fixed_activities": {
             "fixed_activities": [
-                {"name": "ROM", "location": "Toronto", "target_ages": "6-12", "price": "$25", "weather": "indoor"},
+                {
+                    "name": "ROM",
+                    "location": "Toronto",
+                    "target_ages": "6-12",
+                    "price": "$25",
+                    "weather": "indoor",
+                },
             ]
         },
         "json_with_transient_events": {

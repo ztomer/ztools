@@ -6,7 +6,7 @@ Run all eval tasks across all 9 models available on the Osaurus server. Compare
 actual scores against each model's known capabilities (published benchmarks,
 architecture). Flag anomalies, identify test-design issues, and apply fixes.
 
-All fixes implemented as v0.8.10–v0.9.0.
+All fixes implemented as v0.8.10–v0.9.6.
 
 ---
 
@@ -26,7 +26,7 @@ All fixes implemented as v0.8.10–v0.9.0.
 
 ---
 
-## Changes Applied (v0.8.10–v0.9.0)
+## Changes Applied (v0.8.10–v0.9.6)
 
 ### Fixed: detailed_json source grounding (A1)
 
@@ -96,6 +96,29 @@ every task. Added filter in `eval/cli.py` that skips models with keywords
 **Fix**: Handles all template variables independently. `{}`, `{location}`,
 `{age_range}`, `{date_range}` all work together or separately.
 
+### Fixed: image_rename re-added with proper messages (v0.9.4)
+
+Old `image_rename`/`image_rename_mixed` entries had `test_cases` key instead of
+`messages`, so the eval runner silently skipped them. Replaced with proper
+`messages` + `parse_json: True` + `validate_mixed_filename` — same pattern as
+`rename_mixed`/`filename_mixed`. Both score 100% across all 8 models.
+
+### Fixed: Config updated from sweep data (v0.9.5)
+
+- `best_models.json` → `foundation` (fastest at 8s, 100% on all weekend tasks)
+- `best_models.summarize` → `qwen-agentworld-35b-a3b-mxfp8` (65% + 100% contradiction resistance)
+- `filename_models` → `[foundation, qwen-agentworld, qwen3.6-35b]` (removed stale entries)
+
+### Added: Multi-falsehood factual accuracy test (v0.9.6)
+
+New `summarize_factual_accuracy` task with 3 planted falsehoods in the timeline.
+Gradated score (100/67/34/0) replaces binary pass/fail from
+`summarize_contradiction`. 5-level discrimination spectrum across models.
+
+Also added `summarize_factual_coverage` — counts 18 key verifiable facts in
+output. Foundation scores 72% (low synthesis, high dump); better models score
+lower (selective synthesis).
+
 ---
 
 ## Eval Results (Post-Fix)
@@ -104,26 +127,26 @@ every task. Added filter in `eval/cli.py` that skips models with keywords
 
 Full sweep across all 8 applicable models (potion-base-4m excluded):
 
-| Model | Mean | summarize_contradiction | file_summary | weekend_transient_schema | summarize | filename | image_rename |
-|-------|:----:|:----------------------:|:------------:|:------------------------:|:---------:|:--------:|:-----------:|
-| diffusiongemma-26b | 93.4 | **100** | 100 | 100 | 65 | 55 | 100 |
-| qwen3.6-35b-a3b* | 92.4 | **50†** | 60 | 100 | 65 | 55 | 100 |
-| foundation | 87.0 | **0** | 30 | 100 | 55 | 30 | 100 |
-| gemma-4-12b | 85.0 | **0** | 60 | 100 | 65 | 25 | 100 |
-| qwen-agentworld-35b | 82.8 | **100** | 60 | 100 | 65 | 55 | 100 |
-| ornith-1.0-35b | 81.6 | **0** | 60 | 100 | 65 | 0 | 100 |
-| qwen3.6-27b | 79.6 | **0** | 60 | 100 | 65 | 30 | 100 |
-| gemma-4-e4b | 76.1 | **100** | 30 | 0 | 65 | 55 | 100 |
+| Model | Mean | factual_accuracy | summarize_contradiction | file_summary | weekend_transient_schema | summarize | filename |
+|-------|:----:|:----------------:|:----------------------:|:------------:|:------------------------:|:---------:|:--------:|
+| diffusiongemma-26b | 93.4 | **34** | 100 | 100 | 100 | 65 | 55 |
+| qwen3.6-35b-a3b* | 92.4 | **34** | 50† | 60 | 100 | 65 | 55 |
+| foundation | 87.0 | **0** | 0 | 30 | 100 | 55 | 30 |
+| gemma-4-12b | 85.0 | **67** | 0 | 60 | 100 | 65 | 25 |
+| qwen-agentworld-35b | 82.8 | **100** | 100 | 60 | 100 | 65 | 55 |
+| ornith-1.0-35b | 81.6 | **100** | 0†† | 60 | 100 | 65 | 0 |
+| qwen3.6-27b | 79.6 | **34** | 0 | 60 | 100 | 65 | 30 |
+| gemma-4-e4b | 76.1 | **0** | 100 | 30 | 0 | 65 | 55 |
 
 † qwen3.6-35b summarize_contradiction is **stochastic** — 1/3 passes, 2/3 parrots. See quirk below.
-* qwen3.6-35b mean recalculated from v0.9.4 sweep (18 tasks, excluding image_rename which was re-added after).
+†† ornith summarize_contradiction 0% is a **false positive** — model correctly flags the falsehood as "FAKE/SATIRE" but validator counts the tokens as parroting. factual_accuracy resolves this by using multiple falsehoods, making models less likely to explicitly mention any of them.
 
-Key discriminators:
-- **summarize_contradiction**: 3 models reliably resist (diffusiongemma-26b, qwen-agentworld, gemma-4-e4b). qwen3.6-35b is stochastic (33%). Rest parrot the falsehood.
-- **weekend_transient_schema**: gemma-4-e4b scores 0% — outputs markdown tables instead of JSON.
-- **file_summary** (now INFRA-safe): diffusiongemma-26b draws 100% (specific descriptions), others 30-60% (generic).
+Key discriminators (v0.9.6):
+- **factual_accuracy** (3 falsehoods, gradated): spectrum from 0% (foundation, gemma-4-e4b) to 100% (qwen-agentworld, ornith). Best single discriminator for summarization quality.
+- **summarize_contradiction** (single falsehood, binary): 3 models 100%, but ornith false-positive. Replaced by factual_accuracy in practice.
+- **weekend_transient_schema**: gemma-4-e4b 0% — outputs markdown tables instead of JSON.
+- **file_summary**: diffusiongemma-26b 100% (specific descriptions), others 30-60% (generic).
 - **filename**: foundation 30%, qwen3.6-27b 30%; others 55%+; ornith 0% (empty).
-- **image_rename**: **100% across all 8 models** — task discriminates poorly but is now properly wired.
 
 ---
 
@@ -212,7 +235,7 @@ Based on sweep data:
 
 1. **Add long-context needle test** — models vary wildly on 256K retrieval
 2. **Score latency and verbosity as formal metrics**
-3. **Probe foundation's backend identity** (0% on summarize_contradiction + worst filename score suggests weak instruction following for a 100% on weekend content tasks)
+3. **Probe foundation's backend identity** (0% on factual_accuracy + 55% summarize + 30% filename suggests weak instruction following generally, despite 100% on weekend content tasks)
 
 ## Raw Data
 

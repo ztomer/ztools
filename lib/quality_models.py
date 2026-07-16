@@ -1,12 +1,26 @@
 from dataclasses import dataclass, field
-from typing import List, FrozenSet
+from typing import FrozenSet, List
 
-
-GENERIC_FILENAMES: FrozenSet[str] = frozenset({
-    "filename.txt", "file.txt", "text.txt", "output.txt", "document.txt",
-    "note.txt", "image.png", "screenshot.png", "unnamed", "file",
-    "filename", "output", "document", "image", "photo", "screenshot",
-})
+GENERIC_FILENAMES: FrozenSet[str] = frozenset(
+    {
+        "filename.txt",
+        "file.txt",
+        "text.txt",
+        "output.txt",
+        "document.txt",
+        "note.txt",
+        "image.png",
+        "screenshot.png",
+        "unnamed",
+        "file",
+        "filename",
+        "output",
+        "document",
+        "image",
+        "photo",
+        "screenshot",
+    }
+)
 
 
 @dataclass

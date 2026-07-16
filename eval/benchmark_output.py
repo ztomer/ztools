@@ -1,4 +1,4 @@
-from lib.tui import STEP, WARN, FAIL
+from lib.tui import FAIL, STEP, WARN
 
 
 def print_header(models, all_cases):
@@ -30,8 +30,10 @@ def print_model_summary(model, avg_human, avg_auto, model_count):
 
 def print_cross_model_comparison(results):
     if len(results) > 1:
-        print(f"\n  CROSS-MODEL COMPARISON")
+        print("\n  CROSS-MODEL COMPARISON")
         print(f"  {'Model':35s} {'Human':>7} {'Auto':>7} {'Gap':>5}")
-        print(f"  {'-'*35} {'-'*7} {'-'*7} {'-'*5}")
+        print(f"  {'-' * 35} {'-' * 7} {'-' * 7} {'-' * 5}")
         for model, res in sorted(results.items(), key=lambda x: -x[1]["avg_human"]):
-            print(f"  {model:35s} {res['avg_human']:6.0f}  {res['avg_auto']:6.0f}  {res['gap']:+3.0f}")
+            print(
+                f"  {model:35s} {res['avg_human']:6.0f}  {res['avg_auto']:6.0f}  {res['gap']:+3.0f}"
+            )

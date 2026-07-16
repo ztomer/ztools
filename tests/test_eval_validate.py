@@ -1,5 +1,3 @@
-import json
-import pytest
 
 from eval.validate import safe_content, validate_file_summary
 
@@ -75,7 +73,9 @@ class TestValidateFileSummary:
         assert "no content details" in msg
 
     def test_string_with_text_headers(self):
-        content = "## Main module\nhandles configuration and api calls\n## Utils\nvalidation helpers"
+        content = (
+            "## Main module\nhandles configuration and api calls\n## Utils\nvalidation helpers"
+        )
         score, msg = validate_file_summary(content)
         # String is not JSON-parseable as a list/dict of items → score 20, "no headers"
         assert score == 20
@@ -127,7 +127,7 @@ class TestValidateFileSummary:
         assert score == 85
 
     def test_no_items_returns_zero(self):
-        """Line 59: items list is empty after filtering, returns no items."""
+        """Line 59: items list has only non-dict entries, so no content details."""
         data = [
             "string",
             42,
@@ -135,7 +135,7 @@ class TestValidateFileSummary:
         ]
         score, msg = validate_file_summary(data)
         assert score == 25
-        assert "no items" in msg
+        assert "no content details" in msg
 
     def test_medium_detail_count(self):
         """Line 63: detailed_count is 50-80% of total."""
@@ -175,7 +175,10 @@ class TestValidateFileSummary:
 
     def test_long_string_with_headers(self):
         """Line 91: string input that's long enough."""
-        content = "## Header\nThis is a long string that should pass the 200 character threshold for additional scoring in the file summary validation function." * 3
+        content = (
+            "## Header\nThis is a long string that should pass the 200 character threshold for additional scoring in the file summary validation function."
+            * 3
+        )
         score, msg = validate_file_summary(content)
         # String isn't valid JSON, has text headers (+20) and length >= 200 (+20) = 40
         assert score == 40
@@ -231,7 +234,7 @@ class TestValidateFileSummary:
         assert score == 70
         assert msg == ""
 
-    def test_no_items_returns_zero(self):
+    def test_no_items_returns_zero_non_dict(self):
         """Items list with only non-dict entries: num_files is len(items) which is > 0,
         but detailed_count is 0, so falls through to else branch (score 25).
         Line 59 is unreachable since empty list is caught earlier."""

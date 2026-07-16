@@ -6,7 +6,6 @@ Removes thinking blocks, stats tokens, and other model artifacts.
 import re
 from typing import Optional
 
-
 # Pre-compiled regular expressions for performance (John Carmack optimization)
 THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 GEMMA_THOUGHT_MATCH_RE = re.compile(r"<\|channel>thought.*?<channel\|>", re.DOTALL)
@@ -16,11 +15,13 @@ CHANNEL_RE = re.compile(r"<channel\|>")
 THINKING_MARKER_RE = re.compile(r"<\|.*?\|>")
 GEMMA_INTERNAL_RE = re.compile(r"<\|channel\|[^|]*\|>")
 OUTPUT_MARKER_RE = re.compile(
-    r"(?:Output Generation|Output|Final Answer|Response|Proceeds|I will now generate|I'll now generate|Let's draft|Draft)\s*[\.\:]\s*",
-    re.IGNORECASE
+    r"(?:Output Generation|Output|Final Answer|Response|Proceeds|"
+    r"I will now generate|I'll now generate|Let's draft|Draft)"
+    r"\s*[\.\:]\s*",
+    re.IGNORECASE,
 )
 SELF_CORRECTION_RE = re.compile(r"\n?\*?\[?\(?[Ss]elf-[Cc]orrection.*", re.DOTALL)
-JSON_START_RE = re.compile(r'[\[{]')
+JSON_START_RE = re.compile(r"[\[{]")
 TRAILING_STATS_RE = re.compile(r"\n*stats:\d+([;.]\d+)?\s*$")
 
 # Content cleanup limits and indicators (Mitchell Hashimoto design)
@@ -35,13 +36,10 @@ QWEN_THINKING_MARKERS = [
     "Here is my thinking process:",
     "Let me think",
     "Let me carefully",
-    "Let me analyze"
+    "Let me analyze",
 ]
 
-GEMMA_CORRECTION_LOOP_RE = re.compile(
-    r"(\s*Let'?s? pick [^\n]+\? No\.){3,}",
-    re.IGNORECASE
-)
+GEMMA_CORRECTION_LOOP_RE = re.compile(r"(\s*Let'?s? pick [^\n]+\? No\.){3,}", re.IGNORECASE)
 BLANK_JSON_START_RE = re.compile(r"\n\s*\n\s*([\[{])")
 
 STATS1_RE = re.compile(r"stats:\d+;[\d.]+")
@@ -87,12 +85,12 @@ def remove_thinking_blocks(content: str) -> str:
         # Try to find explicit output markers after thinking
         output_match = OUTPUT_MARKER_RE.search(content)
         if output_match:
-            content = content[output_match.end():]
+            content = content[output_match.end() :]
             content = SELF_CORRECTION_RE.sub("", content)
         else:
             json_match = JSON_START_RE.search(content[marker_idx:])
             if json_match:
-                content = content[marker_idx + json_match.start():]
+                content = content[marker_idx + json_match.start() :]
         break
 
     # Handle </think> tag without matching </think>
@@ -130,7 +128,7 @@ def remove_inline_thinking(content: str) -> str:
         # Look for a JSON block that starts after a blank line
         blank_json_match = BLANK_JSON_START_RE.search(content)
         if blank_json_match:
-            content = content[blank_json_match.start(1):]
+            content = content[blank_json_match.start(1) :]
 
     return content.strip()
 

@@ -2,12 +2,11 @@ import json
 import time
 from typing import List, Optional
 
-from lib.config import get_model_prompt, Task, _safe_format_prompt
 from lib import osaurus_lib
-from lib.quality_models import TestCase, ScoreCard, _str
+from lib.config import Task, _safe_format_prompt, get_model_prompt
+from lib.quality_models import ScoreCard, TestCase, _str
 from lib.quality_scorers import score_output
-from lib.tui import STEP, WARN, FAIL
-
+from lib.tui import FAIL, STEP, WARN
 
 LLM_TIMEOUT = 600
 
@@ -57,9 +56,12 @@ SUMMARIZE_CASES = [
             "[@user1 | 11:30] Great feedback!"
         ),
         reference=(
-            "This conversation follows a product launch through four stages: announcement, access setup, beta testing, and community feedback. "
-            "@user1 drives the narrative — announcing the product, directing users to early access, and acknowledging feedback. "
-            "@user2 acts as the engaged user asking questions, @user3 confirms receipt, and @user4 provides the positive beta review.\n\n"
+            "This conversation follows a product launch through four stages: "
+            "announcement, access setup, beta testing, and community feedback. "
+            "@user1 drives the narrative — announcing the product, directing "
+            "users to early access, and acknowledging feedback. "
+            "@user2 acts as the engaged user asking questions, @user3 confirms "
+            "receipt, and @user4 provides the positive beta review.\n\n"
             "## Launch & Access\n"
             "- @user1 announced a new product at 10:00\n"
             "- @user2 asked how to get it at 10:15\n"
@@ -85,7 +87,8 @@ SUMMARIZE_CASES = [
         ),
         reference=(
             "A server migration completed successfully over 2.5 hours. "
-            "@user5 led the process with @user6 and @user7 handling backup, DNS, and monitoring phases. "
+            "@user5 led the process with @user6 and @user7 handling backup, "
+            "DNS, and monitoring phases. "
             "All services were restored by 10:30 with no issues detected.\n\n"
             "## Migration Steps\n"
             "- @user5 started server migration at 09:00\n"
@@ -104,18 +107,25 @@ SUMMARIZE_CASES = [
 FILE_SUMMARY_CASES = [
     TestCase(
         task="file_summary",
-        input_text=json.dumps([
-            {"path": "eval_lib.py", "desc": "model evaluation functions"},
-            {"path": "validators.py", "desc": "validation logic for JSON and text output"},
-            {"path": "config.py", "desc": "configuration management and model prompts"},
-            {"path": "osaurus_lib.py", "desc": "LLM API client library"},
-        ]),
-        reference=json.dumps([
-            {"path": "eval_lib.py", "desc": "model evaluation functions for quality scoring"},
-            {"path": "validators.py", "desc": "validation logic for JSON and text output"},
-            {"path": "config.py", "desc": "configuration management and model prompts"},
-            {"path": "osaurus_lib.py", "desc": "LLM API client for Ollama/OAI-compatible servers"},
-        ]),
+        input_text=json.dumps(
+            [
+                {"path": "eval_lib.py", "desc": "model evaluation functions"},
+                {"path": "validators.py", "desc": "validation logic for JSON and text output"},
+                {"path": "config.py", "desc": "configuration management and model prompts"},
+                {"path": "osaurus_lib.py", "desc": "LLM API client library"},
+            ]
+        ),
+        reference=json.dumps(
+            [
+                {"path": "eval_lib.py", "desc": "model evaluation functions for quality scoring"},
+                {"path": "validators.py", "desc": "validation logic for JSON and text output"},
+                {"path": "config.py", "desc": "configuration management and model prompts"},
+                {
+                    "path": "osaurus_lib.py",
+                    "desc": "LLM API client for Ollama/OAI-compatible servers",
+                },
+            ]
+        ),
         description="4 files with known descriptions",
     ),
 ]
@@ -165,31 +175,57 @@ Potential Venues and Current Exhibits:
 - Lake Simcoe Sugar Bush: Maple syrup tours. Outdoor. All ages.
 - Markham Museum: Heritage buildings and events. Indoor/outdoor. All ages.
 
-Output JSON with schema: [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]
-Include 8-10 items. Use "indoor" for rainy days, "outdoor" for clear days. Focus on venues appropriate for kids ages 6-13.
+Output JSON with schema: [{{"name": "str", "location": "str",
+"target_ages": "str", "price": "str", "weather": "str"}}]
+Include 8-10 items. Use "indoor" for rainy days, "outdoor" for clear days.
+Focus on venues appropriate for kids ages 6-13.
 Output ONLY JSON. No explanations.
 """
 
-WEEKEND_TRANSIENT_REF = json.dumps({
-    "weather": {"friday": "clear", "saturday": "rain", "sunday": "clear"},
-    "age_range": [6, 13],
-    "source_item_names": ["spring festival", "coding workshop", "movie night",
-                          "farmers market", "pottery wheel", "puppet show",
-                          "kids yoga", "magic show", "nature walk",
-                          "board game marathon", "pizza making", "easter egg hunt"],
-    "expected_count": [5, 10],
-})
+WEEKEND_TRANSIENT_REF = json.dumps(
+    {
+        "weather": {"friday": "clear", "saturday": "rain", "sunday": "clear"},
+        "age_range": [6, 13],
+        "source_item_names": [
+            "spring festival",
+            "coding workshop",
+            "movie night",
+            "farmers market",
+            "pottery wheel",
+            "puppet show",
+            "kids yoga",
+            "magic show",
+            "nature walk",
+            "board game marathon",
+            "pizza making",
+            "easter egg hunt",
+        ],
+        "expected_count": [5, 10],
+    }
+)
 
-WEEKEND_FIXED_REF = json.dumps({
-    "weather": {"friday": "clear", "saturday": "rain", "sunday": "clear"},
-    "age_range": [6, 13],
-    "source_item_names": ["vaughan sports arena", "high park", "aga khan museum",
-                          "mcmichael", "gibson park", "richmond hill centre",
-                          "maplewood park", "ezra avenue", "oakridge arts",
-                          "toronto fun zone", "lake simcoe sugar bush", "markham museum"],
-    "exclude": ["canada's wonderland", "ontario science centre", "toronto zoo"],
-    "expected_count": [8, 10],
-})
+WEEKEND_FIXED_REF = json.dumps(
+    {
+        "weather": {"friday": "clear", "saturday": "rain", "sunday": "clear"},
+        "age_range": [6, 13],
+        "source_item_names": [
+            "vaughan sports arena",
+            "high park",
+            "aga khan museum",
+            "mcmichael",
+            "gibson park",
+            "richmond hill centre",
+            "maplewood park",
+            "ezra avenue",
+            "oakridge arts",
+            "toronto fun zone",
+            "lake simcoe sugar bush",
+            "markham museum",
+        ],
+        "exclude": ["canada's wonderland", "ontario science centre", "toronto zoo"],
+        "expected_count": [8, 10],
+    }
+)
 
 WEEKEND_TRANSIENT_CASES = [
     TestCase(
@@ -209,7 +245,13 @@ WEEKEND_FIXED_CASES = [
     ),
 ]
 
-ALL_TEST_CASES = FILENAME_CASES + SUMMARIZE_CASES + FILE_SUMMARY_CASES + WEEKEND_TRANSIENT_CASES + WEEKEND_FIXED_CASES
+ALL_TEST_CASES = (
+    FILENAME_CASES
+    + SUMMARIZE_CASES
+    + FILE_SUMMARY_CASES
+    + WEEKEND_TRANSIENT_CASES
+    + WEEKEND_FIXED_CASES
+)
 
 
 def query_model(model: str, prompt: str, input_text: str, task: str) -> Optional[str]:
@@ -238,19 +280,22 @@ def query_model_direct(model: str, full_prompt: str) -> Optional[str]:
         return None
 
 
-def run_suite(models: List[str], cases: List[TestCase] = None,
-              verbose: bool = True) -> List[ScoreCard]:
+def run_suite(
+    models: List[str], cases: List[TestCase] = None, verbose: bool = True
+) -> List[ScoreCard]:
     if cases is None:
         cases = ALL_TEST_CASES
 
     results = []
-    total = len(models) * len(cases)
 
     for i, model in enumerate(models):
         for j, case in enumerate(cases):
             if verbose:
-                print(f"  {STEP} {model[:30]:30s} {case.task:12s} {case.description}",
-                      end=" ", flush=True)
+                print(
+                    f"  {STEP} {model[:30]:30s} {case.task:12s} {case.description}",
+                    end=" ",
+                    flush=True,
+                )
 
             t0 = time.time()
 
@@ -269,10 +314,16 @@ def run_suite(models: List[str], cases: List[TestCase] = None,
             if output is None:
                 if verbose:
                     print(FAIL)
-                results.append(ScoreCard(
-                    model=model, task=case.task, case_id=case.description,
-                    dimensions=[], output="", elapsed=elapsed,
-                ))
+                results.append(
+                    ScoreCard(
+                        model=model,
+                        task=case.task,
+                        case_id=case.description,
+                        dimensions=[],
+                        output="",
+                        elapsed=elapsed,
+                    )
+                )
                 continue
 
             sc = score_output(output, case.task, case)

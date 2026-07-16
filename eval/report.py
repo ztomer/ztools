@@ -6,10 +6,10 @@ Contains all display, comparison, and export functions.
 
 import csv
 import json
-import os
 import statistics
 import time
 from pathlib import Path
+
 from rich.table import Table
 
 from lib.tui import STEP, console
@@ -23,8 +23,13 @@ def _make_table(columns: list, rows: list, title: str = None, show_header: bool 
     """Create a Rich table with consistent styling."""
     table = Table(show_header=show_header, header_style="bold", show_lines=False, title=title)
     for col in columns:
-        table.add_column(col["name"], style=col.get("style", ""), justify=col.get("justify", "left"), 
-                         no_wrap=col.get("nowrap", False), min_width=col.get("min_width", 0))
+        table.add_column(
+            col["name"],
+            style=col.get("style", ""),
+            justify=col.get("justify", "left"),
+            no_wrap=col.get("nowrap", False),
+            min_width=col.get("min_width", 0),
+        )
     for row in rows:
         table.add_row(*[str(c) for c in row])
     return table
@@ -45,11 +50,16 @@ def print_cross_model_comparison(all_results: list) -> None:
         columns = [{"name": "Task", "justify": "left"}]
         for m in models:
             columns.append({"name": m[:15], "justify": "right", "style": "dim"})
-        table = Table(show_header=True, header_style="bold", show_lines=False, 
-                      title=f"{STEP} Cross-Model Comparison")
+        table = Table(
+            show_header=True,
+            header_style="bold",
+            show_lines=False,
+            title=f"{STEP} Cross-Model Comparison",
+        )
         for col in columns:
-            table.add_column(col["name"], style=col.get("style", ""), 
-                            justify=col.get("justify", "left"))
+            table.add_column(
+                col["name"], style=col.get("style", ""), justify=col.get("justify", "left")
+            )
         console.print(table)
         return
 
@@ -121,8 +131,16 @@ def print_score_stats(stats: dict) -> None:
 
     rows = []
     for model, s in sorted(stats.items(), key=lambda x: x[1]["mean"], reverse=True):
-        rows.append([model, f"{s['mean']:.1f}", f"{s['median']:.1f}", 
-                     f"{s['stdev']:.1f}", str(s['min']), str(s['max'])])
+        rows.append(
+            [
+                model,
+                f"{s['mean']:.1f}",
+                f"{s['median']:.1f}",
+                f"{s['stdev']:.1f}",
+                str(s["min"]),
+                str(s["max"]),
+            ]
+        )
 
     table = _make_table(columns, rows, title=f"{STEP} Score Statistics")
     console.print(table)
@@ -396,7 +414,7 @@ def print_error_rates(rates: dict) -> None:
     rows = []
     for model, r in sorted(rates.items(), key=lambda x: x[1]["success_rate"], reverse=True):
         rate = r["success_rate"] * 100
-        rows.append([model, str(r['infra']), str(r['quality']), str(r['success']), f"{rate:.0f}%"])
+        rows.append([model, str(r["infra"]), str(r["quality"]), str(r["success"]), f"{rate:.0f}%"])
 
     table = _make_table(columns, rows, title=f"{STEP} Error Rates")
     console.print(table)
@@ -489,7 +507,15 @@ def print_diff(diffs: dict) -> None:
             diff = d.get("diff", 0)
             if diff != 0:
                 arrow = "↑" if diff > 0 else "↓"
-                rows.append([model[:18], task[:18], str(d['prev']), str(d['current']), f"{arrow}{abs(diff)}"])
+                rows.append(
+                    [
+                        model[:18],
+                        task[:18],
+                        str(d["prev"]),
+                        str(d["current"]),
+                        f"{arrow}{abs(diff)}",
+                    ]
+                )
 
     if rows:
         table = _make_table(columns, rows)
@@ -505,7 +531,9 @@ def export_to_csv(all_results: list, output_file: str = None) -> None:
 
     with open(output_file, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["Model", "Task", "Score", "Status", "Time(s)", "Failure", "Failure_Category"])
+        writer.writerow(
+            ["Model", "Task", "Score", "Status", "Time(s)", "Failure", "Failure_Category"]
+        )
 
         for r in all_results:
             model = r["model"]

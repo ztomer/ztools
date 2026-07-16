@@ -1,15 +1,15 @@
 """Tests for weekend planner JSON extraction."""
-import pytest
+
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 # Mock ddgs before importing weekend
 mock_ddgs = MagicMock()
 mock_ddgs.DDGS = MagicMock()
-sys.modules['ddgs'] = mock_ddgs
+sys.modules["ddgs"] = mock_ddgs
 
 # Import the extraction logic
-from weekend import normalize_llm_items
+from weekend import normalize_llm_items  # noqa: E402
 
 
 class TestWeekendJsonExtraction:
@@ -60,7 +60,7 @@ class TestWeekendJsonExtraction:
             "data": [
                 {"name": "Event 1"},
                 {"name": "Event 2"},
-            ]
+            ],
         }
         items = []
         if response.get("data") and isinstance(response.get("data"), list):
@@ -89,7 +89,6 @@ class TestWeekendNormalize:
 
     def test_normalize_gemma_field_names(self):
         """Normalize Gemma-specific field names."""
-        from weekend import normalize_llm_items
 
         items = [
             {"name": "Test", "age_group": "6-12"},
@@ -101,7 +100,6 @@ class TestWeekendNormalize:
 
     def test_normalize_string_items(self):
         """Normalize items that are strings."""
-        from weekend import normalize_llm_items
 
         items = ["Simple item 1", "Simple item 2"]
         normalized = normalize_llm_items(items)
@@ -109,18 +107,21 @@ class TestWeekendNormalize:
 
     def test_normalize_empty_list(self):
         """Handle empty list."""
-        from weekend import normalize_llm_items
 
         normalized = normalize_llm_items([])
         assert normalized == []
 
     def test_normalize_with_field_mapping(self):
         """Apply field mapping to normalize LLM output."""
-        from weekend import normalize_llm_items
 
         # Simulate qwen returning category instead of target_ages
         items = [
-            {"name": "Test Park", "location": "Toronto", "category": "6-12", "context_highlight": "$20"},
+            {
+                "name": "Test Park",
+                "location": "Toronto",
+                "category": "6-12",
+                "context_highlight": "$20",
+            },
         ]
         # Apply mapping
         mapping = {"category": "target_ages", "context_highlight": "price"}
@@ -131,7 +132,6 @@ class TestWeekendNormalize:
 
     def test_normalize_with_multiple_field_mappings(self):
         """Apply multiple field mappings."""
-        from weekend import normalize_llm_items
 
         items = [
             {"name": "Test", "category": "6-12", "type": "indoor", "event_date": "Saturday"},
@@ -150,7 +150,7 @@ class TestKeyVariationsFixed:
     def test_extract_from_fixed_activities_key(self):
         """Extract from 'fixed_activities' key."""
         response = {"fixed_activities": [{"name": "A", "location": "B"}]}
-        from weekend import normalize_llm_items
+
         items = []
         for k, v in response.items():
             if isinstance(v, list) and len(v) > 0:
@@ -161,7 +161,7 @@ class TestKeyVariationsFixed:
     def test_extract_from_year_round_fixed_activities_key(self):
         """Extract from 'year_round_fixed_activities' key."""
         response = {"year_round_fixed_activities": [{"name": "A"}, {"name": "B"}]}
-        from weekend import normalize_llm_items
+
         items = []
         for k, v in response.items():
             if isinstance(v, list) and len(v) > 0:
@@ -172,7 +172,7 @@ class TestKeyVariationsFixed:
     def test_extract_from_venues_key(self):
         """Extract from 'venues' key."""
         response = {"venues": [{"name": "A"}, {"name": "B"}, {"name": "C"}]}
-        from weekend import normalize_llm_items
+
         items = []
         for k, v in response.items():
             if isinstance(v, list) and len(v) >= 3:
@@ -183,7 +183,7 @@ class TestKeyVariationsFixed:
     def test_extract_from_places_key(self):
         """Extract from 'places' key."""
         response = {"places": [{"name": "Test Place"}]}
-        from weekend import normalize_llm_items
+
         items = []
         for k, v in response.items():
             if isinstance(v, list) and len(v) > 0:
@@ -197,8 +197,10 @@ class TestKeyVariationsTransient:
 
     def test_extract_from_transient_events_key(self):
         """Extract from 'transient_events' key."""
-        response = {"transient_events": [{"name": "A", "day": "Friday"}, {"name": "B", "day": "Saturday"}]}
-        from weekend import normalize_llm_items
+        response = {
+            "transient_events": [{"name": "A", "day": "Friday"}, {"name": "B", "day": "Saturday"}]
+        }
+
         items = []
         for k, v in response.items():
             if isinstance(v, list) and len(v) > 0:
@@ -210,7 +212,7 @@ class TestKeyVariationsTransient:
     def test_extract_from_events_key(self):
         """Extract from 'events' key."""
         response = {"events": [{"name": "A"}, {"name": "B"}]}
-        from weekend import normalize_llm_items
+
         items = []
         for k, v in response.items():
             if isinstance(v, list) and len(v) > 0:
@@ -221,7 +223,7 @@ class TestKeyVariationsTransient:
     def test_extract_from_activities_key(self):
         """Extract from 'activities' key."""
         response = {"activities": [{"name": "A"}, {"name": "B"}, {"name": "C"}]}
-        from weekend import normalize_llm_items
+
         items = []
         for k, v in response.items():
             if isinstance(v, list) and len(v) > 0:
@@ -236,8 +238,10 @@ class TestMinimumItems:
     def test_minimum_5_items(self):
         """The MIN_ITEMS threshold in weekend.cli is 5."""
         # MIN_ITEMS is defined in weekend.cli.main() as 5
-        from weekend import main
         import inspect
+
+        from weekend import main
+
         src = inspect.getsource(main)
         # Verify MIN_ITEMS = 5 is hardcoded in the source
         assert "MIN_ITEMS = 5" in src
@@ -262,7 +266,6 @@ class TestJsonExtractionRobustness:
 
     def test_extract_from_year_round_activities_key(self):
         """Extract from 'year_round_activities' key (actual format)."""
-        from weekend import normalize_llm_items
 
         response = {
             "year_round_activities": [
@@ -279,14 +282,13 @@ class TestJsonExtractionRobustness:
 
     def test_extract_from_status_wrapper(self):
         """Extract from server wrapper {'status': 'ready', 'message': '...'}."""
-        from weekend import normalize_llm_items
 
         response = {
             "status": "ready",
             "message": "Events fetched successfully",
             "activities": [
                 {"name": "Spring Festival", "day": "Saturday"},
-            ]
+            ],
         }
         priority_keys = ["activities", "events", "items", "recommendations"]
         items = []
@@ -299,14 +301,13 @@ class TestJsonExtractionRobustness:
 
     def test_extract_from_error_wrapper(self):
         """Extract from error wrapper {'status': 'error', 'data': [...]}."""
-        from weekend import normalize_llm_items
 
         response = {
             "status": "error",
             "data": [
                 {"name": "Event 1"},
                 {"name": "Event 2"},
-            ]
+            ],
         }
         items = []
         if response.get("data") and isinstance(response.get("data"), list):
@@ -315,7 +316,6 @@ class TestJsonExtractionRobustness:
 
     def test_handle_single_object_response(self):
         """Handle single object instead of list."""
-        from weekend import normalize_llm_items
 
         response = {
             "name": "Single Event",
@@ -334,18 +334,21 @@ class TestScriptIntegration:
     def test_import_weekend_cli(self):
         """Test that weekend.cli can be imported and exposes main()."""
         import weekend.cli
+
         assert callable(getattr(weekend.cli, "main", None))
         assert callable(getattr(weekend.cli, "parse_args", None))
 
     def test_debug_print_defined(self):
         """Test that debug_print is defined at module level."""
-        from lib.tui import debug_print, DEBUG
+        from lib.tui import DEBUG, debug_print
+
         assert callable(debug_print)
         assert DEBUG is False
 
     def test_debug_print_outputs_when_enabled(self, capsys):
         """Test that debug_print outputs when DEBUG is True."""
         import lib.tui
+
         original_debug = lib.tui.DEBUG
         lib.tui.DEBUG = True
         try:
@@ -357,8 +360,9 @@ class TestScriptIntegration:
 
     def test_main_accepts_debug_arg(self):
         """Test that parse_args() correctly parses --debug flag."""
-        from weekend import parse_args
         import sys
+
+        from weekend import parse_args
 
         saved = sys.argv
         try:

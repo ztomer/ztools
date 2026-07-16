@@ -18,22 +18,41 @@ from typing import Dict, List, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
 
-SKIP_DIRS = frozenset({
-    ".git", "__pycache__", ".venv", ".mypy_cache",
-    ".pytest_cache", ".ruff_cache", "otools.egg-info", "benchmarks",
-    "tools", "docs", "eval_outputs",
-})
+SKIP_DIRS = frozenset(
+    {
+        ".git",
+        "__pycache__",
+        ".venv",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        "otools.egg-info",
+        "benchmarks",
+        "tools",
+        "docs",
+        "eval_outputs",
+    }
+)
 
-SKIP_FILES = frozenset({
-    "eval_results.json", "coverage.json",
-})
+SKIP_FILES = frozenset(
+    {
+        "eval_results.json",
+        "coverage.json",
+    }
+)
 
 SOURCE_EXTS = frozenset({".py", ".yaml", ".yml", ".json", ".sh", ".md"})
 
-CONFIG_FILE_NAMES = frozenset({
-    "config.py", "config_core.py", "config_getters.py", "config_tasks.py",
-    "constants.py", "osaurus_models.py",
-})
+CONFIG_FILE_NAMES = frozenset(
+    {
+        "config.py",
+        "config_core.py",
+        "config_getters.py",
+        "config_tasks.py",
+        "constants.py",
+        "osaurus_models.py",
+    }
+)
 
 Violation = Tuple[int, str, str]
 
@@ -79,7 +98,7 @@ def _is_constant_localhost_def(line: str) -> bool:
     if '"http://localhost:1337"' not in stripped and "'http://localhost:1337'" not in stripped:
         return False
     before_eq = stripped.split("=", 1)[0].strip()
-    return bool(re.match(r'^_?[A-Z][A-Z0-9_]*$', before_eq))
+    return bool(re.match(r"^_?[A-Z][A-Z0-9_]*$", before_eq))
 
 
 def _is_env_fallback(line: str) -> bool:
@@ -90,9 +109,12 @@ def _is_model_config_expr(line: str) -> bool:
     return any(
         kw in line
         for kw in (
-            "os.environ.get(", "os.getenv(",
-            "get_best_model", "select_best_model",
-            "find_best_mlx_model", ".get(",
+            "os.environ.get(",
+            "os.getenv(",
+            "get_best_model",
+            "select_best_model",
+            "find_best_mlx_model",
+            ".get(",
         )
     )
 
@@ -101,6 +123,7 @@ def _is_model_config_expr(line: str) -> bool:
 # Check 1: Machine-specific absolute paths
 # ---------------------------------------------------------------------------
 
+
 def check_absolute_paths(path: Path) -> List[Violation]:
     if path.suffix == ".md":
         return []
@@ -108,11 +131,14 @@ def check_absolute_paths(path: Path) -> List[Violation]:
     violations: List[Violation] = []
     for i, line in enumerate(text.splitlines(), 1):
         if "/Users/ztomer" in line:
-            violations.append((
-                i,
-                "Machine-specific absolute path `/Users/ztomer` — use a config key or relative path",
-                "Replace with a path derived from project root (Path(__file__).parent / ...)",
-            ))
+            violations.append(
+                (
+                    i,
+                    "Machine-specific absolute path `/Users/ztomer` — use a "
+                    "config key or relative path",
+                    "Replace with a path derived from project root (Path(__file__).parent / ...)",
+                )
+            )
     return violations
 
 
@@ -120,7 +146,7 @@ def check_absolute_paths(path: Path) -> List[Violation]:
 # Check 2: Hardcoded years in code
 # ---------------------------------------------------------------------------
 
-_YEAR_RE = re.compile(r'(?<!\w)(2024|2025|2026)(?!\w)')
+_YEAR_RE = re.compile(r"(?<!\w)(2024|2025|2026)(?!\w)")
 
 
 def check_hardcoded_years(path: Path) -> List[Violation]:
@@ -138,15 +164,18 @@ def check_hardcoded_years(path: Path) -> List[Violation]:
             continue
         if "%Y" in line or "strftime" in line:
             continue
-        if re.search(r'datetime\s*\(\s*\d{4}', line):
+        if re.search(r"datetime\s*\(\s*\d{4}", line):
             continue
         m = _YEAR_RE.search(line)
         if m:
-            violations.append((
-                i,
-                f"Hardcoded year `{m.group(1)}` — should come from config or computed dynamically",
-                "Use datetime.date.today().year or a config key",
-            ))
+            violations.append(
+                (
+                    i,
+                    f"Hardcoded year `{m.group(1)}` — should come from "
+                    f"config or computed dynamically",
+                    "Use datetime.date.today().year or a config key",
+                )
+            )
     return violations
 
 
@@ -173,11 +202,13 @@ def check_localhost_1337(path: Path) -> List[Violation]:
             continue
         if _is_env_fallback(line):
             continue
-        violations.append((
-            i,
-            "Hardcoded `http://localhost:1337` — should come from config or a constant",
-            "Replace with config lookup: `_CFG.get(\"llm_url\", \"http://localhost:1337\")`",
-        ))
+        violations.append(
+            (
+                i,
+                "Hardcoded `http://localhost:1337` — should come from config or a constant",
+                'Replace with config lookup: `_CFG.get("llm_url", "http://localhost:1337")`',
+            )
+        )
     return violations
 
 
@@ -206,16 +237,21 @@ def check_home_paths(path: Path) -> List[Violation]:
             continue
         for pat, msg in _HOME_PATH_PATTERNS:
             if pat in line_s:
-                violations.append((
-                    i, msg,
-                    "Use Path.home() / \"subdir\" or a config key",
-                ))
+                violations.append(
+                    (
+                        i,
+                        msg,
+                        'Use Path.home() / "subdir" or a config key',
+                    )
+                )
         if _HOME_DOT_RE.search(line):
-            violations.append((
-                i,
-                "Hardcoded `~/.` path — should use Path.home() / \".file\"",
-                "Use Path.home() / \".filename\" or a config key",
-            ))
+            violations.append(
+                (
+                    i,
+                    'Hardcoded `~/.` path — should use Path.home() / ".file"',
+                    'Use Path.home() / ".filename" or a config key',
+                )
+            )
     return violations
 
 
@@ -223,9 +259,16 @@ def check_home_paths(path: Path) -> List[Violation]:
 # Check 5: Hardcoded model names
 # ---------------------------------------------------------------------------
 
-CONFIG_MODEL_NAMES = frozenset({
-    "foundation", "qwopus", "qwen", "gemma", "nemotron", "laguna",
-})
+CONFIG_MODEL_NAMES = frozenset(
+    {
+        "foundation",
+        "qwopus",
+        "qwen",
+        "gemma",
+        "nemotron",
+        "laguna",
+    }
+)
 _MODEL_VERSION_RE = re.compile(r"""['"]qwen3\.6-""")
 
 
@@ -255,7 +298,7 @@ def check_hardcoded_models(path: Path) -> List[Violation]:
         if " in model" in line_s or "model." in line_s or "model_lower" in line_s:
             continue
 
-        if f'default="' in line_s or "default='" in line_s:
+        if 'default="' in line_s or "default='" in line_s:
             continue
         if 'or ["' in line_s or "or ['" in line_s:
             continue
@@ -269,18 +312,22 @@ def check_hardcoded_models(path: Path) -> List[Violation]:
                 continue
             if "_FALLBACK_MODEL" in line_s or "DEFAULT_MODEL" in line_s:
                 continue
-            violations.append((
-                i,
-                f"Hardcoded model name `{model_name}` — should come from config (best_models)",
-                "Use get_best_model(task) or os.environ.get(\"OLLAMA_MODEL\", ...)",
-            ))
+            violations.append(
+                (
+                    i,
+                    f"Hardcoded model name `{model_name}` — should come from config (best_models)",
+                    'Use get_best_model(task) or os.environ.get("OLLAMA_MODEL", ...)',
+                )
+            )
 
         if _MODEL_VERSION_RE.search(line_s):
-            violations.append((
-                i,
-                "Hardcoded model version `qwen3.6-...` — should come from config",
-                "Use get_best_model(task) or os.environ.get(\"OLLAMA_MODEL\", ...)",
-            ))
+            violations.append(
+                (
+                    i,
+                    "Hardcoded model version `qwen3.6-...` — should come from config",
+                    'Use get_best_model(task) or os.environ.get("OLLAMA_MODEL", ...)',
+                )
+            )
 
     return violations
 
@@ -289,15 +336,16 @@ def check_hardcoded_models(path: Path) -> List[Violation]:
 # Fix mode helpers
 # ---------------------------------------------------------------------------
 
+
 def _detect_config_pattern(lines: List[str]) -> str:
     """Detect which config pattern the file uses."""
     text = "\n".join(lines)
     has_os = "import os" in text or "from os import" in text
-    if any("_RENAME_CFG" in l for l in lines):
+    if any("_RENAME_CFG" in line for line in lines):
         return "rename_cfg"
-    if any("_TWITTER_CFG" in l for l in lines):
+    if any("_TWITTER_CFG" in line for line in lines):
         return "twitter_cfg"
-    if any("_CFG" in l for l in lines):
+    if any("_CFG" in line for line in lines):
         return "generic_cfg"
     if has_os and ("os.environ" in text or "os.getenv" in text):
         return "environ"
@@ -368,20 +416,25 @@ def fix_file_localhost(path: Path, dry_run: bool = True) -> Tuple[bool, int]:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Scan ztools for hardcoded values that should come from config.",
     )
     parser.add_argument(
-        "files", nargs="*",
+        "files",
+        nargs="*",
         help="Specific files to scan (default: all source files)",
     )
     parser.add_argument(
-        "--fix", action="store_true",
+        "--fix",
+        action="store_true",
         help="Auto-fix simple cases (replace localhost:1337 with config expression)",
     )
     parser.add_argument(
-        "--verbose", "-v", action="store_true",
+        "--verbose",
+        "-v",
+        action="store_true",
         help="Show extra detail",
     )
     args = parser.parse_args()
@@ -391,8 +444,7 @@ def main():
     else:
         all_files = sorted(ROOT.rglob("*"))
         scan_files = [
-            f for f in all_files
-            if f.is_file() and f.suffix in SOURCE_EXTS and not _skip_path(f)
+            f for f in all_files if f.is_file() and f.suffix in SOURCE_EXTS and not _skip_path(f)
         ]
 
     if args.verbose:

@@ -1,8 +1,14 @@
-import pytest
 
-from eval.failures import (_classify_failure, _describe_content_failure,
-                           FAIL_INFRA, FAIL_TIMEOUT, FAIL_PARSE, FAIL_FORMAT,
-                           FAIL_CONTENT, FAIL_NONE)
+from eval.failures import (
+    FAIL_CONTENT,
+    FAIL_FORMAT,
+    FAIL_INFRA,
+    FAIL_NONE,
+    FAIL_PARSE,
+    FAIL_TIMEOUT,
+    _classify_failure,
+    _describe_content_failure,
+)
 
 
 class TestClassifyFailure:
@@ -40,7 +46,7 @@ class TestClassifyFailure:
         assert "no JSON brackets" in diagnosis["evidence"]
 
     def test_json_chars_but_parsed_fails(self):
-        result = {"content": 'some text { but not valid json }', "parsed": None}
+        result = {"content": "some text { but not valid json }", "parsed": None}
         task_cfg = {"parse_json": True}
         diagnosis = _classify_failure(result, task_cfg, 0, "extract fail")
         assert diagnosis["category"] == FAIL_PARSE

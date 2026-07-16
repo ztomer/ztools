@@ -1,14 +1,17 @@
 """Tests for twit_output.py."""
-import pytest
+
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import patch
+
+import pytest
 
 
 class TestLoadSaveState:
     def test_load_state_no_file(self, tmp_path, monkeypatch):
         import twitter.output as twit_output
+
         # Redirect Path.home() to tmp_path
         monkeypatch.setattr(twit_output, "STATE_FILE", tmp_path / "state.json")
         result = twit_output.load_state()
@@ -16,6 +19,7 @@ class TestLoadSaveState:
 
     def test_load_state_valid(self, tmp_path, monkeypatch):
         import twitter.output as twit_output
+
         state_file = tmp_path / "state.json"
         state_file.write_text(json.dumps({"key": "value"}))
         monkeypatch.setattr(twit_output, "STATE_FILE", state_file)
@@ -24,6 +28,7 @@ class TestLoadSaveState:
 
     def test_load_state_invalid_json(self, tmp_path, monkeypatch):
         import twitter.output as twit_output
+
         state_file = tmp_path / "state.json"
         state_file.write_text("not json")
         monkeypatch.setattr(twit_output, "STATE_FILE", state_file)
@@ -32,6 +37,7 @@ class TestLoadSaveState:
 
     def test_save_state(self, tmp_path, monkeypatch):
         import twitter.output as twit_output
+
         state_file = tmp_path / "state.json"
         monkeypatch.setattr(twit_output, "STATE_FILE", state_file)
         twit_output.save_state({"key": "value"})
@@ -41,12 +47,14 @@ class TestLoadSaveState:
 class TestLoadSaveDebugCache:
     def test_load_debug_cache_no_file(self, tmp_path, monkeypatch):
         import twitter.output as twit_output
+
         monkeypatch.setattr(twit_output, "DEBUG_CACHE_FILE", tmp_path / "cache.json")
         result = twit_output.load_debug_cache()
         assert result == []
 
     def test_load_debug_cache_invalid(self, tmp_path, monkeypatch):
         import twitter.output as twit_output
+
         cache_file = tmp_path / "cache.json"
         cache_file.write_text("not json")
         monkeypatch.setattr(twit_output, "DEBUG_CACHE_FILE", cache_file)
@@ -55,11 +63,16 @@ class TestLoadSaveDebugCache:
 
     def test_load_debug_cache_with_dates(self, tmp_path, monkeypatch):
         import twitter.output as twit_output
+
         cache_file = tmp_path / "cache.json"
-        cache_file.write_text(json.dumps([
-            {"id": 1, "created_at": "2024-01-01T12:00:00"},
-            {"id": 2, "created_at": "2024-01-02T13:00:00"},
-        ]))
+        cache_file.write_text(
+            json.dumps(
+                [
+                    {"id": 1, "created_at": "2024-01-01T12:00:00"},
+                    {"id": 2, "created_at": "2024-01-02T13:00:00"},
+                ]
+            )
+        )
         monkeypatch.setattr(twit_output, "DEBUG_CACHE_FILE", cache_file)
         result = twit_output.load_debug_cache()
         assert len(result) == 2
@@ -67,6 +80,7 @@ class TestLoadSaveDebugCache:
 
     def test_load_debug_cache_no_dates(self, tmp_path, monkeypatch):
         import twitter.output as twit_output
+
         cache_file = tmp_path / "cache.json"
         cache_file.write_text(json.dumps([{"id": 1, "screen_name": "x"}]))
         monkeypatch.setattr(twit_output, "DEBUG_CACHE_FILE", cache_file)
@@ -75,6 +89,7 @@ class TestLoadSaveDebugCache:
 
     def test_save_debug_cache(self, tmp_path, monkeypatch):
         import twitter.output as twit_output
+
         cache_file = tmp_path / "cache.json"
         monkeypatch.setattr(twit_output, "DEBUG_CACHE_FILE", cache_file)
         dt = datetime(2024, 1, 1, 12, 0, 0)
@@ -85,6 +100,7 @@ class TestLoadSaveDebugCache:
     def test_save_debug_cache_non_serializable_raises(self, tmp_path, monkeypatch):
         """Line 50: TypeError for non-datetime non-serializable objects."""
         import twitter.output as twit_output
+
         cache_file = tmp_path / "cache.json"
         monkeypatch.setattr(twit_output, "DEBUG_CACHE_FILE", cache_file)
         # set is not JSON serializable
@@ -96,6 +112,7 @@ class TestLoadSaveDebugCache:
 class TestPrintToStdout:
     def test_no_bat_uses_print(self, mock_llm, capsys):
         import twitter.output as twit_output
+
         with patch("shutil.which", return_value=None):
             twit_output.print_to_stdout("# Hello")
         captured = capsys.readouterr()
@@ -103,16 +120,22 @@ class TestPrintToStdout:
 
     def test_with_bat_success(self, mock_llm):
         import twitter.output as twit_output
-        with patch("shutil.which", return_value="/usr/bin/bat"), \
-             patch("subprocess.run") as mock_run:
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/bat"),
+            patch("subprocess.run") as mock_run,
+        ):
             twit_output.print_to_stdout("# Hello")
         mock_run.assert_called_once()
         assert mock_run.call_args.kwargs["input"] == "# Hello"
 
     def test_with_bat_failure_falls_back_to_print(self, mock_llm, capsys):
         import twitter.output as twit_output
-        with patch("shutil.which", return_value="/usr/bin/bat"), \
-             patch("subprocess.run", side_effect=Exception("bat failed")):
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/bat"),
+            patch("subprocess.run", side_effect=Exception("bat failed")),
+        ):
             twit_output.print_to_stdout("# Hello")
         captured = capsys.readouterr()
         assert "Hello" in captured.out
@@ -120,25 +143,27 @@ class TestPrintToStdout:
 
 class TestWriteMarkdown:
     def test_basic(self, tmp_path):
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         import twitter.output as twit_output
+
         tweets = [
             {"screen_name": "alice", "text": "Hello"},
             {"screen_name": "bob", "text": "World"},
         ]
         since = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         until = datetime(2024, 1, 2, 12, 0, 0, tzinfo=timezone.utc)
-        out_path, content = twit_output.write_markdown(
-            tweets, "My summary", since, until, tmp_path
-        )
+        out_path, content = twit_output.write_markdown(tweets, "My summary", since, until, tmp_path)
         assert out_path.exists()
         assert "My summary" in content
         assert "2024-01-01" in content
         assert "2 from 2 accounts" in content
 
     def test_unique_authors(self, tmp_path):
-        from datetime import datetime, timezone
+        from datetime import datetime
+
         import twitter.output as twit_output
+
         tweets = [
             {"screen_name": "alice", "text": "1"},
             {"screen_name": "alice", "text": "2"},
@@ -146,21 +171,19 @@ class TestWriteMarkdown:
         ]
         since = datetime(2024, 1, 1, tzinfo=timezone.utc)
         until = datetime(2024, 1, 2, tzinfo=timezone.utc)
-        out_path, content = twit_output.write_markdown(
-            tweets, "S", since, until, tmp_path
-        )
+        out_path, content = twit_output.write_markdown(tweets, "S", since, until, tmp_path)
         assert "3 from 2 accounts" in content
 
 
 class TestCleanFolder:
     def test_folder_not_exists(self, tmp_path, monkeypatch):
+
         import twitter.output as twit_output
-        from io import StringIO
+
         fake_dir = tmp_path / "nonexistent"
         # twit_output does `import sys` and calls sys.exit(0)
         # patch with a real SystemExit-raising function
-        with patch.object(twit_output, "sys") as mock_sys, \
-             patch("builtins.print") as mock_print:
+        with patch.object(twit_output, "sys") as mock_sys, patch("builtins.print") as mock_print:
             mock_sys.exit.side_effect = SystemExit(0)
             with pytest.raises(SystemExit):
                 twit_output.clean_folder(fake_dir)
@@ -170,6 +193,7 @@ class TestCleanFolder:
 
     def test_folder_exists_with_files(self, tmp_path, monkeypatch):
         import twitter.output as twit_output
+
         out_dir = tmp_path / "summaries"
         out_dir.mkdir()
         (out_dir / "old1.md").write_text("old1")
@@ -186,6 +210,7 @@ class TestCleanFolder:
 
     def test_delete_failure_warning(self, tmp_path, monkeypatch):
         import twitter.output as twit_output
+
         out_dir = tmp_path / "summaries"
         out_dir.mkdir()
         md = out_dir / "locked.md"

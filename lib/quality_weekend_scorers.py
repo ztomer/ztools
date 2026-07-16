@@ -1,8 +1,8 @@
 import json
 import re
-from typing import Any, List, Tuple
+from typing import List, Tuple
 
-from lib.quality_models import Score, TestCase, _str, _lower
+from lib.quality_models import Score, TestCase, _lower, _str
 from lib.quality_scorers import register_scorer
 
 INDOOR = {"indoor", "inside", "in", "cover", "shelter"}
@@ -50,7 +50,7 @@ def _has_field(item: dict, field: str) -> bool:
 
 
 def _age_overlap(ta: str, ref_min: int, ref_max: int) -> float:
-    nums = sorted(set(int(n) for n in re.findall(r'\d+', ta)))
+    nums = sorted(set(int(n) for n in re.findall(r"\d+", ta)))
     if not nums:
         return 0.0
     item_min, item_max = nums[0], nums[-1]
@@ -156,8 +156,8 @@ def _score_weekend_source_grounding(output: str, case: TestCase) -> Score:
             if any(sn and sn in name for sn in source_names):
                 scored += 1
         else:
-            tokens = set(re.findall(r'[a-z]+', name))
-            if tokens & set(re.findall(r'[a-z]+', source)):
+            tokens = set(re.findall(r"[a-z]+", name))
+            if tokens & set(re.findall(r"[a-z]+", source)):
                 scored += 1
     ratio = scored / len(items) if items else 0
     score = ratio * 100

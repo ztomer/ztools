@@ -1,13 +1,16 @@
 """Tests for lib.osaurus_lib - core LLM call functions."""
+
 import json
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, Mock
 import requests
 
 
 @pytest.fixture
 def mock_llm():
     from lib.testing import MockLLM
+
     mock = MockLLM()
     mock.patch_all()
     yield mock
@@ -23,11 +26,13 @@ def no_mock_llm():
 class TestApplyModelQuirks:
     def test_apply_quirks_empty_messages(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
+
         result = apply_model_quirks([], "llama-3.1-8b")
         assert result == []
 
     def test_apply_quirks_user_execute(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
+
         messages = [{"role": "user", "content": "Execute the task based on input"}]
         result = apply_model_quirks(messages, "llama-3.1-8b")
         assert "Extract" in result[0]["content"]
@@ -35,6 +40,7 @@ class TestApplyModelQuirks:
 
     def test_apply_quirks_user_current_context(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
+
         messages = [{"role": "user", "content": "Use Current Context to determine result"}]
         result = apply_model_quirks(messages, "llama-3.1-8b")
         assert "Data" in result[0]["content"]
@@ -42,6 +48,7 @@ class TestApplyModelQuirks:
 
     def test_apply_quirks_user_with_context_word(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
+
         messages = [{"role": "user", "content": "Look at the context here"}]
         result = apply_model_quirks(messages, "llama-3.1-8b")
         # No replacement triggered, but logs
@@ -49,6 +56,7 @@ class TestApplyModelQuirks:
 
     def test_apply_quirks_qwen_system_adds_trigger(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
+
         messages = [{"role": "system", "content": "Extract data"}]
         with patch("lib.llm.quirks._get_model_family", return_value="qwen"):
             result = apply_model_quirks(messages, "qwen2.5-7b")
@@ -56,6 +64,7 @@ class TestApplyModelQuirks:
 
     def test_apply_quirks_qwen_system_already_has_trigger(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
+
         messages = [{"role": "system", "content": "Output JSON now\nDo thing"}]
         with patch("lib.llm.quirks._get_model_family", return_value="qwen"):
             result = apply_model_quirks(messages, "qwen2.5-7b")
@@ -63,6 +72,7 @@ class TestApplyModelQuirks:
 
     def test_apply_quirks_qwen_no_json_text_skips(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
+
         messages = [{"role": "system", "content": "no JSON required plain text output"}]
         with patch("lib.llm.quirks._get_model_family", return_value="qwen"):
             result = apply_model_quirks(messages, "qwen2.5-7b")
@@ -70,6 +80,7 @@ class TestApplyModelQuirks:
 
     def test_apply_quirks_qwen_empty_content(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
+
         messages = [{"role": "system", "content": ""}]
         with patch("lib.llm.quirks._get_model_family", return_value="qwen"):
             result = apply_model_quirks(messages, "qwen2.5-7b")
@@ -77,6 +88,7 @@ class TestApplyModelQuirks:
 
     def test_apply_quirks_gemma4_system_json(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
+
         messages = [{"role": "system", "content": "Output JSON"}]
         with patch("lib.llm.quirks._get_model_family", return_value="gemma4"):
             result = apply_model_quirks(messages, "gemma-4-9b")
@@ -84,6 +96,7 @@ class TestApplyModelQuirks:
 
     def test_apply_quirks_gemma4_already_important(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
+
         messages = [{"role": "system", "content": "IMPORTANT: Output JSON"}]
         with patch("lib.llm.quirks._get_model_family", return_value="gemma4"):
             result = apply_model_quirks(messages, "gemma-4-9b")
@@ -91,6 +104,7 @@ class TestApplyModelQuirks:
 
     def test_apply_quirks_default_role(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
+
         messages = [{"role": "user", "content": "x"}]
         result = apply_model_quirks(messages, "llama-3.1-8b")
         # role is preserved through the function
@@ -100,6 +114,7 @@ class TestApplyModelQuirks:
 
     def test_apply_quirks_unknown_family(self, mock_llm):
         from lib.osaurus_lib import apply_model_quirks
+
         messages = [{"role": "system", "content": "x"}, {"role": "user", "content": "y"}]
         result = apply_model_quirks(messages, "unknown-model")
         assert len(result) == 2
@@ -108,12 +123,11 @@ class TestApplyModelQuirks:
 class TestCall:
     def test_call_success(self, no_mock_llm):
         import lib.osaurus_lib
+
         call = lib.osaurus_lib.call
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": "Hello response"}}]
-        }
+        mock_response.json.return_value = {"choices": [{"message": {"content": "Hello response"}}]}
         with patch("lib.osaurus_lib.requests.Session") as mock_session:
             s = mock_session.return_value.__enter__.return_value
             s.post.return_value = mock_response
@@ -126,12 +140,11 @@ class TestCall:
 
     def test_call_with_parse_json(self, no_mock_llm):
         import lib.osaurus_lib
+
         call = lib.osaurus_lib.call
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": '{"a": 1}'}}]
-        }
+        mock_response.json.return_value = {"choices": [{"message": {"content": '{"a": 1}'}}]}
         with patch("lib.osaurus_lib.requests.Session") as mock_session:
             s = mock_session.return_value.__enter__.return_value
             s.post.return_value = mock_response
@@ -142,6 +155,7 @@ class TestCall:
 
     def test_call_parse_json_fails(self, no_mock_llm):
         import lib.osaurus_lib
+
         call = lib.osaurus_lib.call
         # Use content that truly fails extract_json. The function normalizes text via _extract_plain_list
         # so "not json" becomes [{name: not json}]. We use a string with brackets that breaks parsing.
@@ -160,6 +174,7 @@ class TestCall:
 
     def test_call_http_error(self, no_mock_llm):
         import lib.osaurus_lib
+
         call = lib.osaurus_lib.call
         mock_response = MagicMock()
         mock_response.status_code = 500
@@ -172,6 +187,7 @@ class TestCall:
 
     def test_call_empty_choices(self, no_mock_llm):
         import lib.osaurus_lib
+
         call = lib.osaurus_lib.call
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -184,6 +200,7 @@ class TestCall:
 
     def test_call_no_choices_key(self, no_mock_llm):
         import lib.osaurus_lib
+
         call = lib.osaurus_lib.call
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -196,6 +213,7 @@ class TestCall:
 
     def test_call_timeout(self, no_mock_llm):
         import lib.osaurus_lib
+
         call = lib.osaurus_lib.call
         with patch("lib.osaurus_lib.requests.Session") as mock_session:
             s = mock_session.return_value.__enter__.return_value
@@ -205,15 +223,30 @@ class TestCall:
 
     def test_call_connection_error(self, no_mock_llm):
         import lib.osaurus_lib
+
         call = lib.osaurus_lib.call
         with patch("lib.osaurus_lib.requests.Session") as mock_session:
             s = mock_session.return_value.__enter__.return_value
             s.post.side_effect = requests.exceptions.ConnectionError
-            result = call("model-a", [{"role": "user", "content": "hi"}])
+            result = call("model-a", [{"role": "user", "content": "hi"}], use_foundation=False)
         assert "Connection failed" in result["error"]
+
+    def test_call_connection_error_falls_back_to_foundation(self, no_mock_llm):
+        import lib.osaurus_lib
+
+        call = lib.osaurus_lib.call
+        with (
+            patch("lib.osaurus_lib.requests.Session") as mock_session,
+            patch("lib.osaurus_lib._try_foundation", return_value=True) as mock_found,
+        ):
+            s = mock_session.return_value.__enter__.return_value
+            s.post.side_effect = requests.exceptions.ConnectionError
+            call("model-a", [{"role": "user", "content": "hi"}])
+        mock_found.assert_called_once()
 
     def test_call_json_decode_error(self, no_mock_llm):
         import lib.osaurus_lib
+
         call = lib.osaurus_lib.call
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -226,6 +259,7 @@ class TestCall:
 
     def test_call_key_error(self, no_mock_llm):
         import lib.osaurus_lib
+
         call = lib.osaurus_lib.call
         with patch("lib.osaurus_lib.requests.Session") as mock_session:
             s = mock_session.return_value.__enter__.return_value
@@ -235,6 +269,7 @@ class TestCall:
 
     def test_call_generic_exception(self, no_mock_llm):
         import lib.osaurus_lib
+
         call = lib.osaurus_lib.call
         with patch("lib.osaurus_lib.requests.Session") as mock_session:
             s = mock_session.return_value.__enter__.return_value
@@ -244,6 +279,7 @@ class TestCall:
 
     def test_call_with_max_tokens(self, no_mock_llm):
         import lib.osaurus_lib
+
         call = lib.osaurus_lib.call
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -256,6 +292,7 @@ class TestCall:
 
     def test_call_with_custom_timeout(self, no_mock_llm):
         import lib.osaurus_lib
+
         call = lib.osaurus_lib.call
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -268,6 +305,7 @@ class TestCall:
 
     def test_call_parse_json_empty_content(self, no_mock_llm):
         import lib.osaurus_lib
+
         call = lib.osaurus_lib.call
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -280,12 +318,15 @@ class TestCall:
 
     def test_call_default_max_tokens(self, no_mock_llm):
         import lib.osaurus_lib
+
         call = lib.osaurus_lib.call
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "x"}}]}
-        with patch("lib.osaurus_lib.requests.Session") as mock_session, \
-             patch("lib.osaurus_lib.get_max_tokens_for_task", return_value=2048):
+        with (
+            patch("lib.osaurus_lib.requests.Session") as mock_session,
+            patch("lib.osaurus_lib.get_max_tokens_for_task", return_value=2048),
+        ):
             s = mock_session.return_value.__enter__.return_value
             s.post.return_value = mock_response
             call("model-a", [{"role": "user", "content": "hi"}])
@@ -295,6 +336,7 @@ class TestCall:
 class TestCallWithPrompt:
     def test_think_task(self, no_mock_llm):
         import lib.osaurus_lib
+
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "thoughtful"}}]}
@@ -306,17 +348,19 @@ class TestCallWithPrompt:
 
     def test_json_task(self, no_mock_llm):
         import lib.osaurus_lib
+
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": '{"a":1}'}}]}
         with patch("lib.osaurus_lib.requests.Session") as mock_session:
             s = mock_session.return_value.__enter__.return_value
             s.post.return_value = mock_response
-            result = lib.osaurus_lib.call_with_prompt("model-a", "extract", task="json")
+            lib.osaurus_lib.call_with_prompt("model-a", "extract", task="json")
         assert s.post.call_args.kwargs["json"].get("response_format") == {"type": "json_object"}
 
     def test_detailed_json_task(self, no_mock_llm):
         import lib.osaurus_lib
+
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "{}"}}]}
@@ -328,6 +372,7 @@ class TestCallWithPrompt:
 
     def test_summarize_task(self, no_mock_llm):
         import lib.osaurus_lib
+
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "summary"}}]}
@@ -339,6 +384,7 @@ class TestCallWithPrompt:
 
     def test_filename_task(self, no_mock_llm):
         import lib.osaurus_lib
+
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "my_file"}}]}
@@ -350,6 +396,7 @@ class TestCallWithPrompt:
 
     def test_unknown_task(self, no_mock_llm):
         import lib.osaurus_lib
+
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "x"}}]}
@@ -362,6 +409,7 @@ class TestCallWithPrompt:
 
     def test_prompt_substitution(self, no_mock_llm):
         import lib.osaurus_lib
+
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "x"}}]}
@@ -376,6 +424,7 @@ class TestCallWithPrompt:
 class TestTestModel:
     def test_test_model_default(self, no_mock_llm):
         import lib.osaurus_lib
+
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {"choices": [{"message": {"content": "Hello!"}}]}
@@ -389,6 +438,7 @@ class TestTestModel:
 class TestCallLLMApi:
     def test_call_llm_api_with_http(self, no_mock_llm):
         import lib.osaurus_lib
+
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "choices": [{"message": {"content": "resp"}}],
@@ -398,7 +448,9 @@ class TestCallLLMApi:
         with patch("lib.osaurus_lib.requests.Session") as mock_session:
             s = mock_session.return_value.__enter__.return_value
             s.post.return_value = mock_response
-            result = lib.osaurus_lib.call_llm_api("https://api.example.com", "model", [{"role": "user", "content": "hi"}])
+            result = lib.osaurus_lib.call_llm_api(
+                "https://api.example.com", "model", [{"role": "user", "content": "hi"}]
+            )
         assert result["content"] == "resp"
         assert result["model"] == "remote-model"
         assert result["usage"] == {"tokens": 100}
@@ -407,6 +459,7 @@ class TestCallLLMApi:
 
     def test_call_llm_api_without_http(self, no_mock_llm):
         import lib.osaurus_lib
+
         mock_response = MagicMock()
         mock_response.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
         with patch("lib.osaurus_lib.requests.Session") as mock_session:
@@ -417,6 +470,7 @@ class TestCallLLMApi:
 
     def test_call_llm_api_with_api_key(self, no_mock_llm):
         import lib.osaurus_lib
+
         mock_response = MagicMock()
         mock_response.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
         with patch("lib.osaurus_lib.requests.Session") as mock_session:
@@ -427,6 +481,7 @@ class TestCallLLMApi:
 
     def test_call_llm_api_parse_json(self, no_mock_llm):
         import lib.osaurus_lib
+
         mock_response = MagicMock()
         mock_response.json.return_value = {"choices": [{"message": {"content": "{}"}}]}
         with patch("lib.osaurus_lib.requests.Session") as mock_session:
@@ -437,6 +492,7 @@ class TestCallLLMApi:
 
     def test_call_llm_api_http_error(self, no_mock_llm):
         import lib.osaurus_lib
+
         with patch("lib.osaurus_lib.requests.Session") as mock_session:
             s = mock_session.return_value.__enter__.return_value
             s.post.side_effect = Exception("boom")
@@ -445,6 +501,7 @@ class TestCallLLMApi:
 
     def test_call_llm_api_missing_choices(self, no_mock_llm):
         import lib.osaurus_lib
+
         mock_response = MagicMock()
         mock_response.json.return_value = {"oops": "no choices"}
         with patch("lib.osaurus_lib.requests.Session") as mock_session:
@@ -455,6 +512,7 @@ class TestCallLLMApi:
 
     def test_call_llm_api_no_model_in_response(self, no_mock_llm):
         import lib.osaurus_lib
+
         mock_response = MagicMock()
         mock_response.json.return_value = {"choices": [{"message": {"content": "x"}}]}
         with patch("lib.osaurus_lib.requests.Session") as mock_session:
@@ -467,6 +525,7 @@ class TestCallLLMApi:
 class TestThinkingHelpers:
     def test_extract_thinking_with_thinking_block(self, mock_llm):
         from lib.osaurus_lib import extract_thinking
+
         # extract_thinking uses <thinking> tag, but remove_thinking_blocks only strips <think>
         # So content may still contain <thinking> tags (this is a quirk of the implementation)
         text = "<thinking>reasoning here</thinking>\nThe answer is 42"
@@ -476,12 +535,14 @@ class TestThinkingHelpers:
 
     def test_extract_thinking_no_thinking(self, mock_llm):
         from lib.osaurus_lib import extract_thinking
+
         thinking, content = extract_thinking("Just plain text")
         assert thinking == ""
         assert content == "Just plain text"
 
     def test_extract_thinking_with_attributes(self, mock_llm):
         from lib.osaurus_lib import extract_thinking
+
         text = '<think> type="reasoning"</think>my thoughts</think>\nfinal'
         thinking, content = extract_thinking(text)
         # <think> with attributes is matched
@@ -489,11 +550,13 @@ class TestThinkingHelpers:
 
     def test_merge_thinking_empty(self, mock_llm):
         from lib.osaurus_lib import merge_thinking_with_summary
+
         result = merge_thinking_with_summary("", "just summary")
         assert result == "just summary"
 
     def test_merge_thinking_with_thinking(self, mock_llm):
         from lib.osaurus_lib import merge_thinking_with_summary
+
         result = merge_thinking_with_summary("my thoughts", "the answer")
         assert "## Analysis" in result
         assert "the answer" in result
@@ -501,6 +564,7 @@ class TestThinkingHelpers:
 
     def test_strip_thinking(self, mock_llm):
         from lib.osaurus_lib import strip_thinking
+
         text = "before <think>x</think> after"
         result = strip_thinking(text)
         assert "<think>" not in result
@@ -509,4 +573,5 @@ class TestThinkingHelpers:
 
     def test_strip_thinking_no_thinking(self, mock_llm):
         from lib.osaurus_lib import strip_thinking
+
         assert strip_thinking("clean text") == "clean text"

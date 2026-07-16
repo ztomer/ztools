@@ -15,11 +15,39 @@ ZTools is a suite of productivity scripts powered by local LLMs. They run entire
 
 | Requirement | Notes |
 |------------|-------|
-| **[Osaurus](https://github.com/osaurus) or [Ollama](https://ollama.com)** | Server running at `http://localhost:1337` |
-| **Python 3.11+** | For most scripts |
-| **uv** | Required for scripts with browser/vision dependencies |
+| **[Osaurus](https://osaurus.ai/)** server | **Hard runtime dependency.** ZTools talks to an Osaurus (or Ollama-compatible) server at `http://localhost:1337`. Install once with `brew install --cask osaurus`, then start it (`osaurus serve` or launch the app). |
+| **uv** | Installed automatically as a Homebrew dependency; builds the tool venv |
+| **Python 3.13** | Provided by the formula |
 
-## Quick Start
+> **Osaurus is required.** ZTools does not bundle or download models — it is a
+> thin client that drives a local LLM server. If the server is not running, the
+> tools fail (or auto-restart the Osaurus app if it is installed at
+> `/Applications/osaurus.app`).
+
+## Install (Homebrew)
+
+```bash
+# 1. Osaurus server (hard dependency) — macOS 15+, Apple Silicon
+brew install --cask osaurus
+osaurus serve &>/dev/null &   # or open the Osaurus.app GUI
+
+# 2. ZTools commands
+brew tap ztomer/tap
+brew install ztomer/tap/ztools
+```
+
+This installs four commands on your `PATH`, each backed by a `uv`-managed venv:
+
+| Command | Module | Notes |
+|---------|--------|-------|
+| `weekend` | `weekend` | Family weekend planner |
+| `twitter` | `twitter` | Twitter timeline summarizer (needs `twitter --install-browser` once) |
+| `oeval` | `eval` | Local model evaluator |
+| `rename_images` | `rename` | OCR/vision screenshot renamer (operates on `$PWD`) |
+
+Each wrapper self-heals: if its venv is ever removed it rebuilds it on next run.
+
+## Quick Start (from a checkout)
 
 ```bash
 # Weekend planner

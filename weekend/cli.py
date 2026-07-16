@@ -1,57 +1,111 @@
 #!/usr/bin/env python3
+import argparse
 import os
 import time
-import argparse
 from pathlib import Path
 
-
-from lib import init_config
-from lib.config import get_model_top_keys, get_model_field_mapping, Task
-from lib.osaurus_lib import get_best_model
-
-from lib.tui import STEP, WARN, debug_print
 import lib.tui as tui
+from lib import init_config
+from lib.config import Task, get_model_field_mapping, get_model_top_keys
+from lib.osaurus_lib import get_best_model
+from lib.osaurus_server import check_server_or_die
 from lib.signal_handling import setup_signals
-
+from lib.tui import STEP, WARN, debug_print
 from weekend.config import (
-    DEBUG_EVENTS_FILE, DEBUG_VENUES_FILE,
-    load_events_cache, save_events_cache,
-    load_venues_cache, save_venues_cache,
+    AGE_RANGE,
+    CHILDREN,
+    CHILDREN_STR,
+    CITY,
+    DATES_STR,
+    DEBUG_EVENTS_FILE,
+    DEBUG_VENUES_FILE,
+    EXCLUDE_PLACES,
+    MODEL_CONFIG,
+    MODEL_NAME,
+    OSAURUS_APP,
+    OSAURUS_BASE_URL,
+    REGION,
+    WEEKEND_CONFIG,
+    ensure_server,
+    is_server_running_ours,
+    load_events_cache,
+    load_venues_cache,
     load_weekend_config,
-    WEEKEND_CONFIG, EXCLUDE_PLACES, CHILDREN, CHILDREN_STR, CITY, REGION, AGE_RANGE, DATES_STR,
-    MODEL_CONFIG, MODEL_NAME, OSAURUS_BASE_URL, OSAURUS_APP,
-    is_server_running_ours, restart_osaurus, ensure_server,
+    restart_osaurus,
+    save_events_cache,
+    save_venues_cache,
 )
 from weekend.data import (
-    get_weekend_date_objects, get_weekend_dates_string,
-    fetch_weather, fetch_transient_events, fetch_fixed_venues, scrape_review_score,
+    fetch_fixed_venues,
+    fetch_transient_events,
+    fetch_weather,
+    get_weekend_date_objects,
+    get_weekend_dates_string,
+    scrape_review_score,
 )
 from weekend.llm import (
-    get_llm_json, normalize_llm_items, fetch_scores_for_items,
+    fetch_scores_for_items,
     generate_weekend_plan,
+    get_llm_json,
+    normalize_llm_items,
 )
 from weekend.output import (
-    build_markdown_tables, print_to_cli, print_header, print_step, print_info, print_warning, print_summary,
+    build_markdown_tables,
+    print_header,
+    print_info,
+    print_step,
+    print_summary,
+    print_to_cli,
+    print_warning,
 )
 
 __all__ = [
     # weekend_config
-    "DEBUG_EVENTS_FILE", "DEBUG_VENUES_FILE",
-    "load_events_cache", "save_events_cache",
-    "load_venues_cache", "save_venues_cache",
+    "DEBUG_EVENTS_FILE",
+    "DEBUG_VENUES_FILE",
+    "load_events_cache",
+    "save_events_cache",
+    "load_venues_cache",
+    "save_venues_cache",
     "load_weekend_config",
-    "WEEKEND_CONFIG", "EXCLUDE_PLACES", "CHILDREN", "CHILDREN_STR", "CITY", "REGION", "AGE_RANGE", "DATES_STR",
-    "MODEL_CONFIG", "MODEL_NAME", "OSAURUS_BASE_URL", "OSAURUS_APP",
-    "is_server_running_ours", "restart_osaurus", "ensure_server",
+    "WEEKEND_CONFIG",
+    "EXCLUDE_PLACES",
+    "CHILDREN",
+    "CHILDREN_STR",
+    "CITY",
+    "REGION",
+    "AGE_RANGE",
+    "DATES_STR",
+    "MODEL_CONFIG",
+    "MODEL_NAME",
+    "OSAURUS_BASE_URL",
+    "OSAURUS_APP",
+    "is_server_running_ours",
+    "restart_osaurus",
+    "ensure_server",
     # weekend_data
-    "get_weekend_date_objects", "get_weekend_dates_string",
-    "fetch_weather", "fetch_transient_events", "fetch_fixed_venues", "scrape_review_score",
+    "get_weekend_date_objects",
+    "get_weekend_dates_string",
+    "fetch_weather",
+    "fetch_transient_events",
+    "fetch_fixed_venues",
+    "scrape_review_score",
     # weekend_llm
-    "get_llm_json", "normalize_llm_items", "fetch_scores_for_items", "generate_weekend_plan",
+    "get_llm_json",
+    "normalize_llm_items",
+    "fetch_scores_for_items",
+    "generate_weekend_plan",
     # weekend_output
-    "build_markdown_tables", "print_to_cli", "print_header", "print_step", "print_info", "print_warning", "print_summary",
+    "build_markdown_tables",
+    "print_to_cli",
+    "print_header",
+    "print_step",
+    "print_info",
+    "print_warning",
+    "print_summary",
     # shim-specific
-    "main", "parse_args",
+    "main",
+    "parse_args",
 ]
 # CLI parsing and document export constants (Mitchell Hashimoto design)
 MIN_ITEMS_THRESHOLD = 5
@@ -101,25 +155,45 @@ def _fetch_data(fri, sun, year, month_name, use_cache):
 
 
 def _parse_fixed(json_fixed, actual_model, field_mapping):
-    fixed_keys = get_model_top_keys(actual_model).get("fixed", ["fixed_activities", "year_round_fixed_activities", "venues", "places", "activities", "items"])
+    fixed_keys = get_model_top_keys(actual_model).get(
+        "fixed",
+        [
+            "fixed_activities",
+            "year_round_fixed_activities",
+            "venues",
+            "places",
+            "activities",
+            "items",
+        ],
+    )
     name_keys = ["name"] + [k for k, v in field_mapping.items() if v == "name"]
 
     if isinstance(json_fixed, list) and len(json_fixed) >= MIN_FIXED_LIST_LEN:
-        valid_items = [i for i in json_fixed if isinstance(i, dict) and any(i.get(nk) for nk in name_keys)]
+        valid_items = [
+            i for i in json_fixed if isinstance(i, dict) and any(i.get(nk) for nk in name_keys)
+        ]
         if valid_items:
             return normalize_llm_items(valid_items, field_mapping=field_mapping)
 
     if isinstance(json_fixed, dict):
         for key in fixed_keys:
-            if json_fixed.get(key) and isinstance(json_fixed.get(key), list) and len(json_fixed.get(key)) > EMPTY_LIST_LIMIT:
+            if (
+                json_fixed.get(key)
+                and isinstance(json_fixed.get(key), list)
+                and len(json_fixed.get(key)) > EMPTY_LIST_LIMIT
+            ):
                 raw = json_fixed[key]
-                valid_items = [i for i in raw if isinstance(i, dict) and any(i.get(nk) for nk in name_keys)]
+                valid_items = [
+                    i for i in raw if isinstance(i, dict) and any(i.get(nk) for nk in name_keys)
+                ]
                 if valid_items:
-                    debug_print(f"[DEBUG] Found valid in key '{key}': {len(valid_items)} items", flush=True)
+                    debug_print(
+                        f"[DEBUG] Found valid in key '{key}': {len(valid_items)} items", flush=True
+                    )
                     return normalize_llm_items(valid_items, field_mapping=field_mapping)
 
         if any(json_fixed.get(nk) for nk in name_keys):
-            debug_print(f"[DEBUG] Single object, wrapping in list", flush=True)
+            debug_print("[DEBUG] Single object, wrapping in list", flush=True)
             return normalize_llm_items([json_fixed], field_mapping=field_mapping)
 
         for k, v in json_fixed.items():
@@ -137,7 +211,12 @@ def _parse_transient(json_transient, actual_model, field_mapping):
     all_name_keys = name_keys + ["description", "title", "event", "summary", "activity_name"]
 
     if isinstance(json_transient, list) and len(json_transient) >= MIN_TRANSIENT_LIST_LEN:
-        filtered = [i for i in json_transient if isinstance(i, dict) and not any(k in i for k in ['temperature', 'condition', 'precipitation'])]
+        filtered = [
+            i
+            for i in json_transient
+            if isinstance(i, dict)
+            and not any(k in i for k in ["temperature", "condition", "precipitation"])
+        ]
         if not filtered:
             return []
 
@@ -153,18 +232,29 @@ def _parse_transient(json_transient, actual_model, field_mapping):
                 result.append(new_item)
             return result
 
-        valid_items = [i for i in filtered if isinstance(i, dict) and any(i.get(nk) for nk in all_name_keys)]
+        valid_items = [
+            i for i in filtered if isinstance(i, dict) and any(i.get(nk) for nk in all_name_keys)
+        ]
         if valid_items:
             result = _normalize_with_fallback(valid_items)
             return normalize_llm_items(result, field_mapping=field_mapping)
 
-        alt_items = [i for i in filtered if isinstance(i, dict) and any(i.get(ak) for ak in ["description", "title", "event", "summary", "activity_name"])]
+        alt_items = [
+            i
+            for i in filtered
+            if isinstance(i, dict)
+            and any(
+                i.get(ak) for ak in ["description", "title", "event", "summary", "activity_name"]
+            )
+        ]
         if alt_items:
             result = _normalize_with_fallback(alt_items)
             return normalize_llm_items(result, field_mapping=field_mapping)
 
     if isinstance(json_transient, dict):
-        transient_keys = get_model_top_keys(actual_model).get("transient", ["transient_events", "events", "activities", "recommendations"])
+        transient_keys = get_model_top_keys(actual_model).get(
+            "transient", ["transient_events", "events", "activities", "recommendations"]
+        )
 
         for key in transient_keys:
             if json_transient.get(key) and isinstance(json_transient.get(key), list):
@@ -205,14 +295,24 @@ def main(args=None):
     if args is None:
         args = parse_args()
 
-    tui.DEBUG = getattr(args, 'debug', False)
+    tui.DEBUG = getattr(args, "debug", False)
     init_config()
 
-    if args.model:
-        os.environ['OLLAMA_MODEL'] = args.model
+    if getattr(args, "host", None):
+        os.environ["OLLAMA_BASE_URL"] = args.host
+    if getattr(args, "api_key", None):
+        os.environ["OLLAMA_API_KEY"] = args.api_key
 
-    model = os.environ.get('OLLAMA_MODEL') or get_best_model(Task.JSON)
-    print_header("Using model", model)
+    use_foundation = getattr(args, "use_foundation", False)
+    if use_foundation:
+        os.environ["OLLAMA_MODEL"] = "foundation"
+        print_header("Using model", "foundation (on-device Apple Foundation Model)")
+    else:
+        check_server_or_die(os.environ.get("OLLAMA_BASE_URL", OSAURUS_BASE_URL))
+        if getattr(args, "model", None):
+            os.environ["OLLAMA_MODEL"] = args.model
+        model = os.environ.get("OLLAMA_MODEL") or get_best_model(Task.JSON)
+        print_header("Using model", model)
 
     start_time = time.time()
     print_step("Weekend Generator Started")
@@ -220,17 +320,24 @@ def main(args=None):
     fri, sun = get_weekend_date_objects()
     year = fri.strftime("%Y")
     month_name = fri.strftime("%B")
-    weather_str, events_str, venues_str, dates_str = _fetch_data(fri, sun, year, month_name, args.use_cache)
+    weather_str, events_str, venues_str, dates_str = _fetch_data(
+        fri, sun, year, month_name, args.use_cache
+    )
 
     actual_model = os.environ.get("OLLAMA_MODEL") or get_best_model(Task.JSON)
     field_mapping = get_model_field_mapping(actual_model)
 
     print_step("Generating weekend plan...")
     json_transient, json_fixed = generate_weekend_plan(
-        actual_model, weather_str, events_str, venues_str, dates_str,
+        actual_model,
+        weather_str,
+        events_str,
+        venues_str,
+        dates_str,
         location=f"{CITY}/{REGION}",
         age_range=AGE_RANGE,
         date_range=dates_str,
+        use_foundation=use_foundation,
     )
     print_step("Generated weekend plan")
 
@@ -242,10 +349,13 @@ def main(args=None):
     has_transient = len(transient_items) >= MIN_ITEMS
 
     if not has_fixed or not has_transient:
-        print_warning(f"Low item count - Fixed: {len(fixed_acts)}, Transient: {len(transient_items)}")
+        print_warning(
+            f"Low item count - Fixed: {len(fixed_acts)}, Transient: {len(transient_items)}"
+        )
 
     final_markdown = build_markdown_tables(
-        dates_str, weather_str, {"transient_events": transient_items}, fixed_acts)
+        dates_str, weather_str, {"transient_events": transient_items}, fixed_acts
+    )
     print_step("Formatted output")
 
     print_to_cli(final_markdown)
@@ -253,7 +363,8 @@ def main(args=None):
     output_dir = os.path.expanduser(OUTPUT_DIR_PATH)
     os.makedirs(output_dir, exist_ok=True)
     filepath = os.path.join(
-        output_dir, f"{PLAN_FILE_PREFIX}{dates_str.replace(' ', '_').replace(',', '')}{OUTPUT_FILE_SUFFIX}"
+        output_dir,
+        f"{PLAN_FILE_PREFIX}{dates_str.replace(' ', '_').replace(',', '')}{OUTPUT_FILE_SUFFIX}",
     )
     with open(filepath, FILE_WRITE_MODE) as f:
         f.write(final_markdown)
@@ -269,5 +380,16 @@ def parse_args():
     p.add_argument("--use-cache", action="store_true", help="Use cached web results")
     p.add_argument("--model", default=None, help="Model to use")
     p.add_argument("--skip-web", action="store_true", help="Skip web fetch, use cache only")
+    p.add_argument(
+        "--host",
+        default=None,
+        help="Osaurus/Ollama server URL (default: $OLLAMA_BASE_URL or http://localhost:1337)",
+    )
+    p.add_argument("--api-key", default=None, help="Bearer token for the LLM API")
+    p.add_argument(
+        "--use-foundation",
+        action="store_true",
+        help="Use the on-device Apple Foundation Model instead of Osaurus",
+    )
     p.add_argument("--debug", action="store_true", help="Enable debug logging")
     return p.parse_args()

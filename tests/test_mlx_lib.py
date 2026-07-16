@@ -1,14 +1,17 @@
 """Tests for lib.mlx_lib - MLX model discovery, execution, and unified call."""
+
 import json
-import pytest
 import subprocess
 from pathlib import Path
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture
 def mock_llm():
     from lib.testing import MockLLM
+
     mock = MockLLM()
     mock.patch_all()
     yield mock
@@ -38,6 +41,7 @@ def fake_mlx_dir(tmp_path):
 class TestModelDiscovery:
     def test_find_mlx_model_not_exists(self, mock_llm):
         from lib.mlx_lib import find_mlx_model
+
         with patch("lib.mlx_lib.MLX_MODELS_DIR", Path("/nonexistent")):
             assert find_mlx_model("qwen") is None
 
@@ -71,6 +75,7 @@ class TestModelDiscovery:
 
     def test_find_best_mlx_model(self, mock_llm, fake_mlx_dir):
         from lib import mlx_lib
+
         with patch("lib.mlx_lib.find_mlx_model", return_value=fake_mlx_dir / "qwen-7b-fp16"):
             result = mlx_lib.find_best_mlx_model(["nonexistent", "qwen"])
         # First match wins (qwen is preferred over nonexistent)
@@ -78,6 +83,7 @@ class TestModelDiscovery:
 
     def test_find_best_mlx_model_none(self, mock_llm):
         from lib import mlx_lib
+
         with patch("lib.mlx_lib.find_mlx_model", return_value=None):
             assert mlx_lib.find_best_mlx_model(["x", "y"]) is None
 
@@ -95,25 +101,30 @@ class TestModelDiscovery:
 
     def test_get_mlx_context_length(self, mock_llm, fake_mlx_dir):
         from lib.mlx_lib import get_mlx_context_length
+
         qwen = fake_mlx_dir / "qwen-7b-fp16"
         assert get_mlx_context_length(qwen) == 8192
 
     def test_get_mlx_context_length_max_pos(self, mock_llm, fake_mlx_dir):
         from lib.mlx_lib import get_mlx_context_length
+
         llama = fake_mlx_dir / "mlx-community" / "llama-3-8b"
         assert get_mlx_context_length(llama) == 4096
 
     def test_get_mlx_context_length_default(self, mock_llm, tmp_path):
         from lib.mlx_lib import get_mlx_context_length
+
         # No config.json -> default 4096
         assert get_mlx_context_length(tmp_path) == 4096
 
     def test_list_mlx_models_not_exists(self, mock_llm):
         from lib import mlx_lib
+
         assert mlx_lib.list_mlx_models(Path("/nonexistent")) == []
 
     def test_list_mlx_models(self, mock_llm, fake_mlx_dir):
         from lib import mlx_lib
+
         models = mlx_lib.list_mlx_models(fake_mlx_dir)
         # qwen and llama should be there, no-config should not
         assert any("qwen" in m for m in models)
@@ -122,11 +133,13 @@ class TestModelDiscovery:
 
     def test_normalize_mlx_model_name_with_prefix(self, mock_llm):
         from lib.mlx_lib import normalize_mlx_model_name
+
         assert normalize_mlx_model_name("OsaurusAI/Qwen-7B") == "qwen-7b"
         assert normalize_mlx_model_name("mlx-community/Llama-3") == "llama-3"
 
     def test_normalize_mlx_model_name_no_prefix(self, mock_llm):
         from lib.mlx_lib import normalize_mlx_model_name
+
         assert normalize_mlx_model_name("gemma-4-26b") == "gemma-4-26b"
 
 
@@ -222,16 +235,19 @@ class TestCallMlx:
 class TestRunMlxVlm:
     def test_vlm_model_not_exists(self, mock_llm, tmp_path):
         from lib.mlx_lib import run_mlx_vlm
+
         assert run_mlx_vlm(tmp_path / "no", tmp_path / "img") is None
 
     def test_vlm_image_not_exists(self, mock_llm, tmp_path):
         from lib.mlx_lib import run_mlx_vlm
+
         model = tmp_path / "m"
         model.mkdir()
         assert run_mlx_vlm(model, tmp_path / "no") is None
 
     def test_vlm_success(self, mock_llm, tmp_path):
         from lib.mlx_lib import run_mlx_vlm
+
         model = tmp_path / "m"
         model.mkdir()
         img = tmp_path / "img.png"
@@ -245,6 +261,7 @@ class TestRunMlxVlm:
 
     def test_vlm_failure(self, mock_llm, tmp_path):
         from lib.mlx_lib import run_mlx_vlm
+
         model = tmp_path / "m"
         model.mkdir()
         img = tmp_path / "img.png"
@@ -258,6 +275,7 @@ class TestRunMlxVlm:
 
     def test_vlm_timeout(self, mock_llm, tmp_path):
         from lib.mlx_lib import run_mlx_vlm
+
         model = tmp_path / "m"
         model.mkdir()
         img = tmp_path / "img.png"
@@ -268,6 +286,7 @@ class TestRunMlxVlm:
 
     def test_vlm_exception(self, mock_llm, tmp_path):
         from lib.mlx_lib import run_mlx_vlm
+
         model = tmp_path / "m"
         model.mkdir()
         img = tmp_path / "img.png"
@@ -310,8 +329,10 @@ class TestProcessMlxContent:
 class TestUnifiedCall:
     def test_call_model_not_found(self, mock_llm, real_mlx_functions):
         real_call = real_mlx_functions["call"]
-        with patch("lib.mlx_lib.find_text_mlx_model", return_value=None), \
-             patch("lib.mlx_lib.find_mlx_model", return_value=None):
+        with (
+            patch("lib.mlx_lib.find_text_mlx_model", return_value=None),
+            patch("lib.mlx_lib.find_mlx_model", return_value=None),
+        ):
             result = real_call("nonexistent-model", [{"role": "user", "content": "hi"}])
         # Both model finders return None → "Model not found: <name>"
         assert result["error"] == "Model not found: nonexistent-model"
@@ -321,8 +342,10 @@ class TestUnifiedCall:
         real_call = real_mlx_functions["call"]
         model_path = tmp_path / "m"
         model_path.mkdir()
-        with patch("lib.mlx_lib.find_text_mlx_model", return_value=model_path), \
-             patch("lib.mlx_lib.call_mlx", return_value="hello") as m_call:
+        with (
+            patch("lib.mlx_lib.find_text_mlx_model", return_value=model_path),
+            patch("lib.mlx_lib.call_mlx", return_value="hello") as m_call,
+        ):
             result = real_call("qwen", [{"role": "user", "content": "hi"}])
         assert result["content"] == "hello"
         assert result["error"] is None
@@ -333,12 +356,17 @@ class TestUnifiedCall:
         real_call = real_mlx_functions["call"]
         model_path = tmp_path / "m"
         model_path.mkdir()
-        with patch("lib.mlx_lib.find_text_mlx_model", return_value=model_path), \
-             patch("lib.mlx_lib.call_mlx", return_value="ok") as m_call:
-            result = real_call("qwen", [
-                {"role": "system", "content": "You are helpful"},
-                {"role": "user", "content": "hi"},
-            ])
+        with (
+            patch("lib.mlx_lib.find_text_mlx_model", return_value=model_path),
+            patch("lib.mlx_lib.call_mlx", return_value="ok") as m_call,
+        ):
+            real_call(
+                "qwen",
+                [
+                    {"role": "system", "content": "You are helpful"},
+                    {"role": "user", "content": "hi"},
+                ],
+            )
         # The combined prompt contains both
         prompt = m_call.call_args[0][1]
         assert "You are helpful" in prompt
@@ -348,8 +376,10 @@ class TestUnifiedCall:
         real_call = real_mlx_functions["call"]
         model_path = tmp_path / "m"
         model_path.mkdir()
-        with patch("lib.mlx_lib.find_text_mlx_model", return_value=model_path), \
-             patch("lib.mlx_lib.call_mlx", return_value='```json\n{"a": 1}\n```'):
+        with (
+            patch("lib.mlx_lib.find_text_mlx_model", return_value=model_path),
+            patch("lib.mlx_lib.call_mlx", return_value='```json\n{"a": 1}\n```'),
+        ):
             result = real_call("qwen", [{"role": "user", "content": "hi"}], parse_json=True)
         # extract_json strips the code fence and normalizes {"a": 1} dict to ["a"] list
         assert result["parsed"] == ["a"]
@@ -361,8 +391,10 @@ class TestUnifiedCall:
         real_call = real_mlx_functions["call"]
         model_path = tmp_path / "m"
         model_path.mkdir()
-        with patch("lib.mlx_lib.find_text_mlx_model", return_value=model_path), \
-             patch("lib.mlx_lib.call_mlx", return_value="!!!"):
+        with (
+            patch("lib.mlx_lib.find_text_mlx_model", return_value=model_path),
+            patch("lib.mlx_lib.call_mlx", return_value="!!!"),
+        ):
             result = real_call("qwen", [{"role": "user", "content": "hi"}], parse_json=True)
         # The osaurus extract_json may still try to normalize "!!!" as text - either way,
         # it returns something, possibly None.
@@ -374,10 +406,12 @@ class TestUnifiedCall:
         real_call = real_mlx_functions["call"]
         model_path = tmp_path / "m"
         model_path.mkdir()
-        with patch("lib.mlx_lib.find_text_mlx_model", return_value=model_path), \
-             patch("lib.mlx_lib.call_mlx", return_value="just plain text, no json"), \
-             patch("lib.osaurus_lib.extract_json", return_value=None), \
-             patch("lib.mlx_lib.logger") as mock_logger:
+        with (
+            patch("lib.mlx_lib.find_text_mlx_model", return_value=model_path),
+            patch("lib.mlx_lib.call_mlx", return_value="just plain text, no json"),
+            patch("lib.osaurus_lib.extract_json", return_value=None),
+            patch("lib.mlx_lib.logger") as mock_logger,
+        ):
             result = real_call("qwen", [{"role": "user", "content": "hi"}], parse_json=True)
         assert "parsed" in result
         assert result["parsed"] is None
@@ -388,8 +422,10 @@ class TestUnifiedCall:
         real_call = real_mlx_functions["call"]
         model_path = tmp_path / "m"
         model_path.mkdir()
-        with patch("lib.mlx_lib.find_text_mlx_model", return_value=model_path), \
-             patch("lib.mlx_lib.call_mlx", return_value=None):
+        with (
+            patch("lib.mlx_lib.find_text_mlx_model", return_value=model_path),
+            patch("lib.mlx_lib.call_mlx", return_value=None),
+        ):
             result = real_call("qwen", [{"role": "user", "content": "hi"}])
         assert "Empty response" in result["error"]
 
@@ -397,8 +433,10 @@ class TestUnifiedCall:
         real_call = real_mlx_functions["call"]
         model_path = tmp_path / "m"
         model_path.mkdir()
-        with patch("lib.mlx_lib.find_text_mlx_model", return_value=model_path), \
-             patch("lib.mlx_lib.call_mlx", side_effect=Exception("boom")):
+        with (
+            patch("lib.mlx_lib.find_text_mlx_model", return_value=model_path),
+            patch("lib.mlx_lib.call_mlx", side_effect=Exception("boom")),
+        ):
             result = real_call("qwen", [{"role": "user", "content": "hi"}])
         assert "Error" in result["error"]
         assert "boom" in result["error"]
@@ -407,9 +445,11 @@ class TestUnifiedCall:
         real_call = real_mlx_functions["call"]
         model_path = tmp_path / "m"
         model_path.mkdir()
-        with patch("lib.mlx_lib.find_text_mlx_model", return_value=None), \
-             patch("lib.mlx_lib.find_mlx_model", return_value=model_path), \
-             patch("lib.mlx_lib.call_mlx", return_value="ok"):
+        with (
+            patch("lib.mlx_lib.find_text_mlx_model", return_value=None),
+            patch("lib.mlx_lib.find_mlx_model", return_value=model_path),
+            patch("lib.mlx_lib.call_mlx", return_value="ok"),
+        ):
             result = real_call("mlx-community/Qwen-7B", [{"role": "user", "content": "hi"}])
         # lookup_name should be "Qwen-7B"
         assert result["content"] == "ok"

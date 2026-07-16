@@ -9,21 +9,31 @@ import shutil
 import textwrap
 from typing import Optional
 
-from lib.config import get_model_prompt, Task
-from lib.osaurus_lib import (
-    call_llm_api, strip_thinking, get_available_models,
-    get_best_model, select_best_model, merge_thinking_with_summary, extract_thinking,
-    ensure_server,
-)
-from lib.mlx_lib import (
-    find_mlx_model, find_best_mlx_model, find_any_working_mlx_model,
-    get_mlx_context_length, call_mlx, process_mlx_content,
-)
+from lib.config import Task, get_model_prompt
 from lib.llm.fallback import call_with_fallback
+from lib.mlx_lib import (
+    call_mlx,
+    find_any_working_mlx_model,
+    find_best_mlx_model,
+    find_mlx_model,
+    get_mlx_context_length,
+    process_mlx_content,
+)
+from lib.osaurus_lib import (
+    call_llm_api,
+    ensure_server,
+    extract_thinking,
+    get_available_models,
+    get_best_model,
+    merge_thinking_with_summary,
+    select_best_model,
+    strip_thinking,
+)
 from lib.tui import STEP, WARN
 
-_mlx_preferred_str = os.environ.get("TWITTER_MLX_PREFERRED",
-    "Qwopus3.6-27B-v2-MLX-4bit,Qwen3.6,gemma-4,MiniMax")
+_mlx_preferred_str = os.environ.get(
+    "TWITTER_MLX_PREFERRED", "Qwopus3.6-27B-v2-MLX-4bit,Qwen3.6,gemma-4,MiniMax"
+)
 MLX_PREFERRED = [m.strip() for m in _mlx_preferred_str.split(",") if m.strip()]
 
 _PROMPT_RULES = """
@@ -61,7 +71,7 @@ def _check_summary_quality(summary: str) -> tuple[list[str], bool]:
     for line in lines:
         stripped = line.strip()
         char_count += len(stripped)
-        if re.match(r'^#{2,}\s+\w+', stripped):
+        if re.match(r"^#{2,}\s+\w+", stripped):
             header_count += 1
         elif stripped.startswith(("- ", "* ", "  - ", "  * ")):
             bullet_count += 1
@@ -92,7 +102,7 @@ def _build_prompt(
         if reply_to:
             parts.append(f"\u2192 @{reply_to}")
         prefix = f"[{' | '.join(parts)}]: "
-        text = t['text'].strip()
+        text = t["text"].strip()
         line = textwrap.fill(
             f"{prefix}{text}",
             width=width,
@@ -132,8 +142,12 @@ def _estimate_timeout(prompt: str) -> int:
 
 
 def _summarize_with_model(
-    tweets: list[dict], base_url: str, api_key: str,
-    ctx_chars: int, models: list[str], try_model: str,
+    tweets: list[dict],
+    base_url: str,
+    api_key: str,
+    ctx_chars: int,
+    models: list[str],
+    try_model: str,
 ) -> Optional[str]:
     if models and try_model not in models:
         return None
@@ -171,9 +185,7 @@ def _summarize_with_model(
     return None
 
 
-def summarize_with_llm(
-    tweets: list[dict], base_url: str, model: str, api_key: str = ""
-) -> str:
+def summarize_with_llm(tweets: list[dict], base_url: str, model: str, api_key: str = "") -> str:
     target_model = model if model else get_best_model(Task.SUMMARIZE)
     models = get_available_models()
     if not models:
@@ -186,8 +198,12 @@ def summarize_with_llm(
 
     ctx_chars = (OSAURUS_CONTEXT_WINDOW - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN
 
-    _fallback_names = os.environ.get("TWITTER_FALLBACK_MODELS", "qwen3.6-35b-a3b-mxfp4,foundation").split(",")
-    fallback_models = list(dict.fromkeys([target_model] + [m.strip() for m in _fallback_names if m.strip()]))
+    _fallback_names = os.environ.get(
+        "TWITTER_FALLBACK_MODELS", "qwen3.6-35b-a3b-mxfp4,foundation"
+    ).split(",")
+    fallback_models = list(
+        dict.fromkeys([target_model] + [m.strip() for m in _fallback_names if m.strip()])
+    )
 
     def call_fn(m: str) -> Optional[str]:
         return _summarize_with_model(tweets, base_url, api_key, ctx_chars, models, m)
@@ -198,20 +214,18 @@ def summarize_with_llm(
         if first:
             mlx_paths.append(first)
         mlx_paths.extend(
-            m for m in [
-                find_best_mlx_model(MLX_PREFERRED),
-                find_any_working_mlx_model()
-            ] if m and m not in mlx_paths
+            m
+            for m in [find_best_mlx_model(MLX_PREFERRED), find_any_working_mlx_model()]
+            if m and m not in mlx_paths
         )
 
         for mlx_path in mlx_paths:
             mlx_ctx = get_mlx_context_length(mlx_path)
             mlx_prompt_chars = (mlx_ctx - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN
             prompt, n = _build_prompt(
-                tweets, max_chars=mlx_prompt_chars, for_mlx=True, model=mlx_path.name)
-            print(
-                f"{STEP} Sending {n}/{len(tweets)} tweets to MLX model {mlx_path.name} ..."
+                tweets, max_chars=mlx_prompt_chars, for_mlx=True, model=mlx_path.name
             )
+            print(f"{STEP} Sending {n}/{len(tweets)} tweets to MLX model {mlx_path.name} ...")
             raw = call_mlx(mlx_path, prompt)
             if raw and not raw.startswith("[LLM error"):
                 cleaned = process_mlx_content(raw)
@@ -227,7 +241,8 @@ def summarize_with_llm(
         return None
 
     result = call_with_fallback(
-        fallback_models, call_fn,
+        fallback_models,
+        call_fn,
         mlx_fn=mlx_fn,
         max_server_retries=0,
         label="model",

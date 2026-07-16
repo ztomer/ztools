@@ -4,7 +4,6 @@ from typing import Dict, List
 
 from lib.quality_models import ScoreCard
 
-
 BASELINE_PATH = Path(__file__).resolve().parent.parent / "docs" / "eval_baseline.json"
 
 
@@ -33,8 +32,7 @@ def generate_report(results: List[ScoreCard]) -> str:
                 for d in sc.dimensions:
                     avg_dim.setdefault(d.name, []).append(d.score)
 
-            dim_avgs = {name: sum(scores)/len(scores)
-                        for name, scores in avg_dim.items()}
+            dim_avgs = {name: sum(scores) / len(scores) for name, scores in avg_dim.items()}
 
             composites = [sc.composite for sc in task_cards]
             avg_comp = sum(composites) / len(composites)
@@ -49,8 +47,10 @@ def generate_report(results: List[ScoreCard]) -> str:
             lines.append(f"      {'Avg time':18s} {avg_time:5.1f}s  ({len(times)} cases)")
 
     lines.append("")
-    lines.append(f"  {'Model':35s} {'Filename':>9} {'Summarize':>11} {'FileSum':>9} {'Speed':>7} {'Fail':>5}")
-    lines.append(f"  {'-'*35} {'-'*9} {'-'*11} {'-'*9} {'-'*7} {'-'*5}")
+    lines.append(
+        f"  {'Model':35s} {'Filename':>9} {'Summarize':>11} {'FileSum':>9} {'Speed':>7} {'Fail':>5}"
+    )
+    lines.append(f"  {'-' * 35} {'-' * 9} {'-' * 11} {'-' * 9} {'-' * 7} {'-' * 5}")
 
     for model in sorted(by_model.keys()):
         cards = by_model[model]
@@ -74,8 +74,7 @@ def generate_report(results: List[ScoreCard]) -> str:
         speed = avg(all_times) if all_times else 0
 
         lines.append(
-            f"  {model:35s} {f_avg:8.1f}% {s_avg:10.1f}% {fs_avg:8.1f}% "
-            f"{speed:6.1f}s {failures:5}"
+            f"  {model:35s} {f_avg:8.1f}% {s_avg:10.1f}% {fs_avg:8.1f}% {speed:6.1f}s {failures:5}"
         )
 
     return "\n".join(lines)

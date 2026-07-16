@@ -1,15 +1,16 @@
 """Config core - shared state, Task enum, init/reset."""
 
+import enum
 import threading
 from pathlib import Path
-from typing import Dict, Any, Optional
-import enum
+from typing import Any, Dict, Optional
 
 from .config_toml import load_config
 
 
 class ConfigurationError(Exception):
     """Exception raised when configuration loading or parsing fails."""
+
     pass
 
 
@@ -43,13 +44,15 @@ def _auto_load():
         base = Path(__file__).parent.parent / "conf"
         config_path = base / "config.toml"
         if not config_path.exists():
-            print(f"Config file not found, using fallback defaults")
+            print("Config file not found, using fallback defaults")
             _config_loaded = True
             return
         try:
             loaded = load_config(config_path)
         except Exception as e:
-            raise ConfigurationError(f"Failed to read configuration file '{config_path}': {e}") from e
+            raise ConfigurationError(
+                f"Failed to read configuration file '{config_path}': {e}"
+            ) from e
         _config.clear()
         _config.update(loaded if isinstance(loaded, dict) else {})
         _config_loaded = True

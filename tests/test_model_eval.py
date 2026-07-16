@@ -1,16 +1,17 @@
 """Tests for model_eval: memory, tasks, main flow."""
-import pytest
-import os
-import json
-from unittest.mock import patch, MagicMock
+
 from io import StringIO
+from unittest.mock import MagicMock, patch
+
 from rich.console import Console
+
 import eval
 
 
 def _capture_console():
     """Replace eval.cli.console with a buffered one."""
     import eval.cli as model_eval
+
     buf = StringIO()
     new_console = Console(file=buf, force_terminal=True, force_interactive=True, width=120)
     return model_eval.console, new_console, buf
@@ -19,6 +20,7 @@ def _capture_console():
 class TestGetMemoryPercent:
     def test_with_psutil(self, mock_llm):
         import eval.cli as model_eval
+
         fake_mem = MagicMock()
         fake_mem.virtual_memory.return_value = MagicMock(percent=50.0)
         with patch.dict("sys.modules", {"psutil": fake_mem}):
@@ -26,14 +28,18 @@ class TestGetMemoryPercent:
         assert result == 50.0
 
     def test_without_psutil(self, mock_llm):
-        import eval.cli as model_eval
         # Force ImportError
         import builtins
+
+        import eval.cli as model_eval
+
         real_import = builtins.__import__
+
         def mock_import(name, *args, **kwargs):
             if name == "psutil":
                 raise ImportError("no psutil")
             return real_import(name, *args, **kwargs)
+
         with patch.object(builtins, "__import__", side_effect=mock_import):
             result = model_eval.get_memory_percent()
         assert result == 0.0
@@ -42,6 +48,7 @@ class TestGetMemoryPercent:
 class TestCheckMemorySafe:
     def test_safe_memory(self, mock_llm):
         import eval.cli as model_eval
+
         old, new, buf = _capture_console()
         try:
             model_eval.console = new
@@ -52,6 +59,7 @@ class TestCheckMemorySafe:
 
     def test_unsafe_memory(self, mock_llm):
         import eval.cli as model_eval
+
         old, new, buf = _capture_console()
         try:
             model_eval.console = new
@@ -65,6 +73,7 @@ class TestCheckMemorySafe:
 class TestIsServerResponsive:
     def test_responsive(self, mock_llm):
         import eval.cli as model_eval
+
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         with patch("requests.Session") as mock_session:
@@ -74,6 +83,7 @@ class TestIsServerResponsive:
 
     def test_not_responsive(self, mock_llm):
         import eval.cli as model_eval
+
         mock_resp = MagicMock()
         mock_resp.status_code = 500
         with patch("requests.Session") as mock_session:
@@ -83,6 +93,7 @@ class TestIsServerResponsive:
 
     def test_exception(self, mock_llm):
         import eval.cli as model_eval
+
         with patch("requests.Session") as mock_session:
             s = mock_session.return_value.__enter__.return_value
             s.get.side_effect = Exception("conn error")
@@ -92,12 +103,14 @@ class TestIsServerResponsive:
 class TestPrintMemoryUsage:
     def test_normal_memory(self, mock_llm):
         import eval.cli as model_eval
+
         with patch.object(eval.cli, "get_memory_percent", return_value=50.0):
             result = model_eval.print_memory_usage()
         assert result == 50.0
 
     def test_high_memory_logs_warning(self, mock_llm):
         import eval.cli as model_eval
+
         old, new, buf = _capture_console()
         try:
             model_eval.console = new
@@ -112,35 +125,42 @@ class TestPrintMemoryUsage:
 class TestEstimateModelMemory:
     def test_7b_model(self, mock_llm):
         import eval.cli as model_eval
+
         assert model_eval.estimate_model_memory("qwen2.5-7b") == 7
 
     def test_27b_model(self, mock_llm):
         import eval.cli as model_eval
+
         assert model_eval.estimate_model_memory("some-27b-model") == 27
 
     def test_no_size_in_name(self, mock_llm):
         import eval.cli as model_eval
+
         assert model_eval.estimate_model_memory("unknown-model") == 4
 
     def test_case_insensitive(self, mock_llm):
         import eval.cli as model_eval
+
         assert model_eval.estimate_model_memory("Qwen2-72B") == 72
 
 
 class TestLoadTasksFromConfig:
     def test_no_prompts(self, mock_llm):
         import eval.cli as model_eval
+
         with patch.object(eval.cli, "get_model_prompts_all", return_value=None):
             assert model_eval.load_tasks_from_config("m1") is None
 
     def test_empty_prompts(self, mock_llm):
         import eval.cli as model_eval
+
         with patch.object(eval.cli, "get_model_prompts_all", return_value={}):
             # Empty dict is falsy, so `if not prompts: return None`
             assert model_eval.load_tasks_from_config("m1") is None
 
     def test_full_prompts(self, mock_llm):
         import eval.cli as model_eval
+
         prompts = {
             "weekend_fixed": "WF",
             "weekend_transient": "WT",
@@ -158,6 +178,7 @@ class TestLoadTasksFromConfig:
 
     def test_partial_prompts(self, mock_llm):
         import eval.cli as model_eval
+
         prompts = {"filename": "F", "summarize": "S"}
         with patch.object(eval.cli, "get_model_prompts_all", return_value=prompts):
             result = model_eval.load_tasks_from_config("m1")
@@ -169,6 +190,7 @@ class TestLoadTasksFromConfig:
 class TestUpdateConfig:
     def test_no_config_file(self, mock_llm, tmp_path, monkeypatch):
         import eval.cli as model_eval
+
         old, new, buf = _capture_console()
         try:
             model_eval.console = new
@@ -181,6 +203,7 @@ class TestUpdateConfig:
 
     def test_updates_config(self, mock_llm, tmp_path, monkeypatch):
         import eval.cli as model_eval
+
         # Create conf/config.toml
         conf_dir = tmp_path / "conf"
         conf_dir.mkdir()
@@ -198,10 +221,11 @@ class TestUpdateConfig:
 
     def test_existing_best_models(self, mock_llm, tmp_path, monkeypatch):
         import eval.cli as model_eval
+
         conf_dir = tmp_path / "conf"
         conf_dir.mkdir()
         config_file = conf_dir / "config.toml"
-        config_file.write_text("[best_models]\ntask1 = \"old_model\"\n")
+        config_file.write_text('[best_models]\ntask1 = "old_model"\n')
         old, new, buf = _capture_console()
         try:
             model_eval.console = new
@@ -215,6 +239,7 @@ class TestUpdateConfig:
     def test_empty_model_value(self, mock_llm, tmp_path, monkeypatch):
         """If model value is falsy, don't add to best_models."""
         import eval.cli as model_eval
+
         conf_dir = tmp_path / "conf"
         conf_dir.mkdir()
         config_file = conf_dir / "config.toml"
@@ -234,14 +259,18 @@ class TestPrintResults:
     def test_basic(self, mock_llm, tmp_path, monkeypatch):
         """Test _print_results saves to file and prints."""
         import eval.cli as model_eval
+
         monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
         old, new, buf = _capture_console()
         try:
             model_eval.console = new
             all_results = [
-                {"model": "m1", "results": [
-                    {"task": "t1", "quality_score": 80, "result": {"content": "x" * 100}},
-                ]},
+                {
+                    "model": "m1",
+                    "results": [
+                        {"task": "t1", "quality_score": 80, "result": {"content": "x" * 100}},
+                    ],
+                },
             ]
             best_scores = {"t1": 80}
             best_models = {"t1": "m1"}

@@ -60,7 +60,11 @@ weekend_fixed: |
 | qwen | Thinking tokens | Can't disable |
 | jang models (MLX) | Wrong shape | Use server instead |
 | gemma-4-e4b | Input looping | Avoid |
-| foundation, gemma-4-12b, gemma-4-e4b, ornith, qwen3.6-27b, qwen3.6-35b (67%), qwen-agentworld | Parrots planted falsehoods (contradiction test: 0%) | Use diffusiongemma-26b for contradiction-safe summarization |
+| foundation (0%), gemma-4-e4b (0%) | Parrots ALL planted falsehoods (3/3) | Worst fact-checkers; use qwen-agentworld or ornith for factual summarization |
+| gemma-4-12b (67%) | Resists most falsehoods (1/3 parroted) | Adequate for most use cases |
+| diffusiongemma-26b (34%), qwen3.6-27b (34%), qwen3.6-35b (34%) | Resists few falsehoods (2/3 parroted) | Not reliable for truth-sensitive tasks |
+| ornith-1.0-35b | Summarize_contradiction single-falsehood test produces false positive: model correctly flags the falsehood as "FAKE/SATIRE" but token-matching validator counts it as parroting. Multi-falsehood factual_accuracy test confirms 100%. | Use factual_accuracy test instead of summarize_contradiction |
+| qwen-agentworld-35b (100%) | Resists ALL planted falsehoods reliably | Best fact-checker in the suite |
 
 ---
 

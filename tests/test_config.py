@@ -1,11 +1,11 @@
 # Tests for config module
-import os
 import pytest
+
 from lib.config import (
-    get_model_field_mapping,
-    get_model_top_keys,
-    get_model_quirks,
     clear_model_config_cache,
+    get_model_field_mapping,
+    get_model_quirks,
+    get_model_top_keys,
 )
 
 
@@ -76,6 +76,7 @@ def test_get_model_quirks_gemma():
 def test_osaurus_port():
     """Test osaurus server port is 1337 (not 8000)."""
     import subprocess
+
     result = subprocess.run(["osaurus", "status"], capture_output=True, text=True)
     assert result.returncode == 0
     assert "1337" in result.stdout
@@ -84,13 +85,15 @@ def test_osaurus_port():
 def test_init_config_missing_file():
     """Test init_config raises FileNotFoundError for missing file."""
     from lib.config import init_config
+
     with pytest.raises(FileNotFoundError):
         init_config("nonexistent_config_file_xyz.yaml")
 
 
 def test_init_config_invalid_yaml(tmp_path):
     """Test init_config raises ConfigurationError for corrupt TOML file."""
-    from lib.config import init_config, ConfigurationError
+    from lib.config import ConfigurationError, init_config
+
     invalid_file = tmp_path / "invalid_config.toml"
     invalid_file.write_text("[[[")  # Invalid TOML syntax
 

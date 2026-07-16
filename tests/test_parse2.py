@@ -1,6 +1,5 @@
 import json
 
-import pytest
 from lib.osaurus_lib import _extract_json_only
 
 

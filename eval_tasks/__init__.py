@@ -15,6 +15,7 @@ TASKS["detailed_json"] = dict(_TASKS["weekend_fixed"])
 def load_tasks_from_config(model: str):
     """Backward compat — delegates to eval.cli."""
     from eval.cli import load_tasks_from_config as _load
+
     return _load(model)
 
 

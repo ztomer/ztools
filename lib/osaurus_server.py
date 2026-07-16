@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 import os
 import signal
-import time
 import subprocess
+import time
 from pathlib import Path
 
-
 from .logging_config import osaurus_logger as logger
-from .osaurus_models import is_server_running, get_models, DEFAULT_HOST, DEFAULT_PORT
+from .osaurus_models import DEFAULT_HOST, DEFAULT_PORT, get_models, is_server_running
+from .tui import die, err
 
 _pid_dir = Path(os.environ.get("XDG_RUNTIME_DIR", str(Path.home())))
 PID_FILE = _pid_dir / ".osaurus.pid"
@@ -59,7 +59,11 @@ def _is_osaurus_process(pid: int) -> bool:
 
 def _kill_osaurus():
     try:
-        subprocess.run([OSASCRIPT_CMD, OSASCRIPT_FLAG, OSASCRIPT_QUIT_CMD], capture_output=True, timeout=OSASCRIPT_QUIT_TIMEOUT)
+        subprocess.run(
+            [OSASCRIPT_CMD, OSASCRIPT_FLAG, OSASCRIPT_QUIT_CMD],
+            capture_output=True,
+            timeout=OSASCRIPT_QUIT_TIMEOUT,
+        )
     except Exception as e:
         logger.debug(f"Failed to quit osaurus app via osascript: {e}")
 
@@ -71,7 +75,10 @@ def _kill_osaurus():
                 os.kill(pid, signal.SIGTERM)
                 time.sleep(RESTART_SLEEP)
             else:
-                logger.warning(f"PID file contains process ID {pid} which is not osaurus. Skipping termination.")
+                logger.warning(
+                    f"PID file contains process ID {pid} which is not osaurus. "
+                    f"Skipping termination."
+                )
         except (ProcessLookupError, ValueError, OSError) as e:
             logger.debug(f"Failed to kill process {pid}: {e}")
         PID_FILE.unlink(missing_ok=True)
@@ -97,7 +104,7 @@ def restart_server(app_path: str = DEFAULT_APP_PATH, wait: int = SERVER_WAIT) ->
     except Exception as e:
         logger.error(f"Failed to restart osaurus server: {e}")
         return False
-    
+
     # Poll up to wait seconds (Carmack/Hashimoto fast-poll latency optimization)
     max_polls = int(wait / FAST_POLL_INTERVAL)
     for _ in range(max_polls):
@@ -121,6 +128,7 @@ def ensure_server(max_retries: int = ENSURE_MAX_RETRIES, wait: int = SERVER_WAIT
 
 def test_connection(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, model: str = None) -> dict:
     from .osaurus_lib import call
+
     try:
         if not is_server_running(host, port):
             return {"status": STATUS_ERROR, "message": "Server not running"}
@@ -155,3 +163,19 @@ def panic_dump(content: str) -> None:
     dump_file = dump_dir / f"panic_{int(time.time())}.txt"
     dump_file.write_text(content or "(empty)")
     logger.warning(f"Dumped problematic output to {dump_file}")
+
+
+def check_server_or_die(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:
+    """Fail fast with a friendly message if the Osaurus/Ollama server is down.
+
+    ZTools is a thin client and cannot do anything useful without a running
+    server, so we surface the fix (install/start Osaurus) instead of letting the
+    tool proceed into a confusing downstream crash.
+    """
+    if is_server_running(host, port):
+        return
+    host_str = host if host.startswith("http") else f"http://{host}:{port}"
+    err(f"Osaurus server not reachable at {host_str}")
+    print("  Install: brew install --cask osaurus")
+    print("  Start:   osaurus serve &>/dev/null &   (or launch the Osaurus.app GUI)")
+    die("Start the server and retry.", code=1)

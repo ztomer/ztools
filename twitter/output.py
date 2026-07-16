@@ -9,15 +9,20 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from lib.tui import STEP, WARN
+
 from lib.config_toml import load_config
+from lib.tui import STEP, WARN
 
 _TWITTER_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "twitter.toml"
 _TWITTER_CFG = load_config(_TWITTER_CONFIG_PATH) or {}
 
-STATE_FILE = Path(_TWITTER_CFG.get("state_file", str(Path.home() / ".twitter_summary_state.json"))).expanduser()
+STATE_FILE = Path(
+    _TWITTER_CFG.get("state_file", str(Path.home() / ".twitter_summary_state.json"))
+).expanduser()
 DEBUG_CACHE_FILE = Path.home() / ".twitter_summary_debug_cache.json"
-DEFAULT_OUTPUT_DIR = Path(_TWITTER_CFG.get("output_dir", str(Path.home() / "Documents" / "twitter_summaries"))).expanduser()
+DEFAULT_OUTPUT_DIR = Path(
+    _TWITTER_CFG.get("output_dir", str(Path.home() / "Documents" / "twitter_summaries"))
+).expanduser()
 DEFAULT_OLLAMA_URL = _TWITTER_CFG.get("llm_url", "http://localhost:1337")
 
 
@@ -52,6 +57,7 @@ def save_debug_cache(tweets: list[dict]) -> None:
         if isinstance(obj, datetime):
             return obj.isoformat()
         raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
     DEBUG_CACHE_FILE.write_text(json.dumps(tweets, indent=2, default=serialize))
 
 
@@ -82,7 +88,9 @@ def write_markdown(
     filename = f"{since_time.strftime(fmt)}_to_{until_time.strftime(fmt)}.md"
     out_path = output_dir / filename
     unique_authors = len({t["screen_name"] for t in tweets})
-    period_str = f"{since_time.strftime('%Y-%m-%d %H:%M')} → {until_time.strftime('%Y-%m-%d %H:%M')} UTC"
+    period_str = (
+        f"{since_time.strftime('%Y-%m-%d %H:%M')} → {until_time.strftime('%Y-%m-%d %H:%M')} UTC"
+    )
 
     content = f"""# Twitter Timeline Summary
 
@@ -102,9 +110,7 @@ def write_markdown(
 
 def clean_folder(output_dir: Path) -> None:
     if not output_dir.exists():
-        print(
-            f"Directory {output_dir} does not exist. Nothing to clean. Exiting."
-        )
+        print(f"Directory {output_dir} does not exist. Nothing to clean. Exiting.")
         sys.exit(0)
 
     print(f"{STEP} Removing existing .md files in {output_dir} ...")

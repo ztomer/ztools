@@ -15,17 +15,18 @@ import sys
 import time
 from typing import List, Optional, Tuple
 
-from lib.config import get_model_prompt, Task
+from eval.benchmark_output import (
+    print_case_result,
+    print_cross_model_comparison,
+    print_header,
+    print_model_header,
+    print_model_summary,
+)
+from lib.config import Task, get_model_prompt
 from lib.osaurus_lib import call as llm_call
 
 # Timeout for model queries (seconds)
 BENCHMARK_QUERY_TIMEOUT = 120
-
-from eval.benchmark_output import (
-    print_header, print_model_header, print_case_result,
-    print_model_summary, print_cross_model_comparison,
-)
-
 
 # =============================================================
 # TEST CASES
@@ -42,31 +43,31 @@ FILENAME_CASES = [
         "input": "Screenshot showing login error: Invalid credentials. Please try again.",
         "expected_keywords": ["login", "error", "invalid", "credential"],
         "human_score_expectation": 100,
-        "description": "Login error screenshot"
+        "description": "Login error screenshot",
     },
     {
         "input": "Summer Festival 2024 - Family Fun Day at Central Park",  # check-ok: year
         "expected_keywords": ["summer", "festival", "2024", "park"],  # check-ok: year
         "human_score_expectation": 100,
-        "description": "Event with clear subject"
+        "description": "Event with clear subject",
     },
     {
         "input": "10 powerful sentences by Scott Adams navigating failure and ambition",
         "expected_keywords": ["scott", "adam", "failure", "ambition"],
         "human_score_expectation": 100,
-        "description": "Quote with multiple keywords"
+        "description": "Quote with multiple keywords",
     },
     {
         "input": "Screen Shot 2024-03-15 at 14.30.22.png",  # check-ok: year
         "expected_keywords": ["screen", "shot"],
         "human_score_expectation": 60,
-        "description": "Generic screenshot (less info)"
+        "description": "Generic screenshot (less info)",
     },
     {
         "input": "Meeting Notes - Project Alpha - Q1 Review",
         "expected_keywords": ["meeting", "note", "alpha", "review"],
         "human_score_expectation": 100,
-        "description": "Work meeting notes"
+        "description": "Work meeting notes",
     },
 ]
 
@@ -84,21 +85,23 @@ SUMMARIZE_CASES = [
         "expected_users": ["@user1", "@user2", "@user3", "@user4"],
         "expected_topics": ["launch", "access", "beta", "feedback"],
         "human_score_expectation": 85,
-        "description": "Product launch with user interaction"
+        "description": "Product launch with user interaction",
     },
 ]
 
 FILE_SUMMARY_CASES = [
     {
-        "input": json.dumps([
-            {"path": "eval_lib.py", "desc": "model evaluation functions"},
-            {"path": "validators.py", "desc": "validation logic for JSON and text output"},
-            {"path": "config.py", "desc": "configuration management and model prompts"},
-            {"path": "osaurus_lib.py", "desc": "LLM API client library"},
-        ]),
+        "input": json.dumps(
+            [
+                {"path": "eval_lib.py", "desc": "model evaluation functions"},
+                {"path": "validators.py", "desc": "validation logic for JSON and text output"},
+                {"path": "config.py", "desc": "configuration management and model prompts"},
+                {"path": "osaurus_lib.py", "desc": "LLM API client library"},
+            ]
+        ),
         "expected_paths": ["eval_lib.py", "validators.py", "config.py", "osaurus_lib.py"],
         "human_score_expectation": 100,
-        "description": "4 files with known descriptions"
+        "description": "4 files with known descriptions",
     },
 ]
 
@@ -107,6 +110,7 @@ FILE_SUMMARY_CASES = [
 # SCORING FUNCTIONS
 # =============================================================
 
+
 def score_filename(output: str, case: dict) -> Tuple[int, List[str]]:
     """Score a filename output. Returns (score, failures)."""
     failures = []
@@ -114,8 +118,16 @@ def score_filename(output: str, case: dict) -> Tuple[int, List[str]]:
     out_lower = out.lower()
 
     # Empty or generic
-    GENERIC = {"filename.txt", "file.txt", "text.txt", "output.txt", 
-               "document.txt", "note.txt", "screenshot.png", "unnamed"}
+    GENERIC = {
+        "filename.txt",
+        "file.txt",
+        "text.txt",
+        "output.txt",
+        "document.txt",
+        "note.txt",
+        "screenshot.png",
+        "unnamed",
+    }
 
     if not out:
         return 0, ["empty"]
@@ -142,7 +154,7 @@ def score_filename(output: str, case: dict) -> Tuple[int, List[str]]:
 
     # Format quality (50 pts)
     fmt_score = 50
-    has_invalid = bool(re.search(r'[^a-z0-9_.-]', out_lower.replace(" ", "")))
+    has_invalid = bool(re.search(r"[^a-z0-9_.-]", out_lower.replace(" ", "")))
     if has_invalid or has_question:
         fmt_score = 10
         failures.append("invalid format (has questions/text)" if has_question else "invalid chars")
@@ -172,7 +184,7 @@ def score_summarize(output: str, case: dict) -> Tuple[int, List[str]]:
     # User mentions (25 pts)
     users = case["expected_users"]
     # Accept both "@user1" and "User1", "User 1", "user 1"
-    user_pattern = re.compile(r'@?[Uu]ser\s*\d+')
+    user_pattern = re.compile(r"@?[Uu]ser\s*\d+")
     found_users = len(user_pattern.findall(output))
     user_score = min(25, found_users * 7)
 
@@ -182,7 +194,7 @@ def score_summarize(output: str, case: dict) -> Tuple[int, List[str]]:
     topic_score = min(25, found_topics * 7)
 
     # Structure (25 pts)
-    has_headers = bool(re.search(r'^#{2,}\s+\w+', output, re.MULTILINE))
+    has_headers = bool(re.search(r"^#{2,}\s+\w+", output, re.MULTILINE))
     has_bullets = "•" in output or "* " in output or "- " in output
     struct_score = 0
     if has_headers and has_bullets:
@@ -247,8 +259,20 @@ def score_file_summary(output: str, case: dict) -> Tuple[int, List[str]]:
     # Descriptions are meaningful (50 pts)
     descs = [str(item.get("desc", "")) for item in data]
     # Penalize generic descriptions that don't reference the actual file purpose
-    is_generic = lambda d: any(g in d.lower() for g in 
-        ["personal document", "system file", "configuration file", "user's", "folder"]) or len(d) < 8
+    def is_generic(d: str) -> bool:
+        return (
+            any(
+                g in d.lower()
+                for g in [
+                    "personal document",
+                    "system file",
+                    "configuration file",
+                    "user's",
+                    "folder",
+                ]
+            )
+            or len(d) < 8
+        )
     meaningful = sum(1 for d in descs if not is_generic(d))
     desc_score = min(50, meaningful * 15)
     if meaningful < 2:
@@ -260,6 +284,7 @@ def score_file_summary(output: str, case: dict) -> Tuple[int, List[str]]:
 # =============================================================
 # MODEL CALLING
 # =============================================================
+
 
 def query_model(model: str, prompt: str, input_text: str, task: str) -> Optional[str]:
     """Call the model with a prompt and return its text output."""
@@ -275,7 +300,7 @@ def query_model(model: str, prompt: str, input_text: str, task: str) -> Optional
             task=task,
         )
         return result.get("content", "")
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -283,10 +308,12 @@ def query_model(model: str, prompt: str, input_text: str, task: str) -> Optional
 # RUNNER
 # =============================================================
 
+
 def run_benchmark(models: List[str] = None, verbose: bool = True):
     """Run benchmark against one or more models."""
     if models is None:
         from lib.config import get_filename_models
+
         models = get_filename_models() or ["foundation"]
 
     ALL_CASES = [
@@ -327,7 +354,9 @@ def run_benchmark(models: List[str] = None, verbose: bool = True):
                 model_count += 1
 
                 if verbose:
-                    print_case_result(human_score, auto_score, elapsed, case['description'], output, failures)
+                    print_case_result(
+                        human_score, auto_score, elapsed, case["description"], output, failures
+                    )
 
         if model_count:
             avg_human = model_total_human / model_count

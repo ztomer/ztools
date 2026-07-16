@@ -12,96 +12,130 @@ Split into modules:
   eval_report.py    - reporting and analysis
 """
 
-import sys
-import re
-import json
-import time
 import argparse
+import importlib
+import json
 import os
+import re
+import sys
+import time
 from pathlib import Path
+
+from eval.failures import (
+    FAIL_CONTENT,
+    FAIL_FORMAT,
+    FAIL_INFRA,
+    FAIL_NONE,
+    FAIL_PARSE,
+    FAIL_TIMEOUT,
+    _classify_failure,
+    _describe_content_failure,
+)
+from eval.report import (
+    categorize_failures,
+    check_model_history,
+    compute_error_rates,
+    compute_score_stats,
+    compute_task_winners,
+    compute_token_estimates,
+    compute_verbosity,
+    diff_from_last_run,
+    export_to_csv,
+    load_historical_stats,
+    print_cross_model_comparison,
+    print_diff,
+    print_error_rates,
+    print_failure_summary,
+    print_historical_trends,
+    print_score_stats,
+    print_verbosity,
+    save_historical_results,
+)
+from eval.run import (
+    DEFAULT_EVAL_TIMEOUT,
+    MAX_RETRIES,
+    MEMORY_WARNING_THRESHOLD,
+    _call_model,
+    _quality_results_to_eval_format,
+    _validate_result,
+    run_eval,
+    run_eval_quick,
+)
+from eval.tasks_core import (
+    FILE_SUMMARY_PROMPT,
+    RENAME_PROMPT,
+    TASKS,
+    TWITTER_PROMPT,
+    WEEKEND_SYS_FIXED,
+    WEEKEND_SYS_TRANSIENT,
+    WEEKEND_USR_FIXED,
+    WEEKEND_USR_TRANSIENT,
+    _extract_items_from_text,
+)
+from eval.validate import safe_content, validate_file_summary
 from lib import init_config
+from lib.config import build_tasks_from_model, get_model_prompts_all
 from lib.osaurus_lib import (
     call,
     get_models,
     is_server_running,
 )
-
-from lib.tui import STEP, WARN, FAIL, console
-from lib.config import get_model_prompts_all, build_tasks_from_model
-
-from eval.tasks_core import (
-    TASKS,
-    _extract_items_from_text,
-    WEEKEND_SYS_TRANSIENT,
-    WEEKEND_SYS_FIXED,
-    WEEKEND_USR_TRANSIENT,
-    WEEKEND_USR_FIXED,
-    RENAME_PROMPT,
-    FILE_SUMMARY_PROMPT,
-    TWITTER_PROMPT,
-)
-from eval.validate import safe_content, validate_file_summary
-from eval.failures import (
-    FAIL_INFRA,
-    FAIL_TIMEOUT,
-    FAIL_PARSE,
-    FAIL_FORMAT,
-    FAIL_CONTENT,
-    FAIL_NONE,
-    _classify_failure,
-    _describe_content_failure,
-)
-from eval.run import (
-    MAX_RETRIES,
-    DEFAULT_EVAL_TIMEOUT,
-    MEMORY_WARNING_THRESHOLD,
-    _validate_result,
-    _call_model,
-    _quality_results_to_eval_format,
-    run_eval,
-    run_eval_quick,
-)
-from eval.report import (
-    print_cross_model_comparison,
-    compute_score_stats,
-    print_score_stats,
-    categorize_failures,
-    print_failure_summary,
-    save_historical_results,
-    load_historical_stats,
-    check_model_history,
-    print_historical_trends,
-    compute_token_estimates,
-    compute_verbosity,
-    print_verbosity,
-    compute_error_rates,
-    print_error_rates,
-    compute_task_winners,
-    diff_from_last_run,
-    print_diff,
-    export_to_csv,
-)
-
+from lib.signal_handling import setup_signals
+from lib.tui import FAIL, STEP, WARN, console
 
 __all__ = [
-    "TASKS", "MAX_RETRIES", "DEFAULT_EVAL_TIMEOUT", "MEMORY_WARNING_THRESHOLD",
-    "safe_content", "validate_file_summary",
-    "FAIL_INFRA", "FAIL_TIMEOUT", "FAIL_PARSE", "FAIL_FORMAT", "FAIL_CONTENT", "FAIL_NONE",
-    "run_eval", "_validate_result", "_call_model", "_quality_results_to_eval_format",
-    "_extract_items_from_text", "_classify_failure", "_describe_content_failure",
-    "print_cross_model_comparison", "compute_score_stats", "print_score_stats",
-    "categorize_failures", "print_failure_summary",
-    "save_historical_results", "load_historical_stats", "check_model_history",
-    "print_historical_trends", "compute_token_estimates",
-    "compute_verbosity", "print_verbosity",
-    "compute_error_rates", "print_error_rates",
-    "compute_task_winners", "diff_from_last_run", "print_diff", "export_to_csv",
-    "get_memory_percent", "check_memory_safe", "is_server_responsive",
-    "print_memory_usage", "estimate_model_memory",
-    "load_tasks_from_config", "update_config", "main",
-    "WEEKEND_SYS_TRANSIENT", "WEEKEND_SYS_FIXED",
-    "WEEKEND_USR_TRANSIENT", "WEEKEND_USR_FIXED",
-    "RENAME_PROMPT", "FILE_SUMMARY_PROMPT", "TWITTER_PROMPT",
+    "TASKS",
+    "MAX_RETRIES",
+    "DEFAULT_EVAL_TIMEOUT",
+    "MEMORY_WARNING_THRESHOLD",
+    "safe_content",
+    "validate_file_summary",
+    "FAIL_INFRA",
+    "FAIL_TIMEOUT",
+    "FAIL_PARSE",
+    "FAIL_FORMAT",
+    "FAIL_CONTENT",
+    "FAIL_NONE",
+    "run_eval",
+    "_validate_result",
+    "_call_model",
+    "_quality_results_to_eval_format",
+    "_extract_items_from_text",
+    "_classify_failure",
+    "_describe_content_failure",
+    "print_cross_model_comparison",
+    "compute_score_stats",
+    "print_score_stats",
+    "categorize_failures",
+    "print_failure_summary",
+    "save_historical_results",
+    "load_historical_stats",
+    "check_model_history",
+    "print_historical_trends",
+    "compute_token_estimates",
+    "compute_verbosity",
+    "print_verbosity",
+    "compute_error_rates",
+    "print_error_rates",
+    "compute_task_winners",
+    "diff_from_last_run",
+    "print_diff",
+    "export_to_csv",
+    "get_memory_percent",
+    "check_memory_safe",
+    "is_server_responsive",
+    "print_memory_usage",
+    "estimate_model_memory",
+    "load_tasks_from_config",
+    "update_config",
+    "main",
+    "WEEKEND_SYS_TRANSIENT",
+    "WEEKEND_SYS_FIXED",
+    "WEEKEND_USR_TRANSIENT",
+    "WEEKEND_USR_FIXED",
+    "RENAME_PROMPT",
+    "FILE_SUMMARY_PROMPT",
+    "TWITTER_PROMPT",
 ]
 
 
@@ -126,10 +160,12 @@ RESTART_CHECK_RETRIES = 5
 # Memory monitoring
 # ==========================================================
 
+
 def get_memory_percent() -> float:
     """Get current memory usage percent."""
     try:
         import psutil
+
         return psutil.virtual_memory().percent
     except ImportError:
         return 0.0
@@ -144,9 +180,14 @@ def check_memory_safe() -> bool:
     return True
 
 
-def is_server_responsive(host: str = "localhost", port: int = DEFAULT_SERVER_PORT, timeout: int = SERVER_RESPONSIVE_TIMEOUT) -> bool:
+def is_server_responsive(
+    host: str = "localhost",
+    port: int = DEFAULT_SERVER_PORT,
+    timeout: int = SERVER_RESPONSIVE_TIMEOUT,
+) -> bool:
     """Check if osaurus server is responsive."""
     import requests
+
     try:
         with requests.Session() as s:
             resp = s.get(f"http://{host}:{port}/api/tags", timeout=timeout)
@@ -165,8 +206,8 @@ def print_memory_usage():
 
 def estimate_model_memory(model: str) -> int:
     """Estimate memory needed for a model (in GB). Extract size from model name."""
-    import re
-    match = re.search(r'(\d+)b', model.lower())
+
+    match = re.search(r"(\d+)b", model.lower())
     if match:
         return int(match.group(1))
     return 4
@@ -175,6 +216,7 @@ def estimate_model_memory(model: str) -> int:
 # ==========================================================
 # Helper to build tasks from model configs
 # ==========================================================
+
 
 def load_tasks_from_config(model: str):
     """Build task prompts from model config YAML."""
@@ -201,7 +243,9 @@ def load_tasks_from_config(model: str):
 def update_config(best_models: dict):
     """Update config with best models per task."""
     import tomllib
+
     import tomli_w
+
     config_path = Path(__file__).parent.parent / "conf" / "config.toml"
     toml_path = config_path
     if not toml_path.exists():
@@ -222,12 +266,9 @@ def update_config(best_models: dict):
         tomli_w.dump(config, f)
 
 
-from lib.signal_handling import setup_signals
-
-
 def flush_between_models(prev_model: str, next_model: str) -> None:
-    import time
     import subprocess
+
     console.print(f"{STEP} Flushing {prev_model} -> {next_model}...")
     try:
         r = call(next_model, [{"role": "user", "content": "ok"}], timeout=FLUSH_CALL_TIMEOUT)
@@ -246,6 +287,7 @@ def flush_between_models(prev_model: str, next_model: str) -> None:
             for _ in range(RESTART_CHECK_RETRIES):
                 try:
                     import requests
+
                     with requests.Session() as s:
                         _llm_host = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
                         resp = s.get(f"{_llm_host}/api/tags", timeout=RESTART_CHECK_TIMEOUT)
@@ -265,15 +307,49 @@ def main():
     init_config()
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", help="Run evaluation for a specific model")
-    parser.add_argument("--task", help="Run a specific task (weekend_transient, weekend_fixed, filename, summarize, file_summary)")
-    parser.add_argument("--quick", action="store_true", help="Quick mode: run single task with one retry (faster iteration)")
-    parser.add_argument("--config-tasks", action="store_true", help="Load tasks from YAML config instead of hardcoded prompts")
+    parser.add_argument(
+        "--task",
+        help="Run a specific task (weekend_transient, weekend_fixed, "
+        "filename, summarize, file_summary)",
+    )
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Quick mode: run single task with one retry (faster iteration)",
+    )
+    parser.add_argument(
+        "--config-tasks",
+        action="store_true",
+        help="Load tasks from YAML config instead of hardcoded prompts",
+    )
     parser.add_argument("--debug", action="store_true", help="Enable debug logging to console")
-    parser.add_argument("--verbose", "-v", action="store_true", help="Show raw model output for debugging quality")
-    parser.add_argument("--timeout", type=int, default=DEFAULT_EVAL_TIMEOUT, help=f"Per-task timeout in seconds (default {DEFAULT_EVAL_TIMEOUT})")
-    parser.add_argument("--quality", action="store_true", help="Use quality.py dimension-based scoring instead of old validators")
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Show raw model output for debugging quality"
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=DEFAULT_EVAL_TIMEOUT,
+        help=f"Per-task timeout in seconds (default {DEFAULT_EVAL_TIMEOUT})",
+    )
+    parser.add_argument(
+        "--quality",
+        action="store_true",
+        help="Use quality.py dimension-based scoring instead of old validators",
+    )
+    parser.add_argument(
+        "--host",
+        default=None,
+        help="Osaurus/Ollama server URL (default: $OLLAMA_BASE_URL or http://localhost:1337)",
+    )
+    parser.add_argument("--api-key", default=None, help="Bearer token for the LLM API")
     args = parser.parse_args()
     timeout = args.timeout
+
+    if args.host:
+        os.environ["OLLAMA_BASE_URL"] = args.host
+    if args.api_key:
+        os.environ["OLLAMA_API_KEY"] = args.api_key
 
     models_to_test = []
 
@@ -288,7 +364,10 @@ def main():
                 continue
             models_to_test.append((m, "osaurus"))
     else:
-        console.print(f"{WARN} Osaurus server not running")
+        console.print(
+            f"{WARN} Osaurus server not running — install/start it to evaluate local models:"
+        )
+        console.print("  brew install --cask osaurus && osaurus serve &>/dev/null &")
 
     if args.model:
         models_to_test = [(m, b) for m, b in models_to_test if m == args.model]
@@ -301,6 +380,7 @@ def main():
 
     tasks_to_run = TASKS
     from lib.config import get_config
+
     _default_eval_model = get_config().get("default_model", "foundation")
     config_model = args.model if args.model else _default_eval_model
 
@@ -314,7 +394,10 @@ def main():
                     tasks_to_run = {args.task: config_tasks[args.task]}
                     console.print(f"{STEP} Using config task: {args.task}")
                 else:
-                    console.print(f"{FAIL} Task '{args.task}' not in config. Available: {list(config_tasks.keys())}")
+                    console.print(
+                        f"{FAIL} Task '{args.task}' not in config. "
+                        f"Available: {list(config_tasks.keys())}"
+                    )
                     sys.exit(1)
             else:
                 tasks_to_run = config_tasks
@@ -343,11 +426,15 @@ def main():
 
         _run_eval = quick_run_eval
     else:
-        _run_eval = lambda model, backend="osaurus", **kwargs: run_eval(
-            model, tasks=kwargs.get("tasks"), backend=backend,
-            verbose=kwargs.get("verbose", False),
-            timeout=timeout, on_complete=print_memory_usage,
-        )
+        def _run_eval(model, backend="osaurus", **kwargs):
+            return run_eval(
+                model,
+                tasks=kwargs.get("tasks"),
+                backend=backend,
+                verbose=kwargs.get("verbose", False),
+                timeout=timeout,
+                on_complete=print_memory_usage,
+            )
 
     all_results = []
     best_scores = {task: -1 for task in tasks_to_run.keys()}
@@ -367,7 +454,11 @@ def main():
 
         mem_pct = get_memory_percent()
         model_mem_gb = estimate_model_memory(model)
-        _total_gb = os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") / (1024**3) if hasattr(os, 'sysconf') else 64
+        _total_gb = (
+            os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") / (1024**3)
+            if hasattr(os, "sysconf")
+            else 64
+        )
         avail_mem_gb = (100 - mem_pct) / 100 * _total_gb
 
         if mem_pct > MEMORY_WARNING_THRESHOLD:
@@ -382,7 +473,8 @@ def main():
         console.print(f"{STEP} Memory: {mem_pct}%, Server: OK")
 
         if args.quality:
-            from lib import quality as qm
+            qm = importlib.import_module("lib.quality")
+
             cases = qm.ALL_TEST_CASES
             if args.task:
                 cases = [c for c in cases if c.task == args.task]
@@ -392,7 +484,7 @@ def main():
             for r in results:
                 lst = task_avgs.setdefault(r["task"], [])
                 lst.append(r["quality_score"])
-            summary = "  ".join(f"{t}={int(round(sum(s)/len(s)))}%" for t, s in task_avgs.items())
+            summary = "  ".join(f"{t}={int(round(sum(s) / len(s)))}%" for t, s in task_avgs.items())
             console.print(f"{STEP} Quality scores: {summary}")
         else:
             results = _run_eval(model, tasks=tasks_to_run, backend=backend, verbose=args.verbose)
@@ -402,10 +494,14 @@ def main():
             console.print(f"{STEP} {model} ({backend}): 0 tasks")
         else:
             avg = sum(scores) / len(scores)
-            status = STEP if all(s >= 90 for s in scores) else (WARN if any(s >= 50 for s in scores) else FAIL)
+            status = (
+                STEP
+                if all(s >= 90 for s in scores)
+                else (WARN if any(s >= 50 for s in scores) else FAIL)
+            )
             console.print(f"{status} {model} ({backend}): {avg:.0f}% avg")
 
-        all_results.append({'model': model, 'backend': backend, 'results': results})
+        all_results.append({"model": model, "backend": backend, "results": results})
         for r in results:
             task = r["task"]
             score = r["quality_score"]
@@ -452,14 +548,19 @@ def _print_results(all_results, best_scores, best_models_dict):
     export_to_csv(all_results)
 
     from eval.report import _get_eval_dir
+
     eval_dir = _get_eval_dir()
     eval_dir.mkdir(parents=True, exist_ok=True)
     results_file = eval_dir / "eval_results.json"
 
     with open(results_file, "w") as f:
-        json.dump({
-            "models": all_results,
-            "best_scores": best_scores,
-            "best_models": best_models_dict,
-        }, f, indent=2)
+        json.dump(
+            {
+                "models": all_results,
+                "best_scores": best_scores,
+                "best_models": best_models_dict,
+            },
+            f,
+            indent=2,
+        )
     console.print(f"{STEP} Saved to {results_file}")

@@ -1,6 +1,7 @@
-import pytest
 from datetime import datetime, timezone
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from twitter.browser import parse_tweets_from_response
 
@@ -201,7 +202,6 @@ class TestParseTweetsFromResponse:
     def test_import_error(self, monkeypatch):
         """When playwright fails to import, sync_playwright/PWTimeout are None."""
         import sys
-        import importlib
 
         # Block playwright import
         monkeypatch.setitem(sys.modules, "playwright", None)
@@ -218,7 +218,6 @@ class TestParseTweetsFromResponse:
         # Cleanup
         del sys.modules["twitter.browser"]
         # Re-import normally
-        import twitter.browser as tb
         from twitter.browser import parse_tweets_from_response
         assert parse_tweets_from_response({}) == []
 
@@ -790,7 +789,8 @@ class TestCollectTweetsViaBrowser:
                                                             "__typename": "Tweet",
                                                             "legacy": {
                                                                 "full_text": "Original content here, exactly matching",
-                                                                "created_at": "Mon Jun 01 12:00:00 +0000 2026",
+                                                                "created_at":
+                                                                "Mon Jun 01 12:00:00 +0000 2026",
                                                             },
                                                             "core": {
                                                                 "user_results": {
@@ -814,7 +814,8 @@ class TestCollectTweetsViaBrowser:
                                                             "__typename": "Tweet",
                                                             "legacy": {
                                                                 "full_text": "RT @someone: Original content here, exactly matching",
-                                                                "created_at": "Mon Jun 01 12:00:00 +0000 2026",
+                                                                "created_at":
+                                                                "Mon Jun 01 12:00:00 +0000 2026",
                                                             },
                                                             "core": {
                                                                 "user_results": {

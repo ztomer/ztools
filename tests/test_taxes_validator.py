@@ -11,14 +11,11 @@ Pins:
 
 from __future__ import annotations
 
-import pytest
-
 from lib.validators.taxes_validator import (
     validate_taxes_anomalies,
     validate_taxes_audit_readiness,
     validate_taxes_synthesis,
 )
-
 
 # 600+ chars of prose hitting 5 signals with $ amounts
 _GOOD_PROSE = (
@@ -56,7 +53,7 @@ def test_anomalies_thin_list_form_low_substance():
 
 
 def test_anomalies_gt_leak_zeroes_no_leak():
-    leaky = ("Filed (GT): $XX,XXX refund. " + _GOOD_PROSE)
+    leaky = "Filed (GT): $XX,XXX refund. " + _GOOD_PROSE
     score, reason = validate_taxes_anomalies(leaky)
     assert "no_leak=0" in reason
     assert "GT-flavored term leaked" in reason
@@ -65,17 +62,21 @@ def test_anomalies_gt_leak_zeroes_no_leak():
 def test_audit_readiness_valid_json_keeps_score():
     """Pure JSON output with `risk_items` list → schema=ok, no halving."""
     import json
+
     items = [
-        {"title": f"T1135 finding {i}",
-         "severity": "high",
-         "rationale": (
-             "Foreign property exceeds $XXX,XXX CAD threshold without "
-             "T1135 disclosure. Form 106 + IBKR statements both show "
-             "balance above $XX,XXX. Box 38 RSU vest values reconcile "
-             "to T4. Quarterly tax compliance verified. No prior "
-             "baseline for cross-year comparison."),
-         "documents": ["IBKR statement", "Form 106"],
-         "mitigation": "file T1135 with return"}
+        {
+            "title": f"T1135 finding {i}",
+            "severity": "high",
+            "rationale": (
+                "Foreign property exceeds $XXX,XXX CAD threshold without "
+                "T1135 disclosure. Form 106 + IBKR statements both show "
+                "balance above $XX,XXX. Box 38 RSU vest values reconcile "
+                "to T4. Quarterly tax compliance verified. No prior "
+                "baseline for cross-year comparison."
+            ),
+            "documents": ["IBKR statement", "Form 106"],
+            "mitigation": "file T1135 with return",
+        }
         for i in range(2)
     ]
     payload = json.dumps({"risk_items": items}, indent=2)
@@ -132,9 +133,11 @@ def test_empty_output_scores_zero():
 def test_load_rubric_missing_file(tmp_path, monkeypatch):
     """When the rubric file doesn't exist, _load_rubric returns {}."""
     import lib.validators.taxes_validator as tv
+
     # Patch the data_dir to a path that doesn't have the file
     monkeypatch.setattr(tv, "Path", lambda *a, **kw: tmp_path)
     from lib.validators.taxes_validator import _load_rubric
+
     result = _load_rubric("nonexistent_task")
     assert result == {}
 
@@ -142,6 +145,7 @@ def test_load_rubric_missing_file(tmp_path, monkeypatch):
 def test_grounding_score_empty_signals():
     """When expected_signals is empty, full 40 score."""
     from lib.validators.taxes_validator import _grounding_score
+
     score, hits = _grounding_score("any output", [])
     assert score == 40
     assert hits == 0

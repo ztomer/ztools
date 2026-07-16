@@ -4,8 +4,9 @@ import pytest
 @pytest.mark.skip(reason="Integration test requiring running LLM server at localhost:1337")
 class TestLlmServer:
     def test_call_llm_api(self):
-        from lib.config import get_best_model, Task
+        from lib.config import Task, get_best_model
         from lib.osaurus_lib import call_llm_api
+
         model = get_best_model(Task.JSON)
         sys_prompt = "Output JSON now."
         usr_prompt = "Extract popular Vaughan venues for families."

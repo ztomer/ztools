@@ -4,8 +4,9 @@ import pytest
 @pytest.mark.skip(reason="Integration test requiring running LLM server")
 class TestGemmaModel:
     def test_gemma_call(self):
-        from lib.osaurus_lib import call as osaurus_call
         from eval.cli import TASKS
+        from lib.osaurus_lib import call as osaurus_call
+
         task = TASKS["json"]
         result = osaurus_call(
             model="gemma-4-26b-a4b-it-4bit",

@@ -1,4 +1,3 @@
-import pytest
 
 from eval.tasks_core import _extract_items_from_text
 

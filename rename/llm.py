@@ -2,22 +2,23 @@
 LLM integration for image renaming - server management, relevance checks, and filename queries.
 """
 
+import base64
 import json
 import os
 import re
-import base64
-import subprocess
-import time
 from pathlib import Path
 from typing import Optional
+
 import requests
 
-from lib.config import get_filename_models, get_model_prompt, Task
+from lib.config import Task, get_filename_models, get_model_prompt
 from lib.config_toml import load_config
-from lib.osaurus_lib import check_llm_availability
-from lib.mlx_lib import find_mlx_model, find_any_working_mlx_model, process_mlx_content, call_mlx
-from lib.tui import WARN, FAIL
+from lib.logging_config import get_logger
+from lib.mlx_lib import call_mlx, find_any_working_mlx_model, find_mlx_model, process_mlx_content
+from lib.tui import FAIL
 from rename.helpers import _strip_instruction_prefix
+
+logger = get_logger("rename.llm")
 
 RELEVANCE_CHECK_PROMPT = """Is this image content useful/interesting enough to keep and rename?
 Consider: educational content, useful tips, meaningful information, actionable advice.
@@ -27,17 +28,26 @@ Content:
 
 Answer ONLY one word: "keep" or "skip"."""
 
-PROMPT_IMAGE_TO_FILENAME = "Describe the visual objects in this image using 3 to 4 descriptive nouns and adjectives (e.g., 'white goose grass'). Ignore any text. Do not use words like 'image', 'empty', 'text', 'file', or 'filename'. Output ONLY the descriptive words."
+PROMPT_IMAGE_TO_FILENAME = (
+    "Describe the visual objects in this image using 3 to 4 descriptive "
+    "nouns and adjectives (e.g., 'white goose grass'). Ignore any text. "
+    "Do not use words like 'image', 'empty', 'text', 'file', or "
+    "'filename'. Output ONLY the descriptive words."
+)
 
 FILENAME_MODELS = get_filename_models()
 
-PROMPT_TEXT_TO_FILENAME = get_model_prompt(FILENAME_MODELS[0], Task.FILENAME) if FILENAME_MODELS else ""
+PROMPT_TEXT_TO_FILENAME = (
+    get_model_prompt(FILENAME_MODELS[0], Task.FILENAME) if FILENAME_MODELS else ""
+)
 
 # Load rename config for overridable paths
 _RENAME_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "rename.toml"
 _RENAME_CFG = load_config(_RENAME_CONFIG_PATH) or {}
 
-MLX_MODELS_DIR = Path(_RENAME_CFG.get("mlx_models_dir", str(Path.home() / "MLXModels"))).expanduser()
+MLX_MODELS_DIR = Path(
+    _RENAME_CFG.get("mlx_models_dir", str(Path.home() / "MLXModels"))
+).expanduser()
 
 # Timeouts for LLM API calls (seconds)
 RELEVANCE_CHECK_TIMEOUT = 5
@@ -52,7 +62,9 @@ APP_LAUNCH_WAIT = 15
 DEFAULT_SERVER_URL = _RENAME_CFG.get("llm_url", "http://localhost:1337")
 API_CHAT_PATH = "/api/chat"
 TEXT_PREVIEW_LIMIT = 500
-_relevance_models_str = _RENAME_CFG.get("relevance_check_models") or os.environ.get("RENAME_RELEVANCE_MODELS", "qwen3.6-27b-mxfp4,gemma-4-26b-a4b-it-mxfp4")
+_relevance_models_str = _RENAME_CFG.get("relevance_check_models") or os.environ.get(
+    "RENAME_RELEVANCE_MODELS", "qwen3.6-27b-mxfp4,gemma-4-26b-a4b-it-mxfp4"
+)
 RELEVANCE_CHECK_MODELS = [m.strip() for m in _relevance_models_str.split(",") if m.strip()]
 MIN_CONTENT_LEN = 2
 MAX_FILENAME_WORDS = 6
@@ -63,8 +75,8 @@ HTTP_STATUS_OK = 200
 def ensure_llm_running() -> bool:
     """Detect crash and restart server if needed."""
     from lib.osaurus_lib import ensure_server
-    return ensure_server()
 
+    return ensure_server()
 
 
 def is_relevant_with_llm(text: str, host: str, api_key: str = "") -> Optional[bool]:
@@ -96,7 +108,8 @@ def is_relevant_with_llm(text: str, host: str, api_key: str = "") -> Optional[bo
                 return True
             elif "skip" in content:
                 return False
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Relevance check failed for model {model}: {e}")
             continue
 
     return None
@@ -135,16 +148,17 @@ def query_llm_for_filename(
 
                 content = _strip_instruction_prefix(content)
 
-                words = re.findall(r'[a-z]+', content)
+                words = re.findall(r"[a-z]+", content)
                 if not words:
                     continue
 
-                content = '_'.join(words[:MAX_FILENAME_WORDS])
+                content = "_".join(words[:MAX_FILENAME_WORDS])
                 if len(content) > MAX_FILENAME_LEN:
                     content = content[:MAX_FILENAME_LEN]
 
                 return content
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Filename query failed for model {m}: {e}")
             continue
 
     return None
@@ -196,11 +210,7 @@ def query_vlm_for_filename(
         with open(image_path, "rb") as f:
             base64_image = base64.b64encode(f.read()).decode("utf-8")
 
-        messages = [{
-            "role": "user",
-            "content": prompt,
-            "images": [base64_image]
-        }]
+        messages = [{"role": "user", "content": prompt, "images": [base64_image]}]
 
         headers = {}
         if api_key:
@@ -232,5 +242,6 @@ def query_vlm_for_filename(
         return _strip_instruction_prefix(content.strip()) if content else None
 
     except Exception as e:
+        logger.warning(f"VLM error for model {model}: {e}")
         print(f"{FAIL} VLM error: {e}")
         return None

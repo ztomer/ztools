@@ -32,7 +32,7 @@ def _load_rubric(task_name: str) -> dict[str, Any]:
     fp = data_dir / f"taxes_{task_name}.sanitized.json"
     if not fp.exists():
         return {}
-    return (json.loads(fp.read_text(encoding="utf-8")).get("rubric") or {})
+    return json.loads(fp.read_text(encoding="utf-8")).get("rubric") or {}
 
 
 def _grounding_score(output: str, expected_signals: list[str]) -> tuple[int, int]:
@@ -42,11 +42,16 @@ def _grounding_score(output: str, expected_signals: list[str]) -> tuple[int, int
         return 40, 0
     out_lower = (output or "").lower()
     hits = sum(1 for sig in expected_signals if sig.lower() in out_lower)
-    if hits >= 5:  return 40, hits
-    if hits == 4: return 32, hits
-    if hits == 3: return 24, hits
-    if hits == 2: return 16, hits
-    if hits == 1: return 8, hits
+    if hits >= 5:
+        return 40, hits
+    if hits == 4:
+        return 32, hits
+    if hits == 3:
+        return 24, hits
+    if hits == 2:
+        return 16, hits
+    if hits == 1:
+        return 8, hits
     return 0, hits
 
 
@@ -75,8 +80,7 @@ def _substance_score(output: str) -> int:
         score -= 10
     if not re.findall(r"\$([\d,]+(?:\.\d{2})?)", output):
         score -= 10
-    bullet_count = len(re.findall(r"^\s*(?:\d+[.)]\s+|[-•*]\s+)",
-                                  output, re.MULTILINE))
+    bullet_count = len(re.findall(r"^\s*(?:\d+[.)]\s+|[-•*]\s+)", output, re.MULTILINE))
     non_bullet = re.sub(r"^[\s\d.\-•*]+", "", output, flags=re.MULTILINE)
     non_bullet = re.sub(r"\s+", " ", non_bullet)
     if bullet_count >= 3 and len(non_bullet) < bullet_count * 60:
@@ -95,8 +99,9 @@ def _validate_taxes_task(output: str, task_name: str) -> Tuple[int, str]:
     s_score = _substance_score(output)
     total = g_score + l_score + s_score
 
-    reason = (f"grounding={g_score}/40 ({g_hits} signals)  "
-              f"no_leak={l_score}/30  substance={s_score}/30")
+    reason = (
+        f"grounding={g_score}/40 ({g_hits} signals)  no_leak={l_score}/30  substance={s_score}/30"
+    )
     if l_score == 0:
         reason += "  ⚠ GT-flavored term leaked"
     return total, reason

@@ -4,11 +4,15 @@ from pathlib import Path
 from typing import Dict, List
 
 from .config_core import (
-    _auto_load, _config, _model_configs_cache, Task,
-    _FALLBACK_TIMEOUT, _FALLBACK_MAX_TOKENS, _FALLBACK_MODEL,
+    _FALLBACK_MAX_TOKENS,
+    _FALLBACK_MODEL,
+    _FALLBACK_TIMEOUT,
+    Task,
+    _auto_load,
+    _config,
+    _model_configs_cache,
 )
 from .config_toml import load_config as _load_config_toml
-
 
 
 def get_timeouts() -> Dict[str, int]:
@@ -81,7 +85,9 @@ def get_model_config(model: str) -> Dict:
                 merged["version"] = version
                 return merged
         return family_config
-    version_config_path = Path(__file__).parent.parent / "conf" / "models" / f"{family}_versions.toml"
+    version_config_path = (
+        Path(__file__).parent.parent / "conf" / "models" / f"{family}_versions.toml"
+    )
     config_path = Path(__file__).parent.parent / "conf" / "models" / f"{family}.toml"
     if version_config_path.exists():
         loaded = _load_config_toml(version_config_path) or {}
@@ -102,18 +108,52 @@ def get_model_config(model: str) -> Dict:
             "timeout": 300,
             "prompts": {
                 "json": "Output JSON now. Use EXACT schema.",
-                "weekend_fixed": "Output JSON now. Use EXACT schema: {\"fixed_activities\": [{\"name\": \"str\", \"location\": \"str\", \"target_ages\": \"str\", \"price\": \"str\", \"weather\": \"str\"}]}\n\nExtract and format the family-friendly venues from this list as JSON. Return ALL venues.\n\n{}\n\nUse the values from the source data as-is. Output ONLY JSON. No extra text.",
-                "weekend_transient": "Output JSON now. Schema: {\"transient_events\": [{\"name\": \"str\", \"location\": \"str\", \"target_ages\": \"str\", \"price\": \"str\", \"duration\": \"str\", \"weather\": \"str\", \"day\": \"str\"]}\n\nFind events. Use exact fields. Output ONLY JSON.",
-                "summarize": "Create a structured summary of this timeline. Start with a brief TL;DR paragraph that captures the overall narrative. Then organize events into topic sections with ## headers, using bullet points. Include who (@user mentions), what happened, and when. Use natural connecting language between related events.\n\n{}\n",
-                "filename": "Output ONLY the filename string (no JSON, no code blocks). Use lowercase, underscores for spaces, no special characters. Keep it under 50 characters.\n\nTEXT: {}",
+                "weekend_fixed": (
+                    "Output JSON now. Use EXACT schema: "
+                    '{"fixed_activities": [{"name": "str", "location": "str", '
+                    '"target_ages": "str", "price": "str", "weather": "str"}]}'
+                    "\n\nExtract and format the family-friendly venues from this "
+                    "list as JSON. Return ALL venues.\n\n{}\n\nUse the values "
+                    "from the source data as-is. Output ONLY JSON. No extra text."
+                ),
+                "weekend_transient": (
+                    "Output JSON now. Schema: "
+                    '{"transient_events": [{"name": "str", "location": "str", '
+                    '"target_ages": "str", "price": "str", "duration": "str", '
+                    '"weather": "str", "day": "str"]}\n\nFind events. Use exact '
+                    "fields. Output ONLY JSON."
+                ),
+                "summarize": (
+                    "Create a structured summary of this timeline. Start with a "
+                    "brief TL;DR paragraph that captures the overall narrative. "
+                    "Then organize events into topic sections with ## headers, "
+                    "using bullet points. Include who (@user mentions), what "
+                    "happened, and when. Use natural connecting language between "
+                    "related events.\n\n{}\n"
+                ),
+                "filename": (
+                    "Output ONLY the filename string (no JSON, no code "
+                    "blocks). Use lowercase, underscores for spaces, no "
+                    "special characters. Keep it under 50 characters.\n\n"
+                    "TEXT: {}"
+                ),
                 "file_summary": "Output JSON array with path and desc fields.",
             },
             "key_mappings": {
-                "event": "name", "title": "name", "activity": "name",
-                "venue": "location", "address": "location", "place": "location",
-                "age_group": "target_ages", "ages": "target_ages", "age_range": "target_ages",
-                "cost": "price", "pricing": "price", "fee": "price",
-                "type": "weather", "category": "weather",
+                "event": "name",
+                "title": "name",
+                "activity": "name",
+                "venue": "location",
+                "address": "location",
+                "place": "location",
+                "age_group": "target_ages",
+                "ages": "target_ages",
+                "age_range": "target_ages",
+                "cost": "price",
+                "pricing": "price",
+                "fee": "price",
+                "type": "weather",
+                "category": "weather",
             },
             "quirks": [
                 {"type": "prefix", "pattern": "Output JSON now.", "reason": "Ensures clean JSON"}
@@ -124,7 +164,9 @@ def get_model_config(model: str) -> Dict:
             },
             "field_mapping": {},
         }
-    return _model_configs_cache.get(family, {"name": family, "prompts": {}, "key_mappings": {}, "quirks": []})
+    return _model_configs_cache.get(
+        family, {"name": family, "prompts": {}, "key_mappings": {}, "quirks": []}
+    )
 
 
 def get_model_field_mapping(model: str) -> Dict[str, str]:
@@ -134,10 +176,20 @@ def get_model_field_mapping(model: str) -> Dict[str, str]:
 
 def get_model_top_keys(model: str) -> Dict[str, List[str]]:
     config = get_model_config(model)
-    return config.get("top_keys", {
-        "fixed": ["fixed_activities", "year_round_fixed_activities", "venues", "places", "activities", "items"],
-        "transient": ["transient_events", "events", "activities", "recommendations"],
-    })
+    return config.get(
+        "top_keys",
+        {
+            "fixed": [
+                "fixed_activities",
+                "year_round_fixed_activities",
+                "venues",
+                "places",
+                "activities",
+                "items",
+            ],
+            "transient": ["transient_events", "events", "activities", "recommendations"],
+        },
+    )
 
 
 def get_model_quirks(model: str) -> List[Dict]:

@@ -1,11 +1,12 @@
 import datetime
+import re
 import sys
 import time
-import re
+
 import requests
 from ddgs import DDGS
 
-from weekend.config import CITY, REGION, LATITUDE, LONGITUDE, TIMEZONE
+from weekend.config import CITY, LATITUDE, LONGITUDE, REGION, TIMEZONE
 
 # HTTP request defaults
 WEATHER_API_TIMEOUT = 10
@@ -86,10 +87,8 @@ def fetch_weather(friday, sunday):
             precip = precip_array[i] if i < len(precip_array) else 0
             temp = temp_array[i] if i < len(temp_array) else 0
             condition = "Precipitation" if precip > PRECIPITATION_THRESHOLD else "Clear"
-            day_name = datetime.datetime.strptime(
-                date_str, "%Y-%m-%d").strftime("%A")
-            forecasts.append(
-                f"{day_name}: {temp:.1f}°C, {condition} ({precip}mm)")
+            day_name = datetime.datetime.strptime(date_str, "%Y-%m-%d").strftime("%A")
+            forecasts.append(f"{day_name}: {temp:.1f}°C, {condition} ({precip}mm)")
 
         return FORECAST_HEADER + "\n".join(forecasts)
     except Exception as e:
@@ -105,7 +104,7 @@ def fetch_transient_events(dates_str, year, month_name):
                 return results
             except Exception as e:
                 if "429" in str(e) or "rate" in str(e).lower():
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                 else:
                     break
         return []
@@ -171,7 +170,7 @@ def scrape_review_score(place_name):
             break
         except Exception as e:
             if "429" in str(e) or "rate" in str(e).lower():
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
             else:
                 break
     return DEFAULT_REVIEW_SCORE

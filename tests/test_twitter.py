@@ -1,5 +1,5 @@
 """Tests for twitter summarizer."""
-import pytest
+
 
 
 class TestTwitterThinkingRemoval:

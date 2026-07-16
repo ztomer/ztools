@@ -4,10 +4,8 @@ Failure diagnosis module for model evaluation.
 Classifies WHY a model result failed.
 """
 
-
 from eval.validate import safe_content
 from lib.validators_lib import has_item_details
-
 
 FAIL_INFRA = "INFRA"
 FAIL_TIMEOUT = "TIMEOUT"
@@ -78,11 +76,17 @@ def _classify_failure(result: dict, task_cfg: dict, score: int, failure_reason: 
             return {
                 "category": FAIL_PARSE,
                 "reason": failure_reason or "JSON extraction failed",
-                "evidence": f"Output had JSON-like content at char {first_bracket} of {raw_len} but parser couldn't extract valid JSON",
+                "evidence": (
+                    f"Output had JSON-like content at char {first_bracket} of "
+                    f"{raw_len} but parser couldn't extract valid JSON"
+                ),
             }
 
         if parsed and has_prose_before_json:
-            evidence = f"Model emitted {first_bracket} chars of reasoning before first JSON bracket (total {raw_len} chars)"
+            evidence = (
+                f"Model emitted {first_bracket} chars of reasoning before "
+                f"first JSON bracket (total {raw_len} chars)"
+            )
             if score < 50:
                 return {
                     "category": FAIL_FORMAT,
@@ -114,7 +118,10 @@ def _classify_failure(result: dict, task_cfg: dict, score: int, failure_reason: 
         return {
             "category": FAIL_FORMAT,
             "reason": failure_reason,
-            "evidence": f"Model output {raw_len} chars starting with reasoning instead of a direct answer",
+            "evidence": (
+                f"Model output {raw_len} chars starting with reasoning "
+                f"instead of a direct answer"
+            ),
         }
 
     return {
@@ -129,8 +136,7 @@ def _describe_content_failure(parsed, failure_reason: str) -> str:
     if isinstance(parsed, list):
         item_count = len(parsed)
         with_details = sum(
-            1 for item in parsed
-            if isinstance(item, dict) and has_item_details(item)
+            1 for item in parsed if isinstance(item, dict) and has_item_details(item)
         )
         return f"Parsed {item_count} items, {with_details} with details. {failure_reason}"
     elif isinstance(parsed, dict):

@@ -1,13 +1,13 @@
 """Tests for weekend_config module."""
-import json
-import pytest
-from unittest.mock import patch, MagicMock
+
 from pathlib import Path
+from unittest.mock import patch
 
 
 class TestCacheFunctions:
     def test_load_events_cache_exists(self, tmp_path, monkeypatch):
         from weekend.config import load_events_cache
+
         cache_file = tmp_path / ".weekend_events_debug_cache.json"
         cache_file.write_text('["event1", "event2"]')
         monkeypatch.setattr("weekend.config.DEBUG_EVENTS_FILE", cache_file)
@@ -16,12 +16,14 @@ class TestCacheFunctions:
 
     def test_load_events_cache_missing(self, tmp_path, monkeypatch):
         from weekend.config import load_events_cache
+
         cache_file = tmp_path / "missing.json"
         monkeypatch.setattr("weekend.config.DEBUG_EVENTS_FILE", cache_file)
         assert load_events_cache() is None
 
     def test_save_events_cache(self, tmp_path, monkeypatch):
         from weekend.config import save_events_cache
+
         cache_file = tmp_path / ".weekend_events_debug_cache.json"
         monkeypatch.setattr("weekend.config.DEBUG_EVENTS_FILE", cache_file)
         save_events_cache('["saved"]')
@@ -30,6 +32,7 @@ class TestCacheFunctions:
     def test_save_events_cache_creates_dir(self, tmp_path, monkeypatch):
         """Cache save must create parent dir if missing (regression)."""
         from weekend.config import save_events_cache
+
         cache_file = tmp_path / "nonexistent" / "subdir" / "events.json"
         assert not cache_file.parent.exists()
         monkeypatch.setattr("weekend.config.DEBUG_EVENTS_FILE", cache_file)
@@ -39,6 +42,7 @@ class TestCacheFunctions:
     def test_save_venues_cache_creates_dir(self, tmp_path, monkeypatch):
         """Venues cache save must create parent dir if missing (regression)."""
         from weekend.config import save_venues_cache
+
         cache_file = tmp_path / "nonexistent" / "subdir" / "venues.json"
         assert not cache_file.parent.exists()
         monkeypatch.setattr("weekend.config.DEBUG_VENUES_FILE", cache_file)
@@ -47,6 +51,7 @@ class TestCacheFunctions:
 
     def test_load_venues_cache_exists(self, tmp_path, monkeypatch):
         from weekend.config import load_venues_cache
+
         cache_file = tmp_path / ".weekend_venues_debug_cache.json"
         cache_file.write_text('["venue1"]')
         monkeypatch.setattr("weekend.config.DEBUG_VENUES_FILE", cache_file)
@@ -55,12 +60,14 @@ class TestCacheFunctions:
 
     def test_load_venues_cache_missing(self, tmp_path, monkeypatch):
         from weekend.config import load_venues_cache
+
         cache_file = tmp_path / "missing.json"
         monkeypatch.setattr("weekend.config.DEBUG_VENUES_FILE", cache_file)
         assert load_venues_cache() is None
 
     def test_save_venues_cache(self, tmp_path, monkeypatch):
         from weekend.config import save_venues_cache
+
         cache_file = tmp_path / ".weekend_venues_debug_cache.json"
         monkeypatch.setattr("weekend.config.DEBUG_VENUES_FILE", cache_file)
         save_venues_cache('["saved"]')
@@ -70,18 +77,23 @@ class TestCacheFunctions:
 class TestLoadWeekendConfig:
     def test_load_existing(self):
         from weekend.config import load_weekend_config
+
         # Just verify it works on the real config (returns dict)
         result = load_weekend_config()
         assert isinstance(result, dict)
 
     def test_load_exception(self, capsys):
-        from weekend.config import load_weekend_config
         import builtins
+
+        from weekend.config import load_weekend_config
+
         real_open = builtins.open
+
         def fake_open(*args, **kwargs):
             if "weekend" in str(args[0]):
                 raise FileNotFoundError("file missing")
             return real_open(*args, **kwargs)
+
         with patch("builtins.open", side_effect=fake_open):
             result = load_weekend_config()
         assert result == {}
@@ -90,16 +102,19 @@ class TestLoadWeekendConfig:
 class TestServerHelpers:
     def test_is_server_running_ours(self):
         from weekend.config import is_server_running_ours
+
         with patch("weekend.config.is_server_running", return_value=True):
             assert is_server_running_ours() is True
 
     def test_is_server_running_ours_false(self):
         from weekend.config import is_server_running_ours
+
         with patch("weekend.config.is_server_running", return_value=False):
             assert is_server_running_ours() is False
 
     def test_restart_osaurus(self):
         from weekend.config import restart_osaurus
+
         with patch("weekend.config.restart_server", return_value=True) as mock_restart:
             result = restart_osaurus(wait=10)
         assert result is True
@@ -107,6 +122,7 @@ class TestServerHelpers:
 
     def test_ensure_server(self):
         from weekend.config import ensure_server
+
         with patch("weekend.config._osaurus_ensure_server", return_value=True) as mock_ensure:
             result = ensure_server(max_retries=5, wait=30)
         assert result is True
@@ -116,14 +132,15 @@ class TestServerHelpers:
 class TestConstants:
     def test_constants_defined(self):
         from weekend.config import (
+            DATES_STR,
             DEBUG_EVENTS_FILE,
             DEBUG_VENUES_FILE,
             MODEL_CONFIG,
             MODEL_NAME,
-            OSAURUS_BASE_URL,
             OSAURUS_APP,
-            DATES_STR,
+            OSAURUS_BASE_URL,
         )
+
         assert isinstance(DEBUG_EVENTS_FILE, Path)
         assert isinstance(DEBUG_VENUES_FILE, Path)
         # MODEL_CONFIG is the path to the config JSON file
@@ -141,23 +158,19 @@ class TestFetchDataIntegration:
         """_fetch_data creates cache dirs and doesn't crash when all mocked."""
         with monkeypatch.context() as m:
             m.setattr("weekend.cli.ensure_server", lambda: None)
-            m.setattr("weekend.cli.get_weekend_dates_string",
-                      lambda *a: "Jul 17-19, 2026")
-            m.setattr("weekend.cli.fetch_weather",
-                      lambda *a: "Daily Forecast: 24C Clear")
-            m.setattr("weekend.cli.fetch_transient_events",
-                      lambda *a: 'Mock events data')
-            m.setattr("weekend.cli.fetch_fixed_venues",
-                      lambda *a: 'Mock venues data')
+            m.setattr("weekend.cli.get_weekend_dates_string", lambda *a: "Jul 17-19, 2026")
+            m.setattr("weekend.cli.fetch_weather", lambda *a: "Daily Forecast: 24C Clear")
+            m.setattr("weekend.cli.fetch_transient_events", lambda *a: "Mock events data")
+            m.setattr("weekend.cli.fetch_fixed_venues", lambda *a: "Mock venues data")
 
             cache_dir = tmp_path / ".cache" / "weekend"
-            m.setattr("weekend.config.DEBUG_EVENTS_FILE",
-                      cache_dir / "events_debug_cache.json")
-            m.setattr("weekend.config.DEBUG_VENUES_FILE",
-                      cache_dir / "venues_debug_cache.json")
+            m.setattr("weekend.config.DEBUG_EVENTS_FILE", cache_dir / "events_debug_cache.json")
+            m.setattr("weekend.config.DEBUG_VENUES_FILE", cache_dir / "venues_debug_cache.json")
+
+            import datetime
 
             from weekend.cli import _fetch_data
-            import datetime
+
             fri = datetime.date(2026, 7, 17)
             sun = datetime.date(2026, 7, 19)
             weather, events, venues, dates = _fetch_data(fri, sun, "2026", "July", use_cache=False)
@@ -172,27 +185,23 @@ class TestFetchDataIntegration:
         """With use_cache=True, cached data is returned without re-fetching."""
         with monkeypatch.context() as m:
             m.setattr("weekend.cli.ensure_server", lambda: None)
-            m.setattr("weekend.cli.get_weekend_dates_string",
-                      lambda *a: "Jul 17-19, 2026")
-            m.setattr("weekend.cli.fetch_weather",
-                      lambda *a: "Daily Forecast: 24C Clear")
-            m.setattr("weekend.cli.fetch_transient_events",
-                      lambda *a: 'Mock events data')
-            m.setattr("weekend.cli.fetch_fixed_venues",
-                      lambda *a: 'Mock venues data')
+            m.setattr("weekend.cli.get_weekend_dates_string", lambda *a: "Jul 17-19, 2026")
+            m.setattr("weekend.cli.fetch_weather", lambda *a: "Daily Forecast: 24C Clear")
+            m.setattr("weekend.cli.fetch_transient_events", lambda *a: "Mock events data")
+            m.setattr("weekend.cli.fetch_fixed_venues", lambda *a: "Mock venues data")
 
             cache_dir = tmp_path / ".cache" / "weekend"
             # Pre-populate cache
             cache_dir.mkdir(parents=True)
             (cache_dir / "events_debug_cache.json").write_text("Cached events")
             (cache_dir / "venues_debug_cache.json").write_text("Cached venues")
-            m.setattr("weekend.config.DEBUG_EVENTS_FILE",
-                      cache_dir / "events_debug_cache.json")
-            m.setattr("weekend.config.DEBUG_VENUES_FILE",
-                      cache_dir / "venues_debug_cache.json")
+            m.setattr("weekend.config.DEBUG_EVENTS_FILE", cache_dir / "events_debug_cache.json")
+            m.setattr("weekend.config.DEBUG_VENUES_FILE", cache_dir / "venues_debug_cache.json")
+
+            import datetime
 
             from weekend.cli import _fetch_data
-            import datetime
+
             fri = datetime.date(2026, 7, 17)
             sun = datetime.date(2026, 7, 19)
             weather, events, venues, dates = _fetch_data(fri, sun, "2026", "July", use_cache=True)
@@ -207,28 +216,83 @@ class TestMainIntegration:
         import datetime
 
         mock_events = [
-            {"name": "Kids Coding Workshop", "location": "Vaughan",
-             "target_ages": "8-14", "price": "$25", "weather": "indoor", "day": "Saturday"},
-            {"name": "Nature Walk", "location": "Toronto",
-             "target_ages": "All", "price": "Free", "weather": "outdoor", "day": "Sunday"},
-            {"name": "Swimming", "location": "Richmond Hill",
-             "target_ages": "5-12", "price": "$10", "weather": "indoor", "day": "Saturday"},
-            {"name": "Art Class", "location": "Markham",
-             "target_ages": "6-10", "price": "$15", "weather": "indoor", "day": "Sunday"},
-            {"name": "Bike Trail", "location": "Thornhill",
-             "target_ages": "All", "price": "Free", "weather": "outdoor", "day": "Saturday"},
+            {
+                "name": "Kids Coding Workshop",
+                "location": "Vaughan",
+                "target_ages": "8-14",
+                "price": "$25",
+                "weather": "indoor",
+                "day": "Saturday",
+            },
+            {
+                "name": "Nature Walk",
+                "location": "Toronto",
+                "target_ages": "All",
+                "price": "Free",
+                "weather": "outdoor",
+                "day": "Sunday",
+            },
+            {
+                "name": "Swimming",
+                "location": "Richmond Hill",
+                "target_ages": "5-12",
+                "price": "$10",
+                "weather": "indoor",
+                "day": "Saturday",
+            },
+            {
+                "name": "Art Class",
+                "location": "Markham",
+                "target_ages": "6-10",
+                "price": "$15",
+                "weather": "indoor",
+                "day": "Sunday",
+            },
+            {
+                "name": "Bike Trail",
+                "location": "Thornhill",
+                "target_ages": "All",
+                "price": "Free",
+                "weather": "outdoor",
+                "day": "Saturday",
+            },
         ]
         mock_fixed = [
-            {"name": "Canada's Wonderland", "location": "Vaughan",
-             "target_ages": "All", "price": "$$$", "weather": "outdoor"},
-            {"name": "Science Centre", "location": "Toronto",
-             "target_ages": "All", "price": "$25", "weather": "indoor"},
-            {"name": "Adventure Park", "location": "Vaughan",
-             "target_ages": "6-14", "price": "$30", "weather": "outdoor"},
-            {"name": "Indoor Playground", "location": "Richmond Hill",
-             "target_ages": "2-10", "price": "$12", "weather": "indoor"},
-            {"name": "Library Story Time", "location": "Thornhill",
-             "target_ages": "3-7", "price": "Free", "weather": "indoor"},
+            {
+                "name": "Canada's Wonderland",
+                "location": "Vaughan",
+                "target_ages": "All",
+                "price": "$$$",
+                "weather": "outdoor",
+            },
+            {
+                "name": "Science Centre",
+                "location": "Toronto",
+                "target_ages": "All",
+                "price": "$25",
+                "weather": "indoor",
+            },
+            {
+                "name": "Adventure Park",
+                "location": "Vaughan",
+                "target_ages": "6-14",
+                "price": "$30",
+                "weather": "outdoor",
+            },
+            {
+                "name": "Indoor Playground",
+                "location": "Richmond Hill",
+                "target_ages": "2-10",
+                "price": "$12",
+                "weather": "indoor",
+            },
+            {
+                "name": "Library Story Time",
+                "location": "Thornhill",
+                "target_ages": "3-7",
+                "price": "Free",
+                "weather": "indoor",
+            },
         ]
 
         with monkeypatch.context() as m:
@@ -236,27 +300,38 @@ class TestMainIntegration:
             m.setattr("weekend.cli.init_config", lambda: None)
             m.setattr("weekend.cli.ensure_server", lambda: None)
             m.setattr("weekend.cli.get_best_model", lambda *a: "mock-model")
-            m.setattr("weekend.cli.get_weekend_date_objects",
-                      lambda: (datetime.date(2026, 7, 17), datetime.date(2026, 7, 19)))
-            m.setattr("weekend.cli._fetch_data",
-                      lambda *a: ("24C Clear", 'mock events', 'mock venues', 'Jul 17-19'))
-            m.setattr("weekend.cli.get_model_field_mapping",
-                      lambda *a: {"name": "name", "location": "location"})
-            m.setattr("weekend.cli.generate_weekend_plan",
-                      lambda *a, **kw: ({"transient_events": mock_events},
-                                  {"fixed_activities": mock_fixed}))
-            m.setattr("weekend.config.DEBUG_EVENTS_FILE",
-                      tmp_path / "events_debug_cache.json")
-            m.setattr("weekend.config.DEBUG_VENUES_FILE",
-                      tmp_path / "venues_debug_cache.json")
+            m.setattr(
+                "weekend.cli.get_weekend_date_objects",
+                lambda: (datetime.date(2026, 7, 17), datetime.date(2026, 7, 19)),
+            )
+            m.setattr(
+                "weekend.cli._fetch_data",
+                lambda *a: ("24C Clear", "mock events", "mock venues", "Jul 17-19"),
+            )
+            m.setattr(
+                "weekend.cli.get_model_field_mapping",
+                lambda *a: {"name": "name", "location": "location"},
+            )
+            m.setattr(
+                "weekend.cli.generate_weekend_plan",
+                lambda *a, **kw: (
+                    {"transient_events": mock_events},
+                    {"fixed_activities": mock_fixed},
+                ),
+            )
+            m.setattr("weekend.config.DEBUG_EVENTS_FILE", tmp_path / "events_debug_cache.json")
+            m.setattr("weekend.config.DEBUG_VENUES_FILE", tmp_path / "venues_debug_cache.json")
             m.setattr("weekend.cli.OUTPUT_DIR_PATH", str(tmp_path))
 
             m.setenv("OLLAMA_MODEL", "mock-model")
 
-            from weekend.cli import main
             import argparse
-            ns = argparse.Namespace(use_cache=False, model="mock-model",
-                                    skip_web=False, debug=False)
+
+            from weekend.cli import main
+
+            ns = argparse.Namespace(
+                use_cache=False, model="mock-model", skip_web=False, debug=False
+            )
             main(ns)
 
         # Output file was written

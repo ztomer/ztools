@@ -1,13 +1,12 @@
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from rename.helpers import (
+    _strip_instruction_prefix,
     clean_filename,
     extract_first_line,
     extract_full_text,
     is_meaningful_text,
     is_non_human_readable,
-    _strip_instruction_prefix,
 )
 
 

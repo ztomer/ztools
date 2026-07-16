@@ -1,17 +1,19 @@
 """Tests for benchmark_quality: query_model, run_benchmark, __main__."""
-import pytest
-from unittest.mock import patch, MagicMock
+
+from unittest.mock import MagicMock, patch
 
 
 class TestQueryModel:
     def test_query_model_success(self, mock_llm):
         from eval import benchmark_quality as bq
+
         with patch.object(bq, "llm_call", return_value={"content": "result.txt"}):
             result = bq.query_model("model-x", "system prompt", "input", "filename")
         assert result == "result.txt"
 
     def test_query_model_exception(self, mock_llm):
         from eval import benchmark_quality as bq
+
         with patch.object(bq, "llm_call", side_effect=Exception("API error")):
             result = bq.query_model("model-x", "system", "input", "filename")
         assert result is None
@@ -21,13 +23,16 @@ class TestRunBenchmark:
     def test_run_benchmark_with_models(self, mock_llm, capsys):
         """run_benchmark calls query_model for each model x task x case combo."""
         from eval import benchmark_quality as bq
-        with patch.object(bq, "get_model_prompt", return_value="test prompt"), \
-             patch.object(bq, "query_model", return_value="login_error_invalid.png") as mock_q, \
-             patch.object(bq, "print_header") as mock_header, \
-             patch.object(bq, "print_model_header"), \
-             patch.object(bq, "print_case_result"), \
-             patch.object(bq, "print_model_summary") as mock_summary, \
-             patch.object(bq, "print_cross_model_comparison"):
+
+        with (
+            patch.object(bq, "get_model_prompt", return_value="test prompt"),
+            patch.object(bq, "query_model", return_value="login_error_invalid.png") as mock_q,
+            patch.object(bq, "print_header") as mock_header,
+            patch.object(bq, "print_model_header"),
+            patch.object(bq, "print_case_result"),
+            patch.object(bq, "print_model_summary") as mock_summary,
+            patch.object(bq, "print_cross_model_comparison"),
+        ):
             bq.run_benchmark(["model-a", "model-b"], verbose=True)
         # print_header is called once with the models list and ALL_CASES
         mock_header.assert_called_once()
@@ -47,13 +52,16 @@ class TestRunBenchmark:
         """run_benchmark() with no args uses get_filename_models() from config."""
         from eval import benchmark_quality as bq
         from lib import config as lib_config
+
         dummy_models = ["model-a", "model-b"]
-        with patch.object(bq, "get_model_prompt", return_value=None), \
-             patch.object(lib_config, "get_filename_models", return_value=dummy_models), \
-             patch.object(bq, "print_header") as mock_header, \
-             patch.object(bq, "print_model_header"), \
-             patch.object(bq, "print_model_summary") as mock_summary, \
-             patch.object(bq, "print_cross_model_comparison"):
+        with (
+            patch.object(bq, "get_model_prompt", return_value=None),
+            patch.object(lib_config, "get_filename_models", return_value=dummy_models),
+            patch.object(bq, "print_header") as mock_header,
+            patch.object(bq, "print_model_header"),
+            patch.object(bq, "print_model_summary") as mock_summary,
+            patch.object(bq, "print_cross_model_comparison"),
+        ):
             bq.run_benchmark()
         args, _ = mock_header.call_args
         assert args[0] == dummy_models
@@ -62,12 +70,15 @@ class TestRunBenchmark:
     def test_run_benchmark_no_prompt_skips_task(self, mock_llm, capsys):
         """When get_model_prompt returns None, that task is skipped."""
         from eval import benchmark_quality as bq
-        with patch.object(bq, "get_model_prompt", return_value=None), \
-             patch.object(bq, "query_model") as mock_q, \
-             patch.object(bq, "print_header"), \
-             patch.object(bq, "print_model_header"), \
-             patch.object(bq, "print_model_summary"), \
-             patch.object(bq, "print_cross_model_comparison"):
+
+        with (
+            patch.object(bq, "get_model_prompt", return_value=None),
+            patch.object(bq, "query_model") as mock_q,
+            patch.object(bq, "print_header"),
+            patch.object(bq, "print_model_header"),
+            patch.object(bq, "print_model_summary"),
+            patch.object(bq, "print_cross_model_comparison"),
+        ):
             bq.run_benchmark(["m1"], verbose=True)
         # All tasks skipped → query_model never invoked
         mock_q.assert_not_called()
@@ -75,13 +86,16 @@ class TestRunBenchmark:
     def test_run_benchmark_none_output_skips_case(self, mock_llm, capsys):
         """When query_model returns None, the case is skipped (no scoring)."""
         from eval import benchmark_quality as bq
-        with patch.object(bq, "get_model_prompt", return_value="prompt"), \
-             patch.object(bq, "query_model", return_value=None), \
-             patch.object(bq, "print_header"), \
-             patch.object(bq, "print_model_header"), \
-             patch.object(bq, "print_case_result") as mock_case, \
-             patch.object(bq, "print_model_summary"), \
-             patch.object(bq, "print_cross_model_comparison"):
+
+        with (
+            patch.object(bq, "get_model_prompt", return_value="prompt"),
+            patch.object(bq, "query_model", return_value=None),
+            patch.object(bq, "print_header"),
+            patch.object(bq, "print_model_header"),
+            patch.object(bq, "print_case_result") as mock_case,
+            patch.object(bq, "print_model_summary"),
+            patch.object(bq, "print_cross_model_comparison"),
+        ):
             bq.run_benchmark(["m1"], verbose=True)
         # None output → continue before print_case_result
         mock_case.assert_not_called()
@@ -89,13 +103,16 @@ class TestRunBenchmark:
     def test_run_benchmark_quiet_mode(self, mock_llm, capsys):
         """verbose=False skips per-case printing."""
         from eval import benchmark_quality as bq
-        with patch.object(bq, "get_model_prompt", return_value="prompt"), \
-             patch.object(bq, "query_model", return_value="login_error.png"), \
-             patch.object(bq, "print_header"), \
-             patch.object(bq, "print_model_header"), \
-             patch.object(bq, "print_case_result") as mock_case, \
-             patch.object(bq, "print_model_summary") as mock_summary, \
-             patch.object(bq, "print_cross_model_comparison"):
+
+        with (
+            patch.object(bq, "get_model_prompt", return_value="prompt"),
+            patch.object(bq, "query_model", return_value="login_error.png"),
+            patch.object(bq, "print_header"),
+            patch.object(bq, "print_model_header"),
+            patch.object(bq, "print_case_result") as mock_case,
+            patch.object(bq, "print_model_summary") as mock_summary,
+            patch.object(bq, "print_cross_model_comparison"),
+        ):
             bq.run_benchmark(["m1"], verbose=False)
         # verbose=False → no per-case print, but summary still printed
         mock_case.assert_not_called()
@@ -109,10 +126,12 @@ class TestRunBenchmark:
         the aggregated summary numbers.
         """
         from eval import benchmark_quality as bq
+
         # Build a query_model that returns a perfect output for each filename case
         # by referencing the real FILENAME_CASES
-        from eval.benchmark_quality import FILENAME_CASES, SUMMARIZE_CASES, FILE_SUMMARY_CASES
+        from eval.benchmark_quality import FILENAME_CASES
         from lib.config import Task
+
         # Perfect filename outputs: each contains all expected keywords, lowercase,
         # no spaces, no invalid chars, < 60 chars
         perfect_outputs = [
@@ -148,13 +167,15 @@ class TestRunBenchmark:
         def prompt_filter(model, task):
             return "p" if task == Task.FILENAME else None
 
-        with patch.object(bq, "get_model_prompt", side_effect=prompt_filter), \
-             patch.object(bq, "query_model", side_effect=qm_side_effect) as mock_q, \
-             patch.object(bq, "print_header"), \
-             patch.object(bq, "print_model_header"), \
-             patch.object(bq, "print_case_result"), \
-             patch.object(bq, "print_model_summary") as mock_summary, \
-             patch.object(bq, "print_cross_model_comparison"):
+        with (
+            patch.object(bq, "get_model_prompt", side_effect=prompt_filter),
+            patch.object(bq, "query_model", side_effect=qm_side_effect) as mock_q,
+            patch.object(bq, "print_header"),
+            patch.object(bq, "print_model_header"),
+            patch.object(bq, "print_case_result"),
+            patch.object(bq, "print_model_summary") as mock_summary,
+            patch.object(bq, "print_cross_model_comparison"),
+        ):
             bq.run_benchmark(["m1"], verbose=True)
         # All 5 filename cases ran, no summarize/file_summary (no prompt)
         assert mock_q.call_count == 5
@@ -185,6 +206,7 @@ class TestMainBlock:
         """
         import re
         import textwrap
+
         with open("eval/benchmark_quality.py") as f:
             source = f.read()
         # Match: if __name__ == "__main__":\n    <body lines>
@@ -199,7 +221,7 @@ class TestMainBlock:
     def _exec_main_block(self, monkeypatch, argv):
         """Exec the actual __main__ block with mocked run_benchmark."""
         import sys
-        from unittest.mock import MagicMock
+
         from eval import benchmark_quality as bq
 
         monkeypatch.setattr(sys, "argv", argv)

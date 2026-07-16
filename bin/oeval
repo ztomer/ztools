@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# ZTools wrapper: execs the uv-managed venv console script for this tool.
+# The venv is built by the Homebrew formula at install time; if it is missing
+# (e.g. after a manual rm), this wrapper self-heals by rebuilding it from the
+# installed source under `pkgshare`.
+set -euo pipefail
+
+TOOL="oeval"
+EXTRA="oeval"
+
+SELF="$(readlink -f "${BASH_SOURCE[0]:-$0}")"
+PREFIX="$(cd "$(dirname "$SELF")/.." && pwd)"
+LIBEXEC="$PREFIX/libexec/ztools"
+VENV="$LIBEXEC/venv"
+SRC="$PREFIX/share/ztools"
+PY="$VENV/bin/python"
+
+if [ ! -x "$PY" ]; then
+  echo "→ bootstrapping $TOOL venv (one-time)..." >&2
+  command -v uv >/dev/null 2>&1 || { echo "✗ uv is required: https://docs.astral.sh/uv/" >&2; exit 1; }
+  mkdir -p "$LIBEXEC"
+  uv venv "$VENV" >&2
+  if [ -d "$SRC" ]; then
+    uv pip install --python "$PY" "$SRC/.[$EXTRA]" >&2
+  else
+    uv pip install --python "$PY" "otools[$EXTRA]" >&2
+  fi
+fi
+
+exec "$VENV/bin/$TOOL" "$@"

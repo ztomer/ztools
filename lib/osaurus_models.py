@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 import os
-import requests
 from typing import List, Optional
 
-
+import requests
 
 DEFAULT_HOST = "localhost"
 DEFAULT_PORT = 1337
@@ -24,15 +23,21 @@ HTTP_STATUS_NOT_FOUND = 404
 # Model defaults
 DEFAULT_ENV_VAR = "OLLAMA_MODEL"
 FALLBACK_MODEL = "foundation"
-DEFAULT_PREFERRED_MODELS = os.environ.get("OSAURUS_PREFERRED_MODELS", "foundation,qwen,gemma").split(",")
+DEFAULT_PREFERRED_MODELS = os.environ.get(
+    "OSAURUS_PREFERRED_MODELS", "foundation,qwen,gemma"
+).split(",")
 DEFAULT_VLM_KEYWORDS = os.environ.get("OSAURUS_VLM_KEYWORDS", "vl,vision,qwen,llamavl").split(",")
 
 
 def get_api_url(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> str:
+    if "://" in host:
+        return f"{host.rstrip('/')}{API_CHAT_PATH}"
     return f"http://{host}:{port}{API_CHAT_PATH}"
 
 
 def get_base_url(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> str:
+    if "://" in host:
+        return host.rstrip("/")
     return f"http://{host}:{port}"
 
 
@@ -74,7 +79,9 @@ def is_server_running(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> boo
         return False
 
 
-def check_llm_availability(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, api_key: str = "") -> bool:
+def check_llm_availability(
+    host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, api_key: str = ""
+) -> bool:
     return is_server_running(host, port)
 
 
@@ -83,6 +90,7 @@ get_available_models = get_models
 
 def get_best_model(task: str = None, env_var: str = DEFAULT_ENV_VAR) -> str:
     from .config import get_best_model as _get_best
+
     if task:
         return os.environ.get(env_var, _get_best(task))
     return os.environ.get(env_var, FALLBACK_MODEL)

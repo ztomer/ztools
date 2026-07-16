@@ -5,47 +5,29 @@ import argparse
 import os
 import re
 import sys
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from lib import init_config
-from lib.osaurus_lib import get_best_model
 from lib.config import Task
-from lib.tui import STEP, WARN
+from lib.osaurus_lib import get_best_model
+from lib.osaurus_server import check_server_or_die
 from lib.signal_handling import setup_signals
-
-from twitter.cookies import (
-    CHROME_COOKIES_DB,
-    _get_chrome_keychain_key,
-    _decrypt_cookie,
-    get_chrome_cookies,
-)
+from lib.tui import STEP, WARN
 from twitter.browser import (
-    MAX_SCROLLS,
-    SCROLL_PAUSE_MS,
-    parse_tweets_from_response,
     collect_tweets_via_browser,
 )
-from twitter.summarize import (
-    _PROMPT_RULES,
-    CHARS_PER_TOKEN,
-    OUTPUT_RESERVE_TOKENS,
-    _check_summary_quality,
-    _build_prompt,
-    summarize_with_llm,
-)
 from twitter.output import (
-    STATE_FILE,
-    DEBUG_CACHE_FILE,
-    DEFAULT_OUTPUT_DIR,
     DEFAULT_OLLAMA_URL,
-    load_state,
-    save_state,
-    load_debug_cache,
-    save_debug_cache,
-    print_to_stdout,
-    write_markdown,
+    DEFAULT_OUTPUT_DIR,
     clean_folder,
+    load_debug_cache,
+    load_state,
+    print_to_stdout,
+    save_state,
+    write_markdown,
+)
+from twitter.summarize import (
+    summarize_with_llm,
 )
 
 DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", get_best_model(Task.SUMMARIZE))
@@ -71,16 +53,12 @@ def parse_args() -> argparse.Namespace:
         help="Model name",
     )
     p.add_argument(
-        "--base-url",
+        "--host",
         default=os.environ.get("OLLAMA_BASE_URL", DEFAULT_OLLAMA_URL),
-        help="Ollama base URL",
+        help="Osaurus/Ollama server URL (default: $OLLAMA_BASE_URL or http://localhost:1337)",
     )
-    p.add_argument(
-        "--api-key", default=os.environ.get("OLLAMA_API_KEY", ""), help="API key"
-    )
-    p.add_argument(
-        "--debug", action="store_true", help="Show browser window and verbose output"
-    )
+    p.add_argument("--api-key", default=os.environ.get("OLLAMA_API_KEY", ""), help="API key")
+    p.add_argument("--debug", action="store_true", help="Show browser window and verbose output")
     p.add_argument(
         "--clean",
         action="store_true",
@@ -105,8 +83,7 @@ def resolve_since_time(args_since: str | None, state: dict) -> datetime:
                 dt = dt.replace(tzinfo=timezone.utc)
             return dt
         except ValueError:
-            print(
-                f"{WARN} Cannot parse --since '{args_since}'. Using last run or 24h.")
+            print(f"{WARN} Cannot parse --since '{args_since}'. Using last run or 24h.")
     if "last_run" in state:
         return datetime.fromisoformat(state["last_run"])
     return datetime.now(timezone.utc) - timedelta(hours=24)
@@ -117,11 +94,13 @@ def main() -> None:
     args = parse_args()
     output_dir = Path(args.output).expanduser()
 
-    model = args.model or os.environ.get('OLLAMA_MODEL', 'default')
+    model = args.model or os.environ.get("OLLAMA_MODEL", "default")
     print(f"{STEP} Using model: {model}")
 
     if args.clean:
         clean_folder(output_dir)
+
+    check_server_or_die(args.host)
 
     state = load_state()
     since_time = resolve_since_time(args.since, state)
@@ -140,16 +119,12 @@ def main() -> None:
             print(f"{WARN} No tweets found.")
             sys.exit(0)
 
-    summary = summarize_with_llm(
-        tweets, args.base_url, args.model, api_key=args.api_key
-    )
+    summary = summarize_with_llm(tweets, args.host, args.model, api_key=args.api_key)
     if summary.startswith("[LLM error"):
         print(f"{WARN} {summary}\n{WARN} Aborting.")
         sys.exit(1)
 
-    out_path, content = write_markdown(
-        tweets, summary, since_time, until_time, output_dir
-    )
+    out_path, content = write_markdown(tweets, summary, since_time, until_time, output_dir)
     print_to_stdout(content)
     print(f"{STEP} Summary written to: {out_path}")
     save_state({"last_run": until_time.isoformat()})

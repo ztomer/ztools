@@ -1,8 +1,14 @@
-from typing import Protocol, Optional, Any
+from typing import Optional, Protocol
 
 from lib.llm.constants import (
-    DEFAULT_HOST, DEFAULT_PORT, DEFAULT_TEMPERATURE, TASK_THINK,
-    DEFAULT_CLIENT_TYPE, CLIENT_TYPE_OSAURUS, CLIENT_TYPE_MLX, CLIENT_TYPE_LLM,
+    CLIENT_TYPE_LLM,
+    CLIENT_TYPE_MLX,
+    CLIENT_TYPE_OSAURUS,
+    DEFAULT_CLIENT_TYPE,
+    DEFAULT_HOST,
+    DEFAULT_PORT,
+    DEFAULT_TEMPERATURE,
+    TASK_THINK,
 )
 
 
@@ -42,6 +48,7 @@ class OsaurusClient:
         parse_json: bool = False,
     ) -> dict:
         from lib.osaurus_lib import call as _call
+
         return _call(
             model,
             messages,
@@ -70,6 +77,7 @@ class MlxClient:
         parse_json: bool = False,
     ) -> dict:
         from lib.mlx_lib import call as _call
+
         return _call(
             model,
             messages,
@@ -98,6 +106,7 @@ class GenericClient:
         parse_json: bool = False,
     ) -> dict:
         from lib.llm.client import call as _call
+
         return _call(
             model,
             messages,
@@ -120,4 +129,3 @@ def create_client(client_type: str = DEFAULT_CLIENT_TYPE) -> LLMClient:
     elif client_type == CLIENT_TYPE_LLM:
         return GenericClient()
     raise ValueError(f"Unknown client type: {client_type}")
-

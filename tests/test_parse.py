@@ -1,16 +1,15 @@
-import pytest
-from lib.osaurus_lib import extract_json, normalize_keys, filter_json_items, fix_json_years
+from lib.osaurus_lib import extract_json, filter_json_items, fix_json_years, normalize_keys
 
 
 def test_extract_json_valid():
-    content = '''[{"name": "Event", "location": "Park"}]'''
+    content = """[{"name": "Event", "location": "Park"}]"""
     result = extract_json(content)
     # Valid JSON array of 1 item, passed through unchanged
     assert result == [{"name": "Event", "location": "Park"}]
 
 
 def test_extract_json_with_markdown():
-    content = '''**[{"name": "Event", "location": "Park"}]**'''
+    content = """**[{"name": "Event", "location": "Park"}]**"""
     result = extract_json(content)
     # Bold markdown wrapper stripped, JSON extracted
     assert result == [{"name": "Event", "location": "Park"}]
@@ -38,4 +37,3 @@ def test_fix_json_years():
     items = [{"name": "Event 2626"}, {"date": "April 20-22, 2626"}]
     fixed = fix_json_years(items)
     assert any("2026" in str(v) for item in fixed for v in item.values())
-

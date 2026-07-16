@@ -14,9 +14,31 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["lib*", "twitter*", "weekend*", "rename*", "eval*"]
+include = ["lib*", "twitter*", "weekend*", "rename*", "eval*", "conf*"]
+
+[tool.setuptools.package-data]
+conf = ["*.toml", "*.json", "models/*.toml", "models/*.json"]
 
 [project.optional-dependencies]
+web = [
+    "ddgs>=9.0.0",
+    "beautifulsoup4>=4.12.0",
+]
+browser = [
+    "playwright>=1.40.0",
+    "cryptography>=41.0.0",
+]
+vision = [
+    "pillow>=10.0.0",
+    "pytesseract>=0.3.10",
+]
+foundation = [
+    "apple-fm-sdk",
+]
+mlx = [
+    "mlx-lm",
+    "mlx-vlm",
+]
 all = [
     "ddgs>=9.0.0",
     "beautifulsoup4>=4.12.0",
@@ -28,11 +50,53 @@ all = [
     "mlx-vlm",
 ]
 
+# Per-tool extrasets map a tool to the optional dependencies it needs.
+weekend = ["ddgs>=9.0.0", "beautifulsoup4>=4.12.0"]
+twitter = ["playwright>=1.40.0", "cryptography>=41.0.0"]
+oeval = []
+
 [project.scripts]
 tw = "twitter.cli:main"
 wk = "weekend.cli:main"
 rn = "rename.cli:main"
 ev = "eval.cli:main"
+weekend = "weekend.cli:main"
+twitter = "twitter.cli:main"
+oeval = "eval.cli:main"
 
 [tool.rtk]
 python = "3.14"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+# Test modules contain long string fixtures (JSON/HTML/date literals in deeply
+# nested dicts). E501 there is purely cosmetic and reformatting risks altering
+# fixture semantics, so line-too-long is relaxed for tests only.
+"tests/**" = ["E501"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["lib", "weekend", "twitter", "rename", "eval"]
+omit = ["*/tests/*", "*/__main__.py", "*/__init__.py"]
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "def main\\(",
+]

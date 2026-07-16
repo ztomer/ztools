@@ -2,27 +2,26 @@
 
 import json
 import re
-from typing import Optional, Dict, Any, List
+from typing import Any, Optional
 
 from lib.content_processing import clean_model_output
 
 # Pre-compiled regular expressions for performance (John Carmack optimization)
-MARKDOWN_JSON_BLOCK_RE = re.compile(r'```(?:json)?\s*([\s\S]*?)```')
-JSON_CONTAINER_RE = re.compile(r'(\{[\s\S]*\}|\[[\s\S]*\])')
-
+MARKDOWN_JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```")
+JSON_CONTAINER_RE = re.compile(r"(\{[\s\S]*\}|\[[\s\S]*\])")
 
 
 def extract_json(content: str, model: str = None) -> Optional[Any]:
     """Extract JSON from model response."""
     if not content:
         return None
-    
+
     # Try direct parse first
     try:
         return json.loads(content)
     except Exception:
         pass
-    
+
     # Try extracting from markdown code blocks
     match = MARKDOWN_JSON_BLOCK_RE.search(content)
     if match:
@@ -30,7 +29,7 @@ def extract_json(content: str, model: str = None) -> Optional[Any]:
             return json.loads(match.group(1))
         except Exception:
             pass
-    
+
     # Try finding JSON array or object
     match = JSON_CONTAINER_RE.search(content)
     if match:
@@ -38,7 +37,7 @@ def extract_json(content: str, model: str = None) -> Optional[Any]:
             return json.loads(match.group(1))
         except Exception:
             pass
-    
+
     return None
 
 
@@ -57,4 +56,4 @@ def clean_output(text: str) -> str:
     if not text:
         return ""
     cleaned = clean_model_output(text)
-    return cleaned.strip('`').strip()
+    return cleaned.strip("`").strip()

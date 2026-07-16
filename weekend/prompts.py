@@ -1,53 +1,76 @@
-from weekend.config import EXCLUDE_PLACES, CITY, REGION, AGE_RANGE, DATES_STR
-from lib.config import get_model_prompt, Task
+from lib.config import Task, get_model_prompt
 from lib.tui import debug_print
+from weekend.config import AGE_RANGE, CITY, DATES_STR, EXCLUDE_PLACES, REGION
 
 # Phase-specific template constants
-PHASE_WEATHER_CONDENSE = """Given this weather forecast, summarize what to expect for the weekend in 1-2 sentences. Be specific about temperatures and conditions.
+PHASE_WEATHER_CONDENSE = """\
+Given this weather forecast, summarize what to expect for the weekend in
+1-2 sentences. Be specific about temperatures and conditions.
 
 {weather_str}
 
 Output only the summary, nothing else."""
 
-PHASE_EXTRACT_EVENTS = """Extract family-friendly event listings from the search results below. For each event, list its name, location, dates, price if available, and description. Ignore irrelevant search results, ads, and navigation text.
+PHASE_EXTRACT_EVENTS = """\
+Extract family-friendly event listings from the search results below. For each
+event, list its name, location, dates, price if available, and description.
+Ignore irrelevant search results, ads, and navigation text.
 
 Search results:
 {raw_text}
 
 List each relevant event with key details, one per line."""
 
-PHASE_EXTRACT_VENUES = """Extract family-friendly venues from the search results below. For each venue, list its name, location, price if available, and what it offers for kids. Ignore irrelevant search results, ads, and navigation text.
+PHASE_EXTRACT_VENUES = """\
+Extract family-friendly venues from the search results below. For each venue,
+list its name, location, price if available, and what it offers for kids.
+Ignore irrelevant search results, ads, and navigation text.
 
 Search results:
 {raw_text}
 
 List each relevant venue with key details, one per line."""
 
-PHASE_DRAFT_TRANSIENT = """You are a family activity planner. Suggest 10 specific weekend activities for families with kids ages {age_range} in {location}. Focus on time-limited events happening specifically on {date_range}.
+PHASE_DRAFT_TRANSIENT = """\
+You are a family activity planner. Suggest 10 specific weekend activities for
+families with kids ages {age_range} in {location}. Focus on time-limited events
+happening specifically on {date_range}.
 
 Weather: {weather_condensed}
 
 Available events:
 {cleaned_sources}
 
-List specific activity suggestions, one per line. Include name, location, and brief description."""
+List specific activity suggestions, one per line. Include name, location, and
+brief description."""
 
-PHASE_DRAFT_FIXED = """You are a family activity planner. Suggest 10 specific weekend activities for families with kids ages {age_range} in {location}. Focus on year-round venues and fixed-location activities.
+PHASE_DRAFT_FIXED = """\
+You are a family activity planner. Suggest 10 specific weekend activities for
+families with kids ages {age_range} in {location}. Focus on year-round venues
+and fixed-location activities.
 
 Weather: {weather_condensed}
 
 Available venues:
 {cleaned_sources}
 
-List specific activity suggestions, one per line. Include name, location, and brief description."""
+List specific activity suggestions, one per line. Include name, location, and
+brief description."""
 
-PHASE_REFINE = """Here are activity suggestions:
+PHASE_REFINE = """\
+Here are activity suggestions:
 
 {draft_text}
 
-Merge any near-duplicates, keep the best 8, remove low-quality or irrelevant ones, and sort by overall appeal. Output the refined list, one per line with name + description."""
+Merge any near-duplicates, keep the best 8, remove low-quality or irrelevant
+ones, and sort by overall appeal. Output the refined list, one per line with
+name + description."""
 
-PHASE_STRUCTURE_TRANSIENT_SYSTEM = """Output JSON now. Use EXACT schema: {{"transient_events": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}}]}}
+PHASE_STRUCTURE_TRANSIENT_SYSTEM = """\
+Output JSON now. Use EXACT schema:
+{{"transient_events": [{{"name": "str", "location": "str",
+"target_ages": "str", "price": "str", "duration": "str",
+"weather": "str", "day": "str"}}]}}
 
 MANDATORY default values:
 - target_ages: "{age_range}"
@@ -56,18 +79,25 @@ MANDATORY default values:
 - day: Friday/Saturday/Sunday
 
 Weather: {weather_condensed}
-Set weather based on the activity type and forecast above: "outdoor" for outdoor activities (parks, zoo, sports) in nice weather, "indoor" for indoor venues (museums, play centres), "both" for flexible activities.
+Set weather based on the activity type and forecast above: "outdoor" for
+outdoor activities (parks, zoo, sports) in nice weather, "indoor" for indoor
+venues (museums, play centres), "both" for flexible activities.
 
 Never leave any field empty. Output ONLY JSON."""
 
-PHASE_STRUCTURE_FIXED_SYSTEM = """Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
+PHASE_STRUCTURE_FIXED_SYSTEM = """\
+Output JSON now. Use EXACT schema:
+{{"fixed_activities": [{{"name": "str", "location": "str",
+"target_ages": "str", "price": "str", "weather": "str"}}]}}
 
 MANDATORY default values:
 - target_ages: "{age_range}"
 - price: $18-35 per child or free
 
 Weather: {weather_condensed}
-Set weather based on the activity type and forecast above: "outdoor" for outdoor activities (parks, zoo, sports) in nice weather, "indoor" for indoor venues (museums, play centres), "both" for flexible activities.
+Set weather based on the activity type and forecast above: "outdoor" for
+outdoor activities (parks, zoo, sports) in nice weather, "indoor" for indoor
+venues (museums, play centres), "both" for flexible activities.
 
 Never leave any field empty. Output ONLY JSON."""
 
@@ -81,7 +111,9 @@ def build_source_extract_prompt(raw_text, source_type):
     return template.format(raw_text=raw_text)
 
 
-def build_draft_prompt(weather_condensed, cleaned_sources, source_type, location, age_range, date_range):
+def build_draft_prompt(
+    weather_condensed, cleaned_sources, source_type, location, age_range, date_range
+):
     template = PHASE_DRAFT_TRANSIENT if source_type == "transient" else PHASE_DRAFT_FIXED
     return template.format(
         weather_condensed=weather_condensed,
@@ -97,7 +129,11 @@ def build_refine_prompt(draft_text):
 
 
 def build_structure_system_prompt(source_type, age_range, weather_condensed=""):
-    template = PHASE_STRUCTURE_TRANSIENT_SYSTEM if source_type == "transient" else PHASE_STRUCTURE_FIXED_SYSTEM
+    template = (
+        PHASE_STRUCTURE_TRANSIENT_SYSTEM
+        if source_type == "transient"
+        else PHASE_STRUCTURE_FIXED_SYSTEM
+    )
     return template.format(age_range=age_range, weather_condensed=weather_condensed)
 
 
@@ -113,7 +149,11 @@ def build_fixed_system_prompt(model: str = None, location: str = None, age_range
 
     config_prompt = get_model_prompt(model, Task.WEEKEND_FIXED) if model else ""
 
-    debug_print(f"[DEBUG] build_fixed_system_prompt: model={model}, location={location}, age_range={age_range}", flush=True)
+    debug_print(
+        f"[DEBUG] build_fixed_system_prompt: model={model}, "
+        f"location={location}, age_range={age_range}",
+        flush=True,
+    )
     if config_prompt:
         try:
             formatted = config_prompt.format(
@@ -127,8 +167,10 @@ def build_fixed_system_prompt(model: str = None, location: str = None, age_range
         debug_print(f"[DEBUG] prompt after format (first 200): {formatted[:200]}", flush=True)
         return formatted
 
-    return f"""
-    Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}}]}}
+    return f"""\
+    Output JSON now. Use EXACT schema:
+    {{"fixed_activities": [{{"name": "str", "location": "str",
+    "target_ages": "str", "price": "str", "weather": "str"}}]}}
 
     Extract 10 popular {location} venues for families with kids ages {age_range}.
     Include location (city only), target_ages, price in CAD, weather.
@@ -137,14 +179,15 @@ def build_fixed_system_prompt(model: str = None, location: str = None, age_range
     - target_ages: "{age_range}"
     - price: $18-35 per child or free
 
-    Set weather based on activity type: "outdoor" for outdoor activities, "indoor" for indoor venues, "both" for flexible.
+    Set weather based on activity type: "outdoor" for outdoor activities,
+    "indoor" for indoor venues, "both" for flexible.
 
     Never leave any field empty.
     """
 
 
 def build_fixed_user_prompt(dates_str, weather_str, venues_str):
-    return f"""
+    return f"""\
     Current Context for the upcoming weekend:
     Dates: {dates_str}
     {weather_str}
@@ -152,11 +195,15 @@ def build_fixed_user_prompt(dates_str, weather_str, venues_str):
     Potential Venues and Current Exhibits:
     {venues_str}
 
-    Execute the task based on the system instructions and the provided context to find 10 year-round fixed activities, prioritizing current exhibits or highly-rated venues from the context. Output ONLY JSON.
+    Execute the task based on the system instructions and the provided context
+    to find 10 year-round fixed activities, prioritizing current exhibits or
+    highly-rated venues from the context. Output ONLY JSON.
     """
 
 
-def build_transient_system_prompt(model: str = None, location: str = None, age_range: str = None, date_range: str = None):
+def build_transient_system_prompt(
+    model: str = None, location: str = None, age_range: str = None, date_range: str = None
+):
     location = location or f"{CITY}/{REGION}"
     age_range = age_range or AGE_RANGE
     date_range = date_range or DATES_STR
@@ -173,8 +220,11 @@ def build_transient_system_prompt(model: str = None, location: str = None, age_r
             formatted = config_prompt.replace("{}", f"{location} {age_range} {date_range}")
         return formatted
 
-    return f"""
-    Output JSON now. Use EXACT schema: {{"transient_events": [{{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}}]}}
+    return f"""\
+    Output JSON now. Use EXACT schema:
+    {{"transient_events": [{{"name": "str", "location": "str",
+    "target_ages": "str", "price": "str", "duration": "str",
+    "weather": "str", "day": "str"}}]}}
 
     Extract {location} family events for {date_range}.
 
@@ -184,18 +234,21 @@ def build_transient_system_prompt(model: str = None, location: str = None, age_r
     - duration: "2-3 hours"
     - day: Friday/Saturday/Sunday
 
-    Set weather based on activity type: "outdoor" for outdoor activities, "indoor" for indoor venues, "both" for flexible.
+    Set weather based on activity type: "outdoor" for outdoor activities,
+    "indoor" for indoor venues, "both" for flexible.
     """
 
 
 def build_transient_user_prompt(dates_str, weather_str, events_str):
-    return f"""
+    return f"""\
     Current Context for the upcoming weekend:
     Dates: {dates_str}
     {weather_str}
 
-    High-Signal Transient Events (Filter these strictly! Ensure they match the Dates provided!):
+    High-Signal Transient Events (Filter these strictly! Ensure they match the
+    Dates provided!):
     {events_str}
 
-    Execute the task based on the system instructions and the provided context. Output ONLY JSON.
+    Execute the task based on the system instructions and the provided context.
+    Output ONLY JSON.
     """

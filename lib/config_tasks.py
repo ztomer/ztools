@@ -1,13 +1,11 @@
 """Task builder - creates eval tasks from model config."""
 
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 from .config_core import Task
 from .config_getters import get_model_prompts_all
 from .config_toml import load_config
-
-
 
 _eval_inputs_cache: Dict[str, str] = {}
 
@@ -41,6 +39,7 @@ def _safe_format_prompt(prompt_template: str, test_input: str) -> str:
     result = prompt_template
 
     import json
+
     location = ""
     target_ages = ""
     try:
@@ -69,8 +68,8 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
     if not prompts:
         return {}
     tasks = {}
-    from lib.validators_lib import validate_detailed_json, validate_summary, validate_filename
     from eval.validate import validate_file_summary
+    from lib.validators_lib import validate_detailed_json, validate_filename, validate_summary
 
     if Task.WEEKEND_FIXED.value in prompts:
         test_input = get_eval_input("weekend_fixed")

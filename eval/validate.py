@@ -4,8 +4,8 @@ Validation module for model evaluation.
 """
 
 import json
-import re
-from typing import Tuple, Any
+from typing import Any, Tuple
+
 from lib.validators_lib import has_text_headers
 
 
@@ -21,7 +21,7 @@ def safe_content(result: dict) -> str:
 
 def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
     """Validate file summary quality - checks for ACTUAL content detail, not filename inference.
-    
+
     STRICT checks:
     - No filename-only summaries (must describe what file does)
     - No generic patterns like "a python script"
@@ -38,9 +38,28 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
             failures.append(f"only {num_files} files")
 
         detailed_count = 0
-        content_verbs = ['parse', 'validat', 'evaluat', 'extract', 'load', 'save',
-            'read', 'write', 'fetch', 'send', 'process', 'handle',
-            'config', 'setting', 'option', 'parameter', 'api', 'client', 'model', 'llm']
+        content_verbs = [
+            "parse",
+            "validat",
+            "evaluat",
+            "extract",
+            "load",
+            "save",
+            "read",
+            "write",
+            "fetch",
+            "send",
+            "process",
+            "handle",
+            "config",
+            "setting",
+            "option",
+            "parameter",
+            "api",
+            "client",
+            "model",
+            "llm",
+        ]
 
         for item in items:
             if not isinstance(item, dict):
@@ -97,9 +116,28 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
     num_files = len(items)
 
     detailed_count = 0
-    content_verbs = ['parse', 'validat', 'evaluat', 'extract', 'load', 'save',
-        'read', 'write', 'fetch', 'send', 'process', 'handle',
-        'config', 'setting', 'option', 'parameter', 'api', 'client', 'model', 'llm']
+    content_verbs = [
+        "parse",
+        "validat",
+        "evaluat",
+        "extract",
+        "load",
+        "save",
+        "read",
+        "write",
+        "fetch",
+        "send",
+        "process",
+        "handle",
+        "config",
+        "setting",
+        "option",
+        "parameter",
+        "api",
+        "client",
+        "model",
+        "llm",
+    ]
 
     for filepath, summary in items:
         if not filepath or not summary:

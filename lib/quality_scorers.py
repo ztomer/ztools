@@ -1,19 +1,20 @@
 import json
 import re
-from typing import Dict, List, Callable
+from typing import Callable, Dict, List
 
-from lib.quality_models import Score, ScoreCard, TestCase, _str, _lower, GENERIC_FILENAMES
-
+from lib.quality_models import GENERIC_FILENAMES, Score, ScoreCard, TestCase, _lower, _str
 
 _scorer_registry: Dict[str, List[Callable]] = {}
 
 
 def register_scorer(*tasks: str):
     """Decorator that registers a scorer function for one or more task types."""
+
     def decorator(func):
         for task in tasks:
             _scorer_registry.setdefault(task, []).append(func)
         return func
+
     return decorator
 
 
@@ -39,11 +40,36 @@ def _score_filename_relevance(output: str, case: TestCase) -> Score:
     if not out:
         return Score("Relevance", 0, 0.40, failures=["empty"])
 
-    stopwords = {"the", "a", "an", "is", "are", "was", "were", "be", "been",
-                 "to", "of", "in", "for", "on", "with", "at", "by", "from",
-                 "and", "or", "but", "not", "please", "try", "again", "showing"}
-    inp_tokens = set(re.findall(r'[a-z0-9]+', inp)) - stopwords
-    out_tokens = set(re.findall(r'[a-z0-9]+', out))
+    stopwords = {
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "to",
+        "of",
+        "in",
+        "for",
+        "on",
+        "with",
+        "at",
+        "by",
+        "from",
+        "and",
+        "or",
+        "but",
+        "not",
+        "please",
+        "try",
+        "again",
+        "showing",
+    }
+    inp_tokens = set(re.findall(r"[a-z0-9]+", inp)) - stopwords
+    out_tokens = set(re.findall(r"[a-z0-9]+", out))
 
     matches = set()
     for it in inp_tokens:
@@ -56,7 +82,7 @@ def _score_filename_relevance(output: str, case: TestCase) -> Score:
                     break
     coverage = len(matches) / len(inp_tokens) if inp_tokens else 0
 
-    ref_tokens = set(re.findall(r'[a-z0-9]+', ref))
+    ref_tokens = set(re.findall(r"[a-z0-9]+", ref))
     ref_matches = set()
     for rt in ref_tokens:
         if rt in out_tokens:
@@ -102,7 +128,7 @@ def _score_filename_format(output: str, case: TestCase) -> Score:
         deduction += 50
         failures.append("has question/instruction text")
 
-    valid_part = re.sub(r'[a-zA-Z0-9_.-]', '', out)
+    valid_part = re.sub(r"[a-zA-Z0-9_.-]", "", out)
     if valid_part:
         space_count = valid_part.count(" ")
         non_space = valid_part.replace(" ", "")
@@ -159,7 +185,7 @@ def _score_filename_conciseness(output: str, case: TestCase) -> Score:
         failures.append(f"too long ({length} chars)")
 
     filler = ["the", "and", "of", "for", "with", "from", "this", "that"]
-    if any(f in _lower(re.sub(r'[_-]', ' ', out)).split() for f in filler):
+    if any(f in _lower(re.sub(r"[_-]", " ", out)).split() for f in filler):
         score = max(score - 15, 0)
         failures.append("has filler words")
 
@@ -175,20 +201,19 @@ def _score_summarize_completeness(output: str, case: TestCase) -> Score:
 
     failures = []
 
-    users_ref = set(re.findall(r'user\s*(\d+)', inp, re.IGNORECASE))
-    users_out = set(re.findall(r'user\s*(\d+)', out, re.IGNORECASE))
+    users_ref = set(re.findall(r"user\s*(\d+)", inp, re.IGNORECASE))
+    users_out = set(re.findall(r"user\s*(\d+)", out, re.IGNORECASE))
     user_ratio = len(users_out & users_ref) / len(users_ref) if users_ref else 1
     if user_ratio < 0.75:
         failures.append(f"users: {len(users_out & users_ref)}/{len(users_ref)}")
 
-    events = len(re.findall(r'\d{1,2}:\d{2}', inp))
-    out_events = len(re.findall(r'\d{1,2}:\d{2}', out))
+    events = len(re.findall(r"\d{1,2}:\d{2}", inp))
+    out_events = len(re.findall(r"\d{1,2}:\d{2}", out))
     event_ratio = min(1.0, out_events / events) if events else 1
     if event_ratio < 0.5:
         failures.append(f"events: {out_events}/{events} timestamped")
 
-    topics = {"launch", "access", "beta", "feedback", "migration",
-              "backup", "dns", "services"}
+    topics = {"launch", "access", "beta", "feedback", "migration", "backup", "dns", "services"}
     inp_topics = {t for t in topics if t in inp}
     out_topics = {t for t in topics if t in _lower(out)}
     topic_ratio = len(out_topics & inp_topics) / len(inp_topics) if inp_topics else 1
@@ -212,39 +237,50 @@ def _score_summarize_synthesis(output: str, case: TestCase) -> Score:
     failures = []
     score = 0
 
-    header_match = re.search(r'\n#{2,}\s+\w+', out)
+    header_match = re.search(r"\n#{2,}\s+\w+", out)
     if header_match:
-        top_level = out[:header_match.start()].strip()
-    elif not re.search(r'^#{2,}\s+\w+', out, re.MULTILINE):
+        top_level = out[: header_match.start()].strip()
+    elif not re.search(r"^#{2,}\s+\w+", out, re.MULTILINE):
         top_level = out
     else:
         top_level = ""
 
-    has_synthesis = bool(re.search(
-        r'(?i)(overall|summary|in (short|summary)|tl;dr|(the|this|that) '
-        r'(conversation|discussion|thread|interaction|timeline|migration|launch))',
-        top_level
-    )) if top_level else False
+    has_synthesis = (
+        bool(
+            re.search(
+                r"(?i)(overall|summary|in (short|summary)|tl;dr|(the|this|that) "
+                r"(conversation|discussion|thread|interaction|timeline|migration|launch))",
+                top_level,
+            )
+        )
+        if top_level
+        else False
+    )
 
-    narrative_verbs = len(re.findall(
-        r'(?i)\b(?:ask(?:s|ed|ing)?|respond(?:s|ed|ing)?|thank(?:s|ed|ing)?|'
-        r'report(?:s|ed|ing)?|confirm(?:s|ed|ing)?|direct(?:s|ed|ing)?|'
-        r'inquire(?:s|d|ing)?|announce(?:s|d|ing)?|share(?:s|d|ing)?|'
-        r'request(?:s|ed|ing)?|provide(?:s|d|ing)?|drive(?:s|n)?|lead?|'
-        r'act(?:s|ed|ing)?|handle(?:s|d)?|manage(?:s|d)?|coordinate(?:s|d)?)\b',
-        out
-    ))
+    narrative_verbs = len(
+        re.findall(
+            r"(?i)\b(?:ask(?:s|ed|ing)?|respond(?:s|ed|ing)?|thank(?:s|ed|ing)?|"
+            r"report(?:s|ed|ing)?|confirm(?:s|ed|ing)?|direct(?:s|ed|ing)?|"
+            r"inquire(?:s|d|ing)?|announce(?:s|d|ing)?|share(?:s|d|ing)?|"
+            r"request(?:s|ed|ing)?|provide(?:s|d|ing)?|drive(?:s|n)?|lead?|"
+            r"act(?:s|ed|ing)?|handle(?:s|d)?|manage(?:s|d)?|coordinate(?:s|d)?)\b",
+            out,
+        )
+    )
 
-    user_action = len(re.findall(
-        r'(?i)@?[Uu]ser\s*\d+\s+(?:announce|ask|direct|confirm|report|thank|inquire)',
-        out
-    ))
-    relationship_patterns = len(re.findall(
-        r'(?i)(in response|follow(?:ing|ed|s)? (?:up|that)|'
-        r'the(?:n| (?:discussion|conversation|thread)) (?:shift|move|transition|turn)|'
-        r'wrapped? up|kicked? off|stepped? in)',
-        out
-    ))
+    user_action = len(
+        re.findall(
+            r"(?i)@?[Uu]ser\s*\d+\s+(?:announce|ask|direct|confirm|report|thank|inquire)", out
+        )
+    )
+    relationship_patterns = len(
+        re.findall(
+            r"(?i)(in response|follow(?:ing|ed|s)? (?:up|that)|"
+            r"the(?:n| (?:discussion|conversation|thread)) (?:shift|move|transition|turn)|"
+            r"wrapped? up|kicked? off|stepped? in)",
+            out,
+        )
+    )
 
     synthesis_score = 40 if has_synthesis else 0
     narrative_score = min(30, narrative_verbs * 6)
@@ -271,8 +307,8 @@ def _score_summarize_structure(output: str, case: TestCase) -> Score:
     failures = []
     score = 0
 
-    has_headers = bool(re.search(r'^#{2,}\s+\w+', out, re.MULTILINE))
-    has_bullets = bool(re.search(r'^[\s]*[-*•]', out, re.MULTILINE))
+    has_headers = bool(re.search(r"^#{2,}\s+\w+", out, re.MULTILINE))
+    has_bullets = bool(re.search(r"^[\s]*[-*•]", out, re.MULTILINE))
 
     if has_headers and has_bullets:
         score = 100
@@ -284,7 +320,7 @@ def _score_summarize_structure(output: str, case: TestCase) -> Score:
         score = 20
         failures.append("no headers or bullet points")
 
-    template_fields = len(re.findall(r'\*\*(Who|What|When|Where):', out))
+    template_fields = len(re.findall(r"\*\*(Who|What|When|Where):", out))
     if template_fields >= 3:
         score = max(30, score - 40)
         failures.append("template-like structure")
@@ -308,19 +344,21 @@ def _score_summarize_specificity(output: str, case: TestCase) -> Score:
     failures = []
     score = 0
 
-    timestamps = len(re.findall(r'\d{1,2}:\d{2}', out))
-    expected_events = len(re.findall(r'\d{1,2}:\d{2}', case.input_text))
+    timestamps = len(re.findall(r"\d{1,2}:\d{2}", out))
+    expected_events = len(re.findall(r"\d{1,2}:\d{2}", case.input_text))
     ts_score = min(40, (timestamps / expected_events * 40) if expected_events else 0)
 
-    user_numbers = set(re.findall(r'user\s*(\d+)', out, re.IGNORECASE))
-    expected_users = set(re.findall(r'user\s*(\d+)', case.input_text, re.IGNORECASE))
-    user_coverage = len(user_numbers & expected_users) / len(expected_users) if expected_users else 0
+    user_numbers = set(re.findall(r"user\s*(\d+)", out, re.IGNORECASE))
+    expected_users = set(re.findall(r"user\s*(\d+)", case.input_text, re.IGNORECASE))
+    user_coverage = (
+        len(user_numbers & expected_users) / len(expected_users) if expected_users else 0
+    )
     mention_score = user_coverage * 30
 
-    inp_details = set(re.findall(r'\d{1,2}:\d{2}', case.input_text))
-    inp_users = set(re.findall(r'user\s*(\d+)', case.input_text, re.IGNORECASE))
-    out_ts = set(re.findall(r'\d{1,2}:\d{2}', out))
-    out_users = set(re.findall(r'user\s*(\d+)', out, re.IGNORECASE))
+    inp_details = set(re.findall(r"\d{1,2}:\d{2}", case.input_text))
+    inp_users = set(re.findall(r"user\s*(\d+)", case.input_text, re.IGNORECASE))
+    out_ts = set(re.findall(r"\d{1,2}:\d{2}", out))
+    out_users = set(re.findall(r"user\s*(\d+)", out, re.IGNORECASE))
     inp_total = len(inp_details) + len(inp_users)
     out_total = len(out_ts & inp_details) + len(out_users & inp_users)
     detail_ratio = out_total / inp_total if inp_total else 0
@@ -388,9 +426,8 @@ def _score_file_accuracy(output: str, case: TestCase) -> Score:
         ref_path = ref_item["path"]
         ref_desc = ref_item["desc"]
         match = next(
-            (item for item in data if isinstance(item, dict)
-             and item.get("path", "") == ref_path),
-            None
+            (item for item in data if isinstance(item, dict) and item.get("path", "") == ref_path),
+            None,
         )
         if match is None:
             failures.append(f"'{ref_path}' not found")
@@ -401,8 +438,8 @@ def _score_file_accuracy(output: str, case: TestCase) -> Score:
             failures.append(f"'{ref_path}' has no description")
             continue
 
-        ref_tokens = set(re.findall(r'[a-z]+', _lower(ref_desc)))
-        out_tokens = set(re.findall(r'[a-z]+', _lower(out_desc)))
+        ref_tokens = set(re.findall(r"[a-z]+", _lower(ref_desc)))
+        out_tokens = set(re.findall(r"[a-z]+", _lower(out_desc)))
         if len(ref_tokens) == 0:
             continue
 
@@ -447,8 +484,7 @@ def _score_file_format(output: str, case: TestCase) -> Score:
     if len(data) == 0:
         return Score("Format", 30, 0.30, failures=["empty array"])
 
-    valid = sum(1 for item in data if isinstance(item, dict)
-                and "path" in item and "desc" in item)
+    valid = sum(1 for item in data if isinstance(item, dict) and "path" in item and "desc" in item)
     ratio = valid / len(data)
     score = ratio * 100
 
@@ -459,7 +495,7 @@ def _score_file_format(output: str, case: TestCase) -> Score:
 
 
 # Registry snapshot — built after all decorators fire
-import lib.quality_weekend_scorers as _  # side-effect: registers weekend scorers
+
 TASK_SCORERS: Dict[str, List[Callable]] = _scorer_registry
 
 
@@ -468,7 +504,9 @@ def score_output(output: str, task: str, case: TestCase) -> ScoreCard:
 
     if not out:
         return ScoreCard(
-            model="", task=task, case_id=case.description,
+            model="",
+            task=task,
+            case_id=case.description,
             dimensions=[],
             output=output,
         )
@@ -476,10 +514,14 @@ def score_output(output: str, task: str, case: TestCase) -> ScoreCard:
     if task == "filename":
         if _lower(out) in GENERIC_FILENAMES:
             return ScoreCard(
-                model="", task=task, case_id=case.description,
-                dimensions=[Score("Relevance", 0, 0.40, failures=["generic"]),
-                            Score("Format", 0, 0.35, failures=["generic"]),
-                            Score("Conciseness", 0, 0.25, failures=["generic"])],
+                model="",
+                task=task,
+                case_id=case.description,
+                dimensions=[
+                    Score("Relevance", 0, 0.40, failures=["generic"]),
+                    Score("Format", 0, 0.35, failures=["generic"]),
+                    Score("Conciseness", 0, 0.25, failures=["generic"]),
+                ],
                 output=output,
             )
 

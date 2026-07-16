@@ -4,10 +4,12 @@ Helper utilities for image processing and filename generation.
 
 import re
 from pathlib import Path
-from lib.tui import FAIL
 from typing import Optional
-from lib.config_toml import load_config
+
 from PIL import Image
+
+from lib.config_toml import load_config
+from lib.tui import FAIL
 
 # Load tesseract path from rename config, fall back to Homebrew default
 _RENAME_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "rename.toml"
@@ -16,13 +18,35 @@ _TESSERACT_BREW = _RENAME_CFG.get("tesseract_cmd", "/opt/homebrew/bin/tesseract"
 _TESSERACT_INIT = False
 
 # Generic LLM outputs that should be rejected (not real filenames)
-_GENERIC_BASES = frozenset({
-    "text", "file", "image", "unnamed", "output", "filename",
-    "none", "screenshot", "document", "note", "empty", "blank",
-})
-_GENERIC_EXTENSIONS = frozenset({
-    "txt", "png", "jpg", "jpeg", "gif", "bmp", "tiff", "tif", "webp",
-})
+_GENERIC_BASES = frozenset(
+    {
+        "text",
+        "file",
+        "image",
+        "unnamed",
+        "output",
+        "filename",
+        "none",
+        "screenshot",
+        "document",
+        "note",
+        "empty",
+        "blank",
+    }
+)
+_GENERIC_EXTENSIONS = frozenset(
+    {
+        "txt",
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "bmp",
+        "tiff",
+        "tif",
+        "webp",
+    }
+)
 _GENERIC_NAMES = _GENERIC_BASES | frozenset(
     f"{base}_{ext}" for base in _GENERIC_BASES for ext in _GENERIC_EXTENSIONS
 )
@@ -53,6 +77,7 @@ def _get_tesseract():
         _TESSERACT_INIT = True
     else:
         import sys
+
         pytesseract = sys.modules.get("pytesseract")
     return pytesseract
 
@@ -116,7 +141,7 @@ def is_non_human_readable(text: str) -> bool:
     if len(text) < 3:
         return True
 
-    if re.match(r'^HF[A-Za-z0-9]{7,}$', text) or re.match(r'^HH[A-Za-z0-9]{7,}$', text):
+    if re.match(r"^HF[A-Za-z0-9]{7,}$", text) or re.match(r"^HH[A-Za-z0-9]{7,}$", text):
         return True
 
     if text.startswith("@") and "_" not in text and len(text) > 1:
@@ -136,5 +161,8 @@ def _strip_instruction_prefix(content: str) -> str:
     return re.sub(
         r"^\s*(?:(?:here(?: is|'s)?(?: a| the)?|the|suggested|renamed? to)?\s*"
         r"(?:filename|file|name|output|result|response)?(?:\s+is)?\s*:\s*)",
-        '', content, count=1, flags=re.IGNORECASE
+        "",
+        content,
+        count=1,
+        flags=re.IGNORECASE,
     ).strip()

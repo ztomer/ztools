@@ -2,6 +2,7 @@
 Signal handling utilities for CLI scripts.
 Provides graceful Ctrl+C / SIGTERM handling with cleanup callbacks.
 """
+
 import signal
 import sys
 import threading
@@ -50,15 +51,15 @@ def is_shutdown_requested() -> bool:
 
 class GracefulShutdown:
     """Context manager for graceful shutdown with auto-registration."""
-    
+
     def __init__(self, cleanup_fn: Callable = None):
         self.cleanup_fn = cleanup_fn
-    
+
     def __enter__(self):
         if self.cleanup_fn:
             register_cleanup(self.cleanup_fn)
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.cleanup_fn:
             try:

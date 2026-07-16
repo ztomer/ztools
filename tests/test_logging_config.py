@@ -1,12 +1,12 @@
 """Tests for lib.logging_config."""
+
 import logging
-import pytest
-from pathlib import Path
 
 
 class TestGetLogger:
     def test_basic_logger(self):
         from lib.logging_config import get_logger
+
         # Reset cache
         log = logging.getLogger("test_basic")
         log.handlers = []
@@ -17,6 +17,7 @@ class TestGetLogger:
 
     def test_logger_with_debug_level(self):
         from lib.logging_config import get_logger
+
         log = logging.getLogger("test_debug")
         log.handlers = []
         result = get_logger("test_debug", level="DEBUG")
@@ -24,6 +25,7 @@ class TestGetLogger:
 
     def test_logger_with_warning_level(self):
         from lib.logging_config import get_logger
+
         log = logging.getLogger("test_warning")
         log.handlers = []
         result = get_logger("test_warning", level="WARNING")
@@ -31,6 +33,7 @@ class TestGetLogger:
 
     def test_logger_with_error_level(self):
         from lib.logging_config import get_logger
+
         log = logging.getLogger("test_error")
         log.handlers = []
         result = get_logger("test_error", level="ERROR")
@@ -38,6 +41,7 @@ class TestGetLogger:
 
     def test_logger_with_critical_level(self):
         from lib.logging_config import get_logger
+
         log = logging.getLogger("test_critical")
         log.handlers = []
         result = get_logger("test_critical", level="CRITICAL")
@@ -45,6 +49,7 @@ class TestGetLogger:
 
     def test_logger_invalid_level(self):
         from lib.logging_config import get_logger
+
         log = logging.getLogger("test_invalid_level")
         log.handlers = []
         result = get_logger("test_invalid_level", level="BOGUS")
@@ -53,6 +58,7 @@ class TestGetLogger:
 
     def test_logger_cached(self):
         from lib.logging_config import get_logger
+
         log = logging.getLogger("test_cached")
         log.handlers = []
         first = get_logger("test_cached")
@@ -62,6 +68,7 @@ class TestGetLogger:
 
     def test_logger_with_file(self, tmp_path):
         from lib.logging_config import get_logger
+
         log = logging.getLogger("test_file")
         log.handlers = []
         log_file = tmp_path / "test.log"
@@ -70,6 +77,7 @@ class TestGetLogger:
 
     def test_logger_without_console(self):
         from lib.logging_config import get_logger
+
         log = logging.getLogger("test_no_console")
         log.handlers = []
         result = get_logger("test_no_console", console_output=False)
@@ -79,6 +87,7 @@ class TestGetLogger:
 
     def test_logger_propagate_false(self):
         from lib.logging_config import get_logger
+
         log = logging.getLogger("test_propagate")
         log.handlers = []
         result = get_logger("test_propagate")
@@ -86,6 +95,7 @@ class TestGetLogger:
 
     def test_logger_writes_to_file(self, tmp_path):
         from lib.logging_config import get_logger
+
         log = logging.getLogger("test_write")
         log.handlers = []
         log_file = tmp_path / "writes.log"
@@ -100,26 +110,31 @@ class TestGetLogger:
 class TestModuleLevel:
     def test_lib_logger(self):
         from lib.logging_config import lib_logger
+
         assert lib_logger is not None
         assert lib_logger.name == "lib"
 
     def test_osaurus_logger(self):
         from lib.logging_config import osaurus_logger
+
         assert osaurus_logger is not None
         assert osaurus_logger.name == "lib.osaurus"
 
     def test_mlx_logger(self):
         from lib.logging_config import mlx_logger
+
         assert mlx_logger is not None
         assert mlx_logger.name == "lib.mlx"
 
     def test_validators_logger(self):
         from lib.logging_config import validators_logger
+
         assert validators_logger is not None
         assert validators_logger.name == "lib.validators"
 
     def test_content_logger(self):
         from lib.logging_config import content_logger
+
         assert content_logger is not None
         assert content_logger.name == "lib.content"
 
@@ -127,6 +142,7 @@ class TestModuleLevel:
 class TestConstants:
     def test_log_levels_keys(self):
         from lib.logging_config import LOG_LEVELS
+
         assert "DEBUG" in LOG_LEVELS
         assert "INFO" in LOG_LEVELS
         assert "WARNING" in LOG_LEVELS
@@ -135,9 +151,11 @@ class TestConstants:
 
     def test_log_format(self):
         from lib.logging_config import LOG_FORMAT
+
         assert "%(asctime)s" in LOG_FORMAT
         assert "%(levelname)s" in LOG_FORMAT
 
     def test_date_format(self):
         from lib.logging_config import DATE_FORMAT
+
         assert "%Y" in DATE_FORMAT

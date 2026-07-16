@@ -11,34 +11,34 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
+from lib.config import get_best_models
+from lib.osaurus_lib import check_llm_availability
+from lib.signal_handling import setup_signals
+from lib.tui import FAIL, STEP
 from rename.helpers import (
-    clean_filename,
-    extract_first_line,
-    extract_full_text,
-    is_meaningful_text,
-    is_non_human_readable,
-    _strip_instruction_prefix,
     _GENERIC_BASES,
     _GENERIC_EXTENSIONS,
     _GENERIC_NAMES,
+    _strip_instruction_prefix,
+    clean_filename,
+    extract_first_line,
+    extract_full_text,
     image_extensions,
+    is_meaningful_text,
+    is_non_human_readable,
 )
 from rename.llm import (
+    FILENAME_MODELS,
+    PROMPT_IMAGE_TO_FILENAME,
+    PROMPT_TEXT_TO_FILENAME,
+    RELEVANCE_CHECK_PROMPT,
     ensure_llm_running,
     is_relevant_with_llm,
     query_llm_for_filename,
     query_vlm_for_filename,
-    FILENAME_MODELS,
-    RELEVANCE_CHECK_PROMPT,
-    PROMPT_TEXT_TO_FILENAME,
-    PROMPT_IMAGE_TO_FILENAME,
 )
-from lib.config import get_best_models
-from lib.osaurus_lib import check_llm_availability
-from lib.tui import STEP, FAIL
-from lib.signal_handling import setup_signals
 
 __all__ = [
     "ensure_llm_running",
@@ -71,12 +71,27 @@ def parse_args() -> argparse.Namespace:
     )
 
     parser.add_argument("directory", nargs="?", default="", help="Directory containing images")
-    parser.add_argument("--dry-run", "-n", action="store_true", help="Show changes without renaming")
+    parser.add_argument(
+        "--dry-run", "-n", action="store_true", help="Show changes without renaming (default: on)"
+    )
+    parser.add_argument(
+        "--apply", action="store_true", help="Actually rename files (default is dry-run/preview)"
+    )
     parser.add_argument("--force", "-f", action="store_true", help="Check relevance before rename")
     parser.add_argument("--pattern", "-p", default="*", help="File pattern")
     parser.add_argument("--max-length", "-m", type=int, default=50, help="Max filename length")
-    parser.add_argument("--llm-host", default=os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337"), help="LLM server URL")
-    parser.add_argument("--llm-model", default=FILENAME_MODELS[0] if FILENAME_MODELS else os.environ.get("RENAME_DEFAULT_FILENAME_MODEL", "foundation"), help="LLM model")
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337"),
+        help="LLM server URL",
+    )
+    parser.add_argument(
+        "--model",
+        default=FILENAME_MODELS[0]
+        if FILENAME_MODELS
+        else os.environ.get("RENAME_DEFAULT_FILENAME_MODEL", "foundation"),
+        help="LLM model",
+    )
     parser.add_argument("--vlm-model", default="", help="VLM model to use when no text is found")
     parser.add_argument("--api-key", default="", help="Bearer token for LLM API")
     parser.add_argument("--test", action="store_true", help="Test connection")
@@ -179,13 +194,13 @@ def main():
 
     directory = directory.resolve()
 
-    active_llm_host = args.llm_host
-    active_model = args.llm_model
+    active_llm_host = args.host
+    active_model = args.model
 
-    if not check_llm_availability(args.llm_host, api_key=args.api_key):
-        print(f"{FAIL} LLM server not responding")
-        print("  Use --llm-host to specify a different server")
-        sys.exit(1)
+    if not check_llm_availability(args.host, api_key=args.api_key):
+        from lib.osaurus_server import check_server_or_die
+
+        check_server_or_die(args.host)
 
     print(f"{STEP} {active_model}")
     image_files = []
@@ -203,8 +218,9 @@ def main():
         sys.exit(0)
 
     print(f"{STEP} {len(image_files)} images")
-    if args.dry_run:
-        print(f"{STEP} Dry run")
+    dry_run = not args.apply
+    if dry_run:
+        print(f"{STEP} Dry run (preview only — pass --apply to rename)")
 
     active_vlm_model = args.vlm_model
     if not active_vlm_model:
@@ -215,7 +231,7 @@ def main():
     for image_path in sorted(image_files):
         success, message = rename_image(
             image_path,
-            dry_run=args.dry_run,
+            dry_run=dry_run,
             force=args.force,
             llm_host=active_llm_host,
             llm_model=active_model,
@@ -232,6 +248,8 @@ def main():
             stats["errors"] += 1
             print(message)
 
-    print(f"{STEP} {stats['renamed']} renamed, {stats['skipped']} skipped, {stats['errors']} errors")
-    if args.dry_run and stats["renamed"] > 0:
-        print("  Run without --dry-run to rename")
+    print(
+        f"{STEP} {stats['renamed']} renamed, {stats['skipped']} skipped, {stats['errors']} errors"
+    )
+    if dry_run and stats["renamed"] > 0:
+        print("  Preview only. Pass --apply to rename for real.")

@@ -10,12 +10,13 @@ import time
 from datetime import datetime, timezone
 
 try:
-    from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+    from playwright.sync_api import TimeoutError as PWTimeout
+    from playwright.sync_api import sync_playwright
 except Exception:
     sync_playwright = PWTimeout = None
 
-from twitter.cookies import get_chrome_cookies
 from lib.tui import STEP, WARN
+from twitter.cookies import get_chrome_cookies
 
 MAX_SCROLLS = int(os.environ.get("TWITTER_MAX_SCROLLS", "1200"))
 SCROLL_PAUSE_MS = int(os.environ.get("TWITTER_SCROLL_PAUSE_MS", "1800"))
@@ -63,25 +64,18 @@ def parse_tweets_from_response(data: dict) -> list[dict]:
                 item_content = content.get("itemContent", {})
                 if item_content.get("itemType") != TWITTER_ITEM_TIMELINE_TWEET:
                     continue
-                tweet_result = item_content.get(
-                    "tweet_results", {}).get("result", {})
+                tweet_result = item_content.get("tweet_results", {}).get("result", {})
                 if tweet_result.get("__typename") == TWITTER_TYPENAME_VISIBILITY:
                     tweet_result = tweet_result.get("tweet", tweet_result)
 
                 legacy = tweet_result.get("legacy", {})
-                user_result = (
-                    tweet_result.get("core", {})
-                    .get("user_results", {})
-                    .get("result", {})
-                )
+                user_result = tweet_result.get("core", {}).get("user_results", {}).get("result", {})
                 user_core = user_result.get("core", {})
                 user_legacy = user_result.get("legacy", {})
                 full_text = legacy.get("full_text", "")
                 created_at_str = legacy.get("created_at", "")
                 screen_name = (
-                    user_core.get("screen_name")
-                    or user_legacy.get("screen_name")
-                    or UNKNOWN_USER
+                    user_core.get("screen_name") or user_legacy.get("screen_name") or UNKNOWN_USER
                 )
                 favorite_count = legacy.get("favorite_count", 0)
                 retweet_count = legacy.get("retweet_count", 0)
@@ -93,9 +87,7 @@ def parse_tweets_from_response(data: dict) -> list[dict]:
                     continue
 
                 try:
-                    created_at = datetime.strptime(
-                        created_at_str, TWITTER_DATE_FORMAT
-                    )
+                    created_at = datetime.strptime(created_at_str, TWITTER_DATE_FORMAT)
                     created_at = created_at.replace(tzinfo=timezone.utc)
                 except ValueError:
                     continue
@@ -156,6 +148,7 @@ def collect_tweets_via_browser(since_time: datetime, debug: bool) -> list[dict]:
             if "Executable doesn't exist" in str(e):
                 print(f"{WARN} Browser binary missing — running playwright install chromium ...")
                 import subprocess
+
                 subprocess.run(["playwright", "install", "chromium"], check=True)
                 browser = pw.chromium.launch(headless=not debug)
             else:
@@ -171,37 +164,51 @@ def collect_tweets_via_browser(since_time: datetime, debug: bool) -> list[dict]:
         page.on("response", handle_response)
 
         try:
-            page.goto(
-                TWITTER_HOME_URL, wait_until="domcontentloaded", timeout=PAGE_LOAD_TIMEOUT_MS
-            )
+            page.goto(TWITTER_HOME_URL, wait_until="domcontentloaded", timeout=PAGE_LOAD_TIMEOUT_MS)
         except PWTimeout:
             pass
 
         time.sleep(INITIAL_PAGE_WAIT)
-        if any(
-            kw in page.title().lower()
-            for kw in LOGIN_KEYWORDS
-        ):
+        is_login_page = any(kw in page.title().lower() for kw in LOGIN_KEYWORDS) or any(
+            kw in page.url.lower() for kw in ("/login", "/signin", "/i/flow/login")
+        )
+        if is_login_page:
             print(
                 f"{WARN} Not logged in — cookies may be stale. Log into x.com in Chrome and retry."
             )
             sys.exit(EXIT_ERROR)
 
         try:
-            following_tab = page.locator(
-                '[role="tab"]', has_text="Following").first
-            following_tab.click(timeout=CLICK_TIMEOUT_MS)
-            time.sleep(TAB_SWITCH_WAIT)
-        except Exception:
-            pass
+            localized_following = (
+                "Following", "Abonnements", "Siguiendo", "Sigo", "Gefolgt", "关注", "フォロー中"
+            )
+            following_tab = None
+            for term in localized_following:
+                loc = page.locator('[role="tab"]', has_text=term).first
+                if loc.count() > 0:
+                    following_tab = loc
+                    break
+            
+            if following_tab is None:
+                tabs = page.locator('[role="tab"]')
+                if tabs.count() > 1:
+                    following_tab = tabs.nth(1)
 
-        print(
-            f"{STEP} Scrolling timeline (collecting tweets since {since_time.isoformat()}) ..."
-        )
+            if following_tab:
+                following_tab.click(timeout=CLICK_TIMEOUT_MS)
+                time.sleep(TAB_SWITCH_WAIT)
+            else:
+                print(f"{WARN} Could not locate 'Following' tab (defaulting to current view).", file=sys.stderr)
+        except Exception as e:
+            print(f"{WARN} Failed to switch to 'Following' tab: {e}. Defaulting to current view.", file=sys.stderr)
+
+        print(f"{STEP} Scrolling timeline (collecting tweets since {since_time.isoformat()}) ...")
         scrolls = 0
         try:
             while scrolls < MAX_SCROLLS:
-                page.evaluate(f"window.scrollBy(0, window.innerHeight * {SCROLL_INNER_HEIGHT_MULTIPLIER})")
+                page.evaluate(
+                    f"window.scrollBy(0, window.innerHeight * {SCROLL_INNER_HEIGHT_MULTIPLIER})"
+                )
                 time.sleep(SCROLL_PAUSE_MS / MS_PER_SECOND)
                 scrolls += 1
                 if oldest_seen and oldest_seen < since_time:

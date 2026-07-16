@@ -4,34 +4,49 @@ Osaurus Library - Generic LLM utilities.
 Shim that re-exports from sub-modules.
 """
 
-import re
 import json
+import re
 import time
-import requests
-from typing import Any, Optional, List, Dict
+from typing import Any, Dict, List, Optional
 
-from .content_processing import remove_thinking_blocks
-from .logging_config import osaurus_logger as logger
-from .config import get_timeout, get_max_tokens_for_task
+import requests
 
 from lib.llm.quirks import apply_model_quirks
 
+from .config import get_max_tokens_for_task, get_timeout
+from .content_processing import remove_thinking_blocks
+from .logging_config import osaurus_logger as logger
 from .osaurus_models import (
-    DEFAULT_HOST, DEFAULT_PORT,
-    get_api_url, get_base_url, get_models, is_server_running,
-    check_llm_availability, get_available_models,
-    get_best_model, select_best_vlm_model, select_best_model,
+    DEFAULT_HOST,
+    DEFAULT_PORT,
+    check_llm_availability,
+    get_api_url,
+    get_available_models,
+    get_base_url,
+    get_best_model,
+    get_models,
+    is_server_running,
+    select_best_model,
+    select_best_vlm_model,
 )
-
-from .osaurus_server import (
-    restart_server, ensure_server, test_connection, panic_dump,
-)
-
 from .osaurus_output import (
-    clean_output, extract_json, normalize_keys, merge_flat_dicts,
-    filter_json_items, fix_json_years, normalize_text_output,
-    _extract_json_only, _extract_plain_list,
-    TOP_LEVEL_KEYS, KEY_NORMALIZATIONS,
+    KEY_NORMALIZATIONS,
+    TOP_LEVEL_KEYS,
+    _extract_json_only,
+    _extract_plain_list,
+    clean_output,
+    extract_json,
+    filter_json_items,
+    fix_json_years,
+    merge_flat_dicts,
+    normalize_keys,
+    normalize_text_output,
+)
+from .osaurus_server import (
+    ensure_server,
+    panic_dump,
+    restart_server,
+    test_connection,
 )
 
 # Default parameter values
@@ -43,13 +58,14 @@ ERROR_TRUNCATE_LEN = 200
 
 class SessionContext:
     """Helper to reuse connection pool in with blocks without closing it (Carmack optimization)"""
+
     def __init__(self, session, close_on_exit=False):
         self.session = session
         self.close_on_exit = close_on_exit
-        
+
     def __enter__(self):
         return self.session
-        
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.close_on_exit:
             self.session.close()
@@ -61,7 +77,10 @@ _session = None
 
 def _get_session_context():
     global _session
-    if hasattr(requests.Session, "mock_add_spec") or type(requests.Session).__name__ in ("Mock", "MagicMock"):
+    if hasattr(requests.Session, "mock_add_spec") or type(requests.Session).__name__ in (
+        "Mock",
+        "MagicMock",
+    ):
         return requests.Session()
     if _session is None:
         _session = requests.Session()
@@ -69,44 +88,85 @@ def _get_session_context():
 
 
 __all__ = [
-    "DEFAULT_HOST", "DEFAULT_PORT",
-    "DEFAULT_TEMPERATURE", "DEFAULT_MAX_TOKENS", "DEFAULT_TIMEOUT", "ERROR_TRUNCATE_LEN",
-    "get_api_url", "get_base_url", "get_models", "is_server_running",
-    "check_llm_availability", "get_available_models",
-    "get_best_model", "select_best_vlm_model", "select_best_model",
-    "restart_server", "ensure_server", "test_connection", "panic_dump",
-    "clean_output", "extract_json", "normalize_keys", "merge_flat_dicts",
-    "filter_json_items", "fix_json_years", "normalize_text_output",
-    "_extract_json_only", "_extract_plain_list",
-    "TOP_LEVEL_KEYS", "KEY_NORMALIZATIONS",
-    "apply_model_quirks", "PROMPTS", "call", "call_with_prompt",
-    "test_model", "call_llm_api", "extract_thinking",
-    "merge_thinking_with_summary", "strip_thinking",
+    "DEFAULT_HOST",
+    "DEFAULT_PORT",
+    "DEFAULT_TEMPERATURE",
+    "DEFAULT_MAX_TOKENS",
+    "DEFAULT_TIMEOUT",
+    "ERROR_TRUNCATE_LEN",
+    "get_api_url",
+    "get_base_url",
+    "get_models",
+    "is_server_running",
+    "check_llm_availability",
+    "get_available_models",
+    "get_best_model",
+    "select_best_vlm_model",
+    "select_best_model",
+    "restart_server",
+    "ensure_server",
+    "test_connection",
+    "panic_dump",
+    "clean_output",
+    "extract_json",
+    "normalize_keys",
+    "merge_flat_dicts",
+    "filter_json_items",
+    "fix_json_years",
+    "normalize_text_output",
+    "_extract_json_only",
+    "_extract_plain_list",
+    "TOP_LEVEL_KEYS",
+    "KEY_NORMALIZATIONS",
+    "apply_model_quirks",
+    "PROMPTS",
+    "call",
+    "call_with_prompt",
+    "test_model",
+    "call_llm_api",
+    "extract_thinking",
+    "merge_thinking_with_summary",
+    "strip_thinking",
 ]
 
 
 PROMPTS = {
     "think": {
         "messages": [
-            {"role": "system", "content": "Think step by step if needed. Then provide your answer."},
+            {
+                "role": "system",
+                "content": "Think step by step if needed. Then provide your answer.",
+            },
             {"role": "user", "content": "{prompt}"},
         ]
     },
     "json": {
         "messages": [
-            {"role": "system", "content": "Output ONLY valid JSON. Start with { or [. No markdown, no explanations."},
+            {
+                "role": "system",
+                "content": (
+                    "Output ONLY valid JSON. Start with { or [. "
+                    "No markdown, no explanations."
+                ),
+            },
             {"role": "user", "content": "{prompt}"},
         ]
     },
     "summarize": {
         "messages": [
-            {"role": "system", "content": "Output headers with ## and key facts. No thinking, no markdown."},
+            {
+                "role": "system",
+                "content": "Output headers with ## and key facts. No thinking, no markdown.",
+            },
             {"role": "user", "content": "{prompt}"},
         ]
     },
     "filename": {
         "messages": [
-            {"role": "system", "content": "Output ONLY a short filename. No explanations. Under 50 chars."},
+            {
+                "role": "system",
+                "content": "Output ONLY a short filename. No explanations. Under 50 chars.",
+            },
             {"role": "user", "content": "{prompt}"},
         ]
     },
@@ -123,6 +183,7 @@ def call(
     timeout: Optional[int] = None,
     task: str = "think",
     parse_json: bool = False,
+    use_foundation: Optional[bool] = None,
 ) -> dict:
     logger.debug(f"Calling {model} for task '{task}' at {host}:{port}")
     messages = apply_model_quirks(messages, model)
@@ -138,12 +199,19 @@ def call(
         payload["response_format"] = {"type": "json_object"}
     result = {"model": model, "time": None, "content": None, "parsed": None, "error": None}
     start = time.time()
+
+    # Forced Foundation mode: use the on-device model and skip the server.
+    if use_foundation is True:
+        _try_foundation(True, messages, parse_json, result)
+        return result
+
     try:
         timeout = timeout or get_timeout(task)
         logger.debug(f"Sending request with {len(messages)} messages, timeout={timeout}s")
         with _get_session_context() as s:
             resp = s.post(
-                url, json=payload,
+                url,
+                json=payload,
                 headers={"Content-Type": "application/json"},
                 timeout=timeout,
             )
@@ -172,8 +240,10 @@ def call(
         result["error"] = "Timeout"
         logger.warning(f"Request timed out after {timeout}s")
     except requests.exceptions.ConnectionError:
-        result["error"] = "Connection failed - is server running?"
         logger.warning(f"Connection error to {url}")
+        if _try_foundation(use_foundation, messages, parse_json, result):
+            return result
+        result["error"] = "Connection failed - is server running?"
     except json.JSONDecodeError as e:
         result["error"] = f"Invalid JSON response: {e}"
         logger.error(f"JSON decode error: {e}")
@@ -184,6 +254,40 @@ def call(
         result["error"] = f"Error: {type(e).__name__}: {e}"
         logger.exception(f"Unexpected error: {e}")
     return result
+
+
+def _try_foundation(
+    use_foundation: Optional[bool], messages, parse_json: bool, result: dict
+) -> bool:
+    """Attempt the on-device Foundation Models fallback.
+
+    use_foundation: True = force, False = never, None = only if available.
+    On success, fills ``result`` and returns True.
+    """
+    if use_foundation is False:
+        return False
+    try:
+        from lib.foundation_lib import call_foundation, foundation_available
+    except Exception:
+        return False
+    if not foundation_available():
+        return False
+    system = next((m["content"] for m in messages if m.get("role") == "system"), "")
+    user = next((m["content"] for m in messages if m.get("role") == "user"), "")
+    try:
+        raw = call_foundation(system, user, parse_json=parse_json)
+    except Exception as e:
+        logger.warning(f"Foundation fallback failed: {e}")
+        return False
+    if not raw:
+        return False
+    result["content"] = raw
+    result["model"] = "foundation"
+    result["foundation"] = True
+    if parse_json:
+        result["parsed"] = extract_json(raw)
+    logger.info("Served by on-device Foundation Models")
+    return True
 
 
 def call_with_prompt(
@@ -207,25 +311,46 @@ def call_with_prompt(
     else:
         messages = [{"role": "user", "content": prompt}]
     parse_json = task in ("json", "detailed_json")
-    return call(model, messages, host, port, temperature, max_tokens, timeout=get_timeout(task), parse_json=parse_json)
+    return call(
+        model,
+        messages,
+        host,
+        port,
+        temperature,
+        max_tokens,
+        timeout=get_timeout(task),
+        parse_json=parse_json,
+    )
 
 
-def test_model(model: str, prompt: str = "Hello", task: str = "think", host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> dict:
+def test_model(
+    model: str,
+    prompt: str = "Hello",
+    task: str = "think",
+    host: str = DEFAULT_HOST,
+    port: int = DEFAULT_PORT,
+) -> dict:
     return call_with_prompt(model, prompt, task, host, port)
 
 
 def call_llm_api(
-    host: str, model: str, messages: List[dict],
-    api_key: str = "",     temperature: float = DEFAULT_TEMPERATURE,
-    max_tokens: int = DEFAULT_MAX_TOKENS, timeout: int = DEFAULT_TIMEOUT,
+    host: str,
+    model: str,
+    messages: List[dict],
+    api_key: str = "",
+    temperature: float = DEFAULT_TEMPERATURE,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+    timeout: int = DEFAULT_TIMEOUT,
     parse_json: bool = False,
 ) -> dict:
     headers = {"Content-Type": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     payload = {
-        "model": model, "messages": messages,
-        "temperature": temperature, "max_tokens": max_tokens,
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
     }
     if parse_json:
         payload["response_format"] = {"type": "json_object"}

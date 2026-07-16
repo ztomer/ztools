@@ -1,12 +1,11 @@
-import pytest
 
 from eval.report import (
-    compute_score_stats,
     categorize_failures,
+    compute_error_rates,
+    compute_score_stats,
+    compute_task_winners,
     compute_token_estimates,
     compute_verbosity,
-    compute_error_rates,
-    compute_task_winners,
 )
 
 
@@ -40,11 +39,14 @@ class TestComputeScoreStats:
         assert stats["model_a"]["count"] == 1
 
     def test_multiple_scores(self):
-        r = {"model": "m1", "results": [
-            {"quality_score": 80, "task": "t1"},
-            {"quality_score": 90, "task": "t2"},
-            {"quality_score": 100, "task": "t3"},
-        ]}
+        r = {
+            "model": "m1",
+            "results": [
+                {"quality_score": 80, "task": "t1"},
+                {"quality_score": 90, "task": "t2"},
+                {"quality_score": 100, "task": "t3"},
+            ],
+        }
         stats = compute_score_stats([r])
         assert stats["m1"]["mean"] == 90.0
         assert stats["m1"]["median"] == 90.0
@@ -115,10 +117,12 @@ class TestComputeTokenEstimates:
         assert est["total"] == 25
 
     def test_input_and_output(self):
-        results = [{
-            "content": "a" * 100,
-            "messages": [{"content": "b" * 200}],
-        }]
+        results = [
+            {
+                "content": "a" * 100,
+                "messages": [{"content": "b" * 200}],
+            }
+        ]
         est = compute_token_estimates(results)
         assert est["output"] == 25
         assert est["input"] == 50
@@ -153,10 +157,13 @@ class TestComputeVerbosity:
         assert verb["m1"]["t1"] == 0
 
     def test_multiple_tasks(self):
-        r = {"model": "m1", "results": [
-            {"task": "t1", "result": {"content": "abc"}},
-            {"task": "t2", "result": {"content": "abcdef"}},
-        ]}
+        r = {
+            "model": "m1",
+            "results": [
+                {"task": "t1", "result": {"content": "abc"}},
+                {"task": "t2", "result": {"content": "abcdef"}},
+            ],
+        }
         verb = compute_verbosity([r])
         assert verb["m1"]["t1"] == 3
         assert verb["m1"]["t2"] == 6
@@ -184,16 +191,22 @@ class TestComputeErrorRates:
         assert rates["m1"]["success"] == 0
 
     def test_mixed_results(self):
-        r = {"model": "m1", "results": [
-            {"quality_score": 100, "failure_category": None, "error": None},
-            {"quality_score": 0, "failure_category": "INFRA", "error": "err"},
-            {"quality_score": 30, "failure_category": "FORMAT", "error": None},
-        ]}
+        r = {
+            "model": "m1",
+            "results": [
+                {"quality_score": 100, "failure_category": None, "error": None},
+                {"quality_score": 0, "failure_category": "INFRA", "error": "err"},
+                {"quality_score": 30, "failure_category": "FORMAT", "error": None},
+            ],
+        }
         rates = compute_error_rates([r])
         assert rates["m1"]["success"] == 1
         assert rates["m1"]["infra"] == 1
         assert rates["m1"]["quality"] == 1
-        assert rates["m1"]["success_rate"] + rates["m1"]["infra_rate"] + rates["m1"]["quality_rate"] == 1.0
+        assert (
+            rates["m1"]["success_rate"] + rates["m1"]["infra_rate"] + rates["m1"]["quality_rate"]
+            == 1.0
+        )
 
 
 class TestComputeTaskWinners:

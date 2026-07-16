@@ -1,21 +1,53 @@
 import re
-import json
-from typing import List, Tuple, Any, Dict
+from typing import Any, Dict, List, Tuple
 
 from lib.validators.constants import (
-    MAX_SCORE, JSON_ITEMS_WEIGHT, JSON_SCHEMA_WEIGHT,
-    JSON_COMPLETENESS_WEIGHT, JSON_QUALITY_WEIGHT,
-    MIN_ITEMS_GOOD, MIN_ITEMS_OK,
-    SOURCE_THRESHOLD_HIGH, SOURCE_THRESHOLD_MED, SOURCE_THRESHOLD_LOW,
-    MAX_SCORE_HIGH_SOURCE, MAX_SCORE_MED_SOURCE, MAX_SCORE_LOW_SOURCE, MAX_SCORE_NO_SOURCE,
     DETAIL_REQUIRED_FIELDS,
+    JSON_QUALITY_WEIGHT,
+    MAX_SCORE,
+    MAX_SCORE_HIGH_SOURCE,
+    MAX_SCORE_LOW_SOURCE,
+    MAX_SCORE_MED_SOURCE,
+    MAX_SCORE_NO_SOURCE,
+    MIN_ITEMS_GOOD,
+    MIN_ITEMS_OK,
+    SOURCE_THRESHOLD_HIGH,
+    SOURCE_THRESHOLD_LOW,
+    SOURCE_THRESHOLD_MED,
 )
 
 STOPWORDS = {
-    "the", "and", "for", "with", "this", "that", "from", "are", "was",
-    "has", "have", "but", "not", "you", "all", "can", "her", "his",
-    "had", "they", "been", "will", "would", "could", "what", "when",
-    "where", "who", "which", "why", "how",
+    "the",
+    "and",
+    "for",
+    "with",
+    "this",
+    "that",
+    "from",
+    "are",
+    "was",
+    "has",
+    "have",
+    "but",
+    "not",
+    "you",
+    "all",
+    "can",
+    "her",
+    "his",
+    "had",
+    "they",
+    "been",
+    "will",
+    "would",
+    "could",
+    "what",
+    "when",
+    "where",
+    "who",
+    "which",
+    "why",
+    "how",
 }
 
 JSON_STRUCTURE_WEIGHT = 20
@@ -37,34 +69,50 @@ DETAIL_PARTIAL_HIGH = DETAILED_QUALITY_WEIGHT * 8 // 10
 DETAIL_PARTIAL_MID = DETAILED_QUALITY_WEIGHT * 5 // 10
 DETAIL_PARTIAL_LOW = DETAILED_QUALITY_WEIGHT * 2 // 10
 
-# Source grounding thresholds for score capping
-SOURCE_THRESHOLD_HIGH = 0.8
-SOURCE_THRESHOLD_MED = 0.5
-SOURCE_THRESHOLD_LOW = 0.3
-
-# Max score caps based on source grounding
-MAX_SCORE_HIGH_SOURCE = 100
-MAX_SCORE_MED_SOURCE = 60
-MAX_SCORE_LOW_SOURCE = 30
-MAX_SCORE_NO_SOURCE = 15
-
 NAME_FIELDS = ["name", "event", "title", "activity", "place"]
 DETAIL_FIELDS = [
-    "name", "event", "title", "activity", "place",
-    "location", "venue", "address", "where",
-    "day", "date", "when", "time", "duration",
-    "target_ages", "age_group", "ages", "audience", "who",
-    "price", "cost", "pricing",
-    "weather", "type", "indoor_outdoor", "setting",
+    "name",
+    "event",
+    "title",
+    "activity",
+    "place",
+    "location",
+    "venue",
+    "address",
+    "where",
+    "day",
+    "date",
+    "when",
+    "time",
+    "duration",
+    "target_ages",
+    "age_group",
+    "ages",
+    "audience",
+    "who",
+    "price",
+    "cost",
+    "pricing",
+    "weather",
+    "type",
+    "indoor_outdoor",
+    "setting",
 ]
 
 
 def extract_list_from_dict(data: Any) -> List[Any]:
     if isinstance(data, dict):
         keys = [
-            "activities", "items", "results", "data",
-            "fixed_activities", "transient_events",
-            "events", "places", "venues", "recommendations",
+            "activities",
+            "items",
+            "results",
+            "data",
+            "fixed_activities",
+            "transient_events",
+            "events",
+            "places",
+            "venues",
+            "recommendations",
         ]
         for key in keys:
             if key in data and isinstance(data[key], list):
@@ -107,28 +155,20 @@ def check_source_extraction(items: List[Any], source_text: str) -> float:
     if not items or not source_text:
         return 0.0
     source_lower = source_text.lower()
-    source_terms = {
-        t for t in source_lower.split()
-        if len(t) >= 3 and t not in STOPWORDS
-    }
+    source_terms = {t for t in source_lower.split() if len(t) >= 3 and t not in STOPWORDS}
     if not source_terms:
         return 0.0
     matches = 0
     for item in items:
         if isinstance(item, dict):
-            item_text = " ".join(
-                str(v).lower() for v in item.values() if v
-            )
+            item_text = " ".join(str(v).lower() for v in item.values() if v)
         elif isinstance(item, str):
             item_text = item.lower()
         else:
             item_text = str(item).lower()
         if not item_text:
             continue
-        item_terms = {
-            t for t in item_text.split()
-            if len(t) >= 3 and t not in STOPWORDS
-        }
+        item_terms = {t for t in item_text.split() if len(t) >= 3 and t not in STOPWORDS}
         common = item_terms & source_terms
         if len(common) >= 2:
             matches += 1
@@ -151,10 +191,7 @@ def get_source_matching_details(items: List[Dict], source_text: str) -> Dict:
     if not items or not source_text:
         return {"matched": [], "unmatched": [], "ratio": 0.0, "source_preview": ""}
     source_lower = source_text.lower()
-    source_terms = {
-        t for t in source_lower.split()
-        if len(t) >= 3 and t not in STOPWORDS
-    }
+    source_terms = {t for t in source_lower.split() if len(t) >= 3 and t not in STOPWORDS}
     if not source_terms:
         return {"matched": [], "unmatched": [], "ratio": 0.0, "source_preview": source_text[:50]}
     matched = []
@@ -171,10 +208,7 @@ def get_source_matching_details(items: List[Dict], source_text: str) -> Dict:
             item_name = str(item)
         if not item_text:
             continue
-        item_terms = {
-            t for t in item_text.split()
-            if len(t) >= 3 and t not in STOPWORDS
-        }
+        item_terms = {t for t in item_text.split() if len(t) >= 3 and t not in STOPWORDS}
         common = item_terms & source_terms
         if len(common) >= 2:
             matched.append(item_name or "unnamed")
@@ -191,7 +225,11 @@ def get_source_matching_details(items: List[Dict], source_text: str) -> Dict:
 def validate_json(data: Any, source_text: str = "") -> Tuple[int, str]:
     if not data:
         return 0, "empty response"
-    items = extract_list_from_dict(data) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+    items = (
+        extract_list_from_dict(data)
+        if isinstance(data, dict)
+        else (data if isinstance(data, list) else [])
+    )
     if not items:
         return 0, "no items found"
     score = 0
@@ -202,9 +240,7 @@ def validate_json(data: Any, source_text: str = "") -> Tuple[int, str]:
     elif len(items) >= MIN_ITEMS_OK:
         score += JSON_COUNT_OK
     else:
-        failures.append(
-            f"only {len(items)} items (need {MIN_ITEMS_GOOD}+)"
-        )
+        failures.append(f"only {len(items)} items (need {MIN_ITEMS_GOOD}+)")
     valid_items = sum(1 for item in items if is_valid_list_item(item))
     if valid_items == len(items):
         score += JSON_VALIDITY_WEIGHT
@@ -227,11 +263,11 @@ def validate_json(data: Any, source_text: str = "") -> Tuple[int, str]:
 
 
 def _norm_name(name: str) -> str:
-    return re.sub(r'[^a-z0-9 ]', '', name.lower()).strip()
+    return re.sub(r"[^a-z0-9 ]", "", name.lower()).strip()
 
 
 def _name_tokens(name: str) -> set:
-    norm = re.sub(r'[^a-z0-9 ]', ' ', name.lower()).split()
+    norm = re.sub(r"[^a-z0-9 ]", " ", name.lower()).split()
     return {t for t in norm if len(t) >= 3 and t not in STOPWORDS}
 
 
@@ -282,7 +318,11 @@ def validate_mixed_signal(
     """Score signal-from-noise filtering via precision (excluded noise) + recall (kept signal)."""
     if not data:
         return 0, "empty response"
-    items = extract_list_from_dict(data) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+    items = (
+        extract_list_from_dict(data)
+        if isinstance(data, dict)
+        else (data if isinstance(data, list) else [])
+    )
     if not items:
         return 0, "no items found"
 
@@ -291,15 +331,14 @@ def validate_mixed_signal(
 
     signal_set = signal_items or []
     noise_set = noise_items or []
-    signal_norm = {_norm_name(s) for s in signal_set}
-    noise_norm = {_norm_name(n) for n in noise_set}
 
-    tp = 0   # output item matched a signal item
-    fp = 0   # output item matched a noise item
+    tp = 0  # output item matched a signal item
+    fp = 0  # output item matched a noise item
     for item in items:
         name = (
             item.get("name", item.get("event", item.get("title", "")))
-            if isinstance(item, dict) else str(item)
+            if isinstance(item, dict)
+            else str(item)
         )
         if not name:
             continue
@@ -313,7 +352,9 @@ def validate_mixed_signal(
     total_signal = len(signal_set)
     total_noise = len(noise_set)
     recall = min(1.0, tp / total_signal) if total_signal else 1.0
-    precision = min(1.0, tp / (tp + fp)) if (tp + fp) else (1.0 if tp == 0 and total_signal == 0 else 0.0)
+    precision = (
+        min(1.0, tp / (tp + fp)) if (tp + fp) else (1.0 if tp == 0 and total_signal == 0 else 0.0)
+    )
 
     score = int(100 * (0.5 * recall + 0.5 * precision))
     failures = []
@@ -334,7 +375,11 @@ REQUIRED_DETAILED_FIELDS = ["name", "location"]
 def validate_detailed_json(data: Any, source_text: str = "") -> Tuple[int, str]:
     if not data:
         return 0, "empty response"
-    items = extract_list_from_dict(data) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+    items = (
+        extract_list_from_dict(data)
+        if isinstance(data, dict)
+        else (data if isinstance(data, list) else [])
+    )
     if not items:
         return 0, "no items found"
     score = 0
@@ -345,9 +390,7 @@ def validate_detailed_json(data: Any, source_text: str = "") -> Tuple[int, str]:
     elif len(items) >= MIN_ITEMS_OK:
         score += DETAILED_COUNT_OK
     else:
-        failures.append(
-            f"only {len(items)} items (need {MIN_ITEMS_GOOD}+)"
-        )
+        failures.append(f"only {len(items)} items (need {MIN_ITEMS_GOOD}+)")
     valid_with_details = 0
     for item in items:
         if isinstance(item, dict) and has_item_details(item):
@@ -361,22 +404,14 @@ def validate_detailed_json(data: Any, source_text: str = "") -> Tuple[int, str]:
     elif valid_with_details == 0:
         failures.append("no items with details")
     else:
-        failures.append(
-            f"only {valid_with_details}/{len(items)} have details"
-        )
-    names = [
-        item.get("name", "")
-        if isinstance(item, dict) else str(item)
-        for item in items
-    ]
+        failures.append(f"only {valid_with_details}/{len(items)} have details")
+    names = [item.get("name", "") if isinstance(item, dict) else str(item) for item in items]
     unique_names = set(n for n in names if n)
     if len(unique_names) < len(names):
         duplicate_ratio = (len(names) - len(unique_names)) / len(names)
         if duplicate_ratio > 0.1:
             score -= int(duplicate_ratio * 20)
-            failures.append(
-                f"duplicates ({int(duplicate_ratio*100)}%)"
-            )
+            failures.append(f"duplicates ({int(duplicate_ratio * 100)}%)")
     else:
         score += JSON_QUALITY_WEIGHT
     source_ratio = 0.0

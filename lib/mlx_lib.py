@@ -4,18 +4,18 @@ MLX Library - Utilities for running MLX models directly.
 Parallel to osaurus_lib for server-based LLM calls.
 """
 
-import os
 import json
+import os
 import subprocess
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
+
+from .content_processing import clean_model_output, extract_content_from_code_blocks
+from .logging_config import mlx_logger as logger
 
 # Get the venv Python with mlx_lm
 # For MLX, use uv run to get the right Python environment
 UV_RUN = ["rtk", "uv", "run", "--with", "mlx", "--with", "mlx-lm"]
-
-from .content_processing import clean_model_output, extract_content_from_code_blocks
-from .logging_config import mlx_logger as logger
 
 # Timeouts for MLX subprocess calls (seconds)
 MLX_GEN_TIMEOUT = 1800
@@ -31,8 +31,7 @@ MLX_DEFAULT_PORT = 1337
 MLX_DEFAULT_TEMPERATURE = 0.1
 
 # MLX models directory
-MLX_MODELS_DIR = Path(os.environ.get(
-    "MLX_MODELS_DIR", Path.home() / "MLXModels"))
+MLX_MODELS_DIR = Path(os.environ.get("MLX_MODELS_DIR", Path.home() / "MLXModels"))
 
 
 # ==========================================================
@@ -107,7 +106,6 @@ def get_mlx_context_length(model_path: Path) -> int:
     if not config_file.exists():
         return DEFAULT_CTX_LENGTH
 
-    import json
 
     with open(config_file) as f:
         config = json.load(f)
@@ -160,35 +158,39 @@ def call_mlx(model_path: Path, prompt: str) -> Optional[str]:
     logger.debug(f"Calling MLX model at {model_path}")
 
     import tempfile
-    import base64
     import uuid
 
     model_path_str = str(model_path)
     model_parent = str(model_path.parent)
 
     # Use temp directory for debugging (no hardcoded paths)
-    import tempfile
+
     debug_dir = Path(tempfile.gettempdir()) / "mlx_debug"
     debug_dir.mkdir(exist_ok=True)
     uid = uuid.uuid4().hex[:8]
     prompt_file = str(debug_dir / f"prompt_{uid}.txt")
     script_path = str(debug_dir / f"script_{uid}.py")
 
-    with open(prompt_file, 'w') as pf:
+    # Escape quotes and backslashes for safe interpolation in python strings
+    model_parent_escaped = model_parent.replace("\\", "\\\\").replace('"', '\\"')
+    model_path_escaped = model_path_str.replace("\\", "\\\\").replace('"', '\\"')
+    prompt_file_escaped = prompt_file.replace("\\", "\\\\").replace('"', '\\"')
+
+    with open(prompt_file, "w") as pf:
         pf.write(prompt)
 
-    with open(script_path, 'w') as sf:
+    with open(script_path, "w") as sf:
         sf.write(f'''
 import os, sys, json, traceback
-os.chdir("{model_parent}")
+os.chdir("{model_parent_escaped}")
 try:
     from mlx_lm import load, stream_generate
-    model, tokenizer = load("{model_path_str}")
+    model, tokenizer = load("{model_path_escaped}")
 except Exception as e:
     print(f"[MLX LOAD ERROR] {{type(e).__name__}}: {{e}}", flush=True)
     sys.exit(1)
 
-with open("{prompt_file}", "r") as f:
+with open("{prompt_file_escaped}", "r") as f:
     prompt = f.read()
 
 # Prepend JSON trigger to avoid thinking
@@ -232,7 +234,10 @@ print(response, flush=True)
                 logger.warning(f"MLX model error: {error_msg}")
                 return None
             else:
-                logger.warning(f"MLX generate failed (rc={result.returncode}): {stderr[:300] if stderr else 'no output'}")
+                logger.warning(
+                    f"MLX generate failed (rc={result.returncode}): "
+                    f"{stderr[:300] if stderr else 'no output'}"
+                )
         except subprocess.TimeoutExpired:
             logger.warning(f"MLX generate timed out after 1800s for {model_path.name}")
         except Exception as e:
@@ -250,8 +255,7 @@ print(response, flush=True)
                     timeout=MLX_FALLBACK_TIMEOUT,
                 )
                 if result.returncode == 0:
-                    logger.info(
-                        f"Fallback successful, got {len(result.stdout)} chars")
+                    logger.info(f"Fallback successful, got {len(result.stdout)} chars")
                     return result.stdout.strip()
             except Exception as e:
                 logger.debug(f"Fallback failed: {e}")
@@ -262,7 +266,7 @@ print(response, flush=True)
                 os.unlink(f)
             except FileNotFoundError:
                 pass
-    
+
     logger.debug(f"All MLX attempts failed for {model_path.name}")
     return None
 
@@ -293,8 +297,7 @@ def run_mlx_vlm(model_path: Path, image_path: Path) -> Optional[str]:
             logger.info(f"VLM call successful, got {len(result.stdout)} chars")
             return result.stdout.strip()
         else:
-            logger.warning(
-                f"VLM command failed with return code {result.returncode}")
+            logger.warning(f"VLM command failed with return code {result.returncode}")
     except subprocess.TimeoutExpired:
         logger.error("VLM call timed out after 180s")
     except Exception as e:
@@ -344,12 +347,13 @@ def call(
     parse_json: bool = False,
 ) -> dict:
     """Call MLX model. Returns dict with content, parsed, time, error.
-    
+
     This is a pure transport/parsing layer. Validation and retry logic
     should be handled by the caller (e.g. model_eval.py).
     """
     import time
-    from .osaurus_lib import extract_json, apply_model_quirks
+
+    from .osaurus_lib import apply_model_quirks, extract_json
 
     # Apply model-specific quirks
     messages = apply_model_quirks(messages, model)
@@ -364,7 +368,9 @@ def call(
 
     model_name_for_lookup = model.split("/")[-1] if "/" in model else model
     logger.debug(f"MLX lookup: original={model}, lookup_name={model_name_for_lookup}")
-    model_path = find_text_mlx_model([model_name_for_lookup]) or find_mlx_model(model_name_for_lookup)
+    model_path = find_text_mlx_model([model_name_for_lookup]) or find_mlx_model(
+        model_name_for_lookup
+    )
     if not model_path:
         result["error"] = f"Model not found: {model}"
         logger.error(f"MLX model not found: {model_name_for_lookup}")
@@ -386,7 +392,7 @@ def call(
 
         if content:
             result["content"] = process_mlx_content(content)
-            
+
             # For JSON tasks: extract and parse JSON from raw content
             if parse_json:
                 result["parsed"] = extract_json(content)
@@ -400,4 +406,3 @@ def call(
         result["error"] = f"Error: {type(e).__name__}: {e}"
 
     return result
-

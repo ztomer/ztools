@@ -7,16 +7,16 @@ Contains the main eval loop, model calling, and validation orchestration.
 import json
 import re
 from pathlib import Path
-from lib.osaurus_lib import call
-from lib.config import Task, get_timeout
-from eval.tasks_core import TASKS, _extract_items_from_text
-from eval.failures import FAIL_INFRA, FAIL_CONTENT, FAIL_NONE, _classify_failure
-from eval.validate import safe_content
-from lib.validators_lib import validate_summary, get_source_matching_details
-from lib.mlx_lib import call as mlx_call
-from lib.logging_config import osaurus_logger as eval_logger
-from lib.tui import STEP, WARN, FAIL, console
 
+from eval.failures import FAIL_CONTENT, FAIL_INFRA, FAIL_NONE, _classify_failure
+from eval.tasks_core import TASKS, _extract_items_from_text
+from eval.validate import safe_content
+from lib.config import Task, get_timeout
+from lib.logging_config import osaurus_logger as eval_logger
+from lib.mlx_lib import call as mlx_call
+from lib.osaurus_lib import call
+from lib.tui import FAIL, STEP, WARN, console
+from lib.validators_lib import get_source_matching_details, validate_summary
 
 MAX_RETRIES = 1
 DEFAULT_EVAL_TIMEOUT = 900
@@ -50,7 +50,9 @@ def _effective_timeout(model: str, task_name: str) -> int:
     return max(learned, configured, DEFAULT_EVAL_TIMEOUT)
 
 
-def _record_signal(model: str, task_name: str, time_taken: float, had_retries: bool, is_parse_failure: bool):
+def _record_signal(
+    model: str, task_name: str, time_taken: float, had_retries: bool, is_parse_failure: bool
+):
     if not time_taken and not had_retries:
         return
     signals = _load_eval_signals()
@@ -77,7 +79,9 @@ def _record_signal(model: str, task_name: str, time_taken: float, had_retries: b
     _save_eval_signals(signals)
 
 
-def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool = False) -> tuple[int, str, dict]:
+def _validate_result(
+    result: dict, task_cfg: dict, task_name: str, debug: bool = False
+) -> tuple[int, str, dict]:
     """Run validation on a library result. Returns (score, failure_reason, diagnosis)."""
     validator = task_cfg["validator"]
 
@@ -102,7 +106,7 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
         return score, failure_reason, diagnosis
 
     if is_parse_json and content:
-        json_match = re.search(r'\[[\s\S]*\]', content) or re.search(r'\{[\s\S]*\}', content)
+        json_match = re.search(r"\[[\s\S]*\]", content) or re.search(r"\{[\s\S]*\}", content)
         extracted = None
         if json_match:
             try:
@@ -116,7 +120,9 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
             extracted = _extract_items_from_text(content)
 
         if extracted:
-            validated = validator(extracted, source_text=source, **task_cfg.get("validator_kwargs", {}))
+            validated = validator(
+                extracted, source_text=source, **task_cfg.get("validator_kwargs", {})
+            )
             items_for_debug = extracted
         elif len(content) > 50:
             validated = validate_summary(content)
@@ -129,12 +135,18 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
         if debug and source and "weekend" in task_name and items_for_debug:
             details = get_source_matching_details(items_for_debug, source)
             console.print(f"  Source matching for {task_name}:")
-            console.print(f"    Matched: {len(details['matched'])}/{len(details['matched']) + len(details['unmatched'])} ({details['ratio']*100:.0f}%)")
-            if details['unmatched']:
-                console.print(f"    Unmatched items:")
-                for item in details['unmatched'][:3]:
+            console.print(
+                f"    Matched: {len(details['matched'])}/"
+                f"{len(details['matched']) + len(details['unmatched'])} "
+                f"({details['ratio'] * 100:.0f}%)"
+            )
+            if details["unmatched"]:
+                console.print("    Unmatched items:")
+                for item in details["unmatched"][:3]:
                     if isinstance(item, dict):
-                        console.print(f"      - {item['name']} (terms: {item.get('terms', [])[:3]})")
+                        console.print(
+                            f"      - {item['name']} (terms: {item.get('terms', [])[:3]})"
+                        )
                     else:
                         console.print(f"      - {item}")
 
@@ -161,7 +173,15 @@ def _validate_result(result: dict, task_cfg: dict, task_name: str, debug: bool =
     return score, failure_reason, diagnosis
 
 
-def _call_model(model: str, task_cfg: dict, task_name: str, host: str, port: int, backend: str, timeout: int = None) -> dict:
+def _call_model(
+    model: str,
+    task_cfg: dict,
+    task_name: str,
+    host: str,
+    port: int,
+    backend: str,
+    timeout: int = None,
+) -> dict:
     """Call model via the appropriate backend (pure transport, no validation)."""
     effective_timeout = timeout or DEFAULT_EVAL_TIMEOUT
     if backend == "mlx":
@@ -191,39 +211,61 @@ def _quality_results_to_eval_format(scorecards: list, model: str) -> list[dict]:
         failures = [f for d in sc.dimensions for f in d.failures]
         composite = sc.composite
         status = "ok" if composite >= 90 else ("partial" if composite >= 50 else "fail")
-        results.append({
-            "task": sc.task,
-            "case_id": sc.case_id,
-            "status": status,
-            "quality_score": round(composite, 1),
-            "time": round(sc.elapsed, 1),
-            "error": None,
-            "failure_reason": "; ".join(failures) if failures else "",
-            "failure_category": None,
-            "failure_evidence": "",
-            "result": {"model": model, "time": sc.elapsed, "content": sc.output},
-        })
+        results.append(
+            {
+                "task": sc.task,
+                "case_id": sc.case_id,
+                "status": status,
+                "quality_score": round(composite, 1),
+                "time": round(sc.elapsed, 1),
+                "error": None,
+                "failure_reason": "; ".join(failures) if failures else "",
+                "failure_category": None,
+                "failure_evidence": "",
+                "result": {"model": model, "time": sc.elapsed, "content": sc.output},
+            }
+        )
     return results
 
 
 def run_eval_quick(
-    model: str, tasks: dict = None, host: str = "localhost", port: int = 1337, backend: str = "osaurus",
-    verbose: bool = False, timeout: int = DEFAULT_EVAL_TIMEOUT, on_complete: callable = None
+    model: str,
+    tasks: dict = None,
+    host: str = "localhost",
+    port: int = 1337,
+    backend: str = "osaurus",
+    verbose: bool = False,
+    timeout: int = DEFAULT_EVAL_TIMEOUT,
+    on_complete: callable = None,
 ) -> dict:
     """Run evaluation with no retries (quick mode)."""
     global MAX_RETRIES
     orig_retries = MAX_RETRIES
     MAX_RETRIES = 0
     try:
-        return run_eval(model, tasks=tasks, host=host, port=port, backend=backend,
-                        verbose=verbose, timeout=timeout, on_complete=on_complete)
+        return run_eval(
+            model,
+            tasks=tasks,
+            host=host,
+            port=port,
+            backend=backend,
+            verbose=verbose,
+            timeout=timeout,
+            on_complete=on_complete,
+        )
     finally:
         MAX_RETRIES = orig_retries
 
 
 def run_eval(
-    model: str, tasks: dict = None, host: str = "localhost", port: int = 1337, backend: str = "osaurus",
-    verbose: bool = False, timeout: int = DEFAULT_EVAL_TIMEOUT, on_complete: callable = None
+    model: str,
+    tasks: dict = None,
+    host: str = "localhost",
+    port: int = 1337,
+    backend: str = "osaurus",
+    verbose: bool = False,
+    timeout: int = DEFAULT_EVAL_TIMEOUT,
+    on_complete: callable = None,
 ) -> dict:
     """Run evaluation on model using real-world tasks.
 
@@ -248,20 +290,31 @@ def run_eval(
 
         for attempt in range(MAX_RETRIES + 1):
             if attempt > 0:
-                eval_logger.warning(f"Retrying task '{task_name}' with model {model} (Attempt {attempt+1}/{MAX_RETRIES+1})...")
+                eval_logger.warning(
+                    f"Retrying task '{task_name}' with model {model} "
+                    f"(Attempt {attempt + 1}/{MAX_RETRIES + 1})..."
+                )
                 first_attempt_failed = True
 
             try:
-                result = _call_model(model, task_cfg, task_name, host, port, backend, timeout=task_timeout)
+                result = _call_model(
+                    model, task_cfg, task_name, host, port, backend, timeout=task_timeout
+                )
             except Exception as e:
                 eval_logger.error(f"Model call failed with exception: {e}")
                 result = {"content": None, "error": str(e), "time": None, "model": model}
 
             try:
-                score, failure_reason, diagnosis = _validate_result(result, task_cfg, task_name, debug=True)
+                score, failure_reason, diagnosis = _validate_result(
+                    result, task_cfg, task_name, debug=True
+                )
             except Exception as e:
                 eval_logger.error(f"Validation failed with exception: {e}")
-                score, failure_reason, diagnosis = 0, f"Validation error: {e}", {"category": FAIL_INFRA, "reason": str(e), "evidence": ""}
+                score, failure_reason, diagnosis = (
+                    0,
+                    f"Validation error: {e}",
+                    {"category": FAIL_INFRA, "reason": str(e), "evidence": ""},
+                )
 
             eval_logger.info(f"Quality score: {score}/100")
 
@@ -304,7 +357,8 @@ def run_eval(
         )
 
         _record_signal(
-            model, task_name,
+            model,
+            task_name,
             time_taken=(best_result.get("time") or 0) if best_result else 0,
             had_retries=first_attempt_failed,
             is_parse_failure=(category == "PARSE"),
@@ -313,11 +367,14 @@ def run_eval(
         status_symbol = STEP if status == "ok" else (WARN if status == "partial" else FAIL)
         category_tag = f" [{category}]" if category else ""
         fail_info = f" - {best_failure}" if best_failure else ""
-        evidence_info = f"\n    - {best_diagnosis['evidence']}" if best_diagnosis.get("evidence") else ""
-        time_taken = best_result.get('time') if best_result else None
+        evidence_info = (
+            f"\n    - {best_diagnosis['evidence']}" if best_diagnosis.get("evidence") else ""
+        )
+        time_taken = best_result.get("time") if best_result else None
         time_taken_str = f"{time_taken}s" if time_taken is not None else "N/A"
         console.print(
-            f"  {status_symbol} {task_name}: {best_score}% ({time_taken_str}){category_tag}{fail_info}{evidence_info}"
+            f"  {status_symbol} {task_name}: {best_score}% "
+            f"({time_taken_str}){category_tag}{fail_info}{evidence_info}"
         )
 
         if verbose and best_result:
@@ -350,7 +407,10 @@ def run_eval(
             ratio = details["ratio"] * 100
             console.print(f"  {task_name}: {matched}/{total} items from source ({ratio:.0f}%)")
             if details["unmatched"]:
-                names = [u if isinstance(u, str) else u.get("name", "unnamed") for u in details["unmatched"][:2]]
+                names = [
+                    u if isinstance(u, str) else u.get("name", "unnamed")
+                    for u in details["unmatched"][:2]
+                ]
                 console.print(f"    {WARN} Not from source: {names}")
 
     if mixed_tasks:
@@ -367,6 +427,8 @@ def run_eval(
             elif "missed" in reason or "coverage" in reason:
                 noise_part = reason
             symbol = WARN if ("included" in reason and "noise" in reason) else STEP
-            console.print(f"  {symbol} {task_name}: {r['quality_score']}% — {noise_part or 'filtered clean'}")
+            console.print(
+                f"  {symbol} {task_name}: {r['quality_score']}% — {noise_part or 'filtered clean'}"
+            )
 
     return results

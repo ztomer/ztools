@@ -3,47 +3,103 @@ Mock LLM provider for integration tests.
 Provides canned responses for all task types so tests don't need a running server.
 """
 
-import re
 import json
+import re
 import unittest.mock
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Optional
 
-_THINK_RE = re.compile(r'<think>.*?</think>', re.DOTALL)
-
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 
 def _default_content_for(task: str) -> str:
     if task in ("json", "weekend_transient"):
-        return json.dumps([
-            {"name": "Spring Festival", "location": "Toronto", "target_ages": "All",
-             "price": "Free", "weather": "outdoor", "day": "Saturday"},
-            {"name": "Indoor Coding Workshop", "location": "Vaughan", "target_ages": "8-14",
-             "price": "$25", "weather": "indoor", "day": "Sunday"},
-        ])
+        return json.dumps(
+            [
+                {
+                    "name": "Spring Festival",
+                    "location": "Toronto",
+                    "target_ages": "All",
+                    "price": "Free",
+                    "weather": "outdoor",
+                    "day": "Saturday",
+                },
+                {
+                    "name": "Indoor Coding Workshop",
+                    "location": "Vaughan",
+                    "target_ages": "8-14",
+                    "price": "$25",
+                    "weather": "indoor",
+                    "day": "Sunday",
+                },
+            ]
+        )
     if task == "filename":
         return "mock_test_filename"
     if task in ("image_rename", "image_rename_mixed"):
-        return json.dumps(["how_to_manage_underperformers", "scott_adams_essays", "scott_adams_powerful_sentences", "business_lessons", "delusional_belief", "prioritize_pro", "musk_founding_tips", "context_engineering"])
+        return json.dumps(
+            [
+                "how_to_manage_underperformers",
+                "scott_adams_essays",
+                "scott_adams_powerful_sentences",
+                "business_lessons",
+                "delusional_belief",
+                "prioritize_pro",
+                "musk_founding_tips",
+                "context_engineering",
+            ]
+        )
     if task == "summarize":
-        return "## Summary\n- OpenAI announced GPT-5\n- Apple Vision Pro 2 enters production\n- Google unveils Gemini 2.5 Pro\n"
+        return (
+            "## Summary\n"
+            "- OpenAI announced GPT-5\n"
+            "- Apple Vision Pro 2 enters production\n"
+            "- Google unveils Gemini 2.5 Pro\n"
+        )
     if task == "summarize_factual_accuracy":
-        return "## Summary\n- OpenAI announced GPT-5\n- Apple Vision Pro 2 enters production\n- Google unveils Gemini 2.5 Pro\n"
+        return (
+            "## Summary\n"
+            "- OpenAI announced GPT-5\n"
+            "- Apple Vision Pro 2 enters production\n"
+            "- Google unveils Gemini 2.5 Pro\n"
+        )
     if task == "summarize_factual_coverage":
-        return "## Summary\n- OpenAI announced GPT-5\n- Apple Vision Pro 2 enters production\n- Google unveils Gemini 2.5 Pro\n- NVIDIA stock at all-time high\n- Microsoft acquires AI startup for $2B\n- IBM quantum computer with 1000+ qubit\n"
+        return (
+            "## Summary\n"
+            "- OpenAI announced GPT-5\n"
+            "- Apple Vision Pro 2 enters production\n"
+            "- Google unveils Gemini 2.5 Pro\n"
+            "- NVIDIA stock at all-time high\n"
+            "- Microsoft acquires AI startup for $2B\n"
+            "- IBM quantum computer with 1000+ qubit\n"
+        )
     if task == "file_summary":
-        return json.dumps([
-            {"path": "eval_lib.py", "desc": "evaluates model quality across tasks"},
-            {"path": "validators.py", "desc": "validates JSON output format"},
-            {"path": "config.py", "desc": "manages configuration loading"},
-            {"path": "osaurus_lib.py", "desc": "LLM API client library"},
-        ])
+        return json.dumps(
+            [
+                {"path": "eval_lib.py", "desc": "evaluates model quality across tasks"},
+                {"path": "validators.py", "desc": "validates JSON output format"},
+                {"path": "config.py", "desc": "manages configuration loading"},
+                {"path": "osaurus_lib.py", "desc": "LLM API client library"},
+            ]
+        )
     if task in ("weekend_fixed", "detailed_json"):
-        return json.dumps([
-            {"name": "Vaughan Sports Arena", "location": "Vaughan", "target_ages": "6-13",
-             "price": "$20", "weather": "indoor"},
-            {"name": "High Park", "location": "Toronto", "target_ages": "All",
-             "price": "Free", "weather": "outdoor"},
-        ])
+        return json.dumps(
+            [
+                {
+                    "name": "Vaughan Sports Arena",
+                    "location": "Vaughan",
+                    "target_ages": "6-13",
+                    "price": "$20",
+                    "weather": "indoor",
+                },
+                {
+                    "name": "High Park",
+                    "location": "Toronto",
+                    "target_ages": "All",
+                    "price": "Free",
+                    "weather": "outdoor",
+                },
+            ]
+        )
     return "mock content for " + task
 
 
@@ -57,11 +113,11 @@ def _default_parsed_for(task: str) -> Optional[Any]:
 
 class MockLLM:
     """Configurable mock LLM provider for testing.
-    
+
     Patches key LLM functions so tests don't need a running server.
     Call patch_all() before importing modules under test, or use the
     mock_llm pytest fixture from conftest.
-    
+
     Usage:
         mock = MockLLM()
         mock.set_response("json", {"content": "...", "parsed": [...]})
@@ -81,8 +137,7 @@ class MockLLM:
     def set_response_fn(self, task: str, fn: Callable):
         self._responses[task] = fn
 
-    def call(self, model: str = "", messages: list = None,
-             task: str = "", **kwargs) -> dict:
+    def call(self, model: str = "", messages: list = None, task: str = "", **kwargs) -> dict:
         task = task or "json"
         if task in self._responses:
             resp = self._responses[task]
@@ -127,7 +182,7 @@ class MockLLM:
         pass
 
     def strip_thinking(self, content: str) -> str:
-        return _THINK_RE.sub('', content).strip()
+        return _THINK_RE.sub("", content).strip()
 
     def _patch(self, target: str, func: Callable):
         p = unittest.mock.patch(target, func)
@@ -141,6 +196,7 @@ class MockLLM:
 
     def patch_osaurus(self):
         import lib.osaurus_lib as m
+
         self._patch_obj(m, "call", self.call)
         self._patch_obj(m, "call_llm_api", self.call_llm_api)
         self._patch_obj(m, "get_models", self.get_models)
@@ -153,6 +209,7 @@ class MockLLM:
 
     def patch_mlx(self):
         import lib.mlx_lib as m
+
         self._patch_obj(m, "call", self.call_mlx)
         self._patch_obj(m, "call_mlx", self.call_mlx)
         self._patch_obj(m, "find_text_mlx_model", self.find_text_mlx_model)
@@ -161,6 +218,7 @@ class MockLLM:
 
     def patch_config(self):
         import lib.config as m
+
         self._patch_obj(m, "get_model_prompts_all", lambda *a, **kw: None)
         self._patch_obj(m, "build_tasks_from_model", lambda *a, **kw: None)
 

@@ -1,71 +1,89 @@
 # Text Validation functions
 # Quality-based scoring - checks output signals, not just format
 
-import re
 import json
-from typing import List, Tuple, Any
-
-from lib.validators.constants import (
-    MAX_SCORE, SUMMARY_HEADERS_WEIGHT, SUMMARY_LENGTH_GOOD,
-    SUMMARY_LENGTH_OK, SUMMARY_LENGTH_THRESHOLD, SUMMARY_LENGTH_THRESHOLD_OK,
-    SUMMARY_CONTENT_WEIGHT, SUMMARY_LINES_GOOD, SUMMARY_LINES_OK,
-    FILENAME_LENGTH_MIN, FILENAME_LENGTH_MAX, FILENAME_LENGTH_WEIGHT,
-    FILENAME_CHARS_WEIGHT, FILENAME_FORMAT_WEIGHT,
-    FILE_SUMMARY_ITEMS_WEIGHT, FILE_SUMMARY_QUALITY_WEIGHT,
-    FILE_SUMMARY_MIN_ITEMS,
-    MIN_SPECIFIC_FILENAME_LEN, FILENAME_LENGTH_SCORE, FILENAME_CHARS_SCORE,
-    FILENAME_FORMAT_SCORE, MAX_EXPLANATORY_FILENAME_LEN,
-    FILENAME_EXPLANATION_PENALTY_SCORE, FILENAME_SPECIFIC_SCORE,
-    STRUCT_HEADERS_BULLETS_SCORE, STRUCT_HEADERS_ONLY_SCORE,
-    STRUCT_BULLET_LONG_LEN, STRUCT_BULLET_LONG_SCORE,
-    STRUCT_BULLET_SHORT_LEN, STRUCT_BULLET_SHORT_SCORE,
-    USERS_COVERAGE_HIGH_COUNT, USERS_COVERAGE_HIGH_SCORE,
-    USERS_COVERAGE_MED_COUNT, USERS_COVERAGE_MED_SCORE,
-    USERS_COVERAGE_LOW_COUNT, USERS_COVERAGE_LOW_SCORE,
-    TIMESTAMP_SPECIFICITY_SCORE, MAX_NARRATIVE_SPECIFICITY_SCORE,
-    NARRATIVE_WORD_SCORE_MULTIPLIER, TEMPLATE_DRIVEN_FIELD_LIMIT,
-    BOILERPLATE_SYNTHESIS_SCORE, DEFAULT_SYNTHESIS_SCORE,
-    SYNTHESIS_MATCH_BONUS, TOPIC_COVERAGE_HIGH_COUNT,
-    TOPIC_COVERAGE_HIGH_SCORE, TOPIC_COVERAGE_MED_COUNT,
-    TOPIC_COVERAGE_MED_SCORE, TOPIC_TRANSITION_WORD_SCORE,
-    FILE_SUMMARY_ITEMS_SCORE, PATH_REALISM_HIGH_RATIO,
-    PATH_REALISM_HIGH_SCORE, PATH_REALISM_MED_RATIO,
-    PATH_REALISM_MED_SCORE, SPECIFIC_DESC_HIGH_COUNT,
-    SPECIFIC_DESC_HIGH_SCORE, SPECIFIC_DESC_MED_COUNT,
-    SPECIFIC_DESC_MED_SCORE, SPECIFIC_DESC_LOW_SCORE,
-    MIN_SPECIFIC_DESC_LEN,
-)
-
-from lib.validators.helpers import (
-    has_text_headers, count_content_lines, is_valid_filename_char,
-    has_filename_format, strip_backtick_value, _extract_best_filename_candidate,
-)
-
+import re
+from typing import Any, List, Tuple
 
 from lib.quality_models import GENERIC_FILENAMES
+from lib.validators.constants import (
+    BOILERPLATE_SYNTHESIS_SCORE,
+    DEFAULT_SYNTHESIS_SCORE,
+    FILE_SUMMARY_ITEMS_SCORE,
+    FILE_SUMMARY_MIN_ITEMS,
+    FILENAME_CHARS_SCORE,
+    FILENAME_EXPLANATION_PENALTY_SCORE,
+    FILENAME_FORMAT_SCORE,
+    FILENAME_LENGTH_MAX,
+    FILENAME_LENGTH_MIN,
+    FILENAME_LENGTH_SCORE,
+    FILENAME_SPECIFIC_SCORE,
+    MAX_EXPLANATORY_FILENAME_LEN,
+    MAX_NARRATIVE_SPECIFICITY_SCORE,
+    MAX_SCORE,
+    MIN_SPECIFIC_DESC_LEN,
+    MIN_SPECIFIC_FILENAME_LEN,
+    NARRATIVE_WORD_SCORE_MULTIPLIER,
+    PATH_REALISM_HIGH_RATIO,
+    PATH_REALISM_HIGH_SCORE,
+    PATH_REALISM_MED_RATIO,
+    PATH_REALISM_MED_SCORE,
+    SPECIFIC_DESC_HIGH_COUNT,
+    SPECIFIC_DESC_HIGH_SCORE,
+    SPECIFIC_DESC_LOW_SCORE,
+    SPECIFIC_DESC_MED_COUNT,
+    SPECIFIC_DESC_MED_SCORE,
+    STRUCT_BULLET_LONG_LEN,
+    STRUCT_BULLET_LONG_SCORE,
+    STRUCT_BULLET_SHORT_LEN,
+    STRUCT_BULLET_SHORT_SCORE,
+    STRUCT_HEADERS_BULLETS_SCORE,
+    STRUCT_HEADERS_ONLY_SCORE,
+    SYNTHESIS_MATCH_BONUS,
+    TEMPLATE_DRIVEN_FIELD_LIMIT,
+    TIMESTAMP_SPECIFICITY_SCORE,
+    TOPIC_COVERAGE_HIGH_COUNT,
+    TOPIC_COVERAGE_HIGH_SCORE,
+    TOPIC_COVERAGE_MED_COUNT,
+    TOPIC_COVERAGE_MED_SCORE,
+    TOPIC_TRANSITION_WORD_SCORE,
+    USERS_COVERAGE_HIGH_COUNT,
+    USERS_COVERAGE_HIGH_SCORE,
+    USERS_COVERAGE_LOW_COUNT,
+    USERS_COVERAGE_LOW_SCORE,
+    USERS_COVERAGE_MED_COUNT,
+    USERS_COVERAGE_MED_SCORE,
+)
+from lib.validators.helpers import (
+    _extract_best_filename_candidate,
+    has_filename_format,
+    has_text_headers,
+    is_valid_filename_char,
+    strip_backtick_value,
+)
 
 # Filename validation characters
-FILENAME_VALID_CHARS = set('_.-')
+FILENAME_VALID_CHARS = set("_.-")
 
 # Pre-compiled validation regular expressions (John Carmack optimization)
-USER_MENTIONS_RE = re.compile(r'@?[Uu]ser\s*\d+')
-TIMESTAMP_RE = re.compile(r'\d{1,2}:\d{2}')
+USER_MENTIONS_RE = re.compile(r"@?[Uu]ser\s*\d+")
+TIMESTAMP_RE = re.compile(r"\d{1,2}:\d{2}")
 NARRATIVE_WORDS_RE = re.compile(
-    r'\b(?:ask(?:s|ed|ing)?|respond(?:s|ed|ing)?|thank(?:s|ed|ing)?|report(?:s|ed|ing)?|confirm(?:s|ed|ing)?|direct(?:s|ed|ing)?|inquire(?:s|d|ing)?|announce(?:s|d|ing)?|share(?:s|d|ing)?|request(?:s|ed|ing)?|provide(?:s|d|ing)?)\b',
-    re.IGNORECASE
+    r"\b(?:ask(?:s|ed|ing)?|respond(?:s|ed|ing)?|thank(?:s|ed|ing)?|report(?:s|ed|ing)?|confirm(?:s|ed|ing)?|direct(?:s|ed|ing)?|inquire(?:s|d|ing)?|announce(?:s|d|ing)?|share(?:s|d|ing)?|request(?:s|ed|ing)?|provide(?:s|d|ing)?)\b",
+    re.IGNORECASE,
 )
-TEMPLATE_FIELDS_RE = re.compile(r'\*\*(Who|What|When|Where):')
-BOILERPLATE_RE = re.compile(r'(not specified|n/a|unknown|not provided)', re.IGNORECASE)
-NEWLINE_HEADER_RE = re.compile(r'\n#{2,}\s+\w+')
-START_HEADER_RE = re.compile(r'^#{2,}\s+\w+', re.MULTILINE)
+TEMPLATE_FIELDS_RE = re.compile(r"\*\*(Who|What|When|Where):")
+BOILERPLATE_RE = re.compile(r"(not specified|n/a|unknown|not provided)", re.IGNORECASE)
+NEWLINE_HEADER_RE = re.compile(r"\n#{2,}\s+\w+")
+START_HEADER_RE = re.compile(r"^#{2,}\s+\w+", re.MULTILINE)
 SYNTHESIS_RE = re.compile(
-    r'(overall|summary|in (short|summary)|key (points?|takeaways?)|tl;dr|(the|this|that) (conversation|discussion|thread|interaction))',
-    re.IGNORECASE
+    r"(overall|summary|in (short|summary)|key (points?|takeaways?)|"
+    r"tl;dr|(the|this|that) (conversation|discussion|thread|interaction))",
+    re.IGNORECASE,
 )
-TOPIC_MARKERS_RE = re.compile(r'^#{2,}\s+\w+|^[A-Z][^a-z]{2,}:\s', re.MULTILINE)
+TOPIC_MARKERS_RE = re.compile(r"^#{2,}\s+\w+|^[A-Z][^a-z]{2,}:\s", re.MULTILINE)
 TRANSITION_WORDS_RE = re.compile(
-    r'(first|second|third|then|also|additionally|meanwhile)',
-    re.IGNORECASE
+    r"(first|second|third|then|also|additionally|meanwhile)", re.IGNORECASE
 )
 
 
@@ -83,8 +101,7 @@ def validate_filename(data: Any, source_text: str = "") -> Tuple[int, str]:
 
     clean = strip_backtick_value(raw)
 
-    if (len(clean) >= FILENAME_LENGTH_MAX
-            or not all(is_valid_filename_char(c) for c in clean)):
+    if len(clean) >= FILENAME_LENGTH_MAX or not all(is_valid_filename_char(c) for c in clean):
         clean = _extract_best_filename_candidate(raw)
 
     failures = []
@@ -98,7 +115,9 @@ def validate_filename(data: Any, source_text: str = "") -> Tuple[int, str]:
     if FILENAME_LENGTH_MIN < len(clean) < FILENAME_LENGTH_MAX:
         score += FILENAME_LENGTH_SCORE
     else:
-        failures.append(f"length {len(clean)} not in {FILENAME_LENGTH_MIN}-{FILENAME_LENGTH_MAX - 1}")
+        failures.append(
+            f"length {len(clean)} not in {FILENAME_LENGTH_MIN}-{FILENAME_LENGTH_MAX - 1}"
+        )
 
     # Valid characters (20 pts)
     if all(is_valid_filename_char(c) for c in clean):
@@ -115,8 +134,12 @@ def validate_filename(data: Any, source_text: str = "") -> Tuple[int, str]:
     # Non-generic specificity (25 pts)
     # Score outputs based on whether they look like filenames vs prose explanations
     clean_lower = clean.lower()
-    has_question_parts = "?" in clean or "please" in clean_lower or "which" in clean_lower or "what" in clean_lower
-    has_explanation = len(clean) > MAX_EXPLANATORY_FILENAME_LEN or clean_lower.startswith(("the ", "this ", "a "))
+    has_question_parts = (
+        "?" in clean or "please" in clean_lower or "which" in clean_lower or "what" in clean_lower
+    )
+    has_explanation = len(clean) > MAX_EXPLANATORY_FILENAME_LEN or clean_lower.startswith(
+        ("the ", "this ", "a ")
+    )
     if has_question_parts:
         failures.append("question-like output")
     elif has_explanation:
@@ -138,7 +161,6 @@ def validate_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
     data_str = str(data).strip()
     failures = []
     score = 0
-    data_lower = data_str.lower()
 
     # Structure - headers + bullet points (15 pts)
     has_headers = has_text_headers(data_str)
@@ -172,7 +194,9 @@ def validate_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
     specificity_score = 0
     if has_timestamps:
         specificity_score += TIMESTAMP_SPECIFICITY_SCORE
-    specificity_score += min(MAX_NARRATIVE_SPECIFICITY_SCORE, narrative_words * NARRATIVE_WORD_SCORE_MULTIPLIER)  # up to 15 for narrative words
+    specificity_score += min(
+        MAX_NARRATIVE_SPECIFICITY_SCORE, narrative_words * NARRATIVE_WORD_SCORE_MULTIPLIER
+    )  # up to 15 for narrative words
     if specificity_score == 0:
         failures.append("no timestamps or narrative words")
     score += specificity_score
@@ -266,7 +290,11 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
 
     # Check descriptions are specific (not generic phrases)
     generic_phrases = ["personal", "document", "system", "user's", "folder"]
-    specific = sum(1 for d in descs if not any(g in d.lower() for g in generic_phrases) and len(d) > MIN_SPECIFIC_DESC_LEN)
+    specific = sum(
+        1
+        for d in descs
+        if not any(g in d.lower() for g in generic_phrases) and len(d) > MIN_SPECIFIC_DESC_LEN
+    )
 
     quality_score = 0
     if specific >= SPECIFIC_DESC_HIGH_COUNT:
@@ -287,6 +315,7 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
 # MIXED-SIGNAL VALIDATORS (signal-from-noise filtering)
 # ============================================================
 
+
 def _split_signal_noise(source_text: str) -> Tuple[str, str]:
     """Split a mixed prompt into (signal_part, noise_part) on the NOISE marker."""
     if "NOISE" not in source_text:
@@ -299,17 +328,47 @@ def _extract_tweet_senders(text: str) -> List[str]:
     """Extract @Sender handles from tweet lines: [@Sender | time]: ..."""
     senders = []
     for line in text.split("\n"):
-        m = re.search(r'\[@([\w]+)\s*\|', line)
+        m = re.search(r"\[@([\w]+)\s*\|", line)
         if m:
             senders.append("@" + m.group(1).lower())
     return senders
 
 
 _COMMON = {
-    "about", "above", "after", "again", "their", "there", "these", "those",
-    "would", "could", "should", "which", "while", "where", "when", "what",
-    "with", "from", "this", "that", "then", "than", "they", "them", "have",
-    "been", "were", "will", "your", "said", "says", "into", "over", "also",
+    "about",
+    "above",
+    "after",
+    "again",
+    "their",
+    "there",
+    "these",
+    "those",
+    "would",
+    "could",
+    "should",
+    "which",
+    "while",
+    "where",
+    "when",
+    "what",
+    "with",
+    "from",
+    "this",
+    "that",
+    "then",
+    "than",
+    "they",
+    "them",
+    "have",
+    "been",
+    "were",
+    "will",
+    "your",
+    "said",
+    "says",
+    "into",
+    "over",
+    "also",
 }
 
 
@@ -327,7 +386,7 @@ def _parse_noise_entries(noise_part: str) -> List[str]:
 
 def _entry_hit(entry: str, text: str) -> bool:
     """True if >=2 distinctive tokens of a noise entry appear in the text (phrase match)."""
-    toks = {t for t in re.sub(r'[^a-z0-9 ]', ' ', entry.lower()).split() if len(t) >= 4}
+    toks = {t for t in re.sub(r"[^a-z0-9 ]", " ", entry.lower()).split() if len(t) >= 4}
     if not toks:
         return False
     return sum(1 for t in toks if t in text) >= 2
@@ -359,12 +418,12 @@ def validate_mixed_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
 
     # Signal coverage: distinctive (>=5 char) content tokens from the real timeline.
     sig_toks = {
-        t for t in re.sub(r'[^a-z0-9 ]', ' ', signal_part.lower()).split()
+        t
+        for t in re.sub(r"[^a-z0-9 ]", " ", signal_part.lower()).split()
         if len(t) >= 5 and t not in _COMMON
     }
     if sig_toks:
         covered = sum(1 for t in sig_toks if t in summary)
-        cov = covered / len(sig_toks)
         failures.append(f"signal coverage {covered}/{len(sig_toks)}")
         if covered == 0:
             score = min(score, 30)  # says nothing about the actual timeline
@@ -462,7 +521,7 @@ def _extract_mixed_filenames(source_text: str) -> Tuple[List[str], List[str]]:
     signal = []
     for line in signal_part.split("\n"):
         line = line.strip()
-        m = re.match(r'^\d+\.\s*(.+)$', line)
+        m = re.match(r"^\d+\.\s*(.+)$", line)
         if m:
             signal.append(m.group(1).strip())
     noise = []
@@ -477,7 +536,9 @@ def _extract_mixed_filenames(source_text: str) -> Tuple[List[str], List[str]]:
 
 
 def _name_overlap(a: str, b: str) -> bool:
-    norm = lambda s: re.sub(r'[^a-z0-9 ]', ' ', s.lower()).split()
+    def norm(s: str) -> list[str]:
+        return re.sub(r"[^a-z0-9 ]", " ", s.lower()).split()
+
     ta = {t for t in norm(a) if len(t) >= 3}
     tb = {t for t in norm(b) if len(t) >= 3}
     return bool(ta & tb)
@@ -566,7 +627,7 @@ def validate_strict_schema(raw: str, source_text: str = "", kind: str = "json") 
         if not brackets or not ends or max(ends) < min(brackets):
             return 0, "no JSON object/array found"
         before = text[: min(brackets)].strip()
-        after = text[max(ends) + 1:].strip()
+        after = text[max(ends) + 1 :].strip()
         if before or after:
             return 0, f"prose outside JSON (before={before!r}, after={after!r})"
         return 100, ""
@@ -580,8 +641,9 @@ def validate_strict_schema(raw: str, source_text: str = "", kind: str = "json") 
     return 100, ""
 
 
-def validate_factual_accuracy(output: str, source_text: str = "",
-                              falsehood_phrases: list = None) -> Tuple[int, str]:
+def validate_factual_accuracy(
+    output: str, source_text: str = "", falsehood_phrases: list = None
+) -> Tuple[int, str]:
     """Multi-falsehood faithfulness probe.
     Checks the output against MULTIPLE planted falsehoods.
     Scores 100 - (33 * parroted_count) for 3 falsehoods.
@@ -598,7 +660,7 @@ def validate_factual_accuracy(output: str, source_text: str = "",
         if p and p in out:
             found.append(phrase)
         elif p:
-            ptoks = {t for t in re.sub(r'[^a-z0-9 ]', ' ', p).split() if len(t) >= 4}
+            ptoks = {t for t in re.sub(r"[^a-z0-9 ]", " ", p).split() if len(t) >= 4}
             if ptoks and sum(1 for t in ptoks if t in out) >= 2:
                 found.append(phrase)
     if not found:
@@ -607,8 +669,9 @@ def validate_factual_accuracy(output: str, source_text: str = "",
     return pct, f"parrots {len(found)}/{len(falsehood_phrases)} falsehoods: {found[0]!r}"
 
 
-def validate_factual_coverage(output: str, source_text: str = "",
-                              key_facts: list = None) -> Tuple[int, str]:
+def validate_factual_coverage(
+    output: str, source_text: str = "", key_facts: list = None
+) -> Tuple[int, str]:
     """Fact-coverage scoring.
     Checks how many of the given `key_facts` (case-insensitive substrings) are
     present in the output. High coverage = thorough summarization."""
@@ -625,8 +688,9 @@ def validate_factual_coverage(output: str, source_text: str = "",
     return pct, "; ".join(failures)
 
 
-def validate_no_contradiction(output: str, source_text: str = "",
-                              contradiction_phrase: str = "") -> Tuple[int, str]:
+def validate_no_contradiction(
+    output: str, source_text: str = "", contradiction_phrase: str = ""
+) -> Tuple[int, str]:
     """Faithfulness probe: assert the model does NOT parrot a planted falsehood.
     `contradiction_phrase` is the sentinel fact injected into the source; if it
     (or its distinctive tokens) appears in the output, the model failed to filter
@@ -637,7 +701,7 @@ def validate_no_contradiction(output: str, source_text: str = "",
     phrase = contradiction_phrase.lower().strip()
     if phrase and phrase in out:
         return 0, f"parrots contradiction: {contradiction_phrase!r}"
-    ptoks = {t for t in re.sub(r'[^a-z0-9 ]', ' ', phrase).split() if len(t) >= 4}
+    ptoks = {t for t in re.sub(r"[^a-z0-9 ]", " ", phrase).split() if len(t) >= 4}
     if ptoks and sum(1 for t in ptoks if t in out) >= 2:
         return 0, f"parrots contradiction: {contradiction_phrase!r}"
     return 100, ""
