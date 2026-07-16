@@ -31,6 +31,7 @@ SKIP_DIRS = frozenset(
         "tools",
         "docs",
         "eval_outputs",
+        "build",
     }
 )
 

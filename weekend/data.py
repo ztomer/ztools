@@ -34,8 +34,8 @@ DAILY_METEO_VARS = os.environ.get("WEEKEND_METEO_VARS", "temperature_2m_max,prec
 PRECIPITATION_THRESHOLD = float(os.environ.get("WEEKEND_PRECIP_THRESHOLD", "0.5"))
 FORECAST_HEADER = os.environ.get("WEEKEND_FORECAST_HEADER", "Daily Forecast:\n")
 
-SCRAPE_ATTEMPTS = 3
-DEFAULT_REVIEW_SCORE = 0.0
+SCRAPE_ATTEMPTS = int(os.environ.get("WEEKEND_SCRAPE_ATTEMPTS", "3"))
+DEFAULT_REVIEW_SCORE = float(os.environ.get("WEEKEND_DEFAULT_REVIEW_SCORE", "0.0"))
 
 # Pre-compiled regular expressions (John Carmack optimization)
 RATING_OUT_OF_FIVE_RE = re.compile(r"([0-4]\.\d)\s*/?\s*5", re.IGNORECASE)
@@ -114,12 +114,17 @@ def fetch_transient_events(dates_str, year, month_name):
         return []
 
     try:
+        _transient_template_str = os.environ.get(
+            "WEEKEND_TRANSIENT_QUERIES",
+            "{REGION} family events {month_name} {year}||"
+            "{REGION} Zoo special events {month_name} {year}||"
+            "kids activities {CITY} {month_name} {year}||"
+            "{REGION} museum family programs {month_name} {year}||"
+            "{CITY} community centres kids {month_name} {year}",
+        )
         queries = [
-            f"{REGION} family events {month_name} {year}",
-            f"{REGION} Zoo special events {month_name} {year}",
-            f"kids activities {CITY} {month_name} {year}",
-            f"{REGION} museum family programs {month_name} {year}",
-            f"{CITY} community centres kids {month_name} {year}",
+            q.format(REGION=REGION, CITY=CITY, year=year, month_name=month_name)
+            for q in _transient_template_str.split("||")
         ]
 
         all_results = []
@@ -135,12 +140,17 @@ def fetch_transient_events(dates_str, year, month_name):
 
 def fetch_fixed_venues(year, month_name):
     try:
+        _fixed_template_str = os.environ.get(
+            "WEEKEND_FIXED_VENUE_QUERIES",
+            "indoor play centre {CITY} {REGION} {year} prices||"
+            "trampoline park {REGION} kids {year}||"
+            "children museum {REGION} {year}||"
+            "family arcade {CITY} {year}||"
+            "playplace {CITY} indoor kids {year} prices",
+        )
         queries = [
-            f"indoor play centre {CITY} {REGION} {year} prices",
-            f"trampoline park {REGION} kids {year}",
-            f"children museum {REGION} {year}",
-            f"family arcade {CITY} {year}",
-            f"playplace {CITY} indoor kids {year} prices",
+            q.format(CITY=CITY, REGION=REGION, year=year)
+            for q in _fixed_template_str.split("||")
         ]
 
         all_results = []
@@ -161,7 +171,10 @@ def scrape_review_score(place_name):
     for attempt in range(SCRAPE_ATTEMPTS):
         try:
             time.sleep(RATE_LIMIT_SLEEP)
-            query = f'"{place_name}" rating review 5 stars'
+            _review_template = os.environ.get(
+                "WEEKEND_REVIEW_QUERY", '"{place_name}" rating review 5 stars'
+            )
+            query = _review_template.format(place_name=place_name)
             results = list(DDGS().text(query, max_results=REVIEW_MAX_RESULTS))
             combined = " ".join([r.get("title", "") + " " + r.get("body", "") for r in results])
 

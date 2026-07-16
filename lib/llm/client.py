@@ -70,9 +70,9 @@ def reset_session():
 def get_api_url(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> str:
     """Get API URL for host:port.
 
-    Idempotent: if ``host`` already carries a scheme (e.g. the full
-    ``http://localhost:1337`` from ``$OLLAMA_BASE_URL``), it is used verbatim
-    instead of being prefixed again (which would yield ``http://http://...``).
+    Idempotent: if ``host`` already carries a scheme (e.g. from
+    ``$OLLAMA_BASE_URL``), it is used verbatim instead of being
+    prefixed again (which would yield ``http://http://...``).
     """
     if "://" in host:
         return host.rstrip("/")

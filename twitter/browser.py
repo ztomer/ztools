@@ -40,7 +40,8 @@ SCROLL_INNER_HEIGHT_MULTIPLIER = 2
 MS_PER_SECOND = 1000.0
 EXACT_MATCH_PREVIEW_LIMIT = 80
 CONTENT_MATCH_PREVIEW_LIMIT = 100
-LOGIN_KEYWORDS = ("log in", "login", "sign in", "signin")
+_login_kw_str = os.environ.get("TWITTER_LOGIN_KEYWORDS", "log in,login,sign in,signin")
+LOGIN_KEYWORDS = tuple(k.strip() for k in _login_kw_str.split(",") if k.strip())
 EXIT_ERROR = 1
 
 # Pre-compiled regular expressions for performance (John Carmack optimization)

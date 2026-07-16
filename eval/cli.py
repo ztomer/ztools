@@ -75,6 +75,7 @@ from eval.tasks_core import (
 from eval.validate import safe_content, validate_file_summary
 from lib import init_config
 from lib.config import build_tasks_from_model, get_model_prompts_all
+from lib.llm.constants import API_TAGS, DEFAULT_HOST, DEFAULT_PORT
 from lib.osaurus_lib import (
     call,
     get_models,
@@ -190,7 +191,7 @@ def is_server_responsive(
 
     try:
         with requests.Session() as s:
-            resp = s.get(f"http://{host}:{port}/api/tags", timeout=timeout)
+            resp = s.get(f"http://{host}:{port}{API_TAGS}", timeout=timeout)
         return resp.status_code == 200
     except Exception:
         return False
@@ -290,7 +291,7 @@ def flush_between_models(prev_model: str, next_model: str) -> None:
 
                     with requests.Session() as s:
                         _llm_host = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
-                        resp = s.get(f"{_llm_host}/api/tags", timeout=RESTART_CHECK_TIMEOUT)
+                        resp = s.get(f"{_llm_host}{API_TAGS}", timeout=RESTART_CHECK_TIMEOUT)
                     if resp.status_code == 200:
                         console.print(f"{STEP} Server restarted")
                         break
@@ -340,7 +341,7 @@ def main():
     parser.add_argument(
         "--host",
         default=None,
-        help="Osaurus/Ollama server URL (default: $OLLAMA_BASE_URL or http://localhost:1337)",
+        help=f"Osaurus/Ollama server URL (default: $OLLAMA_BASE_URL or http://{DEFAULT_HOST}:{DEFAULT_PORT})",
     )
     parser.add_argument("--api-key", default=None, help="Bearer token for the LLM API")
     args = parser.parse_args()

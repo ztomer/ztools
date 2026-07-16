@@ -5,6 +5,7 @@ Contains the main eval loop, model calling, and validation orchestration.
 """
 
 import json
+import os
 import re
 from pathlib import Path
 
@@ -18,8 +19,8 @@ from lib.osaurus_lib import call
 from lib.tui import FAIL, STEP, WARN, console
 from lib.validators_lib import get_source_matching_details, validate_summary
 
-MAX_RETRIES = 1
-DEFAULT_EVAL_TIMEOUT = 900
+MAX_RETRIES = int(os.environ.get("EVAL_MAX_RETRIES", "1"))
+DEFAULT_EVAL_TIMEOUT = int(os.environ.get("EVAL_DEFAULT_TIMEOUT", "900"))
 MEMORY_WARNING_THRESHOLD = 80
 
 EVAL_SIGNALS_PATH = Path(__file__).parent.parent / "conf" / "eval_signals.json"

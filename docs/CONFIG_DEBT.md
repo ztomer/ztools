@@ -1,8 +1,7 @@
-# Config Debt Scan
+# Config Debt Scan [RETIRED]
 
-> Thorough scan of all `.py`, `.yaml`, `.json`, `.sh`, `.md` files (88 py, 12 yaml, 8 json, 1 sh, 13 md) for hardcoded values that should be dynamic/configurable.
->
-> Date: 2026-07-11
+> All 90 items fixed as of 2026-07-16. `tools/check_config_debt.py` returns zero violations.
+> The CI gate and pre-commit hook protect against regression. This document is kept for audit trail only.
 
 ---
 

@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from lib.config import Task
+from lib.llm.constants import DEFAULT_HOST, DEFAULT_PORT
 from lib.osaurus_lib import get_best_model
 from lib.osaurus_server import check_server_or_die
 from lib.signal_handling import setup_signals
@@ -55,7 +56,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--host",
         default=os.environ.get("OLLAMA_BASE_URL", DEFAULT_OLLAMA_URL),
-        help="Osaurus/Ollama server URL (default: $OLLAMA_BASE_URL or http://localhost:1337)",
+        help=f"Osaurus/Ollama server URL (default: $OLLAMA_BASE_URL or http://{DEFAULT_HOST}:{DEFAULT_PORT})",
     )
     p.add_argument("--api-key", default=os.environ.get("OLLAMA_API_KEY", ""), help="API key")
     p.add_argument("--debug", action="store_true", help="Show browser window and verbose output")

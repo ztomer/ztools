@@ -199,7 +199,7 @@ def summarize_with_llm(tweets: list[dict], base_url: str, model: str, api_key: s
     ctx_chars = (OSAURUS_CONTEXT_WINDOW - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN
 
     _fallback_names = os.environ.get(
-        "TWITTER_FALLBACK_MODELS", "qwen3.6-35b-a3b-mxfp4,foundation"
+        "TWITTER_FALLBACK_MODELS", "qwen3.6-35b-a3b-mxfp4,foundation"  # check-ok: env var fallback
     ).split(",")
     fallback_models = list(
         dict.fromkeys([target_model] + [m.strip() for m in _fallback_names if m.strip()])

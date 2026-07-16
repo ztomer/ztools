@@ -1,5 +1,6 @@
 """Config getters - all config lookup functions."""
 
+import sys
 from pathlib import Path
 from typing import Dict, List
 
@@ -103,6 +104,10 @@ def get_model_config(model: str) -> Dict:
     elif config_path.exists():
         _model_configs_cache[family] = _load_config_toml(config_path) or {}
     else:
+        print(
+            f"Warning: No model config found for '{family}', using built-in fallback prompts",
+            file=sys.stderr,
+        )
         _model_configs_cache[family] = {
             "name": family,
             "timeout": 300,

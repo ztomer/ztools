@@ -13,6 +13,7 @@ import requests
 
 from lib.config import Task, get_filename_models, get_model_prompt
 from lib.config_toml import load_config
+from lib.llm.constants import API_CHAT
 from lib.logging_config import get_logger
 from lib.mlx_lib import call_mlx, find_any_working_mlx_model, find_mlx_model, process_mlx_content
 from lib.tui import FAIL
@@ -60,10 +61,11 @@ APP_LAUNCH_WAIT = 15
 
 # Connection, path, limit, and status constants (Mitchell Hashimoto design)
 DEFAULT_SERVER_URL = _RENAME_CFG.get("llm_url", "http://localhost:1337")
-API_CHAT_PATH = "/api/chat"
+API_CHAT_PATH = API_CHAT
 TEXT_PREVIEW_LIMIT = 500
 _relevance_models_str = _RENAME_CFG.get("relevance_check_models") or os.environ.get(
-    "RENAME_RELEVANCE_MODELS", "qwen3.6-27b-mxfp4,gemma-4-26b-a4b-it-mxfp4"
+    "RENAME_RELEVANCE_MODELS",
+    "qwen3.6-27b-mxfp4,gemma-4-26b-a4b-it-mxfp4",  # check-ok: env var fallback
 )
 RELEVANCE_CHECK_MODELS = [m.strip() for m in _relevance_models_str.split(",") if m.strip()]
 MIN_CONTENT_LEN = 2

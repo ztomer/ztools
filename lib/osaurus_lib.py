@@ -24,6 +24,7 @@ from .logging_config import osaurus_logger as logger
 from .osaurus_models import (
     DEFAULT_HOST,
     DEFAULT_PORT,
+    FALLBACK_MODEL,
     check_llm_availability,
     get_api_url,
     get_available_models,
@@ -304,8 +305,8 @@ def _try_foundation(
     if not raw:
         return False
     result["content"] = raw
-    result["model"] = "foundation"
-    result["foundation"] = True
+    result["model"] = FALLBACK_MODEL
+    result["served_by_foundation"] = True
     if parse_json:
         result["parsed"] = extract_json(raw)
     logger.info("Served by on-device Foundation Models")

@@ -8,7 +8,9 @@ from pathlib import Path
 import lib.tui as tui
 from lib import init_config
 from lib.config import Task, get_model_field_mapping, get_model_top_keys
+from lib.llm.constants import DEFAULT_HOST, DEFAULT_PORT
 from lib.osaurus_lib import get_best_model
+from lib.osaurus_models import FALLBACK_MODEL
 from lib.osaurus_server import check_server_or_die
 from lib.signal_handling import setup_signals
 from lib.tui import STEP, WARN, debug_print
@@ -329,8 +331,8 @@ def main(args=None):
 
     use_foundation = getattr(args, "use_foundation", False)
     if use_foundation:
-        os.environ["OLLAMA_MODEL"] = "foundation"
-        print_header("Using model", "foundation (on-device Apple Foundation Model)")
+        os.environ["OLLAMA_MODEL"] = FALLBACK_MODEL
+        print_header("Using model", f"{FALLBACK_MODEL} (on-device Apple Foundation Model)")
     else:
         check_server_or_die(os.environ.get("OLLAMA_BASE_URL", OSAURUS_BASE_URL))
         if getattr(args, "model", None):
@@ -406,7 +408,7 @@ def parse_args():
     p.add_argument(
         "--host",
         default=None,
-        help="Osaurus/Ollama server URL (default: $OLLAMA_BASE_URL or http://localhost:1337)",
+        help=f"Osaurus/Ollama server URL (default: $OLLAMA_BASE_URL or http://{DEFAULT_HOST}:{DEFAULT_PORT})",
     )
     p.add_argument("--api-key", default=None, help="Bearer token for the LLM API")
     p.add_argument(
