@@ -1,3 +1,4 @@
+import logging
 import time
 from typing import List, Optional
 
@@ -7,6 +8,8 @@ from lib.eval_data import ALL_TEST_CASES
 from lib.quality_models import ScoreCard, TestCase, _str
 from lib.quality_scorers import score_output
 from lib.tui import FAIL, STEP, WARN
+
+_logger = logging.getLogger(__name__)
 
 LLM_TIMEOUT = 600
 
@@ -21,7 +24,8 @@ def query_model(model: str, prompt: str, input_text: str, task: str) -> Optional
             task=task,
         )
         return _str(result.get("content"))
-    except Exception:
+    except Exception as e:
+        _logger.exception("query_model(%s, ...) failed: %s", model, e)
         return None
 
 

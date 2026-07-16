@@ -57,6 +57,8 @@ def _safe_format_prompt(prompt_template: str, test_input: str) -> str:
         result = result.replace("{age_range}", target_ages)
     if "{date_range}" in result:
         result = result.replace("{date_range}", "this weekend")
+    if "{text}" in result:
+        result = result.replace("{text}", test_input)
     if "{}" in result:
         result = result.replace("{}", test_input)
 

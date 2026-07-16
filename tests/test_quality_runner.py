@@ -2,18 +2,6 @@
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-
-@pytest.fixture
-def mock_llm():
-    from lib.testing import MockLLM
-
-    mock = MockLLM()
-    mock.patch_all()
-    yield mock
-    mock.unpatch()
-
 
 class TestTestCases:
     def test_filename_cases_count(self, mock_llm):

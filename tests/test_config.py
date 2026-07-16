@@ -10,7 +10,7 @@ from lib.config import (
 
 
 def test_get_model_field_mapping_qwen():
-    """Test qwen field mapping from yaml config."""
+    """Test qwen field mapping from toml config."""
     clear_model_config_cache()
     mapping = get_model_field_mapping("qwen3.6-35b-a3b-mxfp4")
     assert mapping.get("category") == "target_ages"
@@ -19,7 +19,7 @@ def test_get_model_field_mapping_qwen():
 
 
 def test_get_model_field_mapping_gemma():
-    """Test gemma field mapping from yaml config."""
+    """Test gemma field mapping from toml config."""
     clear_model_config_cache()
     mapping = get_model_field_mapping("gemma-4-31b-it-jang_4m")
     assert mapping.get("activity") == "name"
@@ -34,7 +34,7 @@ def test_get_model_field_mapping_unknown():
 
 
 def test_get_model_top_keys_qwen():
-    """Test qwen top keys from yaml config."""
+    """Test qwen top keys from toml config."""
     clear_model_config_cache()
     keys = get_model_top_keys("qwen3.6-35b-a3b-mxfp4")
     assert "fixed" in keys
@@ -44,7 +44,7 @@ def test_get_model_top_keys_qwen():
 
 
 def test_get_model_top_keys_gemma():
-    """Test gemma top keys from yaml config."""
+    """Test gemma top keys from toml config."""
     clear_model_config_cache()
     keys = get_model_top_keys("gemma-4-31b-it-jang_4m")
     assert "transient_events" in keys["transient"]
@@ -59,7 +59,7 @@ def test_get_model_top_keys_default():
 
 
 def test_get_model_quirks_qwen():
-    """Test qwen quirks from yaml config."""
+    """Test qwen quirks from toml config."""
     clear_model_config_cache()
     quirks = get_model_quirks("qwen3.6-35b-a3b-mxfp4")
     assert len(quirks) > 0
@@ -67,7 +67,7 @@ def test_get_model_quirks_qwen():
 
 
 def test_get_model_quirks_gemma():
-    """Test gemma quirks from yaml config."""
+    """Test gemma quirks from toml config."""
     clear_model_config_cache()
     quirks = get_model_quirks("gemma-4-31b-it-jang_4m")
     assert len(quirks) > 0
@@ -91,10 +91,10 @@ def test_init_config_missing_file():
     from lib.config import init_config
 
     with pytest.raises(FileNotFoundError):
-        init_config("nonexistent_config_file_xyz.yaml")
+        init_config("nonexistent_config_file_xyz.toml")
 
 
-def test_init_config_invalid_yaml(tmp_path):
+def test_init_config_invalid_toml(tmp_path):
     """Test init_config raises ConfigurationError for corrupt TOML file."""
     from lib.config import ConfigurationError, init_config
 

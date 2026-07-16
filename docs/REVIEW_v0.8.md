@@ -244,50 +244,18 @@ in one place.
 
 ## Cross-cutting: Config format migration (YAML + JSON → TOML)
 
-The project currently uses **three config formats**:
+The project previously used **YAML + JSON** for config. **All config is now TOML:**
 
 | Format | Files | Purpose |
 |---|---|---|
-| YAML | 11 files | Model configs, eval inputs, app configs |
-| JSON | 3 files | Eval/phase/extract signals (auto-generated) |
+| TOML | 12 files | All app configs, model configs, eval inputs |
+| JSON | 3 files | Eval/phase/extract signals (auto-generated, machine-written) |
 
-**YAML files to migrate:**
-- `conf/config.yaml` — main application config
-- `conf/twitter.yaml` — twitter summarizer config
-- `conf/rename.yaml` — image renamer config
-- `conf/weekend.yaml` — weekend planner config
-- `conf/eval_inputs.yaml` — eval test case data
-- `conf/models/foundation.yaml` — foundation model prompts
-- `conf/models/gemma.yaml` — gemma model prompts
-- `conf/models/gemma_versions.yaml` — gemma version config
-- `conf/models/laguna.yaml` — laguna model prompts
-- `conf/models/qwen.yaml` — qwen model prompts
-- `conf/models/nemotron.yaml` — nemotron model prompts
-- `conf/models/qwopus.yaml` — qwopus model prompts
-
-**JSON files to migrate:**
-- `conf/eval_signals.json` — model eval signals (auto-generated)
-- `conf/phase_signals.json` — phase signals (auto-generated)
-- `conf/extract_signals.json` — extract signals (auto-generated)
-
-Auto-generated JSON files (`*_signals.json`) can stay JSON since they are
-machine-written. Everything else should move to TOML.
-
-**Benefits of TOML:**
-- Single canonical INI-style format (one parser, one syntax)
-- Native Python support (stdlib `tomllib` in 3.11+, `tomli` for older)
-- No ambiguity between `{"key": "value"}` and `{key: value}` (YAML pitfalls)
-- Supports nested tables for model configs
-- Clearer multiline strings (`[[]]` array of tables for model lists)
-
-**Approach:**
-1. Add `tomli` / use `tomllib` (stdlib 3.11+) as the sole config parser
-2. Convert model YAMLs to TOML array-of-tables (`[[model]]` per model)
-3. Convert `config.yaml` to `[tool.ztools]` sections (following pyproject.toml convention)
-4. Convert `eval_inputs.yaml` to TOML inline tables
-5. Keep JSON for auto-generated signal data (machine-written)
-6. Update all `lib/config_core.py` and consumers to read TOML
-7. Deprecate/remove YAML parser dependency
+**Migration completed:**
+- `conf/config.toml`, `conf/twitter.toml`, `conf/rename.toml`, `conf/weekend.toml`
+- `conf/eval_inputs.toml`, `conf/models/*.toml` (7 model configs)
+- `lib/config_toml.py` uses stdlib `tomllib` (Python 3.11+) — no PyYAML dependency
+- `load_config()` auto-resolves `.yaml` → `.toml` via `.with_suffix(".toml")` for backwards compat
 
 ---
 
@@ -308,6 +276,6 @@ machine-written. Everything else should move to TOML.
 | 11 | Three `Console()` instances → one shared in `lib/tui.py` + `capture_console()` context manager | HIGH | FIXED |
 | 12 | `TASK_SCORERS` decorator registry + dedup weekend keys | MED | FIXED |
 | 13 | `eval/__init__.py` export surface (trim to public API only) | LOW | FIXED |
-| 14 | Config migration YAML/JSON → TOML | MED | PENDING |
+| 14 | Config migration YAML/JSON → TOML | MED | FIXED |
 | 15 | Tests for `quality_weekend_scorers.py` (47 tests, found + fixed 2 bugs) | HIGH | FIXED |
-| 16 | Pre-existing flake: `test_quality_runner.py::test_query_model_success` | LOW | PENDING (test isolation issue)
+| 16 | Flaky `test_quality_runner.py::test_query_model_success` | LOW | FIXED |

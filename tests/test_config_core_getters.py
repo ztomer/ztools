@@ -55,7 +55,7 @@ class TestAutoLoad:
 
         with patch("lib.config_core.Path") as mock_path:
             instance = MagicMock()
-            # Chain: Path(__file__).parent.parent / "conf" / "config.yaml"
+            # Chain: Path(__file__).parent.parent / "conf" / "config.toml"
             # First / returns a MagicMock whose / returns another MagicMock that .exists() is False
             conf_mock = MagicMock()
             yaml_mock = MagicMock()
@@ -383,7 +383,7 @@ class TestGetModelConfig:
         # Falls back to family config (no version)
         assert result == {"name": "qwen", "models": {"qwen2.5-7b": {}}}
 
-    def test_get_model_config_with_version_yaml(self, tmp_path):
+    def test_get_model_config_with_version_toml(self, tmp_path):
         import lib.config_getters as cg
 
         # Create tmp/conf/models/qwen_versions.toml
@@ -401,24 +401,24 @@ class TestGetModelConfig:
         assert "extra" in result
         assert result.get("name") == "qwen"
 
-    def test_get_model_config_with_version_yaml_no_match(self, tmp_path):
+    def test_get_model_config_with_version_toml_no_match(self, tmp_path):
         import lib.config_getters as cg
 
         conf_dir = tmp_path / "conf"
         conf_dir.mkdir()
         models_dir = conf_dir / "models"
         models_dir.mkdir()
-        version_yaml = models_dir / "qwen_versions.yaml"
-        version_yaml.write_text("name: qwen\nmodels: {}\n")
+        version_toml = models_dir / "qwen_versions.toml"
+        version_toml.write_text('name = "qwen"\n[models]\n')
         with patch("lib.config_getters.Path") as mock_path:
             instance = MagicMock()
             instance.parent.parent.__truediv__.return_value = conf_dir
             mock_path.return_value = instance
             result = cg.get_model_config("qwen-other")
-        # Returns the loaded yaml as-is
+        # Returns the loaded toml as-is
         assert result["name"] == "qwen"
 
-    def test_get_model_config_with_family_yaml(self, tmp_path):
+    def test_get_model_config_with_family_toml(self, tmp_path):
         import lib.config_getters as cg
 
         conf_dir = tmp_path / "conf"
