@@ -22,18 +22,18 @@ from lib.tui import STEP, WARN, debug_print
 from weekend.config import OSAURUS_BASE_URL, ensure_server
 
 # LLM API defaults
-LLM_TEMPERATURE = 0.1
-LLM_API_TIMEOUT = 1800
-LLM_MAX_RETRIES = 5
+LLM_TEMPERATURE = float(os.environ.get("WEEKEND_LLM_TEMPERATURE", "0.1"))
+LLM_API_TIMEOUT = int(os.environ.get("WEEKEND_LLM_TIMEOUT", "1800"))
+LLM_MAX_RETRIES = int(os.environ.get("WEEKEND_LLM_MAX_RETRIES", "5"))
 
 # Phase pipeline timeouts (seconds) — set high for slow models (qwopus).
 # phase_signals.json learns actual per-model latencies and tightens on reruns.
-PHASE_TIMEOUT_WEATHER = 900
-PHASE_TIMEOUT_EXTRACT = 900
-PHASE_TIMEOUT_DRAFT = 900
-PHASE_TIMEOUT_REFINE = 900
-PHASE_TIMEOUT_STRUCTURE = 900
-PHASE_MAX_RETRIES = 3
+PHASE_TIMEOUT_WEATHER = int(os.environ.get("WEEKEND_PHASE_TIMEOUT", "900"))
+PHASE_TIMEOUT_EXTRACT = int(os.environ.get("WEEKEND_PHASE_TIMEOUT", "900"))
+PHASE_TIMEOUT_DRAFT = int(os.environ.get("WEEKEND_PHASE_TIMEOUT", "900"))
+PHASE_TIMEOUT_REFINE = int(os.environ.get("WEEKEND_PHASE_TIMEOUT", "900"))
+PHASE_TIMEOUT_STRUCTURE = int(os.environ.get("WEEKEND_PHASE_TIMEOUT", "900"))
+PHASE_MAX_RETRIES = int(os.environ.get("WEEKEND_PHASE_MAX_RETRIES", "3"))
 PHASE_SIGNALS_PATH = Path(__file__).parent.parent / "conf" / "phase_signals.json"
 
 # Timing, scoring, and source constants (Mitchell Hashimoto & John Carmack design)
