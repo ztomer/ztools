@@ -61,8 +61,7 @@ Replace terminal-dependent emojis with standard prefixes.
 ### Phase 4: Output Styling & Wrap Formatting
 
 #### 4.1 Twitter Wrap Alignment in TUI View
-- **Issue:** Timeline outputs wrap mid-word and lack visual indentation.
-- **Fix:** Align text body cleanly after the `@name` column and prevent mid-word wrapping.
+- **Fix:** Added `overflow-x: auto; width: 100%` to `.result-area Markdown` in `tui/app.py` to prevent mid-word wrapping and ensure consistent text layout.
 
 #### 4.2 Weekend Planner Output Polish
 - **Weather Dump:** ~~Instead of dumping raw data on a single long line, format it as a readable sentence:~~ Done via `_format_weather_display()` in `weekend/cli.py`.

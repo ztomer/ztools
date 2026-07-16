@@ -350,6 +350,8 @@ class ZToolsApp(App):
     .result-area Markdown {
         background: transparent;
         color: #e2e8f0;
+        overflow-x: auto;
+        width: 100%;
     }
     .result-area Label {
         color: #e2e8f0;
