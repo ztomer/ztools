@@ -1,75 +1,82 @@
-# TUI Cleanup Plan: Dieter Rams / Susan Kare Edition
+# ZTools TUI & CLI Cleanup Plan
 
-## Guiding Principles
+This document outlines the consolidated plan and roadmap for terminal/user interface cleanup across the `ztools` codebase, applying the design principles of terminal interface design experts (Dieter Rams / Susan Kare philosophies). 
 
-1. **One prefix system** — `·` (step), `✗` (error), `!` (warning) everywhere. No `[PASS]`, `[WARN]`, `[FAIL]`, `[llm]`, `[cache]`, `[browser]`, `[!]`, `[ok]`, `[Wrn]`.
-2. **No decorative borders** — no `====`, `────`, `━━━━`, `──`, `-` * 40 in terminal output (markdown/file output is fine).
-3. **No emoji** in console output. `✗`/`·`/`!` are the only symbols. (Emoji rendering varies by terminal — unreliable.)
-4. **One print system** — pick `print()` or `console.print()` per file, never both.
-5. **Every character earns its place** — no debug/instructions printed on normal runs.
-6. **Success is silent** — no `[OK]`, `[SUCCESS]`, or `✓` for normal operations. Summary line only at end.
+---
 
-## Phases
+## 🎨 Guiding Principles
 
-### Phase 1: Kill the loudest noise (immediate payoff)
+1. **One Prefix System:** Use only `·` (step), `✗` (error), and `!` (warning) in console output. No arbitrary labels like `[PASS]`, `[FAIL]`, `[llm]`, `[cache]`, `[browser]`, `[Wrn]`, or `[ok]`.
+2. **No Decorative Borders:** Do not print banners like `====`, `────`, `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, or `"-" * 40` to stdout (markdown/file outputs are exempt).
+3. **No Console Emojis:** Rely exclusively on `✗`/`·`/`!` symbols. Emoji rendering is terminal-dependent and visually noisy.
+4. **Unified Printing System:** Pick either standard `print()` or `console.print()` on a per-file basis; do not mix them.
+5. **Silent Success:** Operations should succeed silently or output a clean final summary (e.g. `· N processed, M skipped`). No redundant `[OK]`, `[SUCCESS]`, or `✓` lines for individual steps.
 
-| # | File | Line(s) | What | Fix |
-|---|------|---------|------|-----|
-| 1 | `eval/cli.py` | 460–475 | 16-line debug instruction block printed every run | Move to `--help` text or guard behind `args.verbose` |
+---
 
-### Phase 2: Normalize prefix symbols (all tools)
+## 🏁 Completed Milestones
 
-Replace every prefix convention with the `·`/`✗`/`!` system:
+- [x] **Unified TUI Dashboard:** Centralized all four tools (`weekend`, `twitter`, `oeval`, `rename`) into a responsive Python `Textual` dashboard ([tui/app.py](file:///Users/ztomer/Projects/ztools/tui/app.py)).
+- [x] **Active Task Scheduler:** Implemented the `⏱️ Task Scheduler` tab in the TUI view to schedule, monitor, and delete background automation tasks.
+- [x] **Async Background Workers:** Added non-blocking async execution daemon loops (`scheduler_loop`) with dynamic status tags.
+- [x] **Local Quality Gate Hook:** Built a pre-push hook ([.githooks/pre-push](file:///Users/ztomer/Projects/ztools/.githooks/pre-push)) enforcing Ruff checks and isolated tests (coverage >95%) matching the remote GitHub Actions runner exactly.
 
-| # | File | Pattern | Replace with |
-|---|------|---------|--------------|
-| 2 | `twitter/summarize.py` | `[llm]` (12 lines) | `·` or drop (context is obvious) |
-| 3 | `twitter/browser.py` | `[cookies]`, `[browser]`, `[parse]` | Drop labels, keep message |
-| 4 | `twitter/output.py` | `[clean]`, `[!]` | Drop `[clean]`, `[!]` → `!` |
-| 5 | `twitter/cli.py` (shim at root: `twitter_summarizer.py`) | `[!]`, `[cache]`, `[ok]` | `!`, drop `[cache]`, drop `[ok]` |
-| 6 | `lib/config_core.py` | `[ Wrn ]` | Drop label |
-| 7 | `eval/run.py` | `[PASS]`, `[WARN]`, `[FAIL]` | `·`, `!`, `✗` |
-| 8 | `eval/cli.py` | `[PASS]`, `[WARN]`, `[FAIL]` | `·`, `!`, `✗` |
-| 9 | `lib/quality_entry.py` | `──` section separators | Drop |
-| 10 | `lib/quality_runner.py` | `✓`, `△` | `·`, `!` |
+---
 
-### Phase 3: Kill decorative borders
+## 🛠️ Outstanding Cleanup Tasks
 
-| # | File | Line(s) | What |
-|---|------|---------|------|
-| 11 | `eval/run.py` | 170–172 | `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` banner |
-| 12 | `twitter/cli.py` (shim at root: `twitter_summarizer.py`) | 218, 220 | `"-" * 40` |
-| 13 | `eval/benchmark_quality.py` | 292–294, 357–359 | `====` borders |
-| 14 | `eval/benchmark_quality.py` | 299, 350 | `──` borders |
+### Phase 1: Prefix Standardization
+Normalize all logger and output statements across CLI scripts to use the `·`, `!`, `✗` prefixes.
 
-### Phase 4: Unify print/console.print
+| # | File | Legacy Format | Action |
+|---|------|---------------|--------|
+| 1.1 | `eval/run.py` & `eval/cli.py` | `[PASS]`, `[WARN]`, `[FAIL]` | Replace with `·`, `!`, `✗` |
+| 1.2 | `twitter/summarize.py` | `[llm]` | Replace with `·` or drop |
+| 1.3 | `twitter/browser.py` | `[cookies]`, `[browser]`, `[parse]` | Drop labels, keep raw message prefixed with `·` |
+| 1.4 | `twitter/output.py` | `[clean]`, `[!]` | Replace `[!]` with `!`, drop `[clean]` |
+| 1.5 | `twitter/cli.py` | `[!]`, `[cache]`, `[ok]` | `!`, drop `[cache]`, drop `[ok]` |
+| 1.6 | `lib/config_core.py` | `[ Wrn ]` | Replace with `!` |
+| 1.7 | `lib/quality_runner.py` | `✓`, `△` | Replace with `·`, `!` |
 
-| # | File | Issue |
-|---|------|-------|
-| 15 | `twitter/cli.py` (shim at root: `twitter_summarizer.py`) | Mixes `console.print` (line 186) with plain `print` (all others). Convert all to `print()` or all to `console.print()`. |
-| 16 | `weekend/cli.py` (shim at root: `weekend_planner.py`) | Mixes plain `print` (line 361 `[WARNING]`) with Rich. Pick one. |
+---
 
-### Phase 5: Remove emoji from console
+### Phase 2: Eliminate Console Decorative Borders & Banners
+Remove visual clutter and character-printed lines from stdout runs.
 
-| # | File | Line(s) | Emoji | Replace with |
-|---|------|---------|-------|--------------|
-| 17 | `eval/run.py` | 183 | `⚠️` | `!` |
-| 18 | `eval/cli.py` | 138, 162, 372, 375, 378 | `⚠️` | `!` |
+*   [ ] **`eval/run.py` (Lines 170-172):** Remove `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━` banner.
+*   [ ] **`twitter/cli.py` (Lines 218, 220):** Remove `"-" * 40` separators.
+*   [ ] **`eval/benchmark_quality.py`:** Remove `====` and `──` borders.
+*   [ ] **`weekend/cli.py`:** Remove `=== Weekend Generator Started ===` and similar decorative header lines.
 
-### Phase 6 (bonus): Consistency polish
+---
 
-| # | File | What |
-|---|------|------|
-| 19 | `rename/cli.py` | Lines 112–134: 6 repeated `✗` error handlers — could DRY into a helper |
-| 20 | `rename/llm.py` | Lines 199, 216: error prints missing `✗` prefix (unlike `rename/helpers.py`) |
+### Phase 3: Emoji Sanitization
+Replace terminal-dependent emojis with high-fidelity unicode or standard prefixes.
 
-## Verification
+*   [ ] **`eval/run.py` (Line 183):** Replace `⚠️` with `!`.
+*   [ ] **`eval/cli.py`:** Replace `⚠️` with `!`.
 
-After each phase run:
-```
-python3 -m pytest tests/test_validators.py tests/test_config.py tests/test_content_processing.py tests/test_parse.py tests/test_parse2.py tests/test_weekend.py tests/test_twitter.py tests/test_taxes_validator.py -v
-```
+---
 
-## Test Count Target
+### Phase 4: Output Styling & Wrap Formatting
 
-74 passed, 0 failed, no LLM-dependent tests included.
+#### 4.1 Twitter Wrap Alignment in TUI View
+- **Issue:** Timeline outputs wrap mid-word and lack visual indentation.
+- **Fix:** Align text body cleanly after the `@name` column and prevent mid-word wrapping.
+
+#### 4.2 Weekend Planner Output Polish
+- **Weather Dump:** Instead of dumping raw data on a single long line, format it as a readable sentence: `"Fri 27°C (rain), Sat 20°C (heavy rain), Sun 18°C (rain)"`.
+- **Dangling Progress Spinners:** Replace the timing-heavy `⠏ ✓` spinners in `weekend/cli.py` with simple `·` prefixed lines that complete in-place.
+- **Table Scores:** Remove the score column if it defaults to `N/A`, or implement actual scoring metrics.
+
+#### 4.3 Image Renamer Output Compactness
+- **Issue:** Printing long `old_name.png -> new_name.png` lines on every file creates cluttered terminal outputs.
+- **Fix:** Print only the filename difference/renamed output concisely (e.g. showing just the changes).
+
+---
+
+### Phase 5: Print System Unification
+Pick a single printing interface per file to avoid mixed terminal formats.
+
+*   [ ] **`twitter/cli.py`:** Standardize on standard `print` or `console.print` exclusively (currently mixes both).
+*   [ ] **`weekend/cli.py`:** Standardize console print format (removes inline mixed Rich markup).
