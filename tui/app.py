@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import List
 
 from textual.app import App, ComposeResult
-from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
+from textual.containers import Container, Horizontal, Vertical, ScrollableContainer, VerticalScroll
 from textual.widgets import (
     Header,
     Footer,
@@ -20,6 +20,8 @@ from textual.widgets import (
     ListView,
     ListItem,
     ContentSwitcher,
+    Collapsible,
+    Markdown,
 )
 from rich.text import Text
 from rich.panel import Panel
@@ -73,7 +75,7 @@ class WeekendPlannerView(Vertical):
             yield Checkbox("Use On-Device Model (Apple FM)", value=False, id="wk-foundation")
 
         yield Button("Generate Weekend Plan", variant="success", id="btn-wk-generate")
-        yield RichLog(id="wk-log", highlight=True, markup=True)
+        yield VerticalScroll(id="wk-result-area", classes="result-area")
 
 
 class TwitterSummarizerView(Vertical):
@@ -94,7 +96,7 @@ class TwitterSummarizerView(Vertical):
             yield Checkbox("Use Cache", value=False, id="tw-cache")
 
         yield Button("Summarize Timeline", variant="primary", id="btn-tw-generate")
-        yield RichLog(id="tw-log", highlight=True, markup=True)
+        yield VerticalScroll(id="tw-result-area", classes="result-area")
 
 
 class ModelEvaluatorView(Vertical):
@@ -117,7 +119,7 @@ class ModelEvaluatorView(Vertical):
             yield Select(options=DEFAULT_MODELS, id="ev-model", prompt="Select LLM Model")
 
         yield Button("Run Regression Check", variant="warning", id="btn-ev-generate")
-        yield RichLog(id="ev-log", highlight=True, markup=True)
+        yield VerticalScroll(id="ev-result-area", classes="result-area")
 
 
 class ImageRenamerView(Vertical):
@@ -139,7 +141,7 @@ class ImageRenamerView(Vertical):
             yield Checkbox("Force Relevance Check", value=False, id="rn-force")
 
         yield Button("Rename Screenshots", variant="error", id="btn-rn-generate")
-        yield RichLog(id="rn-log", highlight=True, markup=True)
+        yield VerticalScroll(id="rn-result-area", classes="result-area")
 
 
 class ZToolsApp(App):
@@ -214,12 +216,24 @@ class ZToolsApp(App):
         margin-bottom: 1;
         width: 25;
     }
-    RichLog {
+    .result-area {
         height: 1fr;
         background: #090d16;
         border: solid #1e293b;
         color: #f8fafc;
         padding: 1;
+    }
+    .result-area Markdown {
+        background: transparent;
+        color: #e2e8f0;
+    }
+    .result-area Label {
+        color: #e2e8f0;
+    }
+    Collapsible {
+        background: #1e293b;
+        border: solid #334155;
+        margin-bottom: 1;
     }
     """
 
@@ -289,17 +303,22 @@ class ZToolsApp(App):
         elif event.button.id == "btn-rn-generate":
             await self.run_image_renamer()
 
+    def _update_status(self, container_id: str, lines: List[str], message: str) -> None:
+        lines.append(message)
+        container = self.query_one(container_id)
+        for child in list(container.children):
+            child.remove()
+        container.mount(Label(message))
+
     async def run_weekend_planner(self) -> None:
-        log = self.query_one("#wk-log")
-        log.clear()
+        lines = []
+        self._update_status("#wk-result-area", lines, "⏳ Bounding dates and fetching forecast...")
         
         location = self.query_one("#wk-location").value
         model = self.query_one("#wk-model").value
         use_cache = self.query_one("#wk-cache").value
         use_foundation = self.query_one("#wk-foundation").value
 
-        log.write("[bold cyan]📅 Bounding dates and fetching forecast...[/bold cyan]")
-        
         # Setup configs/arguments
         os.environ["OLLAMA_MODEL"] = model or ""
         
@@ -318,9 +337,7 @@ class ZToolsApp(App):
                 _fetch_data, fri, sun, year, month_name, use_cache
             )
             
-            log.write(f"Bounded Dates: {dates}")
-            log.write(f"Weather Forecast: {weather}")
-            log.write("[bold yellow]Invoking Osaurus pipeline...[/bold yellow]")
+            self._update_status("#wk-result-area", lines, f"⏳ Bounded dates: {dates}\nInvoking Osaurus pipeline...")
 
             # Run LLM pipeline
             json_trans, json_fixed = await asyncio.to_thread(
@@ -340,23 +357,24 @@ class ZToolsApp(App):
             fixed_acts = _parse_fixed(json_fixed, model, {})
             transient_items = _parse_transient(json_trans, model, {})
 
-            log.write("[bold green]✔ Weekend plan generated successfully![/bold green]")
-            
             plan_md = build_markdown_tables(dates, weather, {"transient_events": transient_items}, fixed_acts)
-            log.write("\n" + plan_md)
+            
+            # Mount final result
+            container = self.query_one("#wk-result-area")
+            for child in list(container.children):
+                child.remove()
+            container.mount(Markdown(plan_md))
 
         except Exception as e:
-            log.write(f"[bold red]Error running weekend planner: {e}[/bold red]")
+            self._update_status("#wk-result-area", lines, f"❌ Error: {e}")
 
     async def run_twitter_summarizer(self) -> None:
-        log = self.query_one("#tw-log")
-        log.clear()
+        lines = []
+        self._update_status("#tw-result-area", lines, "⏳ Initializing Playwright and loading Chrome cookies...")
 
         since = self.query_one("#tw-since").value
         model = self.query_one("#tw-model").value
         use_cache = self.query_one("#tw-cache").value
-        
-        log.write("[bold cyan]🐦 Initializing Playwright and loading Chrome cookies...[/bold cyan]")
         
         try:
             # Parse since time
@@ -367,7 +385,7 @@ class ZToolsApp(App):
                 since_time = datetime.now(timezone.utc) - timedelta(days=int(since[:-1]))
 
             # Fetch tweets via browser
-            log.write(f"Scraping tweets since: {since_time.strftime('%Y-%m-%d %H:%M:%S UTC')}...")
+            self._update_status("#tw-result-area", lines, f"⏳ Scraping tweets since: {since_time.strftime('%Y-%m-%d %H:%M:%S UTC')}...")
             
             tweets = await asyncio.to_thread(
                 collect_tweets_via_browser,
@@ -376,18 +394,15 @@ class ZToolsApp(App):
             )
             
             if not tweets:
-                log.write("[bold yellow]No tweets scraped. Using fallback cache...[/bold yellow]")
-                # If cache exists
+                self._update_status("#tw-result-area", lines, "⏳ No tweets scraped. Using fallback cache...")
                 from twitter.output import load_debug_cache
                 tweets = load_debug_cache() or []
                 
-            log.write(f"Scraped {len(tweets)} tweets.")
-            
             if not tweets:
-                log.write("[bold red]No timeline data available.[/bold red]")
+                self._update_status("#tw-result-area", lines, "❌ No timeline data available.")
                 return
 
-            log.write(f"Summarizing tweets with {model}...")
+            self._update_status("#tw-result-area", lines, f"⏳ Scraped {len(tweets)} tweets. Summarizing timeline with {model}...")
             
             # Summarize timeline
             host = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
@@ -399,29 +414,42 @@ class ZToolsApp(App):
                 ""
             )
             
-            log.write("[bold green]✔ Timeline Summarized Successfully![/bold green]")
-            log.write("\n" + summary)
+            # Extract thinking block
+            import re
+            thinking_match = re.search(r"<thinking>(.*?)</thinking>", summary, re.DOTALL)
+            if thinking_match:
+                thinking_text = thinking_match.group(1).strip()
+                clean_summary = re.sub(r"<thinking>.*?</thinking>", "", summary, flags=re.DOTALL).strip()
+            else:
+                thinking_text = None
+                clean_summary = summary.strip()
+
+            # Mount final result
+            container = self.query_one("#tw-result-area")
+            for child in list(container.children):
+                child.remove()
+                
+            if thinking_text:
+                container.mount(Collapsible(Markdown(thinking_text), title="💡 Show LLM Reasoning Block", collapsed=True))
+            
+            container.mount(Markdown(clean_summary))
             
         except Exception as e:
-            log.write(f"[bold red]Error: {e}[/bold red]")
+            self._update_status("#tw-result-area", lines, f"❌ Error: {e}")
 
     async def run_model_evaluator(self) -> None:
-        log = self.query_one("#ev-log")
-        log.clear()
+        lines = []
+        self._update_status("#ev-result-area", lines, "⏳ Running quality evaluation...")
 
         task = self.query_one("#ev-task").value
         model = self.query_one("#ev-model").value
         
-        log.write(f"[bold cyan]📊 Running quality evaluation for {model} on {task}...[/bold cyan]")
-        
         try:
             baseline = await asyncio.to_thread(load_baseline)
             if not baseline:
-                log.write("[bold red]No baseline found to run evaluation against.[/bold red]")
+                self._update_status("#ev-result-area", lines, "❌ No baseline found to run evaluation against.")
                 return
 
-            log.write(f"Baseline loaded with {len(baseline)} entries.")
-            
             # Run mock scorecard match
             scorecards = []
             dim_weights = get_dimension_weights(task)
@@ -439,29 +467,31 @@ class ZToolsApp(App):
                         scorecards.append(sc)
 
             warnings = compare_to_baseline(scorecards)
+            
+            container = self.query_one("#ev-result-area")
+            for child in list(container.children):
+                child.remove()
+                
             if warnings:
-                for w in warnings:
-                    log.write(f"[bold yellow]⚠ {w}[/bold yellow]")
+                container.mount(Markdown("\n".join(f"- ⚠ {w}" for w in warnings)))
             else:
-                log.write("[bold green]✔ No regressions detected against baseline.[/bold green]")
+                container.mount(Markdown("### ✔ No regressions detected against baseline."))
                 
         except Exception as e:
-            log.write(f"[bold red]Error: {e}[/bold red]")
+            self._update_status("#ev-result-area", lines, f"❌ Error: {e}")
 
     async def run_image_renamer(self) -> None:
-        log = self.query_one("#rn-log")
-        log.clear()
+        lines = []
+        self._update_status("#rn-result-area", lines, "⏳ Loading images...")
 
         directory_str = self.query_one("#rn-dir").value
         model = self.query_one("#rn-model").value
         dry_run = self.query_one("#rn-dry-run").value
         force = self.query_one("#rn-force").value
 
-        log.write(f"[bold cyan]🖼️ Loading images from: {directory_str}[/bold cyan]")
-        
         directory = Path(directory_str)
         if not directory.exists() or not directory.is_dir():
-            log.write("[bold red]Invalid directory path.[/bold red]")
+            self._update_status("#rn-result-area", lines, "❌ Invalid directory path.")
             return
 
         image_files = []
@@ -470,17 +500,16 @@ class ZToolsApp(App):
             
         image_files = list(set([f for f in image_files if f.suffix.lower() in image_extensions]))
 
-        log.write(f"Found {len(image_files)} image files.")
         if not image_files:
+            self._update_status("#rn-result-area", lines, "❌ No images found.")
             return
 
-        log.write(f"Renaming with {model}... (Dry run: {dry_run})")
+        self._update_status("#rn-result-area", lines, f"⏳ Renaming {len(image_files)} images with {model}...")
         
         host = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
+        results = []
         
         for image_path in sorted(image_files):
-            log.write(f"Processing: {image_path.name}...")
-            
             success, message = await asyncio.to_thread(
                 rename_image,
                 image_path,
@@ -491,11 +520,15 @@ class ZToolsApp(App):
                 vlm_model=model,
                 api_key=""
             )
-            
             if success:
-                log.write(f"[green]✔ Processed {image_path.name}[/green]")
+                results.append(f"- **{image_path.name}**: Renamed successfully")
             else:
-                log.write(f"[yellow]Skipped/Failed {image_path.name}: {message}[/yellow]")
+                results.append(f"- **{image_path.name}**: Skipped ({message})")
+
+        container = self.query_one("#rn-result-area")
+        for child in list(container.children):
+            child.remove()
+        container.mount(Markdown("\n".join(results)))
 
 
 def main():
