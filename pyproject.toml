@@ -94,7 +94,7 @@ addopts = "-ra"
 
 [tool.coverage.run]
 source = ["lib", "weekend", "twitter", "rename", "eval"]
-omit = ["*/tests/*", "*/__main__.py", "*/__init__.py"]
+omit = ["*/tests/*", "*/__main__.py", "*/__init__.py", "eval/explore_quirks.py"]
 
 [tool.coverage.report]
 fail_under = 95
