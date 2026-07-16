@@ -11,16 +11,16 @@ from lib.tui import WARN
 from weekend.config import CITY, LATITUDE, LONGITUDE, REGION, TIMEZONE
 
 # HTTP request defaults
-WEATHER_API_TIMEOUT = 10
+WEATHER_API_TIMEOUT = int(os.environ.get("WEEKEND_WEATHER_TIMEOUT", "10"))
 
 # Web search retries and limits
-FETCH_RETRIES = 3
-DDGS_MAX_RESULTS = 8
-REVIEW_MAX_RESULTS = 5
-MAX_BODY_LENGTH = 300
+FETCH_RETRIES = int(os.environ.get("WEEKEND_FETCH_RETRIES", "3"))
+DDGS_MAX_RESULTS = int(os.environ.get("WEEKEND_DDGS_MAX_RESULTS", "8"))
+REVIEW_MAX_RESULTS = int(os.environ.get("WEEKEND_REVIEW_MAX_RESULTS", "5"))
+MAX_BODY_LENGTH = int(os.environ.get("WEEKEND_MAX_BODY_LENGTH", "300"))
 
 # Rate limiting
-RATE_LIMIT_SLEEP = 0.5
+RATE_LIMIT_SLEEP = float(os.environ.get("WEEKEND_RATE_LIMIT_SLEEP", "0.5"))
 
 # Date, weather, and scraper constants (Mitchell Hashimoto & John Carmack design)
 FRIDAY_WEEKDAY_INDEX = 4
@@ -30,9 +30,9 @@ SUNDAY_DELTA_DAYS = 2
 WEATHER_API_URL = os.environ.get(
     "WEATHER_API_URL", "https://api.open-meteo.com/v1/forecast"
 )
-DAILY_METEO_VARS = "temperature_2m_max,precipitation_sum"
-PRECIPITATION_THRESHOLD = 0.5
-FORECAST_HEADER = "Daily Forecast:\n"
+DAILY_METEO_VARS = os.environ.get("WEEKEND_METEO_VARS", "temperature_2m_max,precipitation_sum")
+PRECIPITATION_THRESHOLD = float(os.environ.get("WEEKEND_PRECIP_THRESHOLD", "0.5"))
+FORECAST_HEADER = os.environ.get("WEEKEND_FORECAST_HEADER", "Daily Forecast:\n")
 
 SCRAPE_ATTEMPTS = 3
 DEFAULT_REVIEW_SCORE = 0.0

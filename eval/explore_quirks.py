@@ -7,14 +7,15 @@ Run: python3 explore_model_quirks.py <model>
 """
 
 import argparse
+import os
 
 from lib.osaurus_lib import call, filter_json_items
 from lib.validators_lib import check_source_extraction, has_item_details
 
 # Timeouts for model tests (seconds)
-DEFAULT_TEST_TIMEOUT = 30
-SOURCE_MATCH_TIMEOUT = 60
-SOURCE_TEST_TIMEOUT = 90
+DEFAULT_TEST_TIMEOUT = int(os.environ.get("QUIRK_TEST_TIMEOUT", "30"))
+SOURCE_MATCH_TIMEOUT = int(os.environ.get("QUIRK_SOURCE_TIMEOUT", "60"))
+SOURCE_TEST_TIMEOUT = int(os.environ.get("QUIRK_SOURCE_TEST_TIMEOUT", "90"))
 
 TEST_PROMPTS = {
     "simple_json": {

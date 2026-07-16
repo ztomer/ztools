@@ -186,9 +186,13 @@ def collect_tweets_via_browser(since_time: datetime, debug: bool) -> list[dict]:
             sys.exit(EXIT_ERROR)
 
         try:
-            localized_following = (
-                "Following", "Abonnements", "Siguiendo", "Sigo", "Gefolgt", "关注", "フォロー中"
-            )
+            _following_env = os.environ.get("TWITTER_FOLLOWING_TAB", "")
+            if _following_env:
+                localized_following = [t.strip() for t in _following_env.split(",")]
+            else:
+                localized_following = (
+                    "Following", "Abonnements", "Siguiendo", "Sigo", "Gefolgt", "关注", "フォロー中"
+                )
             following_tab = None
             for term in localized_following:
                 loc = page.locator('[role="tab"]', has_text=term).first

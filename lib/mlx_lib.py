@@ -167,7 +167,7 @@ def call_mlx(model_path: Path, prompt: str) -> Optional[str]:
 
     # Use temp directory for debugging (no hardcoded paths)
 
-    debug_dir = Path(tempfile.gettempdir()) / "mlx_debug"
+    debug_dir = Path(os.environ.get("MLX_DEBUG_DIR", tempfile.gettempdir())) / "mlx_debug"
     debug_dir.mkdir(exist_ok=True)
     uid = uuid.uuid4().hex[:8]
     prompt_file = str(debug_dir / f"prompt_{uid}.txt")

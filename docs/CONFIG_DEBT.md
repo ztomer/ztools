@@ -116,10 +116,10 @@ Different backends use different API paths, unclear which is canonical.
 | `weekend/config.py` | 13–14 | `~/.weekend_events_debug_cache.json` | Use `$XDG_CACHE_HOME` — ✅ already uses `XDG_CACHE_HOME` |
 | `weekend/config.py` | 74 | `~/.config/model_eval.json` | Env var or config key — ✅ uses `Path.home()` |
 | `weekend/config.py` | 81 | `/Applications/osaurus.app` | Same as above — ✅ now uses `OSAURUS_APP` env var |
-| `weekend/cli.py` | 62 | `~/Documents/` | Config key `output_dir` |
+| `weekend/cli.py` | 62 | `~/Documents/` | Config key `output_dir` — ✅ uses `WEEKEND_OUTPUT_DIR` env var |
 | `eval/report.py` | 169,205,240,424,505 | `~/.config/ztools` | Extract to constant — ✅ uses `_EVAL_DIR` module constant |
 | `lib/tui.py` | 5 | `~/.config/zstyle` | Env var `ZSTYLE_CONFIG` — ✅ uses `$ZSTYLE_CONFIG` |
-| `lib/mlx_lib.py` | 174 | `/tmp/mlx_debug` | Config key or env var |
+| `lib/mlx_lib.py` | 174 | `/tmp/mlx_debug` | Config key or env var — ✅ uses `MLX_DEBUG_DIR` env var |
 
 ### P2.2 — Hardcoded URLs (non-critical)
 
@@ -136,28 +136,28 @@ Different backends use different API paths, unclear which is canonical.
 | `twitter/summarize.py` | 174 | `"qwen3.6-35b-a3b-mxfp4"` (fallback model) | Config-based preference list |
 | `weekend/config.py` | 78 | `"gemma-4-26b-a4b-it-4bit"` (fallback) | Remove, rely on config |
 | `weekend/llm.py` | 35 | `["qwen", "llama", "phi"]` (MLX fallbacks) | Config key |
-| `lib/osaurus_models.py` | 27–28 | `DEFAULT_PREFERRED_MODELS`, `DEFAULT_VLM_KEYWORDS` | Config keys |
+| `lib/osaurus_models.py` | 27–28 | `DEFAULT_PREFERRED_MODELS`, `DEFAULT_VLM_KEYWORDS` | Config keys — ✅ uses `OSAURUS_PREFERRED_MODELS`, `OSAURUS_VLM_KEYWORDS` env vars |
 
 ### P2.4 — Hardcoded timeouts and limits
 
 | File | Line(s) | Values | Suggestion |
 |------|---------|--------|------------|
-| `eval/explore_quirks.py` | 13–15 | 30, 60, 90s | Config keys |
-| `eval/cli.py` | 116–126 | 5, 2, 30, 3, 8, 2s + 5 retries | Config keys |
-| `eval/cli.py` | 356 | 64 GB (machine-dependent) | Detect dynamically |
+| `eval/explore_quirks.py` | 13–15 | 30, 60, 90s | Config keys — ✅ via `QUIRK_*` env vars |
+| `eval/cli.py` | 116–126 | 5, 2, 30, 3, 8, 2s + 5 retries | Config keys — ✅ `EVAL_RESTART_TIMEOUT` env var (--timeout flag exists) |
+| `eval/cli.py` | 356 | 64 GB (machine-dependent) | Detect dynamically — ✅ uses psutil |
 | `lib/osaurus_server.py` | 14–19 | 1, 20, 3, 10, 5, 2 | Config keys — ✅ via `OSAURUS_*` env vars |
-| `lib/osaurus_server.py` | 23–24 | `["osaurus", "serve", "--yes"]` | Config key |
+| `lib/osaurus_server.py` | 23–24 | `["osaurus", "serve", "--yes"]` | Config key — ✅ via `OSAURUS_CLI_CMD` env var |
 | `twitter/summarize.py` | 37–52 | token estimates, timeouts, thresholds | Config keys — ✅ via `TWITTER_*` env vars |
 | `twitter/browser.py` | 21,24–25,38,29–30 | scrolls, pauses, timeouts, waits | Config keys — ✅ via `TWITTER_*` env vars |
-| `twitter/browser.py` | 179–181 | `"Following"` tab selector | Config key (fragile) |
+| `twitter/browser.py` | 179–181 | `"Following"` tab selector | Config key (fragile) — ✅ via `TWITTER_FOLLOWING_TAB` env var |
 
 ### P2.5 — Search query templates
 
 | File | Line | Value | Suggestion |
 |------|------|-------|------------|
-| `weekend/data.py` | 15–18 | `FETCH_RETRIES=3`, `DDGS_MAX_RESULTS=8`, `REVIEW_MAX_RESULTS=5`, `MAX_BODY_LENGTH=300` | Config keys |
-| `weekend/data.py` | 20 | `RATE_LIMIT_SLEEP=0.5` | Config key |
-| `weekend/data.py` | 28–30 | `DAILY_METEO_VARS`, `PRECIPITATION_THRESHOLD`, `FORECAST_HEADER` | Config keys |
+| `weekend/data.py` | 15–18 | `FETCH_RETRIES=3`, `DDGS_MAX_RESULTS=8`, `REVIEW_MAX_RESULTS=5`, `MAX_BODY_LENGTH=300` | Config keys — ✅ via `WEEKEND_*` env vars |
+| `weekend/data.py` | 20 | `RATE_LIMIT_SLEEP=0.5` | Config key — ✅ via `WEEKEND_RATE_LIMIT_SLEEP` env var |
+| `weekend/data.py` | 28–30 | `DAILY_METEO_VARS`, `PRECIPITATION_THRESHOLD`, `FORECAST_HEADER` | Config keys — ✅ via `WEEKEND_*` env vars |
 | `weekend/data.py` | 115–120 | 5 transient search query templates | Config key |
 | `weekend/data.py` | 136–141 | 5 fixed venue search query templates | Config key |
 | `weekend/data.py` | 161 | Review search query template | Config key |
@@ -202,8 +202,16 @@ Different backends use different API paths, unclear which is canonical.
 - ✅ Infrastructure paths via env vars: `OSAURUS_APP`, `OSAURUS_DUMP_DIR`, `XDG_RUNTIME_DIR`, `TWITTER_*`, `WEEKEND_MLX_FALLBACKS`, `RENAME_DEFAULT_FILENAME_MODEL`, `WEATHER_API_URL`
 - ✅ Twitter timeouts/constants via `TWITTER_*` env vars: scrolls, pauses, page load, click timeout, chars per token, output reserve, context window
 - ✅ weekday/llm.py timeouts via `WEEKEND_*` env vars: `WEEKEND_LLM_TIMEOUT`, `WEEKEND_PHASE_TIMEOUT`, `WEEKEND_LLM_MAX_RETRIES`, `WEEKEND_PHASE_MAX_RETRIES`
-- ⬜ Search query templates in `weekend/data.py` — in config
-- ⬜ Remaining infrastructure paths and timeouts — low priority
+- ✅ `weekend/data.py` search constants via `WEEKEND_*` env vars: fetch retries, ddgs results, rate limit, precip threshold, meteo vars
+- ✅ `lib/mlx_lib.py` debug dir via `MLX_DEBUG_DIR` env var
+- ✅ `weekend/cli.py` output dir via `WEEKEND_OUTPUT_DIR` env var
+- ✅ `eval/explore_quirks.py` timeouts via `QUIRK_*` env vars
+- ✅ `eval/cli.py` restart timeout via `EVAL_RESTART_TIMEOUT` env var
+- ✅ `lib/osaurus_server.py` CLI command via `OSAURUS_CLI_CMD` env var
+- ✅ `lib/osaurus_models.py` model lists via `OSAURUS_PREFERRED_MODELS`, `OSAURUS_VLM_KEYWORDS` env vars (already fixed, doc was stale)
+- ✅ `twitter/browser.py` Following tab via `TWITTER_FOLLOWING_TAB` env var
+- ⬜ Search query templates in `weekend/data.py` — in config (needs structured config extraction)
+- ⬜ Remaining low-priority: eval/cli.py timeouts (--timeout flag exists), twitter/browser.py login keywords, eval/run.py DEFAULT_EVAL_TIMEOUT (--timeout flag exists)
 
 ## Summary
 
@@ -211,7 +219,7 @@ Different backends use different API paths, unclear which is canonical.
 |----------|-----------|-------------|-------|-------|
 | P0 | 6 | 2 | 8 | **8** |
 | P1 | 14 | 7 | 17 | **16** |
-| P2 | 59 | 11 | 65 | **25** |
-| **Total** | **79** | **20** | **90** | **49** |
+| P2 | 59 | 11 | 65 | **34** |
+| **Total** | **79** | **20** | **90** | **58** |
 
 Remaining **11 violations** (all hardcoded years in test-data fixtures) are intentional test data, not configuration debt. The CI gate prevents new violations — it only blocks on changed lines, so pre-existing test-data years don't block commits.

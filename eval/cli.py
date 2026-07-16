@@ -144,7 +144,7 @@ DEFAULT_SERVER_PORT = 1337
 
 # Timeouts for server checks (seconds)
 SERVER_RESPONSIVE_TIMEOUT = 5
-RESTART_CHECK_TIMEOUT = 2
+RESTART_CHECK_TIMEOUT = int(os.environ.get("EVAL_RESTART_TIMEOUT", "2"))
 FLUSH_CALL_TIMEOUT = 30
 
 # Sleep durations during model flush (seconds)
