@@ -16,6 +16,7 @@ from lib.llm.constants import (
 )
 
 from .config_toml import load_config
+from .tui import WARN
 
 
 class ConfigurationError(Exception):
@@ -51,7 +52,7 @@ def _auto_load():
         base = Path(__file__).parent.parent / "conf"
         config_path = base / "config.toml"
         if not config_path.exists():
-            print("Config file not found, using fallback defaults")
+            print(f"{WARN} Config file not found, using fallback defaults")
             _config_loaded = True
             return
         try:

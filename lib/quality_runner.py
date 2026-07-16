@@ -305,7 +305,7 @@ def run_suite(
                 prompt = get_model_prompt(model, Task(case.task))
                 if not prompt:
                     if verbose:
-                        print("- skip")
+                        print(f"{STEP} skip")
                     continue
                 output = query_model(model, prompt, case.input_text, case.task)
 

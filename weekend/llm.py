@@ -18,7 +18,7 @@ from lib.osaurus_lib import (
     panic_dump,
     strip_thinking,
 )
-from lib.tui import WARN, debug_print
+from lib.tui import STEP, WARN, debug_print
 from weekend.config import OSAURUS_BASE_URL, ensure_server
 
 # LLM API defaults
@@ -100,12 +100,12 @@ def _call_llm(
         messages = apply_model_quirks(messages, model_name)
 
         debug_print(
-            f"[llm] _call_llm: phase={phase_key}, attempt={_attempt[0]}, "
+            f"· _call_llm: phase={phase_key}, attempt={_attempt[0]}, "
             f"base={base_timeout}, timeout={current_timeout}",
             flush=True,
         )
         debug_print(
-            f"[llm] system={len(messages[0]['content'])} chars, "
+            f"· system={len(messages[0]['content'])} chars, "
             f"user={len(messages[1]['content'])} chars",
             flush=True,
         )
@@ -127,23 +127,23 @@ def _call_llm(
                 try:
                     json_str = _extract_json_only(cleaned)
                     if json_str is not None:
-                        debug_print(f"[llm] JSON extracted, length={len(json_str)}", flush=True)
+                        debug_print(f"· JSON extracted, length={len(json_str)}", flush=True)
                         return json.loads(json_str)
-                    debug_print("[llm] WARNING: _extract_json_only returned None", flush=True)
+                    debug_print("· _extract_json_only returned None", flush=True)
                 except Exception as e:
-                    debug_print(f"[llm] JSON parse error: {e}", flush=True)
+                    debug_print(f"· JSON parse error: {e}", flush=True)
                 return None
             return cleaned
         else:
             err = result.get("error", "no content") if isinstance(result, dict) else str(result)
             print(f"{WARN} Osaurus API error: {err[:100]}")
-            debug_print(f"[llm] No content in result: {result}", flush=True)
+            debug_print(f"· No content in result: {result}", flush=True)
         return None
 
     def mlx_fn():
         mlx_model = find_text_mlx_model(DEFAULT_MLX_FALLBACKS)
         if mlx_model:
-            print(f"[llm] MLX fallback: {mlx_model.name}")
+            print(f"{STEP} MLX fallback: {mlx_model.name}")
             try:
                 messages = [
                     {"role": "system", "content": system_prompt},
@@ -164,7 +164,7 @@ def _call_llm(
                         raise ValueError("No valid JSON in MLX response")
                     return cleaned
             except Exception as e:
-                print(f"[llm] MLX failed: {e}")
+                print(f"{WARN} MLX failed: {e}")
         return None
 
     def foundation_fn():
@@ -172,11 +172,11 @@ def _call_llm(
 
         if not foundation_available():
             return None
-        print("[llm] On-device Foundation Models fallback")
+        print(f"{STEP} On-device Foundation Models fallback")
         try:
             raw = call_foundation(system_prompt, user_prompt, parse_json=parse_json)
         except Exception as e:
-            print(f"[llm] Foundation failed: {e}")
+            print(f"{WARN} Foundation failed: {e}")
             return None
         if raw is None:
             return None
@@ -184,7 +184,7 @@ def _call_llm(
             json_str = _extract_json_only(raw)
             if json_str is not None:
                 return json.loads(json_str)
-            print("[llm] Foundation returned no valid JSON")
+            print(f"{WARN} Foundation returned no valid JSON")
             return None
         return raw
 
@@ -211,7 +211,7 @@ def _call_llm(
         _save_phase_signals(signals)
 
     if parse_json and result is None and last_content is not None:
-        debug_print("[llm] All retries failed, dumping content")
+        debug_print("· All retries failed, dumping content")
         panic_dump(last_content)
 
     return result
@@ -227,7 +227,7 @@ def get_llm_json(system_prompt, user_prompt, max_retries=LLM_MAX_RETRIES, use_fo
         use_foundation=use_foundation,
     )
     if result is None:
-        print("[llm] WARNING: Failed to parse JSON, returning empty result")
+        print(f"{WARN} Failed to parse JSON, returning empty result")
     return result
 
 

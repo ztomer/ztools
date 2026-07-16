@@ -110,7 +110,7 @@ def write_markdown(
 
 def clean_folder(output_dir: Path) -> None:
     if not output_dir.exists():
-        print(f"Directory {output_dir} does not exist. Nothing to clean. Exiting.")
+        print(f"{WARN} Directory {output_dir} does not exist.")
         sys.exit(0)
 
     print(f"{STEP} Removing existing .md files in {output_dir} ...")
@@ -120,5 +120,5 @@ def clean_folder(output_dir: Path) -> None:
         except OSError as e:
             print(f"{WARN} Failed to delete {md_file}: {e}")
 
-    print("Cleanup complete. Exiting.")
+    print(f"{STEP} Cleanup complete.")
     sys.exit(0)

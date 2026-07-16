@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import os
+import re
 import time
 from pathlib import Path
 
@@ -121,6 +122,29 @@ OUTPUT_FILE_SUFFIX = ".md"
 FILE_WRITE_MODE = "w"
 
 
+def _format_weather_display(weather_str: str) -> str:
+    lines = weather_str.replace("Daily Forecast:", "").strip().splitlines()
+    parts = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        if ":" in line:
+            day, rest = line.split(":", 1)
+            day = day.strip()[:3]
+            rest = rest.strip()
+            m = re.search(r"([\d.]+)°C,\s*(.+?)\s*\(([\d.]+)mm\)", rest)
+            if m:
+                temp = m.group(1)
+                cond = m.group(2).lower()
+                precip = float(m.group(3))
+                label = cond if precip > 0.5 else f"{cond}"
+                parts.append(f"{day} {temp}°C ({label})")
+            else:
+                parts.append(f"{day} {rest}")
+    return ", ".join(parts) if parts else weather_str
+
+
 def _fetch_data(fri, sun, year, month_name, use_cache):
     ensure_server()
     dates_str = get_weekend_dates_string(fri, sun)
@@ -128,7 +152,7 @@ def _fetch_data(fri, sun, year, month_name, use_cache):
 
     with tui.status("Fetching weather forecast..."):
         weather_str = fetch_weather(fri, sun)
-    weather_clean = weather_str.replace("Daily Forecast:", "").strip().replace("\n", " ")
+    weather_clean = _format_weather_display(weather_str)
     print_info("Weather", weather_clean)
 
     with tui.status("Fetching weekend events..."):

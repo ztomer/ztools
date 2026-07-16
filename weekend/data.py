@@ -6,6 +6,7 @@ import time
 import requests
 from ddgs import DDGS
 
+from lib.tui import WARN
 from weekend.config import CITY, LATITUDE, LONGITUDE, REGION, TIMEZONE
 
 # HTTP request defaults
@@ -92,7 +93,7 @@ def fetch_weather(friday, sunday):
 
         return FORECAST_HEADER + "\n".join(forecasts)
     except Exception as e:
-        print(f"[ERROR] Weather fetch failed: {e}", file=sys.stderr)
+        print(f"{WARN} Weather fetch failed: {e}", file=sys.stderr)
         return "Forecast: Precipitation expected (fallback due to error)."
 
 
@@ -125,7 +126,7 @@ def fetch_transient_events(dates_str, year, month_name):
 
         return _clean_search_results(all_results, "Event", max_body=MAX_BODY_LENGTH)
     except Exception as e:
-        print(f"[ERROR] Transient event fetch failed: {e}", file=sys.stderr)
+        print(f"{WARN} Transient event fetch failed: {e}", file=sys.stderr)
         return "Error fetching transient events."
 
 
@@ -145,11 +146,11 @@ def fetch_fixed_venues(year, month_name):
                 results = list(DDGS().text(q, max_results=DDGS_MAX_RESULTS))
                 all_results.extend(results)
             except Exception as e:
-                print(f"[WARN] Query failed: {q[:30]}... - {e}")
+                print(f"{WARN} Query failed: {q[:30]}... - {e}")
 
         return _clean_search_results(all_results, "Venue/Exhibit", max_body=MAX_BODY_LENGTH)
     except Exception as e:
-        print(f"[ERROR] Fixed venue fetch failed: {e}", file=sys.stderr)
+        print(f"{WARN} Fixed venue fetch failed: {e}", file=sys.stderr)
         return "Error fetching fixed venues."
 
 
