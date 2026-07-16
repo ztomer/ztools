@@ -49,7 +49,7 @@ def update_formula_content(file_path: Path, version: str, sha256: str) -> bool:
         print_info("Standard URL/SHA256 patterns not matched. Retrying with generic patterns...")
         # Fallback to generic url/sha256 replacement if structure is different
         updated_content = re.sub(r'url\s+"[^"]+"', f'url "https://github.com/ztomer/ztools/archive/refs/tags/v{version}.tar.gz"', content)
-        updated_content = re.sub(r'sha256\s+"[0-9a-fA-F]+"', f'sha256 "{sha256}"', updated_content)
+        updated_content = re.sub(r'sha256\s+"[^"]+"', f'sha256 "{sha256}"', updated_content)
 
     file_path.write_text(updated_content)
     print_ok(f"Updated {file_path.name} with version v{version} and sha256 {sha256}")
