@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -13,8 +12,6 @@ from textual.widgets import (
     Select,
     Static,
 )
-
-from rename.cli import image_extensions
 
 _DEFAULT_MODEL = "foundation"
 try:
@@ -45,15 +42,11 @@ for _k in ("json", "summarize", "think", "filename"):
 DEFAULT_MODELS = [(m, m) for m in _KNOWN_MODELS]
 
 
-def _collect_images(directory: Path) -> list[Path]:
-    image_files = []
-    for ext in image_extensions:
-        image_files.extend(directory.glob(f"*{ext}"))
 class Sidebar(Vertical):
     """Left sidebar navigation panel."""
 
     def compose(self) -> ComposeResult:
-        yield Label("[bold cyan]ZTools Hub[/bold cyan]", id="app-title")
+        yield Label("[bold]ZTools Hub[/bold]", id="app-title")
         yield ListView(
             ListItem(Label("Weekend Planner"), id="nav-weekend"),
             ListItem(Label("Twitter Summarizer"), id="nav-twitter"),
@@ -145,7 +138,7 @@ class ModelEvaluatorView(Vertical):
             yield Select(options=DEFAULT_MODELS, value=_tool_default_model("think"),
                          id="ev-model", prompt="Select LLM Model")
 
-        yield Button("Run Evaluation", variant="warning", id="btn-ev-generate")
+        yield Button("Run Evaluation", variant="primary", id="btn-ev-generate")
         yield VerticalScroll(id="ev-result-area", classes="result-area")
 
 
@@ -178,11 +171,11 @@ class ImageRenamerView(Vertical):
 
                 with Horizontal(classes="form-row"):
                     yield Button("Rename Screenshots", variant="error", id="btn-rn-generate")
-                    yield Button("Load Preview", variant="primary", id="btn-rn-preview")
+                    yield Button("Show Image Info", variant="primary", id="btn-rn-preview")
                 yield VerticalScroll(id="rn-result-area", classes="result-area")
 
             with Vertical(id="rn-preview-panel"):
-                yield Label("[bold white]Preview Window[/bold white]")
+                yield Label("[bold white]Image Info[/bold white]")
                 yield Static(id="rn-preview-box")
                 yield Label("", id="rn-preview-info")
 class HistoryArchiveView(Vertical):
@@ -214,7 +207,7 @@ class ModelParametersView(Vertical):
                 yield Button("Apply Parameters", variant="success", id="btn-param-apply")
                 yield Button("Reset Defaults", variant="primary", id="btn-param-reset")
             yield Label("", id="param-status")
-            yield Label("[yellow]Session only — lost on quit[/yellow]", id="param-hint")
+            yield Label("Session only — lost on quit", id="param-hint")
 
 
 class TaskSchedulerView(Vertical):

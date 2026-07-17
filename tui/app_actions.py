@@ -13,7 +13,7 @@ from lib.llm.client import get_models, is_server_running
 from lib.quality_entry import compare_to_baseline, get_dimension_weights, load_baseline
 from lib.quality_models import Score, ScoreCard
 from rename.cli import image_extensions, rename_image
-from tui.lib import ICON_OK
+from tui.lib import ICON_OK, ICON_WARN
 from twitter.browser import collect_tweets_via_browser
 from twitter.summarize import summarize_with_llm
 from weekend.cli import _fetch_data, _parse_fixed, _parse_transient
@@ -36,9 +36,9 @@ async def action_refresh_models(self) -> None:
     status_box.update("[yellow]Checking Osaurus...[/yellow]")
     is_running = await asyncio.to_thread(is_server_running)
     if is_running:
-        status_box.update("[green]Server Online[/green]")
         models = await asyncio.to_thread(get_models)
         if models:
+            status_box.update("[green]Server Online[/green]")
             options = [(m, m) for m in models]
             for select_id in ("#wk-model", "#tw-model", "#ev-model", "#rn-model"):
                 try:
@@ -224,7 +224,7 @@ async def run_model_evaluator(self) -> None:
             child.remove()
 
         if warnings:
-            container.mount(Markdown("\n".join(f"- ⚠ {w}" for w in warnings)))
+            container.mount(Markdown("\n".join(f"- {ICON_WARN} {w}" for w in warnings)))
         else:
             container.mount(Markdown(f"### {ICON_OK} No regressions detected against baseline."))
 
@@ -316,6 +316,8 @@ async def refresh_history_archive(self) -> None:
 
     doc_dir = Path.home() / "Documents"
     if not doc_dir.exists() or not doc_dir.is_dir():
+        item = ListItem(Label("[yellow]No history directory found[/yellow]"))
+        hist_list.append(item)
         return
 
     files = []
@@ -408,11 +410,11 @@ async def scheduler_loop(self) -> None:
 
 async def run_scheduled_task(self, sched: dict) -> None:
     try:
-        sched["last_run_status"] = "[DEMO] Running"
+        sched["last_run_status"] = "Running"
         self.refresh_scheduler_display()
         # Do nothing / simulate task run for demo tasks
         await asyncio.sleep(2)
-        sched["last_run_status"] = "[DEMO] Success"
+        sched["last_run_status"] = "Success"
     except Exception as e:
         sched["last_run_status"] = f"Failed: {e}"
     finally:
@@ -428,7 +430,7 @@ def refresh_scheduler_display(self) -> None:
     for child in list(container.children):
         child.remove()
     if not self.active_schedules:
-        container.mount(Label("[yellow]No scheduled tasks configured.[/yellow]"))
+        container.mount(Label("No scheduled tasks configured."))
         return
     for sched in self.active_schedules:
         task_type_label = {
@@ -479,7 +481,7 @@ def add_scheduler_task(self) -> None:
             "task_type": task_type,
             "interval_seconds": interval,
             "next_run": datetime.now() + timedelta(seconds=interval),
-            "last_run_status": "[DEMO] Idle",
+            "last_run_status": "Idle",
             "is_running": False
         }
         self.active_schedules.append(sched)
