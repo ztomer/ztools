@@ -13,6 +13,7 @@ from lib.llm.client import get_models, is_server_running
 from lib.quality_entry import compare_to_baseline, get_dimension_weights, load_baseline
 from lib.quality_models import Score, ScoreCard
 from rename.cli import image_extensions, rename_image
+from tui.app_views import _tool_default_model
 from tui.lib import ICON_OK, ICON_WARN
 from twitter.browser import collect_tweets_via_browser
 from twitter.summarize import summarize_with_llm
@@ -40,10 +41,17 @@ async def action_refresh_models(self) -> None:
         if models:
             status_box.update("[green]Server Online[/green]")
             options = [(m, m) for m in models]
-            for select_id in ("#wk-model", "#tw-model", "#ev-model", "#rn-model"):
+            for select_id, config_key in (
+                ("#wk-model", "json"),
+                ("#tw-model", "summarize"),
+                ("#ev-model", "think"),
+                ("#rn-model", "filename"),
+            ):
                 try:
-                    self.query_one(select_id).options = options
-                    self.query_one(select_id).value = models[0]
+                    widget = self.query_one(select_id)
+                    widget.options = options
+                    preferred = _tool_default_model(config_key)
+                    widget.value = preferred if preferred in models else models[0]
                 except Exception:
                     pass
     else:
@@ -399,10 +407,8 @@ def reset_model_parameters(self) -> None:
     status.update("[green]Reset to default values[/green]")
 
 async def scheduler_loop(self) -> None:
-    """Daemon loop to run scheduled tasks in background."""
     while True:
         await asyncio.sleep(1)
-        # Make a copy to avoid concurrent modification issues
         for sched in list(self.active_schedules):
             if sched["next_run"] <= datetime.now() and not sched["is_running"]:
                 sched["is_running"] = True
@@ -412,7 +418,6 @@ async def run_scheduled_task(self, sched: dict) -> None:
     try:
         sched["last_run_status"] = "Running"
         self.refresh_scheduler_display()
-        # Do nothing / simulate task run for demo tasks
         await asyncio.sleep(2)
         sched["last_run_status"] = "Success"
     except Exception as e:
@@ -470,21 +475,18 @@ def add_scheduler_task(self) -> None:
 
         interval = int(interval_str)
         task_id = str(len(self.active_schedules) + 1)
-
         for s in self.active_schedules:
             if s["task_type"] == task_type:
                 status.update(f"[red]Error: {task_type} is already scheduled.[/red]")
                 return
-
-        sched = {
+        self.active_schedules.append({
             "id": task_id,
             "task_type": task_type,
             "interval_seconds": interval,
             "next_run": datetime.now() + timedelta(seconds=interval),
             "last_run_status": "Idle",
             "is_running": False
-        }
-        self.active_schedules.append(sched)
+        })
         status.update("[green]Task scheduled successfully.[/green]")
         self.refresh_scheduler_display()
     except Exception as e:
