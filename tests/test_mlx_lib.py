@@ -231,6 +231,33 @@ class TestCallMlx:
             r = real_call_mlx(model, "prompt")
         assert r == "partial output"
 
+    def test_generated_script_interpolates_max_tokens(
+        self, mock_llm, tmp_path, real_mlx_functions
+    ):
+        """Regression: the emitted MLX script must contain the literal max_tokens value,
+        not a bare `MLX_MAX_TOKENS` name that is undefined inside the subprocess."""
+        from lib.mlx_lib import MLX_MAX_TOKENS
+
+        real_call_mlx = real_mlx_functions["call_mlx"]
+        model = tmp_path / "model"
+        model.mkdir()
+        captured = {}
+
+        def fake_run(cmd, **kwargs):
+            captured["script"] = Path(cmd[-1]).read_text()
+            r = MagicMock()
+            r.returncode = 0
+            r.stdout = "ok"
+            r.stderr = ""
+            return r
+
+        with patch("subprocess.run", side_effect=fake_run):
+            real_call_mlx(model, "prompt")
+
+        script = captured["script"]
+        assert f"max_tokens={MLX_MAX_TOKENS}" in script
+        assert "MLX_MAX_TOKENS" not in script
+
 
 class TestRunMlxVlm:
     def test_vlm_model_not_exists(self, mock_llm, tmp_path):

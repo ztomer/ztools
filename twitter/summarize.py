@@ -44,14 +44,52 @@ _PROMPT_RULES = """
 
 CHARS_PER_TOKEN = int(os.environ.get("TWITTER_CHARS_PER_TOKEN", "3"))
 OUTPUT_RESERVE_TOKENS = int(os.environ.get("TWITTER_OUTPUT_RESERVE", "4096"))
+
+# Dynamic timeout model (seconds):
+#   timeout = cold_start_load + input_chars/prefill_rate + output_tokens/decode_rate
+# COLD_START_BASE is the fixed model-load cost (large for 35B models on first hit).
+# TWITTER_PREFILL_CHARS_PER_SEC is how fast the server ingests the prompt.
+# TWITTER_DECODE_TOKENS_PER_SEC is generation throughput; combined with the output
+# reserve it bounds the time spent producing the summary.
 COLD_START_BASE = int(os.environ.get("TWITTER_COLD_START_BASE", "120"))
-MAX_TIMEOUT = int(os.environ.get("TWITTER_MAX_TIMEOUT", "600"))
+MAX_TIMEOUT = int(os.environ.get("TWITTER_MAX_TIMEOUT", "1800"))
+MIN_TIMEOUT = int(os.environ.get("TWITTER_MIN_TIMEOUT", "60"))
+PREFILL_CHARS_PER_SEC = int(os.environ.get("TWITTER_PREFILL_CHARS_PER_SEC", "40"))
+DECODE_TOKENS_PER_SEC = int(os.environ.get("TWITTER_DECODE_TOKENS_PER_SEC", "8"))
 
 # Default context window size for Osaurus models (tokens)
 OSAURUS_CONTEXT_WINDOW = int(os.environ.get("TWITTER_CONTEXT_WINDOW", "8192"))
 
-# Timeout estimation: chars per second processing rate
-CHARS_PER_SECOND = 25
+# On-device Apple Foundation Models have a much smaller context window than the
+# server models. Sizing the prompt to OSAURUS_CONTEXT_WINDOW and re-sending it to
+# `foundation` overflows its window and returns HTTP 500. Size per-model instead.
+FOUNDATION_CONTEXT_WINDOW = int(os.environ.get("TWITTER_FOUNDATION_CONTEXT_WINDOW", "4096"))
+
+
+def _context_window_for_model(model: str) -> int:
+    """Return the token context window to size the prompt against for a model."""
+    if model and "foundation" in model.lower():
+        return FOUNDATION_CONTEXT_WINDOW
+    return OSAURUS_CONTEXT_WINDOW
+
+
+def _ctx_chars_for_model(model: str) -> int:
+    """Prompt character budget for a model, derived from its context window.
+
+    The output reserve is capped at half the window so a small window (e.g.
+    Foundation's) still leaves room for the input prompt instead of collapsing
+    the budget to zero.
+    """
+    window = _context_window_for_model(model)
+    reserve = min(OUTPUT_RESERVE_TOKENS, window // 2)
+    return (window - reserve) * CHARS_PER_TOKEN
+
+
+def _output_tokens_for_model(model: str) -> int:
+    """Estimated output tokens to budget generation time against."""
+    window = _context_window_for_model(model)
+    return min(OUTPUT_RESERVE_TOKENS, window // 2)
+
 
 # Quality thresholds
 MIN_BULLET_COUNT = 3
@@ -137,8 +175,17 @@ def _build_prompt(
     return prompt, len(lines)
 
 
-def _estimate_timeout(prompt: str) -> int:
-    return max(COLD_START_BASE, min(MAX_TIMEOUT, len(prompt) // CHARS_PER_SECOND))
+def _estimate_timeout(prompt: str, model: str = None) -> int:
+    """Dynamic request timeout scaled to input size + expected output.
+
+    timeout = cold-start load + prefill(input) + decode(output), clamped to
+    [MIN_TIMEOUT, MAX_TIMEOUT]. Larger timelines and slower models get more time
+    instead of a flat cap that a big prompt on a 35B model blows through.
+    """
+    prefill = len(prompt) / max(1, PREFILL_CHARS_PER_SEC)
+    decode = _output_tokens_for_model(model) / max(1, DECODE_TOKENS_PER_SEC)
+    estimate = COLD_START_BASE + prefill + decode
+    return int(max(MIN_TIMEOUT, min(MAX_TIMEOUT, estimate)))
 
 
 def _summarize_with_model(
@@ -151,6 +198,7 @@ def _summarize_with_model(
 ) -> Optional[str]:
     if models and try_model not in models:
         return None
+    ctx_chars = _ctx_chars_for_model(try_model)
     prompt, n = _build_prompt(tweets, max_chars=ctx_chars, model=try_model)
     try:
         print(f"{STEP} Trying {try_model} ({n} tweets)...")
@@ -159,7 +207,7 @@ def _summarize_with_model(
             try_model,
             [{"role": "user", "content": prompt}],
             api_key=api_key,
-            timeout=_estimate_timeout(prompt),
+            timeout=_estimate_timeout(prompt, try_model),
         )
         if result and "content" in result:
             thinking, cleaned = extract_thinking(result["content"])
@@ -187,25 +235,31 @@ def _summarize_with_model(
 
 def summarize_with_llm(tweets: list[dict], base_url: str, model: str, api_key: str = "") -> str:
     target_model = model if model else get_best_model(Task.SUMMARIZE)
-    models = get_available_models()
+    models = get_available_models(base_url)
     if not models:
         print(f"{WARN} Osaurus server not responding — trying to start it...")
         ensure_server()
-        models = get_available_models()
+        models = get_available_models(base_url)
 
     if models and target_model not in models:
         target_model = select_best_model(models) or target_model
 
-    ctx_chars = (OSAURUS_CONTEXT_WINDOW - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN
-
     _fallback_names = os.environ.get(
-        "TWITTER_FALLBACK_MODELS", "qwen3.6-35b-a3b-mxfp4,foundation"  # check-ok: env var fallback
+        "TWITTER_FALLBACK_MODELS", "foundation"  # check-ok: env var fallback
     ).split(",")
     fallback_models = list(
         dict.fromkeys([target_model] + [m.strip() for m in _fallback_names if m.strip()])
     )
+    # Drop server models the live server does not actually serve so a stale id
+    # does not waste a full request/timeout cycle. `foundation` is the on-device
+    # model and is always kept as a last-resort server fallback.
+    if models:
+        fallback_models = [
+            m for m in fallback_models if m in models or "foundation" in m.lower()
+        ]
 
     def call_fn(m: str) -> Optional[str]:
+        ctx_chars = _ctx_chars_for_model(m)
         return _summarize_with_model(tweets, base_url, api_key, ctx_chars, models, m)
 
     def mlx_fn() -> Optional[str]:

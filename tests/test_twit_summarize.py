@@ -4,6 +4,8 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
+FALLBACK_ENV = {"TWITTER_FALLBACK_MODELS": "qwen3.6-35b-a3b-mxfp4"}
+
 
 class TestCheckSummaryQuality:
     def test_empty_summary(self, mock_llm):
@@ -161,6 +163,45 @@ class TestBuildPrompt:
         assert "Use headers" in prompt
 
 
+class TestEstimateTimeout:
+    def test_scales_with_input_size(self, mock_llm):
+        import twitter.summarize as twit_summarize
+
+        small = twit_summarize._estimate_timeout("x" * 1000, "m1")
+        large = twit_summarize._estimate_timeout("x" * 40000, "m1")
+        # A larger prompt must get strictly more time (the whole point of the fix).
+        assert large > small
+
+    def test_clamped_to_min(self, mock_llm):
+        import twitter.summarize as twit_summarize
+
+        with (
+            patch.object(twit_summarize, "COLD_START_BASE", 0),
+            patch.object(twit_summarize, "MIN_TIMEOUT", 60),
+        ):
+            t = twit_summarize._estimate_timeout("x", "m1")
+        assert t >= 60
+
+    def test_clamped_to_max(self, mock_llm):
+        import twitter.summarize as twit_summarize
+
+        with patch.object(twit_summarize, "MAX_TIMEOUT", 300):
+            t = twit_summarize._estimate_timeout("x" * 10_000_000, "m1")
+        assert t == 300
+
+    def test_includes_cold_start(self, mock_llm):
+        import twitter.summarize as twit_summarize
+
+        with (
+            patch.object(twit_summarize, "COLD_START_BASE", 500),
+            patch.object(twit_summarize, "MAX_TIMEOUT", 1800),
+            patch.object(twit_summarize, "MIN_TIMEOUT", 1),
+        ):
+            # Tiny prompt: timeout is dominated by the fixed cold-start cost.
+            t = twit_summarize._estimate_timeout("x", "m1")
+        assert t >= 500
+
+
 class TestSummarizeWithLlm:
     def _make_tweets(self):
         return [
@@ -223,6 +264,7 @@ class TestSummarizeWithLlm:
         import twitter.summarize as twit_summarize
 
         with (
+            patch.dict("os.environ", FALLBACK_ENV),
             patch.object(
                 twit_summarize, "get_available_models", return_value=["m1", "qwen3.6-35b-a3b-mxfp4"]
             ),
@@ -254,6 +296,7 @@ class TestSummarizeWithLlm:
         import twitter.summarize as twit_summarize
 
         with (
+            patch.dict("os.environ", FALLBACK_ENV),
             patch.object(
                 twit_summarize, "get_available_models", return_value=["m1", "qwen3.6-35b-a3b-mxfp4"]
             ),
@@ -280,6 +323,7 @@ class TestSummarizeWithLlm:
         import twitter.summarize as twit_summarize
 
         with (
+            patch.dict("os.environ", FALLBACK_ENV),
             patch.object(
                 twit_summarize, "get_available_models", return_value=["m1", "qwen3.6-35b-a3b-mxfp4"]
             ),
@@ -340,6 +384,7 @@ class TestSummarizeWithLlm:
         import twitter.summarize as twit_summarize
 
         with (
+            patch.dict("os.environ", FALLBACK_ENV),
             patch.object(
                 twit_summarize, "get_available_models", return_value=["m1", "qwen3.6-35b-a3b-mxfp4"]
             ),

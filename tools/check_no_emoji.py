@@ -19,7 +19,9 @@ pre-commit hook so the policy can't silently regress.
 
 This file lists disallowed codepoints by NUMBER, never as literal glyphs, so it never trips itself.
 """
-import os, subprocess, sys
+import os
+import subprocess
+import sys
 
 # The complete allow-list, in two buckets so the policy is auditable:
 #   1. Kare icon set + approved typographic arrows — the canonical vocabulary.
@@ -28,7 +30,8 @@ import os, subprocess, sys
 # To go Kare-strict, delete bucket 2 (and the three arrows from bucket 1).
 ALLOWED = {
     "→", "✓", "✗", "⚠", "↔", "↑", "↓",   # 1. Kare icons + arrows
-    "←", "⌘", "⌥", "⌨",                    # 2. functional: cardinal arrow + Mac keys (⌘ cmd / ⌥ opt)
+    "←", "⌘", "⌥", "⌨",
+    # 2. functional: cardinal arrow + Mac keys (⌘ cmd / ⌥ opt)
 }
 
 # Codepoint ranges that hold emoji / decorative pictographs. A char in any of these that is NOT in
@@ -39,7 +42,8 @@ RANGES = (
     (0x2700,  0x27BF),    # dingbats (check-mark-button, scissors, ... and the allowed check/x)
     (0x2300,  0x23FF),    # misc technical (pause, stopwatch, ... and the allowed keyboard glyph)
     (0x2B00,  0x2BFF),    # stars, big block arrows
-    (0x2190,  0x21FF),    # arrows (cardinal + bidi allowed via ALLOWED; double-arrow, mapsto rejected)
+    (0x2190,  0x21FF),
+    # arrows (cardinal + bidi allowed via ALLOWED; double-arrow, mapsto rejected)
     (0xFE00,  0xFE0F),    # variation selectors (emoji-presentation VS16, etc.)
     (0x20E3,  0x20E3),    # combining enclosing keycap
 )
@@ -75,7 +79,8 @@ def main() -> int:
     staged = "--staged" in sys.argv
     root = _root()
     if not root:
-        print("[no_emoji] not a git repo — skipping"); return 0
+        print("[no_emoji] not a git repo — skipping")
+        return 0
     files = _files(root, staged)
     bad = []
     for f in files:

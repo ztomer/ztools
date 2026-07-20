@@ -199,7 +199,7 @@ with open("{prompt_file_escaped}", "r") as f:
 prompt = "Output JSON:\\n" + prompt
 text_parts = []
 try:
-    for r in stream_generate(model, tokenizer, prompt, max_tokens=MLX_MAX_TOKENS):
+    for r in stream_generate(model, tokenizer, prompt, max_tokens={MLX_MAX_TOKENS}):
         if hasattr(r, "text"):
             text_parts.append(r.text)
         elif isinstance(r, str):
