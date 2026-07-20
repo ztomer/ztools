@@ -5,14 +5,24 @@ MLX-VLM support — loading Osaurus-installed multimodal/MoE models on-device.
 The Osaurus-installed models (Gemma4 `gemma4`/`gemma4_unified`, Qwen
 `qwen3_5_moe`, MXFP8/4) are standard HF checkpoints, but stock `mlx_lm`
 (text-only) cannot construct their vision/audio towers or MoE heads. `mlx-vlm`
-from git main loads them (PyPI `mlx-vlm` 0.6.4 predates PR #1523, the audio-conv
-weight-layout fix these checkpoints ship in). We invoke it via the uv git+https
-URL so the Python MLX route is a real last resort, not a dead end.
+from git main is the Python package that CAN build these architectures (PyPI
+`mlx-vlm` 0.6.4 predates PR #1523, the audio-conv weight-layout fix these
+checkpoints ship in).
 
-Split out of lib/mlx_lib.py to keep both modules under the 500-line limit.
+NOTE (verified live): `mlx-vlm@git` HEAD requires a `Gemma4Processor`
+class that is not present in any currently-installable `transformers`
+(>=5.14.0, the floor mlx-vlm declares). So `load()` fails at the processor
+step with `ModuleNotFoundError: Gemma4Processor` under `rtk uv run`. Until
+mlx-vlm or transformers ships that class, the on-device mlx-vlm path is
+BEST-EFFORT and will report a clear dependency error; the Osaurus server
+remains the reliable primary. We invoke it via the uv git+https URL so the
+Python MLX route is a genuine last resort, not a dead end.
+
+Split out of lib.mlx_lib.py to keep both modules under the 500-line limit.
 """
 
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import List, Optional
@@ -29,6 +39,23 @@ from .mlx_lib import (
     _looks_like_mlx_model,
     find_mlx_model,
 )
+
+# Patterns that mean mlx-vlm could not build/run the model because of a missing
+# dependency or a processor/template breakage (not a model or prompt problem).
+# Under `rtk uv run` the git-main mlx-vlm fails at the processor step
+# (Gemma4Processor not in any installable transformers) or when applying the
+# chat template (UnicodeDecodeError on the model's template). The fallback should
+# surface these clearly rather than let them look like a generic failure.
+_DEP_ERROR_RE = re.compile(
+    r"ModuleNotFoundError|Gemma4Processor|No module named 'torch'|ImportError|"
+    r"UnicodeDecodeError|apply_chat_template|Gemma4",
+    re.IGNORECASE,
+)
+
+
+def is_vlm_dependency_error(reason: Optional[str]) -> bool:
+    """True if a mlx-vlm failure is an environment/dependency issue (not the model)."""
+    return bool(reason) and bool(_DEP_ERROR_RE.search(reason))
 
 # Osaurus-installed models (Gemma4/qwen3_5_moe, MXFP8/4) are standard HF
 # checkpoints, but stock `mlx_lm` (text-only) cannot build their vision/audio
@@ -187,9 +214,17 @@ try:
     text = result.text if hasattr(result, "text") else str(result)
     if text.startswith("Output JSON:\\n"):
         text = text[13:]
-    print(text, flush=True)
+    # Emit via the binary buffer with errors="replace": model output may carry
+    # stray non-UTF-8 bytes that would crash a plain print() with UnicodeEncodeError.
+    sys.stdout.buffer.write(text.encode("utf-8", errors="replace"))
+    sys.stdout.buffer.write(b"\\n")
+    sys.stdout.buffer.flush()
 except Exception as e:
-    print(f"[VLM GENERATE ERROR] {{type(e).__name__}}: {{e}}", flush=True)
+    sys.stdout.buffer.write(
+        f"[VLM GENERATE ERROR] {{type(e).__name__}}: {{e}}".encode("utf-8", errors="replace")
+    )
+    sys.stdout.buffer.write(b"\\n")
+    sys.stdout.buffer.flush()
     sys.exit(1)
 ''')
 
@@ -197,11 +232,14 @@ except Exception as e:
         result = subprocess.run(
             UV_RUN_VLM + [script_path],
             capture_output=True,
-            text=True,
+            text=False,
             timeout=MLX_GEN_TIMEOUT,
         )
-        stdout = result.stdout
-        stderr = result.stderr
+        # Decode with errors="replace": model output can contain stray bytes
+        # (e.g. a lone surrogate) that are not valid UTF-8; a raw decode crash
+        # here would mask a working generation with a UnicodeDecodeError.
+        stdout = result.stdout.decode("utf-8", errors="replace") if result.stdout else ""
+        stderr = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
 
         if result.returncode == 0 and stdout.strip():
             return stdout.strip()

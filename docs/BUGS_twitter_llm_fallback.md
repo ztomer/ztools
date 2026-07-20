@@ -166,16 +166,30 @@ HF-structured checkpoints (`config.json`, `tokenizer.json`, `model.safetensors.i
 | `Qwen3.6-*-MXFP8-MTP`, `Qwen-AgentWorld-*-MXFP8` | `qwen3_5_moe` | MXFP8 |
 
 Stock `mlx_lm` (text-only) rejects them: `ValueError: Received 126 parameters not in model`
-(the vision/audio towers + MoE heads it cannot construct). The fix is **`mlx-vlm` from git
-main** (NOT PyPI `0.6.4`, which predates PR #1523 — the audio-conv-weight layout fix these
-checkpoints need).
+(the vision/audio towers + MoE heads it cannot construct). The package that CAN build these
+architectures is **`mlx-vlm` from git main** (NOT PyPI `0.6.4`, which predates PR #1523 — the
+audio-conv-weight layout fix these checkpoints need).
 
-Proven end-to-end on this machine (`rtk uv run --with mlx --with "mlx-vlm @ git+..."`):
-- `gemma-4-E4B-it-8bit` → loads **and generates** ~71 tok/s, 9 GB peak.
-- `Qwen3.6-35B-A3B-MXFP8-MTP` → loads.
+BLOCKER (verified live): `mlx-vlm@git` HEAD calls `load()` which builds a
+processor (`Gemma4Processor`) that does **not exist in any installable `transformers`**
+(>=5.14.0 is the floor mlx-vlm declares, and 5.14.0/5.14.1 both lack it). So `load()`
+fails at the processor step with `ModuleNotFoundError: Gemma4Processor` under `rtk uv run
+--with mlx --with torch --with "mlx-vlm @ git+..."`. An earlier generate that appeared to
+work was a transient uv-cache state; it is NOT reproducible. **Conclusion: the on-device
+mlx-vlm path is best-effort and currently blocked by an upstream mlx-vlm/transformers
+version drift. The Osaurus server is the reliable primary.**
 
-Decision (user): invoke `mlx-vlm` via the **uv git+https URL** (floating HEAD); fallback
-ordering is **mlx-vlm first, Osaurus restart+retry second**. Implementation in
-`lib/mlx_lib.py` (`probe_mlx_vlm_loadable`, `call_mlx_vlm`, `find_*_mlx_vlm_model`) and
-`twitter/summarize.py` (`_direct_mlx_fallback` → vlm stage then lm stage; `mlx_fn` reordered).
+What IS proven working (live):
+- `summarize_with_llm` against the running Osaurus server (`:1337`) produces a real
+  structured summary from `gemma-4-e4b-it-8bit` (headers + bullets). Server path = verified.
+- The fallback cascade reaches the mlx-vlm stage and degrades gracefully: dependency
+  errors are detected (`is_vlm_dependency_error`) and reported clearly instead of
+  crashing on a decode/import traceback.
+
+Decision (user, corrected): Osaurus server first; on failure restart+retry the server;
+only if the server is down do we try the Python mlx-vlm route as a last resort. Invoke
+`mlx-vlm` via the **uv git+https URL** (floating HEAD). Implementation in `lib/mlx_vlm.py`
+(`probe_mlx_vlm_loadable`, `call_mlx_vlm`, `find_*_mlx_vlm_model`, `is_vlm_dependency_error`)
+and `twitter/summarize.py` (`_direct_mlx_fallback` → vlm stage then lm stage; `mlx_fn`
+= server restart+retry first, then mlx-vlm).
 

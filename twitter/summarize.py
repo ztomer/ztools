@@ -26,6 +26,7 @@ from lib.mlx_vlm import (
     call_mlx_vlm,
     find_any_working_mlx_vlm_model,
     find_best_mlx_vlm_model,
+    is_vlm_dependency_error,
     probe_mlx_vlm_loadable,
 )
 from lib.osaurus_lib import (
@@ -341,7 +342,14 @@ def _generate_via_mlx_vlm(tweets: list[dict], mlx_path: Path) -> Optional[str]:
             return None
         return cleaned
     reason = last_mlx_error() or "unknown error"
-    print(f"{WARN} MLX-VLM model {mlx_path.name} failed: {reason[:120]}")
+    if is_vlm_dependency_error(reason):
+        print(
+            f"{WARN} MLX-VLM ({mlx_path.name}) skipped — environment missing a "
+            f"dependency (torch/transformers/Gemma4Processor). Use the Osaurus "
+            f"server instead. Detail: {reason[:100]}"
+        )
+    else:
+        print(f"{WARN} MLX-VLM model {mlx_path.name} failed: {reason[:120]}")
     return None
 
 
