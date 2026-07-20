@@ -15,10 +15,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Capture references to lib.mlx_lib functions at conftest load time.
 # This MUST happen before any mock patches them.
 import lib.mlx_lib  # noqa: E402
+import lib.mlx_vlm  # noqa: E402
 
 _REAL_MLX_FUNCTIONS = {
     "call": lib.mlx_lib.call,
     "call_mlx": lib.mlx_lib.call_mlx,
+    "call_mlx_vlm": lib.mlx_vlm.call_mlx_vlm,
+    "probe_mlx_vlm_loadable": lib.mlx_vlm.probe_mlx_vlm_loadable,
     "process_mlx_content": lib.mlx_lib.process_mlx_content,
     "find_mlx_model": lib.mlx_lib.find_mlx_model,
     "find_text_mlx_model": lib.mlx_lib.find_text_mlx_model,

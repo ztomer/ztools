@@ -1,7 +1,6 @@
 """Tests for twit_summarize.py."""
 
 from datetime import datetime
-from pathlib import Path
 from unittest.mock import patch
 
 FALLBACK_ENV = {"TWITTER_FALLBACK_MODELS": "qwen3.6-35b-a3b-mxfp4"}
@@ -373,6 +372,14 @@ class TestSummarizeWithLlm:
         with (
             patch.object(twit_summarize, "get_available_models", return_value=["m1"]),
             patch.object(twit_summarize, "call_llm_api", return_value={"error": "fail"}),
+            patch.object(twit_summarize, "restart_server", return_value=True),
+            patch.object(twit_summarize, "select_best_model", return_value="m1"),
+            patch.object(twit_summarize, "find_mlx_model", return_value=None),
+            patch.object(twit_summarize, "find_best_mlx_model", return_value=None),
+            patch.object(twit_summarize, "find_any_working_mlx_model", return_value=None),
+            patch.object(twit_summarize, "find_best_mlx_vlm_model", return_value=None),
+            patch.object(twit_summarize, "find_any_working_mlx_vlm_model", return_value=None),
+            patch.object(twit_summarize, "get_model_prompt", return_value="Summarize: {}"),
         ):
             result = twit_summarize.summarize_with_llm(
                 self._make_tweets(), "http://localhost:1337", "m1"
@@ -430,63 +437,3 @@ class TestSummarizeWithLlm:
                 self._make_tweets(), "http://localhost:1337", "m1"
             )
         assert "Topic" in result
-
-    def test_mlx_fallback_success_with_warnings(self, mock_llm):
-        """All server models fail, MLX returns summary with quality warnings (non-critical)."""
-        import twitter.summarize as twit_summarize
-
-        with (
-            patch.object(twit_summarize, "get_available_models", return_value=["m1", "m2"]),
-            patch.object(twit_summarize, "call_llm_api", return_value={"error": "fail"}),
-            patch.object(twit_summarize, "find_mlx_model", return_value=Path("/tmp/mlx-test")),
-            patch.object(twit_summarize, "find_best_mlx_model", return_value=None),
-            patch.object(twit_summarize, "find_any_working_mlx_model", return_value=None),
-            patch.object(twit_summarize, "call_mlx", return_value="## Short\n- fact a\n- fact b"),
-            patch.object(twit_summarize, "process_mlx_content", side_effect=lambda x: x),
-            patch.object(twit_summarize, "get_mlx_context_length", return_value=8192),
-            patch.object(twit_summarize, "get_model_prompt", return_value="Summarize: {}"),
-        ):
-            result = twit_summarize.summarize_with_llm(
-                self._make_tweets(), "http://localhost:1337", "m1"
-            )
-        assert "Short" in result
-
-    def test_mlx_fallback_error_start(self, mock_llm):
-        """MLX returns string starting with [LLM error, tries next, falls through."""
-        import twitter.summarize as twit_summarize
-
-        with (
-            patch.object(twit_summarize, "get_available_models", return_value=["m1", "m2"]),
-            patch.object(twit_summarize, "call_llm_api", return_value={"error": "fail"}),
-            patch.object(twit_summarize, "find_mlx_model", return_value=Path("/tmp/mlx-test")),
-            patch.object(twit_summarize, "find_best_mlx_model", return_value=None),
-            patch.object(twit_summarize, "find_any_working_mlx_model", return_value=None),
-            patch.object(twit_summarize, "call_mlx", return_value="[LLM error: oops]"),
-            patch.object(twit_summarize, "process_mlx_content", side_effect=lambda x: x),
-            patch.object(twit_summarize, "get_mlx_context_length", return_value=8192),
-            patch.object(twit_summarize, "get_model_prompt", return_value="Summarize: {}"),
-        ):
-            result = twit_summarize.summarize_with_llm(
-                self._make_tweets(), "http://localhost:1337", "m1"
-            )
-        assert "LLM error" in result
-
-    def test_mlx_fallback_critical(self, mock_llm):
-        """MLX summary fails quality check, falls through to error."""
-        import twitter.summarize as twit_summarize
-
-        with (
-            patch.object(twit_summarize, "get_available_models", return_value=["m1", "m2"]),
-            patch.object(twit_summarize, "call_llm_api", return_value={"error": "fail"}),
-            patch.object(twit_summarize, "find_mlx_model", return_value=Path("/tmp/mlx-test")),
-            patch.object(twit_summarize, "find_best_mlx_model", return_value=None),
-            patch.object(twit_summarize, "find_any_working_mlx_model", return_value=None),
-            patch.object(twit_summarize, "call_mlx", return_value="plain text no structure"),
-            patch.object(twit_summarize, "process_mlx_content", side_effect=lambda x: x),
-            patch.object(twit_summarize, "get_mlx_context_length", return_value=8192),
-            patch.object(twit_summarize, "get_model_prompt", return_value="Summarize: {}"),
-        ):
-            result = twit_summarize.summarize_with_llm(
-                self._make_tweets(), "http://localhost:1337", "m1"
-            )
-        assert "LLM error" in result

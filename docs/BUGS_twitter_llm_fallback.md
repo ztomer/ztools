@@ -154,3 +154,28 @@ Break-the-code check confirmed the test goes red with the old code.
 
 Verified: `foundation` returns 200 on a right-sized prompt; MLX fallback no longer NameErrors;
 `tests/test_twit_summarize.py` and `tests/test_mlx_lib.py` green; ruff clean.
+
+## MLX route research (corrected conclusion)
+
+The Osaurus-installed models are **not** opaque mlx-swift blobs. They are standard
+HF-structured checkpoints (`config.json`, `tokenizer.json`, `model.safetensors.index.json`):
+
+| Model | `model_type` | Quant |
+|---|---|---|
+| `gemma-4-E4B-it-8bit`, `gemma-4-12B-it-MXFP8` | `gemma4` / `gemma4_unified` | MXFP8 |
+| `Qwen3.6-*-MXFP8-MTP`, `Qwen-AgentWorld-*-MXFP8` | `qwen3_5_moe` | MXFP8 |
+
+Stock `mlx_lm` (text-only) rejects them: `ValueError: Received 126 parameters not in model`
+(the vision/audio towers + MoE heads it cannot construct). The fix is **`mlx-vlm` from git
+main** (NOT PyPI `0.6.4`, which predates PR #1523 — the audio-conv-weight layout fix these
+checkpoints need).
+
+Proven end-to-end on this machine (`rtk uv run --with mlx --with "mlx-vlm @ git+..."`):
+- `gemma-4-E4B-it-8bit` → loads **and generates** ~71 tok/s, 9 GB peak.
+- `Qwen3.6-35B-A3B-MXFP8-MTP` → loads.
+
+Decision (user): invoke `mlx-vlm` via the **uv git+https URL** (floating HEAD); fallback
+ordering is **mlx-vlm first, Osaurus restart+retry second**. Implementation in
+`lib/mlx_lib.py` (`probe_mlx_vlm_loadable`, `call_mlx_vlm`, `find_*_mlx_vlm_model`) and
+`twitter/summarize.py` (`_direct_mlx_fallback` → vlm stage then lm stage; `mlx_fn` reordered).
+

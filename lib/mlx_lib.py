@@ -21,6 +21,19 @@ UV_RUN = ["rtk", "uv", "run", "--with", "mlx", "--with", "mlx-lm"]
 MLX_GEN_TIMEOUT = 1800
 MLX_FALLBACK_TIMEOUT = 600
 MLX_VLM_TIMEOUT = 180
+# Load-probe timeout: attempt to load the model (weights + tokenizer) and bail
+# fast if the installed mlx_lm cannot construct the architecture. Osaurus-format
+# models (Gemma4/qwen3_5_moe, MXFP8) fail here with a parameter mismatch.
+MLX_LOAD_PROBE_TIMEOUT = int(os.environ.get("MLX_LOAD_PROBE_TIMEOUT", "120"))
+
+# Last failure reason from call_mlx, so callers can surface WHY a model failed
+# (load mismatch, timeout, empty output) instead of a generic "failed".
+_LAST_MLX_ERROR: Optional[str] = None
+
+
+def last_mlx_error() -> Optional[str]:
+    """Return the reason the most recent call_mlx() failed, or None."""
+    return _LAST_MLX_ERROR
 
 # MLX generation parameters
 MLX_MAX_TOKENS = 8192
@@ -39,13 +52,87 @@ MLX_MODELS_DIR = Path(os.environ.get("MLX_MODELS_DIR", Path.home() / "MLXModels"
 # ==========================================================
 
 
-def _check_mlx_model_compatible(model_path: Path) -> bool:
-    """Quick sanity check that a path looks like a loadable MLX model.
+# Cache of (path -> (loadable, reason)) so we probe each model at most once
+# per process. Osaurus-format models fail the probe; re-probing them would waste
+# ~minutes per fallback attempt.
+_LOAD_PROBE_CACHE: Dict[str, tuple] = {}
 
-    Verifies: (1) is a directory, (2) has config.json.
-    Full compatibility is verified at load time by call_mlx().
-    """
+
+def _looks_like_mlx_model(model_path: Path) -> bool:
+    """Cheap structural check: a directory with a config.json."""
     return model_path.is_dir() and (model_path / "config.json").exists()
+
+
+def probe_mlx_loadable(model_path: Path) -> tuple:
+    """Attempt a real (but lightweight) load to see if the installed mlx_lm can
+    construct this model. Returns (loadable: bool, reason: str).
+
+    This catches Osaurus-format models (mlx-swift quantized Gemma4/qwen3_5_moe)
+    that stock Python mlx_lm cannot load, so the fallback can skip them fast
+    instead of spending the full generation timeout per model.
+
+    Results are cached per path for the life of the process.
+    """
+    if not _looks_like_mlx_model(model_path):
+        return (False, "not a model directory (no config.json)")
+
+    key = str(model_path)
+    if key in _LOAD_PROBE_CACHE:
+        return _LOAD_PROBE_CACHE[key]
+
+    model_path_escaped = key.replace("\\", "\\\\").replace('"', '\\"')
+    probe = (
+        "import sys\n"
+        "try:\n"
+        "    from mlx_lm import load\n"
+        f'    load("{model_path_escaped}")\n'
+        '    print("MLX_LOAD_OK", flush=True)\n'
+        "except Exception as e:\n"
+        '    print(f"MLX_LOAD_FAIL {type(e).__name__}: {e}", flush=True)\n'
+        "    sys.exit(1)\n"
+    )
+    try:
+        result = subprocess.run(
+            UV_RUN + ["python3", "-c", probe],
+            capture_output=True,
+            text=True,
+            timeout=MLX_LOAD_PROBE_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        outcome = (False, f"load timed out after {MLX_LOAD_PROBE_TIMEOUT}s")
+        _LOAD_PROBE_CACHE[key] = outcome
+        return outcome
+    except Exception as e:
+        outcome = (False, f"probe error: {type(e).__name__}: {e}")
+        _LOAD_PROBE_CACHE[key] = outcome
+        return outcome
+
+    out = (result.stdout or "") + (result.stderr or "")
+    if result.returncode == 0 and "MLX_LOAD_OK" in out:
+        outcome = (True, "ok")
+    else:
+        reason = "unknown load failure"
+        for line in out.splitlines():
+            if line.startswith("MLX_LOAD_FAIL"):
+                reason = line[len("MLX_LOAD_FAIL ") :].strip()
+                break
+        outcome = (False, reason)
+    _LOAD_PROBE_CACHE[key] = outcome
+    return outcome
+
+
+def _check_mlx_model_compatible(model_path: Path, deep: bool = False) -> bool:
+    """Check whether a path is a usable MLX model.
+
+    Structural check by default (fast). When ``deep`` is True, additionally run
+    a real load-probe so models the installed mlx_lm cannot construct are
+    rejected before a full generation attempt.
+    """
+    if not _looks_like_mlx_model(model_path):
+        return False
+    if deep:
+        return probe_mlx_loadable(model_path)[0]
+    return True
 
 
 def find_mlx_model(model_name: str, mlx_dir: Path = MLX_MODELS_DIR) -> Optional[Path]:
@@ -67,27 +154,33 @@ def find_mlx_model(model_name: str, mlx_dir: Path = MLX_MODELS_DIR) -> Optional[
     return None
 
 
-def find_best_mlx_model(preferred: List[str]) -> Optional[Path]:
+def find_best_mlx_model(preferred: List[str], deep: bool = False) -> Optional[Path]:
     """Find the best available MLX model from preferred list.
 
-    Skips models that are incompatible with the installed mlx_lm.
+    Skips models that are incompatible with the installed mlx_lm. When
+    ``deep`` is True, a real load-probe is run so models that only load in
+    Osaurus's mlx-swift runtime (not stock mlx_lm) are skipped fast.
     """
     for name in preferred:
         model = find_mlx_model(name)
-        if model and _check_mlx_model_compatible(model):
+        if model and _check_mlx_model_compatible(model, deep=deep):
             return model
     return None
 
 
-def find_any_working_mlx_model() -> Optional[Path]:
-    """Find any MLX model that's compatible with the installed mlx_lm."""
+def find_any_working_mlx_model(deep: bool = False) -> Optional[Path]:
+    """Find any MLX model that's compatible with the installed mlx_lm.
+
+    When ``deep`` is True, each candidate is load-probed and the first one that
+    actually loads is returned (unloadable Osaurus-format models are skipped).
+    """
     if not MLX_MODELS_DIR.exists():
         return None
     for item in MLX_MODELS_DIR.iterdir():
         if not item.is_dir():
             continue
         for model_dir in [item] + [sub for sub in item.iterdir() if sub.is_dir()]:
-            if _check_mlx_model_compatible(model_dir):
+            if _check_mlx_model_compatible(model_dir, deep=deep):
                 return model_dir
     return None
 
@@ -153,8 +246,11 @@ def normalize_mlx_model_name(mlx_model: str) -> str:
 
 def call_mlx(model_path: Path, prompt: str) -> Optional[str]:
     """Call MLX model for text generation using mlx_lm.generate."""
+    global _LAST_MLX_ERROR
+    _LAST_MLX_ERROR = None
     if not model_path.exists():
-        logger.warning(f"Model path does not exist: {model_path}")
+        _LAST_MLX_ERROR = f"model path does not exist: {model_path}"
+        logger.warning(_LAST_MLX_ERROR)
         return None
 
     logger.debug(f"Calling MLX model at {model_path}")
@@ -233,17 +329,21 @@ print(response, flush=True)
                 return stdout.strip()
             elif stdout.strip():
                 error_msg = stdout.strip()
+                _LAST_MLX_ERROR = error_msg
                 logger.warning(f"MLX model error: {error_msg}")
                 return None
             else:
-                logger.warning(
-                    f"MLX generate failed (rc={result.returncode}): "
+                _LAST_MLX_ERROR = (
+                    f"generate failed (rc={result.returncode}): "
                     f"{stderr[:300] if stderr else 'no output'}"
                 )
+                logger.warning(f"MLX {_LAST_MLX_ERROR}")
         except subprocess.TimeoutExpired:
-            logger.warning(f"MLX generate timed out after 1800s for {model_path.name}")
+            _LAST_MLX_ERROR = f"generate timed out after {MLX_GEN_TIMEOUT}s"
+            logger.warning(f"MLX {_LAST_MLX_ERROR} for {model_path.name}")
         except Exception as e:
-            logger.error(f"MLX generate failed: {type(e).__name__}: {e}")
+            _LAST_MLX_ERROR = f"generate failed: {type(e).__name__}: {e}"
+            logger.error(f"MLX {_LAST_MLX_ERROR}")
 
         # Fallback: main.py
         main_py = model_path / "main.py"
@@ -272,40 +372,6 @@ print(response, flush=True)
     logger.debug(f"All MLX attempts failed for {model_path.name}")
     return None
 
-
-def run_mlx_vlm(model_path: Path, image_path: Path) -> Optional[str]:
-    """Call MLX VLM for image analysis."""
-    if not model_path.exists() or not image_path.exists():
-        return None
-
-    cmd = [
-        "python3",
-        "-m",
-        "mxrc.vl",
-        "--model",
-        str(model_path),
-        "--image",
-        str(image_path),
-    ]
-
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=MLX_VLM_TIMEOUT,
-        )
-        if result.returncode == 0:
-            logger.info(f"VLM call successful, got {len(result.stdout)} chars")
-            return result.stdout.strip()
-        else:
-            logger.warning(f"VLM command failed with return code {result.returncode}")
-    except subprocess.TimeoutExpired:
-        logger.error("VLM call timed out after 180s")
-    except Exception as e:
-        logger.error(f"VLM call failed: {type(e).__name__}: {e}")
-
-    return None
 
 
 # ==========================================================

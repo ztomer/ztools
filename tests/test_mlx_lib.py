@@ -261,19 +261,19 @@ class TestCallMlx:
 
 class TestRunMlxVlm:
     def test_vlm_model_not_exists(self, mock_llm, tmp_path):
-        from lib.mlx_lib import run_mlx_vlm
+        from lib.mlx_vlm import run_mlx_vlm
 
         assert run_mlx_vlm(tmp_path / "no", tmp_path / "img") is None
 
     def test_vlm_image_not_exists(self, mock_llm, tmp_path):
-        from lib.mlx_lib import run_mlx_vlm
+        from lib.mlx_vlm import run_mlx_vlm
 
         model = tmp_path / "m"
         model.mkdir()
         assert run_mlx_vlm(model, tmp_path / "no") is None
 
     def test_vlm_success(self, mock_llm, tmp_path):
-        from lib.mlx_lib import run_mlx_vlm
+        from lib.mlx_vlm import run_mlx_vlm
 
         model = tmp_path / "m"
         model.mkdir()
@@ -287,7 +287,7 @@ class TestRunMlxVlm:
         assert r == "vlm output"
 
     def test_vlm_failure(self, mock_llm, tmp_path):
-        from lib.mlx_lib import run_mlx_vlm
+        from lib.mlx_vlm import run_mlx_vlm
 
         model = tmp_path / "m"
         model.mkdir()
@@ -301,7 +301,7 @@ class TestRunMlxVlm:
         assert r is None
 
     def test_vlm_timeout(self, mock_llm, tmp_path):
-        from lib.mlx_lib import run_mlx_vlm
+        from lib.mlx_vlm import run_mlx_vlm
 
         model = tmp_path / "m"
         model.mkdir()
@@ -312,7 +312,7 @@ class TestRunMlxVlm:
         assert r is None
 
     def test_vlm_exception(self, mock_llm, tmp_path):
-        from lib.mlx_lib import run_mlx_vlm
+        from lib.mlx_vlm import run_mlx_vlm
 
         model = tmp_path / "m"
         model.mkdir()

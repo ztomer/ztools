@@ -58,7 +58,7 @@ weekend_fixed: |
 | gemma weather | Outputs weather data | Avoid for weekend |
 | gemma-4-31b-jang | Cold start 30s then 1s | Warmup call first |
 | qwen | Thinking tokens | Can't disable |
-| jang models (MLX) | Wrong shape | Use server instead |
+| jang models (MLX) | Wrong shape under stock `mlx_lm` | Use `mlx-vlm` (git main) or the Osaurus server |
 | gemma-4-e4b | Input looping | Avoid |
 | foundation (0%), gemma-4-e4b (0%) | Parrots ALL planted falsehoods (3/3) | Worst fact-checkers; use qwen-agentworld or ornith for factual summarization |
 | gemma-4-12b (67%) | Resists most falsehoods (1/3 parroted) | Adequate for most use cases |
@@ -256,7 +256,7 @@ summarize: |
 - Returns weather data instead of events
 - 0 items with details in tests
 - Flat dicts instead of nested structure
-- **gemma-4-e4b-it-4bit/8bit**: All tasks return empty — MLX backend may not support these model formats
+- **gemma-4-e4b-it-8bit**: loads + generates via `mlx-vlm` (git main) at ~71 tok/s; stock `mlx_lm` returns empty (cannot build the multimodal arch).
 
 ### Minimax-m2.7-small-jangtq ✗ UNUSABLE
 - **Extremely slow**: 400s+ per single filename call
@@ -345,4 +345,4 @@ prompts:
   Keep it under 50 characters. TEXT: {text}"
 ```
 
-MLX backend: OsaurusAI custom quant (MXFP4/JANGTQ) only loadable via `osaurus serve`. Standard mlx-lm supports qwen3_5, gemma4 architectures. Model discovery (`find_any_working_mlx_model`) scans all dirs and filters incompatible architectures.
+MLX backend: OsaurusAI MXFP8/4 quants (Gemma4 `gemma4`/`gemma4_unified`, Qwen `qwen3_5_moe`) load via `mlx-vlm` (git main) — proven for `gemma-4-E4B-it-8bit` and `Qwen3.6-35B-A3B-MXFP8-MTP`. Stock `mlx-lm` supports plain-text qwen3_5/gemma4 only and rejects the multimodal checkpoints. Model discovery (`find_any_working_mlx_vlm_model`) scans dirs and load-probes via `mlx-vlm`.
