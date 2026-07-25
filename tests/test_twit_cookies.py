@@ -5,6 +5,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# This module exercises the cookie readers themselves against fixture DBs, so
+# it opts out of the conftest gate that stubs them for everyone else.
+pytestmark = pytest.mark.real_cookie_discovery
+
 
 class TestGetChromeKeychainKey:
     def test_basic(self, mock_llm):

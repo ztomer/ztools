@@ -192,3 +192,59 @@ def sample_tweets():
         {"screen_name": "user1", "text": "Test tweet 1", "created_at": "2026-04-21"},
         {"screen_name": "user2", "text": "Test tweet 2", "created_at": "2026-04-21"},
     ]
+
+
+@pytest.fixture(autouse=True)
+def no_real_browsers_or_cookies(request):
+    """Structural gate: no test may launch a browser or read real cookies.
+
+    test_twitter_browser_no_playwright patched only `sync_playwright`, so once
+    camoufox became the preferred backend that test started launching a real
+    Firefox and reading the developer's own x.com session. Pinning the backend
+    and stubbing discovery here makes that impossible for every test, present
+    and future, rather than relying on each one remembering.
+
+    Tests that genuinely exercise cookie discovery opt out with
+    @pytest.mark.real_cookie_discovery.
+    """
+    from unittest.mock import patch
+
+    import twitter.browser_launch as launch
+
+    patches = [patch.object(launch, "BROWSER_BACKEND", launch.BACKEND_CHROMIUM)]
+    if "real_cookie_discovery" not in request.keywords:
+        import twitter.cookies as ck
+        import twitter.cookies_firefox as ckf
+
+        patches += [
+            patch.object(ck, "_get_chrome_keychain_key", return_value=b"k" * 16),
+            patch.object(ck, "_read_profile_cookies", return_value=[]),
+            patch.object(ckf, "firefox_profile_dbs", return_value=[]),
+        ]
+    for p in patches:
+        p.start()
+    try:
+        yield
+    finally:
+        for p in patches:
+            p.stop()
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _signals_files_stay_clean(tmp_path_factory):
+    """Structural gate: `pytest` must not dirty tracked config.
+
+    eval/run.py and weekend/llm.py persist learned per-model timeouts into
+    conf/eval_signals.json and conf/phase_signals.json. Both are tracked, so
+    exercising those code paths rewrote them on every test run and left the
+    working tree dirty. Redirect both at a tmp dir for the whole session.
+    """
+    from unittest.mock import patch
+
+    tmp = tmp_path_factory.mktemp("signals")
+    import eval.run as eval_run
+    import weekend.llm as weekend_llm
+
+    with patch.object(eval_run, "EVAL_SIGNALS_PATH", tmp / "eval_signals.json"), \
+         patch.object(weekend_llm, "PHASE_SIGNALS_PATH", tmp / "phase_signals.json"):
+        yield

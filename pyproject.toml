@@ -26,6 +26,10 @@ web = [
     "beautifulsoup4>=4.12.0",
 ]
 browser = [
+    # camoufox is the preferred backend (anti-detect Firefox); playwright is the
+    # fallback. cryptography decrypts Chromium-family cookie stores — Firefox-family
+    # cookies (Zen, Firefox) are unencrypted and need nothing extra.
+    "camoufox>=0.5.4",
     "playwright>=1.40.0",
     "cryptography>=41.0.0",
 ]
@@ -46,6 +50,7 @@ mlx = [
 all = [
     "ddgs>=9.0.0",
     "beautifulsoup4>=4.12.0",
+    "camoufox>=0.5.4",
     "cryptography>=41.0.0",
     "playwright>=1.40.0",
     "pillow>=10.0.0",
@@ -57,7 +62,7 @@ all = [
 
 # Per-tool extrasets map a tool to the optional dependencies it needs.
 weekend = ["ddgs>=9.0.0", "beautifulsoup4>=4.12.0"]
-twitter = ["playwright>=1.40.0", "cryptography>=41.0.0"]
+twitter = ["camoufox>=0.5.4", "playwright>=1.40.0", "cryptography>=41.0.0"]
 oeval = []
 
 [project.scripts]
@@ -91,6 +96,9 @@ ignore = []
 minversion = "7.0"
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+    "real_cookie_discovery: opts out of the conftest gate that stubs browser cookie discovery",
+]
 
 [tool.coverage.run]
 source = ["lib", "weekend", "twitter", "rename", "eval"]

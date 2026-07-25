@@ -34,7 +34,12 @@ PHASE_TIMEOUT_DRAFT = int(os.environ.get("WEEKEND_PHASE_TIMEOUT", "900"))
 PHASE_TIMEOUT_REFINE = int(os.environ.get("WEEKEND_PHASE_TIMEOUT", "900"))
 PHASE_TIMEOUT_STRUCTURE = int(os.environ.get("WEEKEND_PHASE_TIMEOUT", "900"))
 PHASE_MAX_RETRIES = int(os.environ.get("WEEKEND_PHASE_MAX_RETRIES", "3"))
-PHASE_SIGNALS_PATH = Path(__file__).parent.parent / "conf" / "phase_signals.json"
+# Tracked file — see the EVAL_SIGNALS_DIR note in eval/run.py. tests/conftest.py
+# redirects this to a tmp dir so `pytest` never dirties the working tree.
+PHASE_SIGNALS_DIR = Path(
+    os.environ.get("PHASE_SIGNALS_DIR", str(Path(__file__).parent.parent / "conf"))
+)
+PHASE_SIGNALS_PATH = PHASE_SIGNALS_DIR / "phase_signals.json"
 
 # Timing, scoring, and source constants (Mitchell Hashimoto & John Carmack design)
 _mlx_fallback_str = os.environ.get("WEEKEND_MLX_FALLBACKS", "qwen,llama,phi")

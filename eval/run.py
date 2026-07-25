@@ -23,7 +23,13 @@ MAX_RETRIES = int(os.environ.get("EVAL_MAX_RETRIES", "1"))
 DEFAULT_EVAL_TIMEOUT = int(os.environ.get("EVAL_DEFAULT_TIMEOUT", "900"))
 MEMORY_WARNING_THRESHOLD = 80
 
-EVAL_SIGNALS_PATH = Path(__file__).parent.parent / "conf" / "eval_signals.json"
+# Learned per-model timeouts. This file is tracked, so a test run that exercises the
+# eval loop would otherwise rewrite it and dirty the working tree on every `pytest`.
+# tests/conftest.py points EVAL_SIGNALS_DIR at a tmp dir to keep runs side-effect free.
+EVAL_SIGNALS_DIR = Path(
+    os.environ.get("EVAL_SIGNALS_DIR", str(Path(__file__).parent.parent / "conf"))
+)
+EVAL_SIGNALS_PATH = EVAL_SIGNALS_DIR / "eval_signals.json"
 
 
 def _load_eval_signals():
