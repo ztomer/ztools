@@ -1,12 +1,12 @@
 # Testing Patterns and Findings
 
-**Updated: June 2026** — captures the test patterns, mock infrastructure, and bugs found during the multi-round test audit. All phases of the remediation plan complete.
+**Updated: July 2026** — test patterns, mock infrastructure, the autouse structural gates, and the bugs each was added to prevent.
 
 ---
 
 ## Overview
 
-- **1529 total** (1454 pass + 3 skip in main suite, 75 pass in excluded files).
+- **1712 total** (1652 pass + 3 skip in main suite, 60 pass in the OCR files).
 - Tests use **mocked LLM providers** — no real model calls in CI.
 - OCR-dependent tests (`test_img_helpers.py`, `test_image_renamer.py`) run **without coverage** (numpy C extension crashes under pytest-cov — see **Coverage Limitations** below).
 
@@ -62,7 +62,62 @@ def test_something(mock_llm):
 
 ---
 
+## Structural Gates (conftest, autouse — you cannot opt out by forgetting)
+
+Two autouse fixtures in `tests/conftest.py` make whole classes of test misbehavior
+impossible rather than relying on each test to remember. Both were added after the
+failure they prevent actually happened.
+
+### `no_real_browsers_or_cookies`
+
+Pins the browser backend to chromium and stubs cookie discovery for every test.
+
+**Why:** `test_twitter_browser_no_playwright` patched only `sync_playwright`. Once
+camoufox became the preferred backend, that patch stopped covering the launch path —
+the test launched a **real Firefox and read the developer's actual x.com session**
+during a unit-test run. Backend selection is not something each test should have to
+know about.
+
+Opt out with `@pytest.mark.real_cookie_discovery` only when the test *is* the cookie
+reader (`tests/test_twit_cookies.py` sets it module-wide via `pytestmark`).
+
+### `_signals_files_stay_clean`
+
+Redirects `eval.run.EVAL_SIGNALS_PATH` and `weekend.llm.PHASE_SIGNALS_PATH` at a tmp
+dir for the whole session.
+
+**Why:** both modules persist learned per-model timeouts into `conf/eval_signals.json`
+and `conf/phase_signals.json`, which are tracked. Every `pytest` run rewrote them and
+left the working tree dirty, so `git status` was never trustworthy after a test run.
+Production reads `EVAL_SIGNALS_DIR` / `PHASE_SIGNALS_DIR` from the environment.
+
+**The pattern:** when a test escapes its sandbox (network, filesystem, real
+credentials, a browser), fix it in `conftest.py` as an autouse gate with a named
+opt-out marker — not by patching the one test that surfaced it. The next test to make
+the same mistake won't get its own review.
+
+---
+
 ## Rules for Writing Tests
+
+### 0. Prove a new test can fail
+
+A test you have only ever seen pass is not evidence. Break the behavior it covers —
+delete the guard, invert the condition, remove the conversion — confirm it goes red,
+then restore. Do this before you trust any new assertion.
+
+```bash
+# Example from the scroll stop-conditions work
+sed -i '' 's/if stagnant >= STAGNANT_SCROLL_LIMIT:/if False:/' twitter/browser.py
+pytest tests/test_twit_browser.py -q     # expect: red
+git checkout -- twitter/browser.py
+pytest tests/test_twit_browser.py -q     # expect: green
+```
+
+Mutations that were verified to turn the suite red: disabling stagnation detection,
+disabling the runtime budget, disabling drain mode, removing the millisecond-expiry
+conversion, removing the session-cookie check, removing root-bounce detection,
+removing signed-in-profile preference, and inverting the Following-tab branch.
 
 ### 1. Every test must have a non-tautological assertion
 
@@ -475,3 +530,58 @@ at parse time:
 ```python
 source_names = [_lower(sn) for sn in source_names_list]
 ```
+
+---
+
+## Bugs Found While Adding Tests (July 2026, twitter/camoufox)
+
+Every one of these was invisible to a green test suite and only surfaced by running
+the real path. That is the point of `prove-before-claim`: a passing suite tells you
+the code does what the tests say, not that the feature works.
+
+### 3. A swallowed `add_cookies` hid a 100% failure rate
+
+`twitter/browser.py` wrapped per-cookie injection in `except Exception: pass`. Newer
+Firefox builds (Zen included) store `moz_cookies.expiry` in **milliseconds**;
+Playwright rejects that value outright ("only -1 or a positive number for the unix
+timestamp in s"). All 17 x.com cookies were rejected, silently, and x.com served its
+logged-out page — which scrolls like any other page, so the symptom presented as a
+hung scroll loop, not an auth error.
+
+Two fixes, and the second matters more than the first: normalize the unit
+(`normalize_expiry`, dividing by 1000 above a plausible-seconds bound), **and stop
+swallowing** — `_inject_cookies` now reports the browser's own rejection reason and
+aborts if the session cookie did not survive. A per-item `except: pass` around a loop
+must always be paired with a check on the aggregate outcome.
+
+### 4. Guest cookies are not a session
+
+A jar full of `guest_id` / `__cf_bm` / `gt` looks like a login and is not. Tests that
+mocked cookies as `[{"name": "x"}]` passed happily against code that required a real
+session. Fixture realism matters: `SIGNED_IN_COOKIES` now carries `auth_token` + `ct0`
+alongside guest cookies, and `GUEST_ONLY_COOKIES` exists specifically to prove the
+rejection path.
+
+### 5. A warning printed on the success path
+
+The "Could not locate 'Following' tab" warning lived *inside* `if following_tab:` —
+so it fired on every successful click and never on a real failure. Nothing tested the
+message, so it survived indefinitely. When a branch exists only to emit a log line,
+assert on the log line (`TestFollowingTabReporting` covers both directions).
+
+### 6. A test id that no longer exists still "fails"
+
+Re-running a specific test id after the file was split (`test_image_renamer.py` →
+`+ test_rename_cli_main.py`) can report a failure for a test that is no longer there,
+because `.pytest_cache` and assertion-rewrite bytecode outlive the source. Before
+concluding a failure is stale or a ghost, check `git log -- <file>` — a concurrent
+worktree may simply have fixed and moved it. Clear caches with
+`rm -rf .pytest_cache tests/__pycache__` when a result looks impossible.
+
+### 7. `core.hooksPath` is absolute, so hooks resolve the wrong tree
+
+The pre-commit hook derived its root from `__file__`, which always pointed at the main
+checkout. Committing from a linked worktree therefore ran every gate against main's
+index — the 500-line check measured main's copy of a file, not the staged one. Resolve
+the tree under test with `git rev-parse --show-toplevel`; keep the hook's own path only
+for tooling that lives in the main checkout.

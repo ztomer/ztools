@@ -28,7 +28,7 @@ Installs five `PATH` commands behind a `uv`-managed venv:
 |---------|--------|-------|
 | `ztools` | `tui` | Textual dashboard |
 | `weekend` | `weekend` | Weekend planner |
-| `twitter` | `twitter` | Twitter summarizer (needs `--install-browser` once) |
+| `twitter` | `twitter` | Twitter summarizer (needs `python3 -m camoufox fetch` once) |
 | `oeval` | `eval` | Model evaluator |
 | `rename_images` | `rename` | OCR/vision screenshot renamer (operates on `$PWD`) |
 
@@ -80,12 +80,45 @@ Fetches weather → searches local events/venues → 4-phase LLM pipeline (conde
 
 ```bash
 uv run -m twitter
+uv run -m twitter --since 24h
 uv run -m twitter --use-cache
 uv run -m twitter --model foundation
-uv run -m twitter --since 24h
+uv run -m twitter --login        # only if no browser is signed in to x.com
+uv run -m twitter --debug        # show the browser window
 ```
 
-Opens Chrome via Playwright → scrolls timeline → LLM extracts key facts → markdown briefing.
+Finds your x.com session → scrolls the Following timeline in a headless browser →
+LLM extracts key facts → markdown briefing.
+
+**Session discovery.** It looks for an `auth_token` cookie across every installed
+browser, Firefox-family first (Zen, Firefox, LibreWolf, Waterfox — unencrypted, no
+keychain prompt), then Chromium-family (Chrome, Chromium — decrypted via the
+`Chrome Safe Storage` keychain entry), and reports which one it used. Guest cookies
+are not a session: if no browser is signed in it says so and exits rather than
+scrolling a logged-out page. `--login` opens a window so you can sign in yourself
+into a persistent camoufox profile (`~/.twitter-camoufox-profile`); your password
+never passes through ztools.
+
+**Browser backend.** Defaults to [camoufox](https://camoufox.com/) (anti-detect
+Firefox) and falls back to Playwright chromium, naming the reason. One-time browser
+download:
+
+```bash
+uv run python3 -m camoufox fetch     # ~310 MB
+```
+
+| Env var | Default | Purpose |
+|---------|---------|---------|
+| `TWITTER_BROWSER_BACKEND` | `auto` | `auto` \| `camoufox` \| `chromium`. Naming one makes a launch failure loud instead of falling back. |
+| `TWITTER_MAX_RUNTIME_S` | `300` | Wall-clock budget for the scroll loop |
+| `TWITTER_STAGNANT_SCROLL_LIMIT` | `8` | Give up after N scrolls with no new tweets and no page movement |
+| `TWITTER_MAX_SCROLLS` | `1200` | Hard scroll ceiling |
+| `TWITTER_SCROLL_PAUSE_MS` | `1800` | Pause between scrolls |
+| `TWITTER_CAMOUFOX_HUMANIZE` | `0` | Animated cursor. Off by default — it breaks the Following-tab click. |
+| `TWITTER_PROFILE_DIR` | `~/.twitter-camoufox-profile` | Where `--login` stores the session |
+
+Ctrl+C stops the scroll and still summarizes what was collected; press it twice to
+quit immediately.
 
 ---
 
@@ -214,12 +247,22 @@ eval/                    # Model evaluator
 pytest tests/
 pytest tests/ -v           # verbose
 pytest tests/ -k weekend   # run specific test file
+
+# With coverage — OCR tests must be excluded (numpy's C extension crashes
+# under pytest-cov), then run separately without --cov:
+pytest tests/ --ignore=tests/test_img_helpers.py --ignore=tests/test_image_renamer.py --cov
+pytest tests/test_img_helpers.py tests/test_image_renamer.py
 ```
+
+Tests never reach the network, launch a browser, or read your real cookies —
+`tests/conftest.py` enforces that for every test. See `docs/TESTING.md`.
 
 **Key test files:**
 - `tests/test_quality_entry.py` — Score reconstruction, baseline comparison
 - `tests/test_content_processing.py` — Thinking block removal
 - `tests/test_twit_cookies.py` — Cookie extraction error paths
+- `tests/test_twit_browser.py` — Backend selection, scroll stop conditions, logged-out detection
+- `tests/test_signal_handling.py` — Ctrl+C drain mode, cleanup ordering
 - `tests/test_img_llm.py` — LLM server restart, MLX fallback
 - `tests/test_mlx_lib.py` — Model discovery, execution
 - `tests/test_weekend_*.py` — Weekend planner output, config, LLM

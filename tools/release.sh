@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Release ztools: tag, push, update Homebrew tap via gh.
-# Usage:  tools/release.sh
+# Release ztools: sync version, tag, push, update Homebrew tap via gh.
+# Usage:  tools/release.sh            # bump patch from the latest tag
+#         tools/release.sh 1.0.0      # explicit version (minor/major bump)
 # Requires: gh (authenticated), git, curl, shasum
 set -euo pipefail
 
@@ -16,13 +17,27 @@ info()  { echo "→ $*"; }
 ok()    { echo "✓ $*"; }
 err()   { echo "✗ $*" >&2; exit 1; }
 
-# ── 1. Bump version from latest tag ─────────────────────────────────
+# ── 1. Pick the new version ─────────────────────────────────────────
+# Default: bump the patch of the latest tag. Override with an explicit version
+# for a minor/major bump:  tools/release.sh 1.0.0
 LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-VERSION="${LAST_TAG#v}"
-MAJOR="${VERSION%%.*}"; REST="${VERSION#*.}"
-MINOR="${REST%%.*}";    PATCH="${REST#*.}"
-NEW_TAG="v${MAJOR}.${MINOR}.$((PATCH + 1))"
-V="${NEW_TAG#v}"
+if [ $# -ge 1 ]; then
+  V="${1#v}"
+  case "$V" in
+    [0-9]*.[0-9]*.[0-9]*) ;;
+    *) err "Version must look like MAJOR.MINOR.PATCH (got '$1')" ;;
+  esac
+  NEW_TAG="v$V"
+  if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
+    err "Tag $NEW_TAG already exists"
+  fi
+else
+  VERSION="${LAST_TAG#v}"
+  MAJOR="${VERSION%%.*}"; REST="${VERSION#*.}"
+  MINOR="${REST%%.*}";    PATCH="${REST#*.}"
+  NEW_TAG="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+  V="${NEW_TAG#v}"
+fi
 
 info "Last tag: $LAST_TAG → new tag: $NEW_TAG"
 
@@ -32,10 +47,23 @@ if [ "$UNPUSHED" -eq 0 ]; then
   err "Nothing to release — no unpushed commits"
 fi
 if ! git diff --quiet; then
-  info "Unstaged changes present (will not be included in this release)"
+  err "Working tree is dirty — commit or stash before releasing (the tag would
+    point at HEAD, silently shipping something different from what you tested)"
 fi
 
-# ── 3. Create tag ───────────────────────────────────────────────────
+# ── 3. Sync pyproject version, then tag ────────────────────────────
+# Without this the tarball keeps whatever version pyproject last held, so
+# `pip show otools` disagrees with the git tag and the brew formula.
+CURRENT_V=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
+if [ "$CURRENT_V" != "$V" ]; then
+  info "Syncing pyproject.toml version: $CURRENT_V → $V"
+  sed -i '' "s|^version = \".*\"|version = \"$V\"|" pyproject.toml
+  git add pyproject.toml
+  git commit -m "chore: version $V" --no-verify
+else
+  info "pyproject.toml already at $V"
+fi
+
 info "Tagging HEAD as $NEW_TAG ..."
 git tag -a "$NEW_TAG" -m "Release $NEW_TAG" --no-sign
 
