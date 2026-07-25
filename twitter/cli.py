@@ -12,7 +12,7 @@ from lib.config import Task
 from lib.llm.constants import DEFAULT_HOST, DEFAULT_PORT
 from lib.osaurus_lib import get_best_model
 from lib.osaurus_server import check_server_or_die
-from lib.signal_handling import setup_signals
+from lib.signal_handling import is_shutdown_requested, setup_signals
 from lib.tui import STEP, WARN
 from twitter.browser import (
     collect_tweets_via_browser,
@@ -27,6 +27,7 @@ from twitter.output import (
     save_state,
     write_markdown,
 )
+from twitter.session import login as run_login
 from twitter.summarize import (
     summarize_with_llm,
 )
@@ -61,6 +62,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--api-key", default=os.environ.get("OLLAMA_API_KEY", ""), help="API key")
     p.add_argument("--debug", action="store_true", help="Show browser window and verbose output")
     p.add_argument(
+        "--login",
+        action="store_true",
+        help="Open a browser window to sign in to x.com and save the session, "
+        "then exit. Only needed when no installed browser is signed in.",
+    )
+    p.add_argument(
         "--clean",
         action="store_true",
         help="Delete all .md files in the target output and exit",
@@ -91,8 +98,15 @@ def resolve_since_time(args_since: str | None, state: dict) -> datetime:
 
 
 def main() -> None:
-    setup_signals()
+    # drain=True: Ctrl+C stops the timeline scroll but keeps the tweets already
+    # collected so the run still produces a summary. Ctrl+C twice force-quits.
+    setup_signals(drain=True)
     args = parse_args()
+
+    if args.login:
+        # Sign-in only. Exits before touching the LLM server or output dir.
+        sys.exit(0 if run_login() else 1)
+
     output_dir = Path(args.output).expanduser()
 
     model = args.model or os.environ.get("OLLAMA_MODEL", "default")
@@ -119,6 +133,8 @@ def main() -> None:
         if not tweets:
             print(f"{WARN} No tweets found.")
             sys.exit(0)
+        if is_shutdown_requested():
+            print(f"{WARN} Interrupted — summarizing the {len(tweets)} tweets collected so far.")
 
     summary = summarize_with_llm(tweets, args.host, args.model, api_key=args.api_key)
     if summary.startswith("[LLM error"):
