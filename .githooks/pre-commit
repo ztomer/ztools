@@ -14,7 +14,28 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
+# The hook is invoked via an absolute core.hooksPath, so __file__ always points at the
+# MAIN checkout even when committing from a linked worktree. Resolve the tree being
+# committed from git itself; otherwise every check reads the wrong files and the wrong index.
+HOOK_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _repo_root() -> Path:
+    r = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
+    )
+    if r.returncode == 0 and r.stdout.strip():
+        return Path(r.stdout.strip())
+    return HOOK_ROOT
+
+
+ROOT = _repo_root()
+
+
+def _tool(rel: str) -> Path:
+    """Prefer the tree being committed; fall back to the main checkout."""
+    p = ROOT / rel
+    return p if p.exists() else HOOK_ROOT / rel
 
 
 def get_staged() -> list[str]:
@@ -45,15 +66,15 @@ def get_added_lines(file_path: str) -> set[int]:
     return added
 
 
-venv_bin = ROOT / ".venv" / "bin"
-ruff_cmd = str(venv_bin / "ruff") if (venv_bin / "ruff").exists() else "ruff"
+ruff_path = _tool(".venv/bin/ruff")
+ruff_cmd = str(ruff_path) if ruff_path.exists() else "ruff"
 
 staged_files = get_staged()
 staged_py = get_staged_py()
 errors = []
 
 # --- 1. Emoji gate ---
-EMOJI_CHECKER = ROOT / "tools" / "check_no_emoji.py"
+EMOJI_CHECKER = _tool("tools/check_no_emoji.py")
 if EMOJI_CHECKER.exists():
     r = subprocess.run(
         [sys.executable, str(EMOJI_CHECKER), "--staged"],
@@ -77,7 +98,7 @@ for f in staged_files:
         errors.append(f"  File exceeds {MAX_LINES} lines: {f} ({line_count} lines)")
 
 # --- 3. Config-debt gate ---
-CHECKER = ROOT / "tools" / "check_config_debt.py"
+CHECKER = _tool("tools/check_config_debt.py")
 if CHECKER.exists():
     for f in staged_py:
         added_lines = get_added_lines(f)
