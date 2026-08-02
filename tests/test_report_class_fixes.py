@@ -354,3 +354,53 @@ def test_C5_marker_list_is_shared_with_enforcement_not_copied():
     assert rc.check_wk_weather_label_matches_venue(SHIPPED_AGGREGATOR_ROW), (
         "a public library labelled 'outdoor' must be caught"
     )
+
+
+def test_C3_a_long_running_exhibition_that_spans_the_weekend_is_in_the_plan():
+    """Overlap, not endpoint containment.
+
+    A real run produced "Monet: The Immersive Experience | 2026-06-29 →
+    2026-08-16" for a 2026-08-07..09 plan. That is CORRECT -- it is on all
+    weekend. The checker tested each endpoint for containment, so it reported a
+    correct row as a failure while the enforcement (which used overlap) kept it.
+    Fifth checker in this project to be wrong from a second mental model; both
+    now call weekend.enforce.window_overlap.
+    """
+    from datetime import date as _date
+
+    from weekend.enforce import drop_events_outside_window, window_overlap
+
+    spans = {"name": "Monet", "start_date": "2026-06-29", "end_date": "2026-08-16"}
+    outside = {"name": "Canada Day", "start_date": "2026-07-01", "end_date": "2026-07-01"}
+    start, end = _date(2026, 8, 7), _date(2026, 8, 9)
+
+    assert window_overlap(spans, start, end) is True
+    assert window_overlap(outside, start, end) is False
+    assert window_overlap({"name": "no dates"}, start, end) is None
+
+    kept, notes = drop_events_outside_window([spans, outside], start, end)
+    assert [i["name"] for i in kept] == ["Monet"]
+    assert len(notes) == 1
+
+    rendered = _render_current(kept)
+    assert rc.check_wk_no_row_outside_window(rendered, start, end) == []
+
+
+def test_C3_checker_and_enforcement_agree_on_the_same_rows():
+    """They disagreed once; assert they cannot again."""
+    from datetime import date as _date
+
+    from weekend.enforce import drop_events_outside_window
+
+    start, end = _date(2026, 8, 7), _date(2026, 8, 9)
+    rows = [
+        {"name": "Spans", "start_date": "2026-06-29", "end_date": "2026-08-16"},
+        {"name": "Inside", "start_date": "2026-08-08", "end_date": "2026-08-08"},
+        {"name": "Before", "start_date": "2026-07-01", "end_date": "2026-07-02"},
+        {"name": "After", "start_date": "2026-09-01", "end_date": "2026-09-02"},
+    ]
+    kept, _ = drop_events_outside_window(list(rows), start, end)
+    assert rc.check_wk_no_row_outside_window(_render_current(kept), start, end) == []
+    # and everything the enforcement dropped IS reported by the checker
+    dropped = [r for r in rows if r["name"] not in {k["name"] for k in kept}]
+    assert rc.check_wk_no_row_outside_window(_render_current(dropped), start, end)

@@ -199,16 +199,29 @@ def check_wk_transient_rows_carry_a_date(text: str, year: int) -> list[str]:
 
 
 def check_wk_no_row_outside_window(text: str, start: date, end: date) -> list[str]:
-    """C3. Every explicit date in the report must fall inside the plan window."""
+    """C3. Every dated row's RANGE must overlap the plan window.
+
+    Overlap, not endpoint containment. A long-running exhibition
+    (e.g. late June to mid August) is legitimately in an early-August plan
+    even though neither endpoint falls inside the window. This checker previously tested
+    each date for containment and so reported a correct row as a failure, while
+    the enforcement -- which used overlap -- kept it. Both now call
+    `weekend.enforce.window_overlap`, so there is one decision in one place.
+    """
+    from weekend.enforce import window_overlap
+
     failures = []
     for row in transient_rows(text):
-        blob = " ".join(row.values())
-        for found in find_dates_in(blob, start.year):
-            if not (start <= found <= end):
-                failures.append(
-                    f"{_row_name(row)!r}: date {found.isoformat()} is outside "
-                    f"{start.isoformat()}..{end.isoformat()}"
-                )
+        cell = _cell(row, "dates", "duration", "end date")
+        found = find_dates_in(cell, start.year)
+        if not found:
+            continue
+        item = {"start_date": min(found).isoformat(), "end_date": max(found).isoformat()}
+        if window_overlap(item, start, end) is False:
+            failures.append(
+                f"{_row_name(row)!r}: runs {min(found).isoformat()}..{max(found).isoformat()}, "
+                f"which does not overlap {start.isoformat()}..{end.isoformat()}"
+            )
     return failures
 
 

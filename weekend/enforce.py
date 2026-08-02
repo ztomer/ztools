@@ -25,6 +25,7 @@ __all__ = [
     "reconcile_day_with_dates",
     "INDOOR_MARKERS",
     "parse_any_date",
+    "window_overlap",
 ]
 
 # Venue words that settle indoor/outdoor without consulting a forecast. Kept
@@ -225,13 +226,14 @@ def drop_events_outside_window(
     """
     kept, notes = [], []
     for item in items:
-        starts = _parse_any_date(item.get("start_date", ""), start.year)
-        ends = _parse_any_date(item.get("end_date", ""), start.year)
-        if starts is None and ends is None:
+        overlaps = window_overlap(item, start, end)
+        if overlaps is None:
             kept.append(item)
             continue
+        starts = _parse_any_date(item.get("start_date", ""), start.year)
+        ends = _parse_any_date(item.get("end_date", ""), start.year)
         first, last = starts or ends, ends or starts
-        if last < start or first > end:
+        if not overlaps:
             notes.append(
                 f"dropped {item.get('name', '?')!r} — runs "
                 f"{first.isoformat()}..{last.isoformat()}, outside "
@@ -293,3 +295,28 @@ def reconcile_day_with_dates(
                 + (f"corrected to {corrected!r}" if corrected else "cleared")
             )
     return items, notes
+
+
+def window_overlap(item: dict, start: date, end: date):
+    """Does this row's date range overlap [start, end]?
+
+    Returns True / False, or None when the row carries no parseable date.
+
+    Shared with eval/report_classes.py deliberately. A long-running exhibition
+    (e.g. late June to mid August) is IN the plan if it spans the weekend, even
+    though neither of its endpoints falls inside it. A checker that tested each
+    endpoint for containment instead of testing the range for overlap disagreed
+    with this enforcement and reported a correct row as a failure -- the fifth
+    time in this project that a checker written from a second mental model was
+    wrong. There is one decision, in one place.
+    """
+    first = _parse_any_date(item.get("start_date", ""), start.year)
+    last = _parse_any_date(item.get("end_date", ""), start.year) or first
+    if first is None:
+        last = _parse_any_date(item.get("end_date", ""), start.year)
+        if last is None:
+            return None
+        first = last
+    if last < first:
+        first, last = last, first
+    return not (last < start or first > end)
