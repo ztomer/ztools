@@ -48,21 +48,21 @@ all (C2) and the prompt orders the model to emit `"2-3 hours"` (C4).
 
 ## Class index
 
-| ID | Class | Tool | Evidence |
+| ID | Class | Tool | Status (2026-08-02) |
 | :--- | :--- | :--- | :--- |
-| C1 | `SILENT-TEMPLATE-SUBSTITUTION-FAILURE` | `wk` | proven by probe |
-| C2 | `DATE-DROPPED-AT-THE-LLM-BOUNDARY` | `tw` + `wk` | proven in both samples |
-| C3 | `NO-RECENCY-FILTER` | `wk` | proven in sample |
-| C4 | `MANDATED-PLACEHOLDER` | `wk` | proven in sample |
-| C5 | `UNVERIFIED-SEMANTIC-LABEL` | `wk` | proven in sample |
-| C6 | `PROVENANCE-LABEL-NOT-BACKED-BY-DATA` | `wk` | proven in source |
-| C7 | `CLASSIFICATION-BY-QUERY-PROVENANCE` | `wk` | proven in sample |
-| C8 | `UNENFORCED-USER-CONSTRAINT` | `wk` | proven in sample; layer 1 of 3 fixed |
-| C9 | `BACKEND-PROVENANCE-DISCARDED` | `tw` | proven in source |
-| C10 | `UNSPECIFIED-OUTPUT-CONTRACT` | `tw` | proven across two samples |
-| C11 | `COVERAGE-OVERSTATED` | `tw` | **latent** — not proven on these samples |
-| C12 | `EVAL-DOES-NOT-EXERCISE-PRODUCTION` | both | proven in source |
-| C13 | `DECLARED-BUT-UNREAD-CONFIG` | `tw` | proven by probe |
+| C1 | `SILENT-TEMPLATE-SUBSTITUTION-FAILURE` | `wk` | **FIXED** — shared renderer, raises |
+| C2 | `DATE-DROPPED-AT-THE-LLM-BOUNDARY` | `tw` + `wk` | **C2b FIXED** (schema+renderer); **C2a OPEN** (`tw`) |
+| C3 | `NO-RECENCY-FILTER` | `wk` | **PARTIAL** — dated rows filtered; undated are C7 |
+| C4 | `MANDATED-PLACEHOLDER` | `wk` | **FIXED** — prompts no longer order constants |
+| C5 | `UNVERIFIED-SEMANTIC-LABEL` | `wk` | **FIXED** — corrected in code, clear-cut cases |
+| C6 | `PROVENANCE-LABEL-NOT-BACKED-BY-DATA` | `wk` | **FIXED** — heading renamed to Fit Score |
+| C7 | `CLASSIFICATION-BY-QUERY-PROVENANCE` | `wk` | **OPEN** — now visible as a blank date |
+| C8 | `UNENFORCED-USER-CONSTRAINT` | `wk` | **FIXED** — all 3 layers; enforced in code |
+| C9 | `BACKEND-PROVENANCE-DISCARDED` | `tw` | **FIXED** — degraded runs are banner-marked |
+| C10 | `UNSPECIFIED-OUTPUT-CONTRACT` | `tw` | **OPEN** |
+| C11 | `COVERAGE-OVERSTATED` | `tw` | **LATENT — deliberately untouched** |
+| C12 | `EVAL-DOES-NOT-EXERCISE-PRODUCTION` | both | **FIXED** — one shared renderer |
+| C13 | `DECLARED-BUT-UNREAD-CONFIG` | `tw` | **OPEN** |
 
 C1, C2 and C12 are the load-bearing ones. C2 is the only class present in **both** tools,
 which makes it the true class rather than two coincidental bugs. C12 is why none of the
@@ -511,41 +511,45 @@ server.
 
 ---
 
-## `ev` baseline — attempted 2026-08-02, NOT obtained
+## The Osaurus blocker — RESOLVED, and the Stage 0 diagnosis was wrong
 
-Stage 1 requires a before/after `ev` number. **No baseline could be produced on this machine
-today**, and the reason matters more than the missing number.
+Stage 0 reported that "every MLX model hangs; only the on-device `foundation`
+model answers", and treated that as a property of the machine. **That was wrong,
+and the correction matters more than the original finding.**
 
-Osaurus is running and `/v1/models` answers instantly with 9 models. But only the on-device
-Apple `foundation` model actually completes a chat request:
+The real cause was a **wedged Osaurus process**. It had been up 25 hours with
+117 MB RSS (no model resident) and 0% CPU while RAM was 85% free. After a clean
+relaunch every configured model served normally:
 
-| Model | Trivial 8-token request |
-| :--- | :--- |
-| `foundation` | responds in **1s** |
-| `qwen-agentworld-35b-a3b-mxfp8` (configured for `summarize`) | **no response in 300s** |
-| `qwen3.6-35b-a3b-mxfp8-mtp` (configured for `think`/`vlm`) | **no response in 300s** |
-| `gemma-4-e4b-it-8bit` | **no response in 120s** |
+| Model | Before (wedged) | After relaunch |
+| :--- | :--- | :--- |
+| `foundation` (on-device) | 1s | 1s |
+| `gemma-4-e4b-it-8bit` | no response in 120s | **14s** |
+| `qwen-agentworld-35b-a3b-mxfp8` (`summarize`) | no response in 300s | **13s** |
+| `qwen3.6-35b-a3b-mxfp8-mtp` (`think`) | no response in 300s | **14s** |
 
-`ev --quality --model qwen3.6-35b-a3b-mxfp8-mtp` scored **0.0%** on the very first and
-simplest task (`filename` / "Login error screenshot") after a 600s timeout, then continued to
-the next task. Every MLX-served model hangs; the health check passes because it only lists
-models. This is C12's sibling at the infrastructure layer: **"server OK" is not evidence the
-server can serve.**
+Three things follow, and each is a defect in its own right:
 
-Two consequences:
+1. **The health check could not see it.** `is_server_running()` asks
+   `/v1/models` (`lib/osaurus_models.py:63-71`), which a wedged server answers
+   instantly. `ev` printed `Server: OK` and then burned 600s per task. A
+   readiness check that exercises a cheaper path than the work is not a readiness
+   check. Fixed: `lib/osaurus_server.can_serve()` asks for a single token and
+   returns a stated reason on failure.
+2. **The auto-restart made it worse.** `restart_server()` quit Osaurus, failed to
+   confirm the relaunch within its 20s window, and returned `False` — leaving
+   **nothing listening on 1337**. `ensure_server()` then retries that up to three
+   times. For an unattended routine this converts a recoverable wedge into a hard
+   outage. **Still open** — `can_serve()` gives the honest signal but the restart
+   path itself has not been reworked.
+3. **This is C9's condition in the wild.** While wedged, a real `tw` run would
+   have exhausted the server tier and silently landed on `foundation` — which is
+   exactly why C9 was prioritised.
 
-1. **Any `ev` number quoted today would be a measure of the hang, not of prompt quality.**
-   The baseline must be re-taken once the MLX backend serves; the numbers are deliberately not
-   invented here.
-2. **This is exactly the live condition C9 describes.** With every MLX model hanging, a real
-   `tw` run would exhaust the server tier and land on `foundation` or local MLX — and, because
-   provenance is discarded (`twitter/summarize.py:239`), would write a summary that looks
-   identical to a primary-model one. The two dated `tw` samples cannot be attributed to a
-   backend at all. C9 is not a hypothetical risk on this machine; it is the default path.
-
-**Before re-running the baseline:** restart Osaurus and re-probe each configured model with a
-trivial request. Do not start from `ev` — it takes 600s per model to tell you what a 5s curl
-tells you.
+**`ev` baseline: still not taken.** The server can serve now, so it is finally
+possible, but a `--quality` sweep is ~20 tasks x minutes/task and was not run in
+the time available. No before/after number is claimed. What IS proven is stated
+per class below, by real run or by test.
 
 ---
 

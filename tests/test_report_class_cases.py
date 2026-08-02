@@ -441,3 +441,46 @@ def test_C3_current_pipeline_drops_a_dated_event_outside_the_window():
     assert notes and "2026-07-01" in notes[0]
     assert "Canada Day" not in _render_current(kept)
 
+
+def test_C8_typographic_apostrophe_does_not_defeat_the_exclusion():
+    """Regression: found by a REAL wk run on 2026-08-02, after C8 had already
+    been declared fixed. conf/weekend.toml says "Ripley's" (U+0027); the scraper
+    returned "Ripley’s Aquarium of Canada" (U+2019), so the substring match
+    failed and an excluded venue shipped.
+
+    The checker missed it too, because it normalised the same (wrong) way -- an
+    instrument that shares the bug reports PASS. Both now call one shared
+    normalizer, so they cannot drift apart again.
+    """
+    from weekend.enforce import drop_excluded_places, normalize_for_match
+
+    items = [
+        {"name": "Ripley’s Aquarium of Canada", "location": "Toronto, Ontario"},
+        {"name": "Union Summer", "location": "Union Station Plaza"},
+    ]
+    kept, notes = drop_excluded_places(items, ["Ripley's"])
+    assert len(notes) == 1 and "Ripley" in notes[0]
+    assert [i["name"] for i in kept] == ["Union Summer"]
+
+    # The checker must agree with the enforcement on the same input.
+    rendered = _render_current([], items)
+    assert rc.check_wk_no_excluded_place(rendered, ["Ripley's"]) != []
+    assert normalize_for_match("Ripley’s") == normalize_for_match("Ripley's")
+
+
+def test_C4_an_honest_blank_column_is_not_reported_as_fabricated():
+    """The C4 fix makes unknown values render as the missing sentinel, so a
+    column of blanks is CORRECT. Flagging it would punish the pipeline for
+    telling the truth -- a real run tripped exactly that false positive."""
+    blank = (
+        "### Transient / Limited-Time Events\n"
+        "| Event & Location | Est. Price | Dates |\n| :--- | :--- | :--- |\n"
+        "| **A** (X) | — | 2026-08-07 |\n| **B** (Y) | — | 2026-08-08 |\n"
+        "| **C** (Z) | — | 2026-08-09 |\n"
+    )
+    assert rc.check_wk_no_constant_column(blank) == []
+
+    fabricated = blank.replace("—", "$20-30 per child or free")
+    assert rc.check_wk_no_constant_column(fabricated) != [], (
+        "a repeated NON-empty value is still the C4 defect"
+    )

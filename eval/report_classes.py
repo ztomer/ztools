@@ -24,6 +24,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # Values the prompts mandate verbatim (class C4). A cell equal to one of these
 # was authored by the prompt, not observed in the world.
+# What weekend/output.py renders for a value the source never stated.
+MISSING_SENTINEL = "—"
+
 MANDATED_LITERALS = frozenset(
     {
         "2-3 hours",
@@ -247,13 +250,22 @@ def check_tw_names_its_backend(text: str) -> list[str]:
 
 
 def check_wk_transient_rows_carry_a_date(text: str, year: int) -> list[str]:
-    """C2b. The `Duration / End Date` column must hold a date, not a duration."""
+    """C2b. The date column must hold a date -- never a duration standing in.
+
+    A row whose date cell is the missing sentinel is NOT a C2b failure: the
+    source genuinely gave no date and the report says so. That row is class C7
+    (evergreen content in the transient table), reported by
+    `check_wk_transient_rows_are_time_bounded`. Conflating the two made the fixed
+    renderer look broken because it had started telling the truth.
+    """
     failures = []
     for row in transient_rows(text):
-        cell = _cell(row, "dates", "duration", "end date")
+        cell = _cell(row, "dates", "duration", "end date").strip()
         if find_dates_in(cell, year):
             continue
-        failures.append(f"{_row_name(row)!r}: no date in date column (got {cell!r})")
+        if cell in ("", MISSING_SENTINEL):
+            continue
+        failures.append(f"{_row_name(row)!r}: date column holds a non-date {cell!r}")
     return failures
 
 
@@ -317,7 +329,12 @@ def check_wk_no_mandated_placeholder(text: str) -> list[str]:
 
 
 # Columns that are legitimately identical across rows are not evidence of C4.
-_KEY_COLUMNS = ("activity", "event", "score", "location")
+# "weather" is here because it is a three-value categorical (indoor/outdoor/both)
+# that can honestly be uniform -- a real 2026-08-07 run picked seven indoor
+# venues for a rainy weekend, which is correct behaviour, not a fabricated
+# default. C4 is about a FREE-TEXT field (price, ages, duration) repeating a
+# constant the prompt supplied.
+_KEY_COLUMNS = ("activity", "event", "score", "location", "weather")
 
 
 def check_wk_no_constant_column(text: str) -> list[str]:
@@ -330,6 +347,11 @@ def check_wk_no_constant_column(text: str) -> list[str]:
             if any(k in col.lower() for k in _KEY_COLUMNS):
                 continue
             values = {r.get(col, "").strip() for r in rows}
+            # An empty/sentinel column is an HONEST blank -- the C4 fix makes
+            # unknown values render as nothing at all. Only a repeated
+            # NON-empty value is evidence of a fabricated default.
+            if values <= {"", MISSING_SENTINEL}:
+                continue
             if len(values) == 1:
                 failures.append(
                     f"{label}: column {col!r} is the constant {values.pop()!r} "
@@ -374,11 +396,13 @@ def check_wk_transient_rows_are_time_bounded(text: str, year: int) -> list[str]:
 def check_wk_no_excluded_place(text: str, excluded: Iterable[str]) -> list[str]:
     """C8. The user's `exclude_places` must be enforced, not merely suggested."""
     failures = []
+    from weekend.enforce import normalize_for_match
+
     rows = transient_rows(text) + fixed_rows(text)
     for row in rows:
-        haystack = f"{_row_name(row)} {_cell(row, 'location')}".lower()
+        haystack = normalize_for_match(f"{_row_name(row)} {_cell(row, 'location')}")
         for place in excluded:
-            token = place.strip().lower()
+            token = normalize_for_match(place)
             if token and token in haystack:
                 failures.append(f"{_row_name(row)!r} matches excluded place {place!r}")
                 break

@@ -39,10 +39,35 @@ _INDOOR_MARKERS = (
 )
 
 
+# Scraped venue names use typographic punctuation; a hand-written config uses
+# ASCII. "Ripley's" in conf/weekend.toml did NOT match a scraped
+# "Ripley's Aquarium of Canada" because of U+2019 vs U+0027 -- found by a real
+# `wk` run on 2026-08-02, after the exclusion filter had been declared working.
+_PUNCT_FOLD = str.maketrans(
+    {
+        "’": "'", "‘": "'", "ʼ": "'",
+        "“": '"', "”": '"',
+        "–": "-", "—": "-", "−": "-",
+        " ": " ",
+    }
+)
+
+
+def normalize_for_match(text: str) -> str:
+    """Fold typographic punctuation and whitespace for constraint matching.
+
+    Shared with eval/report_classes.py on purpose: when the checker and the
+    enforcement normalise differently, the checker reports PASS on exactly the
+    rows the enforcement failed to drop. That is how this bug hid.
+    """
+    folded = (text or "").translate(_PUNCT_FOLD).lower()
+    return " ".join(folded.split())
+
+
 def _item_text(item: dict) -> str:
     name = item.get("name") or item.get("event") or item.get("title") or ""
     loc = item.get("location") or item.get("address") or ""
-    return f"{name} {loc}".lower()
+    return normalize_for_match(f"{name} {loc}")
 
 
 def drop_excluded_places(items: list[dict], excluded: list[str]) -> tuple[list[dict], list[str]]:
@@ -62,7 +87,9 @@ def drop_excluded_places(items: list[dict], excluded: list[str]) -> tuple[list[d
     kept, notes = [], []
     for item in items:
         haystack = _item_text(item)
-        hit = next((p for p in excluded if p.strip() and p.strip().lower() in haystack), None)
+        hit = next(
+            (p for p in excluded if p.strip() and normalize_for_match(p) in haystack), None
+        )
         if hit:
             notes.append(f"dropped {item.get('name', '?')!r} — matches excluded place {hit!r}")
         else:
