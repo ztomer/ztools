@@ -585,3 +585,40 @@ checkout. Committing from a linked worktree therefore ran every gate against mai
 index — the 500-line check measured main's copy of a file, not the staged one. Resolve
 the tree under test with `git rev-parse --show-toplevel`; keep the hook's own path only
 for tooling that lives in the main checkout.
+
+---
+
+## Report content-class cases (`tests/test_report_class_cases.py`, August 2026)
+
+Stage 0 of G3. One case per weakness class in `docs/REPORT_WEAKNESS_CLASSES.md`, run
+against real shipped `tw` / `wk` reports rather than eval fixtures.
+
+**Pattern — `xfail(strict=True)` as the open-defect ledger.** Each case asserts the
+*correct* behaviour, so it fails today. `strict=True` means that when Stage 1 fixes the
+class the test XPASSes and pytest turns that into a **failure**, forcing the marker to be
+removed in the same change. A class therefore cannot be quietly fixed-and-forgotten, nor
+quietly left open. This is a structural gate, not a reminder.
+
+Proven end-to-end on 2026-08-02: fixing C8's TOML nesting flipped
+`test_C8_declared_exclusions_reach_production` from XFAIL to `FAILED [XPASS(strict)]`,
+and the marker was removed.
+
+**Rules for these cases:**
+- The checkers live in `eval/report_classes.py` as pure functions over report text. No LLM,
+  no network — they run in CI in under a second.
+- Every checker needs a **passing** counter-test (`test_checkers_pass_on_a_clean_report`).
+  A checker that can only fail proves nothing.
+- A class with thin evidence gets `strict=False` and a comment saying why — see C11, whose
+  mechanism is real but was never reproduced. Do not promote it without a probe.
+- The `wk` fixture is the real 2026-07-31 plan. The `tw` fixtures are synthetic
+  reproductions: the real ones carry the user's private timeline and are not vendored.
+  `test_real_*_exhibit_the_catalogued_classes` re-runs the checks against the real files
+  when present and skips in CI.
+
+### Bug found by writing these: a health check that only lists models
+
+`ev` reports `Server: OK` from `/v1/models`, which answers instantly even when the MLX
+backend cannot serve a single token. On 2026-08-02 every MLX model timed out at 300s while
+`foundation` answered in 1s, and `ev` spent 600s per task discovering this. **Probe one
+trivial completion per model before trusting an eval run** — and treat "server up" and
+"server can serve" as different assertions.
