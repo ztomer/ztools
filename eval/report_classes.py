@@ -250,7 +250,7 @@ def check_wk_transient_rows_carry_a_date(text: str, year: int) -> list[str]:
     """C2b. The `Duration / End Date` column must hold a date, not a duration."""
     failures = []
     for row in transient_rows(text):
-        cell = _cell(row, "duration", "end date")
+        cell = _cell(row, "dates", "duration", "end date")
         if find_dates_in(cell, year):
             continue
         failures.append(f"{_row_name(row)!r}: no date in date column (got {cell!r})")
@@ -360,7 +360,7 @@ def check_wk_transient_rows_are_time_bounded(text: str, year: int) -> list[str]:
     """C7. A row with no time bound is evergreen and belongs in the fixed table."""
     failures = []
     for row in transient_rows(text):
-        cell = _cell(row, "duration", "end date")
+        cell = _cell(row, "dates", "duration", "end date")
         blob = " ".join(row.values())
         if find_dates_in(cell, year) or find_dates_in(blob, year):
             continue
