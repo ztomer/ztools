@@ -64,6 +64,9 @@ all (C2) and the prompt orders the model to emit `"2-3 hours"` (C4).
 | C12 | `EVAL-DOES-NOT-EXERCISE-PRODUCTION` | both | **FIXED** — one shared renderer |
 | C13 | `DECLARED-BUT-UNREAD-CONFIG` | `tw` | **OPEN** |
 | C8b | `NAME-MATCHED-BY-CONTAINMENT` | `wk` | **FIXED** — token-subset matching |
+| C2c | `PIPELINE-NARROWS-AT-EVERY-PHASE` | `wk` | **FIXED** — one carrier format through all phases |
+| C14 | `AGGREGATOR-PAGE-AS-ACTIVITY` | `wk` | judgement to the model; checker added |
+| C15 | `COLUMN-DISAGREES-WITH-ITS-OWN-ROW` | `wk` | **FIXED** — Day derived from the row's dates |
 
 C1, C2 and C12 are the load-bearing ones. C2 is the only class present in **both** tools,
 which makes it the true class rather than two coincidental bugs. C12 is why none of the
@@ -402,6 +405,63 @@ it; an en-dash `$20–30` would previously have escaped the C4 literal check.
 **Failing case:** `test_report_class_fixes.py::test_C8_zero_excluded_venues_in_the_output_not_merely_one_drop`
 — asserts **zero** excluded venues in the rendered output. "At least one drop
 happened" is the assertion that let this through twice.
+
+---
+
+## C14 · AGGREGATOR-PAGE-AS-ACTIVITY
+
+**Invariant violated:** a row must be something a family can go and DO at a time
+and place. A page that LISTS activities is not an activity.
+
+**Symptom / sample (real run, weekend of 2026-08-07).** The user's verdict was
+*"this specifically means nothing"*:
+
+> `| * 2.0/5 | **Vaughan Events & Activities Guides for Kids & Families** (Vaughan Public Libraries, Vaughan, ON, Canada) | 6-13 | — | 2026-08-04 → 2026-08-07 | Saturday | outdoor |`
+
+You cannot attend a guide. Every scraped `things to do in X`, `what's on`,
+`events guide`, `calendar of events` or blog archive page is an instance, and the
+DDGS result set is full of them.
+
+**Distinct from C7.** C7 is *"transient because an events query returned it"* — a
+real but evergreen venue in the wrong table. C14 is *"this is not an activity at
+all"*, and it can land in either table.
+
+**Where the fix lives — judgement vs verification.** *"Is this an actual thing we
+can go and do, or a page listing things?"* is a **judgement call for the model**;
+no matcher gets it right, and a title-pattern filter would silently drop real
+events with generic names. So the instruction lives in the prompt, at both the
+extract and draft phases. `check_wk_no_aggregator_rows` is a **measurement
+instrument only** — it flags a suspicious title so the quality gate fails, and
+code never drops a row on a title pattern.
+
+**Failing case:** `test_report_class_fixes.py::test_C14_a_directory_page_is_not_an_activity`,
+plus a parametrised case over the common aggregator shapes and a conservatism case
+asserting a real event is not flagged.
+
+---
+
+## C15 · COLUMN-DISAGREES-WITH-ITS-OWN-ROW
+
+**Invariant violated:** two columns describing the same fact must agree. This
+needs no model and no judgement — it is arithmetic.
+
+**Sample:** the same shipped row. `Dates` covered `2026-08-04 → 2026-08-07`
+(Tuesday to Friday); `Day` said **Saturday**. That range contains no Saturday.
+
+**Root cause.** `day` came from the model and was never compared against the
+dates beside it. Nothing in the pipeline ever read the two columns together, so a
+row could contradict itself and ship.
+
+**Fix.** `weekend/enforce.py:reconcile_day_with_dates` derives `Day` from the
+row's own dates where they overlap the plan window, corrects or clears a
+disagreement, and reports it. Deliberately narrow: a row with no dates is left
+alone (inventing a day would be C4 again), and a row wholly outside the window is
+left to `drop_events_outside_window`.
+
+**Lesson recorded.** This row also showed why the stage 1b bar had to be raised:
+the `Dates` column was *populated*, and populated with a **publication window**
+rather than an event date. "The column has a value" is not "the value is right" —
+the same assertion trap that cost two rounds on C8.
 
 ---
 
