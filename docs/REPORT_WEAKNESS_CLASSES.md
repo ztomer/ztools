@@ -619,8 +619,16 @@ the real `write_markdown`, but a real `tw` run needs a live X session and was no
 performed — so the degraded-path banner has not been observed in production.
 C12 is a structural property (one shared renderer) and has no runtime artifact.
 
-**Still open:** C2a (`tw` timestamps), C7, C10, C13, and the `restart_server`
-defect above. **C11 remains latent and deliberately untouched.**
+**Still open:** C2a (`tw` timestamps), C7, C10, C13. **C11 remains latent and deliberately untouched.**
+
+**`restart_server` — FIXED and verified on the real app.** The port frees before
+the process exits, so LaunchServices swallowed the relaunch and re-activated the
+terminating instance. `_wait_until_down` now waits for the process (pgrep), the
+launch is retried once (never another quit), and `ensure_server` gives a grace
+period before it may quit again. Real run: `restart_server() -> True` in 2.2s
+with the PID changing 93433 -> 93921 and the model serving afterwards. The first
+attempt at this fix (wait for the port) was insufficient and a live run caught
+it -- the same lesson as C8b.
 
 ### What the real run taught that the tests could not
 
