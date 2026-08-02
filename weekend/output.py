@@ -75,14 +75,14 @@ def _build_fixed_table(fixed):
             or item.get("activity_name")
             or "Unknown"
         ).replace("**", "")
-        loc = item.get("location") or item.get("address") or ""
+        loc = _fmt_location(item)
         age = _fmt_missing(item.get("target_ages") or item.get("age_group"))
         price = _fmt_missing(item.get("price") or item.get("cost"))
         weather = _fmt_missing(item.get("weather") or item.get("weather_appropriateness"))
         if has_scores:
-            md += f"| {score_str} | **{name}** ({loc}) | {age} | {price} | {weather} |\n"
+            md += f"| {score_str} | {_fmt_name_loc(name, loc)} | {age} | {price} | {weather} |\n"
         else:
-            md += f"| **{name}** ({loc}) | {age} | {price} | {weather} |\n"
+            md += f"| {_fmt_name_loc(name, loc)} | {age} | {price} | {weather} |\n"
     return md
 
 
@@ -91,6 +91,28 @@ def _build_fixed_table(fixed):
 # turn that back into the missing sentinel -- otherwise the honest answer leaks
 # into the table as the literal word "unknown", which reads like data.
 _ABSENT_WORDS = frozenset({"unknown", "n/a", "na", "none", "tbd", "not stated", "-", "--"})
+
+
+def _fmt_name_loc(name, loc):
+    """"**Name** (location)", or just "**Name**" when there is no location.
+
+    The TUI tables already did this; the markdown tables interpolated the
+    location unconditionally and would render "**Union Summer** ()" once the
+    absent-word normalisation started returning "".
+    """
+    return f"**{name}** ({loc})" if loc else f"**{name}**"
+
+
+def _fmt_location(item):
+    """Location for display, or "" when the source did not say.
+
+    Returns "" rather than the sentinel because callers render it as
+    "Name (location)" -- an absent location means no parenthetical at all, not
+    "Name (—)". A real run shipped "**Union Summer** (unknown)" because this
+    column was the one place the absent-word normalisation had not reached.
+    """
+    raw = item.get("location") or item.get("address") or ""
+    return "" if _fmt_missing(raw) == MISSING_VALUE_PLACEHOLDER else raw
 
 
 def _fmt_missing(value):
@@ -150,7 +172,7 @@ def _build_transient_table(grouped_transient_list):
             or "Unknown"
         )
         name = name.replace("**", "")
-        loc = item.get("location") or item.get("address") or ""
+        loc = _fmt_location(item)
         age = _fmt_missing(item.get("target_ages") or item.get("age_group"))
         price = _fmt_missing(item.get("price") or item.get("cost"))
         # C2b: the column is "Dates", so it renders start/end dates -- never a
@@ -160,11 +182,14 @@ def _build_transient_table(grouped_transient_list):
         weather = _fmt_missing(item.get("weather") or item.get("weather_appropriateness"))
         if has_scores:
             md += (
-                f"| {score_str} | **{name}** ({loc}) | {age} | {price} | "
+                f"| {score_str} | {_fmt_name_loc(name, loc)} | {age} | {price} | "
                 f"{dates} | {day} | {weather} |\n"
             )
         else:
-            md += f"| **{name}** ({loc}) | {age} | {price} | {dates} | {day} | {weather} |\n"
+            md += (
+                f"| {_fmt_name_loc(name, loc)} | {age} | {price} | "
+                f"{dates} | {day} | {weather} |\n"
+            )
     return md
 
 
@@ -253,7 +278,7 @@ def print_to_cli_gorgeous(dates_str, weather_str, fixed_activities, transient_ev
                 or item.get("activity_name")
                 or "Unknown"
             ).replace("**", "")
-            loc = item.get("location") or item.get("address") or ""
+            loc = _fmt_location(item)
             loc_str = f"{name} ({loc})" if loc else name
             age = _fmt_missing(item.get("target_ages") or item.get("age_group"))
             price = _fmt_missing(item.get("price") or item.get("cost"))
@@ -296,7 +321,7 @@ def print_to_cli_gorgeous(dates_str, weather_str, fixed_activities, transient_ev
                 or item.get("event_name")
                 or "Unknown"
             ).replace("**", "")
-            loc = item.get("location") or item.get("address") or ""
+            loc = _fmt_location(item)
             loc_str = f"{name} ({loc})" if loc else name
             age = _fmt_missing(item.get("target_ages") or item.get("age_group"))
             price = _fmt_missing(item.get("price") or item.get("cost"))

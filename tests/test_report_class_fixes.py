@@ -446,3 +446,26 @@ def test_C4_every_table_uses_the_same_missing_sentinel():
     # no renderer may fall back to a bare literal for these columns
     assert 'item.get("target_ages") or item.get("age_group") or' not in source
     assert 'item.get("price") or item.get("cost") or' not in source
+
+
+def test_C4_location_column_also_normalises_absent_words():
+    """The location was the one column the absent-word fix had not reached, so a
+    real run shipped "**Union Summer** (unknown)". Fix the class, not three of
+    the four columns."""
+    from weekend.output import _build_transient_table
+
+    rendered = _build_transient_table(
+        [{"name": "Union Summer", "location": "unknown", "start_date": "2026-08-08", "score": 1.4}]
+    )
+    assert "unknown" not in rendered.lower()
+    assert "()" not in rendered, "an absent location must not leave empty parentheses"
+    assert "**Union Summer**" in rendered
+
+
+def test_C4_a_real_location_is_still_rendered():
+    from weekend.output import _build_transient_table
+
+    rendered = _build_transient_table(
+        [{"name": "TD Sunday", "location": "MOCA", "start_date": "2026-08-09", "score": 2.2}]
+    )
+    assert "**TD Sunday** (MOCA)" in rendered
