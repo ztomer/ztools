@@ -199,9 +199,48 @@ def test_C8_declared_exclusions_reach_production():
     assert sorted(EXCLUDE_PLACES) == sorted(declared)
 
 
-@pytest.mark.xfail(strict=True, reason="C9 BACKEND-PROVENANCE-DISCARDED")
-def test_C9_report_names_its_backend():
-    assert rc.check_tw_names_its_backend(TW_BRACKET.read_text()) == []
+def test_C9_report_names_its_backend(tmp_path):
+    """FIXED 2026-08-02. write_markdown now emits a provenance banner, so a
+    fallback summary can never be byte-identical to a primary one."""
+    from datetime import datetime, timezone
+
+    from twitter.output import write_markdown
+    from twitter.provenance import FALLBACK, PRIMARY, Provenance, SummaryText
+
+    tweets = [{"screen_name": "a"}, {"screen_name": "b"}]
+    since = datetime(2026, 7, 29, 16, 33, tzinfo=timezone.utc)
+    until = datetime(2026, 7, 31, 12, 15, tzinfo=timezone.utc)
+    body = "## Topic\n- a fact\n- another\n- a third"
+
+    primary = SummaryText(body, Provenance("osaurus", "qwen-agentworld-35b", PRIMARY))
+    degraded = SummaryText(
+        body, Provenance("osaurus", "foundation", FALLBACK, ("primary did not answer",))
+    )
+
+    _, primary_md = write_markdown(tweets, primary, since, until, tmp_path)
+    _, degraded_md = write_markdown(tweets, degraded, since, until, tmp_path / 'd')
+
+    assert rc.check_tw_names_its_backend(primary_md) == []
+    assert rc.check_tw_names_its_backend(degraded_md) == []
+    assert primary_md != degraded_md, "a degraded run must not be byte-identical"
+    assert "DEGRADED OUTPUT" in degraded_md
+    assert "primary did not answer" in degraded_md
+    assert "DEGRADED OUTPUT" not in primary_md
+
+
+def test_C9_unrecorded_provenance_is_not_reported_as_primary():
+    """A bare str summary means nobody recorded it -- that must read as degraded,
+    not as a good run, or an unattended job silently regains the ambiguity."""
+    from twitter.provenance import provenance_of
+
+    prov = provenance_of("a plain string summary")
+    assert prov.degraded
+    assert "DEGRADED OUTPUT" in prov.banner()
+
+
+def test_C9_checker_still_fails_on_a_report_without_provenance():
+    """Prove the check can fail: the pre-fix fixture must still be caught."""
+    assert rc.check_tw_names_its_backend(TW_BRACKET.read_text()) != []
 
 
 @pytest.mark.xfail(strict=True, reason="C10 UNSPECIFIED-OUTPUT-CONTRACT")
