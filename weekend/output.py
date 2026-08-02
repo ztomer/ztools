@@ -76,9 +76,9 @@ def _build_fixed_table(fixed):
             or "Unknown"
         ).replace("**", "")
         loc = item.get("location") or item.get("address") or ""
-        age = item.get("target_ages") or item.get("age_group") or ""
-        price = item.get("price") or item.get("cost") or ""
-        weather = item.get("weather") or item.get("weather_appropriateness") or ""
+        age = _fmt_missing(item.get("target_ages") or item.get("age_group"))
+        price = _fmt_missing(item.get("price") or item.get("cost"))
+        weather = _fmt_missing(item.get("weather") or item.get("weather_appropriateness"))
         if has_scores:
             md += f"| {score_str} | **{name}** ({loc}) | {age} | {price} | {weather} |\n"
         else:
@@ -86,8 +86,20 @@ def _build_fixed_table(fixed):
     return md
 
 
+# Words a model emits to mean "the source did not say". The prompts now ASK for
+# "unknown" rather than a fabricated constant (class C4), so the renderer has to
+# turn that back into the missing sentinel -- otherwise the honest answer leaks
+# into the table as the literal word "unknown", which reads like data.
+_ABSENT_WORDS = frozenset({"unknown", "n/a", "na", "none", "tbd", "not stated", "-", "--"})
+
+
 def _fmt_missing(value):
-    return value if value else MISSING_VALUE_PLACEHOLDER
+    if value is None:
+        return MISSING_VALUE_PLACEHOLDER
+    text = str(value).strip()
+    if not text or text.lower() in _ABSENT_WORDS:
+        return MISSING_VALUE_PLACEHOLDER
+    return value
 
 
 def _fmt_date_range(item):
@@ -243,9 +255,9 @@ def print_to_cli_gorgeous(dates_str, weather_str, fixed_activities, transient_ev
             ).replace("**", "")
             loc = item.get("location") or item.get("address") or ""
             loc_str = f"{name} ({loc})" if loc else name
-            age = item.get("target_ages") or item.get("age_group") or "—"
-            price = item.get("price") or item.get("cost") or "—"
-            weather = item.get("weather") or item.get("weather_appropriateness") or "—"
+            age = _fmt_missing(item.get("target_ages") or item.get("age_group"))
+            price = _fmt_missing(item.get("price") or item.get("cost"))
+            weather = _fmt_missing(item.get("weather") or item.get("weather_appropriateness"))
 
             row = []
             if has_scores:
@@ -286,11 +298,11 @@ def print_to_cli_gorgeous(dates_str, weather_str, fixed_activities, transient_ev
             ).replace("**", "")
             loc = item.get("location") or item.get("address") or ""
             loc_str = f"{name} ({loc})" if loc else name
-            age = item.get("target_ages") or item.get("age_group") or "—"
-            price = item.get("price") or item.get("cost") or "—"
+            age = _fmt_missing(item.get("target_ages") or item.get("age_group"))
+            price = _fmt_missing(item.get("price") or item.get("cost"))
             dates = _fmt_date_range(item)
             day = _fmt_missing(item.get("day") or item.get("dates") or item.get("date"))
-            weather = item.get("weather") or item.get("weather_appropriateness") or "—"
+            weather = _fmt_missing(item.get("weather") or item.get("weather_appropriateness"))
 
             row = []
             if has_scores:
