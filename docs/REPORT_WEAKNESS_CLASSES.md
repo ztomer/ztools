@@ -553,6 +553,48 @@ per class below, by real run or by test.
 
 ---
 
+## Stage 1 outcome (2026-08-02)
+
+**Proven by a REAL `wk` run** (weekend of 2026-08-07..09, `qwen3.6-35b-a3b-mxfp8-mtp`,
+output at `~/Documents/weekend_plan_August_07_to_August_09_2026.md`):
+
+| Class | Real-run result |
+| :--- | :--- |
+| C1 | model receives the real date range; run produced in-window events |
+| C2b | `Dates` column holds ISO dates or an honest blank — never a duration |
+| C3 | no stale or out-of-window row |
+| C4 | no mandated literal; no fabricated constant column |
+| C5 | no impossible weather label |
+| C8 | pipeline printed `dropped 'LEGOLAND Discovery Centre Toronto' — matches excluded place` |
+| C6 | heading reads `Ranked by Fit Score (computed, not reviews)` |
+
+**Test-proven only (no real run):** C9 and C12. C9's banner is exercised through
+the real `write_markdown`, but a real `tw` run needs a live X session and was not
+performed — so the degraded-path banner has not been observed in production.
+C12 is a structural property (one shared renderer) and has no runtime artifact.
+
+**Still open:** C2a (`tw` timestamps), C7, C10, C13, and the `restart_server`
+defect above. **C11 remains latent and deliberately untouched.**
+
+### What the real run taught that the tests could not
+
+C8 was declared fixed and test-proven, then a real run shipped an excluded venue
+anyway: the config's ASCII `Ripley's` did not match the scraper's typographic
+`Ripley’s`. **The checker missed it too**, because it normalised the same wrong
+way — so it reported PASS on the very row the enforcement failed to drop. An
+instrument that shares the bug it is measuring is worse than no instrument.
+
+Two further checker bugs surfaced the same way, both punishing the pipeline for
+telling the truth: a blank date cell was scored as C2b (it is C7), and a column
+of honest blanks was scored as a fabricated constant. Neither could have been
+found without running the real thing.
+
+This is the strongest argument in this document for the `prove-before-claim`
+rule: three of the checks written in Stage 0 were wrong, and every one of them
+looked green until a real artifact went through.
+
+---
+
 ## What Stage 1 should fix first
 
 Ordered by (blast radius / effort), not by how bad the symptom looks:
