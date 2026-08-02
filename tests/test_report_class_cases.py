@@ -164,16 +164,28 @@ def test_C5_weather_label_matches_venue_kind():
     assert rc.check_wk_weather_label_matches_venue(_wk()) == []
 
 
-@pytest.mark.xfail(strict=True, reason="C6 PROVENANCE-LABEL-NOT-BACKED-BY-DATA")
-def test_C6_review_score_heading_requires_review_data():
-    """If a table claims "Review Score", the scraper must be on the call path."""
-    assert "Ranked by Review Score" in _wk()
-    live = (rc.ROOT / "weekend" / "llm.py").read_text()
-    live += (rc.ROOT / "weekend" / "output.py").read_text()
-    assert "scrape_review_score" in live, (
-        "report claims 'Review Score' but weekend/data.py:scrape_review_score is "
-        "never called by the pipeline -- the number is _score_item's heuristic"
+def test_C6_score_column_is_not_labelled_as_reviews(tmp_path):
+    """FIXED 2026-08-02. The tables were headed "Ranked by Review Score" and
+    rendered a N/5 rating, but the number is weekend/scoring.py's internal
+    heuristic; scrape_review_score() is not on the pipeline's call path. The
+    heading now names what the number actually is.
+
+    Asserted against RENDERED output, not by grepping source -- an earlier
+    version of this test grepped for the function name and was satisfied by a
+    code comment that merely mentioned it.
+    """
+    from weekend.output import _build_fixed_table, _build_transient_table
+
+    fixed = _build_fixed_table(
+        [{"name": "A", "location": "Toronto", "weather": "indoor", "score": 4.5}]
     )
+    transient = _build_transient_table(
+        [{"name": "B", "location": "Vaughan", "weather": "indoor", "score": 4.2}]
+    )
+    for rendered in (fixed, transient):
+        assert "Review Score" not in rendered
+        assert "Fit Score" in rendered
+        assert "computed" in rendered
 
 
 @pytest.mark.xfail(strict=True, reason="C7 CLASSIFICATION-BY-QUERY-PROVENANCE")

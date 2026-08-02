@@ -83,40 +83,53 @@ Merge any near-duplicates, keep the best 8, remove low-quality or irrelevant
 ones, and sort by overall appeal. Output the refined list, one per line with
 name + description."""
 
+# Class C4 (MANDATED-PLACEHOLDER) + C2b (DATE-DROPPED-AT-THE-LLM-BOUNDARY).
+# This prompt used to ORDER the model to emit "$20-30 per child or free" and
+# "2-3 hours" on every row and close with "Never leave any field empty" -- which
+# is what turned "unknown" into a fabricated constant the report then rendered as
+# fact. It also had no date field at all, so an event's real dates were
+# structurally impossible to carry. Both are fixed here: unknown is now an
+# explicit empty string, and start_date/end_date are first-class.
 PHASE_STRUCTURE_TRANSIENT_SYSTEM = """\
 Output JSON now. Use EXACT schema:
 {{"transient_events": [{{"name": "str", "location": "str",
-"target_ages": "str", "price": "str", "duration": "str",
-"weather": "str", "day": "str"}}]}}
+"target_ages": "str", "price": "str", "start_date": "str", "end_date": "str",
+"duration": "str", "weather": "str", "day": "str"}}]}}
 
-MANDATORY default values:
-- target_ages: "{age_range}"
-- price: $20-30 per child or free
-- duration: "2-3 hours"
-- day: Friday/Saturday/Sunday
+Rules for every field:
+- Copy values from the source text. NEVER invent one.
+- If the source does not state a value, output an empty string "" for it.
+  An empty field is CORRECT and expected. Do not guess, do not use a typical
+  or average value, and do not repeat a value from another row.
+- start_date / end_date: ISO YYYY-MM-DD, from the source text only. If the
+  source gives only one date, put it in start_date and leave end_date "".
+- target_ages: only if the source states an age range, else "".
+- price: the actual price as written in the source, else "".
 
 Weather: {weather_condensed}
-Set weather based on the activity type and forecast above: "outdoor" for
-outdoor activities (parks, zoo, sports) in nice weather, "indoor" for indoor
-venues (museums, play centres), "both" for flexible activities.
+Set weather from the activity type and the forecast above: "outdoor" for
+outdoor activities (parks, zoo, sports), "indoor" for indoor venues (museums,
+play centres, trampoline parks), "both" for flexible activities.
 
-Never leave any field empty. Output ONLY JSON."""
+Output ONLY JSON."""
 
 PHASE_STRUCTURE_FIXED_SYSTEM = """\
 Output JSON now. Use EXACT schema:
 {{"fixed_activities": [{{"name": "str", "location": "str",
 "target_ages": "str", "price": "str", "weather": "str"}}]}}
 
-MANDATORY default values:
-- target_ages: "{age_range}"
-- price: $18-35 per child or free
+Rules for every field:
+- Copy values from the source text. NEVER invent one.
+- If the source does not state a value, output an empty string "" for it.
+  An empty field is CORRECT and expected. Do not guess a typical price or age
+  range, and do not repeat a value from another row.
 
 Weather: {weather_condensed}
-Set weather based on the activity type and forecast above: "outdoor" for
-outdoor activities (parks, zoo, sports) in nice weather, "indoor" for indoor
-venues (museums, play centres), "both" for flexible activities.
+Set weather from the activity type and the forecast above: "outdoor" for
+outdoor activities (parks, zoo, sports), "indoor" for indoor venues (museums,
+play centres, trampoline parks), "both" for flexible activities.
 
-Never leave any field empty. Output ONLY JSON."""
+Output ONLY JSON."""
 
 
 def build_weather_condense_prompt(weather_str):
@@ -197,14 +210,13 @@ def build_fixed_system_prompt(
     Extract 10 popular {location} venues for families with kids ages {age_range}.
     Include location (city only), target_ages, price in CAD, weather.
 
-    MANDATORY default values:
-    - target_ages: "{age_range}"
-    - price: $18-35 per child or free
+    Copy values from the source text; NEVER invent one. If the source does not
+    state a value, output "" for it -- an empty field is correct. Do not guess a
+    typical price or age range, and do not repeat a value from another row.
 
-    Set weather based on activity type: "outdoor" for outdoor activities,
-    "indoor" for indoor venues, "both" for flexible.
-
-    Never leave any field empty.
+    Set weather from activity type: "outdoor" for outdoor activities, "indoor"
+    for indoor venues (museums, play centres, trampoline parks), "both" for
+    flexible.
     """
 
 
@@ -248,19 +260,21 @@ def build_transient_system_prompt(
     return f"""\
     Output JSON now. Use EXACT schema:
     {{"transient_events": [{{"name": "str", "location": "str",
-    "target_ages": "str", "price": "str", "duration": "str",
-    "weather": "str", "day": "str"}}]}}
+    "target_ages": "str", "price": "str", "start_date": "str", "end_date": "str",
+    "duration": "str", "weather": "str", "day": "str"}}]}}
 
     Extract {location} family events for {date_range}.
+    ONLY include an event if the source text shows it happens within
+    {date_range}. Drop anything outside that window.
 
-    MANDATORY default values:
-    - target_ages: "{age_range}"
-    - price: $20-30 per child or free
-    - duration: "2-3 hours"
-    - day: Friday/Saturday/Sunday
+    Copy values from the source text; NEVER invent one. If the source does not
+    state a value, output "" for it -- an empty field is correct. Do not guess a
+    typical price, duration or age range, and do not repeat a value from another
+    row. start_date/end_date are ISO YYYY-MM-DD taken from the source only.
 
-    Set weather based on activity type: "outdoor" for outdoor activities,
-    "indoor" for indoor venues, "both" for flexible.
+    Set weather from activity type: "outdoor" for outdoor activities, "indoor"
+    for indoor venues (museums, play centres, trampoline parks), "both" for
+    flexible.
     """
 
 

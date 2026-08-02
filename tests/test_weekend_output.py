@@ -145,7 +145,8 @@ class TestBuildFixedTable:
         ]
         result = _build_fixed_table(items)
         assert "Fixed / Year-Round" in result
-        assert "Ranked by Review Score" in result
+        # C6: the heading names a computed fit score, not reviews.
+        assert "Ranked by Fit Score (computed, not reviews)" in result
         assert "Activity A" in result
         assert "4.5" in result
 

@@ -11,6 +11,10 @@ DEFAULT_SCORE = 0
 MAX_RATING_SCALE = 5
 SECONDS_PER_MINUTE = 60.0
 MISSING_VALUE_PLACEHOLDER = "—"
+# Class C6: this number is weekend/scoring.py's internal heuristic over field
+# completeness, age overlap and weather fit -- NOT a review score. The heading
+# must say what it is; scrape_review_score() is not on the pipeline's call path.
+SCORE_LABEL = "Fit Score (computed, not reviews)"
 NEWLINE = "\n"
 
 
@@ -47,7 +51,7 @@ def _build_fixed_table(fixed):
     has_scores = any(item.get("score", DEFAULT_SCORE) > DEFAULT_SCORE for item in fixed)
     heading = "### Fixed / Year-Round Activities"
     if has_scores:
-        heading += " (Ranked by Review Score)"
+        heading += f" (Ranked by {SCORE_LABEL})"
     heading += "\n"
     if has_scores:
         md = (
@@ -86,6 +90,20 @@ def _fmt_missing(value):
     return value if value else MISSING_VALUE_PLACEHOLDER
 
 
+def _fmt_date_range(item):
+    """Render an event's real dates, or an honest blank.
+
+    Class C2b/C4: the predecessor printed `item["duration"]` under a column
+    headed "Duration / End Date", so a prompt-mandated "2-3 hours" was displayed
+    where a date belonged. A duration is not a date and is never shown here.
+    """
+    start = (item.get("start_date") or "").strip()
+    end = (item.get("end_date") or "").strip()
+    if start and end and start != end:
+        return f"{start} → {end}"
+    return _fmt_missing(start or end)
+
+
 def _build_transient_table(grouped_transient_list):
     if not grouped_transient_list:
         return ""
@@ -94,20 +112,20 @@ def _build_transient_table(grouped_transient_list):
     )
     heading = "### Transient / Limited-Time Events"
     if has_scores:
-        heading += " (Ranked by Review Score)"
+        heading += f" (Ranked by {SCORE_LABEL})"
     heading += "\n"
     if has_scores:
         md = (
             heading
             + "| Score | Event & Location | Target Age(s) | Est. Price | "
-            "Duration / End Date | Day | Weather Appr. |\n| :--- | :--- | "
+            "Dates | Day | Weather Appr. |\n| :--- | :--- | "
             ":--- | :--- | :--- | :--- | :--- |\n"
         )
     else:
         md = (
             heading
-            + "| Event & Location | Target Age(s) | Est. Price | Duration / "
-            "End Date | Day | Weather Appr. |\n| :--- | :--- | :--- | :--- | "
+            + "| Event & Location | Target Age(s) | Est. Price | Dates "
+            "| Day | Weather Appr. |\n| :--- | :--- | :--- | :--- | "
             ":--- | :--- |\n"
         )
     for item in grouped_transient_list:
@@ -121,18 +139,20 @@ def _build_transient_table(grouped_transient_list):
         )
         name = name.replace("**", "")
         loc = item.get("location") or item.get("address") or ""
-        age = item.get("target_ages") or item.get("age_group") or ""
-        price = item.get("price") or item.get("cost") or ""
-        duration = item.get("duration") or item.get("end_date") or ""
+        age = _fmt_missing(item.get("target_ages") or item.get("age_group"))
+        price = _fmt_missing(item.get("price") or item.get("cost"))
+        # C2b: the column is "Dates", so it renders start/end dates -- never a
+        # duration standing in for one. A row with no date says so.
+        dates = _fmt_date_range(item)
         day = _fmt_missing(item.get("day") or item.get("dates") or item.get("date"))
-        weather = item.get("weather") or item.get("weather_appropriateness") or ""
+        weather = _fmt_missing(item.get("weather") or item.get("weather_appropriateness"))
         if has_scores:
             md += (
                 f"| {score_str} | **{name}** ({loc}) | {age} | {price} | "
-                f"{duration} | {day} | {weather} |\n"
+                f"{dates} | {day} | {weather} |\n"
             )
         else:
-            md += f"| **{name}** ({loc}) | {age} | {price} | {duration} | {day} | {weather} |\n"
+            md += f"| **{name}** ({loc}) | {age} | {price} | {dates} | {day} | {weather} |\n"
     return md
 
 
@@ -250,7 +270,7 @@ def print_to_cli_gorgeous(dates_str, weather_str, fixed_activities, transient_ev
         table_transient.add_column("Event & Location", style="bold white")
         table_transient.add_column("Ages", justify="center")
         table_transient.add_column("Price", justify="right", style="magenta")
-        table_transient.add_column("Duration / End Date")
+        table_transient.add_column("Dates")
         table_transient.add_column("Day", style="bold blue")
         table_transient.add_column("Weather", style="italic")
 
@@ -268,14 +288,14 @@ def print_to_cli_gorgeous(dates_str, weather_str, fixed_activities, transient_ev
             loc_str = f"{name} ({loc})" if loc else name
             age = item.get("target_ages") or item.get("age_group") or "—"
             price = item.get("price") or item.get("cost") or "—"
-            duration = item.get("duration") or item.get("end_date") or "—"
+            dates = _fmt_date_range(item)
             day = _fmt_missing(item.get("day") or item.get("dates") or item.get("date"))
             weather = item.get("weather") or item.get("weather_appropriateness") or "—"
 
             row = []
             if has_scores:
                 row.append(score_str)
-            row.extend([loc_str, age, price, duration, day, weather])
+            row.extend([loc_str, age, price, dates, day, weather])
             table_transient.add_row(*row)
 
         console.print(table_transient)

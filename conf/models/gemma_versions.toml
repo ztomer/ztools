@@ -22,7 +22,7 @@ Output JSON now. Use EXACT schema: {{"fixed_activities": [{{"name": "str", "loca
 Extract EXACTLY 8-10 popular {location} venues for families with kids ages {age_range}.
 You MUST output a JSON ARRAY with 8-10 items, not a single object.
 Include location (city only), target_ages, price in CAD, weather.
-MANDATORY defaults: target_ages="{age_range}", price=$18-35, weather="indoor" or "outdoor"
+Copy values from the source; never invent. Unknown -> "". weather: "indoor"/"outdoor"/"both".
 """
 
 weekend_transient = """
