@@ -299,9 +299,11 @@ def check_wk_no_stale_event_name(text: str, start: date, end: date) -> list[str]
         "victoria day": (5, 20),
         "boxing day": (12, 26),
     }
+    from weekend.enforce import normalize_for_match
+
     failures = []
     for row in transient_rows(text):
-        name = _row_name(row).lower()
+        name = normalize_for_match(_row_name(row))
         for holiday, (month, day) in holidays.items():
             if holiday not in name:
                 continue
@@ -314,13 +316,16 @@ def check_wk_no_stale_event_name(text: str, start: date, end: date) -> list[str]
     return failures
 
 
-def check_wk_no_mandated_placeholder(text: str) -> list[str]:
+def check_wk_no_mandated_placeholder(text: str) -> list[str]:  # noqa: D401
     """C4, literal form. A cell equal to a prompt-mandated constant is invented."""
+    from weekend.enforce import normalize_for_match
+
+    _NORMALIZED_MANDATED = {normalize_for_match(v) for v in MANDATED_LITERALS}
     failures = []
     for label, rows in (("transient", transient_rows(text)), ("fixed", fixed_rows(text))):
         for row in rows:
             for col, val in row.items():
-                if val.strip().lower() in MANDATED_LITERALS:
+                if normalize_for_match(val) in _NORMALIZED_MANDATED:
                     failures.append(
                         f"{label} {_row_name(row)!r}: column {col!r} is the "
                         f"prompt-mandated literal {val!r}"
@@ -363,9 +368,11 @@ def check_wk_no_constant_column(text: str) -> list[str]:
 def check_wk_weather_label_matches_venue(text: str) -> list[str]:
     """C5. An unambiguously indoor venue must not be labelled outdoor."""
     failures = []
+    from weekend.enforce import normalize_for_match
+
     for rows in (transient_rows(text), fixed_rows(text)):
         for row in rows:
-            name = _row_name(row).lower()
+            name = normalize_for_match(_row_name(row))
             weather = _cell(row, "weather").strip().lower()
             if weather != "outdoor":
                 continue
@@ -396,14 +403,13 @@ def check_wk_transient_rows_are_time_bounded(text: str, year: int) -> list[str]:
 def check_wk_no_excluded_place(text: str, excluded: Iterable[str]) -> list[str]:
     """C8. The user's `exclude_places` must be enforced, not merely suggested."""
     failures = []
-    from weekend.enforce import normalize_for_match
+    from weekend.enforce import matches_exclusion
 
     rows = transient_rows(text) + fixed_rows(text)
     for row in rows:
-        haystack = normalize_for_match(f"{_row_name(row)} {_cell(row, 'location')}")
+        haystack = f"{_row_name(row)} {_cell(row, 'location')}"
         for place in excluded:
-            token = normalize_for_match(place)
-            if token and token in haystack:
+            if matches_exclusion(place, haystack):
                 failures.append(f"{_row_name(row)!r} matches excluded place {place!r}")
                 break
     return failures
