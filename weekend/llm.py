@@ -19,6 +19,12 @@ from lib.osaurus_lib import (
 )
 from lib.tui import STEP, WARN, debug_print
 from weekend.config import OSAURUS_BASE_URL, ensure_server
+from weekend.phases import (  # noqa: F401  (re-export shim)
+    draft_activities,
+    extract_sources,
+    refine_draft,
+    structure_to_json,
+)
 from weekend.scoring import _score_item, fetch_scores_for_items  # noqa: F401  (re-export shim)
 
 # LLM API defaults
@@ -294,124 +300,6 @@ DEFAULT_BATCH_SIZE = 3
 MAX_BATCH_SIZE = 5
 
 
-def _load_extract_signals():
-    try:
-        if EXTRACT_SIGNALS_PATH.exists():
-            return json.loads(EXTRACT_SIGNALS_PATH.read_text())
-    except Exception:
-        pass
-    return {}
-
-
-def _save_extract_signals(signals):
-    EXTRACT_SIGNALS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    EXTRACT_SIGNALS_PATH.write_text(json.dumps(signals, indent=2, sort_keys=True))
-
-
-def _extract_group_prompt(lines, source_type):
-    from weekend.prompts import build_source_extract_prompt
-
-    return build_source_extract_prompt("\n".join(lines), source_type)
-
-
-def extract_sources(raw_text, source_type, model_name="default", use_foundation=False):
-    signals = _load_extract_signals()
-    per_type = signals.setdefault(model_name or "default", {}).setdefault(source_type, {})
-    batch_size = per_type.get("batch_size", DEFAULT_BATCH_SIZE)
-    phase_key = f"extract_sources/{source_type}"
-
-    lines = [line for line in raw_text.split("\n") if line.startswith("- ")]
-    if not lines:
-        return raw_text
-
-    results = []
-    streak = 0
-    i = 0
-    while i < len(lines):
-        chunk = lines[i : i + batch_size]
-        prompt = _extract_group_prompt(chunk, source_type)
-        result = _call_llm(
-            "",
-            prompt,
-            timeout=PHASE_TIMEOUT_EXTRACT,
-            phase_key=phase_key,
-            use_foundation=use_foundation,
-        )
-
-        if result:
-            results.append(result)
-            streak += 1
-            i += batch_size
-            if streak >= BATCH_GROWTH_STREAK_LIMIT and batch_size < MAX_BATCH_SIZE:
-                batch_size += 1
-                per_type["batch_size"] = batch_size
-                _save_extract_signals(signals)
-        else:
-            per_type["timeouts"] = per_type.get("timeouts", 0) + 1
-            batch_size = max(batch_size // 2, 1)
-            per_type["batch_size"] = batch_size
-            _save_extract_signals(signals)
-            streak = 0
-            if batch_size == 1:
-                results.append(chunk[0])
-                i += 1
-                batch_size = per_type.get("batch_size", DEFAULT_BATCH_SIZE)
-
-    if not results:
-        return raw_text
-    return "\n".join(results)
-
-
-def draft_activities(
-    weather_condensed,
-    cleaned_sources,
-    source_type,
-    location,
-    age_range,
-    date_range,
-    use_foundation=False,
-):
-    from weekend.prompts import build_draft_prompt
-
-    prompt = build_draft_prompt(
-        weather_condensed, cleaned_sources, source_type, location, age_range, date_range
-    )
-    return _call_llm(
-        "",
-        prompt,
-        timeout=PHASE_TIMEOUT_DRAFT,
-        phase_key=f"draft_activities/{source_type}",
-        use_foundation=use_foundation,
-    )
-
-
-def refine_draft(draft_text, use_foundation=False):
-    from weekend.prompts import build_refine_prompt
-
-    result = _call_llm(
-        "",
-        build_refine_prompt(draft_text),
-        timeout=PHASE_TIMEOUT_REFINE,
-        phase_key="refine_draft",
-        use_foundation=use_foundation,
-    )
-    return result if result else draft_text
-
-
-def structure_to_json(text, source_type, age_range, weather_condensed="", use_foundation=False):
-    from weekend.prompts import build_structure_system_prompt, build_structure_user_prompt
-
-    sys_prompt = build_structure_system_prompt(source_type, age_range, weather_condensed)
-    usr_prompt = build_structure_user_prompt(text)
-    return _call_llm(
-        sys_prompt,
-        usr_prompt,
-        timeout=PHASE_TIMEOUT_STRUCTURE,
-        parse_json=True,
-        phase_key=f"structure_to_json/{source_type}",
-        use_foundation=use_foundation,
-    )
-
 
 def generate_weekend_plan(
     model,
@@ -423,8 +311,17 @@ def generate_weekend_plan(
     age_range,
     date_range,
     use_foundation=False,
+    plan_year=None,
 ):
     from weekend.output import print_warning
+
+    # The model dated four events 2025 in a 2026 plan; only the C3 window filter
+    # caught them. The year is now stated explicitly at every phase that emits a
+    # date rather than being inferred from the range string.
+    if plan_year is None:
+        from datetime import date as _d
+
+        plan_year = _d.today().year
 
     condensed_weather = condense_weather(weather_str)
 
@@ -439,13 +336,15 @@ def generate_weekend_plan(
         age_range,
         date_range,
         use_foundation=use_foundation,
+        year=plan_year,
     )
     json_transient = {}
     if draft_transient:
         refined_transient = refine_draft(draft_transient)
         json_transient = (
             structure_to_json(
-                refined_transient, SOURCE_TYPE_TRANSIENT, age_range, condensed_weather
+                refined_transient, SOURCE_TYPE_TRANSIENT, age_range, condensed_weather,
+                year=plan_year,
             )
             or {}
         )
@@ -474,12 +373,17 @@ def generate_weekend_plan(
         age_range,
         date_range,
         use_foundation=use_foundation,
+        year=plan_year,
     )
     json_fixed = {}
     if draft_fixed:
         refined_fixed = refine_draft(draft_fixed)
         json_fixed = (
-            structure_to_json(refined_fixed, SOURCE_TYPE_FIXED, age_range, condensed_weather) or {}
+            structure_to_json(
+                refined_fixed, SOURCE_TYPE_FIXED, age_range, condensed_weather,
+                year=plan_year,
+            )
+            or {}
         )
     else:
         print_warning("Fixed draft failed, using monolithic fallback")

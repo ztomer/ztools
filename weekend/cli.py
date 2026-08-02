@@ -397,6 +397,7 @@ def main(args=None):
             age_range=AGE_RANGE,
             date_range=dates_str,
             use_foundation=use_foundation,
+            plan_year=fri.year,
         )
 
     fixed_acts = _parse_fixed(json_fixed, actual_model, field_mapping)

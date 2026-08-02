@@ -28,15 +28,31 @@ Given this weather forecast, summarize what to expect for the weekend in
 
 Output only the summary, nothing else."""
 
+# The phase chain used to NARROW at every step: extract asked for dates, draft
+# asked only for "name, location, description", and refine only for
+# "name + description". So the dates were discarded two phases before the schema
+# that wanted them, and every date column rendered blank. Each phase now carries
+# the same fields through verbatim -- see class C2c.
+_CARRY_FIELDS = """Carry these fields through EXACTLY as they appear in the input,
+never rewritten or dropped: DATES, PRICE, AGES, LOCATION. If the input does not
+state one, write "unknown" for it -- never guess."""
+
 PHASE_EXTRACT_EVENTS = """\
-Extract family-friendly event listings from the search results below. For each
-event, list its name, location, dates, price if available, and description.
-Ignore irrelevant search results, ads, and navigation text.
+Extract family-friendly event listings from the search results below.
+
+For each event output one line:
+NAME | LOCATION | DATES | PRICE | AGES | short description
+
+- DATES: copy the date text exactly as written, e.g. "Saturday, August 1 -
+  Monday, August 3" or "23rd August" or "February 14-16". Include the year if
+  the result shows one. Write "unknown" if the result gives no date.
+- PRICE and AGES: copy verbatim if stated, else "unknown".
+- Ignore ads, navigation text, and results for other cities or countries.
 
 Search results:
 {raw_text}
 
-List each relevant event with key details, one per line."""
+One event per line, in the pipe-separated format above."""
 
 PHASE_EXTRACT_VENUES = """\
 Extract family-friendly venues from the search results below. For each venue,
@@ -53,26 +69,33 @@ You are a family activity planner. Suggest 10 specific weekend activities for
 families with kids ages {age_range} in {location}. Focus on time-limited events
 happening specifically on {date_range}.
 
+The year is {year}. Every date you output must be in {year}. An event dated in
+any other year does not belong in this plan -- drop it rather than re-dating it.
+
 Weather: {weather_condensed}
 
 Available events:
 {cleaned_sources}
 
-List specific activity suggestions, one per line. Include name, location, and
-brief description."""
+Output one line per suggestion in this EXACT format:
+NAME | LOCATION | DATES | PRICE | AGES | short description
+
+{carry}"""
 
 PHASE_DRAFT_FIXED = """\
 You are a family activity planner. Suggest 10 specific weekend activities for
 families with kids ages {age_range} in {location}. Focus on year-round venues
-and fixed-location activities.
+and fixed-location activities. The year is {year}; the weekend is {date_range}.
 
 Weather: {weather_condensed}
 
 Available venues:
 {cleaned_sources}
 
-List specific activity suggestions, one per line. Include name, location, and
-brief description."""
+Output one line per suggestion in this EXACT format:
+NAME | LOCATION | DATES | PRICE | AGES | short description
+
+{carry}"""
 
 PHASE_REFINE = """\
 Here are activity suggestions:
@@ -80,8 +103,13 @@ Here are activity suggestions:
 {draft_text}
 
 Merge any near-duplicates, keep the best 8, remove low-quality or irrelevant
-ones, and sort by overall appeal. Output the refined list, one per line with
-name + description."""
+ones, and sort by overall appeal.
+
+Output the refined list in the SAME pipe-separated format you received:
+NAME | LOCATION | DATES | PRICE | AGES | short description
+
+Carry DATES, PRICE, AGES and LOCATION through unchanged from the input. Merging
+two entries keeps the more specific value, never "unknown" over a real one."""
 
 # Class C4 (MANDATED-PLACEHOLDER) + C2b (DATE-DROPPED-AT-THE-LLM-BOUNDARY).
 # This prompt used to ORDER the model to emit "$20-30 per child or free" and
@@ -101,8 +129,10 @@ Rules for every field:
 - If the source does not state a value, output an empty string "" for it.
   An empty field is CORRECT and expected. Do not guess, do not use a typical
   or average value, and do not repeat a value from another row.
-- start_date / end_date: ISO YYYY-MM-DD, from the source text only. If the
-  source gives only one date, put it in start_date and leave end_date "".
+- start_date / end_date: ISO YYYY-MM-DD, from the DATES field of the input.
+  The input dates are usually free text (e.g. "Saturday, August 1 - Monday,
+  August 3") -- convert them to ISO. If the text gives no year, the year is
+  {year}. If the input says "unknown", output "".
 - target_ages: only if the source states an age range, else "".
 - price: the actual price as written in the source, else "".
 
@@ -141,8 +171,15 @@ def build_source_extract_prompt(raw_text, source_type):
     return template.format(raw_text=raw_text)
 
 
+def _default_year():
+    from datetime import date
+
+    return date.today().year
+
+
 def build_draft_prompt(
-    weather_condensed, cleaned_sources, source_type, location, age_range, date_range
+    weather_condensed, cleaned_sources, source_type, location, age_range, date_range,
+    year=None,
 ):
     template = PHASE_DRAFT_TRANSIENT if source_type == "transient" else PHASE_DRAFT_FIXED
     return template.format(
@@ -151,6 +188,8 @@ def build_draft_prompt(
         location=location,
         age_range=age_range,
         date_range=date_range,
+        year=year or _default_year(),
+        carry=_CARRY_FIELDS,
     )
 
 
@@ -158,13 +197,17 @@ def build_refine_prompt(draft_text):
     return PHASE_REFINE.format(draft_text=draft_text)
 
 
-def build_structure_system_prompt(source_type, age_range, weather_condensed=""):
+def build_structure_system_prompt(source_type, age_range, weather_condensed="", year=None):
     template = (
         PHASE_STRUCTURE_TRANSIENT_SYSTEM
         if source_type == "transient"
         else PHASE_STRUCTURE_FIXED_SYSTEM
     )
-    return template.format(age_range=age_range, weather_condensed=weather_condensed)
+    return template.format(
+        age_range=age_range,
+        weather_condensed=weather_condensed,
+        year=year or _default_year(),
+    )
 
 
 def build_structure_user_prompt(draft_text):
