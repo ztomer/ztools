@@ -48,6 +48,16 @@ NAME | LOCATION | DATES | PRICE | AGES | short description
   the result shows one. Write "unknown" if the result gives no date.
 - PRICE and AGES: copy verbatim if stated, else "unknown".
 - Ignore ads, navigation text, and results for other cities or countries.
+- DATES must be when the EVENT runs, not when the page was written or updated.
+  If the only date on the page is a publication or "last updated" date, that is
+  not an event date -- write "unknown".
+
+IS THIS AN ACTIVITY? Before listing anything, ask: "is this an actual thing a
+family can go and DO at a specific time and place, or is it a page that LISTS
+things?" A directory, guide, calendar, round-up, "what's on" page, "things to do
+in X" article, blog archive or a venue's events INDEX is NOT an activity -- you
+cannot attend a guide. Skip those results entirely, however well they match.
+If the page names a SPECIFIC event, list that event, not the page.
 
 Search results:
 {raw_text}
@@ -68,6 +78,13 @@ PHASE_DRAFT_TRANSIENT = """\
 You are a family activity planner. Suggest 10 specific weekend activities for
 families with kids ages {age_range} in {location}. Focus on time-limited events
 happening specifically on {date_range}.
+
+IS THIS AN ACTIVITY? Before listing anything, ask: "is this an actual thing a
+family can go and DO at a specific time and place, or is it a page that LISTS
+things?" A directory, guide, calendar, round-up, "what's on" page, "things to do
+in X" article, blog archive or a venue's events INDEX is NOT an activity -- you
+cannot attend a guide. Skip those results entirely, however well they match.
+If the page names a SPECIFIC event, list that event, not the page.
 
 The year is {year}. Every date you output must be in {year}. An event dated in
 any other year does not belong in this plan -- drop it rather than re-dating it.

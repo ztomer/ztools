@@ -23,19 +23,24 @@ __all__ = [
     "correct_weather_labels",
     "drop_events_outside_window",
     "reconcile_day_with_dates",
+    "INDOOR_MARKERS",
     "parse_any_date",
 ]
 
 # Venue words that settle indoor/outdoor without consulting a forecast. Kept
 # deliberately small: only terms where an "outdoor" label is unambiguously wrong.
-_INDOOR_MARKERS = (
+#
+# These are STEMS, matched as substrings, so plurals are covered: "librar"
+# catches both "library" and "libraries". A real run labelled "Vaughan Public
+# Libraries" as outdoor and the singular-only marker missed it.
+INDOOR_MARKERS = (
     "indoor",
     "trampoline park",
     "museum",
     "play centre",
     "play center",
     "playground",
-    "library",
+    "librar",
     "cinema",
     "aquarium",
     "arcade",
@@ -173,7 +178,7 @@ def correct_weather_labels(items: list[dict]) -> tuple[list[dict], list[str]]:
         if weather != "outdoor":
             continue
         text = _item_text(item)
-        marker = next((m for m in _INDOOR_MARKERS if m in text), None)
+        marker = next((m for m in INDOOR_MARKERS if m in text), None)
         if marker:
             item["weather"] = "indoor"
             notes.append(

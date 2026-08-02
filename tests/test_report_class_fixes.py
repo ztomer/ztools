@@ -253,3 +253,104 @@ def test_C8_checker_and_enforcement_agree_on_the_same_input():
     assert notes and not kept
     # and the checker flags the same row when it is NOT dropped
     assert rc.check_wk_no_excluded_place(_render_current([], row), excluded) != []
+
+# ---------------------------------------------------------------------------
+# C14 AGGREGATOR-PAGE-AS-ACTIVITY + the Day/dates consistency rule
+#
+# All four cases below are built from ONE row that really shipped, which the
+# user rejected with "this specifically means nothing":
+#
+#   Vaughan Events & Activities Guides for Kids & Families
+#   (Vaughan Public Libraries, Vaughan, ON, Canada)
+#   | 6-13 | — | 2026-08-04 → 2026-08-07 | Saturday | outdoor |
+#
+# It carries three independent defects, and the row is kept intact here so a
+# regression in any one of them is caught by the row that produced it.
+# ---------------------------------------------------------------------------
+
+SHIPPED_AGGREGATOR_ROW = (
+    "### Transient / Limited-Time Events\n"
+    "| Score | Event & Location | Target Age(s) | Est. Price | Dates | Day | Weather Appr. |\n"
+    "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
+    "| * 2.0/5 | **Vaughan Events & Activities Guides for Kids & Families** "
+    "(Vaughan Public Libraries, Vaughan, ON, Canada) | 6-13 | — | "
+    "2026-08-04 → 2026-08-07 | Saturday | outdoor |\n"
+)
+
+
+def test_C14_a_directory_page_is_not_an_activity():
+    """You cannot attend a guide."""
+    failures = rc.check_wk_no_aggregator_rows(SHIPPED_AGGREGATOR_ROW)
+    assert failures and "directory page" in failures[0]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Things to do in Vaughan with kids",
+        "What's On in Toronto This Weekend",
+        "Your Guide to Summer Fun",
+        "August 2026 Archives",
+        "Toronto Event Calendar",
+        "Top 10 Family Attractions",
+    ],
+)
+def test_C14_catches_the_common_aggregator_shapes(name):
+    row = SHIPPED_AGGREGATOR_ROW.replace(
+        "Vaughan Events & Activities Guides for Kids & Families", name
+    )
+    assert rc.check_wk_no_aggregator_rows(row), f"{name!r} should read as a directory page"
+
+
+def test_C14_does_not_flag_a_real_activity():
+    """Conservative: a genuine event must not be mistaken for a directory."""
+    for name in ("Harbour Kite Festival", "Jurassic Quest", "TD Community Sunday at MOCA"):
+        row = SHIPPED_AGGREGATOR_ROW.replace(
+            "Vaughan Events & Activities Guides for Kids & Families", name
+        )
+        assert rc.check_wk_no_aggregator_rows(row) == [], f"{name!r} is a real activity"
+
+
+def test_day_must_fall_within_the_rows_own_dates():
+    """Pure internal consistency -- no model needed, code should never ship this."""
+    failures = rc.check_wk_day_matches_dates(SHIPPED_AGGREGATOR_ROW, 2026)
+    assert failures and "Saturday" in failures[0]
+
+    from datetime import date as _date
+
+    from weekend.enforce import reconcile_day_with_dates
+
+    items = [
+        {
+            "name": "Vaughan Events Guide",
+            "start_date": "2026-08-04",
+            "end_date": "2026-08-07",
+            "day": "Saturday",
+        }
+    ]
+    fixed, notes = reconcile_day_with_dates(items, _date(2026, 8, 7), _date(2026, 8, 9))
+    assert notes and "not within" in notes[0]
+    assert fixed[0]["day"] != "Saturday"
+
+
+def test_day_check_passes_when_the_row_agrees_with_itself():
+    """Prove the check can go green."""
+    good = SHIPPED_AGGREGATOR_ROW.replace("2026-08-04 → 2026-08-07", "2026-08-08").replace(
+        "| Saturday |", "| Saturday |"
+    )
+    assert rc.check_wk_day_matches_dates(good, 2026) == []
+
+
+def test_C5_marker_list_is_shared_with_enforcement_not_copied():
+    """The C8b lesson applied to C5: one list, so checker and enforcement agree.
+
+    'Vaughan Public Libraries' was labelled outdoor and the singular-only marker
+    'library' missed it; the checker had its own copy of the list, so it agreed
+    with the bug instead of catching it.
+    """
+    from weekend.enforce import INDOOR_MARKERS
+
+    assert rc._indoor_markers() is INDOOR_MARKERS
+    assert rc.check_wk_weather_label_matches_venue(SHIPPED_AGGREGATOR_ROW), (
+        "a public library labelled 'outdoor' must be caught"
+    )
