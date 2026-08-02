@@ -43,6 +43,10 @@ FAST_POLL_INTERVAL = 0.1
 # machine), short enough that a wedged server fails fast instead of
 # hanging a scheduled run. See can_serve().
 SERVE_PROBE_TIMEOUT = int(os.environ.get("OSAURUS_SERVE_PROBE_TIMEOUT", "45"))
+# How long to wait for a quit to actually free the port before relaunching.
+SHUTDOWN_WAIT = int(os.environ.get("OSAURUS_SHUTDOWN_WAIT", "15"))
+# Grace period before a failed restart is allowed to quit osaurus again.
+RETRY_GRACE = int(os.environ.get("OSAURUS_RETRY_GRACE", "20"))
 
 
 def _is_osaurus_process(pid: int) -> bool:
@@ -89,8 +93,50 @@ def _kill_osaurus():
         PID_FILE.unlink(missing_ok=True)
 
 
+def _osaurus_process_exists() -> bool:
+    """Is any osaurus process still alive?
+
+    The HTTP port frees BEFORE the process finishes exiting, so waiting only on
+    the port is not enough: macOS LaunchServices still considers the app running
+    and swallows the relaunch, re-activating the terminating instance instead of
+    starting a new one. That is why the relaunch appeared to do nothing.
+    """
+    try:
+        res = subprocess.run(
+            ["pgrep", "-x", "osaurus"],
+            capture_output=True,
+            text=True,
+            timeout=PROCESS_CHECK_TIMEOUT,
+        )
+        return res.returncode == 0 and bool(res.stdout.strip())
+    except Exception:
+        return False
+
+
+def _wait_until_down(timeout: int = SHUTDOWN_WAIT) -> bool:
+    """Block until the server stops answering, or `timeout` elapses.
+
+    The osascript quit is ASYNCHRONOUS. The predecessor slept a flat 1s and then
+    relaunched, so `open` could attach to the still-quitting instance, which then
+    exited -- leaving NOTHING listening on 1337 while `restart_server` reported
+    failure. Observed for real: an `ensure_server()` call turned a recoverable
+    wedge into a hard outage. Waiting for the port to actually free removes the
+    race instead of widening the sleep and hoping.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not is_server_running() and not _osaurus_process_exists():
+            return True
+        time.sleep(FAST_POLL_INTERVAL)
+    return not is_server_running() and not _osaurus_process_exists()
+
+
 def restart_server(app_path: str = DEFAULT_APP_PATH, wait: int = SERVER_WAIT) -> bool:
     _kill_osaurus()
+    if not _wait_until_down():
+        logger.warning(
+            "osaurus still answering after quit; relaunching anyway may race with shutdown"
+        )
     time.sleep(RESTART_SLEEP)
 
     is_gui = Path(app_path).exists()
@@ -98,24 +144,43 @@ def restart_server(app_path: str = DEFAULT_APP_PATH, wait: int = SERVER_WAIT) ->
         launcher = [GUI_LAUNCHER_CMD, app_path]
     else:
         launcher = CLI_LAUNCHER_CMD
-    try:
-        proc = subprocess.Popen(
-            launcher,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        if not is_gui:
-            PID_FILE.write_text(str(proc.pid))
-    except Exception as e:
-        logger.error(f"Failed to restart osaurus server: {e}")
+
+    def _launch() -> bool:
+        try:
+            proc = subprocess.Popen(
+                launcher, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            if not is_gui:
+                PID_FILE.write_text(str(proc.pid))
+            return True
+        except Exception as exc:
+            logger.error(f"Failed to restart osaurus server: {exc}")
+            return False
+
+    if not _launch():
         return False
 
     # Poll up to wait seconds (Carmack/Hashimoto fast-poll latency optimization)
-    max_polls = int(wait / FAST_POLL_INTERVAL)
+    max_polls = max(1, int(wait / FAST_POLL_INTERVAL))
     for _ in range(max_polls):
         time.sleep(FAST_POLL_INTERVAL)
         if is_server_running():
             return True
+
+    # One more LAUNCH -- never another quit. A relaunch issued while the old
+    # instance was still terminating gets swallowed by LaunchServices, and the
+    # cure for that is to ask again, not to kill something that is starting.
+    logger.warning("osaurus did not come up; issuing one more launch (no quit)")
+    if _launch():
+        for _ in range(max_polls):
+            time.sleep(FAST_POLL_INTERVAL)
+            if is_server_running():
+                return True
+    logger.error(
+        "osaurus did not answer within %ss of relaunch; nothing may be listening on "
+        "the port. Do NOT retry blindly -- a second quit would kill an instance that "
+        "is still starting.", wait
+    )
     return False
 
 
@@ -155,14 +220,36 @@ def can_serve(model: str, timeout: int = SERVE_PROBE_TIMEOUT) -> tuple[bool, str
 
 
 def ensure_server(max_retries: int = ENSURE_MAX_RETRIES, wait: int = SERVER_WAIT) -> bool:
+    """Make sure osaurus is up, restarting it at most `max_retries` times.
+
+    Between attempts the server is re-checked and given a grace period. The
+    predecessor looped straight back into `restart_server`, whose first act is to
+    QUIT osaurus -- so a slow-starting instance was killed by the next attempt,
+    and three retries reliably ended with nothing listening. For an unattended
+    routine that converts a recoverable wedge into a hard outage.
+    """
     for attempt in range(1, max_retries + 1):
         if is_server_running():
             return True
         logger.warning(f"Server not responding (attempt {attempt}/{max_retries})")
-        if not restart_server(wait=wait):
-            if attempt == max_retries:
-                logger.error("Server failed to restart")
-                return False
+        if restart_server(wait=wait):
+            return True
+        # Never quit again without first giving a slow start time to finish.
+        if _wait_for_up(RETRY_GRACE):
+            logger.info("osaurus came up during the grace period; not restarting again")
+            return True
+        if attempt == max_retries:
+            logger.error("Server failed to restart after %s attempts", max_retries)
+            return False
+    return is_server_running()
+
+
+def _wait_for_up(timeout: int) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if is_server_running():
+            return True
+        time.sleep(FAST_POLL_INTERVAL)
     return is_server_running()
 
 
