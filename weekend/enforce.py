@@ -22,6 +22,8 @@ __all__ = [
     "drop_excluded_places",
     "correct_weather_labels",
     "drop_events_outside_window",
+    "reconcile_day_with_dates",
+    "parse_any_date",
 ]
 
 # Venue words that settle indoor/outdoor without consulting a forecast. Kept
@@ -233,3 +235,56 @@ def drop_events_outside_window(
         else:
             kept.append(item)
     return kept, notes
+
+
+def parse_any_date(value: str, year: int):
+    """Public alias -- the checker must parse dates exactly as enforcement does."""
+    return _parse_any_date(value, year)
+
+
+def reconcile_day_with_dates(
+    items: list[dict], start: date, end: date
+) -> tuple[list[dict], list[str]]:
+    """Make `day` agree with the row's own dates, or blank it.
+
+    A real run shipped a row whose date range covered Tuesday to Friday while
+    its Day column said Saturday. Nothing in the pipeline ever compared the two
+    columns, so a row could disagree with itself.
+
+    This is the purely CHECKABLE half of correctness -- no judgement, no model.
+    Where the row's dates overlap the plan window, `day` is derived from them.
+    Where they do not overlap at all the row is left for
+    `drop_events_outside_window`. Where there are no dates, `day` is left alone:
+    it cannot be verified, and inventing one would be class C4 again.
+    """
+    notes: list[str] = []
+    for item in items:
+        first = _parse_any_date(item.get("start_date", ""), start.year)
+        last = _parse_any_date(item.get("end_date", ""), start.year) or first
+        if first is None:
+            continue
+        if last < first:
+            first, last = last, first
+
+        lo, hi = max(first, start), min(last, end)
+        if lo > hi:
+            continue  # entirely outside the window; not this function's job
+
+        covered = []
+        cursor = lo
+        while cursor <= hi:
+            covered.append(cursor.strftime("%A"))
+            cursor = cursor.fromordinal(cursor.toordinal() + 1)
+
+        stated = str(item.get("day") or "").strip()
+        if stated and stated in covered:
+            continue
+        corrected = covered[0] if len(covered) == 1 else ""
+        item["day"] = corrected
+        if stated:
+            notes.append(
+                f"{item.get('name', '?')!r}: day {stated!r} is not within "
+                f"{first.isoformat()}..{last.isoformat()} — "
+                + (f"corrected to {corrected!r}" if corrected else "cleared")
+            )
+    return items, notes

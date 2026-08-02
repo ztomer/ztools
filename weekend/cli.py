@@ -192,6 +192,7 @@ def _enforce_constraints(fixed_acts, transient_items, fri, sun):
         correct_weather_labels,
         drop_events_outside_window,
         drop_excluded_places,
+        reconcile_day_with_dates,
     )
 
     notes = []
@@ -200,6 +201,9 @@ def _enforce_constraints(fixed_acts, transient_items, fri, sun):
     transient_items, n = drop_excluded_places(transient_items, EXCLUDE_PLACES)
     notes += n
     transient_items, n = drop_events_outside_window(transient_items, fri, sun)
+    notes += n
+    # Purely checkable: a row must not disagree with its own dates.
+    transient_items, n = reconcile_day_with_dates(transient_items, fri, sun)
     notes += n
     fixed_acts, n = correct_weather_labels(fixed_acts)
     notes += n
