@@ -57,12 +57,13 @@ all (C2) and the prompt orders the model to emit `"2-3 hours"` (C4).
 | C5 | `UNVERIFIED-SEMANTIC-LABEL` | `wk` | **FIXED** — corrected in code, clear-cut cases |
 | C6 | `PROVENANCE-LABEL-NOT-BACKED-BY-DATA` | `wk` | **FIXED** — heading renamed to Fit Score |
 | C7 | `CLASSIFICATION-BY-QUERY-PROVENANCE` | `wk` | **OPEN** — now visible as a blank date |
-| C8 | `UNENFORCED-USER-CONSTRAINT` | `wk` | **FIXED** — all 3 layers; enforced in code |
+| C8 | `UNENFORCED-USER-CONSTRAINT` | `wk` | **FIXED (3rd attempt)** — see C8b, the matcher class |
 | C9 | `BACKEND-PROVENANCE-DISCARDED` | `tw` | **FIXED** — degraded runs are banner-marked |
 | C10 | `UNSPECIFIED-OUTPUT-CONTRACT` | `tw` | **OPEN** |
 | C11 | `COVERAGE-OVERSTATED` | `tw` | **LATENT — deliberately untouched** |
 | C12 | `EVAL-DOES-NOT-EXERCISE-PRODUCTION` | both | **FIXED** — one shared renderer |
 | C13 | `DECLARED-BUT-UNREAD-CONFIG` | `tw` | **OPEN** |
+| C8b | `NAME-MATCHED-BY-CONTAINMENT` | `wk` | **FIXED** — token-subset matching |
 
 C1, C2 and C12 are the load-bearing ones. C2 is the only class present in **both** tools,
 which makes it the true class rather than two coincidental bugs. C12 is why none of the
@@ -359,6 +360,51 @@ is only ever a suggestion to a model is not a feature.
 
 ---
 
+## C8b · NAME-MATCHED-BY-CONTAINMENT
+
+**Invariant violated:** when matching a user-configured name against scraped
+text, the config's wording is *not* a contiguous substring of the scraped
+wording. Matching must tolerate reordering, interpolation and punctuation.
+
+**Symptom.** An excluded venue shipped from a real run — twice, after C8 had been
+declared fixed both times.
+
+**Sample (real run, 2026-08-07, line 12 of the shipped plan):**
+> `| * 1.9/5 | **Sky Zone Trampoline Park** (Vaughan/Toronto) | 5 and up |  | indoor |`
+
+`conf/weekend.toml` excludes `Sky Zone Toronto`. The tokens are all present but
+not contiguous, so `normalize_for_match(entry) in haystack` missed. The same run
+*did* drop `LEGOLAND Discovery Centre Toronto`, and that single drop was
+mistakenly taken as proof the class was closed.
+
+**Root cause of the root cause — the escape hatch.** The first fix addressed only
+the U+2019 instance (`Ripley's` vs `Ripley’s`) and then documented the remaining
+gap as acceptable: *"Add the variant to `exclude_places` if one slips through."*
+That comment converted a matcher defect into unbounded manual config maintenance
+and is why the class survived a second review. A workaround written into a
+docstring is not a fix; it is permission for the bug to stay.
+
+**Fix.** `weekend/enforce.py:matches_exclusion` requires every *significant*
+token of the entry to appear in the candidate, in any order:
+`{sky, zone, toronto} ⊆ {sky, zone, trampoline, park, vaughan, toronto}`.
+Still conservative — all tokens required — so `Toronto Zoo` does not match
+`Toronto Islands`, `CN Tower` does not match `Tower of London`, and
+`Little Canada` does not match `Canada Day at the Zoo`. Two tokenizer defects
+surfaced while testing it: a possessive left a stray `s` token, and a
+parenthetical was treated as required.
+
+**The checker was wrong too — the fourth this session.** It passed the shipped
+row because it used the same containment logic. Checker and enforcement now share
+one function. Three sibling sites (holiday names, indoor markers, mandated price
+literals) matched scraped text without punctuation folding and were fixed with
+it; an en-dash `$20–30` would previously have escaped the C4 literal check.
+
+**Failing case:** `test_report_class_fixes.py::test_C8_zero_excluded_venues_in_the_output_not_merely_one_drop`
+— asserts **zero** excluded venues in the rendered output. "At least one drop
+happened" is the assertion that let this through twice.
+
+---
+
 ## C9 · BACKEND-PROVENANCE-DISCARDED
 
 **Invariant violated (house rule "never let a degraded path be silent"):** the artifact must
@@ -565,7 +611,7 @@ output at `~/Documents/weekend_plan_August_07_to_August_09_2026.md`):
 | C3 | no stale or out-of-window row |
 | C4 | no mandated literal; no fabricated constant column |
 | C5 | no impossible weather label |
-| C8 | pipeline printed `dropped 'LEGOLAND Discovery Centre Toronto' — matches excluded place` |
+| C8 | **initially WRONG** — that run also shipped `Sky Zone Trampoline Park`. See C8b; re-verified after the matcher fix. |
 | C6 | heading reads `Ranked by Fit Score (computed, not reviews)` |
 
 **Test-proven only (no real run):** C9 and C12. C9's banner is exercised through
