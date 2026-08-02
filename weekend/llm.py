@@ -1,6 +1,5 @@
 import json
 import os
-import re
 from pathlib import Path
 
 from lib.config import Task
@@ -20,6 +19,7 @@ from lib.osaurus_lib import (
 )
 from lib.tui import STEP, WARN, debug_print
 from weekend.config import OSAURUS_BASE_URL, ensure_server
+from weekend.scoring import _score_item, fetch_scores_for_items  # noqa: F401  (re-export shim)
 
 # LLM API defaults
 LLM_TEMPERATURE = float(os.environ.get("WEEKEND_LLM_TEMPERATURE", "0.1"))
@@ -277,101 +277,6 @@ def normalize_llm_items(items, field_mapping=None):
     return normalized
 
 
-def _score_item(item, weather_str="", age_range=""):
-    CLOUD_KEYWORDS = [
-        "cloudy",
-        "overcast",
-        "rain",
-        "snow",
-        "storm",
-        "wet",
-        "cold (<10",
-        "drizzle",
-        "showers",
-        "thunder",
-    ]
-    SUN_KEYWORDS = [
-        "sunny",
-        "clear",
-        "warm",
-        "sun",
-        "hot",
-        "outdoor",
-        "outside",
-        "fair",
-        "dry",
-        "pleasant",
-    ]
-
-    score = 0.0
-
-    fields = ["name", "location", "price", "target_ages", "weather", "day", "duration"]
-    populated = sum(1 for f in fields if item.get(f))
-    score += (populated / len(fields)) * POPULATED_FIELDS_BASE_SCORE
-
-    if age_range and item.get("target_ages"):
-        age_nums = sorted(set(int(n) for n in re.findall(r"\d+", str(age_range))))
-        target_nums = sorted(set(int(n) for n in re.findall(r"\d+", str(item["target_ages"]))))
-        if age_nums and target_nums:
-            overlap = max(
-                0, min(age_nums[-1], target_nums[-1]) - max(age_nums[0], target_nums[0]) + 1
-            )
-            if overlap >= 2:
-                score += OVERLAP_SCORE_HIGH
-            elif overlap == 1:
-                score += OVERLAP_SCORE_LOW
-
-    if item.get("weather"):
-        w = item["weather"].lower()
-        is_cloudy = any(k in w for k in CLOUD_KEYWORDS)
-        is_sunny = any(k in w for k in SUN_KEYWORDS)
-        is_outdoor = "outdoor" in w
-        is_indoor = "indoor" in w and not is_outdoor
-        forecast_cloudy = (
-            any(k in weather_str.lower() for k in CLOUD_KEYWORDS) if weather_str else False
-        )
-        forecast_sunny = (
-            any(k in weather_str.lower() for k in SUN_KEYWORDS) if weather_str else False
-        )
-        if is_indoor:
-            score += WEATHER_PARTIAL_BONUS
-        elif is_outdoor and forecast_sunny:
-            score += WEATHER_MATCH_BONUS
-        elif is_outdoor and forecast_cloudy:
-            pass
-        elif is_cloudy and forecast_cloudy:
-            score += WEATHER_MATCH_BONUS
-        elif is_sunny and forecast_sunny:
-            score += WEATHER_MATCH_BONUS
-        elif is_sunny or is_cloudy:
-            score += WEATHER_PARTIAL_BONUS
-
-    if item.get("price") and item["price"].lower() not in ("", "free", "n/a", "tbd"):
-        score += PRICE_MATCH_BONUS
-    if item.get("location") and len(item["location"]) > 5:
-        score += LOCATION_MATCH_BONUS
-
-    if item.get("name"):
-        name = item["name"]
-        if len(name) > 20:
-            score += 0.3
-        if any(c.isdigit() for c in name):
-            score += 0.2
-        if len(name.split()) >= 3:
-            score += 0.3
-    if item.get("duration") and item["duration"].lower() not in ("", "2-3 hours"):
-        score += 0.3
-    if item.get("weather") and item["weather"].lower() not in ("", "indoor", "outdoor", "both"):
-        score += 0.2
-
-    return min(round(score / SCORE_DIVISOR, 1), SCORE_MAX_LIMIT)
-
-
-def fetch_scores_for_items(items, weather_str="", age_range=""):
-    for item in items:
-        item["score"] = _score_item(item, weather_str=weather_str, age_range=age_range)
-
-
 def condense_weather(weather_str):
     from weekend.prompts import build_weather_condense_prompt
 
@@ -549,7 +454,11 @@ def generate_weekend_plan(
         from weekend.prompts import build_transient_system_prompt, build_transient_user_prompt
 
         sys_t = build_transient_system_prompt(
-            model, location=location, age_range=age_range, date_range=date_range
+            model,
+            location=location,
+            age_range=age_range,
+            date_range=date_range,
+            events_str=events_str,
         )
         usr_t = build_transient_user_prompt(dates_str, weather_str, events_str)
         json_transient = get_llm_json(sys_t, usr_t, use_foundation=use_foundation) or {}
@@ -576,7 +485,9 @@ def generate_weekend_plan(
         print_warning("Fixed draft failed, using monolithic fallback")
         from weekend.prompts import build_fixed_system_prompt, build_fixed_user_prompt
 
-        sys_f = build_fixed_system_prompt(model, location=location, age_range=age_range)
+        sys_f = build_fixed_system_prompt(
+            model, location=location, age_range=age_range, venues_str=venues_str
+        )
         usr_f = build_fixed_user_prompt(dates_str, weather_str, venues_str)
         json_fixed = get_llm_json(sys_f, usr_f, use_foundation=use_foundation) or {}
 

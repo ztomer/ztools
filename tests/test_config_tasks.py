@@ -134,16 +134,17 @@ class TestSafeFormatPrompt:
         result = _safe_format_prompt("Hello {}", "world")
         assert "world" in result
 
-    def test_format_with_invalid_template_fallback(self, mock_llm):
-        """Template that contains {} but is otherwise invalid - .format raises ValueError."""
-        from lib.config_tasks import _safe_format_prompt
+    def test_mixed_positional_template_raises_instead_of_half_rendering(self, mock_llm):
+        """Previously this asserted the swallow: `{0}` survived into the prompt.
 
-        # Create a template that .format will reject
-        template = "Hello {0} {} world"  # Mixing positional and empty
-        # .format with single arg raises ValueError for mixed
-        result = _safe_format_prompt(template, "test")
-        # Falls back to replace
-        assert "test" in result
+        A template mixing `{0}` and `{}` cannot be rendered coherently, so it is a
+        loud failure now rather than a prompt shipped with `{0}` still in it.
+        """
+        from lib.config_tasks import _safe_format_prompt
+        from lib.prompt_render import PromptRenderError
+
+        with pytest.raises(PromptRenderError, match=r"unrendered placeholder.*'0'"):
+            _safe_format_prompt("Hello {0} {} world", "test")
 
     def test_format_with_location(self, mock_llm):
         from lib.config_tasks import _safe_format_prompt
@@ -173,26 +174,45 @@ class TestSafeFormatPrompt:
         result = _safe_format_prompt("plain text prompt", "irrelevant input")
         assert result == "plain text prompt"
 
-    def test_format_empty_test_input(self, mock_llm):
+    # The three cases below previously asserted "no input -> no replacement",
+    # i.e. they pinned shipping a literal `{age_range}` to a model as CORRECT.
+    # That is class C1/C12 encoded as a test. The contract is now the opposite:
+    # a placeholder is always resolved, and an unresolvable one raises.
+
+    def test_format_empty_test_input_still_resolves_the_placeholder(self, mock_llm):
         from lib.config_tasks import _safe_format_prompt
 
         result = _safe_format_prompt("with {age_range}", "")
-        # No input -> no replacement
-        assert result == "with {age_range}"
+        assert "{age_range}" not in result
+        assert result == "with 6-13"
 
-    def test_format_invalid_json(self, mock_llm):
+    def test_format_invalid_json_still_resolves_the_placeholder(self, mock_llm):
         from lib.config_tasks import _safe_format_prompt
 
         result = _safe_format_prompt("with {age_range}", "not json")
-        # Falls through to no replacement
-        assert result == "with {age_range}"
+        assert "{age_range}" not in result
 
-    def test_format_empty_json_array(self, mock_llm):
+    def test_format_empty_json_array_still_resolves_the_placeholder(self, mock_llm):
         from lib.config_tasks import _safe_format_prompt
 
         result = _safe_format_prompt("with {age_range}", "[]")
-        # Empty array - no replacement
-        assert result == "with {age_range}"
+        assert "{age_range}" not in result
+
+    def test_unknown_placeholder_raises_instead_of_reaching_a_model(self, mock_llm):
+        from lib.config_tasks import _safe_format_prompt
+        from lib.prompt_render import PromptRenderError
+
+        with pytest.raises(PromptRenderError, match="unrendered placeholder"):
+            _safe_format_prompt("needs {some_unknown_field}", "[]")
+
+    def test_json_schema_braces_survive_rendering(self, mock_llm):
+        """The bug that started C1: a literal JSON brace must not be a format field."""
+        from lib.config_tasks import _safe_format_prompt
+
+        template = '{"transient_events": [{"name": "str"}]} for {age_range}'
+        result = _safe_format_prompt(template, "[]")
+        assert '{"transient_events": [{"name": "str"}]}' in result
+        assert "{age_range}" not in result
 
 
 class TestBuildTasksFromModel:

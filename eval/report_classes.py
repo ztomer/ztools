@@ -397,8 +397,16 @@ WEEKEND_PROMPT_TASKS = ("weekend_fixed", "weekend_transient")
 
 
 def check_model_prompts_render(models_dir: Path | None = None) -> list[str]:
-    """C1. Every weekend prompt must render under production's keyword set."""
+    """C1. Every weekend prompt must render through PRODUCTION's renderer.
+
+    Deliberately calls `weekend.prompts._render_model_prompt` -- the exact
+    function the pipeline uses -- rather than re-implementing substitution here.
+    A check that renders prompts its own way is the C12 mistake repeated.
+    """
     import tomllib
+
+    from lib.prompt_render import PromptRenderError, unrendered_placeholders
+    from weekend.prompts import _render_model_prompt
 
     models_dir = models_dir or (ROOT / "conf" / "models")
     failures = []
@@ -409,11 +417,16 @@ def check_model_prompts_render(models_dir: Path | None = None) -> list[str]:
             if template is None:
                 continue
             try:
-                rendered = template.format(**PRODUCTION_PROMPT_KWARGS)
-            except (KeyError, IndexError, ValueError) as exc:
-                failures.append(f"{path.name}:{task} raises {type(exc).__name__}: {exc}")
+                rendered = _render_model_prompt(
+                    template,
+                    f"{path.name}:{task}",
+                    "SOURCE-CONTEXT",
+                    **PRODUCTION_PROMPT_KWARGS,
+                )
+            except PromptRenderError as exc:
+                failures.append(str(exc))
                 continue
-            left = sorted(set(re.findall(r"\{([a-z_]+)\}", rendered)))
+            left = unrendered_placeholders(rendered)
             if left:
                 failures.append(f"{path.name}:{task} left placeholders unrendered: {left}")
     return failures

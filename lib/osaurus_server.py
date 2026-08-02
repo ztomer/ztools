@@ -39,6 +39,10 @@ OSASCRIPT_QUIT_CMD_LOWER = "osaurus"
 OSASCRIPT_CMD = "osascript"
 OSASCRIPT_FLAG = "-e"
 FAST_POLL_INTERVAL = 0.1
+# Long enough for a cold MLX model load (~13s measured on this
+# machine), short enough that a wedged server fails fast instead of
+# hanging a scheduled run. See can_serve().
+SERVE_PROBE_TIMEOUT = int(os.environ.get("OSAURUS_SERVE_PROBE_TIMEOUT", "45"))
 
 
 def _is_osaurus_process(pid: int) -> bool:
@@ -113,6 +117,41 @@ def restart_server(app_path: str = DEFAULT_APP_PATH, wait: int = SERVER_WAIT) ->
         if is_server_running():
             return True
     return False
+
+
+def can_serve(model: str, timeout: int = SERVE_PROBE_TIMEOUT) -> tuple[bool, str]:
+    """Can `model` actually produce a token? Returns (ok, reason).
+
+    `is_server_running()` only asks `/v1/models`, which a wedged Osaurus keeps
+    answering instantly while every completion hangs forever. Observed in the wild:
+    a day-old process reported OK with no model resident and 0% CPU, and `ev`
+    burned 600s per task discovering that a "healthy" server could not serve.
+
+    A readiness check must exercise the same path as the work. This one asks for a
+    single token, so a cold model load (~13s here) passes and a wedge fails fast
+    with a stated reason instead of an unbounded hang.
+    """
+    import requests
+
+    try:
+        resp = requests.post(
+            f"http://{DEFAULT_HOST}:{DEFAULT_PORT}/v1/chat/completions",
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": TEST_PROMPT_CONTENT}],
+                "max_tokens": 1,
+            },
+            timeout=timeout,
+        )
+    except requests.exceptions.Timeout:
+        return False, f"{model}: no token within {timeout}s (server is up but not serving)"
+    except requests.exceptions.ConnectionError as exc:
+        return False, f"{model}: cannot connect ({exc.__class__.__name__})"
+    if resp.status_code == 404:
+        return False, f"{model}: not installed or registered with any provider"
+    if resp.status_code != 200:
+        return False, f"{model}: HTTP {resp.status_code}"
+    return True, f"{model}: serving"
 
 
 def ensure_server(max_retries: int = ENSURE_MAX_RETRIES, wait: int = SERVER_WAIT) -> bool:

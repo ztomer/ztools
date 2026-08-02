@@ -116,9 +116,22 @@ def test_tw_checkers_pass_on_a_clean_report():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="C1 SILENT-TEMPLATE-SUBSTITUTION-FAILURE")
 def test_C1_model_prompts_render_under_production_kwargs():
+    """FIXED 2026-08-02. conf/models/*.toml prompts embed unescaped JSON braces,
+    so str.format() raised and weekend/prompts.py swallowed it into a replace that
+    substituted nothing -- the model received the literal text `{date_range}`.
+    Rendering no longer goes through str.format(), and a template that cannot be
+    rendered now raises PromptRenderError instead of passing through."""
     assert rc.check_model_prompts_render() == []
+
+
+def test_C1_unrenderable_template_raises_rather_than_passing_through():
+    """The CLASS, not the instance: a template error must be loud."""
+    from lib.prompt_render import PromptRenderError
+    from weekend.prompts import _render_model_prompt
+
+    with pytest.raises(PromptRenderError, match="unrendered placeholder"):
+        _render_model_prompt("Find events for {date_range}", "t.toml:x", "ctx")
 
 
 @pytest.mark.xfail(strict=True, reason="C2a DATE-DROPPED-AT-THE-LLM-BOUNDARY (tw)")
@@ -212,21 +225,31 @@ def test_C11_stated_count_matches_processed_count():
     )
 
 
-@pytest.mark.xfail(strict=True, reason="C12 EVAL-DOES-NOT-EXERCISE-PRODUCTION")
-def test_C12_eval_and_production_render_prompts_identically():
-    """`ev` uses _safe_format_prompt (str.replace) while production uses
-    str.format, so the eval succeeds on templates production cannot render."""
-    from lib.config_tasks import _safe_format_prompt
+def test_C12_eval_and_production_share_one_renderer():
+    """FIXED 2026-08-02. `ev` rendered prompts with a private str.replace helper
+    while production used str.format, so the eval was green on templates
+    production shipped corrupted. Both now call lib.prompt_render.render_prompt,
+    so the divergence is structurally impossible rather than a convention."""
+    from lib import config_tasks
+    from lib.prompt_render import render_prompt
+    from weekend.prompts import _render_model_prompt
 
-    template = tomllib.loads((rc.ROOT / "conf" / "models" / "qwen.toml").read_text())[
-        "prompts"
-    ]["weekend_transient"]
-    eval_rendered = _safe_format_prompt(template, "[]")
-    try:
-        prod_rendered = template.format(**rc.PRODUCTION_PROMPT_KWARGS)
-    except (KeyError, IndexError, ValueError) as exc:
-        pytest.fail(f"production renderer raises where the eval renderer does not: {exc}")
-    assert eval_rendered == prod_rendered
+    # A template with the exact shape that used to diverge: literal JSON braces
+    # (which broke production's str.format) plus named placeholders (which the
+    # eval's private helper substituted anyway).
+    template = '{"transient_events": [{"name": "str"}]} for {age_range} in {location}'
+    expected = '{"transient_events": [{"name": "str"}]} for 6-13 in Vaughan'
+
+    assert render_prompt(template, age_range="6-13", location="Vaughan") == expected
+    assert _render_model_prompt(template, "t", None, age_range="6-13", location="Vaughan") == expected
+
+    # The eval renders the same template through the same function. Its VALUES
+    # differ (they come from the eval input), but no template can now render in
+    # one path and fail in the other.
+    eval_rendered = config_tasks._safe_format_prompt(
+        template, '[{"location": "Vaughan", "target_ages": "6-13"}]'
+    )
+    assert eval_rendered == expected
 
 
 @pytest.mark.xfail(strict=True, reason="C13 DECLARED-BUT-UNREAD-CONFIG")

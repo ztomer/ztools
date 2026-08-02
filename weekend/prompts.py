@@ -1,6 +1,23 @@
 from lib.config import Task, get_model_prompt
+from lib.prompt_render import POSITIONAL_SLOT, render_prompt
 from lib.tui import debug_print
 from weekend.config import AGE_RANGE, CITY, DATES_STR, EXCLUDE_PLACES, REGION
+
+
+def _render_model_prompt(template, template_id, context, **fields):
+    """Render a conf/models/*.toml prompt, or raise.
+
+    The two template conventions (a single positional `{}` slot vs named
+    `{placeholder}`s) are detected and dispatched EXPLICITLY. The predecessor
+    guessed, and a broad `except` turned a wrong guess into a prompt that reached
+    the model with `{date_range}` still in it -- see class C1.
+    """
+    return render_prompt(
+        template,
+        template_id=template_id,
+        positional=context if POSITIONAL_SLOT in template else None,
+        **fields,
+    )
 
 # Phase-specific template constants
 PHASE_WEATHER_CONDENSE = """\
@@ -141,7 +158,9 @@ def build_structure_user_prompt(draft_text):
     return f"Convert these activities to the schema:\n\n{draft_text}"
 
 
-def build_fixed_system_prompt(model: str = None, location: str = None, age_range: str = None):
+def build_fixed_system_prompt(
+    model: str = None, location: str = None, age_range: str = None, venues_str: str = ""
+):
     exclusion_string = ", ".join(EXCLUDE_PLACES)
 
     location = location or f"{CITY}/{REGION}"
@@ -155,16 +174,19 @@ def build_fixed_system_prompt(model: str = None, location: str = None, age_range
         flush=True,
     )
     if config_prompt:
-        try:
-            formatted = config_prompt.format(
-                location=location,
-                age_range=age_range,
-                date_range=DATES_STR,
-                exclusions=exclusion_string,
-            )
-        except (KeyError, IndexError, ValueError):
-            formatted = config_prompt.replace("{}", f"{location} {age_range}")
-        debug_print(f"[DEBUG] prompt after format (first 200): {formatted[:200]}", flush=True)
+        # The positional slot in these templates reads "...from this list", so it
+        # wants the scraped venues. The old except-path filled it with
+        # "<location> <age_range>" instead -- a second bug the swallow hid.
+        formatted = _render_model_prompt(
+            config_prompt,
+            f"{model}:{Task.WEEKEND_FIXED.value}",
+            venues_str,
+            location=location,
+            age_range=age_range,
+            date_range=DATES_STR,
+            exclusions=exclusion_string,
+        )
+        debug_print(f"[DEBUG] prompt after render (first 200): {formatted[:200]}", flush=True)
         return formatted
 
     return f"""\
@@ -202,7 +224,11 @@ def build_fixed_user_prompt(dates_str, weather_str, venues_str):
 
 
 def build_transient_system_prompt(
-    model: str = None, location: str = None, age_range: str = None, date_range: str = None
+    model: str = None,
+    location: str = None,
+    age_range: str = None,
+    date_range: str = None,
+    events_str: str = "",
 ):
     location = location or f"{CITY}/{REGION}"
     age_range = age_range or AGE_RANGE
@@ -210,15 +236,14 @@ def build_transient_system_prompt(
 
     config_prompt = get_model_prompt(model, Task.WEEKEND_TRANSIENT) if model else ""
     if config_prompt:
-        try:
-            formatted = config_prompt.format(
-                location=location,
-                age_range=age_range,
-                date_range=date_range,
-            )
-        except (KeyError, IndexError, ValueError):
-            formatted = config_prompt.replace("{}", f"{location} {age_range} {date_range}")
-        return formatted
+        return _render_model_prompt(
+            config_prompt,
+            f"{model}:{Task.WEEKEND_TRANSIENT.value}",
+            events_str,
+            location=location,
+            age_range=age_range,
+            date_range=date_range,
+        )
 
     return f"""\
     Output JSON now. Use EXACT schema:
