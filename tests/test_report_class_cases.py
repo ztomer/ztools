@@ -337,23 +337,39 @@ def test_real_tw_samples_exhibit_the_catalogued_classes():
     assert rc.check_tw_attribution_format_is_uniform(texts), "C10 vanished"
 
 
-@pytest.mark.xfail(strict=True, reason="C16 OUT-OF-REGION-ROW -- open, judgement sits with the model")
-def test_C16_every_row_is_somewhere_the_user_could_go():
-    """A real run returned a San Diego zoo, a Dublin trampoline park and an
-    Oswego one for a Vaughan/Toronto plan. DDGS returns results globally and
-    nothing checks the geography.
+def test_C16_out_of_region_noise_is_stopped_at_the_source():
+    """FIXED source-side. A real run returned a San Diego zoo, a Dublin
+    trampoline park and an Oswego one for a Vaughan/Toronto plan.
 
-    Marked xfail: the WHERE rule was added to the extract prompt, but the class
-    is NOT closed -- it needs source-side query scoping and a real run to prove.
-    Enforcement is deliberately absent: a place-name blocklist can never be
-    complete and would silently drop real local venues.
+    The fix is a relevance floor on RAW scrape results, not a filter on curated
+    rows: `_clean_search_results` requires positive in-region evidence before a
+    result reaches the model. Enforcement on curated rows stays deliberately
+    absent -- a place-name blocklist can never be complete and would silently
+    drop real local venues.
     """
+    from weekend.data import _clean_search_results
+
+    out = _clean_search_results(
+        [
+            {"title": "San Diego Zoo Nighttime Zoo", "body": "San Diego, California"},
+            {"title": "Urban Air Trampoline", "body": "Dublin"},
+            {"title": "Kite Festival", "body": "Woodbridge, Vaughan"},
+        ],
+        "Event",
+    )
+    assert "Kite Festival" in out
+    assert "San Diego" not in out and "Dublin" not in out
+
+
+def test_C16_curated_row_checker_still_reports_a_foreign_row():
+    """The checker remains a MEASUREMENT instrument: if one slips past the source
+    filter and the model, the quality gate must still fail rather than pass."""
     sample = (
         "### Transient / Limited-Time Events\n"
         "| Event & Location | Dates |\n| :--- | :--- |\n"
         "| **San Diego Zoo Nighttime Zoo** (San Diego Zoo) | 2026-08-09 |\n"
     )
-    assert rc.check_wk_rows_are_in_region(sample) == []
+    assert rc.check_wk_rows_are_in_region(sample) != []
 
 
 def test_C16_checker_does_not_flag_a_local_venue():

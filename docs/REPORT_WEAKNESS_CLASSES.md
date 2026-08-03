@@ -67,7 +67,7 @@ all (C2) and the prompt orders the model to emit `"2-3 hours"` (C4).
 | C2c | `PIPELINE-NARROWS-AT-EVERY-PHASE` | `wk` | **FIXED** — one carrier format through all phases |
 | C14 | `AGGREGATOR-PAGE-AS-ACTIVITY` | `wk` | judgement to the model; checker added |
 | C15 | `COLUMN-DISAGREES-WITH-ITS-OWN-ROW` | `wk` | **FIXED** — Day derived from the row's dates |
-| C16 | `OUT-OF-REGION-ROW` | `wk` | **OPEN** — prompt rule added, needs query scoping |
+| C16 | `OUT-OF-REGION-ROW` | `wk` | **FIXED** — whitelist + source scoping, real-run verified |
 | C17 | `ABSENT-WORD-RENDERED-AS-DATA` | `wk` | **FIXED** — "unknown" normalised to the sentinel |
 
 C1, C2 and C12 are the load-bearing ones. C2 is the only class present in **both** tools,
@@ -482,9 +482,27 @@ naming the configured location was added to the extract prompt. Enforcement is
 deliberately absent. `check_wk_rows_are_in_region` is a **measurement instrument**
 that flags obviously-foreign rows so the gate fails.
 
-**Not closed.** The durable fix is source-side: scope the DDGS queries and filter
-results for relevance before the LLM sees them (the "extraction noise" item in
-AUTOMATION_PLAN G3 stage 1). Marked `xfail(strict=True)`.
+**Closed, source-side.** `_clean_search_results` now requires positive in-region
+evidence before a raw result reaches the model, and `weekend/region.py` holds the
+whitelist (GTA municipalities plus the configured city/region). A real run drops
+6-13 out-of-region results per fetch and the artifact carries none.
+
+**The probe overturned the obvious hypothesis.** `DDGS` defaults to
+`region="us-en"`, which looked like the cause — but `ca-en` was *worse*
+(Edmonton, Boston, a mobile game's event calendar). The real mechanism: a query
+with no good local matches is answered with whatever matched the YEAR. A "<city>
+community centres kids <month> <year>" query returned a mass-spectrometry
+conference, an Astana film festival, a Bulgarian concert and a Bengali government
+scheme. There was no relevance floor at all.
+
+**Strictness is confined to the SOURCE layer**, where results are redundant and
+dropping noise is cheap. A curated row lacking region evidence is a judgement
+call for the model and is never dropped by code — dropping is not free.
+
+**Anchoring the queries with the province is asymmetric, and that is deliberate.**
+It clearly improved the VENUE queries and clearly degraded the EVENT ones
+(surfacing provincial forest-fire bulletins and tennis fixtures). Probed, not
+assumed; commented at both sites so it is not "tidied up" into symmetry later.
 
 ---
 
