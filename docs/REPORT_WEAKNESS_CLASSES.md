@@ -67,6 +67,8 @@ all (C2) and the prompt orders the model to emit `"2-3 hours"` (C4).
 | C2c | `PIPELINE-NARROWS-AT-EVERY-PHASE` | `wk` | **FIXED** — one carrier format through all phases |
 | C14 | `AGGREGATOR-PAGE-AS-ACTIVITY` | `wk` | judgement to the model; checker added |
 | C15 | `COLUMN-DISAGREES-WITH-ITS-OWN-ROW` | `wk` | **FIXED** — Day derived from the row's dates |
+| C16 | `OUT-OF-REGION-ROW` | `wk` | **OPEN** — prompt rule added, needs query scoping |
+| C17 | `ABSENT-WORD-RENDERED-AS-DATA` | `wk` | **FIXED** — "unknown" normalised to the sentinel |
 
 C1, C2 and C12 are the load-bearing ones. C2 is the only class present in **both** tools,
 which makes it the true class rather than two coincidental bugs. C12 is why none of the
@@ -462,6 +464,46 @@ left to `drop_events_outside_window`.
 the `Dates` column was *populated*, and populated with a **publication window**
 rather than an event date. "The column has a value" is not "the value is right" —
 the same assertion trap that cost two rounds on C8.
+
+---
+
+## C16 · OUT-OF-REGION-ROW  *(open)*
+
+**Invariant:** every row must be somewhere the user could actually go.
+
+**Sample (real run, Vaughan/Toronto plan):** `San Diego Zoo Nighttime Zoo`,
+`Urban Air Trampoline and Adventure Park (Dublin)`, `Altitude Trampoline Park
+(Oswego)`. DDGS returns results globally; nothing checked the geography.
+
+**Where the fix belongs.** "Could a family here drive to this?" is a judgement
+call — a place-name blocklist can never be complete and would silently drop real
+local venues, which is the C8 escape-hatch trap in a new costume. A WHERE rule
+naming the configured location was added to the extract prompt. Enforcement is
+deliberately absent. `check_wk_rows_are_in_region` is a **measurement instrument**
+that flags obviously-foreign rows so the gate fails.
+
+**Not closed.** The durable fix is source-side: scope the DDGS queries and filter
+results for relevance before the LLM sees them (the "extraction noise" item in
+AUTOMATION_PLAN G3 stage 1). Marked `xfail(strict=True)`.
+
+---
+
+## C17 · ABSENT-WORD-RENDERED-AS-DATA
+
+**Invariant:** absence must look like absence.
+
+After C4 stopped the prompts fabricating constants, they were told to emit
+`"unknown"` when the source says nothing. Nothing turned that back into the
+missing sentinel, so a real run shipped `| — | unknown | — |` and
+`**Union Summer** (unknown)`: the honest answer had leaked into the table as a
+word, which reads like data.
+
+**Fixed at the class level, on the second attempt.** `_fmt_missing` normalises
+the absent words; `_fmt_location` and `_fmt_name_loc` cover the location column,
+which is interpolated into the name cell and was missed the first time — three
+of four columns fixed still ships the fourth. All four renderers (two markdown,
+two TUI) now share one helper, with a test asserting none reintroduces a private
+fallback.
 
 ---
 

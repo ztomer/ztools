@@ -457,3 +457,37 @@ from eval.report_classes_tw import (  # noqa: E402,F401
     check_tw_names_its_backend,
     check_tw_timestamps_are_day_qualified,
 )
+
+# Places far outside the configured region that the scrape keeps returning.
+# This is a MEASUREMENT instrument, not an enforcement filter: "could a family
+# here drive to this?" is a judgement call for the model (see the WHERE rule in
+# PHASE_EXTRACT_EVENTS). A checker may flag an obviously-foreign row so the
+# quality gate fails; code must not drop rows on a place-name list, because the
+# list can never be complete and would silently discard real local venues.
+_OUT_OF_REGION_HINTS = (
+    "san diego", "new york", "chicago", "boston", "london", "dublin", "oswego",
+    "edmonton", "calgary", "vancouver", "montreal", "ottawa", "seattle",
+    "los angeles", "california", "texas", "florida", "australia", "queensland",
+)
+
+
+def check_wk_rows_are_in_region(text: str) -> list[str]:
+    """C16. Every row must be somewhere the user could actually go.
+
+    A real run returned "San Diego Zoo Nighttime Zoo", "Urban Air Trampoline
+    (Dublin)" and "Altitude Trampoline Park (Oswego)" for a Vaughan/Toronto
+    plan. DDGS returns results globally and nothing checked the geography.
+    """
+    from weekend.enforce import normalize_for_match
+
+    failures = []
+    for label, rows in (("transient", transient_rows(text)), ("fixed", fixed_rows(text))):
+        for row in rows:
+            blob = normalize_for_match(f"{_row_name(row)} {_cell(row, 'location')}")
+            hit = next((h for h in _OUT_OF_REGION_HINTS if h in blob), None)
+            if hit:
+                failures.append(
+                    f"{label} {_row_name(row)!r}: names {hit!r}, which is not in the "
+                    f"configured region"
+                )
+    return failures

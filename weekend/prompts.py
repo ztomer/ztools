@@ -38,7 +38,8 @@ never rewritten or dropped: DATES, PRICE, AGES, LOCATION. If the input does not
 state one, write "unknown" for it -- never guess."""
 
 PHASE_EXTRACT_EVENTS = """\
-Extract family-friendly event listings from the search results below.
+Extract family-friendly event listings, near {location}, from the search
+results below.
 
 For each event output one line:
 NAME | LOCATION | DATES | PRICE | AGES | short description
@@ -47,7 +48,12 @@ NAME | LOCATION | DATES | PRICE | AGES | short description
   Monday, August 3" or "23rd August" or "February 14-16". Include the year if
   the result shows one. Write "unknown" if the result gives no date.
 - PRICE and AGES: copy verbatim if stated, else "unknown".
-- Ignore ads, navigation text, and results for other cities or countries.
+- WHERE: only include somewhere a family in {location} could drive to for a
+  day out. The search engine returns results from all over the world -- a zoo in
+  San Diego, a trampoline park in Dublin or Oswego is useless here however well
+  it matches. If the result does not name a place in or near {location}, skip
+  it. Do not "adapt" a foreign listing to the local area.
+- Ignore ads and navigation text.
 - DATES must be when the EVENT runs, not when the page was written or updated.
   If the only date on the page is a publication or "last updated" date, that is
   not an event date -- write "unknown".
@@ -183,8 +189,11 @@ def build_weather_condense_prompt(weather_str):
     return PHASE_WEATHER_CONDENSE.format(weather_str=weather_str)
 
 
-def build_source_extract_prompt(raw_text, source_type):
+def build_source_extract_prompt(raw_text, source_type, location=None):
     template = PHASE_EXTRACT_EVENTS if source_type == "events" else PHASE_EXTRACT_VENUES
+    location = location or f"{CITY}/{REGION}"
+    if "{location}" in template:
+        return template.format(raw_text=raw_text, location=location)
     return template.format(raw_text=raw_text)
 
 

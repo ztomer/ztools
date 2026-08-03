@@ -335,3 +335,33 @@ def test_real_tw_samples_exhibit_the_catalogued_classes():
     assert all(rc.check_tw_timestamps_are_day_qualified(t) for t in texts), "C2a vanished"
     assert all(rc.check_tw_names_its_backend(t) for t in texts), "C9 vanished"
     assert rc.check_tw_attribution_format_is_uniform(texts), "C10 vanished"
+
+
+@pytest.mark.xfail(strict=True, reason="C16 OUT-OF-REGION-ROW -- open, judgement sits with the model")
+def test_C16_every_row_is_somewhere_the_user_could_go():
+    """A real run returned a San Diego zoo, a Dublin trampoline park and an
+    Oswego one for a Vaughan/Toronto plan. DDGS returns results globally and
+    nothing checks the geography.
+
+    Marked xfail: the WHERE rule was added to the extract prompt, but the class
+    is NOT closed -- it needs source-side query scoping and a real run to prove.
+    Enforcement is deliberately absent: a place-name blocklist can never be
+    complete and would silently drop real local venues.
+    """
+    sample = (
+        "### Transient / Limited-Time Events\n"
+        "| Event & Location | Dates |\n| :--- | :--- |\n"
+        "| **San Diego Zoo Nighttime Zoo** (San Diego Zoo) | 2026-08-09 |\n"
+    )
+    assert rc.check_wk_rows_are_in_region(sample) == []
+
+
+def test_C16_checker_does_not_flag_a_local_venue():
+    """Conservatism: GTA suburbs must not be mistaken for out-of-region."""
+    for place in ("Vaughan, ON", "Mississauga, ON", "Scarborough", "Woodbridge", "Concord"):
+        sample = (
+            "### Transient / Limited-Time Events\n"
+            "| Event & Location | Dates |\n| :--- | :--- |\n"
+            f"| **Kite Festival** ({place}) | 2026-08-09 |\n"
+        )
+        assert rc.check_wk_rows_are_in_region(sample) == [], place
