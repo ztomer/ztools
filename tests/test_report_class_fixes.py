@@ -404,3 +404,25 @@ def test_C3_checker_and_enforcement_agree_on_the_same_rows():
     # and everything the enforcement dropped IS reported by the checker
     dropped = [r for r in rows if r["name"] not in {k["name"] for k in kept}]
     assert rc.check_wk_no_row_outside_window(_render_current(dropped), start, end)
+
+
+def test_C7_dates_must_come_from_the_date_column_not_anywhere_in_the_row():
+    """False-green found on a real artifact.
+
+    A run emitted five rows with an EMPTY Dates column and a date range dumped
+    into the `Day` column. C7 scanned the whole row for dates, found them in
+    `Day`, and reported all five as properly time-bounded. Four other checks
+    passed too; only the constant-column check caught anything.
+    """
+    misplaced = (
+        "### Transient / Limited-Time Events\n"
+        "| Event & Location | Est. Price | Dates | Day |\n| :--- | :--- | :--- | :--- |\n"
+        "| **Indoor Play Centre** (Kids Play Zone) | $15 | — | Saturday, August 1 - Monday, August 3 |\n"
+    )
+    assert rc.check_wk_transient_rows_are_time_bounded(misplaced, 2026), (
+        "a row whose Dates column is empty is NOT time-bounded, wherever else a "
+        "date may appear in the row"
+    )
+
+    proper = misplaced.replace("| — | Saturday, August 1 - Monday, August 3 |", "| 2026-08-08 | Saturday |")
+    assert rc.check_wk_transient_rows_are_time_bounded(proper, 2026) == []

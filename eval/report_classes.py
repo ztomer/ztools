@@ -331,9 +331,12 @@ def check_wk_transient_rows_are_time_bounded(text: str, year: int) -> list[str]:
     """C7. A row with no time bound is evergreen and belongs in the fixed table."""
     failures = []
     for row in transient_rows(text):
+        # Dates must come from the DATE column, not from anywhere in the row.
+        # Scanning the whole row let a date range that the model had dumped into
+        # the `Day` column satisfy this check, so five fabricated rows with an
+        # empty Dates column were reported as properly time-bounded.
         cell = _cell(row, "dates", "duration", "end date")
-        blob = " ".join(row.values())
-        if find_dates_in(cell, year) or find_dates_in(blob, year):
+        if find_dates_in(cell, year):
             continue
         failures.append(
             f"{_row_name(row)!r}: no date bound — evergreen content in the "
