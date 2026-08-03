@@ -62,6 +62,11 @@ NAME | LOCATION | DATES | PRICE | AGES | short description
 - DATES must be when the EVENT runs, not when the page was written or updated.
   If the only date on the page is a publication or "last updated" date, that is
   not an event date -- write "unknown".
+- A result marked [THIS WEEKEND] already mentions a date inside the weekend
+  being planned, so prefer those -- they are listed first. This is a hint about
+  where to look, NOT a restriction: extract from the unmarked results too. Never
+  invent an event to fill the list, and never move an event's dates to make it
+  fit the weekend. Fewer real events beats more invented ones.
 
 IS THIS AN ACTIVITY? Before listing anything, ask: "is this an actual thing a
 family can go and DO at a specific time and place, or is it a page that LISTS

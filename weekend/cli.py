@@ -177,6 +177,19 @@ def _fetch_data(fri, sun, year, month_name, use_cache):
             venues_str = fetch_fixed_venues(year, month_name)
             save_venues_cache(venues_str)
 
+    # Make the in-window candidates visible WITHOUT removing the rest. Filtering
+    # here instead was tried and reverted: it starved the draft and the model
+    # invented events. See weekend/supply.py.
+    from weekend.supply import in_window_count, prioritise_in_window
+
+    total = len([line for line in events_str.split("\n") if line.strip()])
+    in_window = in_window_count(events_str, fri, sun)
+    events_str = prioritise_in_window(events_str, fri, sun)
+    # The number that explains a thin plan. 20 candidates of which 0 are
+    # in-window is a SUPPLY problem, and it is indistinguishable from a model
+    # problem unless somebody counts.
+    print_info("Candidates", f"{in_window}/{total} mention a date this weekend")
+
     return weather_str, events_str, venues_str, dates_str
 
 

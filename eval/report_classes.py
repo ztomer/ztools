@@ -20,6 +20,8 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Iterable
 
+from lib.dates import MONTHS, find_dates_in
+
 ROOT = Path(__file__).resolve().parent.parent
 
 # Values the prompts mandate verbatim (class C4). A cell equal to one of these
@@ -45,10 +47,10 @@ def _indoor_markers():
 
     return INDOOR_MARKERS
 
-_MONTHS = (
-    "january february march april may june july august september october "
-    "november december"
-).split()
+# Moved to lib/dates.py so the planner's prioritiser and these checkers share
+# one answer to "is there a date in this text". Re-exported under the old names
+# because both are used throughout this module.
+_MONTHS = MONTHS
 
 # A bare wall-clock time with no day qualifier anywhere near it (C2a).
 _BARE_TIME = re.compile(r"(?<![\d:])([01]?\d|2[0-3]):([0-5]\d)(?![\d:])")
@@ -153,24 +155,6 @@ def parse_window_from_tw_report(text: str) -> tuple[datetime, datetime] | None:
         return None
     fmt = "%Y-%m-%d %H:%M"
     return datetime.strptime(m.group(1), fmt), datetime.strptime(m.group(2), fmt)
-
-
-def find_dates_in(value: str, year: int) -> list[date]:
-    """Pull explicit calendar dates out of a cell. Durations are not dates."""
-    found: list[date] = []
-    for m in re.finditer(r"(\d{4})-(\d{2})-(\d{2})", value):
-        try:
-            found.append(date(int(m.group(1)), int(m.group(2)), int(m.group(3))))
-        except ValueError:
-            pass
-    pattern = r"\b(" + "|".join(_MONTHS) + r")\w*\.?\s+(\d{1,2})\b"
-    for m in re.finditer(pattern, value, re.IGNORECASE):
-        month = _MONTHS.index(m.group(1).lower()) + 1
-        try:
-            found.append(date(year, month, int(m.group(2))))
-        except ValueError:
-            pass
-    return found
 
 
 # --------------------------------------------------------------------------
