@@ -366,26 +366,14 @@ def check_wk_no_excluded_place(text: str, excluded: Iterable[str]) -> list[str]:
 # family go and DO this?" is a judgement call the model makes (see
 # PHASE_EXTRACT_EVENTS). A checker may flag a suspicious row for review; code
 # must not silently drop rows on a title pattern.
-_AGGREGATOR_MARKERS = (
-    "things to do",
-    "what's on",
-    "whats on",
-    "events guide",
-    "activities guide",
-    "events & activities",
-    "events and activities",
-    "guides for",
-    "calendar of events",
-    "event calendar",
-    "event listings",
-    "directory",
-    "round-up",
-    "roundup",
-    "archives",
-    "best places",
-    "top 10",
-    "your guide",
-)
+# Markers come from weekend.followup -- the SAME list the pipeline uses to
+# decide which pages to follow. A checker with a private copy drifts from the
+# code it measures and then agrees with the bug (see C8b, and the C5
+# library/libraries miss).
+def _aggregator_markers():
+    from weekend.followup import AGGREGATOR_MARKERS
+
+    return AGGREGATOR_MARKERS
 
 
 def check_wk_no_aggregator_rows(text: str) -> list[str]:
@@ -405,7 +393,7 @@ def check_wk_no_aggregator_rows(text: str) -> list[str]:
     for label, rows in (("transient", transient_rows(text)), ("fixed", fixed_rows(text))):
         for row in rows:
             name = normalize_for_match(_row_name(row))
-            hit = next((m for m in _AGGREGATOR_MARKERS if m in name), None)
+            hit = next((m for m in _aggregator_markers() if m in name), None)
             if hit:
                 failures.append(
                     f"{label} {_row_name(row)!r}: reads as a directory page, not an "

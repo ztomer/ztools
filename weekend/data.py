@@ -159,7 +159,16 @@ def fetch_transient_events(dates_str, year, month_name):
             results = safe_search(q)
             all_results.extend(results)
 
-        return _clean_search_results(all_results, "Event", max_body=MAX_BODY_LENGTH)
+        corpus = _clean_search_results(all_results, "Event", max_body=MAX_BODY_LENGTH)
+
+        # Class C14 follow-up: web search for "events" returns almost nothing but
+        # directory pages. The model correctly refuses to list one as an activity,
+        # which left the plan nearly empty -- so read the events OUT of them
+        # instead of discarding the whole harvest.
+        from weekend.followup import follow_aggregators
+
+        followed = follow_aggregators(all_results)
+        return f"{corpus}\n{followed}" if followed else corpus
     except Exception as e:
         print(f"{WARN} Transient event fetch failed: {e}", file=sys.stderr)
         return "Error fetching transient events."
