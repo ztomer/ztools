@@ -101,8 +101,8 @@ class TestFetchTransientEvents:
         from weekend.data import fetch_transient_events
 
         mock_results = [
-            {"title": "Festival A", "body": "Description A"},
-            {"title": "Festival B", "body": "Description B"},
+            {"title": "Festival A", "body": "Description A, Toronto"},
+            {"title": "Festival B", "body": "Description B, Vaughan"},
         ]
         fake_ddgs = MagicMock()
         fake_ddgs.return_value.text.return_value = mock_results
@@ -116,8 +116,8 @@ class TestFetchTransientEvents:
         from weekend.data import fetch_transient_events
 
         mock_results = [
-            {"title": "Same", "body": "Desc 1"},
-            {"title": "Same", "body": "Desc 2"},  # duplicate title
+            {"title": "Same", "body": "Desc 1, Toronto"},
+            {"title": "Same", "body": "Desc 2, Toronto"},  # duplicate title
         ]
         fake_ddgs = MagicMock()
         fake_ddgs.return_value.text.return_value = mock_results
@@ -152,7 +152,7 @@ class TestFetchTransientEvents:
             call_count[0] += 1
             if call_count[0] == 1:
                 raise Exception("429 rate limit")
-            return [{"title": "After retry", "body": "x"}]
+            return [{"title": "After retry", "body": "x, Toronto"}]
 
         fake_ddgs = MagicMock()
         fake_ddgs.return_value.text = mock_text
@@ -188,12 +188,16 @@ class TestFetchTransientEvents:
         assert result == ""
 
 
+# NOTE: fixture bodies name a GTA place on purpose. _clean_search_results now
+# requires positive in-region evidence (class C16), so a placeholder result with
+# no location is correctly filtered -- the old fixtures only passed because the
+# pipeline had no relevance floor at all.
 class TestFetchFixedVenues:
     def test_successful(self):
         from weekend.data import fetch_fixed_venues
 
         mock_results = [
-            {"title": "Venue A", "body": "Desc A"},
+            {"title": "Venue A", "body": "Desc A, Toronto"},
         ]
         fake_ddgs = MagicMock()
         fake_ddgs.return_value.text.return_value = mock_results
@@ -205,8 +209,8 @@ class TestFetchFixedVenues:
         from weekend.data import fetch_fixed_venues
 
         mock_results = [
-            {"title": "Same", "body": "1"},
-            {"title": "Same", "body": "2"},
+            {"title": "Same", "body": "1, Toronto"},
+            {"title": "Same", "body": "2, Toronto"},
         ]
         fake_ddgs = MagicMock()
         fake_ddgs.return_value.text.return_value = mock_results
@@ -223,7 +227,7 @@ class TestFetchFixedVenues:
             call_count[0] += 1
             if call_count[0] == 2:
                 raise Exception("query fail")
-            return [{"title": f"Q{call_count[0]}", "body": "x"}]
+            return [{"title": f"Q{call_count[0]}", "body": "x, Toronto"}]
 
         fake_ddgs = MagicMock()
         fake_ddgs.return_value.text = mock_text

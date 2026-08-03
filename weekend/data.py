@@ -7,7 +7,7 @@ import time
 import requests
 from ddgs import DDGS
 
-from lib.tui import WARN
+from lib.tui import STEP, WARN
 from weekend.config import CITY, LATITUDE, LONGITUDE, REGION, TIMEZONE
 
 # HTTP request defaults
@@ -43,15 +43,38 @@ RATING_LABEL_RE = re.compile(r"rating[:\s]*([0-4]\.\d)", re.IGNORECASE)
 
 
 def _clean_search_results(results, default_label="Item", max_body=MAX_BODY_LENGTH):
+    """Dedupe scrape results and drop the ones with no in-region evidence.
+
+    Class C16, scoped at SOURCE. Probed on the real scraper: a query with no
+    good local matches ("Vaughan community centres kids <month> <year>") is
+    answered with whatever matched the YEAR -- a mass-spectrometry conference,
+    an Astana film festival, a Bulgarian concert. There was no relevance floor,
+    and every one of those reached the model as a candidate activity.
+
+    Filtering here is safe because these are RAW results, not curated rows:
+    dropping noise costs nothing, and `has_region_evidence` errs towards keeping
+    anything ambiguous so the model still gets the final say (see
+    `weekend/prompts.py`). A curated row that lacks region evidence is a
+    judgement call and is never dropped by code.
+    """
+    from weekend.region import has_region_evidence
+
     seen = set()
     cleaned = []
+    dropped = 0
     for r in results:
         title = r.get("title", "").strip()
         norm = title.lower().rstrip(".,!?:; ") if title else ""
-        if norm and norm not in seen:
-            seen.add(norm)
-            body = (r.get("body") or "")[:max_body].strip()
-            cleaned.append(f"- {title or default_label}: {body}")
+        if not norm or norm in seen:
+            continue
+        seen.add(norm)
+        body = (r.get("body") or "")[:max_body].strip()
+        if not has_region_evidence(f"{title} {body}"):
+            dropped += 1
+            continue
+        cleaned.append(f"- {title or default_label}: {body}")
+    if dropped:
+        print(f"{STEP} Dropped {dropped} out-of-region search result(s)")
     return "\n".join(cleaned)
 
 
@@ -116,11 +139,11 @@ def fetch_transient_events(dates_str, year, month_name):
     try:
         _transient_template_str = os.environ.get(
             "WEEKEND_TRANSIENT_QUERIES",
-            "{REGION} family events {month_name} {year}||"
+            "{REGION} Ontario family events {month_name} {year}||"
             "{REGION} Zoo special events {month_name} {year}||"
-            "kids activities {CITY} {month_name} {year}||"
-            "{REGION} museum family programs {month_name} {year}||"
-            "{CITY} community centres kids {month_name} {year}",
+            "kids activities {CITY} Ontario {month_name} {year}||"
+            "{REGION} Ontario museum family programs {month_name} {year}||"
+            "{CITY} Ontario community centre kids programs",
         )
         queries = [
             q.format(REGION=REGION, CITY=CITY, year=year, month_name=month_name)
@@ -142,11 +165,11 @@ def fetch_fixed_venues(year, month_name):
     try:
         _fixed_template_str = os.environ.get(
             "WEEKEND_FIXED_VENUE_QUERIES",
-            "indoor play centre {CITY} {REGION} {year} prices||"
-            "trampoline park {REGION} kids {year}||"
-            "children museum {REGION} {year}||"
-            "family arcade {CITY} {year}||"
-            "playplace {CITY} indoor kids {year} prices",
+            "indoor play centre {CITY} {REGION} Ontario prices||"
+            "trampoline park {REGION} Ontario kids||"
+            "children museum {REGION} Ontario||"
+            "family arcade {CITY} Ontario||"
+            "playplace {CITY} Ontario indoor kids prices",
         )
         queries = [
             q.format(CITY=CITY, REGION=REGION, year=year)
