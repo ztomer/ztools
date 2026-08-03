@@ -205,10 +205,21 @@ def _parse_any_date(value: str, year: int) -> date | None:
             return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
         except ValueError:
             return None
-    m = re.search(r"\b(" + "|".join(_MONTHS) + r")\w*\.?\s+(\d{1,2})\b", value, re.IGNORECASE)
+    # Match on the three-letter stem so scraped abbreviations parse too:
+    # "Aug 9", "Aug. 9" and "August 9" are all the same date, and event listings
+    # use all three. Requiring the full name silently dropped the abbreviated
+    # ones, which is a date lost at exactly the boundary class C2 is about.
+    m = re.search(
+        r"\b(" + "|".join(mo[:3] for mo in _MONTHS) + r")[a-z]*\.?\s+(\d{1,2})\b",
+        value,
+        re.IGNORECASE,
+    )
     if m:
         try:
-            return date(year, _MONTHS.index(m.group(1).lower()) + 1, int(m.group(2)))
+            month = next(
+                i for i, mo in enumerate(_MONTHS, 1) if mo.startswith(m.group(1).lower())
+            )
+            return date(year, month, int(m.group(2)))
         except ValueError:
             return None
     return None

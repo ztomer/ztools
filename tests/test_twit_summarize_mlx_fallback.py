@@ -151,3 +151,97 @@ class TestMlxVlmFallback:
                 _make_tweets(), "http://localhost:1337", "m1"
             )
         assert "LLM error" in result
+
+
+# --------------------------------------------------------------------------
+# Provenance across the fallback chain (class C9). Each tier must be
+# distinguishable in the artifact -- a summary that needed a server restart is
+# not the same as one the primary answered first time.
+# --------------------------------------------------------------------------
+
+
+def test_a_summary_produced_after_a_server_restart_is_marked_degraded():
+    """The restart tier was the one path with no provenance test: a run that only
+    succeeded because Osaurus was bounced looked identical to a clean one."""
+    from unittest.mock import patch
+
+    from twitter import summarize as ts
+
+    tweets = [{"screen_name": "a", "created_at": __import__("datetime").datetime(2026, 8, 1, 9, 0),
+               "text": "hello"}]
+
+    with (
+        patch.object(ts, "get_available_models", return_value=["m"]),
+        patch.object(ts, "select_best_model", return_value="m"),
+        patch.object(ts, "_summarize_with_model", return_value=None),
+        patch.object(ts, "_restart_and_retry_server", return_value="## T\n- a\n- b\n- c"),
+        patch.object(ts, "_direct_mlx_fallback", return_value=None),
+    ):
+        result = ts.summarize_with_llm(tweets, "http://localhost:1337", "m")
+
+    prov = result.provenance
+    assert prov.degraded, "a restart-recovered run must not read as primary"
+    assert "restart" in prov.backend or any("restart" in r for r in prov.reasons)
+
+
+def test_a_summary_from_the_local_mlx_tier_is_marked_last_resort():
+    from unittest.mock import patch
+
+    from twitter import summarize as ts
+    from twitter.provenance import LAST_RESORT
+
+    tweets = [{"screen_name": "a", "created_at": __import__("datetime").datetime(2026, 8, 1, 9, 0),
+               "text": "hello"}]
+
+    with (
+        patch.object(ts, "get_available_models", return_value=["m"]),
+        patch.object(ts, "select_best_model", return_value="m"),
+        patch.object(ts, "_summarize_with_model", return_value=None),
+        patch.object(ts, "_restart_and_retry_server", return_value=None),
+        patch.object(ts, "_direct_mlx_fallback", return_value="## T\n- a\n- b\n- c"),
+    ):
+        result = ts.summarize_with_llm(tweets, "http://localhost:1337", "m")
+
+    assert result.provenance.tier == LAST_RESORT
+    assert result.provenance.degraded
+
+
+def test_total_failure_is_marked_failed_not_merely_empty():
+    from unittest.mock import patch
+
+    from twitter import summarize as ts
+    from twitter.provenance import FAILED
+
+    tweets = [{"screen_name": "a", "created_at": __import__("datetime").datetime(2026, 8, 1, 9, 0),
+               "text": "hello"}]
+
+    with (
+        patch.object(ts, "get_available_models", return_value=["m"]),
+        patch.object(ts, "select_best_model", return_value="m"),
+        patch.object(ts, "_summarize_with_model", return_value=None),
+        patch.object(ts, "_restart_and_retry_server", return_value=None),
+        patch.object(ts, "_direct_mlx_fallback", return_value=None),
+    ):
+        result = ts.summarize_with_llm(tweets, "http://localhost:1337", "m")
+
+    assert result.provenance.tier == FAILED
+    assert "LLM error" in result
+
+
+def test_a_reply_is_attributed_in_the_prompt():
+    """The reply-to marker is how the model can tell a conversation from a
+    monologue; it was the one prompt-building branch with no test."""
+    import datetime
+    from unittest.mock import patch
+
+    from twitter import summarize as ts
+
+    tweets = [{
+        "screen_name": "a",
+        "created_at": datetime.datetime(2026, 8, 1, 9, 0),
+        "text": "replying now",
+        "in_reply_to_screen_name": "b",
+    }]
+    with patch.object(ts, "get_model_prompt", return_value=""):
+        prompt, _ = ts._build_prompt(tweets, max_chars=4000)
+    assert "@b" in prompt
