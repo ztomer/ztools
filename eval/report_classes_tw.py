@@ -180,3 +180,51 @@ def check_declared_config_keys_are_read(
     return failures
 
 
+
+
+def check_wk_no_column_echoes_config(text: str, configured: dict[str, str]) -> list[str]:
+    """C4, config-echo form: a column constant across every row AND equal to a
+    configured value is the config leaking into the output, not data.
+
+    This is the SHAPE of the whole C4 class, and it is the assertion that was
+    missing each time it recurred:
+      - "2-3 hours" in every Duration cell    (a prompt-mandated constant)
+      - "$18-35 per child or free" everywhere (a prompt-mandated constant)
+      - the configured FAMILY age range in every Target Age(s) cell, a column
+        that means "the ages this venue is for"
+
+    Each was caught by eye, one at a time, after shipping. A column whose every
+    value equals something the program already knew carries no information about
+    the world, whatever the source of that value.
+
+    `configured` maps a column-name substring to the value it must not equal,
+    e.g. {"target age": "6-13"}.
+    """
+    from eval.report_classes import MISSING_SENTINEL, fixed_rows, transient_rows
+
+    failures = []
+    for label, rows in (("transient", transient_rows(text)), ("fixed", fixed_rows(text))):
+        if len(rows) < 2:
+            continue
+        for col in rows[0]:
+            low = col.lower()
+            expected = next((v for k, v in configured.items() if k in low), None)
+            if not expected:
+                continue
+            values = {r.get(col, "").strip() for r in rows}
+            if values <= {"", MISSING_SENTINEL}:
+                continue
+            if len(values) == 1 and values.pop().strip() == str(expected).strip():
+                failures.append(
+                    f"{label}: column {col!r} is {expected!r} on all {len(rows)} rows, "
+                    f"which is the CONFIGURED value -- the config is echoing into the "
+                    f"output rather than the source being read"
+                )
+    return failures
+
+
+def configured_echo_values() -> dict[str, str]:
+    """The configured values a column must not simply repeat."""
+    from weekend.config import AGE_RANGE
+
+    return {"target age": AGE_RANGE, "age(s)": AGE_RANGE}

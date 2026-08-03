@@ -456,6 +456,8 @@ from eval.report_classes_tw import (  # noqa: E402,F401
     check_tw_attribution_format_is_uniform,
     check_tw_names_its_backend,
     check_tw_timestamps_are_day_qualified,
+    check_wk_no_column_echoes_config,
+    configured_echo_values,
 )
 
 # Places far outside the configured region that the scrape keeps returning.
