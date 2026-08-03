@@ -189,7 +189,6 @@ def _enforce_constraints(fixed_acts, transient_items, fri, sun):
     than quietly shorter.
     """
     from weekend.enforce import (
-        blank_unparseable_dates,
         correct_weather_labels,
         drop_events_outside_window,
         drop_excluded_places,
@@ -197,9 +196,6 @@ def _enforce_constraints(fixed_acts, transient_items, fri, sun):
     )
 
     notes = []
-    # A malformed date ("2026-08-00") must become blank before anything reads it.
-    transient_items, n = blank_unparseable_dates(transient_items, fri.year)
-    notes += n
     fixed_acts, n = drop_excluded_places(fixed_acts, EXCLUDE_PLACES)
     notes += n
     transient_items, n = drop_excluded_places(transient_items, EXCLUDE_PLACES)
@@ -406,8 +402,6 @@ def main(args=None):
             date_range=dates_str,
             use_foundation=use_foundation,
             plan_year=fri.year,
-            window_start=fri,
-            window_end=sun,
         )
 
     fixed_acts = _parse_fixed(json_fixed, actual_model, field_mapping)

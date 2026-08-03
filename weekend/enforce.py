@@ -26,8 +26,6 @@ __all__ = [
     "INDOOR_MARKERS",
     "parse_any_date",
     "window_overlap",
-    "filter_candidates_to_window",
-    "blank_unparseable_dates",
 ]
 
 # Venue words that settle indoor/outdoor without consulting a forecast. Kept
@@ -333,76 +331,3 @@ def window_overlap(item: dict, start: date, end: date):
     if last < first:
         first, last = last, first
     return not (last < start or first > end)
-
-
-def blank_unparseable_dates(items: list[dict], year: int) -> tuple[list[dict], list[str]]:
-    """Replace a date the program cannot read with "".
-
-    Probed on the real model: given a DATES field of "unknown" the structure
-    phase emitted a date with a zero day component -- syntactically plausible,
-    semantically
-    impossible. A malformed date is not information; leaving it in the row
-    lets a value that means nothing render as if it meant something (class C17).
-    """
-    notes = []
-    for item in items:
-        for field in ("start_date", "end_date"):
-            raw = str(item.get(field) or "").strip()
-            if raw and _parse_any_date(raw, year) is None:
-                item[field] = ""
-                notes.append(f"{item.get('name', '?')!r}: cleared unreadable {field} {raw!r}")
-    return items, notes
-
-
-def filter_candidates_to_window(text: str, start: date, end: date) -> tuple[str, int]:
-    """Drop carrier lines whose DATES fall outside the plan window.
-
-    Class C18's root cause. The aggregator pages list a WHOLE MONTH, so the draft
-    phase was choosing among candidates that mostly could not happen on the plan
-    weekend; the model faithfully carried their real dates through, and the
-    window filter at the very end correctly killed every one. Traced counts:
-    7 structured events, all dated outside the window, 0 survivors.
-
-    Constraining here means the model chooses among events that CAN happen,
-    instead of proposing ones that are culled after the fact.
-
-    Lines are the pipe-separated carrier format `NAME | LOCATION | DATES | ...`.
-    A line whose DATES cannot be parsed is KEPT: dropping is not free, and an
-    undated candidate may well be in-window. Only a date we can read AND can see
-    is outside the window justifies a drop.
-    """
-    kept, dropped = [], 0
-    for line in text.splitlines():
-        parts = line.split("|")
-        if len(parts) < 3:
-            kept.append(line)
-            continue
-        dates_field = parts[2]
-        found = [
-            d
-            for d in (_parse_any_date(chunk, start.year) for chunk in _date_chunks(dates_field))
-            if d is not None
-        ]
-        if not found:
-            kept.append(line)
-            continue
-        if max(found) < start or min(found) > end:
-            dropped += 1
-            continue
-        kept.append(line)
-    return "\n".join(kept), dropped
-
-
-def _date_chunks(field: str) -> list[str]:
-    """Split "August 8-9" / "Aug 2 to Aug 5" into individually parseable pieces."""
-    cleaned = field.replace("–", "-").replace("—", "-")
-    parts = re.split(r"\s+(?:to|until|through|-)\s+|,", cleaned)
-    out = []
-    for part in parts:
-        out.append(part)
-        # "August 8-9": the tail number inherits the month from the head.
-        m = re.match(r"\s*([A-Za-z]+\.?\s+\d{1,2})\s*-\s*(\d{1,2})\s*$", part)
-        if m:
-            month = m.group(1).rsplit(" ", 1)[0]
-            out.append(f"{month} {m.group(2)}")
-    return out
