@@ -1,6 +1,5 @@
 import json
 import os
-import re
 from pathlib import Path
 
 from lib.config import Task
@@ -20,6 +19,13 @@ from lib.osaurus_lib import (
 )
 from lib.tui import STEP, WARN, debug_print
 from weekend.config import OSAURUS_BASE_URL, ensure_server
+from weekend.phases import (  # noqa: F401  (re-export shim)
+    draft_activities,
+    extract_sources,
+    refine_draft,
+    structure_to_json,
+)
+from weekend.scoring import _score_item, fetch_scores_for_items  # noqa: F401  (re-export shim)
 
 # LLM API defaults
 LLM_TEMPERATURE = float(os.environ.get("WEEKEND_LLM_TEMPERATURE", "0.1"))
@@ -277,101 +283,6 @@ def normalize_llm_items(items, field_mapping=None):
     return normalized
 
 
-def _score_item(item, weather_str="", age_range=""):
-    CLOUD_KEYWORDS = [
-        "cloudy",
-        "overcast",
-        "rain",
-        "snow",
-        "storm",
-        "wet",
-        "cold (<10",
-        "drizzle",
-        "showers",
-        "thunder",
-    ]
-    SUN_KEYWORDS = [
-        "sunny",
-        "clear",
-        "warm",
-        "sun",
-        "hot",
-        "outdoor",
-        "outside",
-        "fair",
-        "dry",
-        "pleasant",
-    ]
-
-    score = 0.0
-
-    fields = ["name", "location", "price", "target_ages", "weather", "day", "duration"]
-    populated = sum(1 for f in fields if item.get(f))
-    score += (populated / len(fields)) * POPULATED_FIELDS_BASE_SCORE
-
-    if age_range and item.get("target_ages"):
-        age_nums = sorted(set(int(n) for n in re.findall(r"\d+", str(age_range))))
-        target_nums = sorted(set(int(n) for n in re.findall(r"\d+", str(item["target_ages"]))))
-        if age_nums and target_nums:
-            overlap = max(
-                0, min(age_nums[-1], target_nums[-1]) - max(age_nums[0], target_nums[0]) + 1
-            )
-            if overlap >= 2:
-                score += OVERLAP_SCORE_HIGH
-            elif overlap == 1:
-                score += OVERLAP_SCORE_LOW
-
-    if item.get("weather"):
-        w = item["weather"].lower()
-        is_cloudy = any(k in w for k in CLOUD_KEYWORDS)
-        is_sunny = any(k in w for k in SUN_KEYWORDS)
-        is_outdoor = "outdoor" in w
-        is_indoor = "indoor" in w and not is_outdoor
-        forecast_cloudy = (
-            any(k in weather_str.lower() for k in CLOUD_KEYWORDS) if weather_str else False
-        )
-        forecast_sunny = (
-            any(k in weather_str.lower() for k in SUN_KEYWORDS) if weather_str else False
-        )
-        if is_indoor:
-            score += WEATHER_PARTIAL_BONUS
-        elif is_outdoor and forecast_sunny:
-            score += WEATHER_MATCH_BONUS
-        elif is_outdoor and forecast_cloudy:
-            pass
-        elif is_cloudy and forecast_cloudy:
-            score += WEATHER_MATCH_BONUS
-        elif is_sunny and forecast_sunny:
-            score += WEATHER_MATCH_BONUS
-        elif is_sunny or is_cloudy:
-            score += WEATHER_PARTIAL_BONUS
-
-    if item.get("price") and item["price"].lower() not in ("", "free", "n/a", "tbd"):
-        score += PRICE_MATCH_BONUS
-    if item.get("location") and len(item["location"]) > 5:
-        score += LOCATION_MATCH_BONUS
-
-    if item.get("name"):
-        name = item["name"]
-        if len(name) > 20:
-            score += 0.3
-        if any(c.isdigit() for c in name):
-            score += 0.2
-        if len(name.split()) >= 3:
-            score += 0.3
-    if item.get("duration") and item["duration"].lower() not in ("", "2-3 hours"):
-        score += 0.3
-    if item.get("weather") and item["weather"].lower() not in ("", "indoor", "outdoor", "both"):
-        score += 0.2
-
-    return min(round(score / SCORE_DIVISOR, 1), SCORE_MAX_LIMIT)
-
-
-def fetch_scores_for_items(items, weather_str="", age_range=""):
-    for item in items:
-        item["score"] = _score_item(item, weather_str=weather_str, age_range=age_range)
-
-
 def condense_weather(weather_str):
     from weekend.prompts import build_weather_condense_prompt
 
@@ -389,124 +300,6 @@ DEFAULT_BATCH_SIZE = 3
 MAX_BATCH_SIZE = 5
 
 
-def _load_extract_signals():
-    try:
-        if EXTRACT_SIGNALS_PATH.exists():
-            return json.loads(EXTRACT_SIGNALS_PATH.read_text())
-    except Exception:
-        pass
-    return {}
-
-
-def _save_extract_signals(signals):
-    EXTRACT_SIGNALS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    EXTRACT_SIGNALS_PATH.write_text(json.dumps(signals, indent=2, sort_keys=True))
-
-
-def _extract_group_prompt(lines, source_type):
-    from weekend.prompts import build_source_extract_prompt
-
-    return build_source_extract_prompt("\n".join(lines), source_type)
-
-
-def extract_sources(raw_text, source_type, model_name="default", use_foundation=False):
-    signals = _load_extract_signals()
-    per_type = signals.setdefault(model_name or "default", {}).setdefault(source_type, {})
-    batch_size = per_type.get("batch_size", DEFAULT_BATCH_SIZE)
-    phase_key = f"extract_sources/{source_type}"
-
-    lines = [line for line in raw_text.split("\n") if line.startswith("- ")]
-    if not lines:
-        return raw_text
-
-    results = []
-    streak = 0
-    i = 0
-    while i < len(lines):
-        chunk = lines[i : i + batch_size]
-        prompt = _extract_group_prompt(chunk, source_type)
-        result = _call_llm(
-            "",
-            prompt,
-            timeout=PHASE_TIMEOUT_EXTRACT,
-            phase_key=phase_key,
-            use_foundation=use_foundation,
-        )
-
-        if result:
-            results.append(result)
-            streak += 1
-            i += batch_size
-            if streak >= BATCH_GROWTH_STREAK_LIMIT and batch_size < MAX_BATCH_SIZE:
-                batch_size += 1
-                per_type["batch_size"] = batch_size
-                _save_extract_signals(signals)
-        else:
-            per_type["timeouts"] = per_type.get("timeouts", 0) + 1
-            batch_size = max(batch_size // 2, 1)
-            per_type["batch_size"] = batch_size
-            _save_extract_signals(signals)
-            streak = 0
-            if batch_size == 1:
-                results.append(chunk[0])
-                i += 1
-                batch_size = per_type.get("batch_size", DEFAULT_BATCH_SIZE)
-
-    if not results:
-        return raw_text
-    return "\n".join(results)
-
-
-def draft_activities(
-    weather_condensed,
-    cleaned_sources,
-    source_type,
-    location,
-    age_range,
-    date_range,
-    use_foundation=False,
-):
-    from weekend.prompts import build_draft_prompt
-
-    prompt = build_draft_prompt(
-        weather_condensed, cleaned_sources, source_type, location, age_range, date_range
-    )
-    return _call_llm(
-        "",
-        prompt,
-        timeout=PHASE_TIMEOUT_DRAFT,
-        phase_key=f"draft_activities/{source_type}",
-        use_foundation=use_foundation,
-    )
-
-
-def refine_draft(draft_text, use_foundation=False):
-    from weekend.prompts import build_refine_prompt
-
-    result = _call_llm(
-        "",
-        build_refine_prompt(draft_text),
-        timeout=PHASE_TIMEOUT_REFINE,
-        phase_key="refine_draft",
-        use_foundation=use_foundation,
-    )
-    return result if result else draft_text
-
-
-def structure_to_json(text, source_type, age_range, weather_condensed="", use_foundation=False):
-    from weekend.prompts import build_structure_system_prompt, build_structure_user_prompt
-
-    sys_prompt = build_structure_system_prompt(source_type, age_range, weather_condensed)
-    usr_prompt = build_structure_user_prompt(text)
-    return _call_llm(
-        sys_prompt,
-        usr_prompt,
-        timeout=PHASE_TIMEOUT_STRUCTURE,
-        parse_json=True,
-        phase_key=f"structure_to_json/{source_type}",
-        use_foundation=use_foundation,
-    )
-
 
 def generate_weekend_plan(
     model,
@@ -518,8 +311,17 @@ def generate_weekend_plan(
     age_range,
     date_range,
     use_foundation=False,
+    plan_year=None,
 ):
     from weekend.output import print_warning
+
+    # The model dated four events 2025 in a 2026 plan; only the C3 window filter
+    # caught them. The year is now stated explicitly at every phase that emits a
+    # date rather than being inferred from the range string.
+    if plan_year is None:
+        from datetime import date as _d
+
+        plan_year = _d.today().year
 
     condensed_weather = condense_weather(weather_str)
 
@@ -534,13 +336,15 @@ def generate_weekend_plan(
         age_range,
         date_range,
         use_foundation=use_foundation,
+        year=plan_year,
     )
     json_transient = {}
     if draft_transient:
         refined_transient = refine_draft(draft_transient)
         json_transient = (
             structure_to_json(
-                refined_transient, SOURCE_TYPE_TRANSIENT, age_range, condensed_weather
+                refined_transient, SOURCE_TYPE_TRANSIENT, age_range, condensed_weather,
+                year=plan_year,
             )
             or {}
         )
@@ -549,7 +353,11 @@ def generate_weekend_plan(
         from weekend.prompts import build_transient_system_prompt, build_transient_user_prompt
 
         sys_t = build_transient_system_prompt(
-            model, location=location, age_range=age_range, date_range=date_range
+            model,
+            location=location,
+            age_range=age_range,
+            date_range=date_range,
+            events_str=events_str,
         )
         usr_t = build_transient_user_prompt(dates_str, weather_str, events_str)
         json_transient = get_llm_json(sys_t, usr_t, use_foundation=use_foundation) or {}
@@ -565,18 +373,25 @@ def generate_weekend_plan(
         age_range,
         date_range,
         use_foundation=use_foundation,
+        year=plan_year,
     )
     json_fixed = {}
     if draft_fixed:
         refined_fixed = refine_draft(draft_fixed)
         json_fixed = (
-            structure_to_json(refined_fixed, SOURCE_TYPE_FIXED, age_range, condensed_weather) or {}
+            structure_to_json(
+                refined_fixed, SOURCE_TYPE_FIXED, age_range, condensed_weather,
+                year=plan_year,
+            )
+            or {}
         )
     else:
         print_warning("Fixed draft failed, using monolithic fallback")
         from weekend.prompts import build_fixed_system_prompt, build_fixed_user_prompt
 
-        sys_f = build_fixed_system_prompt(model, location=location, age_range=age_range)
+        sys_f = build_fixed_system_prompt(
+            model, location=location, age_range=age_range, venues_str=venues_str
+        )
         usr_f = build_fixed_user_prompt(dates_str, weather_str, venues_str)
         json_fixed = get_llm_json(sys_f, usr_f, use_foundation=use_foundation) or {}
 

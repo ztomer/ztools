@@ -10,7 +10,7 @@ venue = "location"
 json = "Output JSON now. Use EXACT schema."
 
 weekend_transient = """
-Output JSON now. Use EXACT schema: {"transient_events": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}]}
+Output JSON now. Use EXACT schema: {"transient_events": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "start_date": "str", "end_date": "str", "duration": "str", "weather": "str", "day": "str"}]}
 
 Extract 5-10 events for {date_range} in {location}. Kids ages {age_range}.
 Set weather to "outdoor", "indoor", or "both" based on the event type.

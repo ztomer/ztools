@@ -340,4 +340,8 @@ class TestMainIntegration:
         assert len(out_files) == 1
         content = out_files[0].read_text()
         assert "Kids Coding Workshop" in content
-        assert "Canada's Wonderland" in content
+        # C8: "Canada's Wonderland" is in the user's conf/weekend.toml
+        # exclude_places, so the pipeline must DROP it. This assertion used to
+        # require its presence -- i.e. it pinned the unenforced-exclusion defect.
+        assert "Canada's Wonderland" not in content
+        assert "Science Centre" in content

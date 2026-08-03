@@ -6,6 +6,7 @@ from typing import Any, Dict
 from .config_core import Task
 from .config_getters import get_model_prompts_all
 from .config_toml import load_config
+from .prompt_render import POSITIONAL_SLOT, render_prompt, unrendered_placeholders
 
 _eval_inputs_cache: Dict[str, str] = {}
 
@@ -36,8 +37,16 @@ def get_eval_input(task: str) -> str:
 
 
 def _safe_format_prompt(prompt_template: str, test_input: str) -> str:
-    result = prompt_template
+    """Render an eval prompt through the SAME renderer production uses.
 
+    Class C12. This used to be a private `str.replace()` helper that silently
+    succeeded on templates `str.format()` could not render, so `ev` scored green
+    on prompts production shipped corrupted. Both paths now go through
+    `lib.prompt_render.render_prompt`, so the divergence cannot silently return.
+
+    The eval's own placeholder values are derived from `test_input`; only the
+    substitution mechanism is shared, not the data.
+    """
     import json
 
     location = ""
@@ -51,18 +60,22 @@ def _safe_format_prompt(prompt_template: str, test_input: str) -> str:
     except Exception:
         pass
 
-    if "{location}" in result and location:
-        result = result.replace("{location}", location)
-    if "{age_range}" in result and target_ages:
-        result = result.replace("{age_range}", target_ages)
-    if "{date_range}" in result:
-        result = result.replace("{date_range}", "this weekend")
-    if "{text}" in result:
-        result = result.replace("{text}", test_input)
-    if "{}" in result:
-        result = result.replace("{}", test_input)
-
-    return result
+    fields = {
+        "location": location or "the eval location",
+        "age_range": target_ages or "6-13",
+        "date_range": "this weekend",
+        "text": test_input,
+        "exclusions": "",
+    }
+    # Only offer fields the template actually asks for, so an unexpected
+    # placeholder still raises rather than being quietly absorbed.
+    wanted = set(unrendered_placeholders(prompt_template))
+    return render_prompt(
+        prompt_template,
+        template_id="eval",
+        positional=test_input if POSITIONAL_SLOT in prompt_template else None,
+        **{k: v for k, v in fields.items() if k in wanted},
+    )
 
 
 def build_tasks_from_model(model: str) -> Dict[str, Any]:

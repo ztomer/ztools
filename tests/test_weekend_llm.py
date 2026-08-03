@@ -326,23 +326,25 @@ class TestPhaseFunctions:
 
     def test_extract_sources_returns_api_content(self, mock_llm):
         import weekend.llm as wl
+        import weekend.phases as wp
 
         with (
             patch.object(wl, "_call_llm", return_value="- Event A: details"),
-            patch.object(wl, "_load_extract_signals", return_value={}),
-            patch.object(wl, "_save_extract_signals"),
+            patch.object(wp, "_load_extract_signals", return_value={}),
+            patch.object(wp, "_save_extract_signals"),
         ):
             result = wl.extract_sources("- raw result", "events")
         assert "Event A" in result
 
     def test_extract_sources_fallback_on_none(self, mock_llm):
         import weekend.llm as wl
+        import weekend.phases as wp
 
         raw = "- raw result 1\n- raw result 2"
         with (
             patch.object(wl, "_call_llm", return_value=None),
-            patch.object(wl, "_load_extract_signals", return_value={}),
-            patch.object(wl, "_save_extract_signals"),
+            patch.object(wp, "_load_extract_signals", return_value={}),
+            patch.object(wp, "_save_extract_signals"),
         ):
             result = wl.extract_sources(raw, "events")
         # With batch_size=1 fallback, results are raw lines
@@ -356,11 +358,12 @@ class TestPhaseFunctions:
 
     def test_extract_sources_reduces_batch_on_timeout(self, mock_llm):
         import weekend.llm as wl
+        import weekend.phases as wp
 
         with (
             patch.object(wl, "_call_llm", side_effect=[None, "- Event B: details"]),
-            patch.object(wl, "_load_extract_signals", return_value={}),
-            patch.object(wl, "_save_extract_signals"),
+            patch.object(wp, "_load_extract_signals", return_value={}),
+            patch.object(wp, "_save_extract_signals"),
         ):
             result = wl.extract_sources("- r1\n- r2", "events")
         # First call with batch=5 fails → batch halves to 2 → retries both items → succeeds

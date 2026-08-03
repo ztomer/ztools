@@ -7,7 +7,7 @@ import time
 import requests
 from ddgs import DDGS
 
-from lib.tui import WARN
+from lib.tui import STEP, WARN
 from weekend.config import CITY, LATITUDE, LONGITUDE, REGION, TIMEZONE
 
 # HTTP request defaults
@@ -43,15 +43,38 @@ RATING_LABEL_RE = re.compile(r"rating[:\s]*([0-4]\.\d)", re.IGNORECASE)
 
 
 def _clean_search_results(results, default_label="Item", max_body=MAX_BODY_LENGTH):
+    """Dedupe scrape results and drop the ones with no in-region evidence.
+
+    Class C16, scoped at SOURCE. Probed on the real scraper: a query with no
+    good local matches ("Vaughan community centres kids <month> <year>") is
+    answered with whatever matched the YEAR -- a mass-spectrometry conference,
+    an Astana film festival, a Bulgarian concert. There was no relevance floor,
+    and every one of those reached the model as a candidate activity.
+
+    Filtering here is safe because these are RAW results, not curated rows:
+    dropping noise costs nothing, and `has_region_evidence` errs towards keeping
+    anything ambiguous so the model still gets the final say (see
+    `weekend/prompts.py`). A curated row that lacks region evidence is a
+    judgement call and is never dropped by code.
+    """
+    from weekend.region import has_region_evidence
+
     seen = set()
     cleaned = []
+    dropped = 0
     for r in results:
         title = r.get("title", "").strip()
         norm = title.lower().rstrip(".,!?:; ") if title else ""
-        if norm and norm not in seen:
-            seen.add(norm)
-            body = (r.get("body") or "")[:max_body].strip()
-            cleaned.append(f"- {title or default_label}: {body}")
+        if not norm or norm in seen:
+            continue
+        seen.add(norm)
+        body = (r.get("body") or "")[:max_body].strip()
+        if not has_region_evidence(f"{title} {body}"):
+            dropped += 1
+            continue
+        cleaned.append(f"- {title or default_label}: {body}")
+    if dropped:
+        print(f"{STEP} Dropped {dropped} out-of-region search result(s)")
     return "\n".join(cleaned)
 
 
@@ -114,13 +137,17 @@ def fetch_transient_events(dates_str, year, month_name):
         return []
 
     try:
+        # NOTE: no province anchor here on purpose. Probed against the real
+        # scraper: adding "Ontario" to EVENT queries degraded them (it surfaced
+        # ontario.ca forest-fire bulletins and tennis fixtures), while the same
+        # anchor clearly improved the VENUE queries below. Evidence, not symmetry.
         _transient_template_str = os.environ.get(
             "WEEKEND_TRANSIENT_QUERIES",
             "{REGION} family events {month_name} {year}||"
             "{REGION} Zoo special events {month_name} {year}||"
             "kids activities {CITY} {month_name} {year}||"
             "{REGION} museum family programs {month_name} {year}||"
-            "{CITY} community centres kids {month_name} {year}",
+            "{CITY} community centre kids programs {month_name}",
         )
         queries = [
             q.format(REGION=REGION, CITY=CITY, year=year, month_name=month_name)
@@ -132,7 +159,16 @@ def fetch_transient_events(dates_str, year, month_name):
             results = safe_search(q)
             all_results.extend(results)
 
-        return _clean_search_results(all_results, "Event", max_body=MAX_BODY_LENGTH)
+        corpus = _clean_search_results(all_results, "Event", max_body=MAX_BODY_LENGTH)
+
+        # Class C14 follow-up: web search for "events" returns almost nothing but
+        # directory pages. The model correctly refuses to list one as an activity,
+        # which left the plan nearly empty -- so read the events OUT of them
+        # instead of discarding the whole harvest.
+        from weekend.followup import follow_aggregators
+
+        followed = follow_aggregators(all_results)
+        return f"{corpus}\n{followed}" if followed else corpus
     except Exception as e:
         print(f"{WARN} Transient event fetch failed: {e}", file=sys.stderr)
         return "Error fetching transient events."
@@ -142,11 +178,11 @@ def fetch_fixed_venues(year, month_name):
     try:
         _fixed_template_str = os.environ.get(
             "WEEKEND_FIXED_VENUE_QUERIES",
-            "indoor play centre {CITY} {REGION} {year} prices||"
-            "trampoline park {REGION} kids {year}||"
-            "children museum {REGION} {year}||"
-            "family arcade {CITY} {year}||"
-            "playplace {CITY} indoor kids {year} prices",
+            "indoor play centre {CITY} {REGION} Ontario prices||"
+            "trampoline park {REGION} Ontario kids||"
+            "children museum {REGION} Ontario||"
+            "family arcade {CITY} Ontario||"
+            "playplace {CITY} Ontario indoor kids prices",
         )
         queries = [
             q.format(CITY=CITY, REGION=REGION, year=year)

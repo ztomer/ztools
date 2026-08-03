@@ -15,16 +15,17 @@ Use the values from the source data as-is. Output ONLY JSON. No extra text.
 """
 
 weekend_transient = """
-Output JSON now. Schema: {"transient_events": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "duration": "str", "weather": "str", "day": "str"}]}
+Output JSON now. Schema: {"transient_events": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "start_date": "str", "end_date": "str", "duration": "str", "weather": "str", "day": "str"}]}
 
 Find 5-10 events for {date_range} in {location}. Kids ages {age_range}.
 
-Use ONLY these values:
-- day: Friday, Saturday, or Sunday
-- target_ages: "{age_range}"
-- price: "$20-30 per child" or "free"
-- duration: "2-3 hours" or "all day"
-- weather: "indoor" or "outdoor"
+Copy every value from the source text. NEVER invent one.
+If the source does not state a value, output "" for that field -- an empty
+field is CORRECT. Do not guess a typical price, duration or age range, and do
+not repeat a value from another row.
+- day: Friday, Saturday, or Sunday (only if the source says which)
+- start_date / end_date: ISO YYYY-MM-DD from the source only, else ""
+- weather: "indoor", "outdoor" or "both", from the activity type
 
 Output ONLY JSON. No extra text.
 """

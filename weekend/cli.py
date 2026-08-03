@@ -180,6 +180,43 @@ def _fetch_data(fri, sun, year, month_name, use_cache):
     return weather_str, events_str, venues_str, dates_str
 
 
+def _enforce_constraints(fixed_acts, transient_items, fri, sun):
+    """Apply the code-side constraint checks and report every action taken.
+
+    Classes C3/C5/C8: these rules were previously stated only in a prompt, so
+    whether they held depended on the model. Enforcing them here makes them
+    deterministic, and printing the notes keeps a filtered run honest rather
+    than quietly shorter.
+    """
+    from weekend.enforce import (
+        correct_weather_labels,
+        drop_events_outside_window,
+        drop_excluded_places,
+        reconcile_day_with_dates,
+    )
+
+    notes = []
+    fixed_acts, n = drop_excluded_places(fixed_acts, EXCLUDE_PLACES)
+    notes += n
+    transient_items, n = drop_excluded_places(transient_items, EXCLUDE_PLACES)
+    notes += n
+    transient_items, n = drop_events_outside_window(transient_items, fri, sun)
+    notes += n
+    # Purely checkable: a row must not disagree with its own dates.
+    transient_items, n = reconcile_day_with_dates(transient_items, fri, sun)
+    notes += n
+    fixed_acts, n = correct_weather_labels(fixed_acts)
+    notes += n
+    transient_items, n = correct_weather_labels(transient_items)
+    notes += n
+
+    for note in notes:
+        print_step(note)
+    if not notes:
+        print_step("Constraint checks: nothing dropped or corrected")
+    return fixed_acts, transient_items
+
+
 def _parse_fixed(json_fixed, actual_model, field_mapping):
     fixed_keys = get_model_top_keys(actual_model).get(
         "fixed",
@@ -364,10 +401,15 @@ def main(args=None):
             age_range=AGE_RANGE,
             date_range=dates_str,
             use_foundation=use_foundation,
+            plan_year=fri.year,
         )
 
     fixed_acts = _parse_fixed(json_fixed, actual_model, field_mapping)
     transient_items = _parse_transient(json_transient, actual_model, field_mapping)
+
+    # Enforce in code what the prompts can only request (classes C3, C5, C8).
+    # Every drop and correction is reported, never silent.
+    fixed_acts, transient_items = _enforce_constraints(fixed_acts, transient_items, fri, sun)
 
     MIN_ITEMS = MIN_ITEMS_THRESHOLD  # MIN_ITEMS = 5
     has_fixed = len(fixed_acts) >= MIN_ITEMS

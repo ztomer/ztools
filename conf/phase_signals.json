@@ -1,4 +1,14 @@
 {
+  "foundation": {
+    "extract_sources/events": {
+      "timeout": 900
+    }
+  },
+  "qwen3.6-35b-a3b-mxfp8-mtp": {
+    "structure_to_json/transient": {
+      "timeout": 900
+    }
+  },
   "qwopus3.6-27b-v2-mlx-4bit": {
     "draft_activities/transient": {
       "timeout": 2700

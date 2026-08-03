@@ -41,6 +41,7 @@ from lib.osaurus_lib import (
     strip_thinking,
 )
 from lib.tui import STEP, WARN
+from twitter.provenance import FAILED, FALLBACK, LAST_RESORT, PRIMARY, Provenance, SummaryText
 
 _mlx_preferred_str = os.environ.get(
     "TWITTER_MLX_PREFERRED", "Qwopus3.6-27B-v2-MLX-4bit,Qwen3.6,gemma-4,MiniMax"
@@ -383,9 +384,19 @@ def summarize_with_llm(tweets: list[dict], base_url: str, model: str, api_key: s
             m for m in fallback_models if m in models or "foundation" in m.lower()
         ]
 
+    # Which tier actually answered. Recorded as the chain runs so the artifact can
+    # state it -- see twitter/provenance.py (class C9).
+    seen: dict[str, object] = {"backend": "osaurus", "model": target_model, "reasons": []}
+
     def call_fn(m: str) -> Optional[str]:
         ctx_chars = _ctx_chars_for_model(m)
-        return _summarize_with_model(tweets, base_url, api_key, ctx_chars, models, m)
+        out = _summarize_with_model(tweets, base_url, api_key, ctx_chars, models, m)
+        if out is not None:
+            seen["backend"] = "osaurus"
+            seen["model"] = m
+        elif m == target_model:
+            seen["reasons"].append(f"primary model {m} returned no usable summary")
+        return out
 
     def mlx_fn() -> Optional[str]:
         # Priority: Osaurus server first. If it is up, the server path runs it
@@ -395,8 +406,15 @@ def summarize_with_llm(tweets: list[dict], base_url: str, model: str, api_key: s
         # same checkpoints on-device as a genuine last resort.
         result = _restart_and_retry_server(tweets, base_url, api_key, target_model)
         if result:
+            seen["backend"] = "osaurus (after restart)"
+            seen["model"] = target_model
+            seen["reasons"].append("server needed a restart before it would answer")
             return result
-        return _direct_mlx_fallback(tweets)
+        result = _direct_mlx_fallback(tweets)
+        if result:
+            seen["backend"] = "direct mlx (on-device)"
+            seen["reasons"].append("the Osaurus server was exhausted; ran the weights locally")
+        return result
 
     result = call_with_fallback(
         fallback_models,
@@ -407,7 +425,30 @@ def summarize_with_llm(tweets: list[dict], base_url: str, model: str, api_key: s
     )
 
     if result:
-        return result
+        model_used = str(seen["model"])
+        reasons = tuple(seen["reasons"])
+        if str(seen["backend"]).startswith("direct mlx"):
+            tier = LAST_RESORT
+        elif reasons or model_used != target_model:
+            tier = FALLBACK
+            if model_used != target_model:
+                reasons = reasons + (
+                    f"answered by {model_used} instead of the intended {target_model}",
+                )
+        else:
+            tier = PRIMARY
+        prov = Provenance(
+            backend=str(seen["backend"]), model=model_used, tier=tier, reasons=reasons
+        )
+        if prov.degraded:
+            print(f"{WARN} Degraded summary: {prov.describe()}")
+            for reason in prov.reasons:
+                print(f"   {WARN} {reason}")
+        return SummaryText(result, prov)
 
     print(f"{WARN} All server models failed: {fallback_models}")
-    return "[LLM error: both local MLX and server failed]"
+    return SummaryText(
+        "[LLM error: both local MLX and server failed]",
+        Provenance(backend="none", model=target_model, tier=FAILED,
+                   reasons=("every server model and the on-device fallback failed",)),
+    )
