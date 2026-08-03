@@ -312,8 +312,11 @@ def generate_weekend_plan(
     date_range,
     use_foundation=False,
     plan_year=None,
+    window_start=None,
+    window_end=None,
 ):
-    from weekend.output import print_warning
+    from weekend.enforce import filter_candidates_to_window
+    from weekend.output import print_step, print_warning
 
     # The model dated four events 2025 in a 2026 plan; only the C3 window filter
     # caught them. The year is now stated explicitly at every phase that emits a
@@ -328,6 +331,20 @@ def generate_weekend_plan(
     cleaned_events = extract_sources(
         events_str, SOURCE_TYPE_EVENTS, model_name=model, use_foundation=use_foundation
     )
+
+    # Class C18's root cause: the scraped pages list a WHOLE MONTH, so the draft
+    # phase was choosing among candidates that mostly could not happen on this
+    # weekend. The model carried their real dates through faithfully and the
+    # window filter at the very end killed every one -- 7 events in, 0 out.
+    # Constrain the candidates here so the model picks from events that CAN
+    # happen. Undated candidates are kept: dropping is not free.
+    if window_start and window_end:
+        cleaned_events, out_of_window = filter_candidates_to_window(
+            cleaned_events, window_start, window_end
+        )
+        if out_of_window:
+            print_step(f"Set aside {out_of_window} candidate(s) dated outside the weekend")
+
     draft_transient = draft_activities(
         condensed_weather or weather_str[:WEATHER_PREVIEW_LIMIT],
         cleaned_events,
