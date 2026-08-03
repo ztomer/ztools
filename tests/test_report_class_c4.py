@@ -127,3 +127,61 @@ def test_C4_config_echo_check_ignores_an_honestly_blank_column():
         "| **B** (Toronto) | — | indoor |\n"
     )
     assert rc.check_wk_no_column_echoes_config(blank, rc.configured_echo_values()) == []
+
+
+# --------------------------------------------------------------------------
+# C18 -- a hollow plan passes every other check
+# --------------------------------------------------------------------------
+
+
+def test_C18_an_empty_transient_table_is_a_failure():
+    """The floor the other checks stand on.
+
+    An empty table satisfies every content rule trivially -- no fabricated
+    constant, no stale date, no excluded venue, no mislabelled weather -- so a
+    run producing ZERO events was reported as "every content check passes". The
+    checks were green and the feature was useless.
+    """
+    hollow = (
+        "# Weekend Plan: August 07 to August 09, 2026\n\n"
+        "### Fixed / Year-Round Activities\n"
+        "| Activity & Location | Weather Appropriateness |\n| :--- | :--- |\n"
+        "| **A** (Vaughan) | indoor |\n| **B** (Toronto) | indoor |\n"
+        "| **C** (Vaughan) | indoor |\n\n"
+        "### Transient / Limited-Time Events\n"
+        "| Event & Location | Dates |\n| :--- | :--- |\n"
+    )
+    failures = rc.check_wk_plan_is_not_hollow(hollow)
+    assert failures and "hollow" in failures[0]
+
+    # ...and every other content check is perfectly happy with it
+    assert rc.check_wk_no_mandated_placeholder(hollow) == []
+    assert rc.check_wk_no_aggregator_rows(hollow) == []
+    assert rc.check_wk_transient_rows_carry_a_date(hollow, 2026) == []
+
+
+def test_C18_a_populated_plan_passes():
+    """Prove the floor can be met, not just tripped."""
+    populated = (
+        "### Fixed / Year-Round Activities\n"
+        "| Activity & Location | Weather Appropriateness |\n| :--- | :--- |\n"
+        "| **A** (Vaughan) | indoor |\n| **B** (Toronto) | indoor |\n"
+        "| **C** (Vaughan) | indoor |\n\n"
+        "### Transient / Limited-Time Events\n"
+        "| Event & Location | Dates |\n| :--- | :--- |\n"
+        "| **Kite Festival** (Vaughan) | 2026-08-08 |\n"
+    )
+    assert rc.check_wk_plan_is_not_hollow(populated) == []
+
+
+def test_C18_reports_the_fixed_table_being_thin_too():
+    thin = (
+        "### Fixed / Year-Round Activities\n"
+        "| Activity & Location | Weather Appropriateness |\n| :--- | :--- |\n"
+        "| **A** (Vaughan) | indoor |\n\n"
+        "### Transient / Limited-Time Events\n"
+        "| Event & Location | Dates |\n| :--- | :--- |\n"
+        "| **Kite Festival** (Vaughan) | 2026-08-08 |\n"
+    )
+    failures = rc.check_wk_plan_is_not_hollow(thin)
+    assert failures and "fixed" in failures[0]

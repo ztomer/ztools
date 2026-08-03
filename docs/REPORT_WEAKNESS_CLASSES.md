@@ -69,6 +69,7 @@ all (C2) and the prompt orders the model to emit `"2-3 hours"` (C4).
 | C15 | `COLUMN-DISAGREES-WITH-ITS-OWN-ROW` | `wk` | **FIXED** — Day derived from the row's dates |
 | C16 | `OUT-OF-REGION-ROW` | `wk` | **FIXED** — whitelist + source scoping, real-run verified |
 | C17 | `ABSENT-WORD-RENDERED-AS-DATA` | `wk` | **FIXED** — "unknown" normalised to the sentinel |
+| C18 | `HOLLOW-PLAN-PASSES-EVERY-CHECK` | `wk` | check added; **event supply still OPEN** |
 
 C1, C2 and C12 are the load-bearing ones. C2 is the only class present in **both** tools,
 which makes it the true class rather than two coincidental bugs. C12 is why none of the
@@ -522,6 +523,46 @@ which is interpolated into the name cell and was missed the first time — three
 of four columns fixed still ships the fourth. All four renderers (two markdown,
 two TUI) now share one helper, with a test asserting none reintroduces a private
 fallback.
+
+---
+
+## C18 · HOLLOW-PLAN-PASSES-EVERY-CHECK
+
+**Invariant:** an empty table is not a clean table.
+
+Every content rule is satisfied trivially by a table with no rows — no fabricated
+constant, no stale date, no excluded venue, no mislabelled weather. A run that
+produced **zero transient events** was therefore reported as *"every content
+check passes"*. The checks were green and the feature was useless.
+
+**Traced with counts** (`trace-the-boundary`; a stage returning zero is
+indistinguishable from a stage with nothing to do without them):
+
+| boundary | surviving |
+| :--- | ---: |
+| raw DDGS results | 40 |
+| after the in-region filter | 29 |
+| aggregator pages followed | 3 |
+| extracted candidates | 20 |
+| draft | 10 |
+| refined | 8 |
+| structured JSON | 7 |
+| after exclusions | 6 |
+| **after the window filter** | **0** |
+
+Every stage worked. The model had stamped **one identical date on all seven
+events** — `2026-08-02`, against a plan window of `2026-08-07..09` — and the
+window filter correctly dropped every one. The defect was upstream of the filter,
+and the filter's correctness is what made it invisible.
+
+**`check_wk_plan_is_not_hollow` is the floor the other checks stand on:** they say
+the rows are honest, it says there are rows.
+
+**Still open — event supply.** The remaining work is upstream: candidates must be
+constrained to the plan window *before* the structure phase, so the model chooses
+among in-window events instead of proposing out-of-window ones that are then
+culled. The aggregator pages list a whole month; nothing narrows them to the
+weekend until the very last filter.
 
 ---
 

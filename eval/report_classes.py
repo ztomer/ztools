@@ -445,6 +445,7 @@ from eval.report_classes_tw import (  # noqa: E402,F401
     check_tw_names_its_backend,
     check_tw_timestamps_are_day_qualified,
     check_wk_no_column_echoes_config,
+    check_wk_plan_is_not_hollow,
     configured_echo_values,
 )
 

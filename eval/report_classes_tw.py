@@ -228,3 +228,35 @@ def configured_echo_values() -> dict[str, str]:
     from weekend.config import AGE_RANGE
 
     return {"target age": AGE_RANGE, "age(s)": AGE_RANGE}
+
+
+def check_wk_plan_is_not_hollow(text: str, min_transient: int = 1, min_fixed: int = 3) -> list[str]:
+    """C18 HOLLOW-PLAN-PASSES-EVERY-CHECK.
+
+    An empty table satisfies every content rule trivially: no fabricated
+    constant, no stale date, no excluded venue, no mislabelled weather. A run
+    that produced ZERO transient events was therefore reported as "every content
+    check passes" -- the checks were green and the feature was useless.
+
+    Traced with counts, the collapse was invisible without them:
+      40 raw results -> 29 in-region -> 3 pages followed -> 20 candidates
+      -> 10 draft -> 8 refined -> 7 structured -> 6 after exclusions -> 0 after
+      the window filter
+    The model had stamped one wrong date on every event, and the window filter
+    correctly dropped all of them. Every stage "worked"; the output was empty.
+
+    So emptiness itself has to be a failure. This check is the floor the other
+    checks stand on: they say the rows are honest, this one says there are rows.
+    """
+    from eval.report_classes import fixed_rows, transient_rows
+
+    failures = []
+    n_transient, n_fixed = len(transient_rows(text)), len(fixed_rows(text))
+    if n_transient < min_transient:
+        failures.append(
+            f"only {n_transient} transient event(s); a weekend plan that cannot name "
+            f"anything happening is hollow, however clean its other columns are"
+        )
+    if n_fixed < min_fixed:
+        failures.append(f"only {n_fixed} fixed activit(ies); expected at least {min_fixed}")
+    return failures
