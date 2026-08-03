@@ -35,7 +35,12 @@ Output only the summary, nothing else."""
 # the same fields through verbatim -- see class C2c.
 _CARRY_FIELDS = """Carry these fields through EXACTLY as they appear in the input,
 never rewritten or dropped: DATES, PRICE, AGES, LOCATION. If the input does not
-state one, write "unknown" for it -- never guess."""
+state one, write "unknown" for it -- never guess.
+
+AGES means the age range the VENUE OR EVENT states for itself, copied from the
+source. It is NOT the age range of the family this plan is for. Never fill it
+with the family's ages -- if the source does not state an age range, "unknown"
+is the correct answer."""
 
 PHASE_EXTRACT_EVENTS = """\
 Extract family-friendly event listings, near {location}, from the search
@@ -156,7 +161,9 @@ Rules for every field:
   The input dates are usually free text (e.g. "Saturday, August 1 - Monday,
   August 3") -- convert them to ISO. If the text gives no year, the year is
   {year}. If the input says "unknown", output "".
-- target_ages: only if the source states an age range, else "".
+- target_ages: the age range the VENUE OR EVENT states for itself, copied
+  from the input. NEVER the family's ages. If the input does not state one,
+  output "".
 - price: the actual price as written in the source, else "".
 
 Weather: {weather_condensed}

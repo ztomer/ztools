@@ -137,13 +137,17 @@ def fetch_transient_events(dates_str, year, month_name):
         return []
 
     try:
+        # NOTE: no province anchor here on purpose. Probed against the real
+        # scraper: adding "Ontario" to EVENT queries degraded them (it surfaced
+        # ontario.ca forest-fire bulletins and tennis fixtures), while the same
+        # anchor clearly improved the VENUE queries below. Evidence, not symmetry.
         _transient_template_str = os.environ.get(
             "WEEKEND_TRANSIENT_QUERIES",
-            "{REGION} Ontario family events {month_name} {year}||"
+            "{REGION} family events {month_name} {year}||"
             "{REGION} Zoo special events {month_name} {year}||"
-            "kids activities {CITY} Ontario {month_name} {year}||"
-            "{REGION} Ontario museum family programs {month_name} {year}||"
-            "{CITY} Ontario community centre kids programs",
+            "kids activities {CITY} {month_name} {year}||"
+            "{REGION} museum family programs {month_name} {year}||"
+            "{CITY} community centre kids programs {month_name}",
         )
         queries = [
             q.format(REGION=REGION, CITY=CITY, year=year, month_name=month_name)
