@@ -8,6 +8,8 @@ the literal word "unknown", and never a value the program already knew.
 See docs/REPORT_WEAKNESS_CLASSES.md C4 / C17.
 """
 
+from pathlib import Path
+
 import pytest
 
 from eval import report_classes as rc
@@ -185,3 +187,60 @@ def test_C18_reports_the_fixed_table_being_thin_too():
     )
     failures = rc.check_wk_plan_is_not_hollow(thin)
     assert failures and "fixed" in failures[0]
+
+
+# --------------------------------------------------------------------------
+# C19 -- FABRICATED-ROW
+# --------------------------------------------------------------------------
+
+FABRICATED = Path(__file__).parent / "fixtures" / "reports" / "wk_fabricated_transient_sample.md"
+
+
+def test_C19_every_fabricated_row_in_the_real_artifact_is_caught():
+    """Built from a REAL shipped artifact, kept as the fixture.
+
+    The draft phase was starved of in-window candidates and the model invented
+    five events rather than return fewer. A constraint a component cannot satisfy
+    honestly gets satisfied dishonestly.
+    """
+    failures = rc.check_wk_no_fabricated_rows(FABRICATED.read_text())
+    assert len(failures) == 5, f"expected all five invented rows, got {len(failures)}"
+    for fragment in ("Indoor Play Centre", "Trampoline Park", "Zoo Adventure",
+                     "Outdoor Park Day", "Sports Day"):
+        assert any(fragment in f for f in failures), f"{fragment} not caught"
+
+
+def test_C19_is_why_it_matters_the_other_checks_pass_on_it():
+    """An invented row corresponds to nothing, so it satisfies almost everything.
+
+    Of the checks below, only the constant-column one caught anything -- and
+    "Central Park" slips the in-region check precisely because the venue does not
+    exist. This is the assertion that documents the gap C19 closes.
+    """
+    text = FABRICATED.read_text()
+    assert rc.check_wk_no_mandated_placeholder(text) == []
+    assert rc.check_wk_no_aggregator_rows(text) == []
+    assert rc.check_wk_rows_are_in_region(text) == []
+    assert rc.check_wk_plan_is_not_hollow(text) == []
+    # the two that do fire
+    assert rc.check_wk_no_constant_column(text) != []
+    assert rc.check_wk_no_fabricated_rows(text) != []
+
+
+def test_C19_does_not_flag_real_venues():
+    """Conservatism, checked against real shipped artifacts. A row is only
+    reported when BOTH its name and location are bare categories, so a real venue
+    with a plain name survives on the strength of its location."""
+    historical = (Path(__file__).parent / "fixtures" / "reports"
+                  / "wk_2026-07-31_sample.md").read_text()
+    assert rc.check_wk_no_fabricated_rows(historical) == []
+
+    real_rows = (
+        "### Transient / Limited-Time Events\n"
+        "| Event & Location | Dates |\n| :--- | :--- |\n"
+        "| **Grange Festival** (Toronto) | 2026-08-07 |\n"
+        "| **TD Jerkfest Toronto** (Toronto) | 2026-08-07 |\n"
+        "| **Sky Zone Trampoline Park** (Vaughan) | 2026-08-08 |\n"
+        "| **The Bubble** (Toronto & Vaughan) | 2026-08-08 |\n"
+    )
+    assert rc.check_wk_no_fabricated_rows(real_rows) == []

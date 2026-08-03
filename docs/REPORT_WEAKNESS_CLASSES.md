@@ -70,6 +70,7 @@ all (C2) and the prompt orders the model to emit `"2-3 hours"` (C4).
 | C16 | `OUT-OF-REGION-ROW` | `wk` | **FIXED** — whitelist + source scoping, real-run verified |
 | C17 | `ABSENT-WORD-RENDERED-AS-DATA` | `wk` | **FIXED** — "unknown" normalised to the sentinel |
 | C18 | `HOLLOW-PLAN-PASSES-EVERY-CHECK` | `wk` | check added; **event supply still OPEN** |
+| C19 | `FABRICATED-ROW` | `wk` | check added; the attempt that caused it was reverted |
 
 C1, C2 and C12 are the load-bearing ones. C2 is the only class present in **both** tools,
 which makes it the true class rather than two coincidental bugs. C12 is why none of the
@@ -563,6 +564,58 @@ constrained to the plan window *before* the structure phase, so the model choose
 among in-window events instead of proposing out-of-window ones that are then
 culled. The aggregator pages list a whole month; nothing narrows them to the
 weekend until the very last filter.
+
+---
+
+## C19 · FABRICATED-ROW — a constraint that cannot be satisfied honestly gets satisfied dishonestly
+
+**Invariant:** a row must correspond to something that exists.
+
+**What happened.** C18's root cause looked clear: the scraped pages list a whole
+month, so the draft phase was choosing among events that could not happen on the
+plan weekend. The fix was to constrain candidates to the window *before* the
+draft. Transient events went from 0 to 5 — and all five were **invented**:
+
+> `| **Zoo Adventure** (Central Zoo) | All Ages | $20 | — | Saturday, August 1 - Monday, August 3 | — |`
+
+Generic venues that name no real place, invented prices, an empty `Dates` column,
+and one identical date range — for the **wrong weekend**, one that had already
+passed — dumped into the `Day` column where nothing validated it.
+
+**The general property, and the reason this belongs beside C18.** Starving the
+draft did not make the model return fewer events; it made it invent them. **A
+constraint a component cannot satisfy honestly will be satisfied dishonestly.**
+That is a general hazard of putting an LLM behind a hard filter, and it is the
+same shape as C18: a component doing exactly what it was told produced a worse
+whole. The commit was reverted (`46bd65a`), and the revert alone restored **four
+real, in-window events** — `Grange Festival`, `TD Jerkfest Toronto`,
+`Electric Island`, `Rush at Scotiabank Arena` — because the model once again had
+real candidates to choose from.
+
+**Empty was honest; this was actively misleading.** Zero events is a
+disappointing plan. Five fabricated ones is a harmful plan: a user could organise
+a Saturday around an event that does not exist. That ordering outranks any count
+criterion.
+
+**Why it needed its own check.** An invented row satisfies almost everything,
+*because it corresponds to nothing*: no excluded venue matches it, no stale date
+contradicts it, and `Central Park` is not even caught by the in-region check. Of
+ten checks, **one** caught anything. `check_wk_no_fabricated_rows` tests for
+specificity — a real listing carries a proper noun, a fabricated one is a
+category (`Trampoline Park` at `Jump City`). It is deliberately narrow: a row is
+reported only when BOTH name and location are bare categories.
+
+**Two checkers of mine were also wrong here**, and one in the dangerous
+direction: C7 and C3 scanned the *whole row* for dates, found the range sitting
+in the `Day` column, and certified all five fabricated rows as properly
+time-bounded. A checker that reads a value from wherever it can find it will
+certify a row that has the value in the wrong place.
+
+**Supply remains open.** The next attempt should filter **after** the draft, not
+before — the model sees the full candidate set (no incentive to invent) and
+out-of-window proposals are culled afterwards, accepting fewer events over
+fabricated ones. Requiring each event to quote its source line pairs naturally
+with this check: an invented event has nothing to cite.
 
 ---
 

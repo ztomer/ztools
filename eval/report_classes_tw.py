@@ -260,3 +260,64 @@ def check_wk_plan_is_not_hollow(text: str, min_transient: int = 1, min_fixed: in
     if n_fixed < min_fixed:
         failures.append(f"only {n_fixed} fixed activit(ies); expected at least {min_fixed}")
     return failures
+
+
+# A name that is only a CATEGORY names no particular place. A real listing is
+# "Sky Zone Trampoline Park" or "Playdium Vaughan"; a fabricated one is
+# "Trampoline Park" at "Jump City", or "Zoo Adventure" at "Central Zoo".
+_GENERIC_NAME_WORDS = frozenset(
+    """indoor outdoor play centre center park zoo museum adventure day fun kids
+    family sports complex zone city trip event events activity activities
+    playground aquarium arcade splash summer winter central local main community
+    town big little world land house place spot venue jump trampoline""".split()
+)
+
+
+def _is_generic(text: str) -> bool:
+    """True when every significant word is a bare category word."""
+    from weekend.enforce import _significant_tokens
+
+    tokens = _significant_tokens(text)
+    return bool(tokens) and tokens <= _GENERIC_NAME_WORDS
+
+
+def check_wk_no_fabricated_rows(text: str) -> list[str]:
+    """C19 FABRICATED-ROW. A row that names no particular place is invented.
+
+    Written from a real artifact (tests/fixtures/reports/wk_fabricated_transient_sample.md)
+    produced when the draft phase was starved of in-window candidates: rather
+    than return fewer events the model invented five, with generic names and
+    invented prices.
+
+    An invented row satisfies every OTHER check trivially, because it corresponds
+    to nothing: no excluded venue matches it, no stale date contradicts it, and
+    "Central Park" is not even caught by the in-region check. Of ten checks, one
+    caught it. Emptiness is honest; this is actively misleading -- a user could
+    plan a Saturday around an event that does not exist.
+
+    The signal is specificity. A real listing carries a proper noun; a fabricated
+    one is a category ("Trampoline Park" at "Jump City"). Deliberately narrow: a
+    row is only reported when BOTH its name and its location are generic, so a
+    real venue with a plain name survives on the strength of its location.
+    """
+    import re
+
+    from eval.report_classes import _cell, _row_name, fixed_rows, transient_rows
+
+    failures = []
+    for label, rows in (("transient", transient_rows(text)), ("fixed", fixed_rows(text))):
+        for row in rows:
+            cell = _row_name(row) or _cell(row, "location")
+            if not cell:
+                continue
+            # The column is "Event & Location", rendered "**Name** (Location)".
+            m = re.match(r"\s*\*\*(.+?)\*\*\s*(?:\((.*)\))?\s*$", cell)
+            name = (m.group(1) if m else cell).strip()
+            loc = ((m.group(2) if m and m.group(2) else "") or "").strip()
+            if _is_generic(name) and (not loc or _is_generic(loc)):
+                where = loc or "(no location)"
+                failures.append(
+                    f"{label} {name!r} at {where!r}: names no particular place -- "
+                    f"a category, not a venue. Likely invented."
+                )
+    return failures
