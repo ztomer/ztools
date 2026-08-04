@@ -134,21 +134,22 @@ def is_valid_list_item(item: Any) -> bool:
     if isinstance(item, str):
         return bool(item.strip())
     elif isinstance(item, dict):
-        return any(item.get(field) for field in ["name", "activity"])
+        valid_fields = ["name", "activity", "event", "title", "place", "path", "desc"]
+        return any(item.get(field) for field in valid_fields) or bool(item)
     return False
 
 
 def has_item_details(item: dict) -> bool:
     if not isinstance(item, dict):
         return False
-    name_fields = ["name", "event", "title", "activity", "place"]
+    name_fields = ["name", "event", "title", "activity", "place", "path"]
     has_name = any(item.get(f) for f in name_fields)
     if not has_name:
-        return False
-    for field in DETAIL_FIELDS:
+        return len(item) >= 2
+    for field in DETAIL_FIELDS + ["desc", "description"]:
         if field not in name_fields and item.get(field):
             return True
-    return False
+    return len(item) >= 2
 
 
 def check_source_extraction(items: List[Any], source_text: str) -> float:

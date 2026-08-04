@@ -143,7 +143,7 @@ def _build_prompt(
     used = 0
     width = min(TERMINAL_WIDTH_LIMIT, shutil.get_terminal_size().columns) if not for_mlx else 120
     for t in reversed(tweets):
-        parts = [f"@{t['screen_name']} | {t['created_at'].strftime('%H:%M')}"]
+        parts = [f"@{t['screen_name']} | {t['created_at'].strftime('%b %d %H:%M')}"]
         fav = t.get("favorite_count", 0)
         rt = t.get("retweet_count", 0)
         if fav or rt:

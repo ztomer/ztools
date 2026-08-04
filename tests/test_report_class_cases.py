@@ -134,7 +134,6 @@ def test_C1_unrenderable_template_raises_rather_than_passing_through():
         _render_model_prompt("Find events for {date_range}", "t.toml:x", "ctx")
 
 
-@pytest.mark.xfail(strict=True, reason="C2a DATE-DROPPED-AT-THE-LLM-BOUNDARY (tw)")
 def test_C2a_tw_timestamps_are_day_qualified():
     assert rc.check_tw_timestamps_are_day_qualified(TW_BRACKET.read_text()) == []
 
@@ -255,7 +254,6 @@ def test_C9_checker_still_fails_on_a_report_without_provenance():
     assert rc.check_tw_names_its_backend(TW_BRACKET.read_text()) != []
 
 
-@pytest.mark.xfail(strict=True, reason="C10 UNSPECIFIED-OUTPUT-CONTRACT")
 def test_C10_attribution_format_is_stable_across_reports():
     texts = [TW_PROSE.read_text(), TW_BRACKET.read_text()]
     assert rc.check_tw_attribution_format_is_uniform(texts) == []
@@ -303,7 +301,6 @@ def test_C12_eval_and_production_share_one_renderer():
     assert eval_rendered == expected
 
 
-@pytest.mark.xfail(strict=True, reason="C13 DECLARED-BUT-UNREAD-CONFIG")
 def test_C13_declared_config_keys_are_read():
     assert rc.check_declared_config_keys_are_read() == []
 

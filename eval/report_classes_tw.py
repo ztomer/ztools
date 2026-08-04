@@ -60,7 +60,7 @@ def check_tw_timestamps_are_day_qualified(text: str) -> list[str]:
     return failures
 
 
-_ATTRIB_BRACKET = re.compile(r"\(@\w+\s*\|\s*\d{1,2}:\d{2}\)")
+_ATTRIB_BRACKET = re.compile(r"\(@\w+\s*\|\s*(?:[A-Za-z]+\s+\d{1,2}\s+)?\d{1,2}:\d{2}\)")
 _ATTRIB_PROSE = re.compile(r"\bat \d{1,2}:\d{2}\b")
 
 

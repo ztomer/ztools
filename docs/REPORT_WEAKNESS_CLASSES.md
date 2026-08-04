@@ -51,7 +51,7 @@ all (C2) and the prompt orders the model to emit `"2-3 hours"` (C4).
 | ID | Class | Tool | Status (2026-08-02) |
 | :--- | :--- | :--- | :--- |
 | C1 | `SILENT-TEMPLATE-SUBSTITUTION-FAILURE` | `wk` | **FIXED** — shared renderer, raises |
-| C2 | `DATE-DROPPED-AT-THE-LLM-BOUNDARY` | `tw` + `wk` | **C2b FIXED** (schema+renderer); **C2a OPEN** (`tw`) |
+| C2 | `DATE-DROPPED-AT-THE-LLM-BOUNDARY` | `tw` + `wk` | **C2b FIXED** (schema+renderer); **C2a FIXED** (`tw` qualified with `%b %d %H:%M`) |
 | C3 | `NO-RECENCY-FILTER` | `wk` | **PARTIAL** — dated rows filtered; undated are C7 |
 | C4 | `MANDATED-PLACEHOLDER` | `wk` | **FIXED** — prompts no longer order constants; recurrence detected by `flag_constant_columns` (2026-08-04) |
 | C5 | `UNVERIFIED-SEMANTIC-LABEL` | `wk` | **FIXED** — corrected in code, clear-cut cases |
@@ -59,10 +59,10 @@ all (C2) and the prompt orders the model to emit `"2-3 hours"` (C4).
 | C7 | `CLASSIFICATION-BY-QUERY-PROVENANCE` | `wk` | **OPEN** — now visible as a blank date |
 | C8 | `UNENFORCED-USER-CONSTRAINT` | `wk` | **FIXED (3rd attempt)** — see C8b, the matcher class |
 | C9 | `BACKEND-PROVENANCE-DISCARDED` | `tw` | **FIXED** — degraded runs are banner-marked |
-| C10 | `UNSPECIFIED-OUTPUT-CONTRACT` | `tw` | **OPEN** |
+| C10 | `UNSPECIFIED-OUTPUT-CONTRACT` | `tw` | **FIXED** — uniform bracket attribution style `(@author \| Date Time)` across reports |
 | C11 | `COVERAGE-OVERSTATED` | `tw` | **LATENT — deliberately untouched** |
 | C12 | `EVAL-DOES-NOT-EXERCISE-PRODUCTION` | both | **FIXED** — one shared renderer |
-| C13 | `DECLARED-BUT-UNREAD-CONFIG` | `tw` | **OPEN** |
+| C13 | `DECLARED-BUT-UNREAD-CONFIG` | `tw` | **FIXED** — read `max_scrolls` & `chrome_cookies_db` from `conf/twitter.toml` |
 | C8b | `NAME-MATCHED-BY-CONTAINMENT` | `wk` | **FIXED** — token-subset matching |
 | C2c | `PIPELINE-NARROWS-AT-EVERY-PHASE` | `wk` | **FIXED** — one carrier format through all phases |
 | C14 | `AGGREGATOR-PAGE-AS-ACTIVITY` | `wk` | judgement to the model; checker added |

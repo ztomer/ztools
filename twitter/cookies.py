@@ -22,8 +22,17 @@ except ImportError:
 
     warnings.warn("cryptography module not installed — Chrome cookie decryption will fail")
 
-CHROME_COOKIES_DB = (
+from lib.config_toml import load_config
+
+_TWITTER_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "twitter.toml"
+_TWITTER_CFG = load_config(_TWITTER_CONFIG_PATH) or {}
+
+_configured_cookies = _TWITTER_CFG.get("chrome_cookies_db")
+_DEFAULT_CHROME_PATH = (
     Path.home() / "Library" / "Application Support" / "Google" / "Chrome" / "Default" / "Cookies"
+)
+CHROME_COOKIES_DB = (
+    Path(_configured_cookies).expanduser() if _configured_cookies else _DEFAULT_CHROME_PATH
 )
 
 # Keychain and Cryptographic Constants to eliminate magic numbers/strings

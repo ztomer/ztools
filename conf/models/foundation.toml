@@ -8,6 +8,8 @@ weekend_fixed = """
 Output JSON now. Use EXACT schema: {"fixed_activities": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}]}
 
 Extract and format the family-friendly venues from this list as JSON. Return ALL venues.
+- location: Copy the street address if present, or city name. NEVER output generic words like 'Indoor venue' or 'Outdoor venue'.
+- weather: "indoor", "outdoor" or "both". Venues with 'park', 'nature', 'garden', 'trail', or 'walk' in their name MUST be labeled 'outdoor'.
 
 {}
 
@@ -20,22 +22,21 @@ Output JSON now. Schema: {"transient_events": [{"name": "str", "location": "str"
 Find 5-10 events for {date_range} in {location}. Kids ages {age_range}.
 
 Copy every value from the source text. NEVER invent one.
-If the source does not state a value, output "" for that field -- an empty
-field is CORRECT. Do not guess a typical price, duration or age range, and do
-not repeat a value from another row.
+If the source does not state a value, output "" for that field -- an empty field is CORRECT. Do not guess a typical price, duration or age range.
+- location: Copy street address or city name. NEVER output generic 'Indoor venue' or 'Outdoor venue'.
 - day: Friday, Saturday, or Sunday (only if the source says which)
 - start_date / end_date: ISO YYYY-MM-DD from the source only, else ""
-- weather: "indoor", "outdoor" or "both", from the activity type
+- weather: "indoor", "outdoor" or "both". Venues with 'park', 'nature', 'garden', 'trail', or 'walk' in their name MUST be labeled 'outdoor'.
 
 Output ONLY JSON. No extra text.
 """
 
 summarize = """
 Create a structured summary of this timeline.
-Start with a brief overall paragraph capturing the main narrative.
+Start with a brief ## Executive Summary paragraph capturing the overarching narrative.
 Then organize events into topic sections with ## headers, using bullet points.
-Include who (@user mentions), what happened, and when.
-Use connecting phrases and narrative verbs to show how events relate.
+Use connecting phrases ('following up on', 'subsequently announced', 'in response to') and narrative verbs ('released', 'responded', 'criticized', 'launched') to show how events relate.
+CRITICAL: Conclude EVERY bullet point with the author handle and timestamp in exact bracket format: `(@username | Mon DD HH:MM)`.
 
 <timeline>
 {}
@@ -53,7 +54,7 @@ TEXT: {}
 file_summary = """
 Output JSON array. One entry per file. Each must have "path" and "desc" fields.
 Example: [{"path": "eval_lib.py", "desc": "model evaluation functions"}, {"path": "validators.py", "desc": "validation logic"}]
-NO single summary. NO inference from filename.
+CRITICAL: Rely ONLY on provided content context. DO NOT infer functionality from file names, words, or puns (e.g. 'osaurus' is an LLM client server wrapper, not dinosaur data).
 
 Files: {}
 {}

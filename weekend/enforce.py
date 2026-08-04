@@ -169,26 +169,44 @@ def drop_excluded_places(items: list[dict], excluded: list[str]) -> tuple[list[d
     return kept, notes
 
 
-def correct_weather_labels(items: list[dict]) -> tuple[list[dict], list[str]]:
-    """C5. An unambiguously indoor venue must not be labelled 'outdoor'.
+OUTDOOR_MARKERS = (
+    "high park",
+    "conservation",
+    "nature walk",
+    "botanical garden",
+    "provincial park",
+    "national park",
+    "hiking trail",
+)
 
-    The label is free LLM choice and was never rechecked, which is how a
-    trampoline park shipped as 'outdoor'. Only clear-cut cases are corrected;
-    genuinely ambiguous venues are left alone rather than guessed at.
+
+def correct_weather_labels(items: list[dict]) -> tuple[list[dict], list[str]]:
+    """C5. Correct weather label inversions (indoor/outdoor).
+
+    Local LLMs occasionally invert weather labels (e.g. High Park or Nature Walk
+    labeled as 'indoor', or Trampoline Park labeled as 'outdoor'). Only clear-cut
+    cases are corrected; ambiguous venues are left alone.
     """
     notes = []
     for item in items:
         weather = str(item.get("weather") or "").strip().lower()
-        if weather != "outdoor":
-            continue
         text = _item_text(item)
-        marker = next((m for m in INDOOR_MARKERS if m in text), None)
-        if marker:
-            item["weather"] = "indoor"
-            notes.append(
-                f"corrected {item.get('name', '?')!r} from 'outdoor' to 'indoor' "
-                f"(name contains {marker!r})"
-            )
+        if weather == "outdoor":
+            marker = next((m for m in INDOOR_MARKERS if m in text), None)
+            if marker:
+                item["weather"] = "indoor"
+                notes.append(
+                    f"corrected {item.get('name', '?')!r} from 'outdoor' to 'indoor' "
+                    f"(name contains {marker!r})"
+                )
+        elif weather == "indoor":
+            marker = next((m for m in OUTDOOR_MARKERS if m in text), None)
+            if marker:
+                item["weather"] = "outdoor"
+                notes.append(
+                    f"corrected {item.get('name', '?')!r} from 'indoor' to 'outdoor' "
+                    f"(name contains {marker!r})"
+                )
     return items, notes
 
 

@@ -144,7 +144,9 @@ _FILE_SUMMARY_FILES = [
 FILE_SUMMARY_FILE_LIST = "\n".join(str(_PROJECT_ROOT / f) for f in _FILE_SUMMARY_FILES)
 FILE_SUMMARY_PROMPT = f"""Read the file list below and give one-line summary for each file.
 
-CRITICAL: DO NOT infer from filename. Describe what each file DOES, not what its filename suggests.
+CRITICAL: Rely ONLY on provided content context. DO NOT infer functionality from file names,
+words, or puns (e.g. 'osaurus' is an LLM client server wrapper, not dinosaur data). Describe
+what each file DOES.
 - Bad: "a python library" (infers from .py extension)
 - Good: "parses web content and extracts metadata"
 
@@ -174,15 +176,20 @@ facts from the provided chronological Twitter/X timeline.
 
 <instructions>
 1. First, analyze the timeline in block.
-2. Identify clusters of related events and synthesize duplicates.
-3. Output ONLY the final briefing after the  tag. No introductory text.
+2. Start with an overall ## Executive Summary section capturing the main narrative.
+3. Organize into topic sections using ## headers and bullet points.
+4. Use connecting phrases ('following up on', 'subsequently announced') and narrative verbs
+   ('released', 'responded', 'criticized') to show how events relate.
+5. CRITICAL: Conclude EVERY bullet point with the author handle and timestamp in exact
+   bracket format: `(@username | Mon DD HH:MM)`.
 </instructions>
 
 <formatting_rules>
-- Use headers starting with ##
+- Start with a `## Executive Summary` paragraph
+- Use topic headers starting with `##`
 - Use bullet points for facts
-- Keep it concise and factual
-- 40 tweets to analyze
+- Use narrative verbs and connecting phrases showing event relationships
+- Conclude every bullet point with `(@username | Mon DD HH:MM)`
 </formatting_rules>
 
 <timeline>
