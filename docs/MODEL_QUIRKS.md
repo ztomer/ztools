@@ -74,6 +74,24 @@ weekend_fixed: |
 - `conf/models/*.toml` — per-model config
 - `lib/config_core.py` — load functions (shim at `lib/config.py`)
 
+## Universal Model Steering Directives (August 2026)
+
+All 7 model configs (`foundation.toml`, `gemma.toml`, `gemma_versions.toml`, `laguna.toml`, `nemotron.toml`, `qwen.toml`, `qwopus.toml`) now incorporate 4 universal prompt steering rules:
+
+1. **Context Bounding (`file_summary`)**:
+   > *"Rely ONLY on provided content context. DO NOT infer functionality from file names, words, or puns (e.g. 'osaurus' is an LLM client server wrapper, not dinosaur data)."*
+   - Prevents small local models from hallucinating domain stories based on filename tokens.
+
+2. **Location Precision (`weekend_fixed` / `weekend_transient`)**:
+   > *"location: Copy street address or city name. NEVER output generic 'Indoor venue' or 'Outdoor venue'."*
+
+3. **Weather Enforcement (`weekend_fixed` / `weekend_transient`)**:
+   > *"weather: 'indoor', 'outdoor' or 'both'. Venues with 'park', 'nature', 'garden', 'trail', or 'walk' in their name MUST be labeled 'outdoor'."*
+   - Backed up by `OUTDOOR_MARKERS` in `weekend/enforce.py` to auto-correct inverted labels.
+
+4. **Executive Narrative & Bracket Attributions (`summarize`)**:
+   > *"Start with a brief ## Executive Summary paragraph... Use narrative verbs... Conclude EVERY bullet point with `(@username | Mon DD HH:MM)`."*
+
 ---
 
 ## The Working Prompt Pattern (April 2026)

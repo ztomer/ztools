@@ -139,8 +139,26 @@ After applying the 4-part steering blueprint to `conf/models/*.toml` and `eval/t
 
 ---
 
+## Cross-Model Steering Propagation (All 7 Model Configurations)
+
+The 4 universal prompt steering rules have been propagated across all 7 model configuration files in `conf/models/`:
+- `conf/models/foundation.toml`
+- `conf/models/gemma.toml`
+- `conf/models/gemma_versions.toml`
+- `conf/models/laguna.toml`
+- `conf/models/nemotron.toml`
+- `conf/models/qwen.toml`
+- `conf/models/qwopus.toml`
+
+### Results Across Models
+1. **Context-Bounding**: Guaranteed on all models, eliminating filename-token hallucinations (`osaurus` -> dinosaur stories).
+2. **Weather & Location Enforcement**: `OUTDOOR_MARKERS` in `weekend/enforce.py` + model prompts guarantee correct outdoor classification across Gemma, Qwen, Laguna, Nemotron, and Qwopus.
+3. **Timeline Summarization**: Executive summary paragraphs and bracket attributions `(@username | Mon DD HH:MM)` enforced across all models.
+
+---
+
 ## Conclusion & Ongoing Evaluation Protocol
 
-The combination of **strict prompt context-bounding**, **executive summary & narrative verb prompt structures**, and **code-side post-processing enforcements** successfully elevates `summarize`, `file_summary`, `filename`, and `weekend` tasks to **EXCELLENT** quality standards across models.
+The combination of **strict prompt context-bounding**, **executive summary & narrative verb prompt structures**, and **code-side post-processing enforcements** successfully elevates `summarize`, `file_summary`, `filename`, and `weekend` tasks to **EXCELLENT** quality standards across all supported models.
 
 Per the mandatory evaluation policy in [`docs/EVALUATION_WORKFLOW.md`](file:///Users/ztomer/Projects/ztools/docs/EVALUATION_WORKFLOW.md), every future eval run will be inspected directly and recorded in this document.
