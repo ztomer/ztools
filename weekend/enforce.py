@@ -26,6 +26,9 @@ __all__ = [
     "INDOOR_MARKERS",
     "parse_any_date",
     "window_overlap",
+    "flag_constant_columns",
+    "CONSTANT_COLUMN_FIELDS",
+    "PROMPT_CONSTANTS",
 ]
 
 # Venue words that settle indoor/outdoor without consulting a forecast. Kept
@@ -331,3 +334,85 @@ def window_overlap(item: dict, start: date, end: date):
     if last < first:
         first, last = last, first
     return not (last < start or first > end)
+
+
+# Fields whose value the prompt asks the model to always supply, paired with the
+# aliases the parsed item may carry them under. These are the columns a model
+# fills mechanically when it has nothing real to say.
+CONSTANT_COLUMN_FIELDS: dict[str, tuple[str, ...]] = {
+    "Target Age(s)": ("target_ages", "age_group"),
+    "Estimated Price": ("price", "cost"),
+    "Duration": ("duration",),
+}
+
+# The values that actually shipped, filled from the instructions rather than
+# from any event. Kept as data so a fourth instance is one line, not a new
+# check -- and so the historical evidence for this class stays readable.
+PROMPT_CONSTANTS: dict[str, list[str]] = {
+    "Estimated Price": ["$18-35", "18-35"],
+    "Duration": ["2-3 hours"],
+}
+
+
+# A column of one row is trivially constant. Flagging it would be noise, and a
+# check that cries wolf on every single-row table is a check the reader learns
+# to skip.
+_MIN_ROWS_FOR_CONSTANT = 2
+
+
+def _column_value(item: dict, aliases: tuple[str, ...]) -> str:
+    for key in aliases:
+        value = item.get(key)
+        if value:
+            return str(value).strip()
+    return ""
+
+
+def flag_constant_columns(
+    items: list[dict],
+    suspect_values: dict[str, list[str]],
+) -> list[str]:
+    """Report columns that are identical on every row **and** equal to a value
+    the configuration or the prompt supplied.
+
+    **The assertion this class always wanted.** Three separate bugs shipped in
+    the same shape: `Duration` reading `2-3 hours` on every row, `Estimated
+    Price` reading `$18-35` on every row, and `Target Age(s)` reading the
+    configured family range `6-13` on every row. Each was a field the model was
+    told never to leave empty, filled from the instructions rather than from the
+    event -- and each was caught by a human noticing, which is exactly why all
+    three reached a report.
+
+    The conjunction is what makes it precise. *Constant* alone fires on a
+    genuinely uniform column (every event in one city). *Equal to a configured
+    value* alone fires on the one row that legitimately matches. Together they
+    say: this column was answered from the question.
+
+    Returns notes and **changes nothing**. A mechanically-filled column is a
+    signal that the extraction is wrong, not a reason to delete the rows --
+    dropping would trade a wrong answer for an empty one, which is how this
+    report went honest and hollow once already.
+    """
+    if len(items) < _MIN_ROWS_FOR_CONSTANT:
+        return []
+
+    notes: list[str] = []
+    for label, aliases in CONSTANT_COLUMN_FIELDS.items():
+        values = [_column_value(item, aliases) for item in items]
+        first = values[0]
+        if any(v.lower() != first.lower() for v in values[1:]):
+            continue
+        # `if s` is load-bearing, not defensive tidying: it is what keeps an
+        # empty column from ever matching. A blank cell is an honest "unknown",
+        # and the failure being hunted here is a column uniformly *populated*
+        # from the prompt -- flagging uniformly blank would invert the lesson
+        # that empty beats fabricated.
+        suspects = [s.strip().lower() for s in suspect_values.get(label, []) if s]
+        if first.lower() not in suspects:
+            continue
+        notes.append(
+            f"{label}: every one of {len(items)} rows reads {first!r}, which is "
+            f"the configured value -- the column was answered from the prompt, "
+            f"not from the events. Rows kept; treat the column as unverified."
+        )
+    return notes

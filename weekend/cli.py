@@ -202,9 +202,11 @@ def _enforce_constraints(fixed_acts, transient_items, fri, sun):
     than quietly shorter.
     """
     from weekend.enforce import (
+        PROMPT_CONSTANTS,
         correct_weather_labels,
         drop_events_outside_window,
         drop_excluded_places,
+        flag_constant_columns,
         reconcile_day_with_dates,
     )
 
@@ -222,6 +224,15 @@ def _enforce_constraints(fixed_acts, transient_items, fri, sun):
     notes += n
     transient_items, n = correct_weather_labels(transient_items)
     notes += n
+
+    # Runs LAST, over what survived: a column can only be judged constant once
+    # the rows are final. It reports and changes nothing -- see the docstring on
+    # why a mechanically-filled column must not become a drop.
+    # The configured family range is the one suspect that is not a literal: it
+    # is what 5.2 filled every Target Age(s) cell with.
+    suspects = {**PROMPT_CONSTANTS, "Target Age(s)": [AGE_RANGE]}
+    notes += flag_constant_columns(fixed_acts, suspects)
+    notes += flag_constant_columns(transient_items, suspects)
 
     for note in notes:
         print_step(note)
