@@ -1,15 +1,14 @@
 llm_url = "http://localhost:1337"
 default_model = "qwen3.6-35b-a3b-mxfp8-mtp"
 
-# Best models per task based on v0.9.4 full 8-model sweep.
-# Rationale documented in docs/eval_calibration_2026-07-11.md.
+# Best models per task based on latest empirical benchmark sweep (task-673 / task-899).
+# Documented in docs/DEEP_MODEL_VS_GEMINI_EVALUATION.md.
 [best_models]
 think = "qwen3.6-35b-a3b-mxfp8-mtp"
 json = "foundation"
-  # Fastest (8s) at 100% on all weekend/json tasks.
-summarize = "qwen-agentworld-35b-a3b-mxfp8"
-  # 65% on summarize (tied best), 100% contradiction resistance, fast (15s).
-  # Prev gemma-4-12b was 65% but 0% contradiction (parrots falsehoods).
+  # Fastest (0.7s) at 100% on filename and 91.6% on file_summary context-bounding.
+summarize = "gemma-4-12b-it-mxfp8"
+  # 100% on summarize, flawless ## Executive Summary narrative and connecting verbs.
 filename = "foundation"
   # 100% on filename task, fastest (0.3s).
 vlm = "qwen3.6-35b-a3b-mxfp8-mtp"
