@@ -135,7 +135,7 @@ def is_valid_list_item(item: Any) -> bool:
         return bool(item.strip())
     elif isinstance(item, dict):
         valid_fields = ["name", "activity", "event", "title", "place", "path", "desc"]
-        return any(item.get(field) for field in valid_fields) or bool(item)
+        return any(item.get(field) for field in valid_fields)
     return False
 
 
