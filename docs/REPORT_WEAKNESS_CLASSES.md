@@ -53,7 +53,7 @@ all (C2) and the prompt orders the model to emit `"2-3 hours"` (C4).
 | C1 | `SILENT-TEMPLATE-SUBSTITUTION-FAILURE` | `wk` | **FIXED** — shared renderer, raises |
 | C2 | `DATE-DROPPED-AT-THE-LLM-BOUNDARY` | `tw` + `wk` | **C2b FIXED** (schema+renderer); **C2a OPEN** (`tw`) |
 | C3 | `NO-RECENCY-FILTER` | `wk` | **PARTIAL** — dated rows filtered; undated are C7 |
-| C4 | `MANDATED-PLACEHOLDER` | `wk` | **FIXED** — prompts no longer order constants |
+| C4 | `MANDATED-PLACEHOLDER` | `wk` | **FIXED** — prompts no longer order constants; recurrence detected by `flag_constant_columns` (2026-08-04) |
 | C5 | `UNVERIFIED-SEMANTIC-LABEL` | `wk` | **FIXED** — corrected in code, clear-cut cases |
 | C6 | `PROVENANCE-LABEL-NOT-BACKED-BY-DATA` | `wk` | **FIXED** — heading renamed to Fit Score |
 | C7 | `CLASSIFICATION-BY-QUERY-PROVENANCE` | `wk` | **OPEN** — now visible as a blank date |
@@ -243,6 +243,31 @@ information-free while the renderer still prints it as fact.
 
 **Failing case:** `report_class_cases.py::C4_no_column_is_constant_across_all_rows` — a
 non-key column whose value is identical on every row is a fabricated default, not data.
+
+**Detector added 2026-08-04** (`enforce.flag_constant_columns`, PENDING 5.3). Removing the
+constants from the prompts stopped the *cause*; nothing yet detected a *recurrence*, and this
+class shipped three separate times — `duration` = `2-3 hours`, `price` = `$18-35`, and
+`target_ages` = the configured family range — each caught only because a human happened to
+read the table.
+
+The check fires when a column is constant across **>=2 rows** *and* equal to a configured
+value. The conjunction is what makes it precise: *constant* alone fires on a genuinely
+uniform column (every event in one city), and *equal to a configured value* alone fires on
+the one row that legitimately matches. Together they say the column was answered from the
+question rather than from the events.
+
+It **reports and changes nothing**. A mechanically-filled column means the extraction is
+wrong, not that the rows should go — dropping would trade a wrong answer for an empty one,
+which is how `wk` went honest and hollow once already. A test asserts the input is not
+mutated. The shipped values live in `PROMPT_CONSTANTS` as data, so a fourth instance is one
+line rather than a new check.
+
+Two things the mutation pass changed: a single row is trivially "constant", so the check
+needs two or it cries wolf on every one-row table; and an emptiness guard written first was
+**provably dead** — the `if s` filter on the suspects list already blocked blank columns, so
+no mutation of the guard could redden a test. It was removed rather than kept unpinnable, and
+the first empty-cells test had been passing for the wrong reason — the exact habit this class
+is about.
 
 **Class-level fix:** drop `MANDATORY default values` and `Never leave any field empty` from
 every prompt; make the schema's optional fields genuinely optional; render a missing value as
