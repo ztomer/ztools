@@ -81,9 +81,9 @@ venue = "location"
 [models."gemma-4-e2b-it-8bit".prompts]
 weekend_transient = """
 EXACT JSON OUTPUT REQUIRED. No text before or after.
-Example: [{"name":"Spring Festival","location":"Central Park","target_ages":"3-7","price":"$25","weather":"outdoor","day":"Saturday","duration":"2 hours"}]
+Schema: [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str", "day": "str"}]
 
-Output exactly in that format. No explanations.
+Output ONLY JSON. Copy values from source only; if not stated output "". No explanations.
 Events for {date_range} in {location}. Kids ages {age_range}.
 """
 
