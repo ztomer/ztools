@@ -13,7 +13,7 @@ description = "weekend planner: scrape, filter to the home region, draft with a 
 # A failure here most often means Osaurus is not serving: a wedged server
 # answers /v1/models instantly while serving nothing (see PENDING 5.3).
 command = "uv run --frozen wk"
-schedule = "weekly on thu at 18:00"
+schedule = "weekly on mon at 08:00"
 # A full run scrapes the web and drives a 35B model; the 120s default would
 # kill it and report a false failure.
 timeout_ms = 1800000
