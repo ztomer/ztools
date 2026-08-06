@@ -3,7 +3,6 @@
 import json
 
 import pytest
-
 from lib.quality_models import TestCase
 
 

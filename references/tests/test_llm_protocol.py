@@ -3,7 +3,6 @@
 from unittest.mock import patch
 
 import pytest
-
 from lib.llm.protocol import (
     GenericClient,
     MlxClient,

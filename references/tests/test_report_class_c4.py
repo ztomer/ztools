@@ -11,7 +11,6 @@ See docs/REPORT_WEAKNESS_CLASSES.md C4 / C17.
 from pathlib import Path
 
 import pytest
-
 from eval import report_classes as rc
 
 

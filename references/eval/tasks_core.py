@@ -7,23 +7,6 @@ _extract_items_from_text helper.
 import re
 from typing import Dict, List
 
-from eval.tasks_prompts import (
-    CONTRADICTION_PHRASE,
-    FALSEHOOD_PHRASES,
-    FILE_SUMMARY_PROMPT,
-    FILE_SUMMARY_PROMPT_MIXED,
-    IMAGE_RENAME_PROMPT,
-    IMAGE_RENAME_PROMPT_MIXED,
-    KEY_FACTS,
-    RENAME_PROMPT,
-    RENAME_PROMPT_MIXED,
-    TWITTER_PROMPT,
-    TWITTER_PROMPT_ACCURACY,
-    TWITTER_PROMPT_CONTRADICTION,
-    TWITTER_PROMPT_MIXED,
-    WEEKEND_USR_FIXED_MIXED,
-    WEEKEND_USR_TRANSIENT_MIXED,
-)
 from lib.eval_data import (
     WEEKEND_SYS_FIXED,
     WEEKEND_SYS_TRANSIENT,
@@ -46,6 +29,24 @@ from lib.validators.text_validator import (
     validate_no_leak,
     validate_strict_schema,
     validate_summary,
+)
+
+from eval.tasks_prompts import (
+    CONTRADICTION_PHRASE,
+    FALSEHOOD_PHRASES,
+    FILE_SUMMARY_PROMPT,
+    FILE_SUMMARY_PROMPT_MIXED,
+    IMAGE_RENAME_PROMPT,
+    IMAGE_RENAME_PROMPT_MIXED,
+    KEY_FACTS,
+    RENAME_PROMPT,
+    RENAME_PROMPT_MIXED,
+    TWITTER_PROMPT,
+    TWITTER_PROMPT_ACCURACY,
+    TWITTER_PROMPT_CONTRADICTION,
+    TWITTER_PROMPT_MIXED,
+    WEEKEND_USR_FIXED_MIXED,
+    WEEKEND_USR_TRANSIENT_MIXED,
 )
 
 

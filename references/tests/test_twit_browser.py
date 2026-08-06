@@ -3,7 +3,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from twitter.browser import parse_tweets_from_response
 
 # A guest cookie set plus the session token, matching what a signed-in Chrome

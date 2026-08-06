@@ -8,7 +8,6 @@ class TestPrintHelpers:
         from io import StringIO
 
         from rich.console import Console
-
         from weekend.output import print_header
 
         fake_console = Console(
@@ -24,7 +23,6 @@ class TestPrintHelpers:
         from io import StringIO
 
         from rich.console import Console
-
         from weekend.output import print_step
 
         fake_console = Console(
@@ -39,7 +37,6 @@ class TestPrintHelpers:
         from io import StringIO
 
         from rich.console import Console
-
         from weekend.output import print_info
 
         fake_console = Console(
@@ -55,7 +52,6 @@ class TestPrintHelpers:
         from io import StringIO
 
         from rich.console import Console
-
         from weekend.output import print_warning
 
         fake_console = Console(
@@ -70,7 +66,6 @@ class TestPrintHelpers:
         from io import StringIO
 
         from rich.console import Console
-
         from weekend.output import print_summary
 
         fake_console = Console(
@@ -360,7 +355,6 @@ class TestPrintToCli:
         from io import StringIO
 
         from rich.console import Console
-
         from weekend.output import print_to_cli
 
         fake_console = Console(

@@ -1,8 +1,8 @@
+from lib.tui import STEP, WARN, console, debug_print
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.table import Table
 
-from lib.tui import STEP, WARN, console, debug_print
 from weekend.config import AGE_RANGE
 from weekend.llm import fetch_scores_for_items
 

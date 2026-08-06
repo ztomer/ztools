@@ -4,8 +4,9 @@ Failure diagnosis module for model evaluation.
 Classifies WHY a model result failed.
 """
 
-from eval.validate import safe_content
 from lib.validators_lib import has_item_details
+
+from eval.validate import safe_content
 
 FAIL_INFRA = "INFRA"
 FAIL_TIMEOUT = "TIMEOUT"

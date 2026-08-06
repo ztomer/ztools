@@ -3,23 +3,23 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from PIL import Image
-from textual.containers import Horizontal
-from textual.widgets import Button, Collapsible, Label, ListItem, Markdown
-
 import lib.llm.client as llm_client
 import lib.osaurus_lib as osaurus_lib
 from lib.llm.client import get_models, is_server_running
 from lib.quality_entry import compare_to_baseline, get_dimension_weights, load_baseline
 from lib.quality_models import Score, ScoreCard
+from PIL import Image
 from rename.cli import image_extensions, rename_image
-from tui.app_views import _tool_default_model
-from tui.lib import ICON_OK, ICON_WARN
+from textual.containers import Horizontal
+from textual.widgets import Button, Collapsible, Label, ListItem, Markdown
 from twitter.browser import collect_tweets_via_browser
 from twitter.summarize import summarize_with_llm
 from weekend.cli import _fetch_data, _parse_fixed, _parse_transient
 from weekend.llm import generate_weekend_plan
 from weekend.output import build_markdown_tables
+
+from tui.app_views import _tool_default_model
+from tui.lib import ICON_OK, ICON_WARN
 
 
 def _collect_images(directory: Path) -> list[Path]:

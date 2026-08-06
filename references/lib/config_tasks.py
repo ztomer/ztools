@@ -84,6 +84,7 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
         return {}
     tasks = {}
     from eval.validate import validate_file_summary
+
     from lib.validators_lib import validate_detailed_json, validate_filename, validate_summary
 
     if Task.WEEKEND_FIXED.value in prompts:

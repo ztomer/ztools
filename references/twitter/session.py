@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 from lib.tui import OK, STEP, WARN
+
 from twitter.browser_launch import launch_camoufox_persistent
 from twitter.cookies import SESSION_COOKIE_NAME
 

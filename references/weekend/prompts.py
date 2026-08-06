@@ -1,6 +1,7 @@
 from lib.config import Task, get_model_prompt
 from lib.prompt_render import POSITIONAL_SLOT, render_prompt
 from lib.tui import debug_print
+
 from weekend.config import AGE_RANGE, CITY, DATES_STR, EXCLUDE_PLACES, REGION
 
 

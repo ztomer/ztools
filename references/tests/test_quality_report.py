@@ -4,7 +4,6 @@ import json
 from unittest.mock import patch
 
 import pytest
-
 from lib.quality_models import Score, ScoreCard
 
 

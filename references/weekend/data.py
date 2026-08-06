@@ -6,8 +6,8 @@ import time
 
 import requests
 from ddgs import DDGS
-
 from lib.tui import STEP, WARN
+
 from weekend.config import CITY, LATITUDE, LONGITUDE, REGION, TIMEZONE
 
 # HTTP request defaults

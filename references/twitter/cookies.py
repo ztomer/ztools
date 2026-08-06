@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 
 from lib.tui import WARN
+
 from twitter.cookies_firefox import firefox_profile_dbs, read_firefox_cookies
 
 try:

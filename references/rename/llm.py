@@ -10,13 +10,13 @@ from pathlib import Path
 from typing import Optional
 
 import requests
-
 from lib.config import Task, get_filename_models, get_model_prompt
 from lib.config_toml import load_config
 from lib.llm.constants import API_CHAT
 from lib.logging_config import get_logger
 from lib.mlx_lib import call_mlx, find_any_working_mlx_model, find_mlx_model, process_mlx_content
 from lib.tui import FAIL
+
 from rename.helpers import _strip_instruction_prefix
 
 logger = get_logger("rename.llm")

@@ -8,9 +8,8 @@ long-running loop can unwind and keep its partial results.
 import signal
 from unittest.mock import MagicMock
 
-import pytest
-
 import lib.signal_handling as sig
+import pytest
 
 
 @pytest.fixture(autouse=True)

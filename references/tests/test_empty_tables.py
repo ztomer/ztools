@@ -1,5 +1,4 @@
 import pytest
-
 from weekend.llm import normalize_llm_items
 from weekend.output import (
     build_markdown_tables,

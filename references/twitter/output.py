@@ -12,6 +12,7 @@ from pathlib import Path
 
 from lib.config_toml import load_config
 from lib.tui import STEP, WARN
+
 from twitter.provenance import provenance_of
 
 _TWITTER_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "twitter.toml"

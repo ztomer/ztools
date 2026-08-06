@@ -14,6 +14,7 @@ from lib.osaurus_models import FALLBACK_MODEL
 from lib.osaurus_server import check_server_or_die
 from lib.signal_handling import setup_signals
 from lib.tui import STEP, WARN, debug_print
+
 from weekend.config import (
     AGE_RANGE,
     CHILDREN,

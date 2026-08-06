@@ -104,7 +104,6 @@ class TestClient:
 
     def test_call_timeout(self, mock_llm):
         import requests
-
         from lib.llm.client import call
 
         with patch("lib.llm.client.requests.Session") as mock_session:
@@ -116,7 +115,6 @@ class TestClient:
 
     def test_call_connection_error(self, mock_llm):
         import requests
-
         from lib.llm.client import call
 
         with patch("lib.llm.client.requests.Session") as mock_session:

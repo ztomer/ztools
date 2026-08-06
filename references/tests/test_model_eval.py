@@ -3,9 +3,8 @@
 from io import StringIO
 from unittest.mock import MagicMock, patch
 
-from rich.console import Console
-
 import eval
+from rich.console import Console
 
 
 def _capture_console():

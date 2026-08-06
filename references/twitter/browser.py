@@ -20,6 +20,7 @@ except Exception:
 from lib.config_toml import load_config
 from lib.signal_handling import GracefulShutdown, is_shutdown_requested
 from lib.tui import STEP, WARN
+
 from twitter.browser_launch import (
     BACKEND_CAMOUFOX,
     BACKEND_CHROMIUM,

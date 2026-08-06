@@ -6,10 +6,9 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from PIL import Image
-
 from lib.config_toml import load_config
 from lib.tui import FAIL
+from PIL import Image
 
 # Load tesseract path from rename config, fall back to Homebrew default
 _RENAME_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "rename.toml"

@@ -10,9 +10,8 @@ import statistics
 import time
 from pathlib import Path
 
-from rich.table import Table
-
 from lib.tui import STEP, console
+from rich.table import Table
 
 
 def _get_eval_dir() -> Path:

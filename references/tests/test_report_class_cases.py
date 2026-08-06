@@ -24,7 +24,6 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-
 from eval import report_classes as rc
 
 FIXTURES = Path(__file__).parent / "fixtures" / "reports"

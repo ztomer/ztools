@@ -21,6 +21,17 @@ import sys
 import time
 from pathlib import Path
 
+from lib import init_config
+from lib.config import build_tasks_from_model, get_model_prompts_all
+from lib.llm.constants import API_TAGS, DEFAULT_HOST, DEFAULT_PORT
+from lib.osaurus_lib import (
+    call,
+    get_models,
+    is_server_running,
+)
+from lib.signal_handling import setup_signals
+from lib.tui import FAIL, STEP, WARN, console
+
 from eval.failures import (
     FAIL_CONTENT,
     FAIL_FORMAT,
@@ -73,16 +84,6 @@ from eval.tasks_core import (
     _extract_items_from_text,
 )
 from eval.validate import safe_content, validate_file_summary
-from lib import init_config
-from lib.config import build_tasks_from_model, get_model_prompts_all
-from lib.llm.constants import API_TAGS, DEFAULT_HOST, DEFAULT_PORT
-from lib.osaurus_lib import (
-    call,
-    get_models,
-    is_server_running,
-)
-from lib.signal_handling import setup_signals
-from lib.tui import FAIL, STEP, WARN, console
 
 __all__ = [
     "TASKS",

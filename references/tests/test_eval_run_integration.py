@@ -411,9 +411,8 @@ class TestQualityResultsToEvalFormat:
         """Lines 76-83: debug=True, weekend task, with items and source - prints source matching details."""
         from io import StringIO
 
-        from rich.console import Console
-
         from eval.run import _validate_result
+        from rich.console import Console
 
         fake_console = Console(file=StringIO(), force_terminal=False, width=200)
         import eval.run as er
@@ -708,9 +707,8 @@ class TestRunEvalAllBranches:
         """Lines 77-83: weekend task with items and source - exercises debug source matching."""
         from io import StringIO
 
-        from rich.console import Console
-
         import eval.run as er
+        from rich.console import Console
 
         fake_console = Console(file=StringIO(), force_terminal=False, width=200)
         # Set response with parsed=None to ensure we go through content path
@@ -736,10 +734,9 @@ class TestRunEvalAllBranches:
         """Line 84: when unmatched item is a dict (not a string) - uses dict path."""
         from io import StringIO
 
-        from rich.console import Console
-
         import eval.run as er
         from eval.run import _validate_result
+        from rich.console import Console
 
         fake_console = Console(file=StringIO(), force_terminal=False, width=200)
 

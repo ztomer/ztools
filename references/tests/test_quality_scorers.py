@@ -1,7 +1,6 @@
 """Tests for lib.quality_scorers - all scoring functions."""
 
 import pytest
-
 from lib.quality_models import TestCase
 
 

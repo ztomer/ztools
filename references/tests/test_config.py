@@ -1,6 +1,5 @@
 # Tests for config module
 import pytest
-
 from lib.config import (
     clear_model_config_cache,
     get_model_field_mapping,

@@ -15,6 +15,9 @@ import sys
 import time
 from typing import List, Optional, Tuple
 
+from lib.config import Task, get_model_prompt
+from lib.osaurus_lib import call as llm_call
+
 from eval.benchmark_output import (
     print_case_result,
     print_cross_model_comparison,
@@ -22,8 +25,6 @@ from eval.benchmark_output import (
     print_model_header,
     print_model_summary,
 )
-from lib.config import Task, get_model_prompt
-from lib.osaurus_lib import call as llm_call
 
 # Timeout for model queries (seconds)
 BENCHMARK_QUERY_TIMEOUT = 120

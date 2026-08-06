@@ -17,6 +17,7 @@ from lib.config import get_best_models
 from lib.osaurus_lib import check_llm_availability
 from lib.signal_handling import setup_signals
 from lib.tui import FAIL, STEP
+
 from rename.helpers import (
     _GENERIC_BASES,
     _GENERIC_EXTENSIONS,

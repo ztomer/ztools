@@ -18,6 +18,7 @@ from lib.osaurus_lib import (
     strip_thinking,
 )
 from lib.tui import STEP, WARN, debug_print
+
 from weekend.config import OSAURUS_BASE_URL, ensure_server
 from weekend.phases import (  # noqa: F401  (re-export shim)
     draft_activities,

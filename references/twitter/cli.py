@@ -14,6 +14,7 @@ from lib.osaurus_lib import get_best_model
 from lib.osaurus_server import check_server_or_die
 from lib.signal_handling import is_shutdown_requested, setup_signals
 from lib.tui import STEP, WARN
+
 from twitter.browser import (
     collect_tweets_via_browser,
 )
@@ -93,7 +94,14 @@ def resolve_since_time(args_since: str | None, state: dict) -> datetime:
         except ValueError:
             print(f"{WARN} Cannot parse --since '{args_since}'. Using last run or 24h.")
     if "last_run" in state:
-        return datetime.fromisoformat(state["last_run"])
+        try:
+            last_run = datetime.fromisoformat(state["last_run"])
+            # If last run was less than 4 hours ago, use default 24h lookback
+            # to avoid tiny 10-second timeline windows on repeated runs.
+            if (datetime.now(timezone.utc) - last_run) > timedelta(hours=4):
+                return last_run
+        except Exception:
+            pass
     return datetime.now(timezone.utc) - timedelta(hours=24)
 
 

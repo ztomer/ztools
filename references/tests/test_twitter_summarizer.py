@@ -2,7 +2,6 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
-
 from twitter import main, parse_args, resolve_since_time
 
 
