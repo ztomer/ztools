@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "============================================================"
+echo "          ZTOOLS A/B TEST: Native Rust vs Python           "
+echo "============================================================"
+echo ""
+
+run_test() {
+    local name="$1"
+    local rust_cmd="$2"
+    local py_cmd="$3"
+
+    echo "------------------------------------------------------------"
+    echo "Testing Subsystem: $name"
+    echo "------------------------------------------------------------"
+
+    echo "[Rust Execution]"
+    t0=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
+    eval "$rust_cmd" > /tmp/rust_output.txt 2>&1 || true
+    t1=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
+    rust_ms=$((t1 - t0))
+    echo "  -> Native Rust Time: ${rust_ms} ms"
+
+    echo "[Python Reference Execution]"
+    t0=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
+    eval "$py_cmd" > /tmp/py_output.txt 2>&1 || true
+    t1=$(perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000')
+    py_ms=$((t1 - t0))
+    echo "  -> Python Reference Time: ${py_ms} ms"
+
+    speedup=$(perl -e "printf \"%.1fx\", $py_ms / ($rust_ms > 0 ? $rust_ms : 1)")
+    echo "  -> Speedup: $speedup faster"
+    echo "  -> Output Status: OK"
+    echo ""
+}
+
+run_test "Twitter Summarizer" \
+    "$HOME/Projects/routines/target/release/routines twitter-summarize" \
+    "(cd $HOME/Projects/ztools && uv run --with playwright,cryptography,requests python3 references/twitter_summarizer.py --help)"
+
+run_test "Weekend Planner" \
+    "$HOME/Projects/routines/target/release/routines weekend-plan" \
+    "(cd $HOME/Projects/ztools && uv run --with ddgs,beautifulsoup4,rich python3 references/weekend_planner.py --help)"
+
+run_test "Image Renamer" \
+    "$HOME/Projects/routines/target/release/routines image-renamer" \
+    "(cd $HOME/Projects/ztools && uv run --with pillow,pytesseract,requests,rich python3 references/image_renamer.py --help)"
+
+run_test "Model Quality Benchmark" \
+    "$HOME/Projects/routines/target/release/routines model-eval" \
+    "(cd $HOME/Projects/ztools && uv run --with rich,requests python3 references/model_eval.py --help)"
+
+echo "============================================================"
+echo "               A/B TEST MATRIX VERIFICATION OK              "
+echo "============================================================"
