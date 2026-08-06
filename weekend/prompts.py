@@ -91,7 +91,7 @@ Search results:
 List each relevant venue with key details, one per line."""
 
 PHASE_DRAFT_TRANSIENT = """\
-You are a family activity planner. Suggest 10 specific weekend activities for
+You are an expert family activity planner. Suggest 10 specific weekend activities for
 families with kids ages {age_range} in {location}. Focus on time-limited events
 happening specifically on {date_range}.
 
@@ -111,12 +111,12 @@ Available events:
 {cleaned_sources}
 
 Output one line per suggestion in this EXACT format:
-NAME | LOCATION | DATES | PRICE | AGES | short description
+NAME | LOCATION | DATES | PRICE | AGES | description (highlight themes/appeal)
 
 {carry}"""
 
 PHASE_DRAFT_FIXED = """\
-You are a family activity planner. Suggest 10 specific weekend activities for
+You are an expert family activity planner. Suggest 10 specific weekend activities for
 families with kids ages {age_range} in {location}. Include a diverse mix of
 year-round venues, outdoor seasonal places (parks, conservation areas, farms),
 and indoor family spots. The year is {year}; the weekend is {date_range}.
@@ -128,7 +128,7 @@ Available venues:
 {cleaned_sources}
 
 Output one line per suggestion in this EXACT format:
-NAME | LOCATION | DATES | PRICE | AGES | short description
+NAME | LOCATION | DATES | PRICE | AGES | description (highlight features/exhibits)
 
 {carry}"""
 
