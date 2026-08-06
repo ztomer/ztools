@@ -437,3 +437,31 @@ class TestSummarizeWithLlm:
                 self._make_tweets(), "http://localhost:1337", "m1"
             )
         assert "Topic" in result
+
+
+class TestDeduplicateTweets:
+    def test_removes_duplicate_retweets_and_crossposts(self):
+        import twitter.summarize as twit_summarize
+
+        tweets = [
+            {
+                "screen_name": "user1",
+                "text": "Breaking news: Major release of new AI model announced today!",
+                "created_at": datetime(2024, 1, 1, 12, 0),
+            },
+            {
+                "screen_name": "user2",
+                "text": "RT @user1: Breaking news: Major release of new AI model announced today!",
+                "created_at": datetime(2024, 1, 1, 12, 5),
+            },
+            {
+                "screen_name": "user3",
+                "text": "Completely different story about local weather.",
+                "created_at": datetime(2024, 1, 1, 12, 10),
+            },
+        ]
+        deduped = twit_summarize.deduplicate_tweets(tweets)
+        assert len(deduped) == 2
+        assert deduped[0]["screen_name"] == "user1"
+        assert deduped[1]["screen_name"] == "user3"
+

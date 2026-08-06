@@ -135,9 +135,32 @@ def _check_summary_quality(summary: str) -> tuple[list[str], bool]:
     return (warnings, critical)
 
 
+def deduplicate_tweets(tweets: list[dict]) -> list[dict]:
+    """Deduplicate tweets by normalized text content and RT signatures."""
+    seen_sigs: set[str] = set()
+    deduped: list[dict] = []
+    for t in tweets:
+        text = t.get("text", "").strip()
+        if not text:
+            continue
+        clean_text = re.sub(r"^RT\s+@\w+:\s*", "", text, flags=re.IGNORECASE)
+        clean_text = re.sub(r"https?://\S+", "", clean_text)
+        norm = " ".join(re.sub(r"[^\w\s]", "", clean_text.lower()).split())
+        if len(norm) < 15:
+            deduped.append(t)
+            continue
+        sig = norm[:90]
+        if sig in seen_sigs:
+            continue
+        seen_sigs.add(sig)
+        deduped.append(t)
+    return deduped
+
+
 def _build_prompt(
     tweets: list[dict], max_chars: int, for_mlx: bool = False, model: str = None
 ) -> tuple[str, int]:
+    tweets = deduplicate_tweets(tweets)
     budget = max_chars - BUDGET_MARGIN
     lines = []
     used = 0
@@ -160,7 +183,7 @@ def _build_prompt(
             replace_whitespace=False,
         )
         if used + len(line) + 1 > budget:
-            break
+            continue
         lines.append(line)
         used += len(line) + 1
     lines.reverse()
@@ -185,6 +208,7 @@ def _build_prompt(
         prompt = f"{prompt_template}\n<timeline>\n{timeline}\n</timeline>"
 
     return prompt, len(lines)
+
 
 
 def _estimate_timeout(prompt: str, model: str = None) -> int:
