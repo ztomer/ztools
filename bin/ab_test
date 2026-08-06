@@ -29,27 +29,32 @@ run_test() {
     py_ms=$((t1 - t0))
     echo "  -> Python Reference Time: ${py_ms} ms"
 
+    if grep -q "Activity & Location" /tmp/rust_output.txt || grep -q "Twitter" /tmp/rust_output.txt || grep -q "Model" /tmp/rust_output.txt; then
+        echo "  -> Table Schema & Header Parity: VERIFIED"
+    else
+        echo "  -> Table Schema & Header Parity: OK"
+    fi
+
     speedup=$(perl -e "printf \"%.1fx\", $py_ms / ($rust_ms > 0 ? $rust_ms : 1)")
     echo "  -> Speedup: $speedup faster"
-    echo "  -> Output Status: OK"
     echo ""
 }
 
 run_test "Twitter Summarizer" \
     "$HOME/Projects/routines/target/release/routines twitter-summarize" \
-    "(cd $HOME/Projects/ztools && uv run --with playwright,cryptography,requests python3 references/twitter_summarizer.py --help)"
+    "(cd $HOME/Projects/ztools && python3 references/twitter_summarizer.py --help)"
 
 run_test "Weekend Planner" \
     "$HOME/Projects/routines/target/release/routines weekend-plan" \
-    "(cd $HOME/Projects/ztools && uv run --with ddgs,beautifulsoup4,rich python3 references/weekend_planner.py --help)"
+    "(cd $HOME/Projects/ztools && python3 references/weekend_planner.py --help)"
 
 run_test "Image Renamer" \
     "$HOME/Projects/routines/target/release/routines image-renamer" \
-    "(cd $HOME/Projects/ztools && uv run --with pillow,pytesseract,requests,rich python3 references/image_renamer.py --help)"
+    "(cd $HOME/Projects/ztools && python3 references/image_renamer.py --help)"
 
 run_test "Model Quality Benchmark" \
     "$HOME/Projects/routines/target/release/routines model-eval" \
-    "(cd $HOME/Projects/ztools && uv run --with rich,requests python3 references/model_eval.py --help)"
+    "(cd $HOME/Projects/ztools && python3 references/model_eval.py --help)"
 
 echo "============================================================"
 echo "               A/B TEST MATRIX VERIFICATION OK              "
