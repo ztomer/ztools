@@ -117,10 +117,12 @@ NAME | LOCATION | DATES | PRICE | AGES | short description
 
 PHASE_DRAFT_FIXED = """\
 You are a family activity planner. Suggest 10 specific weekend activities for
-families with kids ages {age_range} in {location}. Focus on year-round venues
-and fixed-location activities. The year is {year}; the weekend is {date_range}.
+families with kids ages {age_range} in {location}. Include a diverse mix of
+year-round venues, outdoor seasonal places (parks, conservation areas, farms),
+and indoor family spots. The year is {year}; the weekend is {date_range}.
 
 Weather: {weather_condensed}
+Prefer outdoor activities when clear/warm, and indoor venues when precipitation is expected.
 
 Available venues:
 {cleaned_sources}

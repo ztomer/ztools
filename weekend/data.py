@@ -123,6 +123,34 @@ def fetch_weather(friday, sunday):
         return "Forecast: Precipitation expected (fallback due to error)."
 
 
+def _seasonal_keywords(month_name: str) -> list[str]:
+    m = (month_name or "").lower()
+    if m in ("june", "july", "august"):
+        return [
+            "summer festival fair",
+            "splash pad water park",
+            "outdoor night market",
+        ]
+    elif m in ("september", "october", "november"):
+        return [
+            "harvest festival farm pumpkin",
+            "fall fair apple picking",
+            "autumn family event",
+        ]
+    elif m in ("december", "january", "february"):
+        return [
+            "winter festival holiday lights",
+            "outdoor skating rink family",
+            "winter carnival event",
+        ]
+    else:
+        return [
+            "spring festival maple syrup",
+            "farm visit family fair",
+            "flower festival event",
+        ]
+
+
 def fetch_transient_events(dates_str, year, month_name):
     def safe_search(q, retries=FETCH_RETRIES):
         for attempt in range(retries):
@@ -137,14 +165,13 @@ def fetch_transient_events(dates_str, year, month_name):
         return []
 
     try:
-        # NOTE: no province anchor here on purpose. Probed against the real
-        # scraper: adding "Ontario" to EVENT queries degraded them (it surfaced
-        # ontario.ca forest-fire bulletins and tennis fixtures), while the same
-        # anchor clearly improved the VENUE queries below. Evidence, not symmetry.
+        seasonal = _seasonal_keywords(month_name)
+        seasonal_query = f"{{REGION}} {seasonal[0]} {{month_name}} {{year}}" if seasonal else ""
         _transient_template_str = os.environ.get(
             "WEEKEND_TRANSIENT_QUERIES",
             "{REGION} family events {month_name} {year}||"
-            "{REGION} Zoo special events {month_name} {year}||"
+            + (f"{seasonal_query}||" if seasonal_query else "")
+            + "{REGION} Zoo special events {month_name} {year}||"
             "kids activities {CITY} {month_name} {year}||"
             "{REGION} museum family programs {month_name} {year}||"
             "{CITY} community centre kids programs {month_name}",
@@ -152,6 +179,7 @@ def fetch_transient_events(dates_str, year, month_name):
         queries = [
             q.format(REGION=REGION, CITY=CITY, year=year, month_name=month_name)
             for q in _transient_template_str.split("||")
+            if q
         ]
 
         all_results = []
@@ -161,10 +189,6 @@ def fetch_transient_events(dates_str, year, month_name):
 
         corpus = _clean_search_results(all_results, "Event", max_body=MAX_BODY_LENGTH)
 
-        # Class C14 follow-up: web search for "events" returns almost nothing but
-        # directory pages. The model correctly refuses to list one as an activity,
-        # which left the plan nearly empty -- so read the events OUT of them
-        # instead of discarding the whole harvest.
         from weekend.followup import follow_aggregators
 
         followed = follow_aggregators(all_results)
@@ -179,10 +203,11 @@ def fetch_fixed_venues(year, month_name):
         _fixed_template_str = os.environ.get(
             "WEEKEND_FIXED_VENUE_QUERIES",
             "indoor play centre {CITY} {REGION} Ontario prices||"
+            "conservation area outdoor adventure {REGION} Ontario kids||"
             "trampoline park {REGION} Ontario kids||"
             "children museum {REGION} Ontario||"
             "family arcade {CITY} Ontario||"
-            "playplace {CITY} Ontario indoor kids prices",
+            "farm market heritage village {REGION} Ontario family",
         )
         queries = [
             q.format(CITY=CITY, REGION=REGION, year=year)
