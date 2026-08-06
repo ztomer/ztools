@@ -242,26 +242,24 @@ _MONTHS = (
     "november december"
 ).split()
 
+_ISO_DATE_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
+_TEXT_DATE_RE = re.compile(
+    r"\b(" + "|".join(mo[:3] for mo in _MONTHS) + r")[a-z]*\.?\s+(\d{1,2})\b",
+    re.IGNORECASE,
+)
+
 
 def _parse_any_date(value: str, year: int) -> date | None:
     value = (value or "").strip()
     if not value:
         return None
-    m = re.search(r"(\d{4})-(\d{2})-(\d{2})", value)
+    m = _ISO_DATE_RE.search(value)
     if m:
         try:
             return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
         except ValueError:
             return None
-    # Match on the three-letter stem so scraped abbreviations parse too:
-    # "Aug 9", "Aug. 9" and "August 9" are all the same date, and event listings
-    # use all three. Requiring the full name silently dropped the abbreviated
-    # ones, which is a date lost at exactly the boundary class C2 is about.
-    m = re.search(
-        r"\b(" + "|".join(mo[:3] for mo in _MONTHS) + r")[a-z]*\.?\s+(\d{1,2})\b",
-        value,
-        re.IGNORECASE,
-    )
+    m = _TEXT_DATE_RE.search(value)
     if m:
         try:
             month = next(
