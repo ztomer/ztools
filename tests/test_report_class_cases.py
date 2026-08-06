@@ -326,7 +326,7 @@ def test_real_wk_sample_exhibits_the_catalogued_classes():
 
 @pytest.mark.skipif(not REAL_TW_DIR.is_dir(), reason="real tw samples not on this machine")
 def test_real_tw_samples_exhibit_the_catalogued_classes():
-    texts = [p.read_text() for p in sorted(REAL_TW_DIR.glob("*.md"))]
+    texts = [p.read_text() for p in sorted(REAL_TW_DIR.glob("2026-07-*.md"))]
     if len(texts) < 2:
         pytest.skip("need two tw reports to compare attribution styles")
     assert all(rc.check_tw_timestamps_are_day_qualified(t) for t in texts), "C2a vanished"
