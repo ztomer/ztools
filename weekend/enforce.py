@@ -143,27 +143,54 @@ def _item_text(item: dict) -> str:
     return normalize_for_match(f"{name} {loc}")
 
 
-def drop_excluded_places(items: list[dict], excluded: list[str]) -> tuple[list[dict], list[str]]:
-    """C8. Remove rows matching the user's `exclude_places`.
+SEASONAL_EVENT_MARKERS = (
+    "festival",
+    "fair",
+    "lumina",
+    "spooktacular",
+    "lights",
+    "exhibit",
+    "market",
+    "harvest",
+    "show",
+    "carnival",
+    "spectacular",
+    "concert",
+    "expo",
+    "pumpkin",
+    "maple",
+)
 
-    The exclusion list previously reached nothing: it was nested under
-    [[children]] in the TOML so it parsed as empty, and no prompt template ever
-    interpolated `{exclusions}` anyway. Enforcing it here means it holds
-    regardless of what any model does with the instruction.
 
-    Matching is `matches_exclusion` (token-subset). An earlier version used
-    contiguous substring matching and this docstring told the reader to "add the
-    variant to exclude_places if one slips through" -- an escape hatch that
-    turned a matcher defect into unbounded manual config maintenance and let an
-    excluded venue ship from two consecutive real runs. Fix the matcher, not the
-    config.
+def is_seasonal_event_exception(item: dict, hit_exclusion: str) -> bool:
+    """Check if an item at an excluded venue is a specific seasonal event exception.
+
+    Generic visits to excluded places (e.g. 'Toronto Zoo') are dropped. But specific,
+    time-limited seasonal events/exhibits (e.g. 'Terra Lumina at Toronto Zoo' or
+    'Royal Agricultural Winter Fair at Exhibition Place') are allowed as exceptions.
     """
+    name = (item.get("name") or item.get("title") or "").strip()
+    name_norm = normalize_for_match(name)
+    hit_norm = normalize_for_match(hit_exclusion)
+
+    has_event_marker = any(m in name_norm for m in SEASONAL_EVENT_MARKERS)
+    is_more_specific = len(name_norm.split()) > len(hit_norm.split())
+
+    return has_event_marker and is_more_specific
+
+
+def drop_excluded_places(items: list[dict], excluded: list[str]) -> tuple[list[dict], list[str]]:
+    """C8. Remove rows matching the user's `exclude_places` unless it is a seasonal event."""
     kept, notes = [], []
     for item in items:
         haystack = _item_text(item)
         hit = next((p for p in excluded if matches_exclusion(p, haystack)), None)
         if hit:
-            notes.append(f"dropped {item.get('name', '?')!r} — matches excluded place {hit!r}")
+            if is_seasonal_event_exception(item, hit):
+                notes.append(f"kept seasonal event {item.get('name', '?')!r} at {hit!r}")
+                kept.append(item)
+            else:
+                notes.append(f"dropped {item.get('name', '?')!r} — matches excluded place {hit!r}")
         else:
             kept.append(item)
     return kept, notes

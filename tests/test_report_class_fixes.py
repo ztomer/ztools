@@ -123,6 +123,18 @@ def test_C8_current_pipeline_drops_excluded_places():
     assert rc.check_wk_no_excluded_place(_render_current(kept), _declared_exclusions()) == []
 
 
+def test_C8_seasonal_event_exception_allowed():
+    from weekend.enforce import drop_excluded_places
+
+    items = _post_fix_items() + [
+        {"name": "Terra Lumina Light Festival at Toronto Zoo", "location": "Toronto Zoo",
+         "weather": "outdoor", "start_date": "2026-08-08"}
+    ]
+    kept, notes = drop_excluded_places(items, _declared_exclusions())
+    assert any("kept seasonal event" in n for n in notes)
+    assert any("Terra Lumina" in item.get("name", "") for item in kept)
+
+
 def test_C3_current_pipeline_drops_a_dated_event_outside_the_window():
     from datetime import date as _date
 
