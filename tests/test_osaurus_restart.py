@@ -186,7 +186,7 @@ def test_process_exists_reads_pgrep_output(srv):
         assert srv._osaurus_process_exists() is False
 
 
-def test_restart_succeeds_on_the_second_launch(srv):
+def test_restart_succeeds_on_the_second_launch(srv, tmp_path):
     """The real failure mode: LaunchServices swallows a relaunch issued while the
     old instance is still terminating. Asking again must fix it -- quitting again
     must not be what fixes it."""
@@ -195,7 +195,8 @@ def test_restart_succeeds_on_the_second_launch(srv):
         patch.object(srv, "_kill_osaurus") as kill,
         patch.object(srv, "_wait_until_down", lambda *a, **k: True),
         patch.object(srv, "is_server_running", lambda: next(states, True)),
-        patch.object(srv.subprocess, "Popen", lambda *a, **k: None),
+        patch.object(srv, "PID_FILE", tmp_path / "osaurus.pid"),
+        patch.object(srv.subprocess, "Popen", lambda *a, **k: type("P", (), {"pid": 99})()),
         patch.object(srv.time, "sleep", lambda _: None),
     ):
         assert srv.restart_server(app_path="/Applications/osaurus.app", wait=1) is True
