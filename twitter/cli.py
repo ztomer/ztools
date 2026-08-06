@@ -115,7 +115,7 @@ def main() -> None:
     if args.clean:
         clean_folder(output_dir)
 
-    check_server_or_die(args.host)
+    check_server_or_die(args.host, DEFAULT_PORT, model)
 
     state = load_state()
     since_time = resolve_since_time(args.since, state)

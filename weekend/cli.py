@@ -395,10 +395,12 @@ def main(args=None):
         os.environ["OLLAMA_MODEL"] = FALLBACK_MODEL
         print_header("Using model", f"{FALLBACK_MODEL} (on-device Apple Foundation Model)")
     else:
-        check_server_or_die(os.environ.get("OLLAMA_BASE_URL", OSAURUS_BASE_URL))
         if getattr(args, "model", None):
             os.environ["OLLAMA_MODEL"] = args.model
         model = os.environ.get("OLLAMA_MODEL") or get_best_model(Task.JSON)
+        check_server_or_die(
+            os.environ.get("OLLAMA_BASE_URL", OSAURUS_BASE_URL), DEFAULT_PORT, model
+        )
         print_header("Using model", model)
 
     start_time = time.time()

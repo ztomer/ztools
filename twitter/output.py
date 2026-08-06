@@ -99,10 +99,19 @@ def write_markdown(
     prov = provenance_of(summary)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
+    # Class C11: state how many tweets the model actually processed, not just
+    # how many were fetched. Budget truncation is silent unless we say so here.
+    processed = getattr(summary, "processed_count", None)
+    fetched = len(tweets)
+    if processed is not None and processed < fetched:
+        tweets_line = f"{fetched} fetched, {processed} processed from {unique_authors} accounts"
+    else:
+        tweets_line = f"{fetched} from {unique_authors} accounts"
+
     content = f"""# Twitter Timeline Summary
 
 **Period:** {period_str}
-**Tweets:** {len(tweets)} from {unique_authors} accounts
+**Tweets:** {tweets_line}
 {prov.banner()}
 
 ## Summary

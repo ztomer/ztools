@@ -207,7 +207,7 @@ def _summarize_with_model(
     ctx_chars: int,
     models: list[str],
     try_model: str,
-) -> Optional[str]:
+) -> Optional[tuple[str, int]]:
     if models and try_model not in models:
         return None
     ctx_chars = _ctx_chars_for_model(try_model)
@@ -230,14 +230,14 @@ def _summarize_with_model(
                     for w in warnings:
                         print(f"   {WARN} {w}")
                     return None
-                return merge_thinking_with_summary(thinking, cleaned)
+                return merge_thinking_with_summary(thinking, cleaned), n
             cleaned = strip_thinking(cleaned)
             warnings, critical = _check_summary_quality(cleaned)
             if critical:
                 for w in warnings:
                     print(f"   {WARN} {w}")
                 return None
-            return cleaned
+            return cleaned, n
         elif result and "error" in result:
             print(f"{WARN} {try_model} error: {result['error']}")
     except Exception as e:
@@ -247,12 +247,12 @@ def _summarize_with_model(
 
 def _restart_and_retry_server(
     tweets: list[dict], base_url: str, api_key: str, target_model: str
-) -> Optional[str]:
+) -> Optional[tuple[str, int]]:
     """Restart Osaurus and retry the server once.
 
     The installed models only run in Osaurus's mlx-swift runtime, so restarting
     the server and retrying is the genuine last resort (a timeout/500 is often a
-    wedged server, not a bad model). Returns a summary or None.
+    wedged server, not a bad model). Returns a (summary, processed_count) or None.
     """
     print(f"{STEP} Restarting Osaurus server and retrying {target_model} ...")
     if not restart_server():
@@ -266,7 +266,7 @@ def _restart_and_retry_server(
     return _summarize_with_model(tweets, base_url, api_key, ctx_chars, models, retry_model)
 
 
-def _direct_mlx_fallback(tweets: list[dict]) -> Optional[str]:
+def _direct_mlx_fallback(tweets: list[dict]) -> Optional[tuple[str, int]]:
     """Try Python-loadable MLX models directly, mlx-vlm first then stock mlx_lm.
 
     The Osaurus-installed models (Gemma4/qwen3_5_moe, MXFP8) load via `mlx-vlm`
@@ -286,9 +286,9 @@ def _direct_mlx_fallback(tweets: list[dict]) -> Optional[str]:
         if m and m not in vlm_paths
     )
     for mlx_path in vlm_paths:
-        summary = _generate_via_mlx_vlm(tweets, mlx_path)
-        if summary:
-            return summary
+        result = _generate_via_mlx_vlm(tweets, mlx_path)
+        if result:
+            return result
 
     # Stage 2: stock mlx_lm (plain-text checkpoints only).
     lm_paths = []
@@ -317,13 +317,13 @@ def _direct_mlx_fallback(tweets: list[dict]) -> Optional[str]:
             if critical:
                 print("MLX returned unusable summary, aborting.")
                 return None
-            return cleaned
+            return cleaned, n
         reason = last_mlx_error() or "unknown error"
         print(f"{WARN} MLX model {mlx_path.name} failed: {reason[:120]}")
     return None
 
 
-def _generate_via_mlx_vlm(tweets: list[dict], mlx_path: Path) -> Optional[str]:
+def _generate_via_mlx_vlm(tweets: list[dict], mlx_path: Path) -> Optional[tuple[str, int]]:
     """Generate a summary from one mlx-vlm-loadable model, or None."""
     mlx_ctx = get_mlx_context_length(mlx_path)
     mlx_prompt_chars = (mlx_ctx - OUTPUT_RESERVE_TOKENS) * CHARS_PER_TOKEN
@@ -341,7 +341,7 @@ def _generate_via_mlx_vlm(tweets: list[dict], mlx_path: Path) -> Optional[str]:
         if critical:
             print("MLX-VLM returned unusable summary, aborting.")
             return None
-        return cleaned
+        return cleaned, n
     reason = last_mlx_error() or "unknown error"
     if is_vlm_dependency_error(reason):
         print(
@@ -386,19 +386,24 @@ def summarize_with_llm(tweets: list[dict], base_url: str, model: str, api_key: s
 
     # Which tier actually answered. Recorded as the chain runs so the artifact can
     # state it -- see twitter/provenance.py (class C9).
-    seen: dict[str, object] = {"backend": "osaurus", "model": target_model, "reasons": []}
+    seen: dict[str, object] = {
+        "backend": "osaurus", "model": target_model, "reasons": [],
+        "processed_count": None,
+    }
 
-    def call_fn(m: str) -> Optional[str]:
+    def call_fn(m: str) -> Optional[tuple[str, int] | str]:
         ctx_chars = _ctx_chars_for_model(m)
         out = _summarize_with_model(tweets, base_url, api_key, ctx_chars, models, m)
         if out is not None:
             seen["backend"] = "osaurus"
             seen["model"] = m
+            if isinstance(out, (tuple, list)) and len(out) == 2:
+                seen["processed_count"] = out[1]
         elif m == target_model:
             seen["reasons"].append(f"primary model {m} returned no usable summary")
         return out
 
-    def mlx_fn() -> Optional[str]:
+    def mlx_fn() -> Optional[tuple[str, int] | str]:
         # Priority: Osaurus server first. If it is up, the server path runs it
         # (it is the runtime that produced these models and is usually warmed).
         # On failure we restart+retry the server. Only after the server is
@@ -409,11 +414,15 @@ def summarize_with_llm(tweets: list[dict], base_url: str, model: str, api_key: s
             seen["backend"] = "osaurus (after restart)"
             seen["model"] = target_model
             seen["reasons"].append("server needed a restart before it would answer")
+            if isinstance(result, (tuple, list)) and len(result) == 2:
+                seen["processed_count"] = result[1]
             return result
         result = _direct_mlx_fallback(tweets)
         if result:
             seen["backend"] = "direct mlx (on-device)"
             seen["reasons"].append("the Osaurus server was exhausted; ran the weights locally")
+            if isinstance(result, (tuple, list)) and len(result) == 2:
+                seen["processed_count"] = result[1]
         return result
 
     result = call_with_fallback(
@@ -425,6 +434,11 @@ def summarize_with_llm(tweets: list[dict], base_url: str, model: str, api_key: s
     )
 
     if result:
+        if isinstance(result, (tuple, list)) and len(result) == 2:
+            summary_text, _ = result
+        else:
+            summary_text = str(result)
+        processed_count = seen.get("processed_count")
         model_used = str(seen["model"])
         reasons = tuple(seen["reasons"])
         if str(seen["backend"]).startswith("direct mlx"):
@@ -444,7 +458,7 @@ def summarize_with_llm(tweets: list[dict], base_url: str, model: str, api_key: s
             print(f"{WARN} Degraded summary: {prov.describe()}")
             for reason in prov.reasons:
                 print(f"   {WARN} {reason}")
-        return SummaryText(result, prov)
+        return SummaryText(summary_text, prov, processed_count=processed_count)
 
     print(f"{WARN} All server models failed: {fallback_models}")
     return SummaryText(

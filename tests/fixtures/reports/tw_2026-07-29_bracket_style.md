@@ -1,7 +1,7 @@
 # Twitter Timeline Summary
 
 **Period:** 2026-07-29 16:33 → 2026-07-31 12:15 UTC
-**Tweets:** 50 from 46 accounts
+**Tweets:** 50 fetched, 42 processed from 46 accounts
 
 ## Summary
 

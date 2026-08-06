@@ -259,18 +259,14 @@ def test_C10_attribution_format_is_stable_across_reports():
     assert rc.check_tw_attribution_format_is_uniform(texts) == []
 
 
-@pytest.mark.xfail(
-    strict=False, reason="C11 COVERAGE-OVERSTATED -- latent, not reproduced; see catalogue"
-)
 def test_C11_stated_count_matches_processed_count():
-    """Non-strict on purpose: the artifact does not carry the processed count, so
-    this cannot be evaluated from a saved report. Do not fix C11 on the strength
-    of the mechanism alone -- probe a real run first."""
+    """The artifact must state the count the model actually processed, not just
+    the fetched count. Budget truncation is visible from the artifact header."""
     text = TW_BRACKET.read_text()
     assert "**Tweets:**" in text
     assert "processed" in text.lower(), (
         "report states only the fetched count; the count actually sent to the "
-        "model (twitter/summarize.py:186) never reaches the artifact"
+        "model (twitter/summarize.py) never reaches the artifact"
     )
 
 

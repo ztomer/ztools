@@ -81,10 +81,17 @@ class SummaryText(str):
     """
 
     provenance: Provenance
+    processed_count: int | None
 
-    def __new__(cls, text: str, provenance: Provenance | None = None) -> "SummaryText":
+    def __new__(
+        cls,
+        text: str,
+        provenance: Provenance | None = None,
+        processed_count: int | None = None,
+    ) -> "SummaryText":
         obj = super().__new__(cls, text)
         obj.provenance = provenance or Provenance()
+        obj.processed_count = processed_count
         return obj
 
 

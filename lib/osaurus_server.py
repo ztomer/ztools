@@ -292,17 +292,29 @@ def panic_dump(content: str) -> None:
     logger.warning(f"Dumped problematic output to {dump_file}")
 
 
-def check_server_or_die(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:
-    """Fail fast with a friendly message if the Osaurus/Ollama server is down.
+def check_server_or_die(
+    host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, model: str | None = None
+) -> None:
+    """Fail fast with a friendly message if the Osaurus/Ollama server is down or wedged.
 
     ZTools is a thin client and cannot do anything useful without a running
     server, so we surface the fix (install/start Osaurus) instead of letting the
     tool proceed into a confusing downstream crash.
+
+    If `model` is given, also runs `can_serve(model)` to catch wedged instances
+    (answering /v1/models instantly while completions hang forever).
     """
-    if is_server_running(host, port):
-        return
-    host_str = host if host.startswith("http") else f"http://{host}:{port}"
-    err(f"Osaurus server not reachable at {host_str}")
-    print("  Install: brew install --cask osaurus")
-    print("  Start:   osaurus serve &>/dev/null &   (or launch the Osaurus.app GUI)")
-    die("Start the server and retry.", code=1)
+    if not is_server_running(host, port):
+        host_str = host if host.startswith("http") else f"http://{host}:{port}"
+        err(f"Osaurus server not reachable at {host_str}")
+        print("  Install: brew install --cask osaurus")
+        print("  Start:   osaurus serve &>/dev/null &   (or launch the Osaurus.app GUI)")
+        die("Start the server and retry.", code=1)
+
+    if model:
+        ok, reason = can_serve(model)
+        if not ok:
+            logger.warning(f"Server wedged probe failed: {reason}. Attempting restart...")
+            if not restart_server():
+                err(f"Osaurus server is wedged and restart failed: {reason}")
+                die("Restart osaurus manually and retry.", code=1)
