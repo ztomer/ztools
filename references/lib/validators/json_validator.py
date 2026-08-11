@@ -15,6 +15,11 @@ from lib.validators.constants import (
     SOURCE_THRESHOLD_LOW,
     SOURCE_THRESHOLD_MED,
 )
+from lib.validators.report_defects import (
+    constant_column_ratio,
+    generic_location_ratio,
+    near_duplicate_ratio,
+)
 
 STOPWORDS = {
     "the",
@@ -373,6 +378,17 @@ def has_required_fields(item: Dict, required: List[str]) -> bool:
 REQUIRED_DETAILED_FIELDS = ["name", "location"]
 
 
+# Thresholds for the three defects above. Each is a share of rows, and each cap
+# sits below a passing score: a report with these defects is not a worse good
+# report, it is one a reader cannot use.
+GENERIC_LOCATION_LIMIT = 0.5
+GENERIC_LOCATION_MAX_SCORE = 45
+CONSTANT_COLUMN_LIMIT = 0.5
+CONSTANT_COLUMN_MAX_SCORE = 55
+NEAR_DUPLICATE_LIMIT = 0.3
+NEAR_DUPLICATE_MAX_SCORE = 50
+
+
 def validate_detailed_json(data: Any, source_text: str = "") -> Tuple[int, str]:
     if not data:
         return 0, "empty response"
@@ -426,6 +442,25 @@ def validate_detailed_json(data: Any, source_text: str = "") -> Tuple[int, str]:
             score += DETAILED_SOURCE_WEIGHT // 4
         else:
             failures.append("not from input (hallucinated)")
+
+    # Defects a structure checklist cannot see. Each of these scored a full 100
+    # before: the rows were well formed, populated and grounded, and simply not
+    # worth reading. Applied as caps rather than deductions so a model cannot
+    # out-earn them by padding item count.
+    generic = generic_location_ratio(items)
+    if generic >= GENERIC_LOCATION_LIMIT:
+        failures.append(f"{int(generic * 100)}% of locations are generic placeholders")
+        score = min(score, GENERIC_LOCATION_MAX_SCORE)
+
+    constant_ratio, constant_names = constant_column_ratio(items)
+    if constant_ratio >= CONSTANT_COLUMN_LIMIT:
+        failures.append(f"constant across every row: {', '.join(constant_names)}")
+        score = min(score, CONSTANT_COLUMN_MAX_SCORE)
+
+    near_dupes = near_duplicate_ratio(items)
+    if near_dupes >= NEAR_DUPLICATE_LIMIT:
+        failures.append(f"{int(near_dupes * 100)}% of rows repeat an earlier venue")
+        score = min(score, NEAR_DUPLICATE_MAX_SCORE)
 
     # Cap max score based on source grounding — no high scores for hallucinated content.
     # Only applies when a source is provided; without one we cannot assess grounding.

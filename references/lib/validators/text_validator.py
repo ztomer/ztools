@@ -5,6 +5,7 @@ import re
 from typing import Any, Tuple
 
 from lib.quality_models import GENERIC_FILENAMES
+from lib.validators.attribution import attribution_faithfulness
 from lib.validators.constants import (
     BOILERPLATE_SYNTHESIS_SCORE,
     DEFAULT_SYNTHESIS_SCORE,
@@ -267,6 +268,16 @@ def count_distinct_users(text: str) -> int:
     return len(handles | legacy)
 
 
+# A summary with any misattributed bullet cannot score above this, however well
+# formed it is. Sits just ABOVE PLACEHOLDER_LEAK_MAX_SCORE deliberately: a
+# template leak ("Mon DD at HH:MM") is visibly unusable and the reader discards
+# it, whereas a misattributed bullet is plausible and gets believed. Both are
+# far below passing, and keeping them distinct preserves the ordering the suite
+# already asserts -- collapsing them to one number would trade this blindness
+# for another.
+MISATTRIBUTION_MAX_SCORE = 45
+
+
 def validate_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
     """Score summaries based on quality signals: structure, user mentions, content depth."""
     if not data:
@@ -311,15 +322,25 @@ def validate_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
     narrative_words = len(NARRATIVE_WORDS_RE.findall(data_str))
 
     specificity_score = 0
-    grounded, total_bullets = grounded_attribution_ratio(data_str, source_text)
+    # Faithfulness, not mere presence. grounded_attribution_ratio asked whether
+    # the handle and the stamp each appeared SOMEWHERE in the source, which a
+    # summary with every quote moved to the wrong author satisfies completely --
+    # it scored 65, exactly the same as the correct summary. Requiring the PAIR
+    # to head one real source line, and the claim to come from that same line,
+    # is what makes misattribution visible.
+    faithful, total_bullets, attribution_reasons = attribution_faithfulness(
+        data_str, source_text
+    )
     if source_text and total_bullets:
-        ratio = grounded / total_bullets
+        ratio = faithful / total_bullets
         if ratio >= 0.8:
             specificity_score += TIMESTAMP_SPECIFICITY_SCORE
         elif ratio >= 0.5:
             specificity_score += TIMESTAMP_SPECIFICITY_SCORE // 2
         elif ratio == 0:
-            failures.append(f"no grounded attribution (0/{total_bullets} bullets)")
+            failures.append(f"no faithful attribution (0/{total_bullets} bullets)")
+        if attribution_reasons:
+            failures.extend(attribution_reasons[:3])
     elif TIMESTAMP_RE.search(data_str):
         specificity_score += TIMESTAMP_SPECIFICITY_SCORE
 
@@ -388,6 +409,14 @@ def validate_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
         # else it got right. Cap hard rather than deducting a few points.
         failures.append(f"placeholder leak ({len(leaks)} occurrences)")
         return min(PLACEHOLDER_LEAK_MAX_SCORE, score), "; ".join(failures)
+
+    # Misattribution is disqualifying, not a deduction. A summary that tells the
+    # user the wrong person said a thing is worse than one that omits it: the
+    # reader has no way to spot the error, and acting on it means repeating a
+    # false claim about a real person. Everything else here -- structure, user
+    # coverage, depth -- describes a summary that is at least true.
+    if source_text and total_bullets and faithful < total_bullets:
+        score = min(score, MISATTRIBUTION_MAX_SCORE)
 
     return min(MAX_SCORE, score), "; ".join(failures)
 

@@ -167,7 +167,7 @@ class TestSummaryAttributionIsMeasured:
         invented = validate_summary(self.INVENTED, source_text=self.SOURCE)
         grounded = validate_summary(self.GROUNDED, source_text=self.SOURCE)
         assert invented[0] < grounded[0], (invented, grounded)
-        assert "grounded attribution" in invented[1]
+        assert "faithful attribution" in invented[1]
 
     def test_grounded_attribution_scores_clean(self):
         score, failures = validate_summary(self.GROUNDED, source_text=self.SOURCE)

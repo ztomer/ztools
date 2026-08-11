@@ -189,14 +189,19 @@ class TestRunEvalWithMock:
         # First call returns low-score content, subsequent calls return high-score
         call_count = {"n": 0}
         # 10 items with full details to score >= 90 on the validator
+        # Columns must actually vary. This fixture used to hold "All"/"Free" in
+        # every row -- the mandated-placeholder defect -- and scored 90 only
+        # because the scorer could not see it. It now caps at 55, correctly.
+        # This test is about the retry loop, so it needs output that is good for
+        # real rather than output the scorer failed to fault.
         good_items = [
             {
                 "name": f"Item {i}",
-                "location": f"Place {i}",
-                "target_ages": "All",
-                "price": "Free",
-                "weather": "outdoor",
-                "day": "Saturday",
+                "location": f"{i} Main St, Toronto",
+                "target_ages": f"{i}-{i + 6}",
+                "price": "Free" if i % 3 == 0 else f"${i * 4}",
+                "weather": "outdoor" if i % 2 else "indoor",
+                "day": "Saturday" if i % 2 else "Sunday",
             }
             for i in range(10)
         ]
