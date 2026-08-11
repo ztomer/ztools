@@ -243,8 +243,16 @@ class TestModelCapabilitiesAreProbedNotAssumed:
         # ... and the caller falls back to its own documented default.
         assert model_caps.usable_context_window("not-installed", 8192) == 8192
 
-    def test_probe_is_capped_to_something_sendable(self, tmp_path, monkeypatch):
-        """262144 tokens is ~786K chars — the ceiling is not the target."""
+    def test_the_whole_probed_window_is_sent(self, tmp_path, monkeypatch):
+        """No throttle: what the model can take is what it gets.
+
+        These three assertions replace three that pinned the opposite. The old
+        cap was MAX_PREFILL_SECONDS (120, invented here) times a measured rate,
+        floored at 800 chars/sec (also invented here), and it handed back most
+        of a 262,144-token window to save ingestion time that tw -- running
+        every six hours -- and wk -- once a day -- were never short of. The
+        constants read as derived because they sat next to a real measurement.
+        """
         from lib import model_caps
 
         self._write_model(tmp_path, "Huge-Model", {"max_position_embeddings": 262144})
@@ -253,34 +261,20 @@ class TestModelCapabilitiesAreProbedNotAssumed:
         model_caps.probe_context_window.cache_clear()
 
         assert model_caps.probe_context_window("huge-model") == 262144
-        cap = model_caps.practical_context_cap()
-        assert model_caps.usable_context_window("huge-model", 8192) == cap
-        assert cap < 262144, "the cap must actually bind on a huge window"
+        assert model_caps.usable_context_window("huge-model", 8192) == 262144
 
-    def test_the_cap_is_derived_from_prefill_time_not_a_magic_number(self, monkeypatch):
-        """The cap answers "what is worth sending", from measured throughput.
-
-        It was a hand-picked 32768 until prefill was measured at ~1,470 chars/s
-        on gemma and ~3,515 on the qwen MoE — 35-90x the 40 that had been
-        assumed, so the guess was throttling the tools for no reason.
-        """
+    def test_no_time_based_cap_survives_anywhere(self):
+        """The removed API must stay removed, not come back under a new caller."""
         from lib import model_caps
 
-        monkeypatch.delenv("ZTOOLS_MAX_CONTEXT", raising=False)
-        monkeypatch.setattr(model_caps, "MAX_PREFILL_SECONDS", 60)
-        monkeypatch.setattr(model_caps, "PREFILL_CHARS_PER_SEC_FLOOR", 1200)
-        monkeypatch.setattr(model_caps, "CHARS_PER_TOKEN", 3)
-        assert model_caps.practical_context_cap() == 60 * 1200 // 3
-
-        # Doubling the time we are willing to spend doubles what we send.
-        monkeypatch.setattr(model_caps, "MAX_PREFILL_SECONDS", 120)
-        assert model_caps.practical_context_cap() == 120 * 1200 // 3
-
-    def test_an_explicit_pin_overrides_the_derivation(self, monkeypatch):
-        from lib import model_caps
-
-        monkeypatch.setenv("ZTOOLS_MAX_CONTEXT", "4096")
-        assert model_caps.practical_context_cap() == 4096
+        for gone in (
+            "practical_context_cap",
+            "PREFILL_CHARS_PER_SEC_FLOOR",
+            "MAX_PREFILL_SECONDS",
+        ):
+            assert not hasattr(model_caps, gone), (
+                f"{gone} is back -- context is being traded for ingestion time again"
+            )
 
     def test_explicit_override_wins_over_the_probe(self, tmp_path, monkeypatch):
         from lib import model_caps

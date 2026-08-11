@@ -23,7 +23,6 @@ from pathlib import Path
 __all__ = [
     "MODELS_DIR",
     "measured_prefill_rate",
-    "practical_context_cap",
     "is_generative_model",
     "model_config_path",
     "probe_context_window",
@@ -44,30 +43,26 @@ HF_CACHE_DIR = Path(
 _NON_GENERATIVE_TYPES = frozenset({"model2vec", "sentence-transformer", "static"})
 _NON_GENERATIVE_ARCHITECTURES = frozenset({"staticmodel", "sentencetransformer"})
 
-# The probe gives the model's CEILING; this decides what is worth sending. The
-# real constraint is prefill time, not capability, so express it as time.
+# How much context to send is a QUALITY question, not a speed one. `tw` runs
+# every six hours and `wk` once a day, so seconds spent ingesting a prompt are
+# free -- there is nothing to trade them against.
 #
-# Fallback for a model `ev` has never evaluated. Measured on this host with
-# cache-defeating probes (max_tokens=1, unique prefix per run), 2026-08-11:
-#     gemma-4-12b-it-mxfp8   1,045-1,237 chars/sec across four probes
-# Earlier figures of 1,322-3,789 for the same model came from repeating identical
-# probe text and reading the server's prefix cache; see eval/prefill.py. The floor
-# sits below the slowest honest measurement so an unmeasured or denser model does
-# not blow the time budget -- and `ev` replaces it with a real number per model.
-PREFILL_CHARS_PER_SEC_FLOOR = int(os.environ.get("ZTOOLS_PREFILL_RATE", "800"))
-MAX_PREFILL_SECONDS = int(os.environ.get("ZTOOLS_MAX_PREFILL_SECONDS", "120"))
+# This file used to cap context at MAX_PREFILL_SECONDS (120) x a measured rate,
+# with an 800 chars/sec floor for unmeasured models. Both numbers were invented
+# here, not derived from anything, and together they threw away most of a
+# 131072-token window to buy time nobody was spending. They are gone.
+#
+# The measured rate still has one honest use: sizing REQUEST TIMEOUTS so a large
+# prompt is not killed mid-flight. That lives in twitter/budget.py. Note the
+# direction flips -- for a timeout, an unknown rate must be assumed SLOW so the
+# wait is long enough, whereas a throttle would assume slow to send less.
 CHARS_PER_TOKEN = int(os.environ.get("TWITTER_CHARS_PER_TOKEN", "3"))
 
 
 def measured_prefill_rate(model: str) -> float | None:
     """Chars/sec measured for this model by the eval, or None if never run.
 
-    `ev` probes each model with `max_tokens=1` before running its tasks and
-    records the SLOWEST observation in conf/eval_signals.json, so throughput is
-    measured per model on the real host rather than assumed globally. Deriving
-    it from ordinary task calls instead does not work: decode dominates the
-    whole-call time and gemma measured 85 chars/sec that way against 1,322
-    probed, which would have capped its context at 3,420 tokens.
+    Used to size timeouts, never to decide how much context to send.
     """
     try:
         from eval.signals import _load_eval_signals
@@ -78,20 +73,6 @@ def measured_prefill_rate(model: str) -> float | None:
     except Exception:
         return None
 
-
-def practical_context_cap(model: str = "") -> int:
-    """Tokens worth sending, derived from measured prefill throughput.
-
-    Precedence: an explicit ZTOOLS_MAX_CONTEXT pin, then this model's own
-    measured rate, then the conservative global floor. The decision this
-    encodes is "how long am I willing to spend ingesting a prompt", which is
-    MAX_PREFILL_SECONDS -- the rate is measured, not chosen.
-    """
-    pinned = os.environ.get("ZTOOLS_MAX_CONTEXT")
-    if pinned:
-        return int(pinned)
-    rate = measured_prefill_rate(model) or PREFILL_CHARS_PER_SEC_FLOOR
-    return int(MAX_PREFILL_SECONDS * rate) // CHARS_PER_TOKEN
 
 _CONTEXT_KEYS = ("max_position_embeddings", "max_seq_len", "n_positions", "seq_length")
 _NESTED_KEYS = ("text_config", "llm_config", "language_config")
@@ -204,16 +185,21 @@ def is_generative_model(model: str) -> bool:
 
 
 def usable_context_window(model: str, default: int, override: int | None = None) -> int:
-    """How many tokens to actually size a prompt against.
+    """How many tokens to size a prompt against.
 
-    Precedence: an explicit `override` (a per-model config entry) wins, then the
-    probed capability, then `default`. The result is capped at
-    the practical cap because the window is what the model CAN take, not what
-    is sensible to prefill.
+    Precedence: an explicit `override` (a per-model config entry), then the
+    window probed from the model's own config.json, then `default`.
+
+    Deliberately NOT capped by how long the prompt takes to ingest. That cap
+    existed, and it cost quality for a speed nobody needed. If a shorter prompt
+    ever turns out to produce BETTER output -- long-context attention really
+    does degrade -- that is a finding for the eval to make and for a
+    `context_window` entry in conf/models/*.toml to encode, per model, with the
+    evidence beside it. It is not something to assume here.
     """
     if override:
-        return min(int(override), practical_context_cap(model))
+        return int(override)
     probed = probe_context_window(model)
     if probed:
-        return min(probed, practical_context_cap(model))
+        return probed
     return default

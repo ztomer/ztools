@@ -141,24 +141,25 @@ class TestNonGenerativeModelsAreIdentifiedByWhatTheyAre:
 
 
 class TestWhatGetsSent:
-    def test_probed_window_is_capped_by_the_time_budget(self, models_dir, monkeypatch):
-        """262144 tokens is ~786K characters; the cap is what is worth prefilling."""
-        monkeypatch.delenv("ZTOOLS_MAX_CONTEXT", raising=False)
+    def test_the_whole_probed_window_is_used(self, models_dir):
+        """No time-based throttle: a big window is a big prompt.
+
+        This used to be capped at MAX_PREFILL_SECONDS x a measured rate, which
+        handed back ~46,000 of 262,144 tokens to save time that these tools --
+        running every six hours at most -- were never short of.
+        """
         write_model(models_dir, "Org", "huge-model", {"max_position_embeddings": 262144})
 
-        used = model_caps.usable_context_window("huge-model", 8192)
+        assert model_caps.usable_context_window("huge-model", 8192) == 262144
 
-        assert used == model_caps.practical_context_cap("huge-model")
-        assert used < 262144
-
-    def test_small_window_is_used_whole(self, models_dir, monkeypatch):
-        monkeypatch.delenv("ZTOOLS_MAX_CONTEXT", raising=False)
+    def test_small_window_is_used_whole(self, models_dir):
         write_model(models_dir, "Org", "small-model", {"max_position_embeddings": 4096})
 
         assert model_caps.usable_context_window("small-model", 8192) == 4096
 
-    def test_override_still_wins_but_is_capped(self, models_dir, monkeypatch):
-        monkeypatch.delenv("ZTOOLS_MAX_CONTEXT", raising=False)
+    def test_override_wins_over_the_probe(self, models_dir):
+        """The one legitimate way to shrink a window: a per-model config entry,
+        written down with the evidence that a shorter prompt scored better."""
         write_model(models_dir, "Org", "some-model", {"max_position_embeddings": 131072})
 
         assert model_caps.usable_context_window("some-model", 8192, override=16384) == 16384

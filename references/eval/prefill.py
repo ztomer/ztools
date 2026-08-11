@@ -1,17 +1,28 @@
 """Measure how fast a model ingests a prompt, per model, on this host.
 
-Every context budget in the suite derives from this number, and getting it
-honestly took three attempts. 40 chars/sec was assumed (35-90x too low). 85
-chars/sec was derived from whole-call time (17x too low: decode dominates a
-generation-heavy task, so that timing measures the wrong quantity). Then the
-`max_tokens=1` probe read 1,322 and later 3,789 chars/sec for the same model on
-the same host -- because it sent byte-identical filler every time and the server
-served it from its prefix cache. Measured against identical text the "rate"
-climbs to 140,000 chars/sec, which is not a speed, it is a cache hit.
+Used to size request TIMEOUTS so a large prompt is not killed mid-flight. It is
+explicitly NOT used to decide how much context to send: these tools run every
+six hours at most, so ingestion time is free and trading context for it buys
+nothing. An earlier version did exactly that and cost output quality.
 
-So the probe must be unrepeatable: a nonce leads the prompt, and since a prefix
-cache keys on the prefix, nothing downstream can be reused. With that, gemma-4-12b
-measures 1,045-1,237 chars/sec across repeated probes instead of climbing.
+Measuring it honestly took four attempts, and three of them produced a
+confident, wrong number:
+
+  assumed 40 chars/sec              never measured at all
+  derived from whole-call time      decode dominates a generation-heavy task,
+                                    so this times the wrong quantity (17x low)
+  max_tokens=1, identical filler    the server's prefix cache: the same model
+                                    climbed 1,322 -> 3,789 -> 140,281 across
+                                    successive probes
+  no warmup                         the probe is an eval's FIRST request, so it
+                                    timed 27GB of model load as throughput --
+                                    bonsai-27b read 59 chars/sec against
+                                    ornith-9b's 1,803, almost entirely weights
+                                    moving into memory
+
+Hence: warm the model first, then lead the timed prompt with a nonce so no
+prefix can be reused. A rate that changes every time you measure it, or that
+tracks model size rather than model speed, is not a rate.
 """
 
 import os
@@ -40,8 +51,7 @@ def _probe_size_for(model: str) -> int:
 
     A 20K-char probe is 6.6K tokens, which foundation (4096, and that covers
     output too) answers with an HTTP 500. Sizing the probe to the model keeps
-    the measurement possible on small-window models instead of returning None
-    and quietly falling back to the global floor.
+    the measurement possible on small-window models instead of returning None.
     """
     window = probe_context_window(model)
     if not window:
@@ -52,20 +62,32 @@ def _probe_size_for(model: str) -> int:
 def measure_prefill_rate(model: str, host: str, port: int, transport=None) -> float | None:
     """Characters per second this model ingests, measured with max_tokens=1.
 
-    Whole-call timing cannot answer this: on a generation-heavy task decode
-    dominates, and the rate derived that way came out 17x below what the same
-    model measured in isolation. Only `max_tokens=1` isolates ingestion, which
-    is the quantity a context budget actually depends on.
+    Only `max_tokens=1` isolates ingestion from generation, and only a warmed
+    model isolates ingestion from loading.
 
     `transport` is the caller's own `call`, so a test that patches `eval.run.call`
     covers the probe too. Importing `call` here by value created a second seam
     that mocks did not reach, and eighteen mocked tests silently hit the live
     server through it until the conftest gate started failing on connections.
 
-    Returns None when the probe cannot run; callers fall back to their floor.
+    Returns None when the probe cannot run, so a caller can tell 'not measured'
+    from a measurement.
     """
     send = transport or call
     size = _probe_size_for(model)
+
+    # Load the model BEFORE timing anything. The probe is the first request an
+    # eval makes, so without this it times model load as though it were
+    # per-character throughput: bonsai-27b (27GB, loading from disk) measured 59
+    # chars/sec against ornith-9b's 1,803, a difference that was almost entirely
+    # weights moving into memory. A tiny prompt loads the model without
+    # meaningfully warming any prefix the real probe will reuse.
+    try:
+        send(model, messages=[{"role": "user", "content": "hi"}],
+             host=host, port=port, max_tokens=1, timeout=DEFAULT_EVAL_TIMEOUT)
+    except Exception:
+        return None
+
     # The nonce goes FIRST: a prefix cache matches from the start of the prompt,
     # so a leading unique token makes every byte after it new work. Identical
     # filler measured 130x faster than the same model measured honestly.
@@ -88,8 +110,8 @@ def measure_prefill_rate(model: str, host: str, port: int, transport=None) -> fl
         return None
     rate = size / elapsed
     # An instant answer is not a measurement. A mocked or cached transport
-    # returns in microseconds, and recording that as throughput would inflate
-    # every downstream budget with a number no hardware produced.
+    # returns in microseconds, and recording that as throughput would produce a
+    # timeout far too short for the request it is meant to cover.
     if rate > MAX_PLAUSIBLE_PREFILL_RATE:
         return None
     return round(rate, 1)
@@ -98,9 +120,9 @@ def measure_prefill_rate(model: str, host: str, port: int, transport=None) -> fl
 def record_prefill_rate(model: str, rate: float | None) -> None:
     """Store a measured prefill rate as a per-model capability.
 
-    Kept at the model level, not per task: it is a property of the model and
-    the host. The slowest observation wins, because the context budget has to
-    hold on a bad run rather than a lucky one.
+    Kept at the model level, not per task: it is a property of the model and the
+    host. The slowest observation wins, because a timeout has to be long enough
+    on a bad run, not merely on a lucky one.
     """
     if not rate or rate <= 0:
         return

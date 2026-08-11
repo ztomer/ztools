@@ -64,40 +64,51 @@ An unknown model probes to `None`, never a fabricated number, and the caller
 falls back to its own documented default. A `context_window` entry in
 `conf/models/*.toml` still overrides both.
 
-**Also done: what is actually sent is now measured, not chosen.** The window is
-what a model CAN take; the real constraint is how long ingesting a prompt takes.
-So `practical_context_cap(model)` is expressed as time — `MAX_PREFILL_SECONDS`
-(120s, the only number a human picks) multiplied by that model's own measured
-prefill rate. `ev` probes each model with `max_tokens=1` before running its
-tasks and records the slowest observation under `_capabilities` in
-`conf/eval_signals.json`; `lib/model_caps.py` reads it back.
+**Correction (2026-08-11): the context throttle is gone, and it should never
+have existed.** For a while `usable_context_window` capped context at
+`MAX_PREFILL_SECONDS` (120) x a measured prefill rate, floored at 800 chars/sec
+for unmeasured models. Both constants were invented in `lib/model_caps.py`, not
+derived from anything, and they sat beside a genuine measurement which made them
+read as though they had been measured too.
 
-Three wrong numbers were replaced here, and they were wrong in both directions:
+The premise was wrong regardless of the numbers. `tw` runs every six hours and
+`wk` once a day, so ingestion time is free -- there is nothing to trade it
+against. The cap handed back ~46,000 of a 262,144-token window to buy seconds
+nobody was short of, and paid for them in output quality, which is the only
+thing that actually matters here. `usable_context_window` now returns the
+override, then the probed window, then the caller default, and nothing throttles
+it. `test_no_time_based_cap_survives_anywhere` fails if the API returns.
 
-| source | gemma-4-12b rate | implied cap |
+If a SHORTER prompt ever turns out to score better -- long-context attention
+genuinely does degrade -- that is a finding for the eval to make, recorded as a
+`context_window` entry in `conf/models/*.toml` with the evidence beside it. It
+is not a number to assume.
+
+**Prefill measurement survives, for timeouts only.** `ev` probes each model so
+`twitter/budget.py::_estimate_timeout` can wait long enough for a large prompt
+instead of killing it. The direction of caution inverts for this use: an
+unmeasured model is assumed SLOW (200 chars/sec) so the timeout is generous,
+where a throttle would have assumed slow in order to send less. `MAX_TIMEOUT` is
+5400s -- a ceiling that stops a wedged server hanging forever, not a budget to
+fit inside.
+
+Measuring it honestly took four attempts, and three produced confident wrong
+answers. Every published figure before the last row is contaminated:
+
+| method | gemma-4-12b | what it actually measured |
 |---|---|---|
-| assumed `PREFILL_CHARS_PER_SEC = 40` | 40 | 1,600 |
-| derived from whole-call time | 85 | 3,420 |
-| `max_tokens=1`, identical filler each run | 1,322 → 3,789 → 140,281 | absurd |
-| **`max_tokens=1` + per-run nonce** | **1,045-1,237** | **~46,600** |
+| assumed constant | 40 | nothing |
+| whole-call timing | 85 | decode, which dominates a generation-heavy task |
+| `max_tokens=1`, identical filler | 1,322 -> 3,789 -> 140,281 | the server's prefix cache |
+| `max_tokens=1`, nonce, no warmup | 1,045-1,237 | prefill + model load |
+| **`max_tokens=1`, nonce, warmed** | **to be re-measured** | prefill |
 
-Two distinct traps, and both produce a confident number:
-
-- **Timing an ordinary task call measures decode, not ingestion** — ~17x too low
-  on a generation-heavy task. It reads like a conservative floor and is simply
-  the wrong quantity.
-- **Repeating identical probe text measures the server's prefix cache.** The
-  same model on the same host climbed 1,322 → 3,789 → 140,281 chars/sec across
-  successive identical probes. A rate that improves every time you measure it is
-  not a rate. The probe now leads with a nonce, so nothing after it can be
-  reused, and it holds at 1,045-1,237 across four runs;
-  `MAX_PLAUSIBLE_PREFILL_RATE` (20,000) discards any reading that lands in
-  cache-hit territory anyway.
-
-A model `ev` has never evaluated falls back to an 800 chars/sec floor, chosen to
-sit below the slowest honest measurement. `twitter/budget.py::_estimate_timeout`
-reads the same per-model rate, so the timeout and the prompt size come from one
-measurement rather than from two independent constants.
+The warmup bug is the clearest: the probe is an eval's FIRST request, so it
+timed weights moving into memory. bonsai-27b (27GB, ternary) read 59 chars/sec
+against ornith-9b's 1,803 -- a difference almost entirely attributable to load
+time, which was then about to be recorded as that model's throughput forever.
+Every rate in `conf/eval_signals.json` predates the warmup fix and needs
+re-measuring.
 
 **Still to do.**
 - Probe the other capabilities the same way instead of encoding them as quirks:

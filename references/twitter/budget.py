@@ -19,15 +19,16 @@ OUTPUT_RESERVE_TOKENS = int(os.environ.get("TWITTER_OUTPUT_RESERVE", "1536"))
 # TWITTER_DECODE_TOKENS_PER_SEC is generation throughput; combined with the output
 # reserve it bounds the time spent producing the summary.
 COLD_START_BASE = int(os.environ.get("TWITTER_COLD_START_BASE", "120"))
-MAX_TIMEOUT = int(os.environ.get("TWITTER_MAX_TIMEOUT", "1800"))
+# A ceiling that stops a wedged server hanging forever, NOT a budget to fit
+# inside. wk runs once a day and tw every six hours, so a long run costs
+# nothing; a prompt truncated to beat the clock costs output quality.
+MAX_TIMEOUT = int(os.environ.get("TWITTER_MAX_TIMEOUT", "5400"))
 MIN_TIMEOUT = int(os.environ.get("TWITTER_MIN_TIMEOUT", "60"))
-# Fallback only: `_prefill_rate_for_model` prefers the rate `ev` measured for the
-# specific model. Measured with cache-defeating probes, gemma-4-12b ingests
-# ~1,100 chars/sec; the old 40 overestimated prefill time by ~26x, so
-# `_estimate_timeout` clamped every large prompt to MAX_TIMEOUT and made a
-# generous budget look unaffordable. This default sits below the slowest honest
-# measurement for margin.
-PREFILL_CHARS_PER_SEC = int(os.environ.get("TWITTER_PREFILL_CHARS_PER_SEC", "800"))
+# Fallback for a model `ev` has never measured, used ONLY to size a timeout.
+# Deliberately pessimistic: guessing slow makes the tool wait longer than it
+# needs to, guessing fast makes it kill a request that was working. Those are
+# not symmetric, and only one of them loses output.
+PREFILL_CHARS_PER_SEC = int(os.environ.get("TWITTER_PREFILL_CHARS_PER_SEC", "200"))
 DECODE_TOKENS_PER_SEC = int(os.environ.get("TWITTER_DECODE_TOKENS_PER_SEC", "8"))
 
 # Default context window size for Osaurus models (tokens)
@@ -86,12 +87,10 @@ def _output_tokens_for_model(model: str) -> int:
 
 
 def _prefill_rate_for_model(model: str = None) -> float:
-    """Ingestion rate to budget time against: this model's, or the fallback.
+    """Ingestion rate to budget TIME against: this model's, or a slow fallback.
 
-    `ev` measures every model it evaluates, and the models differ by more than
-    2x (1,322 chars/sec on the dense 12B vs 3,515 on the 35B MoE). Budgeting
-    both against one constant gives the fast model a timeout far longer than it
-    needs and the slow model one that is too tight.
+    Only ever widens or narrows a timeout -- it never decides how much context
+    to send. A model measured slow gets longer to finish, not a smaller prompt.
     """
     try:
         from lib.model_caps import measured_prefill_rate

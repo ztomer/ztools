@@ -76,8 +76,8 @@ class TestProbeIsolatesPrefill:
         assert eval_prefill.measure_prefill_rate("m", "localhost", 1337) is None
 
 
-class TestRecordedRateSurvivesToTheBudget:
-    """What zeval measures is what the tools size their prompts against."""
+class TestRecordedRateIsStoredPerModel:
+    """The measurement feeds timeouts. It must never shrink a prompt."""
 
     def test_rate_is_stored_per_model_as_a_capability(self, signals_file):
         eval_prefill.record_prefill_rate("model-a", 1322.0)
@@ -87,7 +87,7 @@ class TestRecordedRateSurvivesToTheBudget:
         assert stored["model-a"]["_capabilities"]["prefill_samples"] == 1
 
     def test_slowest_observation_wins(self, signals_file):
-        """The budget has to hold on a bad run, not on a lucky one."""
+        """A timeout has to be long enough on a bad run, not on a lucky one."""
         eval_prefill.record_prefill_rate("model-a", 3000.0)
         eval_prefill.record_prefill_rate("model-a", 900.0)
         eval_prefill.record_prefill_rate("model-a", 2500.0)
@@ -102,42 +102,30 @@ class TestRecordedRateSurvivesToTheBudget:
 
         assert not signals_file.exists() or json.loads(signals_file.read_text()) == {}
 
-    def test_measured_model_gets_a_larger_budget_than_the_floor(
-        self, signals_file, monkeypatch
-    ):
-        monkeypatch.delenv("ZTOOLS_MAX_CONTEXT", raising=False)
-        floor_cap = model_caps.practical_context_cap("never-measured")
+    def test_a_slow_model_still_gets_its_whole_window(self, signals_file, monkeypatch):
+        """The regression this replaces: context used to be capped at
+        MAX_PREFILL_SECONDS x rate, so a slow model was handed a smaller prompt.
 
-        eval_prefill.record_prefill_rate("fast-model", model_caps.PREFILL_CHARS_PER_SEC_FLOOR * 3)
-        measured_cap = model_caps.practical_context_cap("fast-model")
+        These tools run every six hours at most. Ingestion time is free, so
+        trading context away for it only costs output quality. A slow model gets
+        the same window as a fast one -- it just gets longer to read it.
+        """
+        monkeypatch.setattr(model_caps, "probe_context_window", lambda m: 131072)
+        eval_prefill.record_prefill_rate("slow-model", 60.0)
+        eval_prefill.record_prefill_rate("fast-model", 3500.0)
 
-        assert measured_cap > floor_cap, (
-            "a model measured faster than the floor must be allowed a bigger prompt"
-        )
-        assert measured_cap == pytest.approx(floor_cap * 3, rel=0.01)
+        assert model_caps.usable_context_window("slow-model", 8192) == 131072
+        assert model_caps.usable_context_window(
+            "slow-model", 8192
+        ) == model_caps.usable_context_window("fast-model", 8192)
 
-    def test_slow_model_is_throttled_below_the_floor(self, signals_file, monkeypatch):
-        """Measurement cuts both ways, or it is not measurement."""
-        monkeypatch.delenv("ZTOOLS_MAX_CONTEXT", raising=False)
-        floor_cap = model_caps.practical_context_cap("never-measured")
+    def test_measurement_cannot_shrink_a_window_at_all(self, signals_file, monkeypatch):
+        """Belt and braces: no recorded rate, however small, changes the window."""
+        monkeypatch.setattr(model_caps, "probe_context_window", lambda m: 262144)
+        before = model_caps.usable_context_window("m", 8192)
+        eval_prefill.record_prefill_rate("m", 1.0)
 
-        eval_prefill.record_prefill_rate("slow-model", model_caps.PREFILL_CHARS_PER_SEC_FLOOR / 4)
-
-        assert model_caps.practical_context_cap("slow-model") < floor_cap
-
-    def test_time_budget_is_what_the_cap_actually_encodes(self, signals_file, monkeypatch):
-        """cap = seconds x rate / chars-per-token, so prefill stays within budget."""
-        monkeypatch.delenv("ZTOOLS_MAX_CONTEXT", raising=False)
-        eval_prefill.record_prefill_rate("model-a", 1500.0)
-
-        expected = int(model_caps.MAX_PREFILL_SECONDS * 1500.0) // model_caps.CHARS_PER_TOKEN
-        assert model_caps.practical_context_cap("model-a") == expected
-
-    def test_explicit_pin_overrides_measurement(self, signals_file, monkeypatch):
-        eval_prefill.record_prefill_rate("model-a", 9999.0)
-        monkeypatch.setenv("ZTOOLS_MAX_CONTEXT", "8192")
-
-        assert model_caps.practical_context_cap("model-a") == 8192
+        assert model_caps.usable_context_window("m", 8192) == before == 262144
 
 
 class TestTimeoutUsesTheSameMeasurement:
@@ -174,7 +162,9 @@ class TestProbeDefeatsThePrefixCache:
         eval_prefill.measure_prefill_rate("m", "localhost", 1337)
         eval_prefill.measure_prefill_rate("m", "localhost", 1337)
 
-        assert sent[0] != sent[1], "a repeated probe is served from the prefix cache"
+        # sent = [warmup, probe, warmup, probe]; comparing sent[0] to sent[1]
+        # would compare a warmup against a probe and pass without testing anything.
+        assert sent[1] != sent[3], "a repeated probe is served from the prefix cache"
 
     def test_the_difference_is_at_the_start_of_the_prompt(self, monkeypatch):
         """A prefix cache keys on the prefix, so a trailing nonce would not help."""
@@ -187,7 +177,7 @@ class TestProbeDefeatsThePrefixCache:
         eval_prefill.measure_prefill_rate("m", "localhost", 1337)
         eval_prefill.measure_prefill_rate("m", "localhost", 1337)
 
-        assert sent[0][:40] != sent[1][:40], "the probes share a cacheable prefix"
+        assert sent[1][:40] != sent[3][:40], "the probes share a cacheable prefix"
 
     def test_probe_still_fits_its_size_budget(self, monkeypatch):
         monkeypatch.setattr(eval_prefill, "probe_context_window", lambda m: 4096)
@@ -198,7 +188,7 @@ class TestProbeDefeatsThePrefixCache:
 
         eval_prefill.measure_prefill_rate("foundation", "localhost", 1337)
 
-        assert len(sent[0]) == eval_prefill._probe_size_for("foundation"), (
+        assert len(sent[1]) == eval_prefill._probe_size_for("foundation"), (
             "the nonce must fit inside the probe, not extend past the window"
         )
 
