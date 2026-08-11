@@ -43,7 +43,6 @@ class TestRenameImageNoText:
             patch("rename.cli.extract_full_text", return_value=None),
             patch("rename.cli.extract_first_line", return_value=None),
             patch("rename.cli.query_vlm_for_filename", return_value="white_goose") as mock_vlm,
-            patch("rename.cli.clean_filename", side_effect=lambda x: x),
         ):
             success, msg = rename_image(
                 p,
@@ -85,9 +84,7 @@ class TestRenameImageVlmFallback:
         p = _make_path()
         with (
             patch("rename.cli.extract_full_text", return_value="HFSd9k2Lm"),
-            patch("rename.cli.is_non_human_readable", return_value=True),
             patch("rename.cli.query_vlm_for_filename", return_value="vlm_name") as mock_vlm,
-            patch("rename.cli.clean_filename", side_effect=lambda x: x),
         ):
             success, msg = rename_image(
                 p,
@@ -102,15 +99,18 @@ class TestRenameImageVlmFallback:
             mock_vlm.assert_called_once()
 
     def test_vlm_used_when_text_not_meaningful(self):
+        """Thin OCR text must route to the VLM, not the text LLM.
+
+        The real is_meaningful_text decides this; asserting only `success is
+        True` passed whichever branch ran, so the decision was untested.
+        """
         from rename.cli import rename_image
 
         p = _make_path()
         with (
             patch("rename.cli.extract_full_text", return_value="ab cd"),
-            patch("rename.cli.is_non_human_readable", return_value=False),
-            patch("rename.cli.is_meaningful_text", return_value=False),
-            patch("rename.cli.query_vlm_for_filename", return_value="vlm_result"),
-            patch("rename.cli.clean_filename", side_effect=lambda x: x),
+            patch("rename.cli.query_vlm_for_filename", return_value="vlm_result") as mock_vlm,
+            patch("rename.cli.query_llm_for_filename", return_value="llm_result") as mock_llm,
         ):
             success, msg = rename_image(
                 p,
@@ -122,6 +122,8 @@ class TestRenameImageVlmFallback:
                 api_key="",
             )
             assert success is True
+            mock_vlm.assert_called_once()
+            mock_llm.assert_not_called()
 
     def test_vlm_generic_name_rejected(self):
         from rename.cli import rename_image
@@ -131,7 +133,6 @@ class TestRenameImageVlmFallback:
             patch("rename.cli.extract_full_text", return_value=None),
             patch("rename.cli.extract_first_line", return_value=None),
             patch("rename.cli.query_vlm_for_filename", return_value="unnamed"),
-            patch("rename.cli.clean_filename", side_effect=lambda x: x),
         ):
             success, msg = rename_image(
                 p,
@@ -153,11 +154,8 @@ class TestRenameImageLlmPath:
         p = _make_path()
         with (
             patch("rename.cli.extract_full_text", return_value="some useful text"),
-            patch("rename.cli.is_non_human_readable", return_value=False),
-            patch("rename.cli.is_meaningful_text", return_value=True),
             patch("rename.cli.is_relevant_with_llm", return_value=True),
             patch("rename.cli.query_llm_for_filename", return_value="relevant_name"),
-            patch("rename.cli.clean_filename", side_effect=lambda x: x),
         ):
             success, msg = rename_image(
                 p,
@@ -176,8 +174,6 @@ class TestRenameImageLlmPath:
         p = _make_path()
         with (
             patch("rename.cli.extract_full_text", return_value="junk text"),
-            patch("rename.cli.is_non_human_readable", return_value=False),
-            patch("rename.cli.is_meaningful_text", return_value=True),
             patch("rename.cli.is_relevant_with_llm", return_value=False),
         ):
             success, msg = rename_image(
@@ -198,10 +194,7 @@ class TestRenameImageLlmPath:
         p = _make_path()
         with (
             patch("rename.cli.extract_full_text", return_value="some text"),
-            patch("rename.cli.is_non_human_readable", return_value=False),
-            patch("rename.cli.is_meaningful_text", return_value=True),
             patch("rename.cli.query_llm_for_filename", return_value="llm_filename"),
-            patch("rename.cli.clean_filename", side_effect=lambda x: x),
         ):
             success, msg = rename_image(
                 p,
@@ -220,10 +213,7 @@ class TestRenameImageLlmPath:
         p = _make_path()
         with (
             patch("rename.cli.extract_full_text", return_value="some text"),
-            patch("rename.cli.is_non_human_readable", return_value=False),
-            patch("rename.cli.is_meaningful_text", return_value=True),
             patch("rename.cli.query_llm_for_filename", return_value="unnamed"),
-            patch("rename.cli.clean_filename", side_effect=lambda x: x),
         ):
             success, msg = rename_image(
                 p,
@@ -243,10 +233,7 @@ class TestRenameImageLlmPath:
         p = _make_path()
         with (
             patch("rename.cli.extract_full_text", return_value="some text"),
-            patch("rename.cli.is_non_human_readable", return_value=False),
-            patch("rename.cli.is_meaningful_text", return_value=True),
             patch("rename.cli.query_llm_for_filename", return_value="ab"),
-            patch("rename.cli.clean_filename", side_effect=lambda x: x),
         ):
             success, msg = rename_image(
                 p,
@@ -265,10 +252,7 @@ class TestRenameImageLlmPath:
         p = _make_path()
         with (
             patch("rename.cli.extract_full_text", return_value="useful text content"),
-            patch("rename.cli.is_non_human_readable", return_value=False),
-            patch("rename.cli.is_meaningful_text", return_value=True),
             patch("rename.cli.query_llm_for_filename", return_value=None),
-            patch("rename.cli.clean_filename", side_effect=lambda x: x),
         ):
             success, msg = rename_image(
                 p,
@@ -287,8 +271,6 @@ class TestRenameImageLlmPath:
         p = _make_path()
         with (
             patch("rename.cli.extract_full_text", return_value="useful text"),
-            patch("rename.cli.is_non_human_readable", return_value=False),
-            patch("rename.cli.is_meaningful_text", return_value=True),
         ):
             success, msg = rename_image(
                 p, dry_run=True, force=False, llm_host="", llm_model="", vlm_model="", api_key=""
@@ -307,11 +289,8 @@ class TestRenameImageFileOperations:
         p.exists.return_value = True
         p.with_name.side_effect = lambda n: Path(f"/fake/{n}.png")
         with (
-            patch("rename.cli.extract_full_text", return_value="filename"),
-            patch("rename.cli.is_non_human_readable", return_value=False),
-            patch("rename.cli.is_meaningful_text", return_value=True),
+            patch("rename.cli.extract_full_text", return_value="quarterly revenue report"),
             patch("rename.cli.query_llm_for_filename", return_value="new_name"),
-            patch("rename.cli.clean_filename", side_effect=lambda x: x),
         ):
             p.rename.assert_not_called()  # not called yet
             success, msg = rename_image(
@@ -335,11 +314,8 @@ class TestRenameImageFileOperations:
         p.exists.return_value = True
         p.with_name.side_effect = lambda n: Path(f"/fake/{n}.png")
         with (
-            patch("rename.cli.extract_full_text", return_value="filename"),
-            patch("rename.cli.is_non_human_readable", return_value=False),
-            patch("rename.cli.is_meaningful_text", return_value=True),
+            patch("rename.cli.extract_full_text", return_value="quarterly revenue report"),
             patch("rename.cli.query_llm_for_filename", return_value="new_name"),
-            patch("rename.cli.clean_filename", side_effect=lambda x: x),
         ):
             success, msg = rename_image(
                 p,
@@ -363,11 +339,8 @@ class TestRenameImageFileOperations:
         p.with_name.side_effect = lambda n: Path(f"/fake/{n}.png")
         p.rename.side_effect = PermissionError("permission denied")
         with (
-            patch("rename.cli.extract_full_text", return_value="filename"),
-            patch("rename.cli.is_non_human_readable", return_value=False),
-            patch("rename.cli.is_meaningful_text", return_value=True),
+            patch("rename.cli.extract_full_text", return_value="quarterly revenue report"),
             patch("rename.cli.query_llm_for_filename", return_value="new_name"),
-            patch("rename.cli.clean_filename", side_effect=lambda x: x),
         ):
             success, msg = rename_image(
                 p,
@@ -387,8 +360,6 @@ class TestRenameImageFileOperations:
         p = _make_path()
         with (
             patch("rename.cli.extract_full_text", return_value="file txt"),
-            patch("rename.cli.is_non_human_readable", return_value=False),
-            patch("rename.cli.is_meaningful_text", return_value=True),
             patch("rename.cli.query_llm_for_filename", return_value="file_txt"),
         ):
             success, msg = rename_image(
@@ -411,10 +382,7 @@ class TestRenameImageLlmException:
         p = _make_path()
         with (
             patch("rename.cli.extract_full_text", return_value="fallback text content"),
-            patch("rename.cli.is_non_human_readable", return_value=False),
-            patch("rename.cli.is_meaningful_text", return_value=True),
             patch("rename.cli.query_llm_for_filename", side_effect=Exception("LLM down")),
-            patch("rename.cli.clean_filename", side_effect=lambda x: x),
         ):
             success, msg = rename_image(
                 p,
@@ -450,11 +418,8 @@ class TestRenameImageDuplicates:
         p.with_name.side_effect = make_new_path
 
         with (
-            patch("rename.cli.extract_full_text", return_value="filename"),
-            patch("rename.cli.is_non_human_readable", return_value=False),
-            patch("rename.cli.is_meaningful_text", return_value=True),
+            patch("rename.cli.extract_full_text", return_value="quarterly revenue report"),
             patch("rename.cli.query_llm_for_filename", return_value="new_name"),
-            patch("rename.cli.clean_filename", side_effect=lambda x: x),
         ):
             success, msg = rename_image(
                 p,
