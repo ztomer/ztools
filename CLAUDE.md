@@ -26,7 +26,10 @@ cannot drift.
 - No test may launch a real browser or read real browser cookies; `references/tests/conftest.py`
   enforces this. Opt out with `@pytest.mark.real_cookie_discovery` only to test discovery itself.
 - Prove a new test can fail before trusting it green
-- Run: `./.venv/bin/python -m pytest references/tests/ -q`
+- Run (quick): `./.venv/bin/python -m pytest references/tests/ -q`
+- Run (what the gate runs — use this before pushing; it adds the coverage floor
+  and an unreachable LLM server, and a quick run passing proves neither):
+  `OLLAMA_BASE_URL=http://127.0.0.1:1 MLX_MODELS_DIR=/tmp/nonexistent .venv/bin/pytest --cov --cov-fail-under=95 .`
   (OCR tests need `--ignore=references/tests/test_img_helpers.py --ignore=references/tests/test_image_renamer.py`
   under `--cov` — numpy's C extension crashes with coverage tracing)
 - Add discovered test patterns or bugs to `docs/TESTING.md` immediately

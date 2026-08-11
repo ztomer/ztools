@@ -245,3 +245,39 @@ class TestPrintResults:
             )
         # Saved file
         assert (tmp_path / "eval_results.json").exists()
+
+
+class TestMemoryGuardDegradesHonestly:
+    """A missing psutil must say so, not report a healthy 0%.
+
+    psutil is a hard dependency now; before that the ImportError path returned
+    a bare 0.0, so `mem_pct > MEMORY_WARNING_THRESHOLD` was never true and the
+    guard silently did nothing on any machine without it.
+    """
+
+    def test_real_reading_is_used_when_psutil_is_present(self):
+        from eval import cli_runtime
+
+        pct = cli_runtime.get_memory_percent()
+        assert 0 < pct <= 100, pct
+
+    def test_missing_psutil_warns_once_and_returns_zero(self, monkeypatch, capsys):
+        import builtins
+
+        from eval import cli_runtime
+
+        real_import = builtins.__import__
+
+        def no_psutil(name, *args, **kwargs):
+            if name == "psutil":
+                raise ImportError("no psutil")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(cli_runtime, "_warned_no_psutil", False)
+        monkeypatch.setattr(builtins, "__import__", no_psutil)
+        assert cli_runtime.get_memory_percent() == 0.0
+        assert cli_runtime.get_memory_percent() == 0.0  # warn once, not per call
+        monkeypatch.undo()
+
+        err = capsys.readouterr().err
+        assert err.count("memory guard is disabled") == 1

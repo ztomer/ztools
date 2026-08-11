@@ -12,6 +12,9 @@ dependencies = [
     "rich>=14.0.0",
     "tomli-w>=1.2.0",
     "textual>=0.50.0",
+    # The eval memory guard reads virtual_memory().percent; without psutil it
+    # silently reported 0% and never fired.
+    "psutil>=5.9.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -109,7 +112,7 @@ markers = [
 
 [tool.coverage.run]
 source = ["lib", "weekend", "twitter", "rename", "eval"]
-omit = ["*/tests/*", "*/__main__.py", "*/__init__.py", "eval/explore_quirks.py"]
+omit = ["*/tests/*", "*/__main__.py", "*/__init__.py", "*/eval/explore_quirks.py"]
 
 [tool.coverage.report]
 fail_under = 95

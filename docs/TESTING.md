@@ -10,6 +10,19 @@
 - Tests use **mocked LLM providers** — no real model calls in CI.
 - OCR-dependent tests (`test_img_helpers.py`, `test_image_renamer.py`) run **without coverage** (numpy C extension crashes under pytest-cov — see **Coverage Limitations** below).
 
+**Run what the gate runs.** `pytest references/tests/` passes in a developer
+environment that the pre-push gate does not have: the gate runs the whole
+rootdir, with coverage against a 95% floor, and with the LLM server pointed at a
+dead port. A green `pytest references/tests/` therefore proves very little — it
+misses coverage regressions entirely, and misses anything that only shows when
+the server is unreachable. Before pushing, run the gate's own command:
+
+```bash
+OLLAMA_BASE_URL=http://127.0.0.1:1 \
+MLX_MODELS_DIR=/tmp/nonexistent-mlx-models-dir-for-testing \
+  .venv/bin/pytest --cov --cov-report=term-missing --cov-fail-under=95 .
+```
+
 Local venv must carry the same test deps CI installs, or gates pass locally
 that fail in CI:
 

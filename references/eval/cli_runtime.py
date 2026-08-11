@@ -7,6 +7,7 @@ Split out of cli.py for the repo's 500-line limit. cli.py re-exports these, so
 
 import os
 import re
+import sys
 import time
 
 import requests
@@ -46,13 +47,28 @@ RESTART_CHECK_RETRIES = 5
 # ==========================================================
 
 
+_warned_no_psutil = False
+
+
 def get_memory_percent() -> float:
-    """Get current memory usage percent."""
+    """Current memory usage percent, or 0.0 with a stated reason.
+
+    psutil is a hard dependency now. Returning a bare 0.0 on ImportError made
+    the memory guard read "0% used" and never fire, so the degrade says so
+    rather than looking like a healthy machine.
+    """
+    global _warned_no_psutil
     try:
         import psutil
 
         return psutil.virtual_memory().percent
     except ImportError:
+        if not _warned_no_psutil:
+            _warned_no_psutil = True
+            print(
+                f"{WARN} psutil is not installed — the memory guard is disabled",
+                file=sys.stderr,
+            )
         return 0.0
 
 

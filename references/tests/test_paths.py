@@ -149,3 +149,46 @@ def test_init_config_loads_the_real_file():
         assert init_config() is True
     finally:
         reset_config()
+
+
+def test_package_dir_returns_none_for_a_missing_package():
+    """The import-system lookup must fail soft, not raise."""
+    assert paths._package_dir("no_such_package_anywhere") is None
+
+
+def test_package_dir_returns_none_when_the_location_is_not_a_dir(monkeypatch):
+    class _Spec:
+        submodule_search_locations = ["/definitely/not/a/directory"]
+
+    monkeypatch.setattr(paths.importlib.util, "find_spec", lambda name: _Spec())
+    assert paths._package_dir("anything") is None
+
+
+def test_package_dir_survives_a_broken_import_system(monkeypatch):
+    def boom(name):
+        raise ValueError("__spec__ is not set")
+
+    monkeypatch.setattr(paths.importlib.util, "find_spec", boom)
+    assert paths._package_dir("anything") is None
+
+
+def test_eval_tasks_dir_falls_back_to_the_candidate_scan(tmp_path, monkeypatch):
+    """With the package unreachable, the layout candidates are tried."""
+    monkeypatch.setattr(paths, "_package_dir", lambda name: None)
+    resolved = eval_tasks_dir()
+    assert resolved.name == "eval_tasks"
+    assert resolved.is_dir()
+
+
+def test_eval_tasks_dir_last_resort_names_the_installed_path(monkeypatch, tmp_path):
+    monkeypatch.setattr(paths, "_package_dir", lambda name: None)
+    monkeypatch.setattr(paths, "_LIB_DIR", tmp_path / "nowhere" / "lib")
+    resolved = eval_tasks_dir()
+    assert resolved == tmp_path / "nowhere" / "eval_tasks"
+
+
+def test_repo_path_is_none_outside_a_checkout(monkeypatch, tmp_path):
+    """An installed layout has no repo root, and callers must see that."""
+    monkeypatch.setattr(paths, "_LIB_DIR", tmp_path / "site-packages" / "lib")
+    assert repo_root() is None
+    assert repo_path("docs", "eval_baseline.json") is None
