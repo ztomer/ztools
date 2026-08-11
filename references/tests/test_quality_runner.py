@@ -1,6 +1,6 @@
 """Tests for lib.quality_runner - query_model and run_suite."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 class TestTestCases:
@@ -150,105 +150,73 @@ class TestRunSuite:
         assert sc.elapsed >= 0
         assert sc.task == "filename"
 
-    def test_run_suite_worst_dim_low(self, mock_llm, capsys):
-        """When worst dimension is < 60, the FAIL mark prints."""
-        from lib import quality_runner as qr
-        from lib.quality_models import Score, TestCase
+    def _case(self):
+        from lib.quality_models import TestCase
 
-        case = TestCase(
+        return TestCase(
             task="filename",
-            input_text="Screenshot showing login",
+            input_text="Screenshot showing login page",
             reference="login_screenshot",
-            description="test",
+            description="t",
         )
-        # Force a low-scoring scorecard
-        with (
-            patch.object(qr, "query_model", return_value="login_screenshot.txt"),
-            patch.object(qr, "score_output") as mock_score,
-        ):
-            sc = MagicMock()
-            sc.composite = 30
-            sc.dimensions = [Score("Relevance", 30, 0.4, failures=["bad"])]
-            sc.elapsed = 0.1
-            sc.task = "filename"
-            sc.model = "mock-model"
-            sc.case_id = "test"
-            sc.output = "login_screenshot.txt"
-            mock_score.return_value = sc
-            qr.run_suite(["mock-model"], [case], verbose=True)
-        captured = capsys.readouterr()
-        assert "30" in captured.out
+
+    def _run(self, output, capsys, verbose=True):
+        """Drive run_suite with only the LLM boundary mocked.
+
+        These tests used to patch `score_output` itself and assert that the
+        number they injected appeared in the output, so the real scorer never
+        ran — against the repo rule to use the real scorer and mock only the
+        LLM layer. Now the marks come from real scores.
+        """
+        from lib import quality_runner as qr
+
+        with patch.object(qr, "query_model", return_value=output):
+            results = qr.run_suite(["mock-model"], [self._case()], verbose=verbose)
+        return results, capsys.readouterr().out
+
+    def test_run_suite_worst_dim_low(self, mock_llm, capsys):
+        """A leaked instruction really does score low, and is marked as failing."""
+        from lib.tui import FAIL
+
+        results, out = self._run("Here is the filename: img.txt", capsys)
+        assert round(results[0].composite) == 16
+        assert min(d.score for d in results[0].dimensions) < 40
+        assert FAIL in out
 
     def test_run_suite_worst_dim_mid(self, mock_llm, capsys):
-        """When worst is 60-80, WARN mark."""
-        from lib import quality_runner as qr
-        from lib.quality_models import Score, TestCase
+        """A weak dimension above the failing composite gets the WARN mark.
 
-        case = TestCase(
-            task="filename",
-            input_text="Screenshot",
-            reference="screenshot",
-            description="t",
-        )
-        with (
-            patch.object(qr, "query_model", return_value="ok.txt"),
-            patch.object(qr, "score_output") as mock_score,
-        ):
-            sc = MagicMock()
-            sc.composite = 50
-            sc.dimensions = [Score("R", 65, 0.4, failures=[])]
-            sc.elapsed = 0.1
-            sc.model = "mock-model"
-            sc.task = "filename"
-            sc.case_id = "t"
-            sc.output = "ok.txt"
-            mock_score.return_value = sc
-            qr.run_suite(["mock-model"], [case], verbose=True)
-        captured = capsys.readouterr()
-        assert "50" in captured.out
+        This is the branch that pins the 60 threshold: composite 73.75 with a
+        worst dimension of 50 must warn, not pass.
+        """
+        from lib.tui import WARN
+
+        results, out = self._run("login.txt", capsys)
+        composite = results[0].composite
+        worst = min(d.score for d in results[0].dimensions)
+        assert composite == 73.75, composite
+        assert worst == 50, worst
+        assert WARN in out
+
+    def test_run_suite_good_output_gets_the_step_mark(self, mock_llm, capsys):
+        """The passing branch, from a genuinely good filename."""
+        from lib.tui import STEP
+
+        results, out = self._run("login_screenshot.txt", capsys)
+        assert results[0].composite == 100
+        assert min(d.score for d in results[0].dimensions) >= 60
+        assert STEP in out
 
     def test_run_suite_verbose_false(self, mock_llm, capsys):
-        from lib import quality_runner as qr
-        from lib.quality_models import TestCase
-
-        case = TestCase(
-            task="filename",
-            input_text="Screenshot",
-            reference="screenshot",
-            description="t",
-        )
-        qr.run_suite(["mock-model"], [case], verbose=False)
-        captured = capsys.readouterr()
-        assert captured.out == ""
+        _, out = self._run("login_screenshot.txt", capsys, verbose=False)
+        assert out == ""
 
     def test_run_suite_empty_dimensions(self, mock_llm, capsys):
-        """ScoreCard with output but no dimensions shows 0.0%."""
-        from lib import quality_runner as qr
-        from lib.quality_models import TestCase
-
-        case = TestCase(
-            task="filename",
-            input_text="Screenshot",
-            reference="screenshot",
-            description="t",
-        )
-        # Output exists, but score_output returns ScoreCard with no dimensions
-        with (
-            patch.object(qr, "query_model", return_value="something"),
-            patch.object(qr, "score_output") as mock_score,
-        ):
-            sc = MagicMock()
-            sc.composite = 0
-            sc.dimensions = []
-            sc.elapsed = 0.1
-            sc.model = "mock-model"
-            sc.task = "filename"
-            sc.case_id = "t"
-            sc.output = "something"
-            mock_score.return_value = sc
-            qr.run_suite(["mock-model"], [case], verbose=True)
-        captured = capsys.readouterr()
-        assert "0.0%" in captured.out
+        """Empty model output really does produce a dimensionless 0.0% card."""
+        results, out = self._run("", capsys)
+        assert results[0].dimensions == []
+        assert results[0].composite == 0
+        assert "0.0%" in out
 
     def test_run_suite_multiple_models(self, mock_llm, capsys):
         from lib import quality_runner as qr

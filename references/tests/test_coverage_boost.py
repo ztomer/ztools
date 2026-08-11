@@ -43,29 +43,20 @@ def test_create_client_unknown_raises():
         protocol_mod.create_client("nope")
 
 
-def test_adapter_calls_delegate():
+def test_adapter_delegates_the_call_to_its_client():
+    """Only the transport under each adapter is mocked, not the adapter."""
     messages = [{"role": "user", "content": "hi"}]
-    for client_type in (
-        protocol_mod.CLIENT_TYPE_OSAURUS,
-        protocol_mod.CLIENT_TYPE_MLX,
-        protocol_mod.CLIENT_TYPE_LLM,
-    ):
-        with (
-            patch.object(protocol_mod, "OsaurusClient") as oc,
-            patch.object(protocol_mod, "MlxClient") as mc,
-            patch.object(protocol_mod, "GenericClient") as gc,
-        ):
-            mapping = {
-                protocol_mod.CLIENT_TYPE_OSAURUS: oc,
-                protocol_mod.CLIENT_TYPE_MLX: mc,
-                protocol_mod.CLIENT_TYPE_LLM: gc,
-            }
-            inst = mapping[client_type].return_value
-            inst.call.return_value = {"ok": True}
-            client = protocol_mod.create_client(client_type)
-            out = client.call("m", messages, host="h", port=1, temperature=0.1)
-            assert out == {"ok": True}
-            inst.call.assert_called_once()
+    import lib.osaurus_lib as osaurus_lib
+
+    client = protocol_mod.create_client(protocol_mod.CLIENT_TYPE_OSAURUS)
+    # OsaurusClient imports `call` lazily inside the method, so the transport is
+    # patched where it lives.
+    with patch.object(osaurus_lib, "call", return_value={"ok": True}) as transport:
+        out = client.call("m", messages, host="h", port=1, temperature=0.1)
+    assert out == {"ok": True}
+    assert transport.call_args.args[0] == "m"
+    assert transport.call_args.args[1] == messages
+    assert transport.call_args.kwargs["host"] == "h"
 
 
 def test_signal_handling_safe_paths():
@@ -80,13 +71,17 @@ def test_signal_handling_safe_paths():
     sh._run_cleanup()
     assert calls == [1]
 
-    # Callback that raises must not propagate.
+    # A callback that raises must not propagate, and must not stop the ones
+    # registered after it from running. `in (True, False)` asserted nothing.
+    ran_after = []
+
     def bad():
         raise RuntimeError("boom")
 
     sh.register_cleanup(bad)
+    sh.register_cleanup(lambda: ran_after.append(1))
     sh._run_cleanup()
-    assert sh.is_shutdown_requested() in (True, False)
+    assert ran_after == [1]
 
     # GracefulShutdown registers on enter, removes on exit.
     with sh.GracefulShutdown(cleanup_fn=cb) as g:
@@ -192,15 +187,16 @@ def test_validate_filename_leak_and_candidate():
     assert "instruction leak" in msg
 
     # Long/invalid input forces candidate extraction branch.
-    bad = "x" * 300
-    s2, _ = tv.validate_filename(bad)
-    assert isinstance(s2, int)
+    # Long/invalid input forces candidate extraction. Pin the real score: an
+    # isinstance check passes for every possible scoring regression.
+    s2, m2 = tv.validate_filename("x" * 300)
+    assert (s2, m2) == (75, "no separators/structure")
 
 
 def test_mixed_summary_branches():
     # No noise marker -> signal-only path.
     s, m = tv.validate_mixed_summary("summary text", source_text="signal content here")
-    assert isinstance(s, int)
+    assert s == 30 and m == "signal coverage 0/2"
     # Empty response.
     assert tv.validate_mixed_summary("") == (0, "empty response")
     # Noise entry present in summary lowers score.
@@ -231,10 +227,10 @@ def test_mixed_file_summary_branches():
     # JSON string form.
     out = '{"real/file.py": "desc"}'
     s, m = tv.validate_mixed_file_summary(out, source_text=src)
-    assert isinstance(s, int)
+    assert (s, m) == (100, "")
     # Markdown form.
     s2, m2 = tv.validate_mixed_file_summary("## /real/file.py: desc", source_text=src)
-    assert isinstance(s2, int)
+    assert (s2, m2) == (100, "")
     # Empty output.
     assert tv.validate_mixed_file_summary("", source_text=src) == (0, "empty response")
 
@@ -242,8 +238,16 @@ def test_mixed_file_summary_branches():
 def test_mixed_filename_branches():
     src = "1. vacation photo\n2. receipt NOISE - noise: junk name"
     # dict + list forms of data.
-    assert isinstance(tv.validate_mixed_filename({"name": "vacation"}, source_text=src)[0], int)
-    assert isinstance(tv.validate_mixed_filename(["vacation"], source_text=src)[0], int)
+    # Real scores: the dict form pulls in a noise-derived name and is penalised,
+    # the list form is not. isinstance(..., int) held for every wrong answer too.
+    assert tv.validate_mixed_filename({"name": "vacation"}, source_text=src) == (
+        25,
+        "included 1/1 noise-derived names; missed 1/2 signal snippets",
+    )
+    assert tv.validate_mixed_filename(["vacation"], source_text=src) == (
+        75,
+        "missed 1/2 signal snippets",
+    )
     assert tv.validate_mixed_filename("", source_text=src) == (0, "empty response")
     assert tv.validate_mixed_filename("x", source_text="no signal here") == (
         0,

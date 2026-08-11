@@ -87,22 +87,32 @@ class TestDefaultParsedFor:
         ]
 
     def test_weekend_transient(self):
+        """Transient items carry `day` — that is what makes them transient.
+
+        `isinstance(result, list)` held for an empty list and for any wrong
+        shape, so the fixture the whole suite depends on was unpinned.
+        """
         from lib.testing import _default_parsed_for
 
         result = _default_parsed_for("weekend_transient")
-        assert isinstance(result, list)
+        assert len(result) == 2
+        assert all("day" in item for item in result)
+        assert result[0]["name"] == "Spring Festival"
 
     def test_weekend_fixed(self):
+        """Fixed venues carry no `day`: they are available all weekend."""
         from lib.testing import _default_parsed_for
 
         result = _default_parsed_for("weekend_fixed")
-        assert isinstance(result, list)
+        assert len(result) == 2
+        assert all("day" not in item for item in result)
+        assert {"name", "location", "target_ages", "price", "weather"} <= set(result[0])
 
     def test_detailed_json(self):
         from lib.testing import _default_parsed_for
 
         result = _default_parsed_for("detailed_json")
-        assert isinstance(result, list)
+        assert result == _default_parsed_for("weekend_fixed")
 
     def test_file_summary(self):
         from lib.testing import _default_parsed_for

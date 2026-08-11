@@ -16,80 +16,85 @@ except ImportError:  # pragma: no cover
     sys.modules["ddgs"] = mock_ddgs
 
 # Import the extraction logic
+from lib.validators.json_validator import extract_list_from_dict  # noqa: E402
 from weekend import normalize_llm_items  # noqa: E402
 
 
 class TestWeekendJsonExtraction:
-    """Test JSON extraction from LLM responses."""
+    """The real extractor, on the real fixtures.
+
+    These tests used to re-implement the key-picking loop inline and assert on
+    their own local variable, so deleting or reordering `extract_list_from_dict`
+    could not fail them. Verified: inverting its key-priority list left all 133
+    weekend/json-validator tests green.
+    """
 
     def test_extract_activities_key(self, mock_llm_response):
-        """Extract when model returns 'activities' key."""
-        response = mock_llm_response["json_with_activities"]
-        # Simulate the extraction logic
-        items = []
-        if isinstance(response, dict):
-            for k, v in response.items():
-                if isinstance(v, list) and len(v) > 0:
-                    items = v
-                    break
+        items = extract_list_from_dict(mock_llm_response["json_with_activities"])
         assert len(items) == 2
         assert items[0]["name"] == "Test Activity 1"
 
     def test_extract_fixed_activities_key(self, mock_llm_response):
-        """Extract when model returns 'fixed_activities' key."""
-        response = mock_llm_response["json_with_fixed_activities"]
-        items = []
-        if isinstance(response, dict):
-            for k, v in response.items():
-                if isinstance(v, list) and len(v) > 0:
-                    items = v
-                    break
+        items = extract_list_from_dict(mock_llm_response["json_with_fixed_activities"])
         assert len(items) == 1
         assert items[0]["name"] == "ROM"
 
     def test_extract_transient_events_key(self, mock_llm_response):
-        """Extract when model returns 'transient_events' key."""
-        response = mock_llm_response["json_with_transient_events"]
-        items = []
-        if isinstance(response, dict):
-            for k, v in response.items():
-                if isinstance(v, list) and len(v) > 0:
-                    items = v
-                    break
+        items = extract_list_from_dict(mock_llm_response["json_with_transient_events"])
         assert len(items) == 1
         assert items[0]["name"] == "Spring Festival"
 
+    def test_named_keys_win_over_an_arbitrary_first_list(self):
+        """Priority is the point: a wrapper key must not shadow the real one.
+
+        Insertion order puts the decoy first, so a "take the first list" reading
+        returns the wrong payload.
+        """
+        response = {
+            "debug_trace": [{"name": "not the answer"}],
+            "activities": [{"name": "Event 1"}, {"name": "Event 2"}],
+        }
+        items = extract_list_from_dict(response)
+        assert [i["name"] for i in items] == ["Event 1", "Event 2"]
+
+    def test_key_priority_order_is_pinned(self):
+        """When two known keys are present, the earlier one in the list wins.
+
+        Without this, reordering the priority list is invisible to the suite —
+        every other fixture has exactly one known key, so any order returns the
+        same payload. Verified: inverting the list makes only this test go red.
+        """
+        response = {
+            "transient_events": [{"name": "lower priority"}],
+            "activities": [{"name": "higher priority"}],
+        }
+        assert extract_list_from_dict(response)[0]["name"] == "higher priority"
+
+        # ... and the same holds regardless of dict insertion order.
+        reordered = {
+            "activities": [{"name": "higher priority"}],
+            "transient_events": [{"name": "lower priority"}],
+        }
+        assert extract_list_from_dict(reordered)[0]["name"] == "higher priority"
+
     def test_extract_from_error_wrapper(self):
-        """Extract from error wrapper response."""
-        # Model sometimes returns error-like wrapper with data inside
-        response = {
-            "status": "error",
-            "data": [
-                {"name": "Event 1"},
-                {"name": "Event 2"},
-            ],
-        }
-        items = []
-        if response.get("data") and isinstance(response.get("data"), list):
-            items = response.get("data", [])
-        assert len(items) == 2
+        """Models wrap the payload in an error-shaped envelope; `data` is known."""
+        response = {"status": "error", "data": [{"name": "Event 1"}, {"name": "Event 2"}]}
+        items = extract_list_from_dict(response)
+        assert [i["name"] for i in items] == ["Event 1", "Event 2"]
 
-    def test_extract_from_extracted_data(self):
-        """Extract from 'extracted_data' key."""
-        response = {
-            "extracted_data": [
-                {"name": "Thing 1"},
-                {"name": "Thing 2"},
-            ]
-        }
-        items = []
-        if isinstance(response, dict):
-            for k, v in response.items():
-                if isinstance(v, list) and len(v) > 0:
-                    items = v
-                    break
-        assert len(items) == 2
+    def test_extract_from_unknown_key_falls_back_to_the_longest_list(self):
+        """`extracted_data` is not in the known-key list — the fallback finds it."""
+        response = {"note": [], "extracted_data": [{"name": "Thing 1"}, {"name": "Thing 2"}]}
+        items = extract_list_from_dict(response)
+        assert [i["name"] for i in items] == ["Thing 1", "Thing 2"]
 
+    def test_extract_from_a_nested_wrapper(self):
+        response = {"result": {"transient_events": [{"name": "Nested Festival"}]}}
+        assert extract_list_from_dict(response)[0]["name"] == "Nested Festival"
+
+    def test_no_list_anywhere_yields_empty(self):
+        assert extract_list_from_dict({"status": "error", "message": "no events"}) == []
 
 class TestWeekendNormalize:
     """Test normalization functions."""

@@ -509,21 +509,30 @@ class TestQueryMlxForFilename:
             result = query_mlx_for_filename("some text")
         assert result == "fallback_name"
 
-    def test_fallback_already_tried(self):
+    def test_a_model_path_is_never_tried_twice(self):
+        """The dedup guard, actually exercised.
+
+        The previous version of this test let the first model succeed, so the
+        `model_path in tried` guard and the fallback branch it protects were
+        never reached — deleting the guard could not fail it. Here two configured
+        models and the fallback all resolve to the SAME path, so a missing guard
+        shows up as extra call_mlx invocations.
+        """
         from rename.llm import query_mlx_for_filename
 
         mlx_path = Path("/tmp/my.mlx")
         with (
             patch("rename.llm.find_mlx_model", return_value=mlx_path),
             patch("rename.llm.find_any_working_mlx_model", return_value=mlx_path),
-            patch("rename.llm.call_mlx", return_value="skipped"),
+            patch("rename.llm.call_mlx", return_value=None) as call_mlx,
             patch("rename.llm.process_mlx_content", side_effect=lambda x: x),
-            patch("rename.llm.PROMPT_TEXT_TO_FILENAME", "Text: {text}"),
-            patch("rename.llm.FILENAME_MODELS", ["test-model"]),
+            patch("rename.llm.FILENAME_MODELS", ["model-a", "model-b"]),
             patch("rename.llm.MLX_MODELS_DIR", Path("/tmp")),
         ):
             result = query_mlx_for_filename("some text")
-        assert result == "skipped"
+
+        assert result is None
+        assert call_mlx.call_count == 1, "the same model path must not be tried twice"
 
     def test_fallback_call_mlx_returns_none(self):
         from rename.llm import query_mlx_for_filename

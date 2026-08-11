@@ -115,11 +115,22 @@ then restore. Do this before you trust any new assertion.
 
 ```bash
 # Example from the scroll stop-conditions work
-sed -i '' 's/if stagnant >= STAGNANT_SCROLL_LIMIT:/if False:/' twitter/browser.py
+sed -i '' 's/if stagnant >= STAGNANT_SCROLL_LIMIT:/if False:/' references/twitter/browser.py
 pytest references/tests/test_twit_browser.py -q     # expect: red
-git checkout -- twitter/browser.py
+git checkout -- references/twitter/browser.py
+find references -name __pycache__ -type d -exec rm -rf {} +   # see below
 pytest references/tests/test_twit_browser.py -q     # expect: green
 ```
+
+**Clear `__pycache__` when you restore.** Python validates cached bytecode by
+(mtime, size) at second granularity. A one-character mutation — `>= 60` to
+`>= 30` — does not change the file size, and mutate-run-restore usually happens
+inside the same second, so the restored file can look unchanged to the import
+system while the interpreter keeps running the MUTATED bytecode. The symptom is
+maddening: `inspect.getsource` shows the correct source, evaluating the same
+expression by hand gives the correct answer, and the running function does
+something else. `dis.dis(fn)` shows the truth (`LOAD_CONST (30)` against a file
+that reads `60`). This cost an hour once; clearing the cache costs nothing.
 
 Mutations that were verified to turn the suite red: disabling stagnation detection,
 disabling the runtime budget, disabling drain mode, removing the millisecond-expiry
