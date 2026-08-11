@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest  # noqa: F401  (used by cases added here over time)
 from eval import report_classes as rc
+from lib.paths import conf_path
 
 FIXTURES = Path(__file__).parent / "fixtures" / "reports"
 WINDOW_START = date(2026, 7, 31)
@@ -22,7 +23,7 @@ WINDOW_END = date(2026, 8, 2)
 
 
 def _declared_exclusions() -> list[str]:
-    raw = tomllib.loads((rc.ROOT / "conf" / "weekend.toml").read_text())
+    raw = tomllib.loads(conf_path("weekend.toml").read_text())
     if "exclude_places" in raw:
         return raw["exclude_places"]
     for child in raw.get("children", []):

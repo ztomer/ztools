@@ -297,13 +297,38 @@ def check_hardcoded_models(path: Path) -> List[Violation]:
 _LAYOUT_PATH_RE = re.compile(r'parent\s*(?:\.\w+\s*)*/\s*"(conf|docs|eval_tasks)"')
 
 
+# A cwd-relative path into a package directory. `open("eval/benchmark_quality.py")`
+# resolved from the repo root until the Python moved under references/, then
+# silently stopped — four tests were red for months because of exactly this.
+# Unlike the __file__ rule, this one applies to tests too: that is where it bit.
+_CWD_RELATIVE_RE = re.compile(
+    r"""(?:open|Path)\(\s*["'](lib|eval|weekend|twitter|rename|tui|tests)/"""
+)
+
+
 def check_layout_paths(path: Path) -> List[Violation]:
     if path.suffix != ".py":
         return []
-    if _is_test_file(path) or path.name == "paths.py":
+    # lib/paths.py owns the layout knowledge, and test_paths.py is its test: it
+    # must name the candidate paths to pin them. Nothing else may.
+    if path.name in ("paths.py", "test_paths.py"):
         return []
     violations: List[Violation] = []
+    # Tests are NOT exempt from either rule: this class reached four C8 tests via
+    # `rc.ROOT / "conf" / "weekend.toml"` and four more via a cwd-relative open,
+    # and all eight sat red for months. The patterns only match the three shipped
+    # resource names, so ordinary `Path(__file__).parent / "fixtures"` is unaffected.
     for i, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+        m = _CWD_RELATIVE_RE.search(line)
+        if m:
+            violations.append(
+                (
+                    i,
+                    f"cwd-relative path into `{m.group(1)}/` — resolves only when "
+                    "run from the repo root, and not at all since the move",
+                    "Locate it through the import system (inspect.getfile) or lib.paths",
+                )
+            )
         m = _LAYOUT_PATH_RE.search(line)
         if m:
             resource = m.group(1)

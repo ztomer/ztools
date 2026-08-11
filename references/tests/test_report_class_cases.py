@@ -25,6 +25,7 @@ from pathlib import Path
 
 import pytest
 from eval import report_classes as rc
+from lib.paths import conf_path
 
 FIXTURES = Path(__file__).parent / "fixtures" / "reports"
 WK_FIXTURE = FIXTURES / "wk_2026-07-31_sample.md"
@@ -48,7 +49,7 @@ def _declared_exclusions() -> list[str]:
     Deliberately not via weekend.config: that path is broken (class C8) and this
     helper must report what the user WROTE, not what the program manages to see.
     """
-    raw = tomllib.loads((rc.ROOT / "conf" / "weekend.toml").read_text())
+    raw = tomllib.loads(conf_path("weekend.toml").read_text())
     if "exclude_places" in raw:
         return raw["exclude_places"]
     for child in raw.get("children", []):

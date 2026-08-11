@@ -204,11 +204,17 @@ class TestMainBlock:
         Returns the body with common leading whitespace removed so it can be
         exec'd at module level.
         """
+        import inspect
+        import pathlib
         import re
         import textwrap
 
-        with open("eval/benchmark_quality.py") as f:
-            source = f.read()
+        from eval import benchmark_quality
+
+        # Locate the module through the import system, not a cwd-relative path.
+        # `eval/benchmark_quality.py` stopped resolving when the Python moved
+        # under references/, and these four tests have been red ever since.
+        source = pathlib.Path(inspect.getfile(benchmark_quality)).read_text()
         # Match: if __name__ == "__main__":\n    <body lines>
         match = re.search(
             r'if __name__ == "__main__":\n((?:    .*\n)+)',
