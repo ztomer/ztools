@@ -8,6 +8,7 @@ together with the TASKS dict and _extract_items_from_text helper.
 from pathlib import Path
 
 from lib.eval_data import WEEKEND_USR_FIXED, WEEKEND_USR_TRANSIENT
+from lib.paths import repo_root
 
 WEEKEND_USR_TRANSIENT_MIXED = (
     WEEKEND_USR_TRANSIENT
@@ -108,22 +109,17 @@ NOISE (Ignore - do NOT produce filenames for these):
 - Malformed: incomplete without meaning
 """
 
-_PROJECT_ROOT = Path(__file__).parent.parent
-_FILE_SUMMARY_FILES = [
+# Repo-root-relative files (README, CLAUDE.md, conf/, docs/) versus files under
+# references/. Splitting them keeps the prompt naming paths that actually exist:
+# a single `_PROJECT_ROOT` prefix pointed 13 of 30 entries at references/README.md,
+# references/conf/config.toml and friends, none of which are real.
+_REPO_ROOT = repo_root() or Path(__file__).resolve().parent.parent.parent
+_PYTHON_ROOT = Path(__file__).resolve().parent.parent
+
+_REPO_ROOT_FILES = [
     "README.md",
     "CLAUDE.md",
-    "model_eval.py",
-    "weekend_planner.py",
-    "twitter_summarizer.py",
-    "image_renamer.py",
-    "explore_model_quirks.py",
-    "lib/__init__.py",
-    "lib/osaurus_lib.py",
-    "lib/validators_lib.py",
-    "lib/config.py",
-    "lib/content_processing.py",
-    "lib/mlx_lib.py",
-    "lib/logging_config.py",
+    "pyproject.toml",
     "conf/config.toml",
     "conf/weekend.toml",
     "conf/twitter.toml",
@@ -132,16 +128,30 @@ _FILE_SUMMARY_FILES = [
     "conf/models/gemma.toml",
     "conf/models/qwen.toml",
     "docs/MODEL_QUIRKS.md",
-    "docs/PROJECT_MEMORY.md",
-    "tests/test_validators.py",
-    "tests/test_parse.py",
+    "docs/TESTING.md",
+]
+_PYTHON_ROOT_FILES = [
+    "model_eval.py",
+    "weekend_planner.py",
+    "twitter_summarizer.py",
+    "image_renamer.py",
+    "lib/__init__.py",
+    "lib/osaurus_lib.py",
+    "lib/validators_lib.py",
+    "lib/config.py",
+    "lib/paths.py",
+    "lib/content_processing.py",
+    "lib/mlx_lib.py",
+    "lib/logging_config.py",
     "tests/test_config.py",
     "tests/test_weekend.py",
     "tests/test_content_processing.py",
     "tests/test_twitter.py",
-    "pyproject.toml",
 ]
-FILE_SUMMARY_FILE_LIST = "\n".join(str(_PROJECT_ROOT / f) for f in _FILE_SUMMARY_FILES)
+FILE_SUMMARY_FILE_LIST = "\n".join(
+    [str(_REPO_ROOT / f) for f in _REPO_ROOT_FILES]
+    + [str(_PYTHON_ROOT / f) for f in _PYTHON_ROOT_FILES]
+)
 FILE_SUMMARY_PROMPT = f"""Read the file list below and give one-line summary for each file.
 
 CRITICAL: Rely ONLY on provided content context. DO NOT infer functionality from file names,

@@ -135,3 +135,26 @@ class TestTaxesTasksAreRunnable:
         # terms or misses the required sections, so it must not score full marks.
         score, _ = validate_taxes_synthesis(prompt)
         assert score < 100
+
+
+def test_file_summary_prompt_names_only_real_files():
+    """The prompt must not ask a model to summarize files that do not exist.
+
+    A single `_PROJECT_ROOT` prefix pointed 13 of 30 entries at
+    references/README.md, references/conf/config.toml and similar phantoms —
+    the same layout confusion as the conf/ bug, reaching the prompt text.
+    """
+    from pathlib import Path
+
+    from eval.tasks_prompts import FILE_SUMMARY_FILE_LIST
+    from lib.paths import repo_root
+
+    if repo_root() is None:
+        import pytest
+
+        pytest.skip("paths are checkout-relative; nothing to verify in an install")
+
+    listed = FILE_SUMMARY_FILE_LIST.splitlines()
+    assert len(listed) > 20, "expected a substantial file list"
+    missing = [p for p in listed if not Path(p).exists()]
+    assert missing == [], f"prompt names files that do not exist: {missing}"
