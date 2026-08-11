@@ -246,9 +246,10 @@ class TestQueryLlmForFilename:
             s = mock_session.return_value.__enter__.return_value
             s.post.return_value = mock_resp
             result = query_llm_for_filename("x", "http://localhost:1337")
-            # Truncated to exactly 35 chars
-            assert result == "x" * 35
-            assert len(result) == 35
+            # Truncated to the documented 50-char limit (the prompts promise
+            # "under 50"; the code used to cut at 35 and truncate mid-word).
+            assert result == "x" * 50
+            assert len(result) == 50
 
     def test_non_alpha_content_skipped(self):
         """Lines 135-136, 138-139: non-alpha content is skipped."""

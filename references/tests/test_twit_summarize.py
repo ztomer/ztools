@@ -175,8 +175,8 @@ class TestEstimateTimeout:
         import twitter.summarize as twit_summarize
 
         with (
-            patch.object(twit_summarize, "COLD_START_BASE", 0),
-            patch.object(twit_summarize, "MIN_TIMEOUT", 60),
+            patch("twitter.budget.COLD_START_BASE", 0),
+            patch("twitter.budget.MIN_TIMEOUT", 60),
         ):
             t = twit_summarize._estimate_timeout("x", "m1")
         assert t >= 60
@@ -184,7 +184,7 @@ class TestEstimateTimeout:
     def test_clamped_to_max(self, mock_llm):
         import twitter.summarize as twit_summarize
 
-        with patch.object(twit_summarize, "MAX_TIMEOUT", 300):
+        with patch("twitter.budget.MAX_TIMEOUT", 300):
             t = twit_summarize._estimate_timeout("x" * 10_000_000, "m1")
         assert t == 300
 
@@ -192,9 +192,9 @@ class TestEstimateTimeout:
         import twitter.summarize as twit_summarize
 
         with (
-            patch.object(twit_summarize, "COLD_START_BASE", 500),
-            patch.object(twit_summarize, "MAX_TIMEOUT", 1800),
-            patch.object(twit_summarize, "MIN_TIMEOUT", 1),
+            patch("twitter.budget.COLD_START_BASE", 500),
+            patch("twitter.budget.MAX_TIMEOUT", 1800),
+            patch("twitter.budget.MIN_TIMEOUT", 1),
         ):
             # Tiny prompt: timeout is dominated by the fixed cold-start cost.
             t = twit_summarize._estimate_timeout("x", "m1")

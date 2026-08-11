@@ -36,7 +36,7 @@ Create a structured summary of this timeline.
 Start with a brief ## Executive Summary paragraph capturing the overarching narrative.
 Then organize events into topic sections with ## headers, using bullet points.
 Use connecting phrases ('following up on', 'subsequently announced', 'in response to') and narrative verbs ('released', 'responded', 'criticized', 'launched') to show how events relate.
-CRITICAL: Conclude EVERY bullet point with the author handle and timestamp in exact bracket format: `(@username | Mon DD HH:MM)`.
+CRITICAL: End EVERY bullet with the author handle and timestamp copied EXACTLY as they appear in that tweet's source line. A source line beginning `[@TechCrunch | Aug 10 14:30]:` yields a bullet ending `(@TechCrunch | Aug 10 14:30)`. Never invent or reformat a date, weekday or time that is not in the source line.
 
 <timeline>
 {}

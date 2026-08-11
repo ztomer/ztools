@@ -44,7 +44,7 @@ NOISE (Ignore these - test your filtering):
 
 RENAME_PROMPT = """Give a short 2-4 word summary of: {text}
 
-Output ONLY the filename string, lowercase with underscores. Max 35 characters."""
+Output ONLY the filename string, lowercase with underscores. Max 50 characters."""
 
 RENAME_PROMPT_MIXED = """\
 Rename each text snippet below to a short 2-4 word filename, lowercase with
@@ -190,8 +190,10 @@ facts from the provided chronological Twitter/X timeline.
 3. Organize into topic sections using ## headers and bullet points.
 4. Use connecting phrases ('following up on', 'subsequently announced') and narrative verbs
    ('released', 'responded', 'criticized') to show how events relate.
-5. CRITICAL: Conclude EVERY bullet point with the author handle and timestamp in exact
-   bracket format: `(@username | Mon DD HH:MM)`.
+5. CRITICAL: End EVERY bullet with the author handle and timestamp copied EXACTLY as
+   they appear in that tweet's source line. A source line beginning
+   `[@TechCrunch | 08:00]:` yields a bullet ending `(@TechCrunch | 08:00)`.
+   Never invent or reformat a date, weekday or time that is not in the source line.
 </instructions>
 
 <formatting_rules>
@@ -199,7 +201,7 @@ facts from the provided chronological Twitter/X timeline.
 - Use topic headers starting with `##`
 - Use bullet points for facts
 - Use narrative verbs and connecting phrases showing event relationships
-- Conclude every bullet point with `(@username | Mon DD HH:MM)`
+- End every bullet with `(@handle | timestamp-exactly-as-written-in-the-source-line)`
 </formatting_rules>
 
 <timeline>

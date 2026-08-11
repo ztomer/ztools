@@ -308,10 +308,15 @@ class TestValidateResultDirectly:
         from eval.tasks_core import TASKS
 
         task_cfg = TASKS["filename"]
-        result = {"content": "valid_filename", "parsed": None}
+        # The name must be RELEVANT to the task's input, not merely well-formed:
+        # the filename task now sends the real eval input and scores coverage of
+        # it, so a shape-only name like "valid_filename" is capped at 40.
+        result = {"content": "login_error_invalid_credentials", "parsed": None}
         score, failure, diagnosis = _validate_result(result, task_cfg, "filename")
-        # "valid_filename" passes length, chars, format checks
-        assert score == 100
+        assert score == 100, failure
+
+        shape_only = {"content": "valid_filename", "parsed": None}
+        assert _validate_result(shape_only, task_cfg, "filename")[0] <= 40
         assert failure == ""
 
 
@@ -621,8 +626,9 @@ class TestRunEvalAllBranches:
 
             tasks = {"filename": TASKS["filename"]}
             results = er.run_eval("m", tasks=tasks, verbose=True)
-        # Filename validation: mock returns "mock_test_filename" - all score
-        assert results[0]["quality_score"] == 100
+        # MockLLM returns "mock_test_filename", which is well-formed but says
+        # nothing about the task's input, so the relevance dimension caps it.
+        assert results[0]["quality_score"] == 40
         # Verbose mode should print something
         captured = capsys.readouterr()
         assert len(captured.out) > 0 or len(captured.err) > 0

@@ -3,6 +3,7 @@ Helper utilities for image processing and filename generation.
 """
 
 import re
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -65,7 +66,18 @@ def clean_filename(text: str, max_length: int = 50) -> str:
     return cleaned if cleaned else "unnamed"
 
 
+def ocr_available() -> bool:
+    """Whether OCR can actually run — checked before a batch, not per image."""
+    return _get_tesseract() is not None
+
+
 def _get_tesseract():
+    """Return the pytesseract module, or None with a stated reason.
+
+    A silent None turns this tool into a picture-describer: every screenshot
+    OCRs to nothing, routes to the VLM, and the only trace is a per-image
+    "No readable text" that is indistinguishable from an image with no text.
+    """
     global _TESSERACT_INIT
     if not _TESSERACT_INIT:
         try:
@@ -74,10 +86,20 @@ def _get_tesseract():
             pytesseract = None
         if pytesseract and Path(_TESSERACT_BREW).exists():
             pytesseract.pytesseract.tesseract_cmd = _TESSERACT_BREW
+        elif pytesseract is None:
+            print(
+                f"{FAIL} OCR unavailable: pytesseract is not installed — every image "
+                "would be sent to the VLM. Install it with: uv sync",
+                file=sys.stderr,
+            )
+        elif not Path(_TESSERACT_BREW).exists():
+            print(
+                f"{FAIL} OCR unavailable: the tesseract binary is missing at "
+                f"{_TESSERACT_BREW} — every image would be sent to the VLM.",
+                file=sys.stderr,
+            )
         _TESSERACT_INIT = True
     else:
-        import sys
-
         pytesseract = sys.modules.get("pytesseract")
     return pytesseract
 

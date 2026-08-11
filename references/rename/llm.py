@@ -72,7 +72,9 @@ _relevance_models_str = _RENAME_CFG.get("relevance_check_models") or os.environ.
 RELEVANCE_CHECK_MODELS = [m.strip() for m in _relevance_models_str.split(",") if m.strip()]
 MIN_CONTENT_LEN = 2
 MAX_FILENAME_WORDS = 6
-MAX_FILENAME_LEN = 35
+# The prompts promise "under 50 characters"; slicing at 35 truncated mid-word
+# ("apple_foldable_iphone_launch_delaye"). One limit, matching what we ask for.
+MAX_FILENAME_LEN = 50
 HTTP_STATUS_OK = 200
 
 
@@ -117,6 +119,17 @@ def is_relevant_with_llm(text: str, host: str, api_key: str = "") -> Optional[bo
             continue
 
     return None
+
+
+
+def _truncate_on_word_boundary(name: str, limit: int) -> str:
+    """Cut at the last `_` before `limit` so names never end mid-word."""
+    if len(name) <= limit:
+        return name
+    cut = name[:limit]
+    boundary = cut.rfind("_")
+    # Only honour the boundary if it leaves something substantial.
+    return cut[:boundary] if boundary >= limit // 2 else cut
 
 
 def _filename_prompt(model: str, text: str) -> str:
@@ -167,13 +180,17 @@ def query_llm_for_filename(
 
                 content = _strip_instruction_prefix(content)
 
-                words = re.findall(r"[a-z]+", content)
-                if not words:
+                # Keep digits: years, versions, order numbers and amounts are the
+                # most identifying part of a screenshot name. `[a-z]+` deleted every
+                # one of them ("Quarterly Revenue 2025" -> quarterly_revenue).
+                words = re.findall(r"[a-z0-9]+", content)
+                # Digits belong inside a name, but a name that is ONLY digits
+                # identifies nothing — keep the original "needs letters" guard.
+                if not any(any(c.isalpha() for c in w) for w in words):
                     continue
 
                 content = "_".join(words[:MAX_FILENAME_WORDS])
-                if len(content) > MAX_FILENAME_LEN:
-                    content = content[:MAX_FILENAME_LEN]
+                content = _truncate_on_word_boundary(content, MAX_FILENAME_LEN)
 
                 return content
         except Exception as e:

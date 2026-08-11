@@ -441,7 +441,8 @@ class TestDiffFromLastRun:
                         {"task": "t2", "quality_score": 90},  # 0 (not in diffs)
                     ],
                 }
-            ]
+            ],
+            eval_dir=_EVAL_DIR,
         )
         assert "m1" in result
         assert "t1" in result["m1"]

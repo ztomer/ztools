@@ -225,7 +225,9 @@ class TestRenameImageLlmPath:
                 api_key="",
             )
             assert success is True  # falls back to clean_filename
-            assert msg == ""
+            # A successful rename now reports its mapping so dry runs can
+            # actually preview; it used to return an empty string.
+            assert "->" in msg
 
     def test_llm_too_short_name_rejected(self):
         from rename.cli import rename_image

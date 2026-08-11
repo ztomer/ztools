@@ -17,6 +17,17 @@ from lib.tui import STEP
 from eval import report_core
 from eval.report_core import _make_table, default_eval_dir
 
+# Only UNAMBIGUOUS test doubles. `mock-model` sat at mean 100 and topped the
+# historical trend table. Short names like "m1" are left alone: they are used as
+# fixtures but could plausibly be a real local model, and wrongly hiding a user's
+# real results is worse than one stray row.
+_TEST_MODEL_PREFIXES = ("mock", "test-", "fake")
+
+
+def is_test_model(model: str) -> bool:
+    """Whether a model name is a test double rather than a real served model."""
+    return (model or "").strip().lower().startswith(_TEST_MODEL_PREFIXES)
+
 
 def save_historical_results(
     all_results: list, stats: dict, categories: dict, eval_dir=None
@@ -36,6 +47,10 @@ def save_historical_results(
 
     for r in all_results:
         model = r["model"]
+        # Test doubles must not enter the production leaderboard: `mock-model`
+        # sat at mean 100 and topped the historical trend table.
+        if is_test_model(model):
+            continue
         if model not in history:
             history[model] = []
 
@@ -77,7 +92,10 @@ def load_historical_stats(eval_dir=None) -> dict:
         if not entries:
             continue
 
-        scores = [e["score"] for e in entries if e.get("score")]
+        # `if e.get("score")` is falsy for 0, so every total failure was
+        # dropped from mean/median/min — a model that scored 0 on half its runs
+        # looked identical to one that never failed.
+        scores = [e["score"] for e in entries if e.get("score") is not None]
         if scores:
             stats[model] = {
                 "mean": statistics.mean(scores),

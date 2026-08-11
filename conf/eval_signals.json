@@ -166,9 +166,9 @@
       "total_retries": 0
     },
     "file_summary": {
-      "p95_latency": 16.0,
+      "p95_latency": 15.7,
       "parse_failures": 0,
-      "samples": 12,
+      "samples": 13,
       "timeout": 900,
       "total_retries": 0
     },
@@ -180,9 +180,9 @@
       "total_retries": 0
     },
     "filename": {
-      "p95_latency": 1.4,
+      "p95_latency": 6.3,
       "parse_failures": 0,
-      "samples": 12,
+      "samples": 16,
       "timeout": 900,
       "total_retries": 0
     },
@@ -229,9 +229,9 @@
       "total_retries": 0
     },
     "summarize": {
-      "p95_latency": 9.2,
+      "p95_latency": 15.3,
       "parse_failures": 0,
-      "samples": 14,
+      "samples": 18,
       "timeout": 900,
       "total_retries": 1
     },
@@ -378,9 +378,9 @@
       "total_retries": 0
     },
     "summarize": {
-      "p95_latency": 66.7,
+      "p95_latency": 62.8,
       "parse_failures": 0,
-      "samples": 7,
+      "samples": 9,
       "timeout": 900,
       "total_retries": 1
     },
@@ -458,6 +458,22 @@
     },
     "weekend_transient": {
       "p95_latency": 26.5,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    }
+  },
+  "gemma-4-e2b-it-8bit": {
+    "filename": {
+      "p95_latency": 9.0,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "summarize": {
+      "p95_latency": 22.9,
       "parse_failures": 0,
       "samples": 1,
       "timeout": 900,

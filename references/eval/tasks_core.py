@@ -8,6 +8,7 @@ import json
 import re
 from typing import Dict, List
 
+from lib.config import get_eval_input
 from lib.eval_data import (
     WEEKEND_SYS_FIXED,
     WEEKEND_SYS_TRANSIENT,
@@ -127,6 +128,12 @@ def _extract_items_from_text(text: str) -> List[Dict]:
     return items
 
 
+
+def _filename_prompt_for(text: str) -> str:
+    """Render RENAME_PROMPT with a real input, never the bare template."""
+    return RENAME_PROMPT.replace("{text}", text)
+
+
 TASKS = {
     "weekend_transient": {
         "messages": [
@@ -165,9 +172,16 @@ TASKS = {
         "source": WEEKEND_USR_FIXED_MIXED,
     },
     "filename": {
-        "messages": [{"role": "user", "content": RENAME_PROMPT}],
+        # `{text}` MUST be filled: sending the raw template asked the model to
+        # summarise the literal string "{text}", and the shape-only validator
+        # scored the result 100. `source` lets validate_filename judge relevance
+        # to the actual input rather than just the shape of the output.
+        "messages": [
+            {"role": "user", "content": _filename_prompt_for(get_eval_input("filename"))}
+        ],
         "validator": validate_filename,
         "parse_json": False,
+        "source": get_eval_input("filename"),
     },
     "image_rename": {
         "messages": [{"role": "user", "content": IMAGE_RENAME_PROMPT}],
@@ -255,7 +269,9 @@ TASKS = {
         "validator_kwargs": {"contradiction_phrase": CONTRADICTION_PHRASE},
     },
     "filename_leak": {
-        "messages": [{"role": "user", "content": RENAME_PROMPT}],
+        "messages": [
+            {"role": "user", "content": _filename_prompt_for(get_eval_input("filename"))}
+        ],
         "validator": validate_no_leak,
         "parse_json": False,
     },

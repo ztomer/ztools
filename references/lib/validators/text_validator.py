@@ -87,7 +87,7 @@ from lib.validators.text_validator_mixed import (  # noqa: F401,E402
 FILENAME_VALID_CHARS = set("_.-")
 
 # Pre-compiled validation regular expressions (John Carmack optimization)
-# The prompts order every bullet to end with `(@username | Mon DD HH:MM)`, and the
+# The prompts order every bullet to end with `(@handle | timestamp)`, and the
 # real timelines carry real handles (@TechCrunch). Counting only `user N` tokens
 # scored a prompt-perfect summary as "no user mentions" while `@user 1 @user 2`
 # padding scored full marks. Count both shapes, de-duplicated, so coverage means
@@ -97,6 +97,16 @@ FILENAME_VALID_CHARS = set("_.-")
 USER_HANDLE_RE = re.compile(r"(?<![\w.])@([A-Za-z][A-Za-z0-9_]{1,})")
 LEGACY_USER_RE = re.compile(r"\b[Uu]ser\s*(\d+)\b")
 TIMESTAMP_RE = re.compile(r"\d{1,2}:\d{2}")
+
+# Format placeholders reproduced verbatim instead of filled in. Foundation once
+# ended all 31 bullets with the literal `(@TechCrunch | Mon DD HH:MM)` and still
+# scored 90 "ok" with an empty failure reason: nothing looked for the template.
+PLACEHOLDER_LEAK_MAX_SCORE = 40
+PLACEHOLDER_RE = re.compile(
+    r"Mon DD|DD HH|HH:MM|@username|@handle|<handle>|YYYY-MM-DD|\{\w+\}"
+)
+# A bullet that actually attributes: `... (@handle | 08:15)` or `(@handle | Aug 10 14:30)`.
+ATTRIBUTED_BULLET_RE = re.compile(r"\(@([A-Za-z][\w]*)\s*\|\s*([^)]+)\)\s*$")
 NARRATIVE_WORDS_RE = re.compile(
     r"\b(?:ask(?:s|ed|ing)?|respond(?:s|ed|ing)?|thank(?:s|ed|ing)?|report(?:s|ed|ing)?|confirm(?:s|ed|ing)?|direct(?:s|ed|ing)?|inquire(?:s|d|ing)?|announce(?:s|d|ing)?|share(?:s|d|ing)?|request(?:s|ed|ing)?|provide(?:s|d|ing)?)\b",
     re.IGNORECASE,
@@ -118,6 +128,38 @@ TOPIC_MARKERS_RE = re.compile(r"^#{2,}\s+\w+|^[A-Z][^a-z]{2,}:\s", re.MULTILINE)
 TRANSITION_WORDS_RE = re.compile(
     r"(first|second|third|then|also|additionally|meanwhile)", re.IGNORECASE
 )
+
+
+FILENAME_STOPWORDS = frozenset(
+    {
+        "the", "a", "an", "is", "are", "was", "were", "of", "to", "in", "on",
+        "for", "and", "or", "with", "that", "this", "it", "its", "please",
+        "try", "again", "showing", "show",
+    }
+)
+# A name that shares no content word with the input identifies the wrong thing,
+# however well-formed it is. Below this coverage the shape score cannot rescue it.
+FILENAME_RELEVANCE_FLOOR = 0.2
+FILENAME_RELEVANCE_GOOD = 0.6
+FILENAME_IRRELEVANT_MAX_SCORE = 40
+
+
+def filename_relevance(name: str, source_text: str) -> float:
+    """Fraction of the input's content words that appear in the filename.
+
+    The eval used to send RENAME_PROMPT with `{text}` unfilled and score the
+    result shape-only, so `summary_request` — a name for nothing — earned
+    100/100 and decided `best_models.filename`.
+    """
+    if not source_text:
+        return -1.0
+    words = {w for w in re.findall(r"[a-z0-9]{3,}", source_text.lower())}
+    words -= FILENAME_STOPWORDS
+    if not words:
+        return -1.0
+    name_tokens = set(re.findall(r"[a-z0-9]+", name.lower()))
+    hits = sum(1 for w in words if w in name_tokens or any(w in t for t in name_tokens))
+    return hits / len(words)
 
 
 def validate_filename(data: Any, source_text: str = "") -> Tuple[int, str]:
@@ -181,8 +223,40 @@ def validate_filename(data: Any, source_text: str = "") -> Tuple[int, str]:
     else:
         score += FILENAME_SPECIFIC_SCORE
 
-    return min(MAX_SCORE, score), "; ".join(failures)
+    coverage = filename_relevance(clean, source_text)
+    if coverage >= 0.0:
+        if coverage < FILENAME_RELEVANCE_FLOOR:
+            failures.append(f"unrelated to input (coverage {coverage:.0%})")
+            return min(FILENAME_IRRELEVANT_MAX_SCORE, score), "; ".join(failures)
+        if coverage < FILENAME_RELEVANCE_GOOD:
+            failures.append(f"weak input coverage ({coverage:.0%})")
+            score -= 15
 
+    return min(MAX_SCORE, max(0, score)), "; ".join(failures)
+
+
+
+def grounded_attribution_ratio(text: str, source_text: str) -> tuple[int, int]:
+    """(grounded, total) over bullets that end with an `(@handle | stamp)` tag.
+
+    A bullet is grounded when BOTH its handle and its timestamp appear in the
+    source. That is what makes the prompt's CRITICAL instruction measurable:
+    a copied stamp is grounded, an invented weekday is not, and a leaked
+    placeholder is not.
+    """
+    grounded = total = 0
+    for line in text.splitlines():
+        line = line.rstrip()
+        if not line.lstrip().startswith(("-", "*")):
+            continue
+        m = ATTRIBUTED_BULLET_RE.search(line)
+        if not m:
+            continue
+        total += 1
+        handle, stamp = m.group(1), m.group(2).strip()
+        if source_text and handle.lower() in source_text.lower() and stamp in source_text:
+            grounded += 1
+    return grounded, total
 
 
 def count_distinct_users(text: str) -> int:
@@ -230,12 +304,25 @@ def validate_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
         failures.append("no user mentions")
 
     # Event specificity + narrative depth (25 pts)
-    has_timestamps = bool(TIMESTAMP_RE.search(data_str))
+    # `TIMESTAMP_RE.search` was satisfied by the literal string "HH:MM", so a
+    # summary with no real attribution at all collected the full timestamp
+    # points. Score the fraction of bullets whose (handle, stamp) actually
+    # appears in the source instead; fall back to the sniff with no source.
     narrative_words = len(NARRATIVE_WORDS_RE.findall(data_str))
 
     specificity_score = 0
-    if has_timestamps:
+    grounded, total_bullets = grounded_attribution_ratio(data_str, source_text)
+    if source_text and total_bullets:
+        ratio = grounded / total_bullets
+        if ratio >= 0.8:
+            specificity_score += TIMESTAMP_SPECIFICITY_SCORE
+        elif ratio >= 0.5:
+            specificity_score += TIMESTAMP_SPECIFICITY_SCORE // 2
+        elif ratio == 0:
+            failures.append(f"no grounded attribution (0/{total_bullets} bullets)")
+    elif TIMESTAMP_RE.search(data_str):
         specificity_score += TIMESTAMP_SPECIFICITY_SCORE
+
     specificity_score += min(
         MAX_NARRATIVE_SPECIFICITY_SCORE, narrative_words * NARRATIVE_WORD_SCORE_MULTIPLIER
     )  # up to 15 for narrative words
@@ -294,6 +381,13 @@ def validate_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
         score += TOPIC_TRANSITION_WORD_SCORE
     else:
         failures.append("no topic structure")
+
+    leaks = PLACEHOLDER_RE.findall(data_str)
+    if leaks:
+        # Unfilled template text means the output did not do the task, whatever
+        # else it got right. Cap hard rather than deducting a few points.
+        failures.append(f"placeholder leak ({len(leaks)} occurrences)")
+        return min(PLACEHOLDER_LEAK_MAX_SCORE, score), "; ".join(failures)
 
     return min(MAX_SCORE, score), "; ".join(failures)
 

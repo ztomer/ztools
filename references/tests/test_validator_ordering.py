@@ -120,3 +120,62 @@ def test_hallucinated_json_is_capped_well_below_grounded():
     grounded = validate_detailed_json(GROUNDED_JSON, source_text=SOURCE)[0]
     invented = validate_detailed_json(INVENTED_JSON, source_text=SOURCE)[0]
     assert invented < grounded / 2, (invented, grounded)
+
+
+class TestSummaryAttributionIsMeasured:
+    """The prompt's CRITICAL instruction must be visible to the scorer.
+
+    `(@username | Mon DD HH:MM)` is a strftime-shaped placeholder, and models
+    reproduce it literally: foundation ended all 31 bullets with the verbatim
+    string and `validate_summary` scored it 90/100 with an EMPTY failure reason.
+    Nothing looked for template text, and `TIMESTAMP_RE` was satisfied by the
+    literal "HH:MM" itself.
+    """
+
+    SOURCE = (
+        "[@TechCrunch | 08:00]: OpenAI announced GPT-5\n"
+        "[@TheVerge | 08:15]: Apple Vision Pro 2 mass production\n"
+        "[@Wired | 17:45]: Meta unveiled AR glasses prototype\n"
+    )
+    HEAD = (
+        "## Executive Summary\n"
+        "A dynamic period across AI and consumer hardware, with launches converging\n"
+        "on inference cost and on-device capability.\n\n## AI\n"
+    )
+    GROUNDED = HEAD + (
+        "- OpenAI announced GPT-5 with advanced reasoning (@TechCrunch | 08:00)\n"
+        "- Apple Vision Pro 2 entered mass production (@TheVerge | 08:15)\n"
+        "- Meta unveiled AR glasses (@Wired | 17:45)\n"
+    )
+    LEAKED = HEAD + (
+        "- OpenAI announced GPT-5 with advanced reasoning (@TechCrunch | Mon DD HH:MM)\n"
+        "- Apple Vision Pro 2 entered mass production (@TheVerge | Mon DD HH:MM)\n"
+        "- Meta unveiled AR glasses (@Wired | Mon DD HH:MM)\n"
+    )
+    INVENTED = HEAD + (
+        "- OpenAI announced GPT-5 with advanced reasoning (@TechCrunch | Mon 03:00)\n"
+        "- Apple Vision Pro 2 entered mass production (@TheVerge | Tue 04:15)\n"
+        "- Meta unveiled AR glasses (@Wired | Wed 05:45)\n"
+    )
+
+    def test_placeholder_leak_is_capped_and_named(self):
+        score, failures = validate_summary(self.LEAKED, source_text=self.SOURCE)
+        assert score <= 40, score
+        assert "placeholder leak" in failures
+
+    def test_invented_timestamps_lose_the_attribution_points(self):
+        invented = validate_summary(self.INVENTED, source_text=self.SOURCE)
+        grounded = validate_summary(self.GROUNDED, source_text=self.SOURCE)
+        assert invented[0] < grounded[0], (invented, grounded)
+        assert "grounded attribution" in invented[1]
+
+    def test_grounded_attribution_scores_clean(self):
+        score, failures = validate_summary(self.GROUNDED, source_text=self.SOURCE)
+        assert score >= 90, (score, failures)
+        assert failures == ""
+
+    def test_ordering_across_all_three(self):
+        leaked = validate_summary(self.LEAKED, source_text=self.SOURCE)[0]
+        invented = validate_summary(self.INVENTED, source_text=self.SOURCE)[0]
+        grounded = validate_summary(self.GROUNDED, source_text=self.SOURCE)[0]
+        assert leaked < invented < grounded, (leaked, invented, grounded)

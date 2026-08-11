@@ -29,6 +29,7 @@ from rename.helpers import (
     image_extensions,
     is_meaningful_text,
     is_non_human_readable,
+    ocr_available,
 )
 from rename.llm import (
     FILENAME_MODELS,
@@ -96,6 +97,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--vlm-model", default="", help="VLM model to use when no text is found")
     parser.add_argument("--api-key", default="", help="Bearer token for LLM API")
     parser.add_argument("--test", action="store_true", help="Test connection")
+    parser.add_argument(
+        "--no-ocr",
+        action="store_true",
+        help="Proceed without OCR, naming every image with the VLM",
+    )
     return parser.parse_args()
 
 
@@ -180,7 +186,10 @@ def rename_image(
         except Exception as e:
             return False, f"Error renaming: {e}"
 
-    return True, ""
+    # Report the mapping either way: a dry run that prints nothing spends the
+    # whole inference cost and then discards the result unshown, so the preview
+    # mode could not actually be used to preview.
+    return True, f"{image_path.name} -> {new_path.name}"
 
 
 def main():
@@ -227,6 +236,16 @@ def main():
     if not active_vlm_model:
         active_vlm_model = get_best_models().get("vlm") or active_model
 
+    # OCR missing is not a per-image condition — it degrades every image to the
+    # VLM. Say so once, up front, instead of per-image "no readable text".
+    if not ocr_available() and not args.no_ocr:
+        print(
+            f"{FAIL} Refusing to run: OCR is unavailable, so every image would be "
+            "named by the VLM guessing at pixels. Fix it with `uv sync`, or pass "
+            "--no-ocr to accept VLM-only naming."
+        )
+        return
+
     stats = {"renamed": 0, "skipped": 0, "errors": 0}
 
     for image_path in sorted(image_files):
@@ -241,6 +260,8 @@ def main():
         )
         if success:
             stats["renamed"] += 1
+            if message:
+                print(f"  {STEP} {message}")
         elif "Skipped" in message or "Silent" in message:
             stats["skipped"] += 1
             if "Silent" not in message:

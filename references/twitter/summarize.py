@@ -42,6 +42,21 @@ from lib.osaurus_lib import (
 )
 from lib.tui import STEP, WARN
 
+from twitter.budget import (  # noqa: F401  (re-exported for existing importers)
+    CHARS_PER_TOKEN,
+    COLD_START_BASE,
+    DECODE_TOKENS_PER_SEC,
+    FOUNDATION_CONTEXT_WINDOW,
+    MAX_TIMEOUT,
+    MIN_TIMEOUT,
+    OSAURUS_CONTEXT_WINDOW,
+    OUTPUT_RESERVE_TOKENS,
+    PREFILL_CHARS_PER_SEC,
+    _context_window_for_model,
+    _ctx_chars_for_model,
+    _estimate_timeout,
+    _output_tokens_for_model,
+)
 from twitter.provenance import FAILED, FALLBACK, LAST_RESORT, PRIMARY, Provenance, SummaryText
 
 _mlx_preferred_str = os.environ.get(
@@ -55,56 +70,7 @@ _PROMPT_RULES = """
 - Keep it concise and factual
 """
 
-CHARS_PER_TOKEN = int(os.environ.get("TWITTER_CHARS_PER_TOKEN", "3"))
-OUTPUT_RESERVE_TOKENS = int(os.environ.get("TWITTER_OUTPUT_RESERVE", "4096"))
-
-# Dynamic timeout model (seconds):
-#   timeout = cold_start_load + input_chars/prefill_rate + output_tokens/decode_rate
-# COLD_START_BASE is the fixed model-load cost (large for 35B models on first hit).
-# TWITTER_PREFILL_CHARS_PER_SEC is how fast the server ingests the prompt.
-# TWITTER_DECODE_TOKENS_PER_SEC is generation throughput; combined with the output
-# reserve it bounds the time spent producing the summary.
-COLD_START_BASE = int(os.environ.get("TWITTER_COLD_START_BASE", "120"))
-MAX_TIMEOUT = int(os.environ.get("TWITTER_MAX_TIMEOUT", "1800"))
-MIN_TIMEOUT = int(os.environ.get("TWITTER_MIN_TIMEOUT", "60"))
-PREFILL_CHARS_PER_SEC = int(os.environ.get("TWITTER_PREFILL_CHARS_PER_SEC", "40"))
-DECODE_TOKENS_PER_SEC = int(os.environ.get("TWITTER_DECODE_TOKENS_PER_SEC", "8"))
-
-# Default context window size for Osaurus models (tokens)
-OSAURUS_CONTEXT_WINDOW = int(os.environ.get("TWITTER_CONTEXT_WINDOW", "8192"))
-
-# On-device Apple Foundation Models have a much smaller context window than the
-# server models. Sizing the prompt to OSAURUS_CONTEXT_WINDOW and re-sending it to
-# `foundation` overflows its window and returns HTTP 500. Size per-model instead.
-FOUNDATION_CONTEXT_WINDOW = int(os.environ.get("TWITTER_FOUNDATION_CONTEXT_WINDOW", "4096"))
-
-
-def _context_window_for_model(model: str) -> int:
-    """Return the token context window to size the prompt against for a model."""
-    if model and "foundation" in model.lower():
-        return FOUNDATION_CONTEXT_WINDOW
-    return OSAURUS_CONTEXT_WINDOW
-
-
-def _ctx_chars_for_model(model: str) -> int:
-    """Prompt character budget for a model, derived from its context window.
-
-    The output reserve is capped at half the window so a small window (e.g.
-    Foundation's) still leaves room for the input prompt instead of collapsing
-    the budget to zero.
-    """
-    window = _context_window_for_model(model)
-    reserve = min(OUTPUT_RESERVE_TOKENS, window // 2)
-    return (window - reserve) * CHARS_PER_TOKEN
-
-
-def _output_tokens_for_model(model: str) -> int:
-    """Estimated output tokens to budget generation time against."""
-    window = _context_window_for_model(model)
-    return min(OUTPUT_RESERVE_TOKENS, window // 2)
-
-
-# Quality thresholds
+# Summary-quality and formatting thresholds (not part of the sizing model).
 MIN_BULLET_COUNT = 3
 MIN_SUMMARY_CHARS = 100
 BUDGET_MARGIN = 200
@@ -184,7 +150,11 @@ def _build_prompt(
             replace_whitespace=False,
         )
         if used + len(line) + 1 > budget:
-            continue
+            # Stop, do not skip. `continue` stepped over one oversized tweet and
+            # then admitted older shorter ones, punching non-contiguous holes in
+            # the window the model summarises — the timeline it sees must be a
+            # contiguous run of the newest tweets.
+            break
         lines.append(line)
         used += len(line) + 1
     lines.reverse()
@@ -210,19 +180,6 @@ def _build_prompt(
 
     return prompt, len(lines)
 
-
-
-def _estimate_timeout(prompt: str, model: str = None) -> int:
-    """Dynamic request timeout scaled to input size + expected output.
-
-    timeout = cold-start load + prefill(input) + decode(output), clamped to
-    [MIN_TIMEOUT, MAX_TIMEOUT]. Larger timelines and slower models get more time
-    instead of a flat cap that a big prompt on a 35B model blows through.
-    """
-    prefill = len(prompt) / max(1, PREFILL_CHARS_PER_SEC)
-    decode = _output_tokens_for_model(model) / max(1, DECODE_TOKENS_PER_SEC)
-    estimate = COLD_START_BASE + prefill + decode
-    return int(max(MIN_TIMEOUT, min(MAX_TIMEOUT, estimate)))
 
 
 def _summarize_with_model(
