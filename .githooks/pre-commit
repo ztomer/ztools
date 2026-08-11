@@ -90,21 +90,9 @@ if EMOJI_CHECKER.exists():
 # Tests are exempt by design — see the File Size Limit rule in CLAUDE.md. The
 # exemption lives here so the gate and the documented rule cannot drift.
 #
-# For the three files that were already over the limit before the rule was
-# enforced, the gate blocks GROWTH rather than existence: an unconditional block
-# makes a one-line import fix in a 568-line file impossible to commit, which
-# turns the gate into something people --no-verify past instead of obeying.
-# Same philosophy as the config-debt gate, which only looks at added lines.
+# No production file is over the limit, so the gate blocks existence outright.
+# The growth-only variant existed for three legacy files; they have been split.
 MAX_LINES = 500
-
-
-def lines_at_head(path: str) -> int | None:
-    r = subprocess.run(
-        ["git", "show", f"HEAD:{path}"], capture_output=True, text=True, cwd=str(ROOT)
-    )
-    return len(r.stdout.splitlines()) if r.returncode == 0 else None
-
-
 for f in staged_files:
     filepath = ROOT / f
     if not filepath.exists() or not f.endswith(".py"):
@@ -113,16 +101,8 @@ for f in staged_files:
         continue
     with open(filepath) as fh:
         line_count = sum(1 for _ in fh)
-    if line_count <= MAX_LINES:
-        continue
-    was = lines_at_head(f)
-    if was is None:
-        errors.append(f"  New file exceeds {MAX_LINES} lines: {f} ({line_count} lines)")
-    elif line_count > was:
-        errors.append(
-            f"  File is over {MAX_LINES} lines and growing: {f} "
-            f"({was} -> {line_count}); split it instead"
-        )
+    if line_count > MAX_LINES:
+        errors.append(f"  File exceeds {MAX_LINES} lines: {f} ({line_count} lines)")
 
 # --- 3. Config-debt gate ---
 CHECKER = _tool("tools/check_config_debt.py")

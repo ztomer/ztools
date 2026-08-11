@@ -7,173 +7,143 @@ from unittest.mock import patch
 from rich.console import Console
 
 
-def _capture_rich_console():
-    """Replace eval_report.console with one that writes to a StringIO buffer."""
-    from eval import report as eval_report
+def _console_buffer():
+    """A console that writes to a buffer, handed to the callee as `out=`.
 
+    The print functions take their console as a parameter, so no test needs to
+    rebind a module global — which is exactly what broke silently every time a
+    function moved to another module during the split.
+    """
     buf = StringIO()
-    new_console = Console(file=buf, force_terminal=True, force_interactive=True, width=120)
-    return eval_report.console, new_console, buf
+    return buf, Console(file=buf, force_terminal=True, force_interactive=True, width=120)
 
 
 class TestPrintCrossModelComparison:
     def test_empty_results(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            eval_report.print_cross_model_comparison([])
-        finally:
-            eval_report.console = old
+        buf, out = _console_buffer()
+        eval_report.print_cross_model_comparison([], out=out)
         assert "Cross-Model" not in buf.getvalue()
 
     def test_no_models(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            eval_report.print_cross_model_comparison([{"model": "m1", "results": []}])
-        finally:
-            eval_report.console = old
+        buf, out = _console_buffer()
+        eval_report.print_cross_model_comparison([{"model": "m1", "results": []}], out=out)
         # Header printed but no rows (first_results is empty)
-        out = buf.getvalue()
-        assert "Cross-Model" in out
+        rendered = buf.getvalue()
+        assert "Cross-Model" in rendered
         # No table rows because first_results is empty
-        assert "model_a" not in out
+        assert "model_a" not in rendered
 
     def test_no_first_results(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            results = [
-                {"model": "m1", "results": []},
-                {"model": "m2", "results": []},
-            ]
-            eval_report.print_cross_model_comparison(results)
-        finally:
-            eval_report.console = old
-        out = buf.getvalue()
+        buf, out = _console_buffer()
+        results = [
+            {"model": "m1", "results": []},
+            {"model": "m2", "results": []},
+        ]
+        eval_report.print_cross_model_comparison(results, out=out)
+        rendered = buf.getvalue()
         # Header printed, no task rows (but model names appear in header)
-        assert "Cross-Model" in out
-        assert "Task" in out
-        assert "m1" in out  # model name appears in header
-        assert "m2" in out
+        assert "Cross-Model" in rendered
+        assert "Task" in rendered
+        assert "m1" in rendered  # model name appears in header
+        assert "m2" in rendered
 
     def test_full_table(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            results = [
-                {
-                    "model": "model_a",
-                    "results": [
-                        {"task": "t1", "quality_score": 80},
-                        {"task": "t2", "quality_score": 90},
-                    ],
-                },
-                {
-                    "model": "model_b",
-                    "results": [
-                        {"task": "t1", "quality_score": 95},
-                        {"task": "t2", "quality_score": 70},
-                    ],
-                },
-            ]
-            eval_report.print_cross_model_comparison(results)
-        finally:
-            eval_report.console = old
-        out = buf.getvalue()
+        buf, out = _console_buffer()
+        results = [
+            {
+                "model": "model_a",
+                "results": [
+                    {"task": "t1", "quality_score": 80},
+                    {"task": "t2", "quality_score": 90},
+                ],
+            },
+            {
+                "model": "model_b",
+                "results": [
+                    {"task": "t1", "quality_score": 95},
+                    {"task": "t2", "quality_score": 70},
+                ],
+            },
+        ]
+        eval_report.print_cross_model_comparison(results, out=out)
+        rendered = buf.getvalue()
         # Header printed
-        assert "Cross-Model" in out
+        assert "Cross-Model" in rendered
         # Both models in the table
-        assert "model_a" in out
-        assert "model_b" in out
+        assert "model_a" in rendered
+        assert "model_b" in rendered
         # Tasks rendered
-        assert "t1" in out
-        assert "t2" in out
+        assert "t1" in rendered
+        assert "t2" in rendered
         # Best score marker (*)
-        assert "*" in out
+        assert "*" in rendered
 
 
 class TestPrintScoreStats:
     def test_empty_stats(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            eval_report.print_score_stats({})
-        finally:
-            eval_report.console = old
+        buf, out = _console_buffer()
+        eval_report.print_score_stats({}, out=out)
         # Empty stats → no header printed
         assert "Mean" not in buf.getvalue()
 
     def test_full_stats(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            stats = {
-                "m1": {"mean": 85.0, "median": 85.0, "stdev": 5.0, "min": 80, "max": 90},
-                "m2": {"mean": 70.0, "median": 70.0, "stdev": 0.0, "min": 70, "max": 70},
-            }
-            eval_report.print_score_stats(stats)
-        finally:
-            eval_report.console = old
-        out = buf.getvalue()
+        buf, out = _console_buffer()
+        stats = {
+            "m1": {"mean": 85.0, "median": 85.0, "stdev": 5.0, "min": 80, "max": 90},
+            "m2": {"mean": 70.0, "median": 70.0, "stdev": 0.0, "min": 70, "max": 70},
+        }
+        eval_report.print_score_stats(stats, out=out)
+        rendered = buf.getvalue()
         # Both models printed
-        assert "m1" in out
-        assert "m2" in out
+        assert "m1" in rendered
+        assert "m2" in rendered
         # Mean values
-        assert "85.0" in out
-        assert "70.0" in out
+        assert "85.0" in rendered
+        assert "70.0" in rendered
         # Header columns
-        assert "Mean" in out
-        assert "Stdev" in out
+        assert "Mean" in rendered
+        assert "Stdev" in rendered
 
 
 class TestPrintFailureSummary:
     def test_empty_categories(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            eval_report.print_failure_summary({})
-        finally:
-            eval_report.console = old
+        buf, out = _console_buffer()
+        eval_report.print_failure_summary({}, out=out)
         # Empty → nothing printed
         assert buf.getvalue() == ""
 
     def test_with_categories(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            categories = {
-                "FORMAT": {"count": 5, "models": ["m1", "m2"], "tasks": ["t1"]},
-                "INFRA": {"count": 3, "models": ["m3"], "tasks": ["t2"]},
-            }
-            eval_report.print_failure_summary(categories)
-        finally:
-            eval_report.console = old
-        out = buf.getvalue()
+        buf, out = _console_buffer()
+        categories = {
+            "FORMAT": {"count": 5, "models": ["m1", "m2"], "tasks": ["t1"]},
+            "INFRA": {"count": 3, "models": ["m3"], "tasks": ["t2"]},
+        }
+        eval_report.print_failure_summary(categories, out=out)
+        rendered = buf.getvalue()
         # Both categories printed
-        assert "FORMAT" in out
-        assert "INFRA" in out
+        assert "FORMAT" in rendered
+        assert "INFRA" in rendered
         # Counts
-        assert "5" in out
-        assert "3" in out
+        assert "5" in rendered
+        assert "3" in rendered
         # Models mentioned
-        assert "m1" in out or "m2" in out
+        assert "m1" in rendered or "m2" in out
 
 
 class TestHistoricalFunctions:
@@ -181,7 +151,7 @@ class TestHistoricalFunctions:
         from eval import report as eval_report
 
         # Redirect the config dir to tmp_path
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
+        _EVAL_DIR = tmp_path
         results = [
             {
                 "model": "m1",
@@ -194,12 +164,12 @@ class TestHistoricalFunctions:
         ]
         stats = {"m1": {"mean": 85, "median": 85, "stdev": 5, "min": 80, "max": 90, "count": 2}}
         categories = {"FORMAT": {"count": 1, "models": ["m1"], "tasks": ["t1"]}}
-        eval_report.save_historical_results(results, stats, categories)
+        eval_report.save_historical_results(results, stats, categories, eval_dir=_EVAL_DIR)
         # File should now exist
         hist_file = tmp_path / "eval_history.json"
         assert hist_file.exists()
         # Loading should work
-        loaded = eval_report.load_historical_stats()
+        loaded = eval_report.load_historical_stats(eval_dir=_EVAL_DIR)
         assert "m1" in loaded
         # Check specific fields
         assert loaded["m1"]["mean"] == 85.0
@@ -209,7 +179,7 @@ class TestHistoricalFunctions:
     def test_save_truncates_to_100(self, tmp_path, monkeypatch):
         from eval import report as eval_report
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
+        _EVAL_DIR = tmp_path
         # Generate 110 results for one model
         results = [
             {
@@ -219,7 +189,7 @@ class TestHistoricalFunctions:
                 ],
             }
         ]
-        eval_report.save_historical_results(results, {}, {})
+        eval_report.save_historical_results(results, {}, {}, eval_dir=_EVAL_DIR)
         hist_file = tmp_path / "eval_history.json"
         with open(hist_file) as f:
             data = json.load(f)
@@ -229,7 +199,7 @@ class TestHistoricalFunctions:
         """Lines 146-150: existing history file has invalid JSON, exception caught."""
         from eval import report as eval_report
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
+        _EVAL_DIR = tmp_path
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text("{not valid json")
         results = [
@@ -241,7 +211,7 @@ class TestHistoricalFunctions:
             }
         ]
         # Should not raise — just silently replaces with new data
-        eval_report.save_historical_results(results, {}, {})
+        eval_report.save_historical_results(results, {}, {}, eval_dir=_EVAL_DIR)
         # New data should be saved
         with open(hist_file) as f:
             data = json.load(f)
@@ -250,57 +220,57 @@ class TestHistoricalFunctions:
     def test_load_history_no_file(self, tmp_path, monkeypatch):
         from eval import report as eval_report
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
-        result = eval_report.load_historical_stats()
+        _EVAL_DIR = tmp_path
+        result = eval_report.load_historical_stats(eval_dir=_EVAL_DIR)
         assert result == {}
 
     def test_load_history_invalid_json(self, tmp_path, monkeypatch):
         from eval import report as eval_report
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
+        _EVAL_DIR = tmp_path
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text("{invalid json")
-        result = eval_report.load_historical_stats()
+        result = eval_report.load_historical_stats(eval_dir=_EVAL_DIR)
         assert result == {}
 
     def test_load_history_empty(self, tmp_path, monkeypatch):
         from eval import report as eval_report
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
+        _EVAL_DIR = tmp_path
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text("{}")
-        result = eval_report.load_historical_stats()
+        result = eval_report.load_historical_stats(eval_dir=_EVAL_DIR)
         assert result == {}
 
     def test_load_history_no_scores(self, tmp_path, monkeypatch):
         from eval import report as eval_report
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
+        _EVAL_DIR = tmp_path
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text(json.dumps({"m1": [{"date": "2024-01-01"}]}))  # no score
-        result = eval_report.load_historical_stats()
+        result = eval_report.load_historical_stats(eval_dir=_EVAL_DIR)
         assert "m1" not in result
 
     def test_check_model_history_no_file(self, tmp_path, monkeypatch):
         from eval import report as eval_report
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
-        result = eval_report.check_model_history("m1")
+        _EVAL_DIR = tmp_path
+        result = eval_report.check_model_history("m1", eval_dir=_EVAL_DIR)
         assert result == {}
 
     def test_check_model_history_invalid_json(self, tmp_path, monkeypatch):
         from eval import report as eval_report
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
+        _EVAL_DIR = tmp_path
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text("{not json")
-        result = eval_report.check_model_history("m1")
+        result = eval_report.check_model_history("m1", eval_dir=_EVAL_DIR)
         assert result == {}
 
     def test_check_model_history_found(self, tmp_path, monkeypatch):
         from eval import report as eval_report
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
+        _EVAL_DIR = tmp_path
         hist_file = tmp_path / "eval_history.json"
         hist_file.write_text(
             json.dumps(
@@ -310,7 +280,7 @@ class TestHistoricalFunctions:
                 }
             )
         )
-        result = eval_report.check_model_history("m1")
+        result = eval_report.check_model_history("m1", eval_dir=_EVAL_DIR)
         assert len(result) == 2
 
 
@@ -318,156 +288,134 @@ class TestPrintHistoricalTrends:
     def test_no_stats(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            with patch.object(eval_report, "load_historical_stats", return_value={}):
-                eval_report.print_historical_trends()
-        finally:
-            eval_report.console = old
+        buf, out = _console_buffer()
+        # print_historical_trends calls load_historical_stats from its own
+        # module, so the shim's re-exported name is not the seam.
+        with patch("eval.report_history.load_historical_stats", return_value={}):
+            eval_report.print_historical_trends(out=out)
         # No stats → no output
         assert "Historical" not in buf.getvalue() or buf.getvalue() == ""
 
     def test_with_stats(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            fake_stats = {
-                "m1": {"mean": 85, "stdev": 3, "runs": 10},  # stable
-                "m2": {"mean": 70, "stdev": 10, "runs": 5},  # variable
-                "m3": {"mean": 60, "stdev": 20, "runs": 8},  # unstable
-                "m4": {"mean": 90, "stdev": 0, "runs": 1},  # new (runs < 3)
-            }
-            with patch.object(eval_report, "load_historical_stats", return_value=fake_stats):
-                eval_report.print_historical_trends()
-        finally:
-            eval_report.console = old
-        out = buf.getvalue()
+        buf, out = _console_buffer()
+        fake_stats = {
+            "m1": {"mean": 85, "stdev": 3, "runs": 10},  # stable
+            "m2": {"mean": 70, "stdev": 10, "runs": 5},  # variable
+            "m3": {"mean": 60, "stdev": 20, "runs": 8},  # unstable
+            "m4": {"mean": 90, "stdev": 0, "runs": 1},  # new (runs < 3)
+        }
+        with patch("eval.report_history.load_historical_stats", return_value=fake_stats):
+            eval_report.print_historical_trends(out=out)
+        rendered = buf.getvalue()
         # At least the section header is printed
-        assert "Historical" in out or "Trend" in out or len(out) > 0
+        assert "Historical" in rendered or "Trend" in rendered
 
 
 class TestPrintVerbosity:
     def test_empty_verbosity(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            eval_report.print_verbosity({})
-        finally:
-            eval_report.console = old
+        buf, out = _console_buffer()
+        eval_report.print_verbosity({}, out=out)
         # Empty → no output
         assert buf.getvalue() == ""
 
     def test_with_verbosity(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            verbosity = {
-                "m1": {"t1": 100, "t2": 200},
-                "m2": {"t1": 50, "t2": 75},
-            }
-            eval_report.print_verbosity(verbosity)
-        finally:
-            eval_report.console = old
-        out = buf.getvalue()
+        buf, out = _console_buffer()
+        verbosity = {
+            "m1": {"t1": 100, "t2": 200},
+            "m2": {"t1": 50, "t2": 75},
+        }
+        eval_report.print_verbosity(verbosity, out=out)
+        rendered = buf.getvalue()
         # Both models printed
-        assert "m1" in out
-        assert "m2" in out
+        assert "m1" in rendered
+        assert "m2" in rendered
 
 
 class TestPrintErrorRates:
     def test_empty_rates(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            eval_report.print_error_rates({})
-        finally:
-            eval_report.console = old
+        buf, out = _console_buffer()
+        eval_report.print_error_rates({}, out=out)
         # Empty → no output
         assert buf.getvalue() == ""
 
     def test_with_rates(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            rates = {
-                "m1": {
-                    "infra": 1,
-                    "quality": 2,
-                    "success": 5,
-                    "infra_rate": 0.125,
-                    "quality_rate": 0.25,
-                    "success_rate": 0.625,
-                },
-                "m2": {
-                    "infra": 0,
-                    "quality": 0,
-                    "success": 10,
-                    "infra_rate": 0,
-                    "quality_rate": 0,
-                    "success_rate": 1.0,
-                },
-            }
-            eval_report.print_error_rates(rates)
-        finally:
-            eval_report.console = old
-        out = buf.getvalue()
+        buf, out = _console_buffer()
+        rates = {
+            "m1": {
+                "infra": 1,
+                "quality": 2,
+                "success": 5,
+                "infra_rate": 0.125,
+                "quality_rate": 0.25,
+                "success_rate": 0.625,
+            },
+            "m2": {
+                "infra": 0,
+                "quality": 0,
+                "success": 10,
+                "infra_rate": 0,
+                "quality_rate": 0,
+                "success_rate": 1.0,
+            },
+        }
+        eval_report.print_error_rates(rates, out=out)
+        rendered = buf.getvalue()
         # Both models printed
-        assert "m1" in out
-        assert "m2" in out
+        assert "m1" in rendered
+        assert "m2" in rendered
         # At least one rate is visible
-        assert "62" in out or "100" in out or "%" in out
+        assert "62" in rendered or "100" in out or "%" in out
 
 
 class TestDiffFromLastRun:
     def test_no_prev_file(self, tmp_path, monkeypatch):
         from eval import report as eval_report
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
-        result = eval_report.diff_from_last_run([])
+        _EVAL_DIR = tmp_path
+        result = eval_report.diff_from_last_run([], eval_dir=_EVAL_DIR)
         assert result == {}
 
     def test_invalid_prev_json(self, tmp_path, monkeypatch):
         from eval import report as eval_report
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
+        _EVAL_DIR = tmp_path
         prev = tmp_path / "eval_results.json"
         prev.write_text("{invalid")
-        result = eval_report.diff_from_last_run([])
+        result = eval_report.diff_from_last_run([], eval_dir=_EVAL_DIR)
         assert result == {}
 
     def test_no_models_in_prev(self, tmp_path, monkeypatch):
         from eval import report as eval_report
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
+        _EVAL_DIR = tmp_path
         prev = tmp_path / "eval_results.json"
         prev.write_text(json.dumps({}))  # no models key
-        result = eval_report.diff_from_last_run([])
+        result = eval_report.diff_from_last_run([], eval_dir=_EVAL_DIR)
         assert result == {}
 
     def test_no_matching_model(self, tmp_path, monkeypatch):
         from eval import report as eval_report
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
+        _EVAL_DIR = tmp_path
         prev = tmp_path / "eval_results.json"
         prev.write_text(json.dumps({"models": [{"model": "other", "results": []}]}))
-        result = eval_report.diff_from_last_run([{"model": "m1", "results": []}])
+        result = eval_report.diff_from_last_run([{"model": "m1", "results": []}], eval_dir=_EVAL_DIR)
         assert result == {}
 
     def test_with_diffs(self, tmp_path, monkeypatch):
         from eval import report as eval_report
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
+        _EVAL_DIR = tmp_path
         prev = tmp_path / "eval_results.json"
         prev.write_text(
             json.dumps(
@@ -504,121 +452,101 @@ class TestPrintDiff:
     def test_empty_diffs(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            eval_report.print_diff({})
-        finally:
-            eval_report.console = old
+        buf, out = _console_buffer()
+        eval_report.print_diff({}, out=out)
         # Empty → no output
         assert buf.getvalue() == ""
 
     def test_no_changes(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            diffs = {"m1": {"t1": {"current": 80, "prev": 80, "diff": 0}}}
-            eval_report.print_diff(diffs)
-        finally:
-            eval_report.console = old
-        out = buf.getvalue()
+        buf, out = _console_buffer()
+        diffs = {"m1": {"t1": {"current": 80, "prev": 80, "diff": 0}}}
+        eval_report.print_diff(diffs, out=out)
+        rendered = buf.getvalue()
         # No changes → no table printed (only blank line at top)
-        assert "Model" not in out
-        assert "Diff" not in out
+        assert "Model" not in rendered
+        assert "Diff" not in rendered
 
     def test_with_changes(self):
         from eval import report as eval_report
 
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            diffs = {
-                "m1": {
-                    "t1": {"current": 85, "prev": 80, "diff": 5},
-                    "t2": {"current": 70, "prev": 80, "diff": -10},
-                }
+        buf, out = _console_buffer()
+        diffs = {
+            "m1": {
+                "t1": {"current": 85, "prev": 80, "diff": 5},
+                "t2": {"current": 70, "prev": 80, "diff": -10},
             }
-            eval_report.print_diff(diffs)
-        finally:
-            eval_report.console = old
-        out = buf.getvalue()
+        }
+        eval_report.print_diff(diffs, out=out)
+        rendered = buf.getvalue()
         # Both tasks printed with their diffs
-        assert "m1" in out
-        assert "t1" in out
-        assert "t2" in out
+        assert "m1" in rendered
+        assert "t1" in rendered
+        assert "t2" in rendered
         # Arrow characters present (up for +5, down for -10)
-        assert "\u2191" in out
-        assert "\u2193" in out
+        assert "\u2191" in rendered
+        assert "\u2193" in rendered
         # Diff magnitudes shown
-        assert "5" in out
-        assert "10" in out
+        assert "5" in rendered
+        assert "10" in rendered
 
 
 class TestExportToCsv:
     def test_default_path(self, tmp_path, monkeypatch):
         from eval import report as eval_report
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            results = [
-                {
-                    "model": "m1",
-                    "results": [
-                        {
-                            "task": "t1",
-                            "quality_score": 95,
-                            "time": 1.5,
-                            "failure_reason": "",
-                            "failure_category": "",
-                        },
-                        {
-                            "task": "t2",
-                            "quality_score": 60,
-                            "time": 2.0,
-                            "failure_reason": "x",
-                            "failure_category": "FORMAT",
-                        },
-                        {
-                            "task": "t3",
-                            "quality_score": 30,
-                            "time": 3.0,
-                            "failure_reason": "y",
-                            "failure_category": "INFRA",
-                        },
-                    ],
-                },
-            ]
-            eval_report.export_to_csv(results)
-            csv_file = tmp_path / "eval_results.csv"
-            assert csv_file.exists()
-            content = csv_file.read_text()
-            assert "Model" in content
-            assert "PASS" in content  # score >= 90
-            assert "WARN" in content  # score >= 50
-            assert "FAIL" in content  # score < 50
-        finally:
-            eval_report.console = old
+        _EVAL_DIR = tmp_path
+        buf, out = _console_buffer()
+        results = [
+            {
+                "model": "m1",
+                "results": [
+                    {
+                        "task": "t1",
+                        "quality_score": 95,
+                        "time": 1.5,
+                        "failure_reason": "",
+                        "failure_category": "",
+                    },
+                    {
+                        "task": "t2",
+                        "quality_score": 60,
+                        "time": 2.0,
+                        "failure_reason": "x",
+                        "failure_category": "FORMAT",
+                    },
+                    {
+                        "task": "t3",
+                        "quality_score": 30,
+                        "time": 3.0,
+                        "failure_reason": "y",
+                        "failure_category": "INFRA",
+                    },
+                ],
+            },
+        ]
+        eval_report.export_to_csv(results, out=out, eval_dir=_EVAL_DIR)
+        csv_file = tmp_path / "eval_results.csv"
+        assert csv_file.exists()
+        content = csv_file.read_text()
+        assert "Model" in content
+        assert "PASS" in content  # score >= 90
+        assert "WARN" in content  # score >= 50
+        assert "FAIL" in content  # score < 50
 
     def test_custom_path(self, tmp_path, monkeypatch):
         from eval import report as eval_report
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
-        old, new, buf = _capture_rich_console()
-        try:
-            eval_report.console = new
-            output = tmp_path / "custom.csv"
-            results = [
-                {"model": "m1", "results": [{"task": "t1", "quality_score": 80, "time": 1.0}]}
-            ]
-            eval_report.export_to_csv(results, str(output))
-            assert output.exists()
-            # Verify file was written to custom path, not default
-            content = output.read_text()
-            assert "m1" in content
-            assert "t1" in content
-        finally:
-            eval_report.console = old
+        _EVAL_DIR = tmp_path
+        buf, out = _console_buffer()
+        output = tmp_path / "custom.csv"
+        results = [
+            {"model": "m1", "results": [{"task": "t1", "quality_score": 80, "time": 1.0}]}
+        ]
+        eval_report.export_to_csv(results, str(output), out=out, eval_dir=_EVAL_DIR)
+        assert output.exists()
+        # Verify file was written to custom path, not default
+        content = output.read_text()
+        assert "m1" in content
+        assert "t1" in content

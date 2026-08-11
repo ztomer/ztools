@@ -3,17 +3,17 @@
 from io import StringIO
 from unittest.mock import MagicMock, patch
 
-import eval
 from rich.console import Console
 
 
-def _capture_console():
-    """Replace eval.cli.console with a buffered one."""
-    import eval.cli as model_eval
+def _console_buffer():
+    """A console that writes to a buffer, handed to the callee as `out=`.
 
+    The CLI helpers take their console as a parameter, so no test rebinds a
+    module global.
+    """
     buf = StringIO()
-    new_console = Console(file=buf, force_terminal=True, force_interactive=True, width=120)
-    return model_eval.console, new_console, buf
+    return buf, Console(file=buf, force_terminal=True, force_interactive=True, width=120)
 
 
 class TestGetMemoryPercent:
@@ -48,25 +48,17 @@ class TestCheckMemorySafe:
     def test_safe_memory(self, mock_llm):
         import eval.cli as model_eval
 
-        old, new, buf = _capture_console()
-        try:
-            model_eval.console = new
-            with patch.object(eval.cli, "get_memory_percent", return_value=50.0):
-                assert model_eval.check_memory_safe() is True
-        finally:
-            model_eval.console = old
+        buf, out = _console_buffer()
+        with patch("eval.cli_runtime.get_memory_percent", return_value=50.0):
+            assert model_eval.check_memory_safe(out=out) is True
 
     def test_unsafe_memory(self, mock_llm):
         import eval.cli as model_eval
 
-        old, new, buf = _capture_console()
-        try:
-            model_eval.console = new
-            with patch.object(eval.cli, "get_memory_percent", return_value=95.0):
-                assert model_eval.check_memory_safe() is False
-            assert "Memory" in buf.getvalue()
-        finally:
-            model_eval.console = old
+        buf, out = _console_buffer()
+        with patch("eval.cli_runtime.get_memory_percent", return_value=95.0):
+            assert model_eval.check_memory_safe(out=out) is False
+        assert "Memory" in buf.getvalue()
 
 
 class TestIsServerResponsive:
@@ -103,22 +95,18 @@ class TestPrintMemoryUsage:
     def test_normal_memory(self, mock_llm):
         import eval.cli as model_eval
 
-        with patch.object(eval.cli, "get_memory_percent", return_value=50.0):
+        with patch("eval.cli_runtime.get_memory_percent", return_value=50.0):
             result = model_eval.print_memory_usage()
         assert result == 50.0
 
     def test_high_memory_logs_warning(self, mock_llm):
         import eval.cli as model_eval
 
-        old, new, buf = _capture_console()
-        try:
-            model_eval.console = new
-            with patch.object(eval.cli, "get_memory_percent", return_value=95.0):
-                result = model_eval.print_memory_usage()
-            assert "Memory" in buf.getvalue()
-            assert result == 95.0
-        finally:
-            model_eval.console = old
+        buf, out = _console_buffer()
+        with patch("eval.cli_runtime.get_memory_percent", return_value=95.0):
+            result = model_eval.print_memory_usage(out=out)
+        assert "Memory" in buf.getvalue()
+        assert result == 95.0
 
 
 class TestEstimateModelMemory:
@@ -147,13 +135,13 @@ class TestLoadTasksFromConfig:
     def test_no_prompts(self, mock_llm):
         import eval.cli as model_eval
 
-        with patch.object(eval.cli, "get_model_prompts_all", return_value=None):
+        with patch("eval.cli_runtime.get_model_prompts_all", return_value=None):
             assert model_eval.load_tasks_from_config("m1") is None
 
     def test_empty_prompts(self, mock_llm):
         import eval.cli as model_eval
 
-        with patch.object(eval.cli, "get_model_prompts_all", return_value={}):
+        with patch("eval.cli_runtime.get_model_prompts_all", return_value={}):
             # Empty dict is falsy, so `if not prompts: return None`
             assert model_eval.load_tasks_from_config("m1") is None
 
@@ -167,7 +155,7 @@ class TestLoadTasksFromConfig:
             "filename": "F",
             "file_summary": "FS",
         }
-        with patch.object(eval.cli, "get_model_prompts_all", return_value=prompts):
+        with patch("eval.cli_runtime.get_model_prompts_all", return_value=prompts):
             result = model_eval.load_tasks_from_config("m1")
         assert result["detailed_json"] == "WF"
         assert result["json"] == "WT"
@@ -179,7 +167,7 @@ class TestLoadTasksFromConfig:
         import eval.cli as model_eval
 
         prompts = {"filename": "F", "summarize": "S"}
-        with patch.object(eval.cli, "get_model_prompts_all", return_value=prompts):
+        with patch("eval.cli_runtime.get_model_prompts_all", return_value=prompts):
             result = model_eval.load_tasks_from_config("m1")
         assert "filename" in result
         assert "summarize" in result
@@ -190,48 +178,36 @@ class TestUpdateConfig:
     def test_no_config_file(self, mock_llm, tmp_path, monkeypatch):
         import eval.cli as model_eval
 
-        old, new, buf = _capture_console()
-        try:
-            model_eval.console = new
-            # An existing conf dir with no config.toml in it.
-            monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
-            model_eval.update_config({"task1": "model-x"})
-            assert "Config file not found" in buf.getvalue()
-        finally:
-            model_eval.console = old
+        buf, out = _console_buffer()
+        # An existing conf dir with no config.toml in it.
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        model_eval.update_config({"task1": "model-x"}, out=out)
+        assert "Config file not found" in buf.getvalue()
 
     def test_updates_config(self, mock_llm, tmp_path, monkeypatch):
         import eval.cli as model_eval
 
         config_file = tmp_path / "config.toml"
         config_file.write_text('existing_key = "value"\n')
-        old, new, buf = _capture_console()
-        try:
-            model_eval.console = new
-            monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
-            model_eval.update_config({"task1": "model-x", "task2": "model-y"})
-            content = config_file.read_text()
-            assert "best_models" in content
-            assert "model-x" in content and "model-y" in content
-            assert "existing_key" in content
-        finally:
-            model_eval.console = old
+        buf, out = _console_buffer()
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        model_eval.update_config({"task1": "model-x", "task2": "model-y"}, out=out)
+        content = config_file.read_text()
+        assert "best_models" in content
+        assert "model-x" in content and "model-y" in content
+        assert "existing_key" in content
 
     def test_existing_best_models(self, mock_llm, tmp_path, monkeypatch):
         import eval.cli as model_eval
 
         config_file = tmp_path / "config.toml"
         config_file.write_text('[best_models]\ntask1 = "old_model"\n')
-        old, new, buf = _capture_console()
-        try:
-            model_eval.console = new
-            monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
-            model_eval.update_config({"task1": "new_model"})
-            content = config_file.read_text()
-            assert "new_model" in content
-            assert "old_model" not in content
-        finally:
-            model_eval.console = old
+        buf, out = _console_buffer()
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        model_eval.update_config({"task1": "new_model"}, out=out)
+        content = config_file.read_text()
+        assert "new_model" in content
+        assert "old_model" not in content
 
     def test_empty_model_value(self, mock_llm, tmp_path, monkeypatch):
         """If model value is falsy, don't add to best_models."""
@@ -239,16 +215,12 @@ class TestUpdateConfig:
 
         config_file = tmp_path / "config.toml"
         config_file.write_text('original = "value"\n')
-        old, new, buf = _capture_console()
-        try:
-            model_eval.console = new
-            monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
-            model_eval.update_config({"task1": None})
-            content = config_file.read_text()
-            assert "task1" not in content
-            assert "original" in content
-        finally:
-            model_eval.console = old
+        buf, out = _console_buffer()
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        model_eval.update_config({"task1": None}, out=out)
+        content = config_file.read_text()
+        assert "task1" not in content
+        assert "original" in content
 
 
 class TestPrintResults:
@@ -256,22 +228,20 @@ class TestPrintResults:
         """Test _print_results saves to file and prints."""
         import eval.cli as model_eval
 
-        monkeypatch.setattr("eval.report._get_eval_dir", lambda: tmp_path)
-        old, new, buf = _capture_console()
-        try:
-            model_eval.console = new
-            all_results = [
-                {
-                    "model": "m1",
-                    "results": [
-                        {"task": "t1", "quality_score": 80, "result": {"content": "x" * 100}},
-                    ],
-                },
-            ]
-            best_scores = {"t1": 80}
-            best_models = {"t1": "m1"}
-            model_eval._print_results(all_results, best_scores, best_models)
-            # Saved file
-            assert (tmp_path / "eval_results.json").exists()
-        finally:
-            model_eval.console = old
+        _EVAL_DIR = tmp_path
+        buf, out = _console_buffer()
+        all_results = [
+            {
+                "model": "m1",
+                "results": [
+                    {"task": "t1", "quality_score": 80, "result": {"content": "x" * 100}},
+                ],
+            },
+        ]
+        best_scores = {"t1": 80}
+        best_models = {"t1": "m1"}
+        model_eval._print_results(
+                all_results, best_scores, best_models, eval_dir=_EVAL_DIR
+            )
+        # Saved file
+        assert (tmp_path / "eval_results.json").exists()

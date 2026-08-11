@@ -9,17 +9,15 @@ Reference docs — read these when the task touches their subject, not by defaul
 ### File Size Limit
 No production file may exceed 500 lines. Split into a package (`twitter/`, `weekend/`,
 `rename/`, `eval/`) or extract a module; `lib/config.py`, `lib/quality.py`,
-`lib/osaurus_lib.py`, and `lib/validators/text_validator.py` are shims re-exporting their
-split submodules. Check with `wc -l` before adding to a file that is already close.
+`lib/osaurus_lib.py`, `lib/validators/text_validator.py`, `lib/quality_scorers.py`,
+`eval/report.py` and `eval/cli.py` are shims re-exporting their split submodules.
+Check with `wc -l` before adding to a file that is already close.
 
 Test modules under `references/tests/` are **exempt** — they are lists of independent
 cases padded with long fixtures, so splitting them buys no cohesion, and a gate that
 blocks every routine test edit gets bypassed instead of obeyed. The pre-commit hook
 enforces exactly this split (production gated, tests skipped) so the rule and the gate
 cannot drift.
-
-Known legacy violations, not to be extended: `eval/cli.py`, `eval/report.py`,
-`lib/quality_scorers.py`.
 
 ### Testing
 - Every test must have a non-tautological assertion
