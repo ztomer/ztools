@@ -229,7 +229,6 @@ class TestSummarizeWithLlm:
                 "extract_thinking",
                 return_value=(None, "## Topic\n- fact 1\n- fact 2\n- fact 3"),
             ),
-            patch.object(twit_summarize, "strip_thinking", side_effect=lambda x: x),
         ):
             result = twit_summarize.summarize_with_llm(
                 self._make_tweets(), "http://localhost:1337", "m1"
@@ -283,7 +282,6 @@ class TestSummarizeWithLlm:
                     (None, "## Good\n- a\n- b\n- c"),
                 ],
             ),
-            patch.object(twit_summarize, "strip_thinking", side_effect=lambda x: x),
         ):
             result = twit_summarize.summarize_with_llm(
                 self._make_tweets(), "http://localhost:1337", "m1"
@@ -310,7 +308,6 @@ class TestSummarizeWithLlm:
             patch.object(
                 twit_summarize, "extract_thinking", return_value=(None, "## Good\n- a\n- b\n- c")
             ),
-            patch.object(twit_summarize, "strip_thinking", side_effect=lambda x: x),
         ):
             result = twit_summarize.summarize_with_llm(
                 self._make_tweets(), "http://localhost:1337", "m1"
@@ -337,7 +334,6 @@ class TestSummarizeWithLlm:
             patch.object(
                 twit_summarize, "extract_thinking", return_value=(None, "## Good\n- a\n- b\n- c")
             ),
-            patch.object(twit_summarize, "strip_thinking", side_effect=lambda x: x),
         ):
             result = twit_summarize.summarize_with_llm(
                 self._make_tweets(), "http://localhost:1337", "m1"
@@ -358,7 +354,6 @@ class TestSummarizeWithLlm:
             patch.object(
                 twit_summarize, "extract_thinking", return_value=(None, "## Topic\n- a\n- b\n- c")
             ),
-            patch.object(twit_summarize, "strip_thinking", side_effect=lambda x: x),
         ):
             result = twit_summarize.summarize_with_llm(
                 self._make_tweets(), "http://localhost:1337", "m1"
@@ -411,7 +406,6 @@ class TestSummarizeWithLlm:
                     (None, "## Good\n- a\n- b\n- c"),
                 ],
             ),
-            patch.object(twit_summarize, "strip_thinking", side_effect=lambda x: x),
         ):
             result = twit_summarize.summarize_with_llm(
                 self._make_tweets(), "http://localhost:1337", "m1"
@@ -431,7 +425,6 @@ class TestSummarizeWithLlm:
             patch.object(
                 twit_summarize, "extract_thinking", return_value=(None, "## Topic\n- a\n- b\n- c")
             ),
-            patch.object(twit_summarize, "strip_thinking", side_effect=lambda x: x),
         ):
             result = twit_summarize.summarize_with_llm(
                 self._make_tweets(), "http://localhost:1337", "m1"

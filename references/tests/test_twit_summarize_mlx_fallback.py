@@ -40,7 +40,6 @@ class TestMlxVlmFallback:
             patch.object(
                 twit_summarize, "call_mlx_vlm", return_value="## VLM\n- a fact\n- b fact\n- c fact"
             ),
-            patch.object(twit_summarize, "process_mlx_content", side_effect=lambda x: x),
             patch.object(twit_summarize, "get_mlx_context_length", return_value=8192),
             patch.object(twit_summarize, "get_model_prompt", return_value="Summarize: {}"),
         ):
@@ -66,7 +65,6 @@ class TestMlxVlmFallback:
             patch.object(
                 twit_summarize, "call_mlx_vlm", return_value="## VLM\n- a fact\n- b fact\n- c fact"
             ),
-            patch.object(twit_summarize, "process_mlx_content", side_effect=lambda x: x),
             patch.object(twit_summarize, "get_mlx_context_length", return_value=8192),
             patch.object(twit_summarize, "get_model_prompt", return_value="Summarize: {}"),
         ):
@@ -93,7 +91,6 @@ class TestMlxVlmFallback:
             patch.object(twit_summarize, "probe_mlx_vlm_loadable", return_value=(False, "no")),
             patch.object(twit_summarize, "_check_mlx_model_compatible", return_value=True),
             patch.object(twit_summarize, "call_mlx", return_value="## Short\n- fact a\n- fact b"),
-            patch.object(twit_summarize, "process_mlx_content", side_effect=lambda x: x),
             patch.object(twit_summarize, "get_mlx_context_length", return_value=8192),
             patch.object(twit_summarize, "get_model_prompt", return_value="Summarize: {}"),
         ):
@@ -118,7 +115,6 @@ class TestMlxVlmFallback:
             patch.object(twit_summarize, "find_any_working_mlx_vlm_model", return_value=None),
             patch.object(twit_summarize, "probe_mlx_vlm_loadable", return_value=(False, "no")),
             patch.object(twit_summarize, "call_mlx", return_value="[LLM error: oops]"),
-            patch.object(twit_summarize, "process_mlx_content", side_effect=lambda x: x),
             patch.object(twit_summarize, "get_mlx_context_length", return_value=8192),
             patch.object(twit_summarize, "get_model_prompt", return_value="Summarize: {}"),
         ):
@@ -143,7 +139,6 @@ class TestMlxVlmFallback:
             patch.object(twit_summarize, "find_any_working_mlx_vlm_model", return_value=None),
             patch.object(twit_summarize, "probe_mlx_vlm_loadable", return_value=(False, "no")),
             patch.object(twit_summarize, "call_mlx", return_value="plain text no structure"),
-            patch.object(twit_summarize, "process_mlx_content", side_effect=lambda x: x),
             patch.object(twit_summarize, "get_mlx_context_length", return_value=8192),
             patch.object(twit_summarize, "get_model_prompt", return_value="Summarize: {}"),
         ):

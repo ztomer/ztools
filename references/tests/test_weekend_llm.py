@@ -48,7 +48,6 @@ class TestGetLlmJsonRetries:
                     {"content": '{"ok": true}'},
                 ],
             ),
-            patch.object(wl, "strip_thinking", side_effect=lambda x: x),
             patch.object(wl, "_extract_json_only", side_effect=[None, '{"ok": true}']),
             patch.object(wl, "ensure_server"),
         ):
