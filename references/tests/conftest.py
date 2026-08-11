@@ -253,7 +253,7 @@ def no_real_browsers_or_cookies(request):
 def _signals_files_stay_clean(tmp_path_factory):
     """Structural gate: `pytest` must not dirty tracked config.
 
-    eval/run.py and weekend/llm.py persist learned per-model timeouts into
+    eval/signals.py and weekend/llm.py persist learned per-model timeouts into
     conf/eval_signals.json and conf/phase_signals.json. Both are tracked, so
     exercising those code paths rewrote them on every test run and left the
     working tree dirty. Redirect both at a tmp dir for the whole session.
@@ -261,10 +261,10 @@ def _signals_files_stay_clean(tmp_path_factory):
     from unittest.mock import patch
 
     tmp = tmp_path_factory.mktemp("signals")
-    import eval.run as eval_run
+    import eval.signals as eval_signals
     import weekend.llm as weekend_llm
 
-    with patch.object(eval_run, "EVAL_SIGNALS_PATH", tmp / "eval_signals.json"), \
+    with patch.object(eval_signals, "EVAL_SIGNALS_PATH", tmp / "eval_signals.json"), \
          patch.object(weekend_llm, "PHASE_SIGNALS_PATH", tmp / "phase_signals.json"), \
          patch.object(weekend_llm, "EXTRACT_SIGNALS_PATH", tmp / "extract_signals.json"):
         yield

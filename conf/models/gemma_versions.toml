@@ -1,7 +1,5 @@
 name = "gemma"
 timeout = 120
-# Prompt-sizing budget for tw; a flat 8192 truncated real timelines.
-context_window = 32768
 
 [field_mapping]
 activity = "name"

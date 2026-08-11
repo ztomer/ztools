@@ -7,85 +7,27 @@ Contains the main eval loop, model calling, and validation orchestration.
 import json
 import os
 import re
-from pathlib import Path
 
-from lib.config import Task, get_timeout
 from lib.logging_config import osaurus_logger as eval_logger
 from lib.mlx_lib import call as mlx_call
+from lib.model_caps import is_generative_model
 from lib.osaurus_lib import call
-from lib.paths import conf_dir
 from lib.tui import FAIL, STEP, WARN, console
 from lib.validators_lib import get_source_matching_details
 
 from eval.failures import FAIL_CONTENT, FAIL_INFRA, FAIL_NONE, _classify_failure
+from eval.prefill import measure_prefill_rate, record_prefill_rate
+from eval.signals import (
+    DEFAULT_EVAL_TIMEOUT,
+    _effective_timeout,
+    _record_signal,
+)
 from eval.tasks_core import TASKS, _extract_items_from_text
 from eval.validate import safe_content
 
 MAX_RETRIES = int(os.environ.get("EVAL_MAX_RETRIES", "1"))
-DEFAULT_EVAL_TIMEOUT = int(os.environ.get("EVAL_DEFAULT_TIMEOUT", "900"))
 MEMORY_WARNING_THRESHOLD = 80
 
-# Learned per-model timeouts. This file is tracked, so a test run that exercises the
-# eval loop would otherwise rewrite it and dirty the working tree on every `pytest`.
-# tests/conftest.py points EVAL_SIGNALS_DIR at a tmp dir to keep runs side-effect free.
-EVAL_SIGNALS_DIR = Path(
-    os.environ.get("EVAL_SIGNALS_DIR", str(conf_dir()))
-)
-EVAL_SIGNALS_PATH = EVAL_SIGNALS_DIR / "eval_signals.json"
-
-
-def _load_eval_signals():
-    try:
-        if EVAL_SIGNALS_PATH.exists():
-            return json.loads(EVAL_SIGNALS_PATH.read_text())
-    except Exception:
-        pass
-    return {}
-
-
-def _save_eval_signals(signals):
-    EVAL_SIGNALS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    EVAL_SIGNALS_PATH.write_text(json.dumps(signals, indent=2, sort_keys=True))
-
-
-def _effective_timeout(model: str, task_name: str) -> int:
-    signals = _load_eval_signals()
-    task_signals = signals.get(model, {}).get(task_name, {})
-    learned = task_signals.get("timeout", 0)
-    try:
-        configured = get_timeout(Task(task_name))
-    except Exception:
-        configured = DEFAULT_EVAL_TIMEOUT
-    return max(learned, configured, DEFAULT_EVAL_TIMEOUT)
-
-
-def _record_signal(
-    model: str, task_name: str, time_taken: float, had_retries: bool, is_parse_failure: bool
-):
-    if not time_taken and not had_retries:
-        return
-    signals = _load_eval_signals()
-    per_task = signals.setdefault(model, {}).setdefault(task_name, {})
-    samples = per_task.get("samples", 0)
-    p95 = per_task.get("p95_latency", 0)
-
-    if time_taken > 0:
-        if p95:
-            p95 = max(time_taken, p95 * 0.95 + time_taken * 0.05)
-        else:
-            p95 = time_taken
-        per_task["p95_latency"] = round(p95, 1)
-
-    per_task["samples"] = samples + 1
-    per_task["total_retries"] = per_task.get("total_retries", 0) + (1 if had_retries else 0)
-    per_task["parse_failures"] = per_task.get("parse_failures", 0) + (1 if is_parse_failure else 0)
-
-    if time_taken > 0 and p95 > 0:
-        new_timeout = max(DEFAULT_EVAL_TIMEOUT, int(p95 * 1.5))
-        if new_timeout != per_task.get("timeout"):
-            per_task["timeout"] = new_timeout
-
-    _save_eval_signals(signals)
 
 
 def _validate_result(
@@ -249,6 +191,7 @@ def run_eval_quick(
     verbose: bool = False,
     timeout: int = DEFAULT_EVAL_TIMEOUT,
     on_complete: callable = None,
+    measure_prefill: bool = True,
 ) -> dict:
     """Run evaluation with no retries (quick mode)."""
     global MAX_RETRIES
@@ -264,6 +207,7 @@ def run_eval_quick(
             verbose=verbose,
             timeout=timeout,
             on_complete=on_complete,
+            measure_prefill=measure_prefill,
         )
     finally:
         MAX_RETRIES = orig_retries
@@ -278,6 +222,7 @@ def run_eval(
     verbose: bool = False,
     timeout: int = DEFAULT_EVAL_TIMEOUT,
     on_complete: callable = None,
+    measure_prefill: bool = True,
 ) -> dict:
     """Run evaluation on model using real-world tasks.
 
@@ -288,6 +233,16 @@ def run_eval(
     results = []
 
     console.print(f"{STEP} Testing {model} ({backend})")
+
+    # Measure this model's ingestion rate before timing anything else. It is
+    # what every tool's context budget is sized from, and the alternative was a
+    # hand-picked constant that turned out to be 35-90x too low. One extra
+    # request per model per run.
+    if measure_prefill and backend == "osaurus" and is_generative_model(model):
+        rate = measure_prefill_rate(model, host, port)
+        record_prefill_rate(model, rate)
+        if rate:
+            console.print(f"{STEP} {model} prefill: {rate:,.0f} chars/sec")
 
     for task_name, task_cfg in tasks.items():
         if "messages" not in task_cfg:

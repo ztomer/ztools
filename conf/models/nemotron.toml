@@ -1,7 +1,5 @@
 name = "nemotron"
 timeout = 300
-# Prompt-sizing budget for tw; a flat 8192 truncated real timelines.
-context_window = 16384
 
 [field_mapping]
 category = "target_ages"

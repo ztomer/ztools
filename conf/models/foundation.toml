@@ -1,5 +1,13 @@
 name = "foundation"
 timeout = 60
+# Apple TN3193, "Managing the on-device foundation model's context window":
+# a fixed 4096 tokens covering instructions + prompt + OUTPUT combined. Checked
+# 2026-08-11. Apple states this cannot change for the on-device model; the
+# Private Cloud Compute server model is a separate 32000-token thing.
+#
+# Unlike every server model, foundation has no config.json on disk to probe, so
+# this is the only place the number can come from.
+context_window = 4096
 
 [prompts]
 json = "Output JSON now. Use EXACT schema."

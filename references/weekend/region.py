@@ -23,6 +23,8 @@ the model -- see `weekend/prompts.py` -- not to the floor.
 
 from __future__ import annotations
 
+import re
+
 __all__ = ["region_tokens", "has_region_evidence"]
 
 # Municipalities and neighbourhoods of the Greater Toronto Area and its commuter
@@ -38,9 +40,16 @@ _GTA = (
     "durham region", "peel region", "halton", "yorkdale", "downsview",
 )
 
-# Bare province abbreviations are matched as whole tokens only, so "ON" does not
-# fire on every word containing those letters.
-_ABBREVIATIONS = ("on", "ont")
+# The province abbreviation is matched ONLY in its address form, on the RAW
+# text before case-folding. Matching a lowercased whole word "on" made the
+# filter a near-no-op: "tickets on sale", "posted on Tuesday" and "deals on the
+# beach" all counted as Ontario evidence, so Boston tourism pages and iRacing
+# calendars entered a Vaughan plan as candidates.
+_PROVINCE_ADDRESS_RE = re.compile(
+    r",\s*ON\b"  # "Mississauga, ON"
+    r"|\bON\s+[A-Z]\d[A-Z]"  # "ON L4K 5W4" (postal code follows)
+    r"|\bOnt\.",  # "Ont." abbreviation with its period
+)
 
 
 def region_tokens() -> tuple[str, ...]:
@@ -75,5 +84,6 @@ def has_region_evidence(text: str) -> bool:
         return True
     if any(token in normalized for token in region_tokens()):
         return True
-    words = set(normalized.replace(",", " ").split())
-    return any(abbr in words for abbr in _ABBREVIATIONS)
+    # Checked against the ORIGINAL text: the case and the comma are the whole
+    # signal that distinguishes the province from the preposition.
+    return bool(_PROVINCE_ADDRESS_RE.search(text or ""))

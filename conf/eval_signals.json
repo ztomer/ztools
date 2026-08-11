@@ -307,6 +307,10 @@
     }
   },
   "gemma-4-12b-it-mxfp8": {
+    "_capabilities": {
+      "prefill_chars_per_sec": 1165.1,
+      "prefill_samples": 2
+    },
     "detailed_json": {
       "p95_latency": 25.5,
       "parse_failures": 0,
@@ -378,9 +382,9 @@
       "total_retries": 0
     },
     "summarize": {
-      "p95_latency": 62.8,
+      "p95_latency": 60.0,
       "parse_failures": 0,
-      "samples": 9,
+      "samples": 14,
       "timeout": 900,
       "total_retries": 1
     },

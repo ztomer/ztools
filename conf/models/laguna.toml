@@ -1,7 +1,5 @@
 name = "laguna"
 timeout = 300
-# Prompt-sizing budget for tw; a flat 8192 truncated real timelines.
-context_window = 8192
 
 [field_mapping]
 category = "target_ages"

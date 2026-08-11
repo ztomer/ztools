@@ -1,43 +1,43 @@
 {
   "foundation": {
     "condense_weather": {
-      "p95_latency": 2.5,
-      "samples": 4,
+      "p95_latency": 2.1,
+      "samples": 8,
       "timeout": 900
     },
     "draft_activities/fixed": {
-      "p95_latency": 11.9,
-      "samples": 3,
-      "timeout": 900
-    },
-    "draft_activities/transient": {
-      "p95_latency": 14.1,
-      "samples": 4,
-      "timeout": 900
-    },
-    "extract_sources/events": {
-      "p95_latency": 5.0,
-      "samples": 23,
-      "timeout": 900
-    },
-    "extract_sources/venues": {
-      "p95_latency": 2.0,
-      "samples": 27,
-      "timeout": 900
-    },
-    "refine_draft": {
-      "p95_latency": 5.8,
+      "p95_latency": 11.1,
       "samples": 7,
       "timeout": 900
     },
+    "draft_activities/transient": {
+      "p95_latency": 31.4,
+      "samples": 8,
+      "timeout": 900
+    },
+    "extract_sources/events": {
+      "p95_latency": 55.0,
+      "samples": 87,
+      "timeout": 900
+    },
+    "extract_sources/venues": {
+      "p95_latency": 1.8,
+      "samples": 64,
+      "timeout": 900
+    },
+    "refine_draft": {
+      "p95_latency": 5.2,
+      "samples": 15,
+      "timeout": 900
+    },
     "structure_to_json/fixed": {
-      "p95_latency": 6.7,
-      "samples": 3,
+      "p95_latency": 6.6,
+      "samples": 7,
       "timeout": 900
     },
     "structure_to_json/transient": {
-      "p95_latency": 56.6,
-      "samples": 3,
+      "p95_latency": 47.1,
+      "samples": 7,
       "timeout": 900
     }
   },

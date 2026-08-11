@@ -305,9 +305,16 @@ class TestMainIntegration:
                 "weekend.cli.get_weekend_date_objects",
                 lambda: (datetime.date(2026, 7, 17), datetime.date(2026, 7, 19)),
             )
+            # The corpus must contain the events the mocked model "found":
+            # provenance enforcement drops rows that trace to nothing fetched,
+            # and a fixture whose model invents everything is not a pipeline
+            # this test can meaningfully exercise.
+            mock_corpus = "\n".join(
+                f"- {e['name']} in {e['location']}" for e in (*mock_events, *mock_fixed)
+            )
             m.setattr(
                 "weekend.cli._fetch_data",
-                lambda *a: ("24C Clear", "mock events", "mock venues", "Jul 17-19"),
+                lambda *a: ("24C Clear", mock_corpus, mock_corpus, "Jul 17-19"),
             )
             m.setattr(
                 "weekend.cli.get_model_field_mapping",

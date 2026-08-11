@@ -73,11 +73,52 @@ def fetch_page_text(url: str, timeout: int = FETCH_TIMEOUT, max_chars: int = MAX
         soup = BeautifulSoup(resp.text, "html.parser")
         for tag in soup(["script", "style", "nav", "header", "footer", "form", "noscript"]):
             tag.decompose()
-        text = " ".join(soup.get_text(separator=" ", strip=True).split())
+        # Keep the page's line structure. Collapsing everything into one line
+        # made each followed page a single 4000-char blob, so the extractor had
+        # to find events inside a wall of text and the corpus line count
+        # understated real supply. One source line per listing is what the rest
+        # of the pipeline is built to consume.
+        lines = [
+            " ".join(part.split())
+            for part in soup.get_text(separator="\n", strip=True).splitlines()
+        ]
+        text = "\n".join(line for line in lines if line)
         return text[:max_chars]
     except Exception as exc:
         print(f"{WARN} Could not read {url[:60]}: {type(exc).__name__}")
         return ""
+
+
+
+# Every candidate the pipeline can use must be ONE line starting with "- ":
+# `weekend.phases.extract_sources` keeps only those. This function used to
+# return a single "- Events listed on 'X':" header followed by raw page text,
+# so the header survived and every actual event on the page was discarded --
+# the whole follow-aggregators feature was dead downstream. Reformatting the
+# same text per line flipped a real run from 0 transient rows to 2 correct ones.
+# Deliberately permissive: nav chrome is 1-2 words ("Home", "About"), while a
+# real entry can be short ("TAIWANfest August 28-30" is 23 chars). Starving
+# the pipeline is the failure this whole change exists to fix, so a little
+# noise reaching the extractor is the cheaper error.
+MIN_CANDIDATE_CHARS = int(os.environ.get("WEEKEND_FOLLOW_MIN_LINE", "8"))
+MAX_LINES_PER_PAGE = int(os.environ.get("WEEKEND_FOLLOW_MAX_LINES", "60"))
+
+
+def as_candidate_lines(text: str, title: str) -> str:
+    """Render fetched page text as one `- ` candidate per line.
+
+    The source title is carried on every line so a row can still be traced back
+    to the page it came from after the corpus is flattened.
+    """
+    lines = []
+    for raw in (text or "").splitlines():
+        line = " ".join(raw.split())
+        if len(line) < MIN_CANDIDATE_CHARS:
+            continue
+        lines.append(f"- [{title}] {line}")
+        if len(lines) >= MAX_LINES_PER_PAGE:
+            break
+    return "\n".join(lines)
 
 
 def follow_aggregators(results, limit: int = FOLLOW_LIMIT) -> str:
@@ -99,7 +140,7 @@ def follow_aggregators(results, limit: int = FOLLOW_LIMIT) -> str:
             continue
         text = fetch_page_text(url)
         if text:
-            followed.append(f"- Events listed on '{title}':\n{text}")
+            followed.append(as_candidate_lines(text, title))
     if followed:
         print(f"{STEP} Followed {len(followed)} event listing page(s)")
-    return "\n".join(followed)
+    return "\n".join(block for block in followed if block)

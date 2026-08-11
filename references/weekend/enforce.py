@@ -16,9 +16,13 @@ from __future__ import annotations
 import re
 from datetime import date
 
+from lib.dates import find_dates_in
+
 __all__ = [
     "matches_exclusion",
     "normalize_for_match",
+    "drop_unsourced_rows",
+    "row_is_sourced",
     "drop_excluded_places",
     "correct_weather_labels",
     "drop_events_outside_window",
@@ -237,38 +241,65 @@ def correct_weather_labels(items: list[dict]) -> tuple[list[dict], list[str]]:
     return items, notes
 
 
-_MONTHS = (
-    "january february march april may june july august september october "
-    "november december"
-).split()
-
-_ISO_DATE_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
-_TEXT_DATE_RE = re.compile(
-    r"\b(" + "|".join(mo[:3] for mo in _MONTHS) + r")[a-z]*\.?\s+(\d{1,2})\b",
-    re.IGNORECASE,
-)
-
-
 def _parse_any_date(value: str, year: int) -> date | None:
-    value = (value or "").strip()
-    if not value:
-        return None
-    m = _ISO_DATE_RE.search(value)
-    if m:
-        try:
-            return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-        except ValueError:
-            return None
-    m = _TEXT_DATE_RE.search(value)
-    if m:
-        try:
-            month = next(
-                i for i, mo in enumerate(_MONTHS, 1) if mo.startswith(m.group(1).lower())
-            )
-            return date(year, month, int(m.group(2)))
-        except ValueError:
-            return None
-    return None
+    """First explicit date in `value`, or None.
+
+    Delegates to lib.dates.find_dates_in so the enforcer and the candidate
+    prioritiser cannot drift apart. They already had: this module read
+    three-letter stems ("Aug 15") while lib.dates matched only full month
+    names, so supply prioritisation scored 0 in-window candidates on corpora
+    the enforcer would happily have accepted.
+    """
+    found = find_dates_in(value or "", year)
+    return found[0] if found else None
+
+
+
+# A row's name must be traceable to the fetched corpus. Below this fraction of
+# the name's significant words appearing in the corpus, the row is invention.
+PROVENANCE_MIN_COVERAGE = 0.6
+
+
+def _significant_words(text: str) -> list[str]:
+    """Content words of a venue/event name, folded for matching."""
+    return [w for w in normalize_for_match(text).split() if len(w) > 2 and w not in _CONNECTORS]
+
+
+def row_is_sourced(item: dict, corpus_normalized: str) -> bool:
+    """Whether this row's name traces back to the corpus we actually fetched."""
+    name = str(item.get("name", "") or "")
+    words = _significant_words(name)
+    if not words:
+        # Nothing to check: an unnamed row is C7's problem, not provenance's.
+        return True
+    hits = sum(1 for w in words if w in corpus_normalized)
+    return (hits / len(words)) >= PROVENANCE_MIN_COVERAGE
+
+
+def drop_unsourced_rows(items: list[dict], corpus: str) -> tuple[list[dict], list[str]]:
+    """Drop rows whose name appears nowhere in the fetched corpus.
+
+    This is the gate that was missing: every other check asked whether a row was
+    well-formed, in-window or non-excluded — none asked whether it was real. A
+    starved pipeline fabricates confidently, and confident fabrication is exactly
+    what survives shape checks.
+
+    Applied ONLY when a corpus is available; with no corpus there is nothing to
+    judge against and dropping would be worse than keeping.
+    """
+    if not corpus or not items:
+        return items, []
+    corpus_normalized = normalize_for_match(corpus)
+    if not corpus_normalized:
+        return items, []
+
+    kept, notes = [], []
+    for item in items:
+        if row_is_sourced(item, corpus_normalized):
+            kept.append(item)
+        else:
+            notes.append(f"dropped unsourced row (not in fetched corpus): {item.get('name', '?')}")
+    return kept, notes
 
 
 def drop_events_outside_window(

@@ -218,7 +218,11 @@ class TestRunEvalWithMock:
             task = dict(TASKS["json"])
             task.pop("source", None)
             tasks = {"json": task}
-            results = er.run_eval("mock-model", tasks=tasks, verbose=False)
+            # measure_prefill=False: the throughput probe is a real extra
+            # transport call, and this test indexes its side effect by call number.
+            results = er.run_eval(
+                "mock-model", tasks=tasks, verbose=False, measure_prefill=False
+            )
         # Retry happened: exactly 2 calls (first failed, second succeeded with 10 items)
         assert call_count["n"] == 2
         # best_score should be the second (high) score, not the first
@@ -285,7 +289,11 @@ class TestRunEvalWithMock:
             task = dict(TASKS["json"])
             task.pop("source", None)
             tasks = {"json": task}
-            results = er.run_eval("mock-model", tasks=tasks, verbose=False)
+            # measure_prefill=False: the throughput probe is a real extra
+            # transport call, and this test indexes its side effect by call number.
+            results = er.run_eval(
+                "mock-model", tasks=tasks, verbose=False, measure_prefill=False
+            )
         # FAIL_CONTENT → break after first attempt (no retry)
         assert call_count["n"] == 1
         # The category is recorded in the result

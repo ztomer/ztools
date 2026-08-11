@@ -114,7 +114,10 @@ Available events:
 Output one line per suggestion in this EXACT format:
 NAME | LOCATION | DATES | PRICE | AGES | description (highlight themes/appeal)
 
-{carry}"""
+{carry}DO NOT suggest any of these places -- the family has already ruled them out, and
+a suggestion naming one is dropped after the fact, wasting a slot that could
+have held a real option: {exclusions}
+"""
 
 PHASE_DRAFT_FIXED = """\
 You are an expert family activity planner. Suggest 10 specific weekend activities for
@@ -131,7 +134,10 @@ Available venues:
 Output one line per suggestion in this EXACT format:
 NAME | LOCATION | DATES | PRICE | AGES | description (highlight features/exhibits)
 
-{carry}"""
+{carry}DO NOT suggest any of these places -- the family has already ruled them out, and
+a suggestion naming one is dropped after the fact, wasting a slot that could
+have held a real option: {exclusions}
+"""
 
 PHASE_REFINE = """\
 Here are activity suggestions:
@@ -223,6 +229,11 @@ def build_draft_prompt(
     year=None,
 ):
     template = PHASE_DRAFT_TRANSIENT if source_type == "transient" else PHASE_DRAFT_FIXED
+    # The exclusions were enforced only AFTER drafting, so the model spent slots
+    # on places the config forbids and post-parse enforcement removed them: one
+    # real run drafted Toronto Zoo eight times and shipped an empty transient
+    # table. Telling it up front is the cheap half; enforcement stays as the
+    # guarantee, because a constraint stated only in a prompt is not enforced.
     return template.format(
         weather_condensed=weather_condensed,
         cleaned_sources=cleaned_sources,
@@ -231,6 +242,7 @@ def build_draft_prompt(
         date_range=date_range,
         year=year or _default_year(),
         carry=_CARRY_FIELDS,
+        exclusions=", ".join(EXCLUDE_PLACES) or "none",
     )
 
 
