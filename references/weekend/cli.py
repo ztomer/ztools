@@ -6,12 +6,11 @@ import time
 from pathlib import Path
 
 import lib.tui as tui
-from lib import init_config
+from lib import init_config, osaurus_server
 from lib.config import Task, get_model_field_mapping
 from lib.llm.constants import DEFAULT_HOST, DEFAULT_PORT
 from lib.osaurus_lib import get_best_model
 from lib.osaurus_models import FALLBACK_MODEL
-from lib.osaurus_server import check_server_or_die
 from lib.signal_handling import setup_signals
 from lib.tui import STEP, WARN, die
 
@@ -276,7 +275,7 @@ def main(args=None):
         if getattr(args, "model", None):
             os.environ["OLLAMA_MODEL"] = args.model
         model = os.environ.get("OLLAMA_MODEL") or get_best_model(Task.JSON)
-        check_server_or_die(
+        osaurus_server.check_server_or_die(
             os.environ.get("OLLAMA_BASE_URL", OSAURUS_BASE_URL), DEFAULT_PORT, model
         )
         print_header("Using model", model)

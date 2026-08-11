@@ -8,10 +8,10 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from lib import osaurus_server
 from lib.config import Task
 from lib.llm.constants import DEFAULT_HOST, DEFAULT_PORT
 from lib.osaurus_lib import get_best_model
-from lib.osaurus_server import check_server_or_die
 from lib.signal_handling import is_shutdown_requested, setup_signals
 from lib.tui import STEP, WARN
 
@@ -129,7 +129,7 @@ def main() -> None:
     if args.clean:
         clean_folder(output_dir)
 
-    check_server_or_die(args.host, DEFAULT_PORT, model)
+    osaurus_server.check_server_or_die(args.host, DEFAULT_PORT, model)
 
     state = load_state()
     since_time = resolve_since_time(args.since, state)

@@ -108,6 +108,8 @@ testpaths = ["references/tests"]
 addopts = "-ra"
 markers = [
     "real_cookie_discovery: opts out of the conftest gate that stubs browser cookie discovery",
+    "real_llm: opts out of the conftest gate that blocks connections to the real LLM server",
+    "llm_gate_selftest: tests OF the LLM connection gate; deliberate attempts are expected",
 ]
 
 [tool.coverage.run]

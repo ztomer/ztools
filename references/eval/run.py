@@ -239,7 +239,7 @@ def run_eval(
     # hand-picked constant that turned out to be 35-90x too low. One extra
     # request per model per run.
     if measure_prefill and backend == "osaurus" and is_generative_model(model):
-        rate = measure_prefill_rate(model, host, port)
+        rate = measure_prefill_rate(model, host, port, transport=call)
         record_prefill_rate(model, rate)
         if rate:
             console.print(f"{STEP} {model} prefill: {rate:,.0f} chars/sec")

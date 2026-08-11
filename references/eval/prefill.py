@@ -49,7 +49,7 @@ def _probe_size_for(model: str) -> int:
     return max(2000, min(PREFILL_PROBE_CHARS, int(window * CHARS_PER_TOKEN * 0.6)))
 
 
-def measure_prefill_rate(model: str, host: str, port: int) -> float | None:
+def measure_prefill_rate(model: str, host: str, port: int, transport=None) -> float | None:
     """Characters per second this model ingests, measured with max_tokens=1.
 
     Whole-call timing cannot answer this: on a generation-heavy task decode
@@ -57,8 +57,14 @@ def measure_prefill_rate(model: str, host: str, port: int) -> float | None:
     model measured in isolation. Only `max_tokens=1` isolates ingestion, which
     is the quantity a context budget actually depends on.
 
+    `transport` is the caller's own `call`, so a test that patches `eval.run.call`
+    covers the probe too. Importing `call` here by value created a second seam
+    that mocks did not reach, and eighteen mocked tests silently hit the live
+    server through it until the conftest gate started failing on connections.
+
     Returns None when the probe cannot run; callers fall back to their floor.
     """
+    send = transport or call
     size = _probe_size_for(model)
     # The nonce goes FIRST: a prefix cache matches from the start of the prompt,
     # so a leading unique token makes every byte after it new work. Identical
@@ -67,7 +73,7 @@ def measure_prefill_rate(model: str, host: str, port: int) -> float | None:
     filler = nonce + (_PROBE_LINE * (size // len(_PROBE_LINE) + 1))[: size - len(nonce)]
     started = time.monotonic()
     try:
-        result = call(
+        result = send(
             model,
             messages=[{"role": "user", "content": filler}],
             host=host,

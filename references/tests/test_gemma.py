@@ -1,6 +1,7 @@
 import pytest
 
 
+@pytest.mark.real_llm
 @pytest.mark.skip(reason="Integration test requiring running LLM server")
 class TestGemmaModel:
     def test_gemma_call(self):

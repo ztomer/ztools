@@ -242,3 +242,40 @@ class TestFullBudgetFitsTheTimeout:
             f"a full {max_chars:,}-char prompt needs {estimate}s, at or past the "
             f"{budget.MAX_TIMEOUT}s ceiling -- it would be clamped and time out"
         )
+
+
+class TestTheProbeUsesTheCallersTransport:
+    """One mock seam must cover the probe as well as the task calls.
+
+    `eval/prefill.py` imports `call` by value, so patching `eval.run.call` did
+    not reach it. Eighteen mocked tests called the live server through that gap
+    until the conftest connection gate started failing on it.
+    """
+
+    def test_run_eval_probes_through_its_own_call(self, signals_file):
+        from unittest.mock import patch
+
+        from eval import run as eval_run
+
+        seen = []
+
+        def fake_call(model, messages, **kwargs):
+            seen.append(kwargs.get("max_tokens"))
+            return {"content": "[]", "parsed": [], "time": 0.1}
+
+        tasks = {"t": {"messages": [{"role": "user", "content": "hi"}], "validator": lambda *a, **k: 100}}
+        with patch.object(eval_run, "call", fake_call):
+            eval_run.run_eval("mock-model", tasks=tasks, verbose=False)
+
+        assert 1 in seen, (
+            "the prefill probe did not go through eval.run.call -- it is reaching "
+            "the transport by some other name, which no mock covers"
+        )
+
+    def test_explicit_transport_is_preferred_over_the_module_import(self):
+        sent = []
+        eval_prefill.measure_prefill_rate(
+            "m", "localhost", 1337, transport=lambda *a, **k: sent.append(1)
+        )
+
+        assert sent, "the injected transport was ignored"

@@ -193,6 +193,82 @@ def sample_tweets():
     ]
 
 
+class _RealLLMServerBlocked(BaseException):
+    """Raised when a test reaches for the live model server.
+
+    Derived from BaseException, not Exception, so the `except Exception` handlers
+    throughout lib/ cannot quietly turn a gate violation into an error dict.
+    """
+
+
+@pytest.fixture(autouse=True)
+def no_real_llm_server(request):
+    """Structural gate: no test may reach the real model server.
+
+    test_prefill_measurement patched `eval.run.call` after that function had
+    moved to `eval.prefill`. patch.object happily bound a name nobody read, the
+    probe called the live server, and the only trace was a stray "HTTP 404:
+    Model 'some-model' is not installed" in the captured log. An unrelated
+    assertion caught it; nothing in the suite would have.
+
+    The pre-push gate sets OLLAMA_BASE_URL=http://127.0.0.1:1, which looks like
+    it covers this and does not: lib/osaurus_lib.py builds its URL from its own
+    DEFAULT_HOST/DEFAULT_PORT and never reads that variable.
+
+    Blocking at the socket layer rather than at `requests` is deliberate — it
+    catches urllib, httpx and anything else a future caller reaches for, and it
+    cannot be defeated by patching the wrong module, which is the exact failure
+    this gate exists to catch.
+
+    Integration tests that genuinely need a server opt out with
+    @pytest.mark.real_llm; they already skip themselves when none is running.
+    Tests OF this gate use @pytest.mark.llm_gate_selftest, which keeps the guard
+    active but accepts the deliberate attempt instead of failing on it.
+    """
+    if "real_llm" in request.keywords:
+        yield
+        return
+
+    import socket
+    from unittest.mock import patch
+
+    from lib.llm.constants import DEFAULT_PORT
+
+    real_connect = socket.socket.connect
+    test_id = request.node.nodeid
+    attempts = []
+
+    def guarded_connect(sock, address, *args, **kwargs):
+        port = address[1] if isinstance(address, tuple) and len(address) > 1 else None
+        if port == DEFAULT_PORT:
+            attempts.append(f"{address[0]}:{port}")
+            raise _RealLLMServerBlocked(
+                f"{test_id} tried to reach the real LLM server at "
+                f"{address[0]}:{port}. A mock is missing or is patching the "
+                f"wrong module — patch the module that OWNS the function "
+                f"(e.g. eval.prefill.call, not eval.run.call). Integration "
+                f"tests mark themselves @pytest.mark.real_llm."
+            )
+        return real_connect(sock, address, *args, **kwargs)
+
+    with patch.object(socket.socket, "connect", guarded_connect):
+        yield
+
+    # Raising is not enough on its own. lib/osaurus_lib.py::call catches broad
+    # exceptions and returns {"error": ...}, and urllib3 wraps whatever connect
+    # raises into a ConnectionError on the way out — so a blocked call is
+    # indistinguishable from a server that happens to be down, and the test goes
+    # green having proved nothing. Failing here, after the test body, is what
+    # the caller cannot swallow.
+    if attempts and "llm_gate_selftest" not in request.keywords:
+        pytest.fail(
+            f"{test_id} attempted {len(attempts)} connection(s) to the real LLM "
+            f"server ({', '.join(sorted(set(attempts)))}). The call was blocked, "
+            f"but the code under test swallowed the error and carried on — so "
+            f"whatever this test asserted, it did not assert it against a mock."
+        )
+
+
 @pytest.fixture(autouse=True)
 def no_real_browsers_or_cookies(request):
     """Structural gate: no test may launch a browser or read real cookies.

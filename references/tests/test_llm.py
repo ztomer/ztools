@@ -1,6 +1,7 @@
 import pytest
 
 
+@pytest.mark.real_llm
 @pytest.mark.skip(reason="Integration test requiring running LLM server at localhost:1337")
 class TestLlmServer:
     def test_call_llm_api(self):

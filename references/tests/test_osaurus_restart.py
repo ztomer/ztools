@@ -97,7 +97,18 @@ def test_ensure_server_still_gives_up_and_says_so_when_truly_down(srv):
 
 
 def test_can_serve_reports_a_stated_reason_not_a_bare_false(srv):
-    ok, reason = srv.can_serve("definitely-not-installed", timeout=5)
+    """The reason must name the model, so an unattended run says which one failed.
+
+    This used to call the live server and rely on the model being absent, which
+    made the assertion depend on the developer's machine: with the model
+    installed it would fail, with the server down it would exercise a different
+    branch entirely. Mocking the response pins the branch under test.
+    """
+    from unittest.mock import Mock
+
+    with patch("requests.post", return_value=Mock(status_code=404)):
+        ok, reason = srv.can_serve("definitely-not-installed", timeout=5)
+
     assert ok is False
     assert "definitely-not-installed" in reason and reason.strip()
 

@@ -130,6 +130,9 @@ class MockLLM:
     def __init__(self):
         self._patches: list[unittest.mock._patch] = []
         self._responses: dict[str, dict] = {}
+        # The real transport, captured before patching, so a test can assert no
+        # module still holds an unpatched alias of it.
+        self._real_call_for_test = None
 
     def set_response(self, task: str, response: dict):
         self._responses[task] = response
@@ -194,9 +197,64 @@ class MockLLM:
         p.start()
         self._patches.append(p)
 
+    # Entry-point modules imported so the alias scan below sees them regardless
+    # of what a given test happened to import first. Scanning alone would make
+    # mock coverage depend on test ordering.
+    _ENTRY_MODULES = (
+        "eval.run",
+        "eval.prefill",
+        "eval.cli",
+        "eval.cli_runtime",
+        "eval.explore_quirks",
+        "eval.benchmark_quality",
+        "weekend.cli",
+        "twitter.cli",
+        "rename.cli",
+    )
+
+    def _patch_every_alias(self, original, replacement):
+        """Patch a function everywhere it was imported by value.
+
+        `from lib.osaurus_lib import call` binds a COPY, so patching the
+        definition does not reach the importer. Chasing those one at a time was
+        whack-a-mole -- eval.run, eval.prefill, eval.cli_runtime and eval.cli
+        each held their own alias, and twenty tests POSTed to the live server
+        through the ones nobody had thought of. Matching on object identity
+        finds all of them, including renamed ones (`call as llm_call`).
+        """
+        import importlib
+        import sys
+
+        for name in self._ENTRY_MODULES:
+            try:
+                importlib.import_module(name)
+            except Exception:
+                continue
+
+        prefixes = ("eval", "weekend", "twitter", "rename", "lib")
+        for module in list(sys.modules.values()):
+            name = getattr(module, "__name__", "")
+            if not name.startswith(prefixes):
+                continue
+            try:
+                members = list(vars(module).items())
+            except Exception:
+                continue
+            for attr, value in members:
+                if value is original:
+                    self._patch_obj(module, attr, replacement)
+
     def patch_osaurus(self):
         import lib.osaurus_lib as m
-        import lib.osaurus_server as s
+        import lib.osaurus_server as s_mod
+
+        s = s_mod
+
+        # Patch each alias BEFORE the definition, so `original` still refers to
+        # the real function when the scan runs.
+        self._real_call_for_test = m.call
+        self._patch_every_alias(m.call, self.call)
+        self._patch_every_alias(s_mod.check_server_or_die, lambda *a, **kw: None)
 
         self._patch_obj(m, "call", self.call)
         self._patch_obj(m, "call_llm_api", self.call_llm_api)

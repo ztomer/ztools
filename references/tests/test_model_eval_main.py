@@ -29,6 +29,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=fake_results),
@@ -47,6 +48,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1", "m2"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=fake_results),
@@ -66,6 +68,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
         ):
@@ -81,6 +84,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=fake_results) as mock_run,
@@ -105,6 +109,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
         ):
@@ -122,6 +127,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value=config_tasks),
             patch.object(model_eval, "run_eval", return_value=[]) as mock_run,
@@ -146,6 +152,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value=config_tasks),
             patch.object(model_eval, "run_eval", return_value=[]) as mock_run,
@@ -171,6 +178,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value=config_tasks),
             patch.object(model_eval, "run_eval", return_value=[]) as mock_run,
@@ -191,6 +199,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value=config_tasks),
             patch.object(model_eval, "run_eval", return_value=[]),
@@ -212,6 +221,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "_print_results"),
@@ -232,6 +242,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "_print_results"),
@@ -269,6 +280,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "_print_results"),
@@ -299,6 +311,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=[]),
@@ -323,6 +336,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=fake_results),
@@ -348,6 +362,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=fake_results),
@@ -373,6 +388,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=fake_results),
@@ -395,6 +411,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1", "m2"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=fake_results),
@@ -419,6 +436,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=[]),
@@ -439,6 +457,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1-70b"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=[]),
@@ -460,6 +479,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=[]),
@@ -484,6 +504,7 @@ class TestMainFlow:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=[]) as mock_run,
@@ -507,6 +528,7 @@ class TestFlushBetweenModels:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1", "m2"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=[]),
@@ -530,6 +552,7 @@ class TestFlushBetweenModels:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1", "m2"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=[]),
@@ -563,6 +586,7 @@ class TestFlushBetweenModels:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1", "m2"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=[]),
@@ -592,6 +616,7 @@ class TestFlushBetweenModels:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1", "m2"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=[]),
@@ -620,6 +645,7 @@ class TestFlushBetweenModels:
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1", "m2"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
             patch.object(model_eval, "run_eval", return_value=[]),
