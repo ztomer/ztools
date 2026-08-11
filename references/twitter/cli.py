@@ -25,6 +25,7 @@ from twitter.output import (
     load_debug_cache,
     load_state,
     print_to_stdout,
+    save_debug_cache,
     save_state,
     write_markdown,
 )
@@ -77,6 +78,11 @@ def parse_args() -> argparse.Namespace:
         "--use-cache",
         action="store_true",
         help="Use cached tweets from last run instead of fetching new ones",
+    )
+    p.add_argument(
+        "--fetch-only",
+        action="store_true",
+        help="Collect tweets, save them to the cache, and exit without summarizing",
     )
     return p.parse_args()
 
@@ -140,6 +146,10 @@ def main() -> None:
         tweets = collect_tweets_via_browser(since_time, debug=args.debug)
         if not tweets:
             print(f"{WARN} No tweets found.")
+            sys.exit(0)
+        save_debug_cache(tweets)
+        if args.fetch_only:
+            print(f"{STEP} --fetch-only provided. Exiting.")
             sys.exit(0)
         if is_shutdown_requested():
             print(f"{WARN} Interrupted — summarizing the {len(tweets)} tweets collected so far.")
