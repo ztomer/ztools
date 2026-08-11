@@ -67,6 +67,12 @@ ev     → python3 -m eval
 ```
 After `pip install -e .`: `ztools`, `tw --help`, `wk --help`, etc.
 
+**Config location.** Every tool reads the bundled `conf/` directory, resolved
+the same way in a checkout and in an installed wheel. Set `ZTOOLS_CONF=<dir>`
+to point them at a different one — it fails loudly if the directory does not
+exist, rather than silently falling back to built-in defaults. Per-user
+overrides layer on top from `~/.config/ztools/config.toml`.
+
 ## The Tools
 
 ### Weekend Planner
@@ -188,7 +194,14 @@ Model quirks: `docs/MODEL_QUIRKS.md`
 
 ## Architecture
 
+The Python packages live under `references/`; `conf/`, `tui/`, `docs/`,
+`eval_tasks/` and `bin/` sit at the repo root. An installed wheel flattens the
+packages into site-packages, so code never derives a shipped-resource path from
+its own `__file__` — it goes through `lib.paths` (`conf_path`,
+`eval_tasks_path`, `repo_path`).
+
 ```
+references/
 lib/                     # Shared infrastructure
 ├── tui.py               # Output helpers (· ! ✗)
 ├── osaurus_lib.py       # Server API, JSON extraction
@@ -198,6 +211,7 @@ lib/                     # Shared infrastructure
 ├── quality_*.py         # Quality scoring models + runners
 ├── validators_lib.py    # Source matching, hallucination detection
 ├── config_core.py       # Config loading (lazy, thread-safe)
+├── paths.py             # conf/ + eval_tasks/ + repo-root resolution
 ├── logging_config.py    # Structured logging
 ├── testing.py           # MockLLM infrastructure
 ├── llm/                 # LLM client, protocol, fallback, quirks
@@ -249,30 +263,30 @@ eval/                    # Model evaluator
 ## Run Tests
 
 ```bash
-pytest tests/
-pytest tests/ -v           # verbose
-pytest tests/ -k weekend   # run specific test file
+pytest references/tests/
+pytest references/tests/ -v           # verbose
+pytest references/tests/ -k weekend   # run specific test file
 
 # With coverage — OCR tests must be excluded (numpy's C extension crashes
 # under pytest-cov), then run separately without --cov:
-pytest tests/ --ignore=tests/test_img_helpers.py --ignore=tests/test_image_renamer.py --cov
-pytest tests/test_img_helpers.py tests/test_image_renamer.py
+pytest references/tests/ --ignore=references/tests/test_img_helpers.py --ignore=references/tests/test_image_renamer.py --cov
+pytest references/tests/test_img_helpers.py references/tests/test_image_renamer.py
 ```
 
 Tests never reach the network, launch a browser, or read your real cookies —
-`tests/conftest.py` enforces that for every test. See `docs/TESTING.md`.
+`references/tests/conftest.py` enforces that for every test. See `docs/TESTING.md`.
 
 **Key test files:**
-- `tests/test_quality_entry.py` — Score reconstruction, baseline comparison
-- `tests/test_content_processing.py` — Thinking block removal
-- `tests/test_twit_cookies.py` — Cookie extraction error paths
-- `tests/test_twit_browser.py` — Backend selection, scroll stop conditions, logged-out detection
-- `tests/test_signal_handling.py` — Ctrl+C drain mode, cleanup ordering
-- `tests/test_img_llm.py` — LLM server restart, MLX fallback
-- `tests/test_mlx_lib.py` — Model discovery, execution
-- `tests/test_weekend_*.py` — Weekend planner output, config, LLM
-- `tests/test_twit_*.py` — Twitter summarizer output, browser, cookies
-- `tests/test_model_eval*.py` — Eval runner, reports
+- `references/tests/test_quality_entry.py` — Score reconstruction, baseline comparison
+- `references/tests/test_content_processing.py` — Thinking block removal
+- `references/tests/test_twit_cookies.py` — Cookie extraction error paths
+- `references/tests/test_twit_browser.py` — Backend selection, scroll stop conditions, logged-out detection
+- `references/tests/test_signal_handling.py` — Ctrl+C drain mode, cleanup ordering
+- `references/tests/test_img_llm.py` — LLM server restart, MLX fallback
+- `references/tests/test_mlx_lib.py` — Model discovery, execution
+- `references/tests/test_weekend_*.py` — Weekend planner output, config, LLM
+- `references/tests/test_twit_*.py` — Twitter summarizer output, browser, cookies
+- `references/tests/test_model_eval*.py` — Eval runner, reports
 
 Eval results stored in `~/.config/ztools/`. To track:
 

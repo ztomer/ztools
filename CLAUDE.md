@@ -7,20 +7,29 @@ Reference docs — read these when the task touches their subject, not by defaul
 ## Key Rules
 
 ### File Size Limit
-No file may exceed 500 lines. Split into a package (`twitter/`, `weekend/`, `rename/`,
-`eval/`) or extract a module; `lib/config.py`, `lib/quality.py`, and `lib/osaurus_lib.py`
-are shims re-exporting their split submodules. Check with `wc -l` before adding to a file
-that is already close.
+No production file may exceed 500 lines. Split into a package (`twitter/`, `weekend/`,
+`rename/`, `eval/`) or extract a module; `lib/config.py`, `lib/quality.py`,
+`lib/osaurus_lib.py`, and `lib/validators/text_validator.py` are shims re-exporting their
+split submodules. Check with `wc -l` before adding to a file that is already close.
+
+Test modules under `references/tests/` are **exempt** — they are lists of independent
+cases padded with long fixtures, so splitting them buys no cohesion, and a gate that
+blocks every routine test edit gets bypassed instead of obeyed. The pre-commit hook
+enforces exactly this split (production gated, tests skipped) so the rule and the gate
+cannot drift.
+
+Known legacy violations, not to be extended: `eval/cli.py`, `eval/report.py`,
+`lib/quality_scorers.py`.
 
 ### Testing
 - Every test must have a non-tautological assertion
 - Use the real scorer/validator when possible; mock only the LLM layer
 - Test the real `__main__` block via `exec` of the real source — never re-implement it in the test
-- No test may launch a real browser or read real browser cookies; `tests/conftest.py`
+- No test may launch a real browser or read real browser cookies; `references/tests/conftest.py`
   enforces this. Opt out with `@pytest.mark.real_cookie_discovery` only to test discovery itself.
 - Prove a new test can fail before trusting it green
-- Run: `./.venv/bin/python -m pytest tests/ -q`
-  (OCR tests need `--ignore=tests/test_img_helpers.py --ignore=tests/test_image_renamer.py`
+- Run: `./.venv/bin/python -m pytest references/tests/ -q`
+  (OCR tests need `--ignore=references/tests/test_img_helpers.py --ignore=references/tests/test_image_renamer.py`
   under `--cov` — numpy's C extension crashes with coverage tracing)
 - Add discovered test patterns or bugs to `docs/TESTING.md` immediately
 

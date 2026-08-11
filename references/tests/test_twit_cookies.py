@@ -164,15 +164,13 @@ class TestGetChromeCookies:
         conn.close()
         return db
 
-    def test_db_not_exists(self, tmp_path, monkeypatch):
+    def test_db_not_exists(self, tmp_path, monkeypatch, capsys):
+        """No Chrome cookie DB is an empty result, not process death."""
         import twitter.cookies as twit_cookies
 
         monkeypatch.setattr(twit_cookies, "CHROME_COOKIES_DB", tmp_path / "nonexistent")
-        with patch.object(twit_cookies, "print"), patch.object(twit_cookies, "sys") as mock_sys:
-            mock_sys.exit.side_effect = SystemExit(1)
-            with pytest.raises(SystemExit) as e:
-                twit_cookies.get_chrome_cookies()
-        assert e.value.code == 1
+        assert twit_cookies.get_chrome_cookies() == []
+        assert "not found" in capsys.readouterr().out
 
     def test_basic(self, tmp_path, monkeypatch):
         import twitter.cookies as twit_cookies
@@ -345,3 +343,16 @@ class TestErrorPaths:
         ):
             cookies = twit_cookies.get_chrome_cookies()
         assert cookies == []
+
+
+def test_missing_chrome_db_returns_empty_not_sysexit(monkeypatch, tmp_path):
+    """A probe must not kill the process.
+
+    get_browser_cookies scans Firefox first and only then Chrome; a sys.exit
+    here made the caller's real remedy message unreachable for anyone whose
+    x.com session lives in Firefox/Zen.
+    """
+    import twitter.cookies as ck
+
+    monkeypatch.setattr(ck, "CHROME_COOKIES_DB", tmp_path / "nope" / "Cookies")
+    assert ck.get_chrome_cookies() == []

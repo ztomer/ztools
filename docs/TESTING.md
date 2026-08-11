@@ -10,19 +10,26 @@
 - Tests use **mocked LLM providers** — no real model calls in CI.
 - OCR-dependent tests (`test_img_helpers.py`, `test_image_renamer.py`) run **without coverage** (numpy C extension crashes under pytest-cov — see **Coverage Limitations** below).
 
-Run all: `python3 -m pytest tests/`
-Run single file: `python3 -m pytest tests/test_twit_browser.py -v`
-Run single test: `python3 -m pytest tests/test_file.py::test_name -v`
+Local venv must carry the same test deps CI installs, or gates pass locally
+that fail in CI:
+
+```bash
+uv pip install --python .venv/bin/python pytest pytest-cov pytest-asyncio
+```
+
+Run all: `python3 -m pytest references/tests/`
+Run single file: `python3 -m pytest references/tests/test_twit_browser.py -v`
+Run single test: `python3 -m pytest references/tests/test_file.py::test_name -v`
 Full coverage (excluding numpy-crashing tests):
 ```bash
-python3 -m pytest tests/ \
-  --ignore=tests/test_img_helpers.py \
-  --ignore=tests/test_image_renamer.py \
+python3 -m pytest references/tests/ \
+  --ignore=references/tests/test_img_helpers.py \
+  --ignore=references/tests/test_image_renamer.py \
   --cov=rename.llm --cov=rename.helpers \
   --cov=twitter.summarize --cov=twitter.cookies \
   --cov-report=term-missing
 ```
-OCR tests without coverage: `python3 -m pytest tests/test_img_helpers.py tests/test_image_renamer.py`
+OCR tests without coverage: `python3 -m pytest references/tests/test_img_helpers.py references/tests/test_image_renamer.py`
 
 ---
 
@@ -37,7 +44,7 @@ OCR tests without coverage: `python3 -m pytest tests/test_img_helpers.py tests/t
 | `lib.mlx_lib` | `call`, `call_mlx`, `find_text_mlx_model`, `find_mlx_model`, `process_mlx_content` |
 | `lib.config` | `get_model_prompts_all`, `build_tasks_from_model` |
 
-`mock_llm` pytest fixture (in `tests/conftest.py`) auto-applies and tears down all three.
+`mock_llm` pytest fixture (in `references/tests/conftest.py`) auto-applies and tears down all three.
 
 **Default content per task** is defined in `_default_content_for(task)`:
 
@@ -58,13 +65,13 @@ def test_something(mock_llm):
         result = er.run_eval(...)
 ```
 
-`tests/conftest.py` also captures `_REAL_MLX_FUNCTIONS` at import time so the real `lib.mlx_lib` functions can be retrieved before any patches overwrite them. Use the `real_mlx_functions` fixture for tests that need to call real MLX logic with fake inputs.
+`references/tests/conftest.py` also captures `_REAL_MLX_FUNCTIONS` at import time so the real `lib.mlx_lib` functions can be retrieved before any patches overwrite them. Use the `real_mlx_functions` fixture for tests that need to call real MLX logic with fake inputs.
 
 ---
 
 ## Structural Gates (conftest, autouse — you cannot opt out by forgetting)
 
-Two autouse fixtures in `tests/conftest.py` make whole classes of test misbehavior
+Two autouse fixtures in `references/tests/conftest.py` make whole classes of test misbehavior
 impossible rather than relying on each test to remember. Both were added after the
 failure they prevent actually happened.
 
@@ -79,7 +86,7 @@ during a unit-test run. Backend selection is not something each test should have
 know about.
 
 Opt out with `@pytest.mark.real_cookie_discovery` only when the test *is* the cookie
-reader (`tests/test_twit_cookies.py` sets it module-wide via `pytestmark`).
+reader (`references/tests/test_twit_cookies.py` sets it module-wide via `pytestmark`).
 
 ### `_signals_files_stay_clean`
 
@@ -109,9 +116,9 @@ then restore. Do this before you trust any new assertion.
 ```bash
 # Example from the scroll stop-conditions work
 sed -i '' 's/if stagnant >= STAGNANT_SCROLL_LIMIT:/if False:/' twitter/browser.py
-pytest tests/test_twit_browser.py -q     # expect: red
+pytest references/tests/test_twit_browser.py -q     # expect: red
 git checkout -- twitter/browser.py
-pytest tests/test_twit_browser.py -q     # expect: green
+pytest references/tests/test_twit_browser.py -q     # expect: green
 ```
 
 Mutations that were verified to turn the suite red: disabling stagnation detection,
@@ -462,9 +469,9 @@ Per-module coverage for key packages (excluding numpy-crashing test files):
 ### Audit Script
 
 ```bash
-python3 -m pytest tests/ \
-  --ignore=tests/test_img_helpers.py \
-  --ignore=tests/test_image_renamer.py \
+python3 -m pytest references/tests/ \
+  --ignore=references/tests/test_img_helpers.py \
+  --ignore=references/tests/test_image_renamer.py \
   --cov=rename.llm --cov=rename.helpers \
   --cov=twitter.summarize --cov=twitter.cookies \
   --cov-report=term-missing
@@ -490,7 +497,7 @@ Before merging a test, verify:
 
 - `docs/MODEL_QUIRKS.md` — model behavior quirks, best prompts
 - `lib/testing.py` — MockLLM implementation
-- `tests/conftest.py` — shared fixtures
+- `references/tests/conftest.py` — shared fixtures
 - `CLAUDE.md` — project rules
 
 ## New Modules (Phase 3)
@@ -576,7 +583,7 @@ Re-running a specific test id after the file was split (`test_image_renamer.py` 
 because `.pytest_cache` and assertion-rewrite bytecode outlive the source. Before
 concluding a failure is stale or a ghost, check `git log -- <file>` — a concurrent
 worktree may simply have fixed and moved it. Clear caches with
-`rm -rf .pytest_cache tests/__pycache__` when a result looks impossible.
+`rm -rf .pytest_cache references/tests/__pycache__` when a result looks impossible.
 
 ### 7. `core.hooksPath` is absolute, so hooks resolve the wrong tree
 
@@ -588,7 +595,7 @@ for tooling that lives in the main checkout.
 
 ---
 
-## Report content-class cases (`tests/test_report_class_cases.py`, August 2026)
+## Report content-class cases (`references/tests/test_report_class_cases.py`, August 2026)
 
 Stage 0 of G3. One case per weakness class in `docs/REPORT_WEAKNESS_CLASSES.md`, run
 against real shipped `tw` / `wk` reports rather than eval fixtures.

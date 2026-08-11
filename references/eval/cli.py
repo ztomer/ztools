@@ -19,7 +19,6 @@ import os
 import re
 import sys
 import time
-from pathlib import Path
 
 from lib import init_config
 from lib.config import build_tasks_from_model, get_model_prompts_all
@@ -29,6 +28,7 @@ from lib.osaurus_lib import (
     get_models,
     is_server_running,
 )
+from lib.paths import conf_path
 from lib.signal_handling import setup_signals
 from lib.tui import FAIL, STEP, WARN, console
 
@@ -248,7 +248,7 @@ def update_config(best_models: dict):
 
     import tomli_w
 
-    config_path = Path(__file__).parent.parent / "conf" / "config.toml"
+    config_path = conf_path("config.toml")
     toml_path = config_path
     if not toml_path.exists():
         console.print(f"{WARN} Config file not found, skipping update.")

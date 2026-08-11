@@ -11,11 +11,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from lib.config_toml import load_config
+from lib.paths import conf_path
 from lib.tui import STEP, WARN
 
 from twitter.provenance import provenance_of
 
-_TWITTER_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "twitter.toml"
+_TWITTER_CONFIG_PATH = conf_path("twitter.toml")
 _TWITTER_CFG = load_config(_TWITTER_CONFIG_PATH) or {}
 
 STATE_FILE = Path(

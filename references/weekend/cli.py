@@ -13,7 +13,7 @@ from lib.osaurus_lib import get_best_model
 from lib.osaurus_models import FALLBACK_MODEL
 from lib.osaurus_server import check_server_or_die
 from lib.signal_handling import setup_signals
-from lib.tui import STEP, WARN, debug_print
+from lib.tui import STEP, WARN, debug_print, die
 
 from weekend.config import (
     AGE_RANGE,
@@ -148,7 +148,15 @@ def _format_weather_display(weather_str: str) -> str:
     return ", ".join(parts) if parts else weather_str
 
 
-def _fetch_data(fri, sun, year, month_name, use_cache):
+def _fetch_data(fri, sun, year, month_name, use_cache, skip_web=False):
+    """Gather weather, events and venues.
+
+    `use_cache` prefers the caches but refetches when one is empty. `skip_web`
+    is stricter: it forbids the web fetch entirely and fails loudly on an empty
+    cache, because "offline mode that silently went online" is worse than an
+    error — the flag used to be parsed and never read, so `--skip-web` ran the
+    full DDGS fetch.
+    """
     ensure_server()
     dates_str = get_weekend_dates_string(fri, sun)
     print_info("Bounding Dates", dates_str)
@@ -158,23 +166,21 @@ def _fetch_data(fri, sun, year, month_name, use_cache):
     weather_clean = _format_weather_display(weather_str)
     print_info("Weather", weather_clean)
 
+    prefer_cache = use_cache or skip_web
+
     with tui.status("Fetching weekend events..."):
-        if use_cache:
-            events_str = load_events_cache()
-            if not events_str:
-                events_str = fetch_transient_events(dates_str, year, month_name)
-                save_events_cache(events_str)
-        else:
+        events_str = load_events_cache() if prefer_cache else ""
+        if not events_str:
+            if skip_web:
+                die("--skip-web was given but the events cache is empty")
             events_str = fetch_transient_events(dates_str, year, month_name)
             save_events_cache(events_str)
 
     with tui.status("Fetching fixed venues..."):
-        if use_cache:
-            venues_str = load_venues_cache()
-            if not venues_str:
-                venues_str = fetch_fixed_venues(year, month_name)
-                save_venues_cache(venues_str)
-        else:
+        venues_str = load_venues_cache() if prefer_cache else ""
+        if not venues_str:
+            if skip_web:
+                die("--skip-web was given but the venues cache is empty")
             venues_str = fetch_fixed_venues(year, month_name)
             save_venues_cache(venues_str)
 
@@ -190,6 +196,10 @@ def _fetch_data(fri, sun, year, month_name, use_cache):
     # in-window is a SUPPLY problem, and it is indistinguishable from a model
     # problem unless somebody counts.
     print_info("Candidates", f"{in_window}/{total} mention a date this weekend")
+    if total == 0:
+        print(f"{WARN} No event candidates were fetched — the transient plan will be empty.")
+    if not venues_str.strip():
+        print(f"{WARN} No venue candidates were fetched — the fixed plan will be empty.")
 
     return weather_str, events_str, venues_str, dates_str
 
@@ -411,7 +421,7 @@ def main(args=None):
     year = fri.strftime("%Y")
     month_name = fri.strftime("%B")
     weather_str, events_str, venues_str, dates_str = _fetch_data(
-        fri, sun, year, month_name, args.use_cache
+        fri, sun, year, month_name, args.use_cache, args.skip_web
     )
 
     actual_model = os.environ.get("OLLAMA_MODEL") or get_best_model(Task.JSON)

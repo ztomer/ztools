@@ -24,8 +24,9 @@ except ImportError:
     warnings.warn("cryptography module not installed — Chrome cookie decryption will fail")
 
 from lib.config_toml import load_config
+from lib.paths import conf_path
 
-_TWITTER_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "twitter.toml"
+_TWITTER_CONFIG_PATH = conf_path("twitter.toml")
 _TWITTER_CFG = load_config(_TWITTER_CONFIG_PATH) or {}
 
 _configured_cookies = _TWITTER_CFG.get("chrome_cookies_db")
@@ -186,9 +187,12 @@ def get_chrome_cookies(
                 cookie_paths.append(p)
 
     if not cookie_paths:
-        msg_err = f"{WARN} Chrome Cookies DB not found at {CHROME_COOKIES_DB} or Profile dirs"
-        print(msg_err)
-        sys.exit(EXIT_ERROR)
+        # A probe in a multi-browser scan must not end the process: the caller
+        # tries Firefox-family first and, on an empty result, prints the actual
+        # remedy ("log in to x.com in Chrome/Zen/Firefox, or run --login").
+        # Exiting here made that message unreachable for Firefox-only users.
+        print(f"{WARN} Chrome Cookies DB not found at {CHROME_COOKIES_DB} or Profile dirs")
+        return []
 
     try:
         key = _get_chrome_keychain_key()

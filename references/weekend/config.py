@@ -14,6 +14,7 @@ from lib.osaurus_lib import (
 )
 from lib.osaurus_server import ENSURE_MAX_RETRIES
 from lib.osaurus_server import SERVER_WAIT as RESTART_WAIT
+from lib.paths import conf_path
 
 _cache_dir = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "weekend"
 DEBUG_EVENTS_FILE = _cache_dir / "events_debug_cache.json"
@@ -43,7 +44,7 @@ def save_venues_cache(venues_str):
 
 
 def load_weekend_config():
-    config_path = Path(__file__).parent.parent / "conf" / "weekend.toml"
+    config_path = conf_path("weekend.toml")
     return load_config(config_path)
 
 

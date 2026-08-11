@@ -560,12 +560,34 @@ class TestFixJsonYears:
         result = fix_json_years(items)
         assert "2026" in result[0]["desc"]
 
-    def test_fix_26(self):
+    def test_bare_26_in_a_date_field_is_expanded(self):
+        from lib.osaurus_output import TARGET_YEAR, fix_json_years
+
+        items = [{"start_date": "26", "day": " 26 "}]
+        result = fix_json_years(items)
+        assert result[0]["start_date"] == TARGET_YEAR
+        assert result[0]["day"] == TARGET_YEAR
+
+    def test_day_of_month_and_non_date_26s_survive(self):
+        """The corruption this function used to cause.
+
+        A blanket `\b26(?!\\d)` rewrote every standalone 26 in every value:
+        "August 26" became "August 2026" — which `_parse_any_date` can no longer
+        read, so the row escaped `drop_events_outside_window` — and prices,
+        street numbers and age ranges were mangled the same way.
+        """
         from lib.osaurus_output import fix_json_years
 
-        items = [{"desc": "Year 26 was when..."}]
-        result = fix_json_years(items)
-        assert "2026" in result[0]["desc"]
+        items = [
+            {
+                "day": "August 26",
+                "price": "26",
+                "location": "26 King St W",
+                "target_ages": "8-26",
+                "desc": "Year 26 was when...",
+            }
+        ]
+        assert fix_json_years(items) == items
 
     def test_no_year_unchanged(self):
         from lib.osaurus_output import fix_json_years

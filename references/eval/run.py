@@ -13,8 +13,9 @@ from lib.config import Task, get_timeout
 from lib.logging_config import osaurus_logger as eval_logger
 from lib.mlx_lib import call as mlx_call
 from lib.osaurus_lib import call
+from lib.paths import conf_dir
 from lib.tui import FAIL, STEP, WARN, console
-from lib.validators_lib import get_source_matching_details, validate_summary
+from lib.validators_lib import get_source_matching_details
 
 from eval.failures import FAIL_CONTENT, FAIL_INFRA, FAIL_NONE, _classify_failure
 from eval.tasks_core import TASKS, _extract_items_from_text
@@ -28,7 +29,7 @@ MEMORY_WARNING_THRESHOLD = 80
 # eval loop would otherwise rewrite it and dirty the working tree on every `pytest`.
 # tests/conftest.py points EVAL_SIGNALS_DIR at a tmp dir to keep runs side-effect free.
 EVAL_SIGNALS_DIR = Path(
-    os.environ.get("EVAL_SIGNALS_DIR", str(Path(__file__).parent.parent / "conf"))
+    os.environ.get("EVAL_SIGNALS_DIR", str(conf_dir()))
 )
 EVAL_SIGNALS_PATH = EVAL_SIGNALS_DIR / "eval_signals.json"
 
@@ -132,11 +133,14 @@ def _validate_result(
                 extracted, source_text=source, **task_cfg.get("validator_kwargs", {})
             )
             items_for_debug = extracted
-        elif len(content) > 50:
-            validated = validate_summary(content)
-            items_for_debug = None
         else:
-            failure = "Empty content"
+            # A JSON task that produced no JSON has failed the task, whatever the
+            # prose says. Scoring the leftover text with validate_summary — a
+            # different task's validator — awarded structure and synthesis points
+            # to refusals ("I could not find any events..."), recorded a failure
+            # reason about headers and user mentions instead of "no JSON", and
+            # kept the run out of the parse-failure signal.
+            failure = "Empty content" if len(content) <= 50 else "No JSON in output"
             diagnosis = _classify_failure(result, task_cfg, 0, failure)
             return 0, failure, diagnosis
 

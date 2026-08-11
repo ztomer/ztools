@@ -1,11 +1,11 @@
 """Task builder - creates eval tasks from model config."""
 
-from pathlib import Path
 from typing import Any, Dict
 
 from .config_core import Task
 from .config_getters import get_model_prompts_all
 from .config_toml import load_config
+from .paths import conf_path
 from .prompt_render import POSITIONAL_SLOT, render_prompt, unrendered_placeholders
 
 _eval_inputs_cache: Dict[str, str] = {}
@@ -19,7 +19,7 @@ def _load_eval_inputs() -> Dict[str, str]:
     global _eval_inputs_cache
     if _eval_inputs_cache:
         return _eval_inputs_cache
-    inputs_path = Path(__file__).parent.parent / "conf" / "eval_inputs.toml"
+    inputs_path = conf_path("eval_inputs.toml")
     if not inputs_path.exists():
         raise FileNotFoundError(f"Missing eval inputs: {inputs_path}")
     data = load_config(inputs_path) or {}
@@ -78,6 +78,11 @@ def _safe_format_prompt(prompt_template: str, test_input: str) -> str:
     )
 
 
+def _embeds_source(template: str) -> bool:
+    """Whether the template itself carries the source text into the prompt."""
+    return POSITIONAL_SLOT in template or "{text}" in template
+
+
 def build_tasks_from_model(model: str) -> Dict[str, Any]:
     prompts = get_model_prompts_all(model)
     if not prompts:
@@ -98,11 +103,23 @@ def build_tasks_from_model(model: str) -> Dict[str, Any]:
         }
     if Task.WEEKEND_TRANSIENT.value in prompts:
         test_input = get_eval_input("weekend_transient")
-        prompt = _safe_format_prompt(prompts[Task.WEEKEND_TRANSIENT.value], test_input)
+        template = prompts[Task.WEEKEND_TRANSIENT.value]
+        prompt = _safe_format_prompt(template, test_input)
+        messages = [{"role": "user", "content": prompt}]
+        # The shipped transient templates use named placeholders only, so the
+        # source events never reached the model: the prompt ordered "Copy every
+        # value from the source text. NEVER invent one" with no source text, and
+        # without a "source" key validate_detailed_json skipped both the
+        # grounding score and the no-source cap — schema-shaped hallucination
+        # could score 100. Production's fallback delivers the events as a second
+        # message; do the same here.
+        if not _embeds_source(template):
+            messages.append({"role": "user", "content": f"Source events:\n{test_input}"})
         tasks["json"] = {
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
             "validator": validate_detailed_json,
             "parse_json": True,
+            "source": test_input,
         }
     if Task.FILENAME.value in prompts:
         test_input = get_eval_input("filename")

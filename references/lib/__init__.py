@@ -47,6 +47,7 @@ from .osaurus_lib import (
     get_models,
     is_server_running,
 )
+from .paths import conf_dir, conf_path
 from .validators_lib import (
     validate_detailed_json,
     validate_filename,
@@ -56,6 +57,9 @@ from .validators_lib import (
 
 __all__ = [
     "init_config",
+    # paths
+    "conf_dir",
+    "conf_path",
     # validators
     "validate_json",
     "validate_detailed_json",

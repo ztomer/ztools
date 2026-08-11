@@ -193,8 +193,8 @@ class TestUpdateConfig:
         old, new, buf = _capture_console()
         try:
             model_eval.console = new
-            # Patch __file__ to point to tmp_path
-            monkeypatch.setattr(model_eval, "__file__", str(tmp_path / "eval" / "cli.py"))
+            # An existing conf dir with no config.toml in it.
+            monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
             model_eval.update_config({"task1": "model-x"})
             assert "Config file not found" in buf.getvalue()
         finally:
@@ -203,35 +203,33 @@ class TestUpdateConfig:
     def test_updates_config(self, mock_llm, tmp_path, monkeypatch):
         import eval.cli as model_eval
 
-        # Create conf/config.toml
-        conf_dir = tmp_path / "conf"
-        conf_dir.mkdir()
-        config_file = conf_dir / "config.toml"
+        config_file = tmp_path / "config.toml"
         config_file.write_text('existing_key = "value"\n')
         old, new, buf = _capture_console()
         try:
             model_eval.console = new
-            monkeypatch.setattr(model_eval, "__file__", str(tmp_path / "eval" / "cli.py"))
+            monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
             model_eval.update_config({"task1": "model-x", "task2": "model-y"})
             content = config_file.read_text()
             assert "best_models" in content
+            assert "model-x" in content and "model-y" in content
+            assert "existing_key" in content
         finally:
             model_eval.console = old
 
     def test_existing_best_models(self, mock_llm, tmp_path, monkeypatch):
         import eval.cli as model_eval
 
-        conf_dir = tmp_path / "conf"
-        conf_dir.mkdir()
-        config_file = conf_dir / "config.toml"
+        config_file = tmp_path / "config.toml"
         config_file.write_text('[best_models]\ntask1 = "old_model"\n')
         old, new, buf = _capture_console()
         try:
             model_eval.console = new
-            monkeypatch.setattr(model_eval, "__file__", str(tmp_path / "eval" / "cli.py"))
+            monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
             model_eval.update_config({"task1": "new_model"})
             content = config_file.read_text()
             assert "new_model" in content
+            assert "old_model" not in content
         finally:
             model_eval.console = old
 
@@ -239,17 +237,16 @@ class TestUpdateConfig:
         """If model value is falsy, don't add to best_models."""
         import eval.cli as model_eval
 
-        conf_dir = tmp_path / "conf"
-        conf_dir.mkdir()
-        config_file = conf_dir / "config.toml"
+        config_file = tmp_path / "config.toml"
         config_file.write_text('original = "value"\n')
         old, new, buf = _capture_console()
         try:
             model_eval.console = new
-            monkeypatch.setattr(model_eval, "__file__", str(tmp_path / "eval" / "cli.py"))
+            monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
             model_eval.update_config({"task1": None})
             content = config_file.read_text()
             assert "task1" not in content
+            assert "original" in content
         finally:
             model_eval.console = old
 

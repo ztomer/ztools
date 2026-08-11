@@ -1,6 +1,6 @@
 """Tests for lib.config_core and lib.config_getters - state and lookup functions."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -50,40 +50,24 @@ class TestTaskEnum:
 
 
 class TestAutoLoad:
-    def test_auto_load_with_no_config(self, capsys):
+    def test_auto_load_with_no_config(self, capsys, tmp_path, monkeypatch):
         import lib.config_core as cc
 
-        with patch("lib.config_core.Path") as mock_path:
-            instance = MagicMock()
-            # Chain: Path(__file__).parent.parent / "conf" / "config.toml"
-            # First / returns a MagicMock whose / returns another MagicMock that .exists() is False
-            conf_mock = MagicMock()
-            yaml_mock = MagicMock()
-            yaml_mock.exists.return_value = False
-            conf_mock.__truediv__.return_value = yaml_mock
-            instance.parent.parent.__truediv__.return_value = conf_mock
-            mock_path.return_value = instance
-            cc._auto_load()
+        # A real, existing conf dir that simply has no config.toml in it.
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        cc._auto_load()
         assert cc._config_loaded is True
+        assert cc._config == {}
         # Should print fallback message
         out = capsys.readouterr().out
         assert "not found" in out
 
-    def test_auto_load_with_config(self, tmp_path):
+    def test_auto_load_with_config(self, tmp_path, monkeypatch):
         import lib.config_core as cc
 
-        toml_file = tmp_path / "config.toml"
-        toml_file.write_text("[timeouts]\njson = 100\n")
-        with patch("lib.config_core.Path") as mock_path:
-            instance = MagicMock()
-            # We need a real path-like that exists() returns True on the final result
-            conf_dir = tmp_path / "conf"
-            conf_dir.mkdir()
-            real_toml = conf_dir / "config.toml"
-            real_toml.write_text("[timeouts]\njson = 100\n")
-            instance.parent.parent.__truediv__.return_value = conf_dir
-            mock_path.return_value = instance
-            cc._auto_load()
+        (tmp_path / "config.toml").write_text("[timeouts]\njson = 100\n")
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        cc._auto_load()
         assert cc._config_loaded is True
         assert cc._config.get("timeouts", {}).get("json") == 100
 
@@ -92,34 +76,38 @@ class TestAutoLoad:
 
         cc._config_loaded = True
         cc._config = {"already": "loaded"}
-        with patch("lib.config_core.Path") as mock_path:
+        with patch("lib.config_core.conf_path") as mock_conf_path:
             cc._auto_load()
         # Should not have been called
-        mock_path.assert_not_called()
+        mock_conf_path.assert_not_called()
+        assert cc._config == {"already": "loaded"}
 
-    def test_auto_load_yaml_non_dict(self, tmp_path):
+    def test_auto_load_non_dict_config(self, tmp_path, monkeypatch):
         import lib.config_core as cc
 
-        toml_file = tmp_path / "config.toml"
-        toml_file.write_text("not_a_dict_key\n")
-        with patch("lib.config_core.Path") as mock_path:
-            instance = MagicMock()
-            instance.parent.parent.__truediv__.return_value = toml_file
-            mock_path.return_value = instance
+        (tmp_path / "config.toml").write_text("[timeouts]\njson = 100\n")
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        with patch("lib.config_core.load_config", return_value=["not", "a", "dict"]):
             cc._auto_load()
         assert cc._config == {}
+        assert cc._config_loaded is True
 
 
 class TestInitConfig:
-    def test_init_config_default_path_not_found(self):
+    def test_init_config_default_path_not_found(self, tmp_path, monkeypatch):
         import lib.config_core as cc
 
-        with patch("lib.config_core.Path") as mock_path:
-            instance = MagicMock()
-            instance.exists.return_value = False
-            mock_path.return_value = instance
-            with pytest.raises(FileNotFoundError):
-                cc.init_config()
+        # Real, existing conf dir with no config.toml: the crash `wk`/`ev` hit.
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        with pytest.raises(FileNotFoundError, match="config.toml"):
+            cc.init_config()
+
+    def test_init_config_default_path_found(self):
+        import lib.config_core as cc
+
+        # No override: the shipped conf/ must be reachable in this layout.
+        assert cc.init_config() is True
+        assert cc._config
 
     def test_init_config_explicit_path(self, tmp_path):
         import lib.config_core as cc
@@ -184,15 +172,13 @@ class TestGetConfig:
 
 
 class TestIsConfigLoaded:
-    def test_is_loaded_triggers_autoload(self):
+    def test_is_loaded_triggers_autoload(self, tmp_path, monkeypatch):
         import lib.config_core as cc
 
-        with patch("lib.config_core.Path") as mock_path:
-            instance = MagicMock()
-            instance.parent.parent.__truediv__.return_value.exists.return_value = False
-            mock_path.return_value = instance
-            cc._config_loaded = False
-            assert cc.is_config_loaded() is True
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        cc._config_loaded = False
+        assert cc.is_config_loaded() is True
+        assert cc._config == {}
 
     def test_is_loaded_when_already(self):
         import lib.config_core as cc
@@ -383,92 +369,59 @@ class TestGetModelConfig:
         # Falls back to family config (no version)
         assert result == {"name": "qwen", "models": {"qwen2.5-7b": {}}}
 
-    def test_get_model_config_with_version_toml(self, tmp_path):
+    def test_get_model_config_with_version_toml(self, tmp_path, monkeypatch):
         import lib.config_getters as cg
 
-        # Create tmp/conf/models/qwen_versions.toml
-        conf_dir = tmp_path / "conf"
-        conf_dir.mkdir()
-        models_dir = conf_dir / "models"
+        models_dir = tmp_path / "models"
         models_dir.mkdir()
         version_toml = models_dir / "qwen_versions.toml"
         version_toml.write_text('name = "qwen"\n[models."qwen2.5-7b"]\nextra = 1\n')
-        with patch("lib.config_getters.Path") as mock_path:
-            instance = MagicMock()
-            instance.parent.parent.__truediv__.return_value = conf_dir
-            mock_path.return_value = instance
-            result = cg.get_model_config("qwen2.5-7b")
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        result = cg.get_model_config("qwen2.5-7b")
         assert "extra" in result
         assert result.get("name") == "qwen"
 
-    def test_get_model_config_with_version_toml_no_match(self, tmp_path):
+    def test_get_model_config_with_version_toml_no_match(self, tmp_path, monkeypatch):
         import lib.config_getters as cg
 
-        conf_dir = tmp_path / "conf"
-        conf_dir.mkdir()
-        models_dir = conf_dir / "models"
+        models_dir = tmp_path / "models"
         models_dir.mkdir()
         version_toml = models_dir / "qwen_versions.toml"
         version_toml.write_text('name = "qwen"\n[models]\n')
-        with patch("lib.config_getters.Path") as mock_path:
-            instance = MagicMock()
-            instance.parent.parent.__truediv__.return_value = conf_dir
-            mock_path.return_value = instance
-            result = cg.get_model_config("qwen-other")
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        result = cg.get_model_config("qwen-other")
         # Returns the loaded toml as-is
         assert result["name"] == "qwen"
 
-    def test_get_model_config_with_family_toml(self, tmp_path):
+    def test_get_model_config_with_family_toml(self, tmp_path, monkeypatch):
         import lib.config_getters as cg
 
-        conf_dir = tmp_path / "conf"
-        conf_dir.mkdir()
-        models_dir = conf_dir / "models"
+        models_dir = tmp_path / "models"
         models_dir.mkdir()
         family_toml = models_dir / "qwen.toml"
         family_toml.write_text('name = "qwen"\ntimeout = 500\n')
-        with patch("lib.config_getters.Path") as mock_path:
-            instance = MagicMock()
-            instance.parent.parent.__truediv__.return_value = conf_dir
-            mock_path.return_value = instance
-            result = cg.get_model_config("qwen-default")
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        result = cg.get_model_config("qwen-default")
         assert result == {"name": "qwen", "timeout": 500}
 
-    def test_get_model_config_fallback(self, tmp_path):
+    def test_get_model_config_fallback(self, tmp_path, monkeypatch):
         import lib.config_getters as cg
 
-        conf_dir = tmp_path / "conf"
-        conf_dir.mkdir()
-        models_dir = conf_dir / "models"
-        models_dir.mkdir()
-        # No yaml files - should use built-in fallback
-        with patch("lib.config_getters.Path") as mock_path:
-            instance = MagicMock()
-            instance.parent.parent.__truediv__.return_value = conf_dir
-            mock_path.return_value = instance
-            result = cg.get_model_config("unknown-7b")
+        (tmp_path / "models").mkdir()
+        # No toml files - should use built-in fallback
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        result = cg.get_model_config("unknown-7b")
         assert "prompts" in result
         assert result["name"] == "default"
 
-    def test_get_model_config_default_fallback(self):
-        """When family is not in cache and path is not in model dict."""
+    def test_get_model_config_default_fallback(self, tmp_path, monkeypatch):
+        """When family is not in cache and no config file exists for it."""
         import lib.config_getters as cg
 
         cg._model_configs_cache = {"other": {"x": 1}}
-        with patch("lib.config_getters.Path") as mock_path:
-            instance = MagicMock()
-            # Make both yaml files not exist through chained __truediv__
-            leaf = MagicMock()
-            leaf.exists.return_value = False
-            mid = MagicMock()
-            mid.exists.return_value = False
-            mid.__truediv__.return_value = leaf
-            top = MagicMock()
-            top.exists.return_value = False
-            top.__truediv__.return_value = mid
-            instance.parent.parent.__truediv__.return_value = top
-            mock_path.return_value = instance
-            result = cg.get_model_config("totally-unknown")
+        # An empty conf dir: neither <family>_versions.toml nor <family>.toml exists.
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        result = cg.get_model_config("totally-unknown")
         assert result["name"] == "default"
 
 
@@ -581,3 +534,31 @@ class TestGetFilenamePrompt:
 
         cg._config = {}
         assert "{text}" in cg.get_filename_prompt()
+
+
+class TestFallbackPromptSchemas:
+    """Every embedded "Schema:" in a prompt must be parseable JSON.
+
+    The fallback weekend_transient prompt shipped `"day": "str"]}` — a missing
+    brace — so any model family without a conf/models/*.toml was told to use an
+    EXACT schema that is not valid JSON.
+    """
+
+    def _schema_segments(self, prompt: str):
+        import re
+
+        for match in re.finditer(r"[Ss]chema:?\s*(\{.*?\}\]?\})", prompt, re.DOTALL):
+            yield match.group(1)
+
+    def test_fallback_prompt_schemas_parse(self):
+        import json
+
+        import lib.config_getters as cg
+
+        prompts = cg.get_model_config("totally-unknown-family")["prompts"]
+        checked = 0
+        for name, prompt in prompts.items():
+            for segment in self._schema_segments(prompt):
+                json.loads(segment)  # raises if the schema is malformed
+                checked += 1
+        assert checked >= 2, f"expected embedded schemas to check, saw {checked}"

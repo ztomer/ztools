@@ -1,7 +1,6 @@
 """Config getters - all config lookup functions."""
 
 import sys
-from pathlib import Path
 from typing import Dict, List
 
 from .config_core import (
@@ -14,6 +13,7 @@ from .config_core import (
     _model_configs_cache,
 )
 from .config_toml import load_config as _load_config_toml
+from .paths import conf_path
 
 
 def get_timeouts() -> Dict[str, int]:
@@ -86,10 +86,8 @@ def get_model_config(model: str) -> Dict:
                 merged["version"] = version
                 return merged
         return family_config
-    version_config_path = (
-        Path(__file__).parent.parent / "conf" / "models" / f"{family}_versions.toml"
-    )
-    config_path = Path(__file__).parent.parent / "conf" / "models" / f"{family}.toml"
+    version_config_path = conf_path("models", f"{family}_versions.toml")
+    config_path = conf_path("models", f"{family}.toml")
     if version_config_path.exists():
         loaded = _load_config_toml(version_config_path) or {}
         _model_configs_cache[family] = loaded
@@ -125,7 +123,7 @@ def get_model_config(model: str) -> Dict:
                     "Output JSON now. Schema: "
                     '{"transient_events": [{"name": "str", "location": "str", '
                     '"target_ages": "str", "price": "str", "duration": "str", '
-                    '"weather": "str", "day": "str"]}\n\nFind events. Use exact '
+                    '"weather": "str", "day": "str"}]}\n\nFind events. Use exact '
                     "fields. Output ONLY JSON."
                 ),
                 "summarize": (

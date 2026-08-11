@@ -380,8 +380,13 @@ class TestQualityResultsToEvalFormat:
         assert score == 60
         assert failure == "fail"
 
-    def test_summary_validation_path(self):
-        """Lines 68-70: long content but no extractable items, falls back to validate_summary."""
+    def test_prose_only_json_task_scores_zero_as_a_parse_failure(self):
+        """A JSON task that emitted no JSON has failed, whatever the prose says.
+
+        This used to route the leftover text to validate_summary — a different
+        task's validator — so a refusal earned structure/synthesis points and
+        the run was never counted as a parse failure.
+        """
         from eval.run import _validate_result
 
         # Validator is never called in this path — validate_summary runs instead.
@@ -401,11 +406,10 @@ class TestQualityResultsToEvalFormat:
             "parsed": None,
         }
         score, failure, diagnosis = _validate_result(result, task_cfg, "json", debug=True)
-        # Validator was bypassed in favor of validate_summary
+        # The task's own validator is not called — there were no items to give it.
         assert calls == []
-        # validate_summary returns 20 for unstructured prose
-        assert score == 20
-        assert isinstance(score, (int, float))
+        assert score == 0
+        assert failure == "No JSON in output"
 
     def test_debug_weekend_with_items(self):
         """Lines 76-83: debug=True, weekend task, with items and source - prints source matching details."""
@@ -477,17 +481,16 @@ class TestValidateResultBranches:
     def test_json_match_invalid_extracted(self):
         from eval.run import _validate_result
 
-        # Validator should NOT be called in this path: json.loads fails,
-        # _extract_items_from_text returns nothing (no bullets/tables),
-        # content > 50 chars → validate_summary path is taken instead.
+        # Validator should NOT be called in this path: json.loads fails and
+        # _extract_items_from_text returns nothing (no bullets/tables).
         calls = []
 
         def fake_validator(items, source_text=None):
             calls.append(items)
             return 50, "fail"
 
-        # Content has "[" "]" (matches JSON regex) but contents aren't valid JSON.
-        # Long enough (>50 chars) to skip "Empty content" and reach validate_summary.
+        # Content has "[" "]" (matches JSON regex) but contents aren't valid JSON,
+        # and nothing is extractable from the prose either.
         result = {
             "content": "Here is some prose [this is not valid json at all] and more prose after the bracket text to make it long",
             "parsed": None,
@@ -498,9 +501,8 @@ class TestValidateResultBranches:
         }
         score, failure, diagnosis = _validate_result(result, task_cfg, "json")
         assert calls == []
-        # validate_summary returns 10 for prose with no structure
-        assert score == 10
-        assert isinstance(score, (int, float))
+        assert score == 0
+        assert failure == "No JSON in output"
 
     def test_short_content_no_extracted(self):
         from eval.run import _validate_result

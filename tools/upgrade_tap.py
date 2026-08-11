@@ -35,11 +35,15 @@ def update_formula_content(file_path: Path, version: str, sha256: str) -> bool:
 
     content = file_path.read_text()
 
-    # Regex patterns for url and sha256
-    url_pattern = r'(url\s+)"https://github.com/ztomer/ztools/archive/refs/tags/v[^"]+"'
+    # The URL must name the artifact the checksum was computed over. Both
+    # release paths (this one, driven by .github/workflows/release.yml, and the
+    # manual tools/release.sh) shasum GitHub's auto-generated tag archive, so
+    # they write the same formula and cannot fight over which file is canonical.
+    release_url = f"https://github.com/ztomer/ztools/archive/refs/tags/v{version}.tar.gz"
+    url_pattern = r'(url\s+)"https://github.com/ztomer/ztools/[^"]+"'
     sha_pattern = r'(sha256\s+)"[0-9a-fA-F]{64}"'
 
-    new_url = f'\\1"https://github.com/ztomer/ztools/archive/refs/tags/v{version}.tar.gz"'
+    new_url = f'\\1"{release_url}"'
     new_sha = f'\\1"{sha256}"'
 
     updated_content, url_count = re.subn(url_pattern, new_url, content)
@@ -47,8 +51,7 @@ def update_formula_content(file_path: Path, version: str, sha256: str) -> bool:
 
     if url_count == 0 or sha_count == 0:
         print_info("Standard URL/SHA256 patterns not matched. Retrying with generic patterns...")
-        tar_url = f"https://github.com/ztomer/ztools/archive/refs/tags/v{version}.tar.gz"
-        updated_content = re.sub(r'url\s+"[^"]+"', f'url "{tar_url}"', content)
+        updated_content = re.sub(r'url\s+"[^"]+"', f'url "{release_url}"', content)
         updated_content = re.sub(r'sha256\s+"[^"]+"', f'sha256 "{sha256}"', updated_content)
 
     file_path.write_text(updated_content)

@@ -15,6 +15,8 @@ from lib.config_toml import load_config
 from lib.llm.constants import API_CHAT
 from lib.logging_config import get_logger
 from lib.mlx_lib import call_mlx, find_any_working_mlx_model, find_mlx_model, process_mlx_content
+from lib.paths import conf_path
+from lib.prompt_render import POSITIONAL_SLOT, render_prompt
 from lib.tui import FAIL
 
 from rename.helpers import _strip_instruction_prefix
@@ -43,7 +45,7 @@ PROMPT_TEXT_TO_FILENAME = (
 )
 
 # Load rename config for overridable paths
-_RENAME_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "rename.toml"
+_RENAME_CONFIG_PATH = conf_path("rename.toml")
 _RENAME_CFG = load_config(_RENAME_CONFIG_PATH) or {}
 
 MLX_MODELS_DIR = Path(
@@ -117,12 +119,27 @@ def is_relevant_with_llm(text: str, host: str, api_key: str = "") -> Optional[bo
     return None
 
 
+def _filename_prompt(model: str, text: str) -> str:
+    """Render the filename template for `model` through the shared renderer.
+
+    The shipped templates come in two shapes — foundation uses the positional
+    `{}` slot, others use `{text}` — so `str.format()` raises `IndexError` on the
+    former and the per-model `except` downgraded that to a stderr warning, which
+    silently killed the whole LLM naming path. Class C1; render_prompt is the one
+    renderer that handles both shapes and fails loudly.
+    """
+    template = get_model_prompt(model, Task.FILENAME) or PROMPT_TEXT_TO_FILENAME
+    if POSITIONAL_SLOT in template:
+        return render_prompt(template, template_id=f"{model}:filename", positional=text)
+    return render_prompt(template, template_id=f"{model}:filename", text=text)
+
+
 def query_llm_for_filename(
     text: str, host: str = DEFAULT_SERVER_URL, model: str = "", api_key: str = ""
 ) -> Optional[str]:
     for m in FILENAME_MODELS:
         try:
-            prompt = PROMPT_TEXT_TO_FILENAME.format(text=text)
+            prompt = _filename_prompt(m, text)
             messages = [{"role": "user", "content": prompt}]
 
             with requests.Session() as sess:
@@ -173,7 +190,7 @@ def query_mlx_for_filename(text: str) -> Optional[str]:
         if not model_path or model_path in tried:
             continue
         tried.append(model_path)
-        prompt = PROMPT_TEXT_TO_FILENAME.format(text=text)
+        prompt = _filename_prompt(model_name, text)
         raw = call_mlx(model_path, prompt)
         if raw:
             content = process_mlx_content(raw)
@@ -187,7 +204,7 @@ def query_mlx_for_filename(text: str) -> Optional[str]:
 
     fallback = find_any_working_mlx_model()
     if fallback and fallback not in tried:
-        prompt = PROMPT_TEXT_TO_FILENAME.format(text=text)
+        prompt = _filename_prompt(FILENAME_MODELS[0] if FILENAME_MODELS else "", text)
         raw = call_mlx(fallback, prompt)
         if raw:
             content = process_mlx_content(raw)

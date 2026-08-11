@@ -9,7 +9,6 @@ import sys
 import time
 from contextlib import contextmanager
 from datetime import datetime
-from pathlib import Path
 
 try:
     from playwright.sync_api import TimeoutError as PWTimeout
@@ -18,6 +17,7 @@ except Exception:
     sync_playwright = PWTimeout = None
 
 from lib.config_toml import load_config
+from lib.paths import conf_path
 from lib.signal_handling import GracefulShutdown, is_shutdown_requested
 from lib.tui import STEP, WARN
 
@@ -31,7 +31,7 @@ from twitter.browser_launch import (
 from twitter.browser_parse import parse_tweets_from_response
 from twitter.cookies import SESSION_COOKIE_NAME, get_browser_cookies, has_session_cookie
 
-_TWITTER_CONFIG_PATH = Path(__file__).parent.parent / "conf" / "twitter.toml"
+_TWITTER_CONFIG_PATH = conf_path("twitter.toml")
 _TWITTER_CFG = load_config(_TWITTER_CONFIG_PATH) or {}
 
 MAX_SCROLLS = int(os.environ.get("TWITTER_MAX_SCROLLS", str(_TWITTER_CFG.get("max_scrolls", 1200))))

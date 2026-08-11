@@ -1,6 +1,16 @@
 llm_url = "http://localhost:1337"
 default_model = "qwen3.6-35b-a3b-mxfp8-mtp"
 
+# Fallback chain for `rn`'s filename task, tried in order.
+# Top-level keys must stay ABOVE the first [table] header — a bare key after one
+# belongs to that table, which is how this list spent its life inside
+# [max_tokens] where get_filename_models() could never see it.
+filename_models = [
+  "foundation",
+  "qwen-agentworld-35b-a3b-mxfp8",
+  "qwen3.6-35b-a3b-mxfp8-mtp",
+]
+
 # Best models per task based on latest empirical benchmark sweep (task-673 / task-899).
 # Documented in docs/DEEP_MODEL_VS_GEMINI_EVALUATION.md.
 [best_models]
@@ -26,12 +36,6 @@ json = 16000
 summarize = 16000
 filename = 1000
 vlm = 16000
-
-filename_models = [
-  "foundation",
-  "qwen-agentworld-35b-a3b-mxfp8",
-  "qwen3.6-35b-a3b-mxfp8-mtp",
-]
 
 [prompts]
 filename = """

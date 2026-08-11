@@ -53,12 +53,13 @@ Prompts come from `conf/models/{model}.toml`. Key tasks:
 ```bash
 # Test all imports
 cd /Users/ztomer/Projects/ztools
-python3 -c "from model_eval import run_eval, TASKS; print('model_eval OK')"
+python3 -c "from eval.run import run_eval; from eval.tasks_core import TASKS; print('eval OK')"
 python3 -c "from eval_tasks import TASKS, load_tasks_from_config; print('eval_tasks OK')"
 
 # Test a model (requires osaurus running)
 python3 -c "
-from model_eval import run_eval, TASKS
+from eval.run import run_eval
+from eval.tasks_core import TASKS
 results = run_eval('foundation', TASKS)
 for r in results:
     print(r['task'], r['quality_score'])
@@ -99,15 +100,16 @@ TASKS["new_task"] = {
 ## Testing Changes
 
 ```bash
-# Quick test of model_eval imports
-python3 -c "from model_eval import run_eval, TASKS; print('OK')"
+# Quick test of eval imports
+python3 -c "from eval.run import run_eval; from eval.tasks_core import TASKS; print('OK')"
 
 # Quick test eval_tasks imports  
 python3 -c "from eval_tasks import TASKS, load_tasks_from_config; print('OK')"
 
 # Run eval on a model
 python3 -c "
-from model_eval import run_eval, TASKS
+from eval.run import run_eval
+from eval.tasks_core import TASKS
 results = run_eval('qwen', TASKS)
 for r in results:
     print(r['task'], r['quality_score'])
@@ -116,7 +118,7 @@ for r in results:
 
 ## Key Files
 
-- `model_eval.py` - Main eval runner (1695 lines)
+- `references/eval/` - Eval runner package (`run.py`, `tasks_core.py`, `cli.py`)
 - `lib/validators_lib.py` - Core validators
 - `conf/models/*.toml` - Model prompts
 

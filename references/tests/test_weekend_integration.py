@@ -3,6 +3,8 @@
 import types
 from unittest.mock import patch
 
+import pytest
+
 FAKE_WEATHER = "Daily Forecast:\nFriday: 18°C, Clear (0mm)\nSaturday: 22°C, Sunny (0mm)\nSunday: 20°C, Cloudy (2mm)"
 FAKE_EVENTS = (
     "- Spring Festival at City Hall\n- Coding Workshop at Library\n- Outdoor Movie Night in Park"
@@ -428,3 +430,64 @@ class TestWeekendPrompts:
         prompt = build_transient_user_prompt("June 5-7", "Rainy", "- Event A\n- Event B")
         assert "June 5-7" in prompt
         assert "Event A" in prompt
+
+
+class TestSkipWebIsHonored:
+    """`--skip-web` used to be parsed and never read.
+
+    The README documents it as "use cache only", but main() passed only
+    use_cache to _fetch_data, so the flag ran the full DDGS fetch — the
+    opposite of the promise, silently.
+    """
+
+    def _dates(self):
+        from datetime import date
+
+        return date(2026, 6, 5), date(2026, 6, 7)
+
+    def test_skip_web_uses_cache_without_fetching(self, mock_llm):
+        import weekend.cli as wp
+
+        fri, sun = self._dates()
+        with (
+            patch.object(wp, "ensure_server"),
+            patch.object(wp, "fetch_weather", return_value=FAKE_WEATHER),
+            patch.object(wp, "load_events_cache", return_value=FAKE_EVENTS),
+            patch.object(wp, "load_venues_cache", return_value=FAKE_VENUES),
+            patch.object(wp, "fetch_transient_events") as mock_transient,
+            patch.object(wp, "fetch_fixed_venues") as mock_venues,
+        ):
+            _, events, venues, _ = wp._fetch_data(
+                fri, sun, "2026", "June", use_cache=False, skip_web=True
+            )
+        mock_transient.assert_not_called()
+        mock_venues.assert_not_called()
+        assert events and venues
+
+    def test_skip_web_with_empty_cache_exits_naming_the_cache(self, mock_llm, capsys):
+        import weekend.cli as wp
+
+        fri, sun = self._dates()
+        with (
+            patch.object(wp, "ensure_server"),
+            patch.object(wp, "fetch_weather", return_value=FAKE_WEATHER),
+            patch.object(wp, "load_events_cache", return_value=""),
+            patch.object(wp, "fetch_transient_events") as mock_transient,
+        ):
+            with pytest.raises(SystemExit):
+                wp._fetch_data(fri, sun, "2026", "June", use_cache=False, skip_web=True)
+        mock_transient.assert_not_called()
+        assert "events cache is empty" in capsys.readouterr().out
+
+    def test_main_forwards_the_flag(self, mock_llm, tmp_path):
+        import weekend.cli as wp
+
+        with (
+            patch("os.path.expanduser", return_value=str(tmp_path)),
+            patch.object(
+                wp, "_fetch_data", return_value=(FAKE_WEATHER, FAKE_EVENTS, FAKE_VENUES, FAKE_DATES)
+            ) as mock_fetch,
+            patch.object(wp, "generate_weekend_plan", return_value=(FAKE_TRANSIENT, FAKE_FIXED)),
+        ):
+            wp.main(_make_args(use_cache=False, skip_web=True))
+        assert mock_fetch.call_args[0][5] is True

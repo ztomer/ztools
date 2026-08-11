@@ -4,6 +4,7 @@ Shim: re-exports prompts from eval/tasks_prompts.py, defines TASKS dict and
 _extract_items_from_text helper.
 """
 
+import json
 import re
 from typing import Dict, List
 
@@ -13,22 +14,30 @@ from lib.eval_data import (
     WEEKEND_USR_FIXED,
     WEEKEND_USR_TRANSIENT,
 )
+from lib.paths import eval_tasks_path
 from lib.validators.json_validator import (
     validate_detailed_json,
     validate_mixed_signal,
 )
+from lib.validators.taxes_validator import (
+    validate_taxes_anomalies,
+    validate_taxes_audit_readiness,
+    validate_taxes_synthesis,
+)
 from lib.validators.text_validator import (
-    validate_factual_accuracy,
-    validate_factual_coverage,
     validate_file_summary,
     validate_filename,
+    validate_summary,
+)
+from lib.validators.text_validator_mixed import (
+    validate_factual_accuracy,
+    validate_factual_coverage,
     validate_mixed_file_summary,
     validate_mixed_filename,
     validate_mixed_summary,
     validate_no_contradiction,
     validate_no_leak,
     validate_strict_schema,
-    validate_summary,
 )
 
 from eval.tasks_prompts import (
@@ -266,3 +275,37 @@ TASKS = {
 
 TASKS["json"] = dict(TASKS["weekend_transient"])
 TASKS["detailed_json"] = dict(TASKS["weekend_fixed"])
+
+
+def _register_taxes_tasks() -> None:
+    """Wire the sanitized taxes snapshots into TASKS.
+
+    The data, the rubric and the validators all shipped, but nothing loaded
+    them: README advertised three taxes tasks and `ev --task taxes_synthesis`
+    answered "Unknown task". Each snapshot carries its own system/user prompt,
+    so the task is just the snapshot plus its validator.
+    """
+    validators = {
+        "anomalies": validate_taxes_anomalies,
+        "audit_readiness": validate_taxes_audit_readiness,
+        "synthesis": validate_taxes_synthesis,
+    }
+    for name, validator in validators.items():
+        snapshot = eval_tasks_path("data", "taxes", f"taxes_{name}.sanitized.json")
+        if not snapshot.is_file():
+            continue
+        data = json.loads(snapshot.read_text(encoding="utf-8"))
+        messages = []
+        if data.get("system"):
+            messages.append({"role": "system", "content": data["system"]})
+        messages.append({"role": "user", "content": data["user"]})
+        # The validators consume raw text (audit_readiness does its own
+        # json.loads), so the JSON extraction path must not pre-parse for them.
+        TASKS[f"taxes_{name}"] = {
+            "messages": messages,
+            "validator": validator,
+            "parse_json": False,
+        }
+
+
+_register_taxes_tasks()

@@ -245,3 +245,47 @@ class TestValidateFileSummary:
         assert "only 3 files" in msg
         assert "no content details" in msg
         assert score == 25
+
+
+class TestFileSummaryRejectsFilenameInference:
+    """The task exists to catch filename inference; the checks must be real.
+
+    The docstring promised "no filename-only summaries" and "no generic patterns
+    like 'a python script'", but the implementation was a single keyword scan
+    whose verb list included `config`, `model`, `api` and `client` — so "a
+    python config" counted as a detailed description.
+    """
+
+    DETAILED = [
+        {"path": "lib/config_loader.py", "desc": "Parses TOML config and validates keys"},
+        {"path": "lib/api_client.py", "desc": "Sends chat requests and handles retries"},
+        {"path": "lib/report.py", "desc": "Renders scorecards into markdown and writes files"},
+        {"path": "lib/extract.py", "desc": "Extracts JSON from noisy output, strips thinking"},
+    ]
+
+    def test_real_descriptions_still_score_full(self):
+        score, msg = validate_file_summary(self.DETAILED)
+        assert score == 100
+        assert msg == ""
+
+    def test_filename_echoes_do_not_count_as_detail(self):
+        data = [
+            {"path": "lib/config_loader.py", "desc": "config loader"},
+            {"path": "lib/api_client.py", "desc": "api client"},
+            {"path": "lib/report.py", "desc": "Renders scorecards into markdown and writes files"},
+            {"path": "lib/extract.py", "desc": "Extracts JSON from noisy output"},
+        ]
+        score, msg = validate_file_summary(data)
+        assert score < 100
+        assert "filename-only" in msg
+
+    def test_generic_descriptions_do_not_count_as_detail(self):
+        data = [
+            {"path": "lib/one.py", "desc": "a python script"},
+            {"path": "lib/two.py", "desc": "a config file"},
+            {"path": "lib/three.py", "desc": "Renders scorecards into markdown"},
+            {"path": "lib/four.py", "desc": "Extracts JSON from noisy model output"},
+        ]
+        score, msg = validate_file_summary(data)
+        assert score < 100
+        assert "generic description" in msg

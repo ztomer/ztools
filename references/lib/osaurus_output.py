@@ -28,7 +28,14 @@ BOLD_MARKDOWN_RE = re.compile(r"\*\*([^*]+)\*\*")
 TABLE_DIVIDER_RE = re.compile(r"\|[:\-]+\|")
 LIST_ITEM_RE = re.compile(r"^\d+[\.\)]\s+(.+)$|^- (.+)$")
 YEAR_RE_2626 = re.compile(r"\b2626\b")
-YEAR_RE_26 = re.compile(r"\b26(?!\d)")
+# A bare "26" is only a truncated year when it is the ENTIRE value of a
+# date-shaped field. The old `\b26(?!\d)` matched any standalone 26 anywhere in
+# any string value, so "August 26" became "August 2026" (which then no longer
+# parses as a date and escapes the weekend window filter), price "26" became
+# "2026", and "26 King St W" became "2026 King St W" — corrupting exactly the
+# fields the prompts order copied verbatim.
+YEAR_RE_BARE = re.compile(r"^\s*26\s*$")
+DATE_KEY_HINTS = ("date", "day", "when", "start", "end")
 TEXT_NORM_RE_1 = re.compile(r"^\d+[\.\)]\s*([^\-:?]+)(?:\s*[-:]\s*(.+))?$")
 TEXT_NORM_RE_2 = re.compile(r"^-\s*([^\-:?]+)(?:\s*[-:]\s*(.+))?$")
 DETAILS_SPLIT_RE = re.compile(r"[-:,]")
@@ -247,7 +254,9 @@ def fix_json_years(items: List[Any]) -> List[Any]:
             for k, v in item.items():
                 if isinstance(v, str):
                     v = YEAR_RE_2626.sub(TARGET_YEAR, v)
-                    v = YEAR_RE_26.sub(TARGET_YEAR, v)
+                    key_is_date = any(hint in str(k).lower() for hint in DATE_KEY_HINTS)
+                    if key_is_date and YEAR_RE_BARE.match(v):
+                        v = TARGET_YEAR
                 fixed_item[k] = v
             fixed.append(fixed_item)
         else:

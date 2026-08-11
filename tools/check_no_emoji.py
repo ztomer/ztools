@@ -67,21 +67,30 @@ EXCLUDE_PREFIXES = ()
 
 
 def _files(root: str, staged: bool):
-    if staged:
-        out = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
-                             cwd=root, capture_output=True, text=True).stdout
-    else:
-        out = subprocess.run(["git", "ls-files"], cwd=root, capture_output=True, text=True).stdout
-    return [f for f in out.split("\n") if f and not f.startswith(EXCLUDE_PREFIXES)]
+    """List the files to police, or raise if git itself failed.
+
+    A gate that reports "0 tracked files clean" when git errors is a gate that
+    passes when it measured nothing.
+    """
+    cmd = (["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"] if staged
+           else ["git", "ls-files"])
+    r = subprocess.run(cmd, cwd=root, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"git failed: {' '.join(cmd)}: {r.stderr.strip()}")
+    return [f for f in r.stdout.split("\n") if f and not f.startswith(EXCLUDE_PREFIXES)]
 
 
 def main() -> int:
     staged = "--staged" in sys.argv
     root = _root()
     if not root:
-        print("[no_emoji] not a git repo — skipping")
-        return 0
-    files = _files(root, staged)
+        print("✗ [no_emoji] not a git repo — cannot verify")
+        return 1
+    try:
+        files = _files(root, staged)
+    except RuntimeError as e:
+        print(f"✗ [no_emoji] {e}")
+        return 1
     bad = []
     for f in files:
         try:
@@ -94,8 +103,9 @@ def main() -> int:
             continue   # binary / gone / dir — no text to police
     if bad:
         scope = "staged" if staged else "tracked"
-        print(f"✗ DISALLOWED EMOJI in {len(bad)} location(s) ({scope}) — "
-              f"only the Kare icon set is permitted (→ ✓ ✗ ⚠ ↔ ↑ ↓):")
+        print(f"✗ DISALLOWED EMOJI in {len(bad)} location(s) ({scope}) — only the "
+              f"Kare icon set is permitted (→ ✓ ✗ ⚠ ↔ ↑ ↓, plus the Mac key "
+              f"glyphs ← ⌘ ⌥ ⌨):")
         for b in bad[:200]:
             print("  " + b)
         if len(bad) > 200:

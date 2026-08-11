@@ -1,9 +1,8 @@
 # Text Validation functions
 # Quality-based scoring - checks output signals, not just format
 
-import json
 import re
-from typing import Any, List, Tuple
+from typing import Any, Tuple
 
 from lib.quality_models import GENERIC_FILENAMES
 from lib.validators.constants import (
@@ -62,11 +61,41 @@ from lib.validators.helpers import (
     strip_backtick_value,
 )
 
+# Re-exported from the other half of this module (split for the 500-line limit),
+# so `from lib.validators.text_validator import validate_mixed_*` keeps working.
+from lib.validators.text_validator_mixed import (  # noqa: F401,E402
+    _entry_hit,
+    _extract_file_paths,
+    _extract_mixed_filenames,
+    _extract_tweet_senders,
+    _file_summary_paths,
+    _name_overlap,
+    _parse_noise_entries,
+    _split_signal_noise,
+    detect_instruction_leak,
+    validate_factual_accuracy,
+    validate_factual_coverage,
+    validate_mixed_file_summary,
+    validate_mixed_filename,
+    validate_mixed_summary,
+    validate_no_contradiction,
+    validate_no_leak,
+    validate_strict_schema,
+)
+
 # Filename validation characters
 FILENAME_VALID_CHARS = set("_.-")
 
 # Pre-compiled validation regular expressions (John Carmack optimization)
-USER_MENTIONS_RE = re.compile(r"@?[Uu]ser\s*\d+")
+# The prompts order every bullet to end with `(@username | Mon DD HH:MM)`, and the
+# real timelines carry real handles (@TechCrunch). Counting only `user N` tokens
+# scored a prompt-perfect summary as "no user mentions" while `@user 1 @user 2`
+# padding scored full marks. Count both shapes, de-duplicated, so coverage means
+# "distinct people referenced" rather than "how many times the token appears".
+# The `(?<![\w.])` guard keeps email and domain tokens out of the count:
+# "contact support@example.com" is not three users.
+USER_HANDLE_RE = re.compile(r"(?<![\w.])@([A-Za-z][A-Za-z0-9_]{1,})")
+LEGACY_USER_RE = re.compile(r"\b[Uu]ser\s*(\d+)\b")
 TIMESTAMP_RE = re.compile(r"\d{1,2}:\d{2}")
 NARRATIVE_WORDS_RE = re.compile(
     r"\b(?:ask(?:s|ed|ing)?|respond(?:s|ed|ing)?|thank(?:s|ed|ing)?|report(?:s|ed|ing)?|confirm(?:s|ed|ing)?|direct(?:s|ed|ing)?|inquire(?:s|d|ing)?|announce(?:s|d|ing)?|share(?:s|d|ing)?|request(?:s|ed|ing)?|provide(?:s|d|ing)?)\b",
@@ -80,6 +109,10 @@ SYNTHESIS_RE = re.compile(
     r"(overall|summary|in (short|summary)|key (points?|takeaways?)|"
     r"tl;dr|(the|this|that) (conversation|discussion|thread|interaction))",
     re.IGNORECASE,
+)
+LEADING_SUMMARY_SECTION_RE = re.compile(
+    r"^#{2,}\s+(?:executive\s+summary|summary|overview|tl;?dr)\s*\n(?P<body>.*?)(?=\n#{2,}\s|\Z)",
+    re.IGNORECASE | re.DOTALL,
 )
 TOPIC_MARKERS_RE = re.compile(r"^#{2,}\s+\w+|^[A-Z][^a-z]{2,}:\s", re.MULTILINE)
 TRANSITION_WORDS_RE = re.compile(
@@ -151,6 +184,15 @@ def validate_filename(data: Any, source_text: str = "") -> Tuple[int, str]:
     return min(MAX_SCORE, score), "; ".join(failures)
 
 
+
+def count_distinct_users(text: str) -> int:
+    """Distinct people referenced, counting real @handles and legacy `user N`."""
+    handles = {h.lower() for h in USER_HANDLE_RE.findall(text)}
+    handles.discard("user")  # "@user 1" is the legacy token, not a handle
+    legacy = {f"user{n}" for n in LEGACY_USER_RE.findall(text)}
+    return len(handles | legacy)
+
+
 def validate_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
     """Score summaries based on quality signals: structure, user mentions, content depth."""
     if not data:
@@ -177,7 +219,7 @@ def validate_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
         failures.append("no structure")
 
     # User coverage (15 pts)
-    found_users = len(USER_MENTIONS_RE.findall(data_str))
+    found_users = count_distinct_users(data_str)
     if found_users >= USERS_COVERAGE_HIGH_COUNT:
         score += USERS_COVERAGE_HIGH_SCORE
     elif found_users == USERS_COVERAGE_MED_COUNT:
@@ -209,7 +251,10 @@ def validate_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
     # Check for "Not specified" / boilerplate filler
     has_boilerplate = bool(BOILERPLATE_RE.search(data_str))
 
-    # Check for top-level synthesis (content before first ## or ### header)
+    # Check for top-level synthesis: prose before the first ## header, or — since
+    # the prompts order "Start with a ## Executive Summary paragraph" — the body
+    # of a leading summary section. Requiring prose ABOVE the first header made
+    # the bonus unreachable for output that followed the prompt exactly.
     top_level = ""
     header_match = NEWLINE_HEADER_RE.search(data_str)
     if header_match:
@@ -218,6 +263,10 @@ def validate_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
             top_level = data_str[:first_header].strip()
     elif not START_HEADER_RE.search(data_str):
         top_level = data_str  # no headers at all
+    if not top_level:
+        lead = LEADING_SUMMARY_SECTION_RE.match(data_str.lstrip())
+        if lead:
+            top_level = lead.group("body").strip()
 
     has_synthesis = bool(SYNTHESIS_RE.search(top_level)) if top_level else False
 
@@ -309,399 +358,3 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
     score += quality_score
 
     return min(MAX_SCORE, score), "; ".join(failures)
-
-
-# ============================================================
-# MIXED-SIGNAL VALIDATORS (signal-from-noise filtering)
-# ============================================================
-
-
-def _split_signal_noise(source_text: str) -> Tuple[str, str]:
-    """Split a mixed prompt into (signal_part, noise_part) on the NOISE marker."""
-    if "NOISE" not in source_text:
-        return source_text, ""
-    signal_part, noise_part = source_text.split("NOISE", 1)
-    return signal_part, noise_part
-
-
-def _extract_tweet_senders(text: str) -> List[str]:
-    """Extract @Sender handles from tweet lines: [@Sender | time]: ..."""
-    senders = []
-    for line in text.split("\n"):
-        m = re.search(r"\[@([\w]+)\s*\|", line)
-        if m:
-            senders.append("@" + m.group(1).lower())
-    return senders
-
-
-_COMMON = {
-    "about",
-    "above",
-    "after",
-    "again",
-    "their",
-    "there",
-    "these",
-    "those",
-    "would",
-    "could",
-    "should",
-    "which",
-    "while",
-    "where",
-    "when",
-    "what",
-    "with",
-    "from",
-    "this",
-    "that",
-    "then",
-    "than",
-    "they",
-    "them",
-    "have",
-    "been",
-    "were",
-    "will",
-    "your",
-    "said",
-    "says",
-    "into",
-    "over",
-    "also",
-}
-
-
-def _parse_noise_entries(noise_part: str) -> List[str]:
-    entries = []
-    for line in noise_part.split("\n"):
-        line = line.strip()
-        if line.startswith("- "):
-            content = line[2:].strip()
-            text = content.split(":", 1)[-1].strip()
-            if text:
-                entries.append(text)
-    return entries
-
-
-def _entry_hit(entry: str, text: str) -> bool:
-    """True if >=2 distinctive tokens of a noise entry appear in the text (phrase match)."""
-    toks = {t for t in re.sub(r"[^a-z0-9 ]", " ", entry.lower()).split() if len(t) >= 4}
-    if not toks:
-        return False
-    return sum(1 for t in toks if t in text) >= 2
-
-
-def validate_mixed_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
-    """Score tweet-summary filtering by NOISE EXCLUSION.
-
-    Models summarize by content (not by echoing @senders), so we detect contamination
-    by phrase-matching the NOISE entries (>=2 of an entry's distinctive tokens present).
-    Signal coverage (by distinctive content tokens) is reported and used as a floor so a
-    summary unrelated to the timeline cannot score high.
-    """
-    if not data:
-        return 0, "empty response"
-    summary = str(data).lower()
-
-    signal_part, noise_part = _split_signal_noise(source_text)
-    noise_entries = _parse_noise_entries(noise_part)
-    noise_hits = sum(1 for e in noise_entries if _entry_hit(e, summary))
-    noise_total = len(noise_entries)
-
-    score = 100
-    failures = []
-    if noise_total:
-        score -= round(100 * noise_hits / noise_total)
-        if noise_hits:
-            failures.append(f"included {noise_hits}/{noise_total} noise items")
-
-    # Signal coverage: distinctive (>=5 char) content tokens from the real timeline.
-    sig_toks = {
-        t
-        for t in re.sub(r"[^a-z0-9 ]", " ", signal_part.lower()).split()
-        if len(t) >= 5 and t not in _COMMON
-    }
-    if sig_toks:
-        covered = sum(1 for t in sig_toks if t in summary)
-        failures.append(f"signal coverage {covered}/{len(sig_toks)}")
-        if covered == 0:
-            score = min(score, 30)  # says nothing about the actual timeline
-    return score, "; ".join(failures)
-
-
-def _extract_file_paths(text: str) -> List[str]:
-    paths = []
-    for line in text.split("\n"):
-        line = line.strip()
-        if line.startswith("/") and ("." in line or "/" in line):
-            paths.append(line.split()[0])
-    return paths
-
-
-def _file_summary_paths(data: Any) -> List[str]:
-    if isinstance(data, str):
-        # Markdown form: "## path: summary" or "## path"
-        paths = []
-        for line in data.split("\n"):
-            line = line.strip()
-            if line.startswith("##"):
-                header = line[2:].strip().rstrip(":").strip()
-                if header:
-                    paths.append(header)
-        return paths
-    if isinstance(data, dict):
-        # Accept {"path": "desc"} form
-        if all(isinstance(v, str) for v in data.values()):
-            return [str(k) for k in data.keys()]
-        items = [v for v in data.values() if isinstance(v, list)]
-        data = items[0] if items else []
-    if isinstance(data, list):
-        out = []
-        for item in data:
-            if isinstance(item, dict):
-                p = item.get("path") or item.get("file") or ""
-                if p:
-                    out.append(str(p))
-            elif isinstance(item, str):
-                out.append(item)
-        return out
-    return []
-
-
-def validate_mixed_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
-    """Score file-summary filtering: real files summarized, noise files excluded."""
-    if not data:
-        return 0, "empty response"
-
-    # Models may return JSON (per system prompt) or markdown ## headers. Normalize.
-    if isinstance(data, str):
-        parsed = None
-        try:
-            parsed = json.loads(data)
-        except (json.JSONDecodeError, TypeError):
-            parsed = None
-        if parsed is not None:
-            data = parsed
-
-    signal_part, noise_part = _split_signal_noise(source_text)
-    signal_paths = [p.lower() for p in _extract_file_paths(signal_part)]
-    noise_paths = [p.lower() for p in _extract_file_paths(noise_part)]
-    output_paths = [p.lower() for p in _file_summary_paths(data)]
-
-    if not output_paths:
-        return 0, "no file entries in output"
-
-    # Recall: signal paths covered (by prefix match, since output may abbreviate)
-    tp = 0
-    for sp in signal_paths:
-        if any(sp in op or op in sp for op in output_paths):
-            tp += 1
-    recall = tp / len(signal_paths) if signal_paths else 1.0
-
-    # Precision: output entries that are NOT noise
-    fp = 0
-    for op in output_paths:
-        if any(np in op or op in np for np in noise_paths):
-            fp += 1
-    precision = (len(output_paths) - fp) / len(output_paths) if output_paths else 0.0
-
-    score = int(100 * (0.5 * recall + 0.5 * precision))
-    failures = []
-    if fp > 0:
-        failures.append(f"included {fp}/{len(noise_paths)} noise files")
-    if signal_paths and tp < len(signal_paths):
-        failures.append(f"missed {len(signal_paths) - tp}/{len(signal_paths)} real files")
-    return score, "; ".join(failures)
-
-
-def _extract_mixed_filenames(source_text: str) -> Tuple[List[str], List[str]]:
-    """Parse signal snippets (before NOISE) and noise entries (after NOISE)."""
-    signal_part, noise_part = _split_signal_noise(source_text)
-    signal = []
-    for line in signal_part.split("\n"):
-        line = line.strip()
-        m = re.match(r"^\d+\.\s*(.+)$", line)
-        if m:
-            signal.append(m.group(1).strip())
-    noise = []
-    for line in noise_part.split("\n"):
-        line = line.strip()
-        if line.startswith("- "):
-            content = line[2:].strip()
-            text = content.split(":", 1)[-1].strip()
-            if text:
-                noise.append(text)
-    return signal, noise
-
-
-def _name_overlap(a: str, b: str) -> bool:
-    def norm(s: str) -> list[str]:
-        return re.sub(r"[^a-z0-9 ]", " ", s.lower()).split()
-
-    ta = {t for t in norm(a) if len(t) >= 3}
-    tb = {t for t in norm(b) if len(t) >= 3}
-    return bool(ta & tb)
-
-
-def validate_mixed_filename(data: Any, source_text: str = "") -> Tuple[int, str]:
-    """Score filename-extraction filtering: signal snippets renamed, noise excluded."""
-    if not data:
-        return 0, "empty response"
-
-    if isinstance(data, dict):
-        data = [data]
-    if isinstance(data, list):
-        outputs = [str(x) for x in data if x]
-    else:
-        outputs = [str(data)]
-
-    signal, noise = _extract_mixed_filenames(source_text)
-    if not signal:
-        return 0, "no signal snippets in source"
-
-    # Recall: each signal snippet produced a filename
-    tp = 0
-    for sig in signal:
-        if any(_name_overlap(sig, out) for out in outputs):
-            tp += 1
-    recall = tp / len(signal)
-
-    # Precision: no output derived from noise entries
-    fp = 0
-    for out in outputs:
-        if any(_name_overlap(n, out) for n in noise):
-            fp += 1
-    precision = (len(outputs) - fp) / len(outputs) if outputs else 0.0
-
-    score = int(100 * (0.5 * recall + 0.5 * precision))
-    failures = []
-    if fp > 0:
-        failures.append(f"included {fp}/{len(noise)} noise-derived names")
-    if tp < len(signal):
-        failures.append(f"missed {len(signal) - tp}/{len(signal)} signal snippets")
-    return score, "; ".join(failures)
-
-
-# ============================================================
-# FAITHFULNESS / SCHEMA / LEAK CHECKS (Round 1-2 quality tests)
-# ============================================================
-
-_LEAK_PATTERNS = [
-    re.compile(r"here\s+is\s+(the\s+)?filename", re.I),
-    re.compile(r"here's\s+(the\s+)?filename", re.I),
-    re.compile(r"the\s+filename\s+is", re.I),
-    re.compile(r"filename\s*:", re.I),
-    re.compile(r"here\s+is\s+your\s+(file|output)", re.I),
-]
-
-
-def detect_instruction_leak(text: str) -> List[str]:
-    """Detect nemotron-style leakage where the model echoes the instruction
-    ('Here is the filename: ...') instead of emitting the bare value."""
-    if not text:
-        return []
-    return [p.search(text).group(0) for p in _LEAK_PATTERNS if p.search(text)]
-
-
-def validate_no_leak(text: str, source_text: str = "") -> Tuple[int, str]:
-    """Score 0 if the output leaks instruction text; 100 if clean."""
-    leaks = detect_instruction_leak(text)
-    if leaks:
-        return 0, f"instruction leak: {leaks[0]}"
-    return 100, ""
-
-
-def validate_strict_schema(raw: str, source_text: str = "", kind: str = "json") -> Tuple[int, str]:
-    """Verify the RAW output is exactly the contracted shape — no prose preamble,
-    no markdown fences, no trailing commentary. Gates the prose-before-JSON
-    failure mode (qwen35b / qwopus)."""
-    if not raw or not raw.strip():
-        return 0, "empty response"
-    text = raw.strip()
-    if "```" in text:
-        return 0, "contains code fence (not strict schema)"
-    if kind == "json":
-        brackets = [i for i, c in enumerate(text) if c in "{["]
-        ends = [i for i, c in enumerate(text) if c in "}]"]
-        if not brackets or not ends or max(ends) < min(brackets):
-            return 0, "no JSON object/array found"
-        before = text[: min(brackets)].strip()
-        after = text[max(ends) + 1 :].strip()
-        if before or after:
-            return 0, f"prose outside JSON (before={before!r}, after={after!r})"
-        return 100, ""
-    if kind == "filename":
-        if detect_instruction_leak(text):
-            return 0, "instruction leak"
-        if len(text) > 80:
-            return 0, f"filename too long ({len(text)} chars)"
-        return 100, ""
-    # markdown / free-text: accept as-is
-    return 100, ""
-
-
-def validate_factual_accuracy(
-    output: str, source_text: str = "", falsehood_phrases: list = None
-) -> Tuple[int, str]:
-    """Multi-falsehood faithfulness probe.
-    Checks the output against MULTIPLE planted falsehoods.
-    Scores 100 - (33 * parroted_count) for 3 falsehoods.
-    `falsehood_phrases` is a list of sentinel phrases; each one found in
-    the output counts as a failure."""
-    if not output:
-        return 100, ""
-    if not falsehood_phrases:
-        return 100, ""
-    out = output.lower()
-    found = []
-    for phrase in falsehood_phrases:
-        p = phrase.lower().strip()
-        if p and p in out:
-            found.append(phrase)
-        elif p:
-            ptoks = {t for t in re.sub(r"[^a-z0-9 ]", " ", p).split() if len(t) >= 4}
-            if ptoks and sum(1 for t in ptoks if t in out) >= 2:
-                found.append(phrase)
-    if not found:
-        return 100, ""
-    pct = max(0, 100 - int(100 * len(found) / len(falsehood_phrases)))
-    return pct, f"parrots {len(found)}/{len(falsehood_phrases)} falsehoods: {found[0]!r}"
-
-
-def validate_factual_coverage(
-    output: str, source_text: str = "", key_facts: list = None
-) -> Tuple[int, str]:
-    """Fact-coverage scoring.
-    Checks how many of the given `key_facts` (case-insensitive substrings) are
-    present in the output. High coverage = thorough summarization."""
-    if not output:
-        return 0, "empty response"
-    if not key_facts:
-        return 100, ""
-    out = output.lower()
-    found = sum(1 for fact in key_facts if fact.lower() in out)
-    pct = int(100 * found / len(key_facts))
-    failures = []
-    if pct < 30:
-        failures.append(f"covered {found}/{len(key_facts)} key facts")
-    return pct, "; ".join(failures)
-
-
-def validate_no_contradiction(
-    output: str, source_text: str = "", contradiction_phrase: str = ""
-) -> Tuple[int, str]:
-    """Faithfulness probe: assert the model does NOT parrot a planted falsehood.
-    `contradiction_phrase` is the sentinel fact injected into the source; if it
-    (or its distinctive tokens) appears in the output, the model failed to filter
-    it out."""
-    if not output or not contradiction_phrase:
-        return 100, ""
-    out = output.lower()
-    phrase = contradiction_phrase.lower().strip()
-    if phrase and phrase in out:
-        return 0, f"parrots contradiction: {contradiction_phrase!r}"
-    ptoks = {t for t in re.sub(r"[^a-z0-9 ]", " ", phrase).split() if len(t) >= 4}
-    if ptoks and sum(1 for t in ptoks if t in out) >= 2:
-        return 0, f"parrots contradiction: {contradiction_phrase!r}"
-    return 100, ""

@@ -3,10 +3,17 @@
 import sys
 from unittest.mock import MagicMock
 
-# Mock ddgs before importing weekend
-mock_ddgs = MagicMock()
-mock_ddgs.DDGS = MagicMock()
-sys.modules["ddgs"] = mock_ddgs
+# Stand in for ddgs only when it is genuinely absent. Unconditionally replacing
+# sys.modules["ddgs"] poisoned the real package for the rest of the session: its
+# lazy __getattr__ then raised ModuleNotFoundError inside any later
+# patch("weekend.data.DDGS") in ANY test file, so the failure landed on whoever
+# ran next rather than here.
+try:  # pragma: no cover - depends on the installed extras
+    import ddgs  # noqa: F401
+except ImportError:  # pragma: no cover
+    mock_ddgs = MagicMock()
+    mock_ddgs.DDGS = MagicMock()
+    sys.modules["ddgs"] = mock_ddgs
 
 # Import the extraction logic
 from weekend import normalize_llm_items  # noqa: E402

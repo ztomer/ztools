@@ -15,10 +15,14 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
+where = [".", "references"]
 include = ["lib*", "twitter*", "weekend*", "rename*", "eval*", "conf*", "tui*"]
 
 [tool.setuptools.package-data]
 conf = ["*.toml", "*.json", "models/*.toml", "models/*.json"]
+# The taxes rubrics are read at scoring time; without them an installed run
+# scores those tasks against an empty rubric instead of failing.
+eval_tasks = ["data/*/*.json"]
 
 [project.optional-dependencies]
 web = [
@@ -42,6 +46,9 @@ foundation = [
 ]
 tui = [
     "textual>=0.50.0",
+    # tui/app_actions.py imports PIL at module level; without it the installed
+    # `ztools` command dies on startup.
+    "pillow>=10.0.0",
 ]
 mlx = [
     "mlx-lm",
@@ -90,11 +97,11 @@ ignore = []
 # Test modules contain long string fixtures (JSON/HTML/date literals in deeply
 # nested dicts). E501 there is purely cosmetic and reformatting risks altering
 # fixture semantics, so line-too-long is relaxed for tests only.
-"tests/**" = ["E501"]
+"references/tests/**" = ["E501"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"
-testpaths = ["tests"]
+testpaths = ["references/tests"]
 addopts = "-ra"
 markers = [
     "real_cookie_discovery: opts out of the conftest gate that stubs browser cookie discovery",

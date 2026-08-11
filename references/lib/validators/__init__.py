@@ -47,6 +47,17 @@ from lib.validators.text_validator import (
     validate_filename,
     validate_summary,
 )
+from lib.validators.text_validator_mixed import (
+    detect_instruction_leak,
+    validate_factual_accuracy,
+    validate_factual_coverage,
+    validate_mixed_file_summary,
+    validate_mixed_filename,
+    validate_mixed_summary,
+    validate_no_contradiction,
+    validate_no_leak,
+    validate_strict_schema,
+)
 
 __all__ = [
     # Validators
@@ -55,6 +66,16 @@ __all__ = [
     "validate_summary",
     "validate_filename",
     "validate_file_summary",
+    # Mixed-signal / faithfulness / leak validators
+    "validate_mixed_summary",
+    "validate_mixed_file_summary",
+    "validate_mixed_filename",
+    "validate_factual_accuracy",
+    "validate_factual_coverage",
+    "validate_no_contradiction",
+    "validate_no_leak",
+    "validate_strict_schema",
+    "detect_instruction_leak",
     # Helpers
     "extract_list_from_dict",
     "check_source_extraction",

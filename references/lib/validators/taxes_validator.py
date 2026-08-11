@@ -22,15 +22,30 @@ from __future__ import annotations
 
 import json
 import re
-from pathlib import Path
+import sys
 from typing import Any, Tuple
+
+from lib.paths import eval_tasks_path
+from lib.tui import WARN
+
+_warned_missing_rubrics: set[str] = set()
 
 
 def _load_rubric(task_name: str) -> dict[str, Any]:
-    """Read the snapshot's rubric block by task short-name."""
-    data_dir = Path(__file__).resolve().parent.parent.parent / "eval_tasks" / "data" / "taxes"
-    fp = data_dir / f"taxes_{task_name}.sanitized.json"
+    """Read the snapshot's rubric block by task short-name.
+
+    A missing rubric silently scores every output against nothing, which reads
+    as a passing grade, so say so once per task instead of degrading quietly.
+    """
+    fp = eval_tasks_path("data", "taxes", f"taxes_{task_name}.sanitized.json")
     if not fp.exists():
+        if task_name not in _warned_missing_rubrics:
+            _warned_missing_rubrics.add(task_name)
+            print(
+                f"{WARN} No rubric for taxes task '{task_name}' at {fp} — "
+                "scores for it are not grounded",
+                file=sys.stderr,
+            )
         return {}
     return json.loads(fp.read_text(encoding="utf-8")).get("rubric") or {}
 
@@ -107,11 +122,11 @@ def _validate_taxes_task(output: str, task_name: str) -> Tuple[int, str]:
     return total, reason
 
 
-def validate_taxes_anomalies(output: Any) -> Tuple[int, str]:
+def validate_taxes_anomalies(output: Any, source_text: str = "") -> Tuple[int, str]:
     return _validate_taxes_task(str(output or ""), "anomalies")
 
 
-def validate_taxes_audit_readiness(output: Any) -> Tuple[int, str]:
+def validate_taxes_audit_readiness(output: Any, source_text: str = "") -> Tuple[int, str]:
     """Same rubric + additional schema check: must be valid JSON
     with a `risk_items` list. If schema fails, halve the total."""
     raw = str(output or "")
@@ -129,7 +144,7 @@ def validate_taxes_audit_readiness(output: Any) -> Tuple[int, str]:
     return score, reason
 
 
-def validate_taxes_synthesis(output: Any) -> Tuple[int, str]:
+def validate_taxes_synthesis(output: Any, source_text: str = "") -> Tuple[int, str]:
     """Same rubric + markdown-section check: at least 4 of 5
     expected `**N. Section**` headings present."""
     raw = str(output or "")
@@ -146,6 +161,9 @@ def validate_taxes_synthesis(output: Any) -> Tuple[int, str]:
     return score, reason
 
 
+# `source_text` is accepted and ignored: the rubric lives in the snapshot, not in
+# the prompt, but eval/run.py calls every validator with it and the blanket
+# except there turned the resulting TypeError into a permanent score of 0.
 __all__ = [
     "validate_taxes_anomalies",
     "validate_taxes_audit_readiness",

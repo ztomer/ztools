@@ -22,5 +22,5 @@ timeout_ms = 1800000
 # Read-only: reads back the newest plan from the configured output directory
 # ($WEEKEND_OUTPUT_DIR) and counts its rows
 # using the checkers' own parsers. Runs no model and touches no network.
-command = "uv run --frozen python routines_status.py"
+command = "uv run --frozen python references/routines_status.py"
 timeout_ms = 30000

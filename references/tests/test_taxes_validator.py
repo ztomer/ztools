@@ -134,12 +134,13 @@ def test_load_rubric_missing_file(tmp_path, monkeypatch):
     """When the rubric file doesn't exist, _load_rubric returns {}."""
     import lib.validators.taxes_validator as tv
 
-    # Patch the data_dir to a path that doesn't have the file
-    monkeypatch.setattr(tv, "Path", lambda *a, **kw: tmp_path)
-    from lib.validators.taxes_validator import _load_rubric
+    # Point the rubric lookup at an empty tree so the file cannot be found.
+    monkeypatch.setattr(tv, "eval_tasks_path", lambda *parts: tmp_path.joinpath(*parts))
 
-    result = _load_rubric("nonexistent_task")
-    assert result == {}
+    assert tv._load_rubric("nonexistent_task") == {}
+    # The real rubric is still reachable once the seam is restored.
+    monkeypatch.undo()
+    assert tv._load_rubric("synthesis")
 
 
 def test_grounding_score_empty_signals():

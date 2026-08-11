@@ -10,8 +10,7 @@ from lib.quality_entry import compare_to_baseline, get_dimension_weights, load_b
 from lib.quality_models import Score, ScoreCard
 from PIL import Image
 from rename.cli import image_extensions, rename_image
-from textual.containers import Horizontal
-from textual.widgets import Button, Collapsible, Label, ListItem, Markdown
+from textual.widgets import Collapsible, Label, ListItem, Markdown
 from twitter.browser import collect_tweets_via_browser
 from twitter.summarize import summarize_with_llm
 from weekend.cli import _fetch_data, _parse_fixed, _parse_transient
@@ -405,94 +404,3 @@ def reset_model_parameters(self) -> None:
     osaurus_lib.GLOBAL_OVERRIDES.clear()
 
     status.update("[green]Reset to default values[/green]")
-
-async def scheduler_loop(self) -> None:
-    while True:
-        await asyncio.sleep(1)
-        for sched in list(self.active_schedules):
-            if sched["next_run"] <= datetime.now() and not sched["is_running"]:
-                sched["is_running"] = True
-                self.run_worker(self.run_scheduled_task(sched))
-
-async def run_scheduled_task(self, sched: dict) -> None:
-    try:
-        sched["last_run_status"] = "Running"
-        self.refresh_scheduler_display()
-        await asyncio.sleep(2)
-        sched["last_run_status"] = "Success"
-    except Exception as e:
-        sched["last_run_status"] = f"Failed: {e}"
-    finally:
-        sched["is_running"] = False
-        sched["next_run"] = datetime.now() + timedelta(seconds=sched["interval_seconds"])
-        self.refresh_scheduler_display()
-
-def refresh_scheduler_display(self) -> None:
-    try:
-        container = self.query_one("#sched-list")
-    except Exception:
-        return
-    for child in list(container.children):
-        child.remove()
-    if not self.active_schedules:
-        container.mount(Label("No scheduled tasks configured."))
-        return
-    for sched in self.active_schedules:
-        task_type_label = {
-            "twitter": "Twitter Summarizer",
-            "rename": "Screenshot Renamer",
-            "weekend": "Weekend Planner"
-        }.get(sched["task_type"], sched["task_type"])
-        interval_sec = sched["interval_seconds"]
-        if interval_sec == 10:
-            interval_str = "Every 10 seconds"
-        elif interval_sec == 60:
-            interval_str = "Every 1 minute"
-        else:
-            hours = interval_sec // 3600
-            interval_str = f"Every {hours}h"
-        status_text = sched["last_run_status"]
-        next_run_str = sched["next_run"].strftime("%H:%M:%S")
-        card_content = (
-            f"[bold white]{task_type_label}[/bold white]\n"
-            f"Interval: {interval_str} | Status: {status_text} | Next Run: {next_run_str}"
-        )
-        card_row = Horizontal(classes="sched-card")
-        card_row.mount(Label(card_content, classes="sched-card-info"))
-        btn_id = f"btn-sched-del-{sched['id']}"
-        card_row.mount(Button("Delete", variant="error", id=btn_id, classes="sched-card-btn"))
-        container.mount(card_row)
-
-def add_scheduler_task(self) -> None:
-    status = self.query_one("#sched-form-status")
-    try:
-        task_type = self.query_one("#sched-task-type").value
-        interval_str = self.query_one("#sched-interval").value
-
-        if not task_type or not interval_str:
-            status.update("[red]Error: Please select both task type and interval.[/red]")
-            return
-
-        interval = int(interval_str)
-        task_id = str(len(self.active_schedules) + 1)
-        for s in self.active_schedules:
-            if s["task_type"] == task_type:
-                status.update(f"[red]Error: {task_type} is already scheduled.[/red]")
-                return
-        self.active_schedules.append({
-            "id": task_id,
-            "task_type": task_type,
-            "interval_seconds": interval,
-            "next_run": datetime.now() + timedelta(seconds=interval),
-            "last_run_status": "Idle",
-            "is_running": False
-        })
-        status.update("[green]Task scheduled successfully.[/green]")
-        self.refresh_scheduler_display()
-    except Exception as e:
-        status.update(f"[red]Error: {e}[/red]")
-
-def remove_scheduler_task(self, task_id: str) -> None:
-    self.active_schedules = [s for s in self.active_schedules if s["id"] != task_id]
-    self.refresh_scheduler_display()
-

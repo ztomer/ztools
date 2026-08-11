@@ -205,12 +205,32 @@ def no_real_browsers_or_cookies(request):
 
     Tests that genuinely exercise cookie discovery opt out with
     @pytest.mark.real_cookie_discovery.
+
+    Pinning the backend only decided WHICH browser would launch; the launch
+    itself stayed reachable, so the guarantee rested on every test remembering
+    to patch `sync_playwright`/`launch_camoufox` locally. Both are stubbed here
+    to raise instead, which is what makes this a gate rather than a convention.
     """
     from unittest.mock import patch
 
+    import twitter.browser as browser
     import twitter.browser_launch as launch
 
-    patches = [patch.object(launch, "BROWSER_BACKEND", launch.BACKEND_CHROMIUM)]
+    def _blocked(*args, **kwargs):
+        raise RuntimeError(
+            "real browser launch blocked in tests — patch open_browser "
+            "(or twitter.browser.sync_playwright) in the test itself"
+        )
+
+    patches = [
+        patch.object(launch, "BROWSER_BACKEND", launch.BACKEND_CHROMIUM),
+        patch.object(browser, "sync_playwright", _blocked),
+        patch.object(launch, "launch_camoufox", _blocked),
+        patch.object(launch, "launch_camoufox_persistent", _blocked),
+        # twitter.browser imported launch_camoufox by value, so the module-level
+        # name there needs blocking too.
+        patch.object(browser, "launch_camoufox", _blocked),
+    ]
     if "real_cookie_discovery" not in request.keywords:
         import twitter.cookies as ck
         import twitter.cookies_firefox as ckf
@@ -245,5 +265,43 @@ def _signals_files_stay_clean(tmp_path_factory):
     import weekend.llm as weekend_llm
 
     with patch.object(eval_run, "EVAL_SIGNALS_PATH", tmp / "eval_signals.json"), \
-         patch.object(weekend_llm, "PHASE_SIGNALS_PATH", tmp / "phase_signals.json"):
+         patch.object(weekend_llm, "PHASE_SIGNALS_PATH", tmp / "phase_signals.json"), \
+         patch.object(weekend_llm, "EXTRACT_SIGNALS_PATH", tmp / "extract_signals.json"):
         yield
+
+
+def _tracked_config_digest() -> dict:
+    """Hash every tracked file the tools can write back to."""
+    import hashlib
+
+    from lib.paths import conf_dir, repo_path
+
+    digest = {}
+    targets = sorted(conf_dir().rglob("*.toml")) + sorted(conf_dir().rglob("*.json"))
+    baseline = repo_path("docs", "eval_baseline.json")
+    if baseline is not None:
+        targets.append(baseline)
+    for path in targets:
+        if path.is_file():
+            digest[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return digest
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _tracked_config_stays_clean():
+    """Structural gate: no test may write to the real conf/ or docs/ baseline.
+
+    Before the layout fix these writes silently landed in a nonexistent
+    `references/conf`, so tests that exercised `update_config` or
+    `save_baseline` looked harmless. With paths resolving correctly they hit
+    the tracked files for real — `pytest` rewrote conf/config.toml on the
+    developer's checkout. Tests must point the writers at tmp (ZTOOLS_CONF or
+    a patched module attribute); this fails the run if one does not.
+    """
+    before = _tracked_config_digest()
+    yield
+    after = _tracked_config_digest()
+    changed = sorted(
+        set(before) ^ set(after) | {p for p in before.keys() & after.keys() if before[p] != after[p]}
+    )
+    assert not changed, "tests modified tracked config files:\n  " + "\n  ".join(changed)

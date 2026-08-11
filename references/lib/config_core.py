@@ -16,6 +16,7 @@ from lib.llm.constants import (
 )
 
 from .config_toml import load_config
+from .paths import conf_path
 from .tui import WARN
 
 
@@ -52,8 +53,7 @@ def _auto_load():
     with _config_lock:
         if _config_loaded:
             return
-        base = Path(__file__).parent.parent / "conf"
-        config_path = base / "config.toml"
+        config_path = conf_path("config.toml")
         if not config_path.exists():
             print(f"{WARN} Config file not found, using fallback defaults")
             _config_loaded = True
@@ -80,7 +80,7 @@ def _auto_load():
 def init_config(config_path: Optional[str] = None) -> bool:
     global _config_loaded, _config
     if config_path is None:
-        config_path = Path(__file__).parent.parent / "conf" / "config.toml"
+        config_path = conf_path("config.toml")
     config_file = Path(config_path)
     if not config_file.exists():
         raise FileNotFoundError(f"Config file not found: {config_file}")

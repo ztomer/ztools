@@ -538,3 +538,48 @@ class TestQueryMlxForFilename:
         ):
             result = query_mlx_for_filename("some text")
         assert result is None
+
+
+class TestRealFilenameTemplate:
+    """The production templates, unpatched.
+
+    Every other test in this file replaces PROMPT_TEXT_TO_FILENAME with a
+    `{text}` stand-in, so none of them could see that `.format()` raised
+    IndexError on foundation's positional `{}` template and silently disabled
+    the whole LLM naming path.
+    """
+
+    def test_every_configured_model_renders_its_real_template(self):
+        import rename.llm as rl
+
+        assert rl.FILENAME_MODELS, "config must supply a filename fallback chain"
+        for model in rl.FILENAME_MODELS:
+            prompt = rl._filename_prompt(model, "quarterly revenue report")
+            assert "quarterly revenue report" in prompt
+            assert "{}" not in prompt and "{text}" not in prompt
+
+    def test_query_llm_sends_the_rendered_real_template(self):
+        import rename.llm as rl
+
+        sent = {}
+
+        class _Resp:
+            status_code = 200
+            text = '{"message": {"content": "revenue_report"}, "done": true}'
+
+        class _Sess:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def post(self, url, json=None, timeout=None):
+                sent["messages"] = json["messages"]
+                return _Resp()
+
+        with patch("rename.llm.requests.Session", _Sess):
+            result = rl.query_llm_for_filename("quarterly revenue report")
+
+        assert result == "revenue_report"
+        assert "quarterly revenue report" in sent["messages"][0]["content"]

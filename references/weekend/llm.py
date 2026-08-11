@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from pathlib import Path
 
 from lib.config import Task
@@ -17,6 +18,7 @@ from lib.osaurus_lib import (
     panic_dump,
     strip_thinking,
 )
+from lib.paths import conf_dir, conf_path
 from lib.tui import STEP, WARN, debug_print
 
 from weekend.config import OSAURUS_BASE_URL, ensure_server
@@ -34,17 +36,21 @@ LLM_API_TIMEOUT = int(os.environ.get("WEEKEND_LLM_TIMEOUT", "1800"))
 LLM_MAX_RETRIES = int(os.environ.get("WEEKEND_LLM_MAX_RETRIES", "5"))
 
 # Phase pipeline timeouts (seconds) — set high for slow models (qwopus).
-# phase_signals.json learns actual per-model latencies and tightens on reruns.
+# phase_signals.json records the observed per-(model, phase) latency and widens
+# the timeout for models that genuinely need it; it never goes below the
+# configured default.
 PHASE_TIMEOUT_WEATHER = int(os.environ.get("WEEKEND_PHASE_TIMEOUT", "900"))
 PHASE_TIMEOUT_EXTRACT = int(os.environ.get("WEEKEND_PHASE_TIMEOUT", "900"))
 PHASE_TIMEOUT_DRAFT = int(os.environ.get("WEEKEND_PHASE_TIMEOUT", "900"))
 PHASE_TIMEOUT_REFINE = int(os.environ.get("WEEKEND_PHASE_TIMEOUT", "900"))
 PHASE_TIMEOUT_STRUCTURE = int(os.environ.get("WEEKEND_PHASE_TIMEOUT", "900"))
 PHASE_MAX_RETRIES = int(os.environ.get("WEEKEND_PHASE_MAX_RETRIES", "3"))
+# Headroom over observed latency when persisting a learned phase timeout.
+PHASE_TIMEOUT_HEADROOM = 1.5
 # Tracked file — see the EVAL_SIGNALS_DIR note in eval/run.py. tests/conftest.py
 # redirects this to a tmp dir so `pytest` never dirties the working tree.
 PHASE_SIGNALS_DIR = Path(
-    os.environ.get("PHASE_SIGNALS_DIR", str(Path(__file__).parent.parent / "conf"))
+    os.environ.get("PHASE_SIGNALS_DIR", str(conf_dir()))
 )
 PHASE_SIGNALS_PATH = PHASE_SIGNALS_DIR / "phase_signals.json"
 
@@ -208,6 +214,7 @@ def _call_llm(
             return foundation_result
         print(f"{WARN} --use-foundation requested but Foundation Models unavailable")
 
+    started = time.monotonic()
     result = call_with_fallback(
         [target_model],
         call_fn,
@@ -217,9 +224,19 @@ def _call_llm(
         max_server_retries=max_retries - 1,
         label="Osaurus",
     )
+    elapsed = time.monotonic() - started
 
-    if result is not None and phase_key and _attempt[0] > 1:
-        model_signals[phase_key] = {"timeout": current_timeout}
+    if result is not None and phase_key:
+        # `current_timeout` is always exactly `base_timeout`, so persisting it
+        # restated the default and learned nothing. Record what the call
+        # actually cost, the way eval/run.py::_record_signal does.
+        previous = phase_signals.get("p95_latency", 0)
+        p95 = max(elapsed, previous * 0.95 + elapsed * 0.05) if previous else elapsed
+        model_signals[phase_key] = {
+            "p95_latency": round(p95, 1),
+            "samples": phase_signals.get("samples", 0) + 1,
+            "timeout": max(timeout, int(p95 * PHASE_TIMEOUT_HEADROOM)),
+        }
         _save_phase_signals(signals)
 
     if parse_json and result is None and last_content is not None:
@@ -296,7 +313,7 @@ def condense_weather(weather_str):
     return result if result else weather_str[:WEATHER_PREVIEW_LIMIT]
 
 
-EXTRACT_SIGNALS_PATH = Path(__file__).parent.parent / "conf" / "extract_signals.json"
+EXTRACT_SIGNALS_PATH = conf_path("extract_signals.json")
 DEFAULT_BATCH_SIZE = 3
 MAX_BATCH_SIZE = 5
 

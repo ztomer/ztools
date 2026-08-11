@@ -153,14 +153,14 @@ Known aliases:
 
 **Approach**: Task is "extract from provided JSON context" not "generate events".
 
-- Test data in `_EVAL_TEST_INPUTS` (config.py)
+- Test data in `conf/eval_inputs.toml` (`[test_inputs]`)
 - Pre-generated JSON with proper structure
 - Models score on accurate extraction, not generation
 - Consistent baseline across runs
 - Avoids "refuses to generate fictional events" problem
 
 ### Test Data Locations:
-- `config.py` lines 316-355: `_EVAL_TEST_INPUTS` dict
+- `conf/eval_inputs.toml`: `[test_inputs]` dict
 
 ---
 
@@ -354,13 +354,28 @@ python3 -m eval.benchmark_quality
 
 ## Filename / Rename Task
 
-Config-driven via `conf/config.toml`:
+Config-driven via `conf/config.toml` (the real values — this list must stay
+above the first `[table]` header or TOML nests it inside that table and
+`get_filename_models()` never sees it):
 ```toml
-filename_models = ["laguna-xs.2-mxfp4", "foundation"]
-prompts:
-  filename: "Output ONLY the filename string (no JSON, no code blocks).
-  Use lowercase, underscores for spaces, no special characters.
-  Keep it under 50 characters. TEXT: {text}"
+filename_models = [
+  "foundation",
+  "qwen-agentworld-35b-a3b-mxfp8",
+  "qwen3.6-35b-a3b-mxfp8-mtp",
+]
+
+[prompts]
+filename = """
+Output ONLY the filename string (no JSON, no code blocks).
+Use lowercase, underscores for spaces, no special characters.
+Keep it under 50 characters.
+
+TEXT: {text}
+"""
 ```
+
+Per-model templates in `conf/models/*.toml` may use either the positional `{}`
+slot or `{text}`; `rename.llm` renders them through `lib.prompt_render`, never
+`str.format()`.
 
 MLX backend: OsaurusAI MXFP8/4 quants (Gemma4 `gemma4`/`gemma4_unified`, Qwen `qwen3_5_moe`) load via `mlx-vlm` (git main) — proven for `gemma-4-E4B-it-8bit` and `Qwen3.6-35B-A3B-MXFP8-MTP`. Stock `mlx-lm` supports plain-text qwen3_5/gemma4 only and rejects the multimodal checkpoints. Model discovery (`find_any_working_mlx_vlm_model`) scans dirs and load-probes via `mlx-vlm`.

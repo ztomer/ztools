@@ -2,9 +2,19 @@ import json
 from pathlib import Path
 from typing import Dict, List
 
+from lib.paths import repo_path
 from lib.quality_models import ScoreCard
 
-BASELINE_PATH = Path(__file__).resolve().parent.parent / "docs" / "eval_baseline.json"
+_BASELINE_NAME = "eval_baseline.json"
+_docs_dir = repo_path("docs")
+# `docs/` is checkout-only — it is not packaged into the wheel — so an installed
+# run keeps its baseline in the user config dir instead of inventing a path
+# inside site-packages.
+BASELINE_PATH = (
+    _docs_dir / _BASELINE_NAME
+    if _docs_dir is not None
+    else Path.home() / ".config" / "ztools" / _BASELINE_NAME
+)
 
 
 def generate_report(results: List[ScoreCard]) -> str:

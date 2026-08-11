@@ -1,2 +1,15 @@
 #!/usr/bin/env bash
-exec "$HOME/Projects/routines/target/release/routines" model-eval "$@"
+# Thin shim onto the native Rust `routines` binary. Resolve it from PATH first
+# so this works on any machine; the author's build tree is only a fallback.
+set -euo pipefail
+
+SUB="model-eval"
+if command -v routines >/dev/null 2>&1; then
+  exec routines "$SUB" "$@"
+fi
+DEV_BUILD="$HOME/Projects/routines/target/release/routines"
+if [ -x "$DEV_BUILD" ]; then
+  exec "$DEV_BUILD" "$SUB" "$@"
+fi
+echo "✗ routines binary not found on PATH (and no dev build at $DEV_BUILD)" >&2
+exit 1

@@ -531,3 +531,52 @@ class TestValidateFileSummary:
         score, _ = validate_file_summary(items)
         # Uses "description" as fallback
         assert score > 50
+
+
+class TestSummaryMatchesItsPrompt:
+    """The validator must reward what the summarize prompt actually orders.
+
+    The prompt says: start with a `## Executive Summary` paragraph, and end every
+    bullet with `(@handle | Mon DD HH:MM)`. Counting only `user N` tokens and
+    requiring synthesis prose ABOVE the first header made a prompt-perfect
+    summary score 85 with "no user mentions" while `@user 1..3` padding scored
+    100 — the validator rewarded violating the prompt.
+    """
+
+    CONFORMANT = (
+        "## Executive Summary\n"
+        "The week's discussion centered on funding rounds and model releases, with\n"
+        "several threads converging on inference cost. Participants reported new\n"
+        "benchmarks and confirmed pricing changes across providers.\n\n"
+        "## Funding\n"
+        "- Series B closed at $40M, led by an existing investor "
+        "(@TechCrunch | Mar 15 08:00)\n"
+        "- Follow-on announced for infrastructure spend (@benedictevans | Mar 15 09:30)\n\n"
+        "## Models\n"
+        "- New model release confirmed with lower latency (@simonw | Mar 16 11:05)\n"
+        "- Community shared early evaluation numbers (@karpathy | Mar 16 14:20)\n"
+    )
+
+    def test_prompt_conformant_summary_reaches_ok(self):
+        from lib.validators.text_validator import validate_summary
+
+        score, failures = validate_summary(self.CONFORMANT)
+        assert score >= 90, f"{score}: {failures}"
+        assert "no user mentions" not in failures
+
+    def test_user_n_padding_does_not_outscore_real_handles(self):
+        from lib.validators.text_validator import validate_summary
+
+        padded = self.CONFORMANT + "\n- @user 1 responded, @user 2 asked, @user 3 confirmed\n"
+        assert validate_summary(padded)[0] <= validate_summary(self.CONFORMANT)[0]
+
+    def test_real_handles_are_counted_distinctly(self):
+        from lib.validators.text_validator import count_distinct_users
+
+        assert count_distinct_users("(@TechCrunch | Mar 15) and (@simonw | Mar 16)") == 2
+        # Repeating one handle is not extra coverage.
+        assert count_distinct_users("@simonw @simonw @simonw") == 1
+        # The legacy synthetic-timeline form still counts.
+        assert count_distinct_users("user 1 asked, user 2 replied") == 2
+        # Email and domain tokens are not people.
+        assert count_distinct_users("contact support@example.com or sales@example.com") == 0

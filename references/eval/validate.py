@@ -4,6 +4,8 @@ Validation module for model evaluation.
 """
 
 import json
+import re
+from pathlib import Path
 from typing import Any, Tuple
 
 from lib.validators_lib import has_text_headers
@@ -19,13 +21,38 @@ def safe_content(result: dict) -> str:
     return content
 
 
+# A description that is essentially the file's own name re-spaced ("config
+# loader" for config_loader.py) is filename inference, not file reading, which
+# is precisely what this task exists to detect.
+_GENERIC_DESC_RE = re.compile(
+    r"^(a|an|the)?\s*(python|shell|bash|config(uration)?|test|helper|utility|source)?\s*"
+    r"(script|file|module|class|program|code)\.?$"
+)
+
+
+def _is_filename_echo(path: str, desc_lower: str) -> bool:
+    """True when the description adds nothing beyond the filename itself."""
+    stem = Path(path).stem.replace("_", " ").replace("-", " ").strip().lower()
+    # Short stems ("a", "cli") match as substrings inside ordinary prose, so
+    # require a real word-boundary match on a stem long enough to be meaningful.
+    if len(stem) < 4:
+        return False
+    if not re.search(rf"\b{re.escape(stem)}\b", desc_lower):
+        return False
+    return len(desc_lower) <= len(stem) + 25
+
+
 def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
     """Validate file summary quality - checks for ACTUAL content detail, not filename inference.
 
-    STRICT checks:
-    - No filename-only summaries (must describe what file does)
-    - No generic patterns like "a python script"
-    - Must have actionable content about file purpose/function
+    Checks, in the order they are applied per item:
+    - the description must not be a generic placeholder ("a python script")
+    - it must not merely restate the file's own name ("config loader" for
+      config_loader.py) with nothing added
+    - it must mention what the file actually does (content verbs)
+
+    An item failing either of the first two is not counted as detailed, whatever
+    verbs it happens to contain.
     """
     if not data:
         return 0, "empty response"
@@ -38,6 +65,8 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
             failures.append(f"only {num_files} files")
 
         detailed_count = 0
+        generic_count = 0
+        echo_count = 0
         content_verbs = [
             "parse",
             "validat",
@@ -70,6 +99,14 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
                 continue
             desc_lower = str(desc).lower()
 
+            desc_stripped = desc_lower.strip()
+            if _GENERIC_DESC_RE.match(desc_stripped):
+                generic_count += 1
+                continue
+            if _is_filename_echo(path, desc_stripped):
+                echo_count += 1
+                continue
+
             has_content = any(kw in desc_lower for kw in content_verbs)
             if has_content:
                 detailed_count += 1
@@ -87,6 +124,11 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
         else:
             score = 25
             failures.append("no content details")
+
+        if generic_count:
+            failures.append(f"{generic_count} generic description(s)")
+        if echo_count:
+            failures.append(f"{echo_count} filename-only description(s)")
 
         return min(100, score), "; ".join(failures) if failures else ""
 

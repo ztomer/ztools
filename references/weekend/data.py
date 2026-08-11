@@ -89,6 +89,9 @@ def get_weekend_dates_string(friday, sunday):
     return f"{friday.strftime('%B %d')} to {sunday.strftime('%B %d, %Y')}"
 
 
+FORECAST_UNAVAILABLE = "Forecast: unavailable (weather fetch failed) - do not weight weather."
+
+
 def fetch_weather(friday, sunday):
     try:
         url = WEATHER_API_URL
@@ -120,7 +123,10 @@ def fetch_weather(friday, sunday):
         return FORECAST_HEADER + "\n".join(forecasts)
     except Exception as e:
         print(f"{WARN} Weather fetch failed: {e}", file=sys.stderr)
-        return "Forecast: Precipitation expected (fallback due to error)."
+        # Never invent a forecast: a fabricated "Precipitation expected" steered
+        # the whole plan indoors on a sunny weekend, with one stderr line as the
+        # only trace. Say the forecast is missing and let the prompt weight it.
+        return FORECAST_UNAVAILABLE
 
 
 def _seasonal_keywords(month_name: str) -> list[str]:
@@ -195,7 +201,10 @@ def fetch_transient_events(dates_str, year, month_name):
         return f"{corpus}\n{followed}" if followed else corpus
     except Exception as e:
         print(f"{WARN} Transient event fetch failed: {e}", file=sys.stderr)
-        return "Error fetching transient events."
+        # An empty supply, not a sentence: the caller filters and counts events,
+        # and "Error fetching transient events." used to be handed to the model
+        # as the event list it was told to plan from.
+        return ""
 
 
 def fetch_fixed_venues(year, month_name):
@@ -225,7 +234,7 @@ def fetch_fixed_venues(year, month_name):
         return _clean_search_results(all_results, "Venue/Exhibit", max_body=MAX_BODY_LENGTH)
     except Exception as e:
         print(f"{WARN} Fixed venue fetch failed: {e}", file=sys.stderr)
-        return "Error fetching fixed venues."
+        return ""
 
 
 def scrape_review_score(place_name):

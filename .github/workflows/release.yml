@@ -1,9 +1,16 @@
 name: Release
 
-# Builds a clean source tarball for a pushed tag and computes its sha256 so the
-# Homebrew formula in ztomer/homebrew-tap can be updated. The tarball layout
-# matches what GitHub auto-generates for a tag (ztools-<version>/ prefix), which
-# Homebrew strips automatically.
+# Computes the sha256 of the tarball the Homebrew formula actually points at —
+# GitHub's auto-generated source archive for the tag — and updates the formula
+# in ztomer/homebrew-tap to match.
+#
+# It used to build its OWN curated tarball and shasum THAT while the formula URL
+# named the auto-generated archive: two different files, so `brew install`
+# failed checksum verification on every release. `tools/release.sh` (the manual
+# path) already shasums the archive, and both paths write the same formula — so
+# they must agree on which artifact is canonical. The archive is: it exists for
+# every tag with no upload step, and Homebrew strips its `ztools-<version>/`
+# prefix automatically.
 on:
   push:
     tags:
@@ -27,44 +34,30 @@ jobs:
         id: ver
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Build source tarball (GitHub-style prefix)
-        env:
-          VERSION: ${{ steps.ver.outputs.version }}
-        run: |
-          python3 - <<PY
-          import tarfile, os
-          VERSION = os.environ["VERSION"]
-          EXCL = {'.git','.venv','__pycache__','.mypy_cache','.pytest_cache',
-                  '.ruff_cache','dist','build','logs','eval_outputs','node_modules',
-                  '.github','.githooks','tests','benchmarks'}
-          def keep(p):
-              return not any(x in EXCL for x in p.split('/'))
-          with tarfile.open(f"ztools-{VERSION}.tar.gz", "w:gz") as t:
-              for root, dirs, files in os.walk('.'):
-                  if not keep(root):
-                      dirs[:] = [d for d in dirs if keep(os.path.join(root, d))]
-                      continue
-                  for f in files:
-                      fp = os.path.join(root, f)
-                      if keep(fp):
-                          t.add(fp, arcname=f"ztools-{VERSION}/{fp}")
-          print("built")
-          PY
-
-      - name: Compute sha256
+      - name: Compute sha256 of the published tarball
         id: sha
-        run: echo "sha256=$(shasum -a 256 ztools-${{ steps.ver.outputs.version }}.tar.gz | awk '{print $1}')" >> "$GITHUB_OUTPUT"
-
-      - name: Upload tarball to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ztools-${{ steps.ver.outputs.version }}.tar.gz
+        env:
+          TARBALL_URL: https://github.com/${{ github.repository }}/archive/refs/tags/${{ github.ref_name }}.tar.gz
+        run: |
+          set -euo pipefail
+          # The archive is generated on demand; retry so a cold first request
+          # cannot silently yield an empty file and a checksum for nothing.
+          for attempt in 1 2 3 4 5; do
+            if curl -fsSL "$TARBALL_URL" -o release.tar.gz && [ -s release.tar.gz ]; then
+              break
+            fi
+            echo "attempt $attempt: tarball not ready yet, retrying..." >&2
+            sleep 5
+          done
+          [ -s release.tar.gz ] || { echo "Could not download $TARBALL_URL" >&2; exit 1; }
+          tar -tzf release.tar.gz > /dev/null  # it must be a real tarball
+          echo "sha256=$(shasum -a 256 release.tar.gz | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
       - name: Report sha256
         run: |
           echo "Tarball sha256: ${{ steps.sha.outputs.sha256 }}"
           echo "Update ztools.rb:"
-          echo "  url \"https://github.com/ztomer/ztools/archive/refs/tags/v${{ steps.ver.outputs.version }}.tar.gz\""
+          echo "  url \"https://github.com/${{ github.repository }}/archive/refs/tags/${{ github.ref_name }}.tar.gz\""
           echo "  sha256 \"${{ steps.sha.outputs.sha256 }}\""
 
       - name: Upgrade Homebrew Tap

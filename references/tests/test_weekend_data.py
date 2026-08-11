@@ -59,7 +59,11 @@ class TestFetchWeather:
             s = mock_session.return_value.__enter__.return_value
             s.get.side_effect = Exception("network")
             result = fetch_weather(friday, sunday)
-        assert "fallback" in result.lower() or "Precipitation" in result
+        # An honest "unavailable" marker, never a fabricated forecast: the old
+        # fallback claimed "Precipitation expected" and steered the whole plan
+        # indoors on a sunny weekend.
+        assert "unavailable" in result.lower()
+        assert "precipitation expected" not in result.lower()
         out = capsys.readouterr()
         assert "Weather fetch failed" in out.err
 
@@ -139,7 +143,8 @@ class TestFetchTransientEvents:
         fake_ddgs.return_value.text.return_value = [Failing()]
         with patch("weekend.data.DDGS", fake_ddgs):
             result = fetch_transient_events("April 10-12", 2026, "April")
-        assert "Error" in result
+        # Empty supply, not a sentence handed to the model as event data.
+        assert result == ""
         out = capsys.readouterr()
         assert "Transient event fetch failed" in out.err
 
@@ -252,7 +257,8 @@ class TestFetchFixedVenues:
         fake_ddgs.return_value.text.return_value = [Failing()]
         with patch("weekend.data.DDGS", fake_ddgs):
             result = fetch_fixed_venues(2026, "April")
-        assert "Error" in result
+        # Empty supply, not a sentence handed to the model as event data.
+        assert result == ""
         out = capsys.readouterr()
         assert "Fixed venue fetch failed" in out.err
 
@@ -322,3 +328,37 @@ class TestScrapeReviewScore:
         with patch("weekend.data.DDGS", fake_ddgs), patch("weekend.data.time.sleep"):
             result = scrape_review_score("Place")
         assert result == 0.0
+
+
+class TestFetchFailuresAreEmptyNotSentences:
+    """Fetch failures must not become prompt data.
+
+    `fetch_transient_events` returned the literal string "Error fetching
+    transient events.", which flowed into "Available events: ..." and the model
+    was asked for a ten-activity weekend anyway — a plan invented from nothing,
+    with one stderr WARN minutes earlier as the only trace. Same for venues, and
+    the weather fallback fabricated "Precipitation expected" on error.
+    """
+
+    def test_transient_fetch_failure_returns_empty(self):
+        import weekend.data as wd
+
+        with patch("weekend.data.DDGS", side_effect=RuntimeError("network down")):
+            assert wd.fetch_transient_events("Aug 14-16", "2026", "August") == ""
+
+    def test_venue_fetch_failure_returns_empty(self):
+        import weekend.data as wd
+
+        with patch("weekend.data.DDGS", side_effect=RuntimeError("network down")):
+            assert wd.fetch_fixed_venues("2026", "August") == ""
+
+    def test_weather_failure_says_unavailable_instead_of_inventing_rain(self):
+        import datetime
+
+        import weekend.data as wd
+
+        with patch("weekend.data.requests.Session", side_effect=RuntimeError("network down")):
+            result = wd.fetch_weather(datetime.date(2026, 8, 14), datetime.date(2026, 8, 16))
+        assert result == wd.FORECAST_UNAVAILABLE
+        assert "unavailable" in result.lower()
+        assert "precipitation expected" not in result.lower()

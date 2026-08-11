@@ -16,6 +16,8 @@ from datetime import date
 from pathlib import Path
 from typing import Iterable
 
+from lib.paths import conf_path
+
 ROOT = Path(__file__).resolve().parent.parent
 
 _MONTHS = (
@@ -135,7 +137,7 @@ def check_model_prompts_render(models_dir: Path | None = None) -> list[str]:
     from lib.prompt_render import PromptRenderError, unrendered_placeholders
     from weekend.prompts import _render_model_prompt
 
-    models_dir = models_dir or (ROOT / "conf" / "models")
+    models_dir = models_dir or conf_path("models")
     failures = []
     for path in sorted(models_dir.glob("*.toml")):
         cfg = tomllib.loads(path.read_text())
@@ -165,7 +167,7 @@ def check_declared_config_keys_are_read(
     """C13. A declared config key with no reader silently misdescribes the tool."""
     import tomllib
 
-    config_path = config_path or (ROOT / "conf" / "twitter.toml")
+    config_path = config_path or conf_path("twitter.toml")
     search_dirs = list(search_dirs or [ROOT / "twitter", ROOT / "lib", ROOT / "tui"])
     sources = "\n".join(
         p.read_text(errors="ignore")

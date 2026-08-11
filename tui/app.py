@@ -12,20 +12,23 @@ from textual.widgets import (
 
 from tui.app_actions import (
     action_refresh_models,
-    add_scheduler_task,
     apply_model_parameters,
     load_history_item,
     load_image_preview,
     on_mount,
     refresh_history_archive,
-    refresh_scheduler_display,
-    remove_scheduler_task,
     reset_model_parameters,
     run_image_renamer,
     run_model_evaluator,
-    run_scheduled_task,
     run_twitter_summarizer,
     run_weekend_planner,
+)
+from tui.app_scheduler import (
+    add_scheduler_task,
+    refresh_scheduler_display,
+    remove_scheduler_task,
+    run_scheduled_task,
+    scheduled_task_command,
     scheduler_loop,
 )
 from tui.app_views import (
@@ -303,6 +306,7 @@ for cls in [ZToolsApp]:
     cls.reset_model_parameters = reset_model_parameters
     cls.scheduler_loop = scheduler_loop
     cls.run_scheduled_task = run_scheduled_task
+    cls.scheduled_task_command = scheduled_task_command
     cls.refresh_scheduler_display = refresh_scheduler_display
     cls.add_scheduler_task = add_scheduler_task
     cls.remove_scheduler_task = remove_scheduler_task

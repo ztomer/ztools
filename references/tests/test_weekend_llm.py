@@ -470,3 +470,51 @@ class TestPhaseFunctions:
             )
         assert t == mock_transient
         assert f == {}
+
+
+class TestPhaseTimeoutLearning:
+    """The learned phase timeout must reflect real latency.
+
+    `current_timeout` was only ever assigned `base_timeout`, so the persisted
+    signal restated the configured default on every run: the file grew, nothing
+    was learned, and the comment claimed adaptivity the code had lost.
+    """
+
+    def _run(self, tmp_path, elapsed, seed=None):
+        import json as _json
+
+        import weekend.llm as wl
+
+        signals_path = tmp_path / "phase_signals.json"
+        if seed is not None:
+            signals_path.write_text(_json.dumps(seed))
+
+        clock = iter([0.0, elapsed])
+
+        with (
+            patch.object(wl, "PHASE_SIGNALS_PATH", signals_path),
+            patch.object(wl, "get_best_model", return_value="m1"),
+            patch.object(wl.time, "monotonic", lambda: next(clock)),
+            patch.object(wl, "call_with_fallback", return_value="ok"),
+        ):
+            wl._call_llm("sys", "usr", timeout=900, phase_key="draft", parse_json=False)
+
+        return _json.loads(signals_path.read_text())
+
+    def test_slow_phase_widens_the_timeout(self, tmp_path):
+        saved = self._run(tmp_path, elapsed=1200.0)["m1"]["draft"]
+        assert saved["p95_latency"] == 1200.0
+        assert saved["timeout"] == 1800  # 1200 * 1.5, above the 900 default
+        assert saved["samples"] == 1
+
+    def test_fast_phase_never_drops_below_the_configured_default(self, tmp_path):
+        saved = self._run(tmp_path, elapsed=12.0)["m1"]["draft"]
+        assert saved["p95_latency"] == 12.0
+        assert saved["timeout"] == 900
+
+    def test_samples_accumulate_across_runs(self, tmp_path):
+        seed = {"m1": {"draft": {"p95_latency": 1000.0, "samples": 3, "timeout": 1500}}}
+        saved = self._run(tmp_path, elapsed=20.0, seed=seed)["m1"]["draft"]
+        assert saved["samples"] == 4
+        # A single fast run does not erase the slow history.
+        assert saved["p95_latency"] > 900
