@@ -407,3 +407,24 @@ missing key sees a successful response with nothing in it.
 Ornith has no `conf/models/*.toml`, so it currently runs on the built-in
 fallback prompts. Any fix belongs there, and needs to make the model STOP
 reasoning rather than give it more room.
+
+
+## Decoding policy for the eval: greedy, decided 2026-08-12
+
+`ev` pins temperature to 0 (`EVAL_TEMPERATURE`). Production runs at 0.1, so this
+is deliberately NOT production-identical, and the reason is comparability: with
+sampling on, ornith scored 100% and then 0% on an unchanged `image_rename`
+across two runs, and a leaderboard built on that ranks the sampler.
+
+The cost of the choice, recorded so it is not rediscovered as a surprise:
+greedy scored ornith WORSE on 4 of 11 shared tasks than sampling did
+(`image_rename` and `weekend_transient_mixed` both 100 -> 0). Greedy decoding is
+prone to repetition loops, which is plausibly what feeds ornith's unbounded
+reasoning. So a greedy-sensitive model can rank below where it would ship.
+
+What this means in practice:
+- Cross-model rankings and before/after prompt comparisons are valid, because
+  every model is measured the same way.
+- ABSOLUTE scores are not a prediction of production quality.
+- Re-validate the winning model at temperature 0.1 before writing it into
+  `best_models`, since that is the setting it will actually run under.
