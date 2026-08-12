@@ -15,7 +15,13 @@ from lib.osaurus_lib import call
 from lib.tui import FAIL, STEP, WARN, console
 from lib.validators_lib import get_source_matching_details
 
-from eval.failures import FAIL_CONTENT, FAIL_INFRA, FAIL_NONE, _classify_failure
+from eval.failures import (
+    FAIL_CONTENT,
+    FAIL_INFRA,
+    FAIL_NONE,
+    FAIL_TIMEOUT,
+    _classify_failure,
+)
 from eval.prefill import measure_prefill_rate, record_prefill_rate
 from eval.signals import (
     DEFAULT_EVAL_TIMEOUT,
@@ -26,6 +32,11 @@ from eval.tasks_core import TASKS, _extract_items_from_text
 from eval.validate import safe_content
 
 MAX_RETRIES = int(os.environ.get("EVAL_MAX_RETRIES", "1"))
+# Consecutive INFRA/TIMEOUT failures before abandoning a model. Chosen from
+# observation, not taste: a model that can serve at all recovers within a task
+# or two, while qwen3.6-35b returned 46 straight infrastructure failures without
+# a single success.
+MAX_CONSECUTIVE_INFRA_FAILURES = int(os.environ.get("EVAL_MAX_INFRA_FAILURES", "4"))
 # Greedy decoding, because a leaderboard has to be reproducible.
 #
 # The eval inherited DEFAULT_TEMPERATURE (0.1) and never pinned it, so every run
@@ -259,6 +270,8 @@ def run_eval(
         if rate:
             console.print(f"{STEP} {model} prefill: {rate:,.0f} chars/sec")
 
+    consecutive_infra = 0
+
     for task_name, task_cfg in tasks.items():
         if "messages" not in task_cfg:
             console.print(f"{WARN} Skipping '{task_name}' (no messages key)")
@@ -345,6 +358,26 @@ def run_eval(
             had_retries=first_attempt_failed,
             is_parse_failure=(category == "PARSE"),
         )
+
+        # Stop once the SERVER, not the model, is clearly the problem. A model
+        # too large for the host answers every request with HTTP 503 "at
+        # inference capacity" or nothing at all, and grinding through the rest
+        # of the suite only produces more zeros: qwen3.6-35b took 3h09m to
+        # return 23 of them, 34 x 503 and 12 timeouts, on a host where the 27b
+        # sibling ran fine. Aborting says "cannot run here" in minutes and
+        # leaves the remaining GPU time for models that can.
+        if category in (FAIL_INFRA, FAIL_TIMEOUT):
+            consecutive_infra += 1
+            if consecutive_infra >= MAX_CONSECUTIVE_INFRA_FAILURES:
+                console.print(
+                    f"{FAIL} Abandoning {model}: {consecutive_infra} consecutive "
+                    f"infrastructure failures ({best_failure[:60]}). The server "
+                    f"cannot serve this model on this host -- this is not a "
+                    f"quality result and must not be read as one."
+                )
+                break
+        else:
+            consecutive_infra = 0
 
         status_symbol = STEP if status == "ok" else (WARN if status == "partial" else FAIL)
         category_tag = f" [{category}]" if category else ""

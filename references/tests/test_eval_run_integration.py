@@ -808,3 +808,72 @@ class TestQualityResultsFormat:
         results = _quality_results_to_eval_format([sc], "m")
         assert "e1" in results[0]["failure_reason"]
         assert "e2" in results[0]["failure_reason"]
+
+
+class TestModelIsAbandonedWhenTheServerCannotServe:
+    """23 tasks of identical infrastructure failures is not a quality result.
+
+    qwen3.6-35b spent 3h09m returning 23 zeros -- 34 x HTTP 503 "at inference
+    capacity" and 12 timeouts -- on a host where its 27b sibling ran fine. The
+    503s were leaked server slots: a task exceeds the client timeout, the client
+    abandons it, the server keeps the slot, and the next task takes another one.
+    After twelve, everything 503s. Stopping early both saves the GPU time and
+    keeps a server failure from being recorded as a model's score.
+    """
+
+    def _infra_tasks(self, n):
+        return {
+            f"t{i}": {
+                "messages": [{"role": "user", "content": "hi"}],
+                "parse_json": False,
+                "validator": lambda *a, **k: 100,
+            }
+            for i in range(n)
+        }
+
+    def test_it_stops_after_repeated_infrastructure_failures(self, mock_llm):
+        import eval.run as er
+
+        calls = {"n": 0}
+
+        def always_503(*args, **kwargs):
+            calls["n"] += 1
+            return {"content": None, "error": "HTTP 503: Server is at inference capacity"}
+
+        with patch.object(er, "call", always_503), patch.object(er, "MAX_RETRIES", 0):
+            results = er.run_eval(
+                "mock-model", tasks=self._infra_tasks(20), verbose=False, measure_prefill=False
+            )
+
+        assert len(results) <= er.MAX_CONSECUTIVE_INFRA_FAILURES, (
+            f"ran {len(results)} tasks against a server that cannot serve"
+        )
+        assert calls["n"] < 20, "kept firing requests at an overloaded server"
+
+    def test_a_recovering_server_is_not_abandoned(self, mock_llm):
+        """Intermittent blips must not condemn a model that keeps working.
+
+        Interspersed, not a single failure: with one blip the counter never
+        approaches the threshold whether or not it resets, so the test cannot
+        tell the two apart. Alternating failures exceed the threshold in TOTAL
+        while never being consecutive, which is exactly the distinction.
+        """
+        import eval.run as er
+
+        state = {"n": 0}
+
+        def alternating(*args, **kwargs):
+            state["n"] += 1
+            if state["n"] % 2 == 1:
+                return {"content": None, "error": "HTTP 503: Server is at inference capacity"}
+            return {"content": "[]", "parsed": [], "time": 0.1}
+
+        with patch.object(er, "call", alternating), patch.object(er, "MAX_RETRIES", 0):
+            results = er.run_eval(
+                "mock-model", tasks=self._infra_tasks(8), verbose=False, measure_prefill=False
+            )
+
+        assert len(results) == 8, (
+            "intermittent server blips abandoned a model that kept working -- "
+            "the consecutive counter is not resetting on success"
+        )

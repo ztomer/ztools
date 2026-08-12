@@ -4,6 +4,8 @@ Failure diagnosis module for model evaluation.
 Classifies WHY a model result failed.
 """
 
+import re
+
 from lib.validators_lib import has_item_details
 
 from eval.validate import safe_content
@@ -14,6 +16,13 @@ FAIL_PARSE = "PARSE"
 FAIL_FORMAT = "FORMAT"
 FAIL_CONTENT = "CONTENT"
 FAIL_NONE = None
+
+# HTTP 5xx, or an explicit overload marker. Matched on the error string because
+# that is all the transport hands back once a request has failed.
+_SERVER_ERROR_RE = re.compile(
+    r"HTTP\s+5\d\d|server_overloaded|inference capacity|service unavailable",
+    re.IGNORECASE,
+)
 
 
 def _classify_failure(result: dict, task_cfg: dict, score: int, failure_reason: str) -> dict:
@@ -47,6 +56,18 @@ def _classify_failure(result: dict, task_cfg: dict, score: int, failure_reason: 
             "category": FAIL_INFRA,
             "reason": error,
             "evidence": "Server unreachable",
+        }
+
+    # An HTTP 5xx is the SERVER failing, never the model producing bad output.
+    # These were landing in FORMAT, so qwen3.6-35b's 34 "HTTP 503: Server is at
+    # inference capacity" responses were recorded as 34 formatting failures --
+    # a server outage written down as a model's quality score, and invisible to
+    # anything looking for infrastructure trouble.
+    if _SERVER_ERROR_RE.search(error):
+        return {
+            "category": FAIL_INFRA,
+            "reason": error,
+            "evidence": "Server returned 5xx; the model never got to answer",
         }
 
     if "Timeout" in error or "timed out" in error.lower():
