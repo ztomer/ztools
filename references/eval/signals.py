@@ -38,7 +38,50 @@ def _save_eval_signals(signals):
     EVAL_SIGNALS_PATH.write_text(json.dumps(signals, indent=2, sort_keys=True))
 
 
-def _effective_timeout(model: str, task_name: str) -> int:
+# A POLICY ceiling, not an estimate: the point past which a request is assumed
+# wedged rather than slow. It is deliberately not derived, because its job is to
+# bound the damage when the measurements are wrong. Everything else in this
+# calculation is measured on the host.
+MAX_EVAL_TIMEOUT = int(os.environ.get("EVAL_MAX_TIMEOUT", "7200"))
+
+
+def _derived_timeout(model: str, prompt_chars: int, max_tokens: int) -> int:
+    """How long this model plausibly needs: load + ingest + generate.
+
+    A flat 900s killed qwen3.6-35b on every task. The arithmetic says why:
+    ingesting the largest eval prompt costs it ~228s, but generating a
+    max_tokens=16000 answer costs 500s+ on top, and the ceiling cut in before it
+    finished. Each abandoned request kept its server slot, twelve of those
+    exhausted the pool, and every model after it got HTTP 503 -- so one
+    hand-picked constant took out the rest of the sweep.
+
+    Both rates are measured per model by the prefill probe. When a model has
+    never been measured the caller keeps the old floor, since guessing fast here
+    means killing a request that was working.
+    """
+    caps = (_load_eval_signals().get(model) or {}).get("_capabilities") or {}
+    prefill = caps.get("prefill_chars_per_sec")
+    decode = caps.get("decode_tokens_per_sec")
+    cold_start = caps.get("cold_start_seconds")
+    # Every term measured, or no answer at all. Filling a missing one with a
+    # plausible constant is how a guess ends up wearing a measurement's
+    # authority -- the caller keeps its documented floor instead.
+    if not prefill or not decode or not cold_start:
+        return 0
+    seconds = cold_start + prompt_chars / prefill + max_tokens / decode
+    return int(min(seconds * TIMEOUT_SAFETY_FACTOR, MAX_EVAL_TIMEOUT))
+
+
+# Headroom over the measured estimate. Chosen, not measured -- deriving it would
+# need a variance estimate this has no samples for -- so it is kept as a single
+# explicit multiplier rather than smuggled into the terms above. It matches the
+# factor the learned-p95 path has always applied.
+TIMEOUT_SAFETY_FACTOR = float(os.environ.get("EVAL_TIMEOUT_SAFETY", "1.5"))
+
+
+def _effective_timeout(
+    model: str, task_name: str, prompt_chars: int = 0, max_tokens: int = 0
+) -> int:
     signals = _load_eval_signals()
     task_signals = signals.get(model, {}).get(task_name, {})
     learned = task_signals.get("timeout", 0)
@@ -46,7 +89,8 @@ def _effective_timeout(model: str, task_name: str) -> int:
         configured = get_timeout(Task(task_name))
     except Exception:
         configured = DEFAULT_EVAL_TIMEOUT
-    return max(learned, configured, DEFAULT_EVAL_TIMEOUT)
+    derived = _derived_timeout(model, prompt_chars, max_tokens)
+    return max(learned, configured, DEFAULT_EVAL_TIMEOUT, derived)
 
 
 def _record_signal(

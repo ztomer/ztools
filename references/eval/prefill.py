@@ -44,6 +44,9 @@ _PROBE_LINE = "[@SomeHandle | 08:15]: A reasonably typical sentence about a laun
 # well above any real model and well below any cache hit, and only ever
 # discards a measurement -- it never invents one.
 MAX_PLAUSIBLE_PREFILL_RATE = int(os.environ.get("EVAL_MAX_PLAUSIBLE_PREFILL", "20000"))
+# The warmup asks for enough tokens to time generation, not just to load weights.
+WARMUP_TOKENS = int(os.environ.get("EVAL_WARMUP_TOKENS", "64"))
+WARMUP_PROMPT = "Count from one to twenty in words, one per line."
 
 
 def _probe_size_for(model: str) -> int:
@@ -82,11 +85,38 @@ def measure_prefill_rate(model: str, host: str, port: int, transport=None) -> fl
     # chars/sec against ornith-9b's 1,803, a difference that was almost entirely
     # weights moving into memory. A tiny prompt loads the model without
     # meaningfully warming any prefix the real probe will reuse.
+    # THREE calls, one quantity each. Sharing a call between two measurements is
+    # how every previous version of this got a wrong number: whole-call timing
+    # blamed prefill for decode, and an unwarmed probe blamed prefill for model
+    # load. Timing the load call for decode speed would have repeated the same
+    # error one function later.
+    #
+    # 1. LOAD. The first request after a server restart pays the cold start.
+    #    Timing it turns COLD_START into a measurement instead of a guess.
     try:
-        send(model, messages=[{"role": "user", "content": "hi"}],
-             host=host, port=port, max_tokens=1, timeout=DEFAULT_EVAL_TIMEOUT)
+        load_started = time.monotonic()
+        loaded = send(model, messages=[{"role": "user", "content": WARMUP_PROMPT}],
+                      host=host, port=port, max_tokens=1,
+                      timeout=DEFAULT_EVAL_TIMEOUT)
+        load_elapsed = time.monotonic() - load_started
     except Exception:
         return None
+    if not loaded or loaded.get("error"):
+        return None
+    _record_cold_start(model, load_elapsed)
+
+    # 2. DECODE, now that the weights are resident. Same tiny prompt, so
+    #    ingestion is negligible and the elapsed time is generation.
+    try:
+        decode_started = time.monotonic()
+        generated = send(model, messages=[{"role": "user", "content": WARMUP_PROMPT}],
+                         host=host, port=port, max_tokens=WARMUP_TOKENS,
+                         timeout=DEFAULT_EVAL_TIMEOUT)
+        decode_elapsed = time.monotonic() - decode_started
+    except Exception:
+        generated, decode_elapsed = None, 0
+    if generated and not generated.get("error") and decode_elapsed > 0:
+        _record_decode_rate(model, WARMUP_TOKENS / decode_elapsed)
 
     # The nonce goes FIRST: a prefix cache matches from the start of the prompt,
     # so a leading unique token makes every byte after it new work. Identical
@@ -115,6 +145,36 @@ def measure_prefill_rate(model: str, host: str, port: int, transport=None) -> fl
     if rate > MAX_PLAUSIBLE_PREFILL_RATE:
         return None
     return round(rate, 1)
+
+
+def _record_cold_start(model: str, seconds: float) -> None:
+    """Store how long this model takes to become ready, measured not assumed.
+
+    The SLOWEST observation wins, as with the rates: a timeout has to cover a
+    cold load from disk, not a lucky warm one.
+    """
+    if not seconds or seconds <= 0:
+        return
+    signals = _load_eval_signals()
+    caps = signals.setdefault(model, {}).setdefault("_capabilities", {})
+    previous = caps.get("cold_start_seconds")
+    caps["cold_start_seconds"] = round(max(previous, seconds) if previous else seconds, 2)
+    _save_eval_signals(signals)
+
+
+def _record_decode_rate(model: str, rate: float) -> None:
+    """Store measured generation speed (tokens/sec) alongside the prefill rate.
+
+    Slowest observation wins, for the same reason: a timeout has to hold on a
+    bad run rather than a lucky one.
+    """
+    if not rate or rate <= 0:
+        return
+    signals = _load_eval_signals()
+    caps = signals.setdefault(model, {}).setdefault("_capabilities", {})
+    previous = caps.get("decode_tokens_per_sec")
+    caps["decode_tokens_per_sec"] = round(min(previous, rate) if previous else rate, 2)
+    _save_eval_signals(signals)
 
 
 def record_prefill_rate(model: str, rate: float | None) -> None:

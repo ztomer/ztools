@@ -44,7 +44,9 @@ class TestProbeIsolatesPrefill:
         assert captured["chars"] > 1000, "too small a probe is dominated by request overhead"
 
     def test_rate_is_probe_size_over_elapsed_time(self, monkeypatch):
-        clock = iter([100.0, 102.0])  # 2 seconds elapsed
+        # Four readings now: the warmup is timed too (it measures decode), then
+        # the probe. The probe is the second pair -- 2 seconds elapsed.
+        clock = iter([0.0, 9.0, 50.0, 51.0, 100.0, 102.0])
         monkeypatch.setattr(eval_prefill.time, "monotonic", lambda: next(clock))
         monkeypatch.setattr(eval_prefill, "PREFILL_PROBE_CHARS", 20000)
         monkeypatch.setattr(eval_prefill, "call", lambda *a, **k: {"content": "x"})
@@ -155,7 +157,9 @@ class TestProbeDefeatsThePrefixCache:
         """Identical filler read 130x faster than the same model measured honestly."""
         sent = []
         monkeypatch.setattr(
-            eval_prefill, "call", lambda m, messages, **k: sent.append(messages[0]["content"])
+            eval_prefill,
+            "call",
+            lambda m, messages, **k: (sent.append(messages[0]["content"]), {"content": "x"})[1],
         )
         monkeypatch.setattr(eval_prefill, "probe_context_window", lambda m: None)
 
@@ -164,37 +168,45 @@ class TestProbeDefeatsThePrefixCache:
 
         # sent = [warmup, probe, warmup, probe]; comparing sent[0] to sent[1]
         # would compare a warmup against a probe and pass without testing anything.
-        assert sent[1] != sent[3], "a repeated probe is served from the prefix cache"
+        probes = [c for c in sent if len(c) > 1000]
+        assert len(probes) == 2, f"expected two probe prompts, saw {len(probes)}"
+        assert probes[0] != probes[1], "a repeated probe is served from the prefix cache"
 
     def test_the_difference_is_at_the_start_of_the_prompt(self, monkeypatch):
         """A prefix cache keys on the prefix, so a trailing nonce would not help."""
         sent = []
         monkeypatch.setattr(
-            eval_prefill, "call", lambda m, messages, **k: sent.append(messages[0]["content"])
+            eval_prefill,
+            "call",
+            lambda m, messages, **k: (sent.append(messages[0]["content"]), {"content": "x"})[1],
         )
         monkeypatch.setattr(eval_prefill, "probe_context_window", lambda m: None)
 
         eval_prefill.measure_prefill_rate("m", "localhost", 1337)
         eval_prefill.measure_prefill_rate("m", "localhost", 1337)
 
-        assert sent[1][:40] != sent[3][:40], "the probes share a cacheable prefix"
+        probes = [c for c in sent if len(c) > 1000]
+        assert probes[0][:40] != probes[1][:40], "the probes share a cacheable prefix"
 
     def test_probe_still_fits_its_size_budget(self, monkeypatch):
         monkeypatch.setattr(eval_prefill, "probe_context_window", lambda m: 4096)
         sent = []
         monkeypatch.setattr(
-            eval_prefill, "call", lambda m, messages, **k: sent.append(messages[0]["content"])
+            eval_prefill,
+            "call",
+            lambda m, messages, **k: (sent.append(messages[0]["content"]), {"content": "x"})[1],
         )
 
         eval_prefill.measure_prefill_rate("foundation", "localhost", 1337)
 
-        assert len(sent[1]) == eval_prefill._probe_size_for("foundation"), (
+        probe = max(sent, key=len)
+        assert len(probe) == eval_prefill._probe_size_for("foundation"), (
             "the nonce must fit inside the probe, not extend past the window"
         )
 
     def test_cache_hit_speed_is_rejected(self, monkeypatch):
         """65,000-140,000 chars/sec is a cache hit, not a measurement."""
-        clock = iter([100.0, 100.15])
+        clock = iter([0.0, 9.0, 50.0, 51.0, 100.0, 100.15])  # load, decode, then probe
         monkeypatch.setattr(eval_prefill.time, "monotonic", lambda: next(clock))
         monkeypatch.setattr(eval_prefill, "probe_context_window", lambda m: None)
         monkeypatch.setattr(eval_prefill, "call", lambda *a, **k: {"content": "x"})
@@ -308,3 +320,91 @@ class TestTheEvalIsReproducible:
         from eval.run import EVAL_TEMPERATURE
 
         assert EVAL_TEMPERATURE == 0.0
+
+
+class TestTheTimeoutIsDerivedNotChosen:
+    """A flat 900s killed qwen3.6-35b on every task and took out the sweep."""
+
+    def _measure(self, model, prefill, decode, cold_start=30.0):
+        eval_prefill.record_prefill_rate(model, prefill)
+        eval_prefill._record_decode_rate(model, decode)
+        eval_prefill._record_cold_start(model, cold_start)
+
+    def test_a_slow_model_gets_more_time_than_a_fast_one(self, signals_file):
+        from eval.signals import _effective_timeout
+
+        self._measure("fast", 1190, 40)
+        self._measure("slow", 45, 8)
+
+        assert _effective_timeout("slow", "t", 10_000, 16_000) > _effective_timeout(
+            "fast", "t", 10_000, 16_000
+        )
+
+    def test_generation_dominates_and_is_accounted_for(self, signals_file):
+        """Prefill of the biggest eval prompt is ~228s; decode is 500s+."""
+        from eval.signals import _effective_timeout
+
+        self._measure("m", 45, 8)
+        small_output = _effective_timeout("m", "t", 10_000, 100)
+        big_output = _effective_timeout("m", "t", 10_000, 16_000)
+
+        assert big_output > small_output + 1000, (
+            "max_tokens is not affecting the timeout, so a long generation will "
+            "still be cut off"
+        )
+
+    def test_the_real_qwen_case_now_exceeds_the_old_ceiling(self, signals_file):
+        """The exact numbers that failed: 45 chars/sec, 10238-char prompt, 16k tokens."""
+        from eval.signals import DEFAULT_EVAL_TIMEOUT, _effective_timeout
+
+        self._measure("qwen-like", 45, 8)
+
+        assert _effective_timeout("qwen-like", "t", 10_238, 16_000) > DEFAULT_EVAL_TIMEOUT
+
+    def test_an_unmeasured_model_keeps_the_documented_floor(self, signals_file):
+        """Guessing fast here means killing a request that was working."""
+        from eval.signals import DEFAULT_EVAL_TIMEOUT, _effective_timeout
+
+        assert _effective_timeout("never-measured", "t", 10_000, 16_000) >= DEFAULT_EVAL_TIMEOUT
+
+    def test_a_partially_measured_model_derives_nothing(self, signals_file):
+        """Two measurements and one guess is a guess wearing a measurement's badge."""
+        from eval.signals import _derived_timeout
+
+        eval_prefill.record_prefill_rate("partial", 45)
+        eval_prefill._record_decode_rate("partial", 8)
+        # cold_start deliberately not measured
+
+        assert _derived_timeout("partial", 10_000, 16_000) == 0
+
+    def test_cold_start_is_measured_from_the_load_call(self, monkeypatch, signals_file):
+        """120s was invented; the first call after a restart measures it."""
+        clock = iter([0.0, 37.0, 100.0, 104.0, 200.0, 202.0])
+        monkeypatch.setattr(eval_prefill.time, "monotonic", lambda: next(clock))
+        monkeypatch.setattr(eval_prefill, "probe_context_window", lambda m: None)
+        monkeypatch.setattr(eval_prefill, "call", lambda *a, **k: {"content": "x"})
+
+        eval_prefill.measure_prefill_rate("m", "localhost", 1337)
+
+        caps = json.loads(signals_file.read_text())["m"]["_capabilities"]
+        assert caps["cold_start_seconds"] == 37.0
+        assert caps["decode_tokens_per_sec"] == eval_prefill.WARMUP_TOKENS / 4.0
+
+    def test_the_derived_value_is_capped(self, signals_file):
+        """A backstop against a wedged server, not a budget to fit inside."""
+        from eval.signals import MAX_EVAL_TIMEOUT, _effective_timeout
+
+        self._measure("glacial", 1, 0.01)
+
+        assert _effective_timeout("glacial", "t", 500_000, 16_000) <= MAX_EVAL_TIMEOUT
+
+    def test_the_warmup_measures_generation_speed(self, monkeypatch, signals_file):
+        clock = iter([0.0, 37.0, 100.0, 104.0, 200.0, 202.0])
+        monkeypatch.setattr(eval_prefill.time, "monotonic", lambda: next(clock))
+        monkeypatch.setattr(eval_prefill, "probe_context_window", lambda m: None)
+        monkeypatch.setattr(eval_prefill, "call", lambda *a, **k: {"content": "x"})
+
+        eval_prefill.measure_prefill_rate("m", "localhost", 1337)
+
+        caps = json.loads(signals_file.read_text())["m"]["_capabilities"]
+        assert caps["decode_tokens_per_sec"] == eval_prefill.WARMUP_TOKENS / 4.0

@@ -8,6 +8,7 @@ import json
 import os
 import re
 
+from lib.config_getters import get_max_tokens_for_task
 from lib.logging_config import osaurus_logger as eval_logger
 from lib.mlx_lib import call as mlx_call
 from lib.model_caps import is_generative_model
@@ -276,7 +277,12 @@ def run_eval(
         if "messages" not in task_cfg:
             console.print(f"{WARN} Skipping '{task_name}' (no messages key)")
             continue
-        task_timeout = _effective_timeout(model, task_name)
+        prompt_chars = sum(
+            len(m.get("content") or "") for m in task_cfg.get("messages", [])
+        )
+        task_timeout = _effective_timeout(
+            model, task_name, prompt_chars, get_max_tokens_for_task(task_name)
+        )
         best_score = -1
         best_result = None
         best_failure = ""
