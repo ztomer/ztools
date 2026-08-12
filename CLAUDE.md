@@ -30,8 +30,15 @@ cannot drift.
 - Run (what the gate runs — use this before pushing; it adds the coverage floor
   and an unreachable LLM server, and a quick run passing proves neither):
   `OLLAMA_BASE_URL=http://127.0.0.1:1 MLX_MODELS_DIR=/tmp/nonexistent .venv/bin/pytest --cov --cov-fail-under=95 .`
-  (OCR tests need `--ignore=references/tests/test_img_helpers.py --ignore=references/tests/test_image_renamer.py`
-  under `--cov` — numpy's C extension crashes with coverage tracing)
+  Run it exactly as written. It previously carried
+  `--ignore=references/tests/test_img_helpers.py --ignore=references/tests/test_image_renamer.py`
+  for a numpy C-extension crash under coverage tracing; that crash no longer reproduces
+  (numpy 2.x / coverage 7.15, python 3.11.15), and those two files carry ~95 statements of
+  `rename/helpers.py` and `rename/cli.py`. Excluding them dropped the total to **94.09%**
+  against a 95 floor — the documented gate could not pass, at HEAD, for anyone.
+  With them included it is **95.11%**. If the crash returns, raise it rather than
+  re-adding the ignores: excluding a test file silently subtracts its module's coverage
+  from a floor that is still measuring that module.
 - Add discovered test patterns or bugs to `docs/TESTING.md` immediately
 
 ### Model Evals

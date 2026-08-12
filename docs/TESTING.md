@@ -6,9 +6,12 @@
 
 ## Overview
 
-- **1712 total** (1652 pass + 3 skip in main suite, 60 pass in the OCR files).
+- **2120 pass**, 4 skipped, 7 xfailed, at 95.11% coverage (2026-08-12).
 - Tests use **mocked LLM providers** — no real model calls in CI.
-- OCR-dependent tests (`test_img_helpers.py`, `test_image_renamer.py`) run **without coverage** (numpy C extension crashes under pytest-cov — see **Coverage Limitations** below).
+- The OCR files (`test_img_helpers.py`, `test_image_renamer.py`) run **with** coverage like
+  everything else. They were excluded for a numpy C-extension crash that the lazy-import fix
+  cured; the exclusions outlived it and held the suite below its own floor — see
+  **Coverage Limitations** below.
 
 **Run what the gate runs.** `pytest references/tests/` passes in a developer
 environment that the pre-push gate does not have: the gate runs the whole
@@ -33,16 +36,15 @@ uv pip install --python .venv/bin/python pytest pytest-cov pytest-asyncio
 Run all: `python3 -m pytest references/tests/`
 Run single file: `python3 -m pytest references/tests/test_twit_browser.py -v`
 Run single test: `python3 -m pytest references/tests/test_file.py::test_name -v`
-Full coverage (excluding numpy-crashing tests):
+Full coverage — no exclusions (see **Coverage Limitations**; the numpy crash that once
+required them no longer reproduces, and excluding those two files put the suite under its
+own floor):
 ```bash
 python3 -m pytest references/tests/ \
-  --ignore=references/tests/test_img_helpers.py \
-  --ignore=references/tests/test_image_renamer.py \
   --cov=rename.llm --cov=rename.helpers \
   --cov=twitter.summarize --cov=twitter.cookies \
   --cov-report=term-missing
 ```
-OCR tests without coverage: `python3 -m pytest references/tests/test_img_helpers.py references/tests/test_image_renamer.py`
 
 ---
 
@@ -305,6 +307,20 @@ def test_returns_first_line(self):
 ```
 
 This avoids importing pytesseract under coverage entirely.
+
+**The `--ignore` flags outlived the fix (found 2026-08-12).** Before the lazy import, the
+two OCR test files were excluded from every coverage run. That fix removed the crash — both
+files now run clean under `--cov` (41 and 19 tests) — but the exclusions stayed in CLAUDE.md
+and here, and nobody re-checked. They were not free: those files carry ~95 statements of
+`rename/helpers.py` (39% → 90% with them) and `rename/cli.py` (60% → 99%), so the documented
+pre-push gate measured modules whose tests it had just discarded and scored **94.09%** against
+its own 95% floor. **The gate could not pass at HEAD, for anyone**, which is how a gate becomes
+decorative. Without the ignores: 95.11%, 2120 passed.
+
+Generally: a workaround for a bug is a claim about the world that stops being true when the
+bug is fixed. When a root-cause fix lands, go delete the workarounds it obsoletes — and if a
+coverage floor is involved, remember that excluding a *test* file silently subtracts its
+module's coverage from a denominator that still counts that module.
 
 ### MLX Function Testing (`query_mlx_for_filename`)
 

@@ -380,4 +380,18 @@ def _tracked_config_stays_clean():
     changed = sorted(
         set(before) ^ set(after) | {p for p in before.keys() & after.keys() if before[p] != after[p]}
     )
-    assert not changed, "tests modified tracked config files:\n  " + "\n  ".join(changed)
+    # Attributed by pytest to whichever test ran last, which is not evidence
+    # about that test: this is a session fixture. And the suite is not the only
+    # thing that writes here -- an `ev` run in another terminal updates
+    # conf/eval_signals.json after every task, which trips this gate with a
+    # message accusing an unrelated test. Say so, rather than sending the reader
+    # to audit code that did nothing.
+    assert not changed, (
+        "tracked config files changed during the test session:\n  "
+        + "\n  ".join(changed)
+        + "\n\nEither a test wrote to the real conf/ instead of tmp (point it at "
+        "ZTOOLS_CONF or patch the module attribute), or another process wrote "
+        "them while the suite ran -- a concurrent `ev` run updates "
+        "conf/eval_signals.json. Check `git diff` on the listed files to tell "
+        "which: eval writes latency and _capabilities records."
+    )
