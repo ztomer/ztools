@@ -103,6 +103,26 @@ def test_enormous_outputs_are_truncated(out_dir, monkeypatch):
     assert "chars: 5000" in path.read_text()
 
 
+def test_the_suite_cannot_write_into_the_real_config_dir():
+    """The autouse gate, checked rather than assumed.
+
+    This feature escaped its sandbox within minutes of landing: every existing
+    test that calls run_eval with a fake model wrote real files into
+    ~/.config/ztools/outputs. `_saved_outputs_stay_in_tmp` in conftest redirects
+    it for the whole session, and this asserts the redirect is actually in force
+    -- a sandbox nobody verifies is a sandbox that quietly stops applying.
+
+    Deliberately does NOT use the out_dir fixture: it must observe the session
+    gate, not one this test installed.
+    """
+    from eval.report_core import default_eval_dir
+
+    resolved = eo.outputs_dir().resolve()
+    real = (default_eval_dir() / "outputs").resolve()
+    assert resolved != real, "saved outputs are pointed at the real config dir"
+    assert Path.home() not in resolved.parents or "pytest" in str(resolved), resolved
+
+
 def test_a_real_run_eval_leaves_the_output_on_disk(out_dir, monkeypatch):
     """Drive run_eval itself, not the helper.
 

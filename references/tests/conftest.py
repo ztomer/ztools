@@ -78,6 +78,7 @@ def mock_llm_osaurus():
 # Legacy fixtures used by existing test files
 
 import json  # noqa: E402
+import os  # noqa: E402
 import threading  # noqa: E402
 from http.server import BaseHTTPRequestHandler, HTTPServer  # noqa: E402
 
@@ -344,6 +345,33 @@ def _signals_files_stay_clean(tmp_path_factory):
          patch.object(weekend_llm, "PHASE_SIGNALS_PATH", tmp / "phase_signals.json"), \
          patch.object(weekend_llm, "EXTRACT_SIGNALS_PATH", tmp / "extract_signals.json"):
         yield
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _saved_outputs_stay_in_tmp(tmp_path_factory):
+    """Structural gate: saved eval outputs must not land in the real config dir.
+
+    run_eval now writes each model's raw answer under ~/.config/ztools/outputs so
+    a scorer can be questioned without re-running the model. Every test that
+    calls run_eval with a fake model therefore wrote there too -- the suite left
+    outputs/m, outputs/m1 and outputs/mock-model in the developer's own config
+    directory within minutes of the feature landing.
+
+    Redirected by environment variable because that is the seam production reads;
+    patching a module attribute would miss any caller that imported the path by
+    value. The existing tracked-config gate could not have caught this: it
+    digests conf/ and docs/, and this escapes to $HOME.
+    """
+    tmp = tmp_path_factory.mktemp("eval_outputs")
+    previous = os.environ.get("EVAL_OUTPUT_DIR")
+    os.environ["EVAL_OUTPUT_DIR"] = str(tmp)
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("EVAL_OUTPUT_DIR", None)
+        else:
+            os.environ["EVAL_OUTPUT_DIR"] = previous
 
 
 def _tracked_config_digest() -> dict:

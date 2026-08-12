@@ -103,6 +103,27 @@ know about.
 Opt out with `@pytest.mark.real_cookie_discovery` only when the test *is* the cookie
 reader (`references/tests/test_twit_cookies.py` sets it module-wide via `pytestmark`).
 
+### `_saved_outputs_stay_in_tmp`
+
+Redirects `EVAL_OUTPUT_DIR` at a tmp dir for the whole session.
+
+**Why:** `run_eval` now saves each model's raw answer under `~/.config/ztools/outputs`
+so a scorer can be questioned without re-running the model. Every existing test that
+calls `run_eval` with a fake model started writing there too — the suite left
+`outputs/m`, `outputs/m1` and `outputs/mock-model` in the developer's own config
+directory within minutes of the feature landing (2026-08-12).
+
+**What this teaches beyond the one bug:** `_tracked_config_stays_clean` could not have
+caught it. That gate digests `conf/` and `docs/`, and this escape went to `$HOME`. **A
+sandbox gate only covers the directories it was told about, so any new persistence path
+needs its own redirect on the same commit that introduces the write.** Redirect via the
+environment variable rather than a module attribute — that is the seam production reads,
+and a value-import of the path would slip a module patch.
+
+`test_the_suite_cannot_write_into_the_real_config_dir` asserts the redirect is in force,
+because a sandbox nobody verifies is one that can quietly stop applying. Proven by
+disabling the redirect and watching it go red.
+
 ### `_signals_files_stay_clean`
 
 Redirects `eval.run.EVAL_SIGNALS_PATH` and `weekend.llm.PHASE_SIGNALS_PATH` at a tmp
