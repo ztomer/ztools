@@ -646,6 +646,42 @@ and the marker was removed.
   `test_real_*_exhibit_the_catalogued_classes` re-runs the checks against the real files
   when present and skips in CI.
 
+## Scorer calibration: the reference is the control (`test_factual_coverage.py`, August 2026)
+
+`summarize_factual_coverage` was failed by all five models that produced real results
+(16, 11, 16, 33, 27 — max 33/100). Identical failure across independent models read as a
+prompt weakness. It was the scorer: `validate_factual_coverage` matched each key fact as an
+exact case-insensitive substring, while the prompt orders the model to reword ("use
+narrative verbs and connecting phrases"). It scored verbatim **copying** and called it
+coverage.
+
+**Pattern — score the SOURCE against its own extraction targets.** The timeline contains
+every key fact by construction, so anything under 100 is a defect with no model involved.
+It scored 94: `'Amazon launches drone delivery in Toronto'` is not a substring of its own
+source line (`'...in select Toronto neighborhoods'`), so no output could ever match it.
+That number was available before any model ran. `test_every_key_fact_is_reachable_from_its_own_source`
+keeps it, and it is the gate that fails the next time someone edits a fact or a tweet.
+
+Second control: an ideal answer **in the form the task demands** — all 18 topics, reworded
+rather than copied. It scored 5/100. Kept as `test_paraphrase_is_credited_and_still_separated_from_partial_coverage`,
+which also asserts a ≥50-point gap from a 4-topic partial, because a metric that credits
+paraphrase must not credit everything.
+
+**Bug found by the repair, twice, both too generous.** Matching tokens against raw text:
+`'GPT-5'` reduces to `('gpt', '5')` and `'5' in text` is true of every timestamp, so it
+scored as covered by all 27 tweets. A regex word boundary still matched the `.5` inside
+`Gemini 2.5`. The same looseness flagged a clean summary as repeating a hoax — `'100'` and
+`'000'` from "layoffs of 100,000 employees" both matched inside "1000+ qubits". **Run both
+sides through the same tokenizer and compare token to token.** A loose matcher is wrong in
+both directions at once.
+
+**The test that let this through was vacuous.** `validate_factual_coverage(output, source_text="", key_facts=None)`
+— the old assertion passed the fact list *positionally*, landing it in `source_text`, so
+`key_facts` was `None` and the validator returned 100 without reading the output.
+`assert fc == 100` held for reasons unrelated to coverage. When a validator takes two
+same-typed optional parameters, **pass them by keyword in tests**; the positional slip is
+invisible and permanent.
+
 ### Bug found by writing these: a health check that only lists models
 
 `ev` reports `Server: OK` from `/v1/models`, which answers instantly even when the MLX

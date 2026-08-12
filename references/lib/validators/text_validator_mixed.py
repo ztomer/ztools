@@ -11,9 +11,31 @@ import json
 import re
 from typing import Any, List, Tuple
 
+from lib.validators.text_match import identifying_tokens, phrase_overlap, tokenize
+
 # ============================================================
 # MIXED-SIGNAL VALIDATORS (signal-from-noise filtering)
 # ============================================================
+
+# Both of these are CHOSEN, not measured -- there is no throughput to time here,
+# only a judgement about how much rewording still counts as the same statement.
+# Each was set by running controls rather than by taste, and each is written to
+# fail in its own safe direction.
+#
+# COVERAGE: half the identifying tokens. Calibrated against four controls, where
+# a coverage metric has to separate the middle two:
+#     source timeline (upper bound)          100
+#     all 18 topics, heavily paraphrased       77
+#     4 of 18 topics                           16
+#     no facts at all                           0
+# Lower thresholds credit a summary for a passing name-drop; higher ones start
+# demanding the verbatim copying this replaced. A missed fact under-credits a
+# good summary, so the failure lands on the harmless side.
+COVERAGE_TOKEN_RATIO = 0.5
+# FALSEHOOD: two distinctive tokens, the sensitivity this check already had. A
+# missed falsehood scores a hoax-repeating summary as clean, so this one errs
+# toward over-detection instead.
+FALSEHOOD_TOKEN_HITS = 2
 
 
 def _split_signal_noise(source_text: str) -> Tuple[str, str]:
@@ -360,8 +382,13 @@ def validate_factual_accuracy(
         if p and p in out:
             found.append(phrase)
         elif p:
-            ptoks = {t for t in re.sub(r"[^a-z0-9 ]", " ", p).split() if len(t) >= 4}
-            if ptoks and sum(1 for t in ptoks if t in out) >= 2:
+            # A COUNT, not a fraction, and deliberately so: a couple of
+            # distinctive tokens is enough to show the hoax was repeated, and a
+            # fraction rule would make the LONGEST falsehoods the hardest to
+            # detect -- the unsafe direction for this check.
+            ptoks = set(identifying_tokens(p))
+            present = set(tokenize(out))
+            if ptoks and sum(1 for t in ptoks if t in present) >= FALSEHOOD_TOKEN_HITS:
                 found.append(phrase)
     if not found:
         return 100, ""
@@ -372,15 +399,24 @@ def validate_factual_accuracy(
 def validate_factual_coverage(
     output: str, source_text: str = "", key_facts: list = None
 ) -> Tuple[int, str]:
-    """Fact-coverage scoring.
-    Checks how many of the given `key_facts` (case-insensitive substrings) are
-    present in the output. High coverage = thorough summarization."""
+    """Fact-coverage scoring: how many of `key_facts` the output actually covers.
+
+    Matched on identifying tokens, NOT as exact substrings, because the task
+    prompt orders the model to reword ("use narrative verbs and connecting
+    phrases"). Substring matching therefore scored verbatim COPYING and called
+    it coverage, and the two controls said so plainly: a summary covering all
+    18 topics in its own words scored 5, and the source timeline itself -- the
+    trivial upper bound -- managed only 94, because one key fact ('Amazon
+    launches drone delivery in Toronto') is not a substring of its own source
+    line ('...in select Toronto neighborhoods'). Every model failed this task,
+    and none of them was the reason.
+    """
     if not output:
         return 0, "empty response"
     if not key_facts:
         return 100, ""
     out = output.lower()
-    found = sum(1 for fact in key_facts if fact.lower() in out)
+    found = sum(1 for fact in key_facts if phrase_overlap(fact, out) >= COVERAGE_TOKEN_RATIO)
     pct = int(100 * found / len(key_facts))
     failures = []
     if pct < 30:

@@ -284,12 +284,22 @@ def test_leak_and_schema_and_factual():
         0
     ]
     assert fa < 100
-    assert tv.validate_factual_coverage("", ["x"])[0] == 0
-    assert tv.validate_factual_coverage("ok", [])[0] == 100
-    fc = tv.validate_factual_coverage(
-        "key fact one key fact two", ["key fact one", "key fact two"]
-    )[0]
-    assert fc == 100
+    # key_facts is the THIRD parameter; the second is source_text. Passing the
+    # fact list positionally left key_facts=None, so the validator returned 100
+    # without looking at the output and these lines asserted nothing. The
+    # coverage bug they were meant to guard survived five model sweeps.
+    assert tv.validate_factual_coverage("", key_facts=["x"])[0] == 0
+    assert tv.validate_factual_coverage("ok", key_facts=[])[0] == 100
+    # Facts must be distinguishable from each other or coverage is meaningless:
+    # 'key fact one' and 'key fact two' both reduce to the single token 'fact',
+    # so one sentence would score as covering both.
+    facts = ["Shopify reports 40% revenue growth", "Adobe acquires Figma for $20B"]
+    assert tv.validate_factual_coverage(" ".join(facts), key_facts=facts)[0] == 100
+    assert tv.validate_factual_coverage(facts[0], key_facts=facts)[0] == 50
+    assert tv.validate_factual_coverage("nothing relevant here", key_facts=facts)[0] == 0
+    # Reworded, not copied -- the case exact-substring matching scored as zero.
+    reworded = "Shopify posted 40% growth in revenue; Adobe closed its $20B Figma deal."
+    assert tv.validate_factual_coverage(reworded, key_facts=facts)[0] == 100
     assert tv.validate_no_contradiction("", "x")[0] == 100
     assert tv.validate_no_contradiction("ok", "")[0] == 100
     assert (

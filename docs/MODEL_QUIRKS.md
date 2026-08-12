@@ -191,6 +191,33 @@ Planted a falsehood in the input ("quantum giraffes of Manitoba won the Stanley 
 
 ---
 
+## `summarize_factual_coverage` scores before 2026-08-12 are not comparable
+
+Every model that produced real results failed this task — 16, 11, 16, 33, 27 out of 100.
+Identical failure across independent models looked like a prompt weakness. It was the
+scorer: `validate_factual_coverage` matched each key fact as an exact case-insensitive
+substring, while the prompt orders the model to reword. It was measuring verbatim copying.
+
+Two controls settled it in minutes, neither needing a model:
+
+| control | old scorer | fixed scorer |
+|---|---|---|
+| the source timeline (contains every fact by construction) | 94 | 100 |
+| all 18 topics covered, in the model's own words | 5 | 77 |
+| 4 of 18 topics | 5 | 16 |
+| no facts at all | 0 | 0 |
+
+The 94 was its own defect: `'Amazon launches drone delivery in Toronto'` is not a substring
+of its source line, which says `'...in select Toronto neighborhoods'`. No output could ever
+have matched that fact.
+
+**Consequence for the leaderboard**: any `summarize_factual_coverage` figure recorded before
+this fix was produced by a different instrument and must not be compared with one recorded
+after. Re-run that single task per model rather than reasoning across the boundary.
+`references/tests/test_factual_coverage.py` keeps both controls as gates.
+
+---
+
 ## Strict Validation Rules (Updated 2026)
 
 ### Extraction Validation
