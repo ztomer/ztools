@@ -23,6 +23,7 @@ from eval.failures import (
     FAIL_TIMEOUT,
     _classify_failure,
 )
+from eval.outputs import save_output
 from eval.prefill import measure_prefill_rate, record_prefill_rate
 from eval.signals import (
     DEFAULT_EVAL_TIMEOUT,
@@ -318,6 +319,11 @@ def run_eval(
                 )
 
             eval_logger.info(f"Quality score: {score}/100")
+
+            # Before anything decides what this score MEANS. A scorer question
+            # asked after the fact is unanswerable without the output, and
+            # re-running costs hours on a one-model-at-a-time machine.
+            save_output(model, task_name, result, score, failure_reason)
 
             if score < 90:
                 category = diagnosis.get("category", "")
