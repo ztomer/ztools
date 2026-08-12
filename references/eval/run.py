@@ -26,6 +26,19 @@ from eval.tasks_core import TASKS, _extract_items_from_text
 from eval.validate import safe_content
 
 MAX_RETRIES = int(os.environ.get("EVAL_MAX_RETRIES", "1"))
+# Greedy decoding, because a leaderboard has to be reproducible.
+#
+# The eval inherited DEFAULT_TEMPERATURE (0.1) and never pinned it, so every run
+# sampled. Running ornith twice on an unchanged image_rename scored 100% (190s)
+# and then 0% (523s) -- a 100-point swing on identical input. Ranking models on
+# single sampled runs measures the sampler, and any best_models derived that way
+# would be noise wearing a number.
+#
+# Production still runs at 0.1: this measures the model's best behaviour rather
+# than its average, which is the right basis for comparing models and for
+# telling whether a prompt change helped. It does not eliminate GPU batching
+# non-determinism, only the sampling that dominated it.
+EVAL_TEMPERATURE = float(os.environ.get("EVAL_TEMPERATURE", "0"))
 MEMORY_WARNING_THRESHOLD = 80
 
 
@@ -144,6 +157,7 @@ def _call_model(
             messages=task_cfg["messages"],
             host=host,
             port=port,
+            temperature=EVAL_TEMPERATURE,
             timeout=effective_timeout,
         )
     else:
@@ -154,6 +168,7 @@ def _call_model(
             port=port,
             task=task_name,
             parse_json=task_cfg["parse_json"],
+            temperature=EVAL_TEMPERATURE,
             timeout=effective_timeout,
         )
 

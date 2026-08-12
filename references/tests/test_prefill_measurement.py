@@ -269,3 +269,42 @@ class TestTheProbeUsesTheCallersTransport:
         )
 
         assert sent, "the injected transport was ignored"
+
+
+class TestTheEvalIsReproducible:
+    """A leaderboard built from sampled runs ranks the sampler, not the models."""
+
+    def test_the_eval_pins_temperature_for_every_backend(self):
+        """ornith scored 100% then 0% on an unchanged task across two runs.
+
+        The eval inherited DEFAULT_TEMPERATURE (0.1) and never pinned it, so
+        every run sampled. Both transports must be pinned: pinning one leaves
+        half the leaderboard stochastic.
+        """
+        from unittest.mock import patch
+
+        from eval import run as eval_run
+
+        seen = {}
+
+        def record(backend):
+            def fake(*args, **kwargs):
+                seen[backend] = kwargs.get("temperature")
+                return {"content": "x"}
+
+            return fake
+
+        cfg = {"messages": [{"role": "user", "content": "hi"}], "parse_json": False}
+        with patch.object(eval_run, "call", record("osaurus")):
+            eval_run._call_model("m", cfg, "t", "localhost", 1337, "osaurus")
+        with patch.object(eval_run, "mlx_call", record("mlx")):
+            eval_run._call_model("m", cfg, "t", "localhost", 1337, "mlx")
+
+        assert seen == {"osaurus": 0.0, "mlx": 0.0}, (
+            f"the eval is sampling rather than decoding greedily: {seen}"
+        )
+
+    def test_the_pin_is_zero_not_merely_present(self):
+        from eval.run import EVAL_TEMPERATURE
+
+        assert EVAL_TEMPERATURE == 0.0

@@ -379,3 +379,31 @@ slot or `{text}`; `rename.llm` renders them through `lib.prompt_render`, never
 `str.format()`.
 
 MLX backend: OsaurusAI MXFP8/4 quants (Gemma4 `gemma4`/`gemma4_unified`, Qwen `qwen3_5_moe`) load via `mlx-vlm` (git main) — proven for `gemma-4-E4B-it-8bit` and `Qwen3.6-35B-A3B-MXFP8-MTP`. Stock `mlx-lm` supports plain-text qwen3_5/gemma4 only and rejects the multimodal checkpoints. Model discovery (`find_any_working_mlx_vlm_model`) scans dirs and load-probes via `mlx-vlm`.
+
+## ornith-1.0 (9B, 35B) — unbounded reasoning, answer never emitted (2026-08-11)
+
+Ornith returns its chain of thought in a separate `reasoning_content` field and
+leaves `content` empty until the reasoning ends. On simple prompts it finishes
+in ~230 completion tokens and answers correctly. On the harder eval tasks it
+does not stop: given `max_tokens=16000` it spends all 16,000 on reasoning and
+returns `finish_reason: length` with `content: ''`, which is the 523-second,
+0-scoring `image_rename` and `image_rename_mixed` results in the sweep.
+
+Confirmed reproducible, not sampling noise -- identical at temperature 0 and
+0.1:
+
+    max_tokens=120    finish=length   content=''         reasoning truncated
+    max_tokens=512    finish=stop     content=valid JSON  234 completion tokens
+    max_tokens=16000  finish=length   content=''          complex prompt, 523s
+
+Two things this rules out. It is NOT a token-budget shortage: raising the budget
+makes it worse, because the reasoning expands to fill whatever it is given. And
+"Output JSON now." does NOT suppress it -- that string was in the prompt for
+every run above. Whatever works for the qwen family does not transfer here.
+
+Also note `content` is empty rather than absent, so a caller checking only for a
+missing key sees a successful response with nothing in it.
+
+Ornith has no `conf/models/*.toml`, so it currently runs on the built-in
+fallback prompts. Any fix belongs there, and needs to make the model STOP
+reasoning rather than give it more room.
