@@ -124,6 +124,27 @@ and a value-import of the path would slip a module patch.
 because a sandbox nobody verifies is one that can quietly stop applying. Proven by
 disabling the redirect and watching it go red.
 
+### Why `git push` looked like it was hanging (2026-08-12)
+
+Every `git push` appeared to hang for minutes and was written off as a credential problem
+through several sessions. It was not. **`.githooks/pre-push` runs the whole suite with
+coverage**, which takes about three minutes — the "hang" was the gate doing its job with no
+output until it finished.
+
+It then failed, every time, for a reason no diff could fix: `_tracked_config_stays_clean`
+digests `conf/*.json`, a model sweep was running in another terminal, and `ev` rewrites
+`conf/eval_signals.json` after every task. The suite was green (2130 passed, 95.11%) and
+the push still exited 1.
+
+Fixed by excluding the three signals files from the digest, which loses nothing:
+`_signals_files_stay_clean` already redirects all three for the whole session, so a change
+to the real file *cannot* have come from a test. The specific gate covers them; the broad
+one was only adding a false positive.
+
+Diagnostic worth reusing: `git ls-remote` with `-c credential.helper=` returns in under a
+second. If that works and `push` "hangs", the network is fine and something local — a
+hook — is doing the waiting.
+
 ### `_signals_files_stay_clean`
 
 Redirects `eval.run.EVAL_SIGNALS_PATH` and `weekend.llm.PHASE_SIGNALS_PATH` at a tmp

@@ -374,6 +374,20 @@ def _saved_outputs_stay_in_tmp(tmp_path_factory):
             os.environ["EVAL_OUTPUT_DIR"] = previous
 
 
+# Files a LONG-RUNNING TOOL legitimately rewrites while the suite is running, and
+# which a dedicated fixture already stops the tests themselves from touching.
+#
+# `_signals_files_stay_clean` redirects every one of these at a tmp dir for the
+# whole session, so a change to the real file cannot have come from a test -- it
+# came from an `ev` run in another terminal, which updates eval_signals.json after
+# every task. Digesting them anyway made the pre-push hook fail for a reason no
+# amount of reading the diff could fix, on a machine where a sweep can run for ten
+# hours. Coverage is not lost: the redirect fixture is the stronger, more specific
+# gate, and `test_the_suite_cannot_write_into_the_real_config_dir` is the pattern
+# for proving such a redirect is in force.
+_CONCURRENTLY_WRITTEN = {"eval_signals.json", "phase_signals.json", "extract_signals.json"}
+
+
 def _tracked_config_digest() -> dict:
     """Hash every tracked file the tools can write back to."""
     import hashlib
@@ -386,7 +400,7 @@ def _tracked_config_digest() -> dict:
     if baseline is not None:
         targets.append(baseline)
     for path in targets:
-        if path.is_file():
+        if path.is_file() and path.name not in _CONCURRENTLY_WRITTEN:
             digest[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest()
     return digest
 

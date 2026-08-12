@@ -191,6 +191,42 @@ Planted a falsehood in the input ("quantum giraffes of Manitoba won the Stanley 
 
 ---
 
+## Sweep results, 2026-08-12 (greedy decoding, derived timeouts)
+
+Run by `benchmarks/sweep_models.sh`, one model at a time with a server restart between
+each. Means over the 22 tasks common to all six completed models:
+
+| mean | model | all-task mean |
+|---|---|---|
+| **88.2** | **muse-glimmer-30b-jang_6m** | 88.7 (23 tasks) |
+| 82.5 | gemma-4-12b-it-mxfp8 | 83.3 |
+| 82.1 | gemma-4-e4b-it-8bit | 82.9 |
+| 81.2 | qwen3.6-27b-mxfp8-mtp | 81.2 |
+| 80.0 | foundation | 80.9 |
+| 73.3 | gemma-4-e2b-it-8bit | 74.4 |
+
+Still pending when this was written: bonsai-27b, ornith-9b, ornith-35b, qwen3.6-35b.
+
+**muse-glimmer is the only model that resists planted falsehoods.** It scored 100 on
+`summarize_factual_accuracy` where the field scored 34, 34, 67, 0, 0 — it repeated none
+of the three hoax tweets. That matches the July finding above that only the most capable
+models filter them, and it is the single largest quality difference in the table. Its one
+hard failure is `file_summary` (0%: "only 2 items, need 3+"), where gemma-4-e4b scores 100.
+
+**Two models were recovered by deriving timeouts from measured rates.** muse-glimmer and
+bonsai-27b previously produced nothing at all — every task hit a flat 900s ceiling, and
+the abandoned requests leaked server inference slots until the server returned HTTP 503.
+muse's `weekend_transient` alone takes 737s legitimately.
+
+**Half the eval no longer discriminates.** 10 of the 22 common tasks score 100 for every
+model: filename, filename_leak, filename_mixed, image_rename, image_rename_mixed, json,
+rename_mixed, summarize, weekend_fixed_mixed, weekend_transient_schema. They still work as
+regression floors, but they cost GPU time and separate nothing. The tasks that do
+discriminate are file_summary, detailed_json, weekend_fixed, weekend_transient_mixed,
+summarize_contradiction, summarize_factual_accuracy, and the three taxes tasks.
+
+**Do not read the `summarize_factual_coverage` column across the fix boundary** — see below.
+
 ## `summarize_factual_coverage` scores before 2026-08-12 are not comparable
 
 Every model that produced real results failed this task — 16, 11, 16, 33, 27 out of 100.
