@@ -42,6 +42,19 @@ cannot drift.
 - Add discovered test patterns or bugs to `docs/TESTING.md` immediately
 
 ### Model Evals
+- **Start the server with `./tools/osaurus_one.sh`, never by hand.** Models are
+  4-35GB resident and a second server loads its own copy rather than queueing, so
+  two servers means eviction, swapping, and requests the server cancels itself with
+  `HTTP 499 request_cancelled` — which from the client is indistinguishable from a
+  slow model. That is not hypothetical: it recorded qwen3.8-27b at 0.1 tok/s decode
+  and a 423s cold start. The script is idempotent (a no-op when one is already
+  answering) and `--check` exits 1 when there is not exactly one.
+- **Never measure with anything else running against the GPU.** One command at a
+  time, serially — including your own background jobs.
+- **A contaminated measurement is permanent.** `record_prefill_rate` and
+  `_record_decode_rate` keep the SLOWEST observation, so a number taken under
+  memory pressure can never be displaced by a correct one. Delete the model's
+  `_capabilities` entry in `conf/eval_signals.json` before re-measuring.
 - Quick mode for iteration: `python3 -m eval --model <model> --task <task> --quick`
 - Add discovered learnings to `docs/MODEL_QUIRKS.md` immediately when found
 
