@@ -17,6 +17,40 @@ Do not adjust these rows. `docs/BACKLOG.md` item 1 re-derives them from a sweep;
 that runs, the only measured claims in this file are the roster table below and the
 2026-08-12 sweep section, and only for the models that still exist.
 
+### qwen3.8-27b-mxfp8 does not fit this machine's page cache (2026-08-15)
+
+Measured 0.09 tok/s decode and 143s TTFT for a 1024-token prompt — against 80.6 tok/s
+for the LARGER ornith-35b and 65.5 for gemma-4-12b, on an idle 64GB M4 Max. Confirmed
+by three independent instruments: `eval/prefill.py`, `osaurus bench`, and the server's
+own `usage.tokens_per_second` (0.0903).
+
+**It is not a broken kernel and not a bad download.** The obvious suspects were ruled
+out one at a time:
+
+| hypothesis | killed by |
+|---|---|
+| hybrid linear-attention unsupported | bonsai-27b has the IDENTICAL arch (qwen3_5, 64 layers, 48 linear + 16 full, interval 4) and runs at 12.8 tok/s |
+| MXFP8 mode unsupported | gemma-4-12b-it-mxfp8 runs at 65.5, ornith-1.0-9b-mxfp8 at 44 |
+| qwen3_5 + MXFP8 combination | ornith-9b is exactly that, at 44 tok/s |
+| corrupt/partial download | all 6 shards + MTP shard present, `.topup_done` written, `osaurus show` reports it correctly |
+| a second osaurus competing | reproduced with exactly one process, verified by `tools/osaurus_one.sh --check` |
+| other apps holding RAM | reproduced with the machine 62% free, top consumer 0.4GB |
+
+**What it actually is: working set.** osaurus mmaps the weights, so RSS never exceeded
+3.5GB during a decode (it *declined* to 0.1GB) while `Pages free` sat at 0.1-0.9GB with
+3.7GB of swap in use. The 27GB weight file cannot stay in the page cache, so weights are
+re-read from SSD every token — 27GB at 0.09 tok/s is approximately SSD read bandwidth,
+which is the arithmetic that closes the case.
+
+RSS is therefore the WRONG instrument here: it reports ~3.5GB for a model consuming the
+entire machine. Watch `vm_stat` pages-free and swap instead.
+
+The threshold on this host sits between 18GB (ornith-35b, fine) and 27GB (this, dead).
+The fix is a smaller quant, not a faster kernel — and note the direction is
+counter-intuitive: the HIGHER bit encoding is what makes it unusable, because bits buy
+quality only if the weights stay cached. `mlx-community/Qwen3.8-27B-4bit` is 16.1GB and
+keeps vision.
+
 ### Installed roster, measured 2026-08-15
 
 `family` is `details.family` from `/api/tags` — the real architecture, not the name.

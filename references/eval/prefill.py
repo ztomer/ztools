@@ -39,10 +39,16 @@ from eval.signals import DEFAULT_EVAL_TIMEOUT, _load_eval_signals, _save_eval_si
 PREFILL_PROBE_CHARS = int(os.environ.get("EVAL_PREFILL_PROBE_CHARS", "20000"))
 _PROBE_LINE = "[@SomeHandle | 08:15]: A reasonably typical sentence about a launch today.\n"
 # Above this, the transport did not really ingest anything: a mock, a stub, or a
-# prefix-cache hit. The fastest genuine measurement on this host is ~3,500
-# chars/sec (the 35B MoE); a cache hit returns 65,000-140,000. The bound sits
-# well above any real model and well below any cache hit, and only ever
-# discards a measurement -- it never invents one.
+# prefix-cache hit. A cache hit returns 65,000-140,000. The bound sits well above
+# any real model and well below any cache hit, and only ever discards a
+# measurement -- it never invents one.
+#
+# The ceiling for a genuine reading was given here as ~3,500 chars/sec (the 35B
+# MoE). Measured 2026-08-15 across all eleven installed models, twice each, that
+# is wrong: gemma-4-e4b-it-8bit reads 6,553 and 7,183 on two consecutive runs.
+# Small dense models ingest faster than big MoE ones, so the fastest reading
+# tracks model SIZE, not the architecture the old note assumed. The 20,000 bound
+# is unaffected and still sits between the two populations.
 MAX_PLAUSIBLE_PREFILL_RATE = int(os.environ.get("EVAL_MAX_PLAUSIBLE_PREFILL", "20000"))
 # The warmup asks for enough tokens to time generation, not just to load weights.
 WARMUP_TOKENS = int(os.environ.get("EVAL_WARMUP_TOKENS", "64"))

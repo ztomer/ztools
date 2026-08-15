@@ -185,11 +185,46 @@ code needs nothing. What the DATA needs is different and narrower:
   `ornith-1.0-9b-mxfp8`, `potion-base-4m`. The first of those is `default_model`,
   `think` and `vlm`, so the tool most likely to send a large prompt is sized by the
   200 chars/sec "assume slow" fallback rather than by anything measured.
-- **Every rate is n=1.** `prefill_samples` is 1 across the board, so nothing in the
-  file can tell a reproducible rate from a one-off — which matters because
-  `gemma-4-e4b-it-8bit` reads 6,908.9 chars/sec against the probe's own docstring
-  claim that the fastest genuine reading on this host is ~3,500. One of those two is
-  wrong and a single sample cannot say which.
+- **Every rate was n=1.** `prefill_samples` was 1 across the board, so nothing in the
+  file could tell a reproducible rate from a one-off — which mattered because
+  `gemma-4-e4b-it-8bit` read 6,908.9 chars/sec against the probe's own docstring
+  claim that the fastest genuine reading on this host is ~3,500. Measured twice on
+  2026-08-15: 7,183.4 and 6,552.6, so the reading was right and the DOCSTRING was
+  wrong. Small dense models ingest faster than big MoE ones; the ceiling tracks size,
+  not the architecture that note assumed. Corrected in `eval/prefill.py`.
+
+- **Memory pressure silently corrupts a measurement, and the corruption is permanent.**
+  The largest models are 27-35GB resident. When the machine cannot hold one
+  comfortably it swaps, and the server starts raising `HTTP 499 request_cancelled`
+  against itself — which from the client is indistinguishable from a slow model.
+  `qwen3.8-27b-mxfp8` recorded 0.1 tok/s decode, a 423s cold start and 95.7 chars/sec
+  prefill under those conditions, against 2,740 for the LARGER ornith-35b. Two
+  distinct causes were in play and both must be excluded before believing a number:
+  other applications holding RAM, and a second osaurus process (which does not queue
+  behind the first — it loads its own copy of whatever model it is asked for).
+
+  The permanence is the sharp edge: `record_prefill_rate` and `_record_decode_rate`
+  keep the SLOWEST observation, deliberately, so that a timeout is sized for a bad run
+  rather than a lucky one. The same policy means a reading taken under memory pressure
+  can never be displaced by a correct one. Re-measuring is not enough — the model's
+  `_capabilities` entry has to be deleted first.
+
+  `tools/osaurus_one.sh` now enforces the single-server invariant and is the documented
+  way to start the server. **Still open:** nothing enforces "delete before re-measure".
+  Consider a `--remeasure` flag on `ev` that clears a model's capabilities first, or
+  recording every sample with a timestamp so a contaminated era can be dropped instead
+  of poisoning the minimum forever.
+
+- **`_estimate_timeout` uses one of the three quantities `ev` measures.**
+  `twitter/budget.py` budgets cold start + prefill + decode, and `ev` measures and
+  stores all three per model in `_capabilities`. But only prefill is read back:
+  `_prefill_rate_for_model` consults the measurement, while decode uses a flat
+  `DECODE_TOKENS_PER_SEC = 8` and cold start a flat `COLD_START_BASE = 120`, both
+  ignoring the recorded values. For a model whose real decode rate is well under 8
+  tok/s the budget is short by that ratio and the request is killed at `MAX_TIMEOUT`
+  (5400s) having produced nothing — the failure mode the measured prefill rate exists
+  to prevent, left open on the other two terms. Wire both through, the same way
+  prefill already is.
 - **`conf/eval_signals.json` carries dead entries**, including twelve uninstalled
   models and two keyed `m` and `mock-model`, which are fixture names. These are
   RESIDUE, not an active leak: `conftest.py::_signals_files_stay_clean` is autouse and

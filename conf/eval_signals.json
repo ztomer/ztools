@@ -1,10 +1,10 @@
 {
   "bonsai-27b-ternary-jang": {
     "_capabilities": {
-      "cold_start_seconds": 4.24,
+      "cold_start_seconds": 4.57,
       "decode_tokens_per_sec": 12.76,
       "prefill_chars_per_sec": 249.2,
-      "prefill_samples": 1
+      "prefill_samples": 3
     },
     "detailed_json": {
       "parse_failures": 0,
@@ -310,10 +310,10 @@
   },
   "foundation": {
     "_capabilities": {
-      "cold_start_seconds": 1.49,
-      "decode_tokens_per_sec": 74.95,
-      "prefill_chars_per_sec": 3954.5,
-      "prefill_samples": 1
+      "cold_start_seconds": 1.51,
+      "decode_tokens_per_sec": 66.07,
+      "prefill_chars_per_sec": 3223.8,
+      "prefill_samples": 3
     },
     "detailed_json": {
       "p95_latency": 39.3,
@@ -479,8 +479,10 @@
   },
   "gemma-4-12b-it-mxfp8": {
     "_capabilities": {
-      "prefill_chars_per_sec": 1189.6,
-      "prefill_samples": 1
+      "cold_start_seconds": 5.11,
+      "decode_tokens_per_sec": 18.27,
+      "prefill_chars_per_sec": 714.3,
+      "prefill_samples": 3
     },
     "detailed_json": {
       "p95_latency": 25.2,
@@ -662,6 +664,7 @@
   },
   "gemma-4-e2b-it-8bit": {
     "_capabilities": {
+      "cold_start_seconds": 8.19,
       "decode_tokens_per_sec": 7.04
     },
     "detailed_json": {
@@ -844,8 +847,10 @@
   },
   "gemma-4-e4b-it-8bit": {
     "_capabilities": {
-      "prefill_chars_per_sec": 6908.9,
-      "prefill_samples": 1
+      "cold_start_seconds": 10.14,
+      "decode_tokens_per_sec": 72.32,
+      "prefill_chars_per_sec": 6552.6,
+      "prefill_samples": 3
     },
     "detailed_json": {
       "p95_latency": 23.5,
@@ -1066,10 +1071,10 @@
   },
   "muse-glimmer-30b-jang_6m": {
     "_capabilities": {
-      "cold_start_seconds": 1.76,
-      "decode_tokens_per_sec": 12.18,
-      "prefill_chars_per_sec": 508.6,
-      "prefill_samples": 1
+      "cold_start_seconds": 10.79,
+      "decode_tokens_per_sec": 9.36,
+      "prefill_chars_per_sec": 401.9,
+      "prefill_samples": 3
     },
     "detailed_json": {
       "p95_latency": 229.8,
@@ -1233,7 +1238,21 @@
       "total_retries": 1
     }
   },
+  "nemotron-3.5-lightning-30b-a3b-mxfp8": {
+    "_capabilities": {
+      "cold_start_seconds": 13.24,
+      "decode_tokens_per_sec": 79.43,
+      "prefill_chars_per_sec": 2399.1,
+      "prefill_samples": 2
+    }
+  },
   "ornith-1.0-35b-jang_4m": {
+    "_capabilities": {
+      "cold_start_seconds": 9.61,
+      "decode_tokens_per_sec": 51.63,
+      "prefill_chars_per_sec": 2740.1,
+      "prefill_samples": 2
+    },
     "detailed_json": {
       "parse_failures": 0,
       "samples": 1,
@@ -1493,6 +1512,12 @@
     }
   },
   "ornith-1.0-9b-mxfp8": {
+    "_capabilities": {
+      "cold_start_seconds": 4.06,
+      "decode_tokens_per_sec": 44.01,
+      "prefill_chars_per_sec": 2123.5,
+      "prefill_samples": 2
+    },
     "detailed_json": {
       "parse_failures": 0,
       "samples": 1,
@@ -2143,6 +2168,14 @@
       "samples": 11,
       "timeout": 900,
       "total_retries": 2
+    }
+  },
+  "qwen3.8-27b-mxfp8": {
+    "_capabilities": {
+      "cold_start_seconds": 182.03,
+      "decode_tokens_per_sec": 0.08,
+      "prefill_chars_per_sec": 116.7,
+      "prefill_samples": 2
     }
   },
   "qwopus3.6-27b-v2-mlx-4bit": {
