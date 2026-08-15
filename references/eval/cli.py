@@ -207,6 +207,17 @@ def main():
 
     if is_server_running():
         osaurus_models = get_models()
+
+        # Surface a stale conf/config.toml here rather than waiting for a tool to trip
+        # over it: the roster changes on disk, the config does not follow, and until
+        # this ran the only symptom was an HTTP 404 from whichever tool hit it first.
+        # Audited against the list just fetched — a second request would be both
+        # wasteful and a live connection in a path the test suite forbids one in.
+        from lib.model_resolve import audit_configured_models, format_audit
+
+        for line in format_audit(audit_configured_models(installed=osaurus_models)):
+            cli_runtime.console.print(f"{WARN} {line}" if not line.startswith(" ") else line)
+
         for m in osaurus_models:
             m_lower = m.lower()
             if any(kw in m_lower for kw in NON_LLM_KEYWORDS):

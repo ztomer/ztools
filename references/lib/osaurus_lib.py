@@ -199,8 +199,12 @@ def call(
     task: str = "think",
     parse_json: bool = False,
     use_foundation: Optional[bool] = None,
+    _allow_model_substitution: bool = True,
 ) -> dict:
     logger.debug(f"Calling {model} for task '{task}' at {host}:{port}")
+    # Kept unquirked: a substitute model is a different family, so the retry has to
+    # re-derive quirks from scratch rather than inherit the dead model's prefixes.
+    unquirked_messages = messages
     messages = apply_model_quirks(messages, model)
     max_tokens = max_tokens or get_max_tokens_for_task(task)
 
@@ -240,7 +244,27 @@ def call(
         result["time"] = round(time.time() - start, 1)
         logger.debug(f"Response received in {result['time']}s")
         if resp.status_code != 200:
-            result["error"] = f"HTTP {resp.status_code}: {resp.text[:ERROR_TRUNCATE_LEN]}"
+            body = resp.text
+            retried = _retry_with_substitute(
+                model=model,
+                status_code=resp.status_code,
+                body=body,
+                allowed=_allow_model_substitution,
+                kwargs=dict(
+                    messages=unquirked_messages,
+                    host=host,
+                    port=port,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=timeout,
+                    task=task,
+                    parse_json=parse_json,
+                    use_foundation=use_foundation,
+                ),
+            )
+            if retried is not None:
+                return retried
+            result["error"] = f"HTTP {resp.status_code}: {body[:ERROR_TRUNCATE_LEN]}"
             logger.error(f"HTTP error: {result['error']}")
             return result
         resp_data = resp.json()
@@ -277,6 +301,36 @@ def call(
         result["error"] = f"Error: {type(e).__name__}: {e}"
         logger.exception(f"Unexpected error: {e}")
     return result
+
+
+def _retry_with_substitute(
+    model: str,
+    status_code: int,
+    body: str,
+    allowed: bool,
+    kwargs: dict,
+) -> Optional[dict]:
+    """Retry once against a servable model when the configured tag is gone.
+
+    Returns the retried result, or None to let the original error stand. None is the
+    answer whenever we lack evidence — a non-404, a 404 about something other than a
+    missing model, an unreachable roster, or a roster that offers no alternative —
+    because rewriting the caller's model on a guess would trade a clear error for a
+    silently wrong answer.
+    """
+    from lib.model_resolve import fetch_roster, is_missing_model_error, substitute_model
+
+    if not allowed or not is_missing_model_error(status_code, body):
+        return None
+    roster = fetch_roster(kwargs["host"], kwargs["port"])
+    substitute, reason = substitute_model(model, roster)
+    if not reason:
+        return None
+    logger.warning(reason)
+    retried = call(model=substitute, _allow_model_substitution=False, **kwargs)
+    retried["substituted_from"] = model
+    retried["substitution_reason"] = reason
+    return retried
 
 
 def _try_foundation(

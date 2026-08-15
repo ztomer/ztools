@@ -218,6 +218,26 @@ def get_filename_models() -> List[str]:
     return models if models else ["foundation"]
 
 
+def _default_fallback_chain() -> List[str]:
+    """The known families, on-device first.
+
+    Assembled from MODEL_FAMILIES rather than written out again so there is one list of
+    families in the codebase, not two that drift. conf/config.toml overrides it; this
+    exists so a config predating the key still resolves through the families instead of
+    falling through to "biggest model on the roster".
+    """
+    from lib.llm.constants import DEFAULT_MODEL, MODEL_FAMILIES
+
+    return [DEFAULT_MODEL] + [f for f in MODEL_FAMILIES if f != DEFAULT_MODEL]
+
+
+def get_model_fallback_chain() -> List[str]:
+    """Families lib/model_resolve.py tries when the configured model is gone."""
+    _auto_load()
+    chain = _config.get("model_fallback_chain", [])
+    return list(chain) if chain else _default_fallback_chain()
+
+
 def get_filename_prompt() -> str:
     _auto_load()
     prompts = _config.get("prompts", {})

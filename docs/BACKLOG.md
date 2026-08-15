@@ -5,6 +5,53 @@ accumulating here as a graveyard of finished plans.
 
 ---
 
+## 0. The installed roster drifted out from under the config (fixed 2026-08-15)
+
+**What happened.** `qwen3.6-35b-a3b-mxfp8-mtp` and `qwen-agentworld-35b-a3b-mxfp8` were
+deleted from disk; `nemotron-3.5-lightning-30b-a3b-mxfp8` and `qwen3.8-27b-mxfp8`
+appeared. `conf/config.toml` still named the dead ones for `default_model`,
+`best_models.think`, `best_models.vlm` and 2 of the 3 `filename_models` — four of seven
+tasks routed to a model the server answers with
+
+    HTTP 404 {"error":{"message":"Model '...' is not installed or registered ..."}}
+
+`wk` was dead outright: both of its tasks pointed there. Nothing reported the real
+problem; the tools just surfaced a status code.
+
+**The class.** A model tag is a session-scoped identity (rule #7), and nothing probed
+it before depending on it (rule #10). The connection-failed path already degraded with
+a stated reason via `_try_foundation`; the model-missing path — the same failure shape —
+had no equivalent and died instead.
+
+**Fixed structurally, not per-instance.**
+- `lib/model_resolve.py` — `is_missing_model_error` distinguishes "that tag is gone"
+  from a 404 for a mistyped URL; `substitute_model` picks the largest installed model of
+  the same family (falling back through `foundation, qwen, gemma, ornith, nemotron`)
+  and returns a reason sentence; `audit_configured_models` reports which config SLOT is
+  stale (`best_models.think = ...`), not merely that something is.
+- `lib/osaurus_lib.call` retries once against the substitute and records
+  `substituted_from` / `substitution_reason`. It deliberately does NOT fire on a
+  non-404, on a 404 from a wrong path, or on an unreachable roster — an empty roster is
+  no evidence, not evidence of nothing, and substituting there would trade a loud error
+  for a quiet wrong answer.
+- `conf/config.toml` now names installed models, annotated PROVISIONAL: `qwen3.8-27b-mxfp8`
+  is a like-for-like stand-in (same `qwen3_5` architecture, largest installed qwen,
+  carries a `vision_config` so it can still serve `vlm`), **not** a measured winner.
+  Item 1 is what replaces the guesswork.
+
+- `ev` runs the audit at startup and prints any stale slot before evaluating anything,
+  so the config is checked without waiting for a tool to trip over it. It audits
+  against the roster `ev` had already fetched rather than issuing its own request —
+  the first attempt did fetch its own, which broke 26 tests, because
+  `references/tests/conftest.py` forbids a live server connection on exactly that path.
+  The gate was right and the second request was waste regardless.
+
+**Still open.** The TUI has no equivalent — `ztools` can still start clean while the
+config names an unservable model. Wire `audit_configured_models` into its startup panel,
+passing the roster the TUI already holds. Note that pytest cannot be the gate for any of
+this (the suite blocks real server connections on purpose); the check has to run at
+runtime against a real roster.
+
 ## 1. Sweep zeval across every installed model, and derive the quirks from it
 
 **Why now.** The eval harness only recently started measuring anything real:
@@ -14,22 +61,41 @@ reason. Every `best_models` entry in `conf/config.toml` predates those fixes, so
 the current model assignments were chosen by a harness that could not tell good
 output from bad. They need to be re-derived, not adjusted.
 
-**Scope.** 11 models are installed:
+**Scope.** 11 models are installed, re-listed 2026-08-15 (the previous list was
+stale — see item 0). `family` is `details.family` from `/api/tags`, i.e. the real
+architecture rather than a guess from the name; `vision` is whether the model's own
+`config.json` carries a `vision_config`:
 
-```
-bonsai-27b-ternary-jang        muse-glimmer-30b-jang_6m     qwen3.6-27b-mxfp8-mtp
-foundation                     ornith-1.0-35b-jang_4m       qwen3.6-35b-a3b-mxfp8-mtp
-gemma-4-12b-it-mxfp8           ornith-1.0-9b-mxfp8
-gemma-4-e2b-it-8bit            potion-base-4m
-gemma-4-e4b-it-8bit
-```
+| model | family | size | vision |
+|---|---|---|---|
+| foundation | foundation | — | n/a (on-device) |
+| bonsai-27b-ternary-jang | qwen3_5 | 27B | yes |
+| gemma-4-12b-it-mxfp8 | gemma4_unified | 12B | yes |
+| gemma-4-e2b-it-8bit | gemma4 | 2B | yes |
+| gemma-4-e4b-it-8bit | gemma4 | 4B | yes |
+| muse-glimmer-30b-jang_6m | muse_glimmer | 30B | yes |
+| nemotron-3.5-lightning-30b-a3b-mxfp8 | nemotron_h | 30B | **no** |
+| ornith-1.0-35b-jang_4m | qwen3_5_moe | 35B | yes |
+| ornith-1.0-9b-mxfp8 | qwen3_5 | 9B | yes |
+| potion-base-4m | unknown | 4M | no |
+| qwen3.8-27b-mxfp8 | qwen3_5 | 27B | yes |
 
-Only three families have a `conf/models/*.toml`: gemma, qwen, qwopus (plus
-laguna and nemotron for models no longer installed, and foundation). So
-`bonsai`, `muse-glimmer`, `ornith` and `potion-base` currently fall through to
-the built-in fallback prompts — the ones whose weekend_transient schema was
-malformed until recently. Whether they need their own quirks file is unknown
-because nothing has measured them.
+Two things fall out of that table, both of which change what this sweep has to test:
+
+**The name-prefix family matcher is wrong.** `lib/config_getters.py::get_model_family`
+keys on the model NAME, so `bonsai-*` and `ornith-*` resolve to `"default"` and get the
+built-in fallback prompts — but both are `qwen3_5`, the family `conf/models/qwen.toml`
+was written for. They may need no new config at all, just correct routing. Only
+`muse_glimmer` and `unknown` (potion) are genuinely unserved families. Test the
+architecture-keyed routing against the name-keyed one as part of the sweep rather than
+assuming either.
+
+**The VLM keyword heuristic is wrong in the other direction.**
+`lib/osaurus_models.py::DEFAULT_VLM_KEYWORDS` is `vl,vision,qwen,llamavl`, so it finds
+the qwens and misses gemma, ornith, bonsai and muse-glimmer — every one of which has a
+vision tower. Meanwhile nemotron, the ONLY text-only server model, is not excluded by
+anything. Replace the keyword match with the `config.json` probe (item 2 already reads
+that file for `max_position_embeddings`; `vision_config` is in the same dict).
 
 **Do this.**
 1. Run the full task set per model, one at a time — the GPU is a single shared
@@ -107,16 +173,53 @@ The warmup bug is the clearest: the probe is an eval's FIRST request, so it
 timed weights moving into memory. bonsai-27b (27GB, ternary) read 59 chars/sec
 against ornith-9b's 1,803 -- a difference almost entirely attributable to load
 time, which was then about to be recorded as that model's throughput forever.
-Every rate in `conf/eval_signals.json` predates the warmup fix and needs
-re-measuring.
+
+**Correction (2026-08-15): the recorded rates do NOT predate the warmup fix.** This
+paragraph used to end by claiming they did. Checked rather than assumed: at commit
+`1bb9ee0` (the warmup fix itself) every model's `prefill_chars_per_sec` was absent, so
+each rate now in `conf/eval_signals.json` was measured by the fixed probe. The probe
+code needs nothing. What the DATA needs is different and narrower:
+
+- **Five of eleven installed models have no rate at all** — `qwen3.8-27b-mxfp8`,
+  `nemotron-3.5-lightning-30b-a3b-mxfp8`, `ornith-1.0-35b-jang_4m`,
+  `ornith-1.0-9b-mxfp8`, `potion-base-4m`. The first of those is `default_model`,
+  `think` and `vlm`, so the tool most likely to send a large prompt is sized by the
+  200 chars/sec "assume slow" fallback rather than by anything measured.
+- **Every rate is n=1.** `prefill_samples` is 1 across the board, so nothing in the
+  file can tell a reproducible rate from a one-off — which matters because
+  `gemma-4-e4b-it-8bit` reads 6,908.9 chars/sec against the probe's own docstring
+  claim that the fastest genuine reading on this host is ~3,500. One of those two is
+  wrong and a single sample cannot say which.
+- **`conf/eval_signals.json` carries dead entries**, including twelve uninstalled
+  models and two keyed `m` and `mock-model`, which are fixture names. These are
+  RESIDUE, not an active leak: `conftest.py::_signals_files_stay_clean` is autouse and
+  session-scoped and repoints `EVAL_SIGNALS_PATH` at tmp, so no current test can reach
+  the real file — confirmed by full gate runs leaving it untouched. They are safe to
+  delete and will not come back.
+  (Note for whoever greps: two comments — `eval/signals.py:20` and `weekend/llm.py:50`
+  — say conftest redirects `EVAL_SIGNALS_DIR`. It redirects `EVAL_SIGNALS_PATH`, the
+  resolved path. The protection is real; only the comments name the wrong symbol, and
+  they made the gate look absent when it is not.)
 
 **Still to do.**
-- Probe the other capabilities the same way instead of encoding them as quirks:
-  tool/function-calling support, vision capability (`potion-base-4m` is
-  currently skipped as "non-LLM" by name), and whether a model emits thinking
-  blocks. `details.family` from `/api/tags` gives the real family
-  (`gemma4_unified`, `qwen3_5`, `muse_glimmer`) and is a better key for
-  per-family config than matching on the model name prefix.
+- **Vision: probed, not yet wired** (2026-08-15). Every installed model's `config.json`
+  was read; the `vision_config` column in item 1's table is the answer, and it
+  contradicts the name-keyed heuristic in both directions. Replace
+  `DEFAULT_VLM_KEYWORDS` with the disk probe. `potion-base-4m` is correctly skipped but
+  for the wrong reason — by name, not by capability.
+- **`details.family` confirmed as the right key** (2026-08-15). `/api/tags` reports
+  `gemma4_unified`, `gemma4`, `qwen3_5`, `qwen3_5_moe`, `muse_glimmer`, `nemotron_h`,
+  `unknown` — and it correctly identifies bonsai and ornith as qwen3_5, which the name
+  matcher cannot. Re-key `get_model_family` on it, keeping the name match as the
+  fallback for when the server is unreachable.
+- Still unprobed: tool/function-calling support, and whether a model emits thinking
+  blocks. Both are still encoded as quirks rather than measured.
+- **Re-measure the prefill rates.** `osaurus bench [--model X] [--prompt-tokens
+  1024,8192] [--runs 3] [--json <path>]` ships with the server and reports TTFT /
+  prefill / decode separately, tagged with hardware info. That is a purpose-built
+  instrument for the exact quantity the homegrown probe got wrong three times running;
+  evaluate it against a known-warm model before adopting it, and if it is sound, delete
+  the homegrown probe rather than maintaining two.
 - foundation stays special-cased: no local config to probe, a much smaller
   window than any server model (sizing a prompt to the server budget and
   re-sending it returns HTTP 500), fast and strong on short tasks. Treat "what

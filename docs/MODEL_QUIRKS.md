@@ -4,6 +4,50 @@
 
 ---
 
+## ⚠ Half this document names models that are no longer installed (2026-08-15)
+
+`qwen3.6-35b-a3b-mxfp8-mtp`, `qwen3.6-27b-mxfp8-mtp`, `qwen-agentworld-35b-a3b-mxfp8`
+and the whole `laguna` family have been removed from disk. Every table below that names
+one is describing a model this machine cannot run — including the cheat sheet
+immediately following. `nemotron-3.5-lightning-30b-a3b-mxfp8` and `qwen3.8-27b-mxfp8`
+arrived and appear nowhere. The numbers are not merely stale, they are unrunnable, and
+they are what `conf/config.toml` was copied from.
+
+Do not adjust these rows. `docs/BACKLOG.md` item 1 re-derives them from a sweep; until
+that runs, the only measured claims in this file are the roster table below and the
+2026-08-12 sweep section, and only for the models that still exist.
+
+### Installed roster, measured 2026-08-15
+
+`family` is `details.family` from `/api/tags` — the real architecture, not the name.
+`vision` is whether the model's own `config.json` carries a `vision_config`.
+
+| model | family | size | vision |
+|---|---|---|---|
+| foundation | foundation | — | n/a (on-device) |
+| bonsai-27b-ternary-jang | qwen3_5 | 27B | yes |
+| gemma-4-12b-it-mxfp8 | gemma4_unified | 12B | yes |
+| gemma-4-e2b-it-8bit | gemma4 | 2B | yes |
+| gemma-4-e4b-it-8bit | gemma4 | 4B | yes |
+| muse-glimmer-30b-jang_6m | muse_glimmer | 30B | yes |
+| nemotron-3.5-lightning-30b-a3b-mxfp8 | nemotron_h | 30B | **no** |
+| ornith-1.0-35b-jang_4m | qwen3_5_moe | 35B | yes |
+| ornith-1.0-9b-mxfp8 | qwen3_5 | 9B | yes |
+| potion-base-4m | unknown | 4M | no |
+| qwen3.8-27b-mxfp8 | qwen3_5 | 27B | yes |
+
+Two routing bugs fall straight out of it:
+
+- **`bonsai` and `ornith` are qwen3_5**, but `get_model_family` keys on the model NAME,
+  so both resolve to `"default"` and get built-in fallback prompts instead of
+  `conf/models/qwen.toml`. Only `muse_glimmer` and `unknown` are genuinely unserved.
+- **Nearly everything has a vision tower.** `DEFAULT_VLM_KEYWORDS`
+  (`vl,vision,qwen,llamavl`) finds the qwens and misses gemma, ornith, bonsai and
+  muse-glimmer, while nemotron — the only text-only server model — is excluded by
+  nothing. Read `vision_config` off disk instead of matching names.
+
+---
+
 ## TL;DR Cheat Sheet
 
 Start server: `osaurus serve &>/dev/null & sleep 10`
@@ -11,6 +55,9 @@ Start server: `osaurus serve &>/dev/null & sleep 10`
 ---
 
 ## Best Models by Task
+
+**STALE — every qwen3.6 and laguna row below names an uninstalled model. See the
+warning at the top of this file.**
 
 | Task | Model | Speed | Command |
 |------|-------|-------|---------|

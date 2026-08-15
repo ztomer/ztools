@@ -1,5 +1,18 @@
 llm_url = "http://localhost:1337"
-default_model = "qwen3.6-35b-a3b-mxfp8-mtp"
+
+# PROVISIONAL, 2026-08-15. qwen3.6-35b-a3b-mxfp8-mtp and qwen-agentworld-35b-a3b-mxfp8
+# were deleted from disk at some point after the entries below were written, and
+# nothing noticed: the server answered `default_model`, think, vlm and 2 of the 3
+# filename_models with HTTP 404, which broke `wk` outright (both of its tasks routed
+# there). lib/model_resolve.py now substitutes at call time and says so, but a
+# substitution is a stopgap that fires on every run — these names are the fix.
+#
+# qwen3.8-27b-mxfp8 is a LIKE-FOR-LIKE stand-in, not a measured winner: same qwen3_5
+# architecture as the model it replaces, largest installed qwen, and it carries a
+# vision_config on disk so it can still serve `vlm`. It has never been evaluated on
+# these tasks. Re-derive the whole table from a sweep (docs/BACKLOG.md item 1) and
+# stamp the date when you do, so the next roster change invalidates it visibly.
+default_model = "qwen3.8-27b-mxfp8"
 
 # Fallback chain for `rn`'s filename task, tried in order.
 # Top-level keys must stay ABOVE the first [table] header — a bare key after one
@@ -7,21 +20,28 @@ default_model = "qwen3.6-35b-a3b-mxfp8-mtp"
 # [max_tokens] where get_filename_models() could never see it.
 filename_models = [
   "foundation",
-  "qwen-agentworld-35b-a3b-mxfp8",
-  "qwen3.6-35b-a3b-mxfp8-mtp",
+  "qwen3.8-27b-mxfp8",
 ]
 
-# Best models per task based on latest empirical benchmark sweep (task-673 / task-899).
-# Documented in docs/DEEP_MODEL_VS_GEMINI_EVALUATION.md.
+# Order lib/model_resolve.py tries when a configured model is not installed and no
+# stand-in of its own family is either. Entries are matched as substrings against the
+# server's roster, so they name FAMILIES, not tags — a tag here would rot the same way
+# the ones above did. foundation leads because it is on-device and always present.
+model_fallback_chain = ["foundation", "qwen", "gemma", "ornith", "nemotron"]
+
+# json/summarize/filename below are the surviving entries from the task-673 /
+# task-899 sweep (docs/DEEP_MODEL_VS_GEMINI_EVALUATION.md). Those numbers predate the
+# harness fixes that stopped `filename` scoring 100 for an unfilled {text} placeholder,
+# so treat them as unverified too — they are merely the ones still installed.
 [best_models]
-think = "qwen3.6-35b-a3b-mxfp8-mtp"
+think = "qwen3.8-27b-mxfp8"  # provisional, see above
 json = "foundation"
   # Fastest (0.7s) at 100% on filename and 91.6% on file_summary context-bounding.
 summarize = "gemma-4-12b-it-mxfp8"
   # 100% on summarize, flawless ## Executive Summary narrative and connecting verbs.
 filename = "foundation"
   # 100% on filename task, fastest (0.3s).
-vlm = "qwen3.6-35b-a3b-mxfp8-mtp"
+vlm = "qwen3.8-27b-mxfp8"  # provisional, see above
 
 [timeouts]
 think = 600
