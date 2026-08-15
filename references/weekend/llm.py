@@ -47,8 +47,11 @@ PHASE_TIMEOUT_STRUCTURE = int(os.environ.get("WEEKEND_PHASE_TIMEOUT", "900"))
 PHASE_MAX_RETRIES = int(os.environ.get("WEEKEND_PHASE_MAX_RETRIES", "3"))
 # Headroom over observed latency when persisting a learned phase timeout.
 PHASE_TIMEOUT_HEADROOM = 1.5
-# Tracked file — see the EVAL_SIGNALS_DIR note in eval/run.py. tests/conftest.py
-# redirects this to a tmp dir so `pytest` never dirties the working tree.
+# Tracked file. tests/conftest.py::_signals_files_stay_clean patches PHASE_SIGNALS_PATH
+# (the resolved path, not this dir) at tmp for the whole session, so `pytest` never
+# dirties the working tree. The note this used to point at, in eval/run.py, named
+# EVAL_SIGNALS_DIR — a symbol the fixture does not touch, which made the gate look
+# absent to anyone who went looking for it.
 PHASE_SIGNALS_DIR = Path(
     os.environ.get("PHASE_SIGNALS_DIR", str(conf_dir()))
 )

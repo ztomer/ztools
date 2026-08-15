@@ -17,7 +17,8 @@ DEFAULT_EVAL_TIMEOUT = int(os.environ.get("EVAL_DEFAULT_TIMEOUT", "900"))
 
 # Learned per-model timeouts. This file is tracked, so a test run that exercises the
 # eval loop would otherwise rewrite it and dirty the working tree on every `pytest`.
-# tests/conftest.py points EVAL_SIGNALS_DIR at a tmp dir to keep runs side-effect free.
+# tests/conftest.py::_signals_files_stay_clean patches EVAL_SIGNALS_PATH (the resolved
+# path, not this dir) at a tmp file for the whole session, to keep runs side-effect free.
 EVAL_SIGNALS_DIR = Path(
     os.environ.get("EVAL_SIGNALS_DIR", str(conf_dir()))
 )
