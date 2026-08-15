@@ -47,11 +47,27 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-require_commands osaurus lsof
+require_commands osaurus lsof pgrep
 
-# Every PID listening on the port. This is the definition that matters: two
-# servers can only both be "running" if both hold a socket, and a half-dead
-# process that holds no socket cannot serve a request no matter what ps says.
+# Every osaurus PROCESS, whether or not it holds a socket.
+#
+# An earlier version of this counted only PIDs listening on $PORT, reasoning that a
+# process holding no socket cannot serve a request. True, and beside the point: the
+# harm is not that a stray server answers, it is that it OCCUPIES memory and GPU.
+# `osaurus stop` ends the serving and leaves the process alive, so the machine sat
+# with two osaurus processes -- one holding 1337 and loading a 27B model, one idle
+# but resident -- while this script reported "exactly one server" and the
+# measurement it was guarding got corrupted anyway.
+#
+# Matched on the app binary path so this does not catch the `osaurus` CLI wrapper
+# or a grep of its own command line.
+OSAURUS_BIN="/Applications/osaurus.app/Contents/MacOS/osaurus"
+
+server_pids() {
+  pgrep -f "$OSAURUS_BIN" 2>/dev/null | sort -u || true
+}
+
+# The subset that is actually serving, which is a different question.
 listener_pids() {
   lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t 2>/dev/null | sort -u || true
 }
@@ -78,9 +94,9 @@ stop_all() {
   local pids="$1"
   osaurus stop >/dev/null 2>&1 || true
   sleep 3
-  # `osaurus stop` talks to the app it knows about. Anything still holding the
-  # socket after that is a server it does not know about, which is exactly the
-  # case this script exists for.
+  # `osaurus stop` releases the socket but leaves the process resident, so the loop
+  # below is the part that actually frees the memory -- and it is why this function
+  # is given a PROCESS list rather than a listener list.
   for pid in $pids; do
     if kill -0 "$pid" 2>/dev/null; then
       warn "$(describe "$pid") survived 'osaurus stop'; terminating"
@@ -97,15 +113,19 @@ stop_all() {
 # Newline-separated string, not a bash array: `mapfile` is a bash 4 builtin and
 # macOS ships bash 3.2, so a script that needs it only runs where someone already
 # installed a newer bash. Word-splitting a list of PIDs is safe -- they are digits.
-FOUND="$(listener_pids)"
+FOUND="$(server_pids)"
 COUNT="$(printf '%s' "$FOUND" | grep -c . || true)"
 FIRST="$(printf '%s\n' "$FOUND" | head -1)"
 
 if [ "$MODE" = "check" ]; then
   case "$COUNT" in
-    0) err "no osaurus server on port $PORT"; exit 1 ;;
-    1) ok "exactly one osaurus server on port $PORT — $(describe "$FIRST")"; exit 0 ;;
-    *) err "$COUNT servers on port $PORT — measurements taken now are not trustworthy"
+    0) err "no osaurus process running"; exit 1 ;;
+    1) if [ -z "$(listener_pids)" ]; then
+         err "one osaurus process ($(describe "$FIRST")) but nothing listening on $PORT"
+         exit 1
+       fi
+       ok "exactly one osaurus process, serving $PORT — $(describe "$FIRST")"; exit 0 ;;
+    *) err "$COUNT osaurus processes — measurements taken now are not trustworthy"
        for pid in $FOUND; do err "  $(describe "$pid")"; done
        exit 1 ;;
   esac
@@ -118,16 +138,17 @@ if [ "$MODE" = "restart" ] && [ "$COUNT" -gt 0 ]; then
 fi
 
 if [ "$COUNT" -gt 1 ]; then
-  warn "$COUNT osaurus servers on port $PORT — they compete for the same GPU and RAM"
+  warn "$COUNT osaurus processes — they compete for the same GPU and RAM"
   for pid in $FOUND; do warn "  $(describe "$pid")"; done
   info "stopping all, then starting one"
   stop_all "$FOUND"
   COUNT=0
 elif [ "$COUNT" -eq 1 ]; then
-  # Holding the socket is not the same as answering. A server wedged mid-eviction
-  # keeps its listener and 499s every request, which is the state that produced
-  # the contaminated readings in the first place.
-  if curl -fsS -m 10 -o /dev/null "http://127.0.0.1:$PORT/v1/models" 2>/dev/null; then
+  # Being the only process is not the same as answering. A server wedged
+  # mid-eviction keeps its listener and 499s every request, and one that was
+  # `osaurus stop`ped holds no listener at all while still occupying memory.
+  if [ -n "$(listener_pids)" ] \
+     && curl -fsS -m 10 -o /dev/null "http://127.0.0.1:$PORT/v1/models" 2>/dev/null; then
     ok "one osaurus server, answering — $(describe "$FIRST")"
     echo "$PORT"
     exit 0
@@ -145,10 +166,10 @@ if ! wait_until_serving; then
   die "osaurus did not answer on port $PORT within ${STARTUP_TIMEOUT}s — see $LOG"
 fi
 
-NOW="$(listener_pids)"
+NOW="$(server_pids)"
 NOW_COUNT="$(printf '%s' "$NOW" | grep -c . || true)"
 if [ "$NOW_COUNT" -ne 1 ]; then
-  die "expected exactly one server on port $PORT, found $NOW_COUNT — see $LOG"
+  die "expected exactly one osaurus process, found $NOW_COUNT — see $LOG"
 fi
 
 ok "one osaurus server, answering — $(describe "$(printf '%s\n' "$NOW" | head -1)")"
