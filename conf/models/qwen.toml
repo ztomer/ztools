@@ -98,37 +98,21 @@ transient = ["transient_events", "events", "activities", "recommendations"]
 # model's `model_type`, and get_model_family trims qwen3_5 / qwen3_5_moe / qwen3_5_mtp
 # to "qwen". That is why a model with no "qwen" in its id lands here.
 #
-# THE REASONING OVERRUN. These models stream their chain of thought into a separate
-# `reasoning_content` field and leave `content` empty until it ends. The chat template
-# opens a <think> block on every request and only pre-closes it when
-# `enable_thinking` is false -- and no installed model sets
-# `default_chat_template_kwargs`, so it never is. On an easy prompt the model closes
-# the block itself after ~230-370 tokens; on the harder eval tasks it never does,
-# spends the whole budget thinking, and returns finish_reason=length with nothing.
+# `max_tokens` here NARROWS a task budget for one model. It is deliberately EMPTY.
 #
-# The budget is the knob, and the direction is inverted from the usual. Measured on
-# one model and prompt (docs/MODEL_QUIRKS.md, commit c3d7167):
+# A blanket cap was tried and removed. These models overrun their budget on hard
+# prompts -- they stream chain of thought into `reasoning_content`, leave `content`
+# empty, and never stop -- and capping the budget does stop that. It also removes
+# thinking from every request that was working, including the ones where thinking is
+# what makes the answer good. That trades a visible failure for an invisible one, and
+# it decides in config a question that should be measured: does this model do BETTER
+# with thinking, on this task?
 #
-#     max_tokens=120     finish=length   content=''           reasoning truncated
-#     max_tokens=512     finish=stop     content=valid JSON   ~234 completion tokens
-#     max_tokens=16000   finish=length   content=''           523s, scored 0
+# The overrun is now caught at runtime instead. lib/llm/streaming.py watches the SSE
+# stream and aborts only a run that is already doomed -- reasoning past
+# REASONING_OVERRUN_FRACTION of the budget with `content` still empty, at which point
+# the remaining budget cannot hold an answer anyway. Long thinking is allowed; only
+# runaway thinking is stopped, and the abort is recorded so "does thinking work for
+# this model" becomes an eval result rather than a config guess.
 #
-# A tight budget forces a stop; a generous one guarantees the failure. "Output JSON
-# now." does NOT suppress it -- that prefix was present in every run above.
-# get_max_tokens_for_task only ever NARROWS with this value, never widens.
-#
-# THIS IS A MITIGATION, NOT THE FIX. It stops the model burning a full budget to
-# return nothing, but it also caps legitimate long answers, so a capped model will
-# under-perform on `summarize` for a reason that is ours rather than the model's. The
-# real fix is the switch the chat template already has:
-#
-#     "default_chat_template_kwargs": {"enable_thinking": false}
-#
-# in the model's own generation_config.json, which osaurus reads. That stops the
-# reasoning WITHOUT capping the answer. It edits files under ~/MLXModels rather than
-# this repo, which is why it is documented here and not applied here.
-
-[models."bonsai-27b-ternary-jang"]
-# Caught mid-sweep returning empty content on `filename`, then retrying into the same
-# wall. 27B dense ternary, qwen3_5, 64 layers.
-max_tokens = 512
+# Put a cap here only for a model measured to be BETTER capped, with the numbers.

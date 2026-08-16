@@ -134,71 +134,115 @@ class TestTheRetryUsesASmallerBudget:
 
 
 class TestThePerModelBudgetCap:
-    """conf/models/<family>_versions.toml can narrow a model's output budget.
+    """conf/models/<family>.toml can narrow ONE model's output budget.
 
-    The remedy for a reasoning overrun is a SMALLER budget, so this is the config
-    surface for it. Two things have to hold: the entry must actually be reachable,
-    and it must only ever narrow.
+    No model is capped today, deliberately: a blanket cap removes thinking from every
+    request that was already succeeding, and lib/llm/streaming.py now stops only the
+    runs that cannot finish. The mechanism stays because a model MEASURED to be better
+    capped should be cappable -- so these use a synthetic family config rather than
+    whatever conf/ happens to contain, and keep testing after the last real cap is
+    gone.
     """
 
-    def _as_family(self, monkeypatch, architecture):
-        from lib.config import clear_model_config_cache
+    @pytest.fixture
+    def capped_family(self, monkeypatch):
+        """A synthetic family whose name appears in no model id.
 
-        monkeypatch.setattr(
-            "lib.model_caps.recorded_capability",
-            lambda model, key: architecture if key == "family" else None,
-        )
-        clear_model_config_cache()
+        get_model_family is patched directly rather than the architecture probe and
+        the architecture-to-file mapping behind it. Patching those two failed only
+        under the full suite -- something ahead of it in the run leaves the resolution
+        elsewhere -- and a fixture that works alone but not in the suite is exactly the
+        kind of test this session has been deleting.
+        """
+        import lib.config_getters as getters
+
+        monkeypatch.setattr(getters, "get_model_family", lambda model: "testfam")
+        # Injected into the binding config_getters ACTUALLY reads, not into
+        # lib.config_core. config_getters does `from .config_core import
+        # _model_configs_cache` at import, so it holds a reference to the original
+        # dict -- and test_config_core_edges.py REBINDS lib.config_core's attribute to
+        # a fresh dict (`cc._model_configs_cache = {}`). After that runs, the two
+        # modules have different caches, and anything written through config_core is
+        # invisible here. Same seam hazard the repo already documents for
+        # patch.object across a module split.
+        cache = getters._model_configs_cache
+        cache.clear()
+        cache["testfam"] = {
+            "name": "testfam",
+            "prompts": {"json": "family prompt"},
+            "models": {"brandname-27b": {"max_tokens": 512}},
+        }
+        yield
+        cache.clear()
 
     def test_a_model_whose_name_lacks_its_family_still_reaches_its_entry(
-        self, monkeypatch
+        self, capped_family
     ):
         """The bug this covers is subtle and was live.
 
         get_model_config gated the per-model lookup on `family in model`. That holds
-        while families come from NAMES, and stops holding the moment they come from
-        the architecture: a qwen3_5 model named "bonsai-*" has no "qwen" in its id,
-        so the file loaded, the section existed, and the override was never read.
+        while families come from NAMES and stops holding the moment they come from the
+        architecture: "brandname-27b" contains no "testfam", so the file loaded, the
+        section existed, and the override was never read.
         """
         from lib.config import get_model_config
 
-        self._as_family(monkeypatch, "qwen3_5")
-
         # Twice, deliberately. The uncached path was never gated, so a single lookup
-        # on a cold cache passes whether or not the bug is present. The gate lives in
+        # on a cold cache passes whether or not the bug is present. The gate lived in
         # the CACHED branch, which means the override worked on first read and
-        # silently vanished on every later read in the same process -- the worst
-        # shape for a config bug, because it is correct exactly once.
-        first = get_model_config("bonsai-27b-ternary-jang")
-        second = get_model_config("bonsai-27b-ternary-jang")
+        # silently vanished afterwards -- the worst shape for a config bug.
+        first = get_model_config("brandname-27b")
+        second = get_model_config("brandname-27b")
 
-        assert first.get("name") == "qwen", "should resolve to the qwen family config"
         assert first.get("max_tokens") == 512, "per-model entry was not reached"
         assert second.get("max_tokens") == 512, (
-            "override vanished on the cached lookup — correct once is not correct"
+            "override vanished on the cached lookup -- correct once is not correct"
         )
 
-    def test_the_cap_narrows_the_task_budget(self, monkeypatch):
+    def test_the_family_config_survives_the_overlay(self, capped_family):
+        """An override adds to its family, it does not replace it."""
+        from lib.config import get_model_config
+
+        assert get_model_config("brandname-27b")["prompts"] == {"json": "family prompt"}
+
+    def test_the_cap_narrows_the_task_budget(self, capped_family):
         from lib.config import get_max_tokens_for_task
 
-        self._as_family(monkeypatch, "qwen3_5")
-        assert get_max_tokens_for_task("json", "bonsai-27b-ternary-jang") == 512
+        assert get_max_tokens_for_task("json", "brandname-27b") == 512
 
-    def test_it_never_widens_a_tighter_task_budget(self, monkeypatch):
-        """filename budgets 1000; a 512 cap must not raise it, and a hypothetical
-        larger cap must not either."""
+    def test_it_never_widens_a_tighter_task_budget(self, capped_family):
+        """filename budgets 1000; a cap must narrow it or leave it, never raise it."""
         from lib.config import get_max_tokens_for_task
 
-        self._as_family(monkeypatch, "qwen3_5")
-        assert get_max_tokens_for_task("filename", "bonsai-27b-ternary-jang") == 512
+        assert get_max_tokens_for_task("filename", "brandname-27b") <= 1000
 
-    def test_other_models_of_the_same_family_are_untouched(self, monkeypatch):
+    def test_an_uncapped_model_of_the_same_family_is_untouched(self, capped_family):
         from lib.config import get_max_tokens_for_task
 
-        self._as_family(monkeypatch, "qwen3_5")
-        assert get_max_tokens_for_task("json", "qwen3.8-27b-4bit") == 16000
+        assert get_max_tokens_for_task("json", "othermodel-9b") == 16000
 
     def test_omitting_the_model_keeps_the_plain_task_budget(self):
         from lib.config import get_max_tokens_for_task
 
         assert get_max_tokens_for_task("json") == 16000
+
+    def test_no_model_is_capped_in_the_shipped_config(self):
+        """A guard on the decision itself, not just the mechanism.
+
+        A cap is a measurement result, never a default. If one appears here, it should
+        arrive with numbers in its entry showing that model is better capped.
+        """
+        import tomllib
+
+        from lib.paths import conf_path
+
+        for family in ("qwen", "gemma", "nemotron", "foundation"):
+            path = conf_path("models", f"{family}.toml")
+            if not path.exists():
+                continue
+            data = tomllib.loads(path.read_text())
+            for model, section in (data.get("models") or {}).items():
+                assert "max_tokens" not in section, (
+                    f"{model} is capped in {path.name}; if that is intended, record "
+                    f"the measurement that justifies it and update this test"
+                )

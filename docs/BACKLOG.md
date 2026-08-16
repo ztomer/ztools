@@ -5,6 +5,77 @@ accumulating here as a graveyard of finished plans.
 
 ---
 
+## Current state, 2026-08-16
+
+**Done and committed**
+
+| | item | commits |
+|---|---|---|
+| 0 | Roster drift: config named deleted models, `wk` was dead outright | `c75adcc` |
+| — | Single-server invariant, enforced not remembered | `400cfba`, `9346a9c` |
+| 2 | Prefill re-measured for every model, n>=2 | `1165364`, `aba52b0` |
+| — | qwen3.8 switched to the 4-bit build (326x faster here) | `374d3b1` |
+| — | Capabilities DERIVED rather than concluded by hand | `22b67c2` |
+| — | Those probes actually WIRED into the four name-guessing consumers | `b7c55a0` |
+| — | Sweep harness shipped, truncation visible | `1d9836c` |
+| — | Mutation harness, and the bytecode bug that made its first numbers wrong | `ea0733a`, `137b9fc` |
+| — | Reasoning overrun diagnosed instead of mislabelled | `d22b563` |
+
+**In flight**
+
+1. **The sweep** (item 1 below). Restarted from scratch each time the harness changed,
+   because a sweep whose scoring changes mid-run produces incomparable results. This
+   run is the first on a harness that classifies a reasoning overrun correctly.
+
+**Open, in rough priority order**
+
+2. **Wire the streaming overrun guard into the eval.** `lib/llm/streaming.py` exists,
+   is tested, and is verified against the live server: bonsai thought for 1371 chars
+   and still answered, and the guard correctly left it alone. It is NOT yet used by
+   `eval/run.py`, which still makes a blocking non-streamed call and can only detect
+   an overrun after paying for the whole budget.
+
+3. **91 validator + 22 scorer mutation survivors.** 34 of the validator survivors are
+   boundary mutations (`>=` becoming `>`): thresholds exercised somewhere in their
+   range but never at their edges. `python3 tools/mutate.py --preset validators`.
+
+4. **Make "does thinking help?" a measured question.** Right now nothing records
+   whether a model answered better with reasoning than without. The knob exists --
+   `"default_chat_template_kwargs": {"enable_thinking": false}` in a model's own
+   `generation_config.json`, which osaurus reads and no installed model sets -- so the
+   experiment is available and has never been run. Probe `emits_reasoning` into
+   `_capabilities`, then run one task both ways per model and record which wins.
+
+5. **`_estimate_timeout` uses one of the three quantities `ev` measures.** Prefill is
+   read back per model; decode and cold start use flat constants (8 tok/s, 120s)
+   while the measured values sit in `conf/eval_signals.json`.
+
+6. **A contaminated measurement is permanent.** The recorders keep the SLOWEST
+   observation, so a reading taken under memory pressure can never be displaced by a
+   correct one. Nothing enforces "delete `_capabilities` before re-measuring".
+
+7. **The TUI has no config audit.** `ztools` can start clean while the config names an
+   unservable model; `ev` checks this, the TUI does not.
+
+8. **Unexplained: why a 27GB model runs at 0.09 tok/s on a 64GB machine.** Ruled out:
+   configured caps, KV pre-allocation, a second server, other apps holding RAM,
+   unsupported architecture, unsupported quantization, corrupt download. See
+   docs/MODEL_QUIRKS.md. Remaining untested candidate: the inline MTP shard the MXFP8
+   build carries and the 4-bit does not.
+
+**Standing lessons this session kept re-teaching**
+
+- Calibrate the instrument before believing it. The mutation harness measured its own
+  bytecode cache; the viability check condemned a known-good model; the 6-bit monitor
+  never fired because it matched on a name.
+- A name is not evidence of a capability. Family, vision, size, generativeness and
+  memory footprint were all guessed from model names, and all five guesses were wrong
+  on the current roster.
+- Fix the harness before the bug, and stop the run to do it. A sweep left running
+  through a known harness defect spends hours producing numbers you will throw away.
+
+---
+
 ## 0. The installed roster drifted out from under the config (fixed 2026-08-15)
 
 **What happened.** `qwen3.6-35b-a3b-mxfp8-mtp` and `qwen-agentworld-35b-a3b-mxfp8` were
