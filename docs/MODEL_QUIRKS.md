@@ -139,8 +139,9 @@ Two routing bugs fall straight out of it:
 
 ## Scores before 2026-08-16 are not comparable with scores after it
 
-Two scorer defects were fixed on 2026-08-16, both of the same class: a scorer that
-could not fail a bad answer.
+Four scorer defects were fixed on 2026-08-16, all of the same class: a scorer that
+could not fail a bad answer. The last two are below, under "Attribution was never
+actually checked"; the `summarize` scores in any earlier sweep are affected.
 
 **`validate_file_summary` scored boilerplate as real work.** `BOILERPLATE_RE`
 ("not specified|n/a|unknown|not provided") has always existed and `validate_summary`
@@ -162,6 +163,81 @@ collecting consolation credit for having said something.
 **The `file_summary` and `file_summary_mixed` results in any sweep started before
 this are wrong** for models that emitted boilerplate, and both need re-running per
 model. They are 2 of 23 tasks; the other 21 are unaffected.
+
+### Attribution was never actually checked (two defects, one property)
+
+Misattribution is the failure `tw` exists to avoid -- telling the user the wrong
+person said a thing, which the reader has no way to spot. Two independent defects
+meant the check never ran.
+
+**1. The `summarize` task passed no `source`.** `validate_summary` gates its
+strongest rule on having one:
+
+```python
+if source_text and total_bullets and faithful < total_bullets:
+    score = min(score, MISATTRIBUTION_MAX_SCORE)
+```
+
+With no source the cap cannot fire and the attribution ratio contributes no
+specificity credit either, so a summary crediting every quote to the wrong person
+scored the same as a correct one. Same class as `filename` scoring 100 for
+summarising an unfilled `{text}` placeholder: **the input did not carry the property
+under test, so the validator skipped the test and graded shape.**
+
+Fixed by setting `source` on the task. Worth stating plainly, though: **fixing it did
+not de-saturate `summarize`.** gemma-4-e2b, gemma-4-12b and foundation still score
+100. The models genuinely attribute correctly on that timeline -- every claim there
+has exactly one plausible author, so getting it right takes no care. The saturation
+was in the INPUT's difficulty, not only in the scorer.
+
+**2. `_BULLET_TAG_RE` was measuring punctuation, not attribution.** It anchored on
+`\)\s*$`, so a bullet ending with a full stop or wrapped in a stray bracket parsed as
+UNTAGGED:
+
+    - claim (@Reuters | 07:10)      recognised
+    - claim (@Reuters | 07:10).     NOT recognised   <- gemma-4-12b, gemma-4-e2b
+    - claim ((@mchen | 07:10))      NOT recognised   <- foundation
+
+Downstream, "no tags" is indistinguishable from "no attributions to check": the cap is
+gated on `total_bullets`, so **any model that punctuates its bullets was never
+attribution-checked at all** -- in the eval or in `tw`. Two of the three most-used
+models punctuate.
+
+This one is worth remembering as a method, not just a bug. It surfaced because a new
+task reported `0%, no attributed bullets` for gemma-4-12b, whose raw output tagged
+every bullet correctly AND got the hardest trap right. The same 0 came back for
+foundation, which genuinely failed that trap. **An instrument returning the same
+reading for a right answer and a wrong one is not measuring the thing it names.**
+Always read the raw output behind a surprising score before recording it.
+
+### `summarize_misattribution` (new, 2026-08-16)
+
+Ranks models on attribution, which `summarize` cannot. A compact 8-line timeline
+built entirely from the three ways attribution fails in practice:
+
+| trap | shape |
+|---|---|
+| quoted speaker | `[@Reuters]: Analyst @mchen said X` — @mchen also posts, about something else |
+| adjacent contradiction | two outlets, one line apart, saying opposite things about one company |
+| same handle, two timestamps | `@Bloomberg` posts twice; the claim must pair with the right time |
+
+Graded as a RATIO (`validate_attribution`), not through validate_summary's
+all-or-nothing cap. That cap is correct for `tw` -- one wrong attribution is
+disqualifying for something a user acts on -- but it is a poor instrument, because
+every model with a single slip lands on the same number and the task separates
+nobody. First results:
+
+| model | score | slip |
+|---|---|---|
+| ornith-1.0-35b-jang_4m | 100 | — |
+| muse-glimmer-30b-jang_6m | 100 | — |
+| gemma-4-12b-it-mxfp8 | 88 | reformatted a timestamp to `0732` |
+| gemma-4-e2b-it-8bit | 88 | swapped the adjacent-contradiction authors |
+| foundation | 86 | credited the quoted speaker (@mchen) with Reuters' claim |
+
+Note the timeline is deliberately SHORT. An earlier version injected the same traps
+into the full 40-tweet timeline; every model scored 96-99 because one or two trap
+errors were diluted across forty easy bullets. Trap density is what makes a task rank.
 
 ### The too-few-items cap
 

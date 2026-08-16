@@ -5,6 +5,7 @@ summary, twitter). Imported by eval/tasks_core.py which re-exports these
 together with the TASKS dict and _extract_items_from_text helper.
 """
 
+import re
 from pathlib import Path
 
 from lib.eval_data import WEEKEND_USR_FIXED, WEEKEND_USR_TRANSIENT
@@ -319,3 +320,37 @@ KEY_FACTS = [
     "Intel Core Ultra chips debut",
     "Tesla Cybertruck production ramps up",
 ]
+
+
+# Attribution traps, injected at the head of the real timeline.
+#
+# The plain `summarize` task cannot rank models on attribution: its timeline gives
+# every claim exactly one plausible author, so getting it right takes no care and
+# ten of eleven models scored 100 in the 2026-08-16 sweep. These lines create the
+# three ways attribution actually fails in production, all deterministic to grade:
+#
+#   1. QUOTED SPEAKER. @mchen is named inside a Reuters post and also posts
+#      separately about something else. Crediting the merger claim to @mchen is
+#      wrong on both counts -- wrong author, and content from a different line.
+#   2. ADJACENT CONTRADICTION. Two outlets say opposite things about the same
+#      company, one line apart. Merging them and crediting either is a
+#      misattribution even though every token is present in the source.
+#   3. SAME HANDLE, TWO TIMESTAMPS. @Bloomberg posts twice. Pairing the later
+#      claim with the earlier timestamp is the subtle error `source_lines_by_author`
+#      keys on the PAIR to catch.
+MISATTRIBUTION_TIMELINE = """\
+[@Reuters | 07:10]: Analyst @mchen said the Vertex-Halcyon merger will close in Q3.
+[@mchen | 07:20]: I am travelling this week and will not be commenting on any deals.
+[@AxiosTech | 07:30]: Halcyon Labs will cut 400 roles in its hardware division.
+[@TheInformation | 07:32]: Halcyon Labs says its hardware division is unaffected.
+[@Bloomberg | 07:40]: Sterling fell 1.2% against the dollar this morning.
+[@Bloomberg | 07:55]: Gilt yields rose to a three-month high on heavy selling.
+[@FT | 08:05]: Vertex shares closed up 4% after the merger report.
+[@WSJ | 08:20]: Halcyon Labs will report earnings on the 14th."""
+
+TWITTER_PROMPT_MISATTRIBUTION = re.sub(
+    r"<timeline>.*?</timeline>",
+    "<timeline>\\n" + MISATTRIBUTION_TIMELINE.replace("\\", "\\\\") + "\\n</timeline>",
+    TWITTER_PROMPT,
+    flags=re.S,
+)

@@ -16,6 +16,7 @@ from lib.eval_data import (
     WEEKEND_USR_TRANSIENT,
 )
 from lib.paths import eval_tasks_path
+from lib.validators.attribution import validate_attribution
 from lib.validators.json_validator import (
     validate_detailed_json,
     validate_mixed_signal,
@@ -54,6 +55,7 @@ from eval.tasks_prompts import (
     TWITTER_PROMPT,
     TWITTER_PROMPT_ACCURACY,
     TWITTER_PROMPT_CONTRADICTION,
+    TWITTER_PROMPT_MISATTRIBUTION,
     TWITTER_PROMPT_MIXED,
     WEEKEND_USR_FIXED_MIXED,
     WEEKEND_USR_TRANSIENT_MIXED,
@@ -190,9 +192,26 @@ TASKS = {
         "source": IMAGE_RENAME_PROMPT,
     },
     "summarize": {
+        # `source` MUST be set, for the same reason `filename` needs it above, and it
+        # is the same bug: a task whose input does not carry the thing under test,
+        # graded by a validator that then skips the test.
+        #
+        # validate_summary gates its strongest rule on having a source --
+        # `if source_text and total_bullets and faithful < total_bullets` caps the
+        # score at MISATTRIBUTION_MAX_SCORE, and its own comment calls that
+        # "disqualifying, not a deduction". With no source the cap cannot fire, the
+        # attribution ratio contributes no specificity credit either, and a summary
+        # that credits every quote to the wrong person scores exactly the same as one
+        # that gets them all right. Ten of eleven models tied at 100 here in the
+        # 2026-08-16 sweep; the task was measuring structure and little else.
+        #
+        # The whole prompt is the source, matching summarize_mixed. The attribution
+        # parser keys on `[@handle | HH:MM]` pairs, which appear only in the timeline
+        # block, so the surrounding instructions cannot be mistaken for evidence.
         "messages": [{"role": "user", "content": TWITTER_PROMPT}],
         "validator": validate_summary,
         "parse_json": False,
+        "source": TWITTER_PROMPT,
     },
     "file_summary": {
         "messages": [
@@ -280,6 +299,18 @@ TASKS = {
         "validator": validate_factual_accuracy,
         "parse_json": False,
         "validator_kwargs": {"falsehood_phrases": FALSEHOOD_PHRASES},
+    },
+    "summarize_misattribution": {
+        # Ranks models on attribution, which `summarize` cannot: its timeline gives
+        # every claim one plausible author, so ten of eleven models scored 100 there.
+        # Graded as a RATIO rather than through validate_summary's all-or-nothing cap
+        # -- that cap is correct for `tw`, where one wrong attribution is
+        # disqualifying, but as an instrument it puts every model with a single slip
+        # on the same number and separates nobody.
+        "messages": [{"role": "user", "content": TWITTER_PROMPT_MISATTRIBUTION}],
+        "validator": validate_attribution,
+        "parse_json": False,
+        "source": TWITTER_PROMPT_MISATTRIBUTION,
     },
     "summarize_factual_coverage": {
         "messages": [{"role": "user", "content": TWITTER_PROMPT}],

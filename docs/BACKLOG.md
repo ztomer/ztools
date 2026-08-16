@@ -139,11 +139,14 @@ had no equivalent and died instead.
   `references/tests/conftest.py` forbids a live server connection on exactly that path.
   The gate was right and the second request was waste regardless.
 
-**Still open.** The TUI has no equivalent — `ztools` can still start clean while the
-config names an unservable model. Wire `audit_configured_models` into its startup panel,
-passing the roster the TUI already holds. Note that pytest cannot be the gate for any of
-this (the suite blocks real server connections on purpose); the check has to run at
-runtime against a real roster.
+**Done 2026-08-16** (`ff542ee`). `action_refresh_models` audits against the roster it
+has already fetched and names the config slot to edit. Building it found a live bug it
+was not looking for: `config_getters` bound `_config` at import, so the audit (which
+imports inside the function) and `get_best_models` (which read the stale alias)
+returned different answers about the same config — the TUI reported a clean audit
+while its own dropdowns silently substituted two slots. Three workarounds for that
+binding already existed in the test suite; the binding itself is now fixed and all
+three are gone. See `config_getters._cfg` for the class.
 
 ## 1. Sweep zeval across every installed model, and derive the quirks from it
 
@@ -228,11 +231,37 @@ tasks — where the spread is 0 to 100. Consequences, all acted on:
 - The saturated tasks still earn their place as **regression** tests. They just must
   not be given weight in a ranking.
 
-**Follow-on, still open:** the task set needs more adversarial tasks and fewer
+**Follow-on, in progress.** The task set needs more adversarial tasks and fewer
 saturated ones before the next sweep, or the next one will compress the same way.
-`weekend_fixed_mixed` is a concrete lead — all eleven models missed the identical
-2 of 12 signal items, which is a fixture or prompt defect rather than eleven
-coincidences, and no model choice can fix it.
+
+Done so far (2026-08-16): `summarize_misattribution`, an 8-line trap-dense timeline
+graded on attribution ratio. It ranks where `summarize` could not — 86 to 100 across
+five models, each slip a real trap hit. Building it found two live defects and one
+method worth keeping:
+
+- `summarize` passed no `source`, so validate_summary's misattribution cap could
+  never fire. Fixed — but fixing it did NOT de-saturate the task. The models really
+  do attribute correctly on that timeline. Saturation was in the input's difficulty,
+  not only in the scorer. Adding a source to a too-easy task buys nothing.
+- `_BULLET_TAG_RE` anchored on `\)\s*$`, so any bullet ending in a full stop or an
+  extra bracket parsed as untagged, and the attribution check silently skipped it —
+  in `tw` as well as the eval. Two of the three most-used models punctuate.
+- **Read the raw output behind a surprising score before recording it.** The regex
+  bug surfaced as `0%, no attributed bullets` for a model whose output was correct,
+  and the identical 0 for a model that genuinely failed the trap. Same reading, right
+  and wrong answers.
+
+Still open:
+
+- **Trap density is the lever.** An earlier draft injected the same traps into the
+  full 40-tweet timeline; everything scored 96-99 because one error was diluted
+  across forty easy bullets. New adversarial tasks should be short and dense.
+- `weekend_fixed_mixed` — all eleven models missed the identical 2 of 12 signal
+  items, which is a fixture or prompt defect rather than eleven coincidences, and no
+  model choice can fix it.
+- The remaining saturated tasks (`filename`, `filename_mixed`, `rename_mixed`,
+  `json`, `image_rename*`) still rank nothing and should keep their place only as
+  regression tests.
 
 ## 9. Nothing in the eval suite ever sends an image
 
