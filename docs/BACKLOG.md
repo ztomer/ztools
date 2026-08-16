@@ -300,7 +300,44 @@ that matters most now — having the right answer available is not the same as u
   works for foundation" and "what works for the server models" as two separate
   questions.
 
-## 3. Rewrite the tests that pass by construction (partially done)
+## 3. Rewrite the tests that pass by construction (re-scoped 2026-08-15)
+
+**The raw patch count is not a defect count, and this item was framed as though it
+were.** Measured across the 89 test modules and 2,161 test functions:
+
+| category | count | verdict on inspection |
+|---|---|---|
+| patch targets, total | 1,487 | — |
+| ... at a real boundary (requests, subprocess, sys.argv, PIL, playwright) | 431 | legitimate, keep |
+| ... on the code's own functions | 1,056 | dominated by `main()` composition-root patches, which this file already calls a design call |
+| tests with NO assertion and no `pytest.raises` | **1** | legitimate: `client.connect(...)` "must not raise" IS the assertion |
+| tests whose every assertion is "a mock was called" | **8** | sampled 3, all real: exact forwarded signature, `--task` filter contents, bounded fetch count |
+| tests asserting a literal they injected into a patch | 71 | over-counted; sampling shows the literal is usually a vehicle through real logic (e.g. inject a 4096 window, assert the probe SHRANK below it) |
+
+So the crude tautology classes are essentially absent, and a rewrite of ~890 patch
+sites would be motion rather than progress.
+
+**What the static analysis cannot see, and what actually found bugs.** Over one
+session of changes, mutation testing — break the code, confirm the test goes red —
+was run about ten times and caught **two** tests that passed for the wrong reason:
+
+- a size-vs-alphabetical ordering test whose fixture happened to sort the same way
+  under both rules, so it measured nothing;
+- a recursion-guard test whose scenario converged on its own, so the guard was never
+  exercised.
+
+Both read perfectly well. Neither is reachable by grepping for patch counts or
+missing asserts. That is a ~20% blind rate on freshly written, carefully reviewed
+tests, and there is no reason the existing suite's rate is lower.
+
+**So the real item is not a rewrite.** It is: run mutation testing against the
+highest-value modules (the scorers, the validators, `lib/quality*`, `eval/report*`)
+and fix what survives. Cheap version: for each module, break one branch at a time and
+check the suite goes red. The seam hazard still applies — splitting a module silently
+breaks `patch.object(module, name)`, because the moved function resolves its globals
+in the new module and the patch then applies to a name nobody reads.
+
+### Original note (kept for the reasoning, not the framing)
 
 Eight classes were rewritten and 115 patches removed or converted, but roughly
 890 patch sites remain that mock the code's own functions. The boundary ones
