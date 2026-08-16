@@ -180,11 +180,27 @@ paragraph used to end by claiming they did. Checked rather than assumed: at comm
 each rate now in `conf/eval_signals.json` was measured by the fixed probe. The probe
 code needs nothing. What the DATA needs is different and narrower:
 
-- **Five of eleven installed models have no rate at all** — `qwen3.8-27b-mxfp8`,
-  `nemotron-3.5-lightning-30b-a3b-mxfp8`, `ornith-1.0-35b-jang_4m`,
-  `ornith-1.0-9b-mxfp8`, `potion-base-4m`. The first of those is `default_model`,
-  `think` and `vlm`, so the tool most likely to send a large prompt is sized by the
-  200 chars/sec "assume slow" fallback rather than by anything measured.
+- **Done: every installed model now has a rate**, measured twice, one server, idle
+  machine. Five had none at all, including the then-`default_model`. The one
+  remaining exception is `potion-base-4m`, and that is now a definitive answer rather
+  than a gap: the server rejects it with `HTTP 500 {"message":"Unsupported model type:
+  model2vec"}`. It is an embedding model. `ev` currently skips it by NAME
+  (`NON_LLM_KEYWORDS` contains "potion"); the server's own error is the better signal
+  and would generalise to the next embedding model someone installs.
+
+- **The plausibility bound was discarding a real measurement.**
+  `gemma-4-e2b-it-8bit` reported "unmeasured" through the whole sweep. Every step of
+  its probe actually succeeded — it genuinely ingests 21,946-23,063 chars/sec, and
+  `MAX_PLAUSIBLE_PREFILL_RATE` was 20,000, so the guard threw the reading away as if
+  it were a cache hit. Since the guard only ever discards, the model then fell back to
+  the pessimistic 200 chars/sec default: a 100x error, produced by a safety check.
+
+  The bound has now been set from measured data on both sides (genuine readings top
+  out at 23,063; prefix-cache hits ran 65,000-140,281) rather than from a guess, and
+  two tests pin it inside that gap. Worth noting WHY the guess kept failing: it was
+  twice set from an assumption about which model would be fastest (~3,500 "the 35B
+  MoE", then 20,000). Prefill is compute-bound and parallel, so the fastest ingester
+  is the SMALLEST model — a 2B model shreds a 20K-char prompt in under a second.
 - **Every rate was n=1.** `prefill_samples` was 1 across the board, so nothing in the
   file could tell a reproducible rate from a one-off — which mattered because
   `gemma-4-e4b-it-8bit` read 6,908.9 chars/sec against the probe's own docstring

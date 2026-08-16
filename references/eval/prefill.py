@@ -39,17 +39,30 @@ from eval.signals import DEFAULT_EVAL_TIMEOUT, _load_eval_signals, _save_eval_si
 PREFILL_PROBE_CHARS = int(os.environ.get("EVAL_PREFILL_PROBE_CHARS", "20000"))
 _PROBE_LINE = "[@SomeHandle | 08:15]: A reasonably typical sentence about a launch today.\n"
 # Above this, the transport did not really ingest anything: a mock, a stub, or a
-# prefix-cache hit. A cache hit returns 65,000-140,000. The bound sits well above
-# any real model and well below any cache hit, and only ever discards a
-# measurement -- it never invents one.
+# prefix-cache hit. The bound only ever DISCARDS a measurement -- it never invents
+# one -- so it must sit above every genuine reading, or it silently converts a real
+# measurement into "never measured" and the caller falls back to the pessimistic
+# 200 chars/sec default.
 #
-# The ceiling for a genuine reading was given here as ~3,500 chars/sec (the 35B
-# MoE). Measured 2026-08-15 across all eleven installed models, twice each, that
-# is wrong: gemma-4-e4b-it-8bit reads 6,553 and 7,183 on two consecutive runs.
-# Small dense models ingest faster than big MoE ones, so the fastest reading
-# tracks model SIZE, not the architecture the old note assumed. The 20,000 bound
-# is unaffected and still sits between the two populations.
-MAX_PLAUSIBLE_PREFILL_RATE = int(os.environ.get("EVAL_MAX_PLAUSIBLE_PREFILL", "20000"))
+# Both populations, measured on this host rather than assumed:
+#
+#   genuine, 2026-08-15, all installed models x2, one server, idle machine
+#     gemma-4-e2b-it-8bit (2B)     23,063   <- the fastest, and the reason for 40,000
+#     gemma-4-e4b-it-8bit (4B)      7,183 / 6,553
+#     foundation                    4,006 / 3,224
+#     ornith-35b / nemotron-30b     2,856 - 2,740
+#     gemma-4-12b                     805 /   714
+#     qwen3.8-27b-mxfp8               128 /   117
+#   prefix-cache hits (historical)  65,000 - 140,281
+#
+# 40,000 sits 1.7x above the fastest genuine reading and 1.6x below the slowest
+# cache hit. Two earlier values were both set from a guess about which model would
+# be fastest and both were wrong: ~3,500 ("the 35B MoE") and then 20,000. The
+# fastest ingester is the SMALLEST model, not the biggest or the MoE one -- prefill
+# is compute-bound and parallel, so a 2B model shreds a 20K-char prompt in under a
+# second. gemma-4-e2b sat at "unmeasured" for exactly this reason, its real 23,063
+# discarded by a bound set to 20,000.
+MAX_PLAUSIBLE_PREFILL_RATE = int(os.environ.get("EVAL_MAX_PLAUSIBLE_PREFILL", "40000"))
 # The warmup asks for enough tokens to time generation, not just to load weights.
 WARMUP_TOKENS = int(os.environ.get("EVAL_WARMUP_TOKENS", "64"))
 WARMUP_PROMPT = "Count from one to twenty in words, one per line."

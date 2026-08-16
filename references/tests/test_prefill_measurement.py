@@ -77,6 +77,27 @@ class TestProbeIsolatesPrefill:
         monkeypatch.setattr(eval_prefill, "call", lambda *a, **k: {"error": "connection refused"})
         assert eval_prefill.measure_prefill_rate("m", "localhost", 1337) is None
 
+    def test_the_bound_clears_the_fastest_real_model_on_this_host(self):
+        """The guard must sit ABOVE every genuine reading, not merely below a cache hit.
+
+        It only ever discards, so a bound set too low turns a real measurement into
+        "never measured" and the caller silently falls back to 200 chars/sec. That is
+        not hypothetical: gemma-4-e2b-it-8bit genuinely reads 23,063 chars/sec (2B
+        model, 20K-char probe answered in under a second) and sat unmeasured against a
+        bound of 20,000. Twice now the bound has been set from a guess about which
+        model would be fastest, and twice the guess was wrong -- prefill is
+        compute-bound and parallel, so the SMALLEST model is the fastest ingester.
+        """
+        assert eval_prefill.MAX_PLAUSIBLE_PREFILL_RATE > 23063, (
+            "bound would discard gemma-4-e2b's real measured rate"
+        )
+
+    def test_the_bound_still_rejects_a_prefix_cache_hit(self):
+        """The other side of the same fence: cache hits ran 65,000-140,281."""
+        assert eval_prefill.MAX_PLAUSIBLE_PREFILL_RATE < 65000, (
+            "bound would accept a prefix-cache hit as throughput"
+        )
+
 
 class TestRecordedRateIsStoredPerModel:
     """The measurement feeds timeouts. It must never shrink a prompt."""
