@@ -206,7 +206,7 @@ def call(
     # re-derive quirks from scratch rather than inherit the dead model's prefixes.
     unquirked_messages = messages
     messages = apply_model_quirks(messages, model)
-    max_tokens = max_tokens or get_max_tokens_for_task(task)
+    max_tokens = max_tokens or get_max_tokens_for_task(task, model)
 
     # Apply global overrides
     if "temperature" in GLOBAL_OVERRIDES and temperature == DEFAULT_TEMPERATURE:

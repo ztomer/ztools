@@ -43,10 +43,31 @@ def get_timeout(task: Task) -> int:
     return timeouts.get(task_key, _FALLBACK_TIMEOUT)
 
 
-def get_max_tokens_for_task(task: Task) -> int:
+def get_max_tokens_for_task(task: Task, model: str = None) -> int:
+    """Output budget for a task, narrowed by a per-model cap when one is configured.
+
+    A cap is not a performance tweak here, it is the remedy for a specific failure.
+    Reasoning models stream their chain of thought into `reasoning_content` and leave
+    `content` empty until they stop; given a large budget on a hard prompt they never
+    stop, spend all of it thinking, and return finish_reason=length with nothing to
+    score. A TIGHT budget forces them to stop and answer -- measured, not assumed:
+    the same model and prompt returns empty at 16000 and valid output at 512.
+
+    So the direction is inverted from the usual: for these models a smaller number is
+    the fix and a larger one makes it strictly worse. Set `max_tokens` under the
+    model's `[models."<id>"]` entry in conf/models/<family>.toml, with the
+    evidence beside it.
+    """
     tokens = get_max_tokens()
     task_key = task.value if isinstance(task, Task) else task
-    return tokens.get(task_key, _FALLBACK_MAX_TOKENS)
+    budget = tokens.get(task_key, _FALLBACK_MAX_TOKENS)
+    if not model:
+        return budget
+    cap = (get_model_config(model) or {}).get("max_tokens")
+    # Only ever NARROWS. A per-model entry that widened the budget would silently
+    # override a task's own limit, and for the models this exists for, widening is
+    # the thing that breaks them.
+    return min(budget, int(cap)) if cap else budget
 
 
 def _config_family_for(architecture: str) -> str:
@@ -128,14 +149,16 @@ def get_model_config(model: str) -> Dict:
     version = model.replace(family + "-", "") if family in model else ""
     if family in _model_configs_cache:
         family_config = _model_configs_cache[family]
-        if version and "models" in family_config:
-            version_config = family_config["models"].get(model, {})
-            if version_config:
-                merged = {k: v for k, v in family_config.items() if k != "models"}
-                merged.update(version_config)
-                merged["version"] = version
-                return merged
-        return family_config
+        # Looked up by the FULL model id, not gated on `version`. That gate was
+        # `family in model` -- it assumed a model's name contains its family, which
+        # stops being true the moment the family comes from the architecture instead
+        # of the name. A qwen3_5 model called "bonsai-*" has no "qwen" in its id, so
+        # its per-model entry was silently unreachable: the file loaded, the section
+        # existed, and the override was never read.
+        merged = _merge_model_section(family_config, model)
+        if merged is not family_config:
+            merged["version"] = version
+        return merged
     version_config_path = conf_path("models", f"{family}_versions.toml")
     config_path = conf_path("models", f"{family}.toml")
     if version_config_path.exists():
@@ -217,9 +240,25 @@ def get_model_config(model: str) -> Dict:
             },
             "field_mapping": {},
         }
-    return _model_configs_cache.get(
+    family_config = _model_configs_cache.get(
         family, {"name": family, "prompts": {}, "key_mappings": {}, "quirks": []}
     )
+    # Merge a per-model section on THIS path too, not only on the cached one. The
+    # first call for a family took this branch and returned the family config
+    # unmerged, so a `[models."..."]` override in conf/models/<family>.toml applied
+    # from the second lookup onward and not before -- a config that is correct only
+    # after something else has already read it.
+    return _merge_model_section(family_config, model)
+
+
+def _merge_model_section(family_config: Dict, model: str) -> Dict:
+    """Overlay `[models."<model>"]` onto its family config, if present."""
+    section = (family_config.get("models") or {}).get(model)
+    if not section:
+        return family_config
+    merged = {k: v for k, v in family_config.items() if k != "models"}
+    merged.update(section)
+    return merged
 
 
 def get_model_field_mapping(model: str) -> Dict[str, str]:

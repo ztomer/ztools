@@ -86,11 +86,11 @@ def get_timeout(task: str) -> int:
     return _gt(task)
 
 
-def get_max_tokens_for_task(task: str) -> int:
-    """Get max tokens for task."""
+def get_max_tokens_for_task(task: str, model: str = None) -> int:
+    """Get max tokens for task, narrowed by any per-model cap."""
     from lib.config import get_max_tokens_for_task as _gmt
 
-    return _gmt(task)
+    return _gmt(task, model)
 
 
 def call(
@@ -113,7 +113,7 @@ def call(
     messages = apply_model_quirks(messages, model)
 
     # Get defaults from config
-    max_tokens = max_tokens or get_max_tokens_for_task(task)
+    max_tokens = max_tokens or get_max_tokens_for_task(task, model)
 
     # Apply global overrides
     if "temperature" in GLOBAL_OVERRIDES and temperature == DEFAULT_TEMPERATURE:

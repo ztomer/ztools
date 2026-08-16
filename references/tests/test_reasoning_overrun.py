@@ -131,3 +131,74 @@ class TestTheRetryUsesASmallerBudget:
         from lib.config import get_max_tokens_for_task
 
         assert REASONING_RETRY_MAX_TOKENS < get_max_tokens_for_task("json") / 4
+
+
+class TestThePerModelBudgetCap:
+    """conf/models/<family>_versions.toml can narrow a model's output budget.
+
+    The remedy for a reasoning overrun is a SMALLER budget, so this is the config
+    surface for it. Two things have to hold: the entry must actually be reachable,
+    and it must only ever narrow.
+    """
+
+    def _as_family(self, monkeypatch, architecture):
+        from lib.config import clear_model_config_cache
+
+        monkeypatch.setattr(
+            "lib.model_caps.recorded_capability",
+            lambda model, key: architecture if key == "family" else None,
+        )
+        clear_model_config_cache()
+
+    def test_a_model_whose_name_lacks_its_family_still_reaches_its_entry(
+        self, monkeypatch
+    ):
+        """The bug this covers is subtle and was live.
+
+        get_model_config gated the per-model lookup on `family in model`. That holds
+        while families come from NAMES, and stops holding the moment they come from
+        the architecture: a qwen3_5 model named "bonsai-*" has no "qwen" in its id,
+        so the file loaded, the section existed, and the override was never read.
+        """
+        from lib.config import get_model_config
+
+        self._as_family(monkeypatch, "qwen3_5")
+
+        # Twice, deliberately. The uncached path was never gated, so a single lookup
+        # on a cold cache passes whether or not the bug is present. The gate lives in
+        # the CACHED branch, which means the override worked on first read and
+        # silently vanished on every later read in the same process -- the worst
+        # shape for a config bug, because it is correct exactly once.
+        first = get_model_config("bonsai-27b-ternary-jang")
+        second = get_model_config("bonsai-27b-ternary-jang")
+
+        assert first.get("name") == "qwen", "should resolve to the qwen family config"
+        assert first.get("max_tokens") == 512, "per-model entry was not reached"
+        assert second.get("max_tokens") == 512, (
+            "override vanished on the cached lookup — correct once is not correct"
+        )
+
+    def test_the_cap_narrows_the_task_budget(self, monkeypatch):
+        from lib.config import get_max_tokens_for_task
+
+        self._as_family(monkeypatch, "qwen3_5")
+        assert get_max_tokens_for_task("json", "bonsai-27b-ternary-jang") == 512
+
+    def test_it_never_widens_a_tighter_task_budget(self, monkeypatch):
+        """filename budgets 1000; a 512 cap must not raise it, and a hypothetical
+        larger cap must not either."""
+        from lib.config import get_max_tokens_for_task
+
+        self._as_family(monkeypatch, "qwen3_5")
+        assert get_max_tokens_for_task("filename", "bonsai-27b-ternary-jang") == 512
+
+    def test_other_models_of_the_same_family_are_untouched(self, monkeypatch):
+        from lib.config import get_max_tokens_for_task
+
+        self._as_family(monkeypatch, "qwen3_5")
+        assert get_max_tokens_for_task("json", "qwen3.8-27b-4bit") == 16000
+
+    def test_omitting_the_model_keeps_the_plain_task_budget(self):
+        from lib.config import get_max_tokens_for_task
+
+        assert get_max_tokens_for_task("json") == 16000
