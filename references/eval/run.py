@@ -23,6 +23,7 @@ from eval.failures import (
     FAIL_REASONING,
     FAIL_TIMEOUT,
     _classify_failure,
+    reasoning_retry_budget,
 )
 from eval.outputs import save_output
 from eval.prefill import measure_prefill_rate, record_prefill_rate
@@ -35,11 +36,6 @@ from eval.tasks_core import TASKS, _extract_items_from_text
 from eval.validate import safe_content
 
 MAX_RETRIES = int(os.environ.get("EVAL_MAX_RETRIES", "1"))
-# Budget for a retry after a reasoning overrun. Measured, not chosen: the same model
-# and prompt returns empty at 16000 (finish_reason=length, all budget spent thinking)
-# and valid output at 512 (finish_reason=stop, ~234 completion tokens). Recorded in
-# docs/MODEL_QUIRKS.md.
-REASONING_RETRY_MAX_TOKENS = int(os.environ.get("EVAL_REASONING_RETRY_TOKENS", "512"))
 # Consecutive INFRA/TIMEOUT failures before abandoning a model. Chosen from
 # observation, not taste: a model that can serve at all recovers within a task
 # or two, while qwen3.6-35b returned 46 straight infrastructure failures without
@@ -312,17 +308,17 @@ def run_eval(
                 first_attempt_failed = True
 
             # A retry that repeats the identical call cannot fix a reasoning overrun
-            # -- the model will think itself past the budget again, and each attempt
-            # costs the FULL budget before returning nothing. Retry with a small
-            # budget instead, which is the documented remedy: the same model that
-            # returns empty at max_tokens=16000 returns valid output at 512, because
-            # a tight budget forces it to stop reasoning and answer.
+            # -- the model will think itself past the budget again. Retry with MORE
+            # room, because "reasoned past its budget" is the model telling us the
+            # budget was too small, and a reasoning model's chain of thought scales
+            # with the task rather than fitting whatever ceiling we picked.
             retry_tokens = None
             if attempt > 0 and best_diagnosis.get("category") == FAIL_REASONING:
-                retry_tokens = REASONING_RETRY_MAX_TOKENS
+                base_budget = get_max_tokens_for_task(task_name, model)
+                retry_tokens = reasoning_retry_budget(base_budget)
                 eval_logger.warning(
-                    f"Previous attempt reasoned past its budget; retrying with "
-                    f"max_tokens={retry_tokens} to force a stop"
+                    f"Previous attempt reasoned past its budget ({base_budget}); "
+                    f"retrying with max_tokens={retry_tokens}"
                 )
 
             try:

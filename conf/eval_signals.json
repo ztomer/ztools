@@ -7,7 +7,7 @@
       "family": "qwen3_5",
       "generative": true,
       "prefill_chars_per_sec": 249.2,
-      "prefill_samples": 12,
+      "prefill_samples": 13,
       "vision": true
     },
     "detailed_json": {
@@ -336,7 +336,7 @@
       "decode_tokens_per_sec": 36.52,
       "generative": true,
       "prefill_chars_per_sec": 3223.8,
-      "prefill_samples": 19
+      "prefill_samples": 21
     },
     "detailed_json": {
       "p95_latency": 29.7,
@@ -411,7 +411,7 @@
     "summarize": {
       "p95_latency": 15.1,
       "parse_failures": 0,
-      "samples": 29,
+      "samples": 30,
       "timeout": 900,
       "total_retries": 2
     },
@@ -437,9 +437,9 @@
       "total_retries": 1
     },
     "summarize_misattribution": {
-      "p95_latency": 14.0,
+      "p95_latency": 13.5,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 0
     },
@@ -1309,13 +1309,13 @@
   },
   "nemotron-3.5-lightning-30b-a3b-mxfp8": {
     "_capabilities": {
-      "cold_start_seconds": 25.08,
+      "cold_start_seconds": 72.77,
       "decode_tokens_per_sec": 0.68,
       "disk_bytes": 33950540584,
       "family": "nemotron_h",
       "generative": true,
       "prefill_chars_per_sec": 2399.1,
-      "prefill_samples": 6,
+      "prefill_samples": 7,
       "vision": false
     },
     "detailed_json": {
@@ -1340,11 +1340,11 @@
       "total_retries": 0
     },
     "filename": {
-      "p95_latency": 26.8,
+      "p95_latency": 25.8,
       "parse_failures": 0,
-      "samples": 2,
+      "samples": 3,
       "timeout": 900,
-      "total_retries": 1
+      "total_retries": 2
     },
     "filename_leak": {
       "p95_latency": 25.6,

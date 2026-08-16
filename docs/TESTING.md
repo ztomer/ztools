@@ -747,3 +747,37 @@ backend cannot serve a single token. On 2026-08-02 every MLX model timed out at 
 `foundation` answered in 1s, and `ev` spent 600s per task discovering this. **Probe one
 trivial completion per model before trusting an eval run** — and treat "server up" and
 "server can serve" as different assertions.
+
+## Proving a test can fail: purge `__pycache__` first (August 2026)
+
+"Break the code, watch the test go red, restore, watch it go green" is the rule. The
+restore step has a trap that makes the whole check unreliable.
+
+CPython validates a cached `.pyc` against the source's **(mtime, size)** only. Edit a
+constant from `16000` to `32000` and the file size does not change -- both are five
+characters -- so the only thing standing between you and a stale cache is the mtime.
+That is enough to bite:
+
+    edit 32000 -> 16000, run tests   3 failed      (correct, the break worked)
+    restore 16000 -> 32000, run      3 failed      (WRONG: still executing the .pyc)
+    rm -rf __pycache__, run          22 passed     (the truth)
+
+For ten minutes the evidence said a correct fix was broken. The same mechanism
+already produced wrong mutation-testing numbers earlier in the same session --
+`tools/mutate.py` carries `purge_bytecode()` for exactly this -- so treat it as a
+property of the interpreter, not a one-off.
+
+**Do this** when breaking code deliberately:
+
+```bash
+find references -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -B -m pytest <target> -q
+```
+
+`-B` and `PYTHONDONTWRITEBYTECODE=1` stop the run WRITING a cache; neither stops it
+READING one that already exists. The `rm -rf` is the part that matters.
+
+Signature to recognise: a test that fails while the source you just read plainly
+contains the passing value. Verify with
+`python -c "import m; print(m.CONST)"` -- when that disagrees with the file, it is
+the cache, not your reasoning.

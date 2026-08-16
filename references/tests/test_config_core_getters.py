@@ -298,7 +298,9 @@ class TestGetMaxTokensForTask:
         from lib.config_getters import get_max_tokens_for_task
 
         with patch("lib.config_getters.get_max_tokens", return_value={}):
-            assert get_max_tokens_for_task("anything") == 16000
+            from lib.llm.constants import DEFAULT_MAX_TOKENS
+
+            assert get_max_tokens_for_task("anything") == DEFAULT_MAX_TOKENS
 
 
 class TestGetModelFamily:

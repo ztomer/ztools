@@ -9,6 +9,15 @@ timeout = 60
 # this is the only place the number can come from.
 context_window = 4096
 
+# The [max_tokens] budget in conf/config.toml is 32000, sized for the slowest
+# server-side reasoner. That number is meaningless here and would exceed this
+# model's entire window, so it is narrowed per-model. get_max_tokens_for_task only
+# ever NARROWS, which is exactly what this needs.
+#
+# 3000 rather than 4096, because the window covers instructions + prompt + OUTPUT
+# combined: the budget has to leave room for the prompt that earns it.
+max_tokens = 3000
+
 [prompts]
 json = "Output JSON now. Use EXACT schema."
 

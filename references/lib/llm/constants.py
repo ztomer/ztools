@@ -14,7 +14,13 @@ API_CHAT = "/api/chat"
 
 # Request defaults
 DEFAULT_TEMPERATURE = 0.1
-DEFAULT_MAX_TOKENS = 16000
+# Must match the [max_tokens] entries in conf/config.toml. This is the budget for any
+# task whose name is NOT a key in that table, which is most of them -- 23 of the 24
+# eval tasks. When the two disagree, the budget a task gets depends on whether
+# someone happened to name it in the config, and for a reasoning model the budget
+# decides the score: `filename` (a config key) and `filename_leak` (not one) send the
+# same 185-character prompt, and nemotron scored 0% and 100% on them respectively.
+DEFAULT_MAX_TOKENS = 32000
 DEFAULT_TIMEOUT = 600
 
 # Model families for quirks

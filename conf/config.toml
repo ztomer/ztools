@@ -99,19 +99,51 @@ vlm = "gemma-4-12b-it-mxfp8"
   # docs/BACKLOG.md carries the item for a real image task; until that exists, treat
   # this slot as a guess with a plausible mechanism, not a measurement.
 
+# Timeouts are a FLOOR, not a ceiling: eval/signals.py takes
+# max(learned, configured, DEFAULT_EVAL_TIMEOUT, derived-from-measured-rates). These
+# were below what a reasoning model needs and were cutting runs off mid-answer --
+# nemotron completes `summarize` in 625s against a configured 300.
 [timeouts]
-think = 600
-json = 600
-summarize = 300
-filename = 120
-vlm = 600
+think = 1800
+json = 1800
+summarize = 1800
+filename = 900
+vlm = 1800
 
+# One budget for every task, set to the MEASURED requirement of the slowest reasoner
+# on the largest task, because the per-task variation here was never designed and was
+# deciding scores on its own.
+#
+# What it used to be: `filename = 1000` and everything else absent, so exactly one of
+# the 24 eval tasks had a configured budget and the other 23 inherited the 16000
+# fallback. That is not a policy, it is an accident -- and for a reasoning model the
+# budget, not the model, decided the score. The proof is a pair of tasks that share a
+# byte-identical 185-character prompt:
+#
+#     filename       key in [max_tokens] -> 1000 tokens  -> nemotron scored   0%
+#     filename_leak  not a key           -> 16000        -> nemotron scored 100%
+#
+# Re-run directly to confirm: at 1000 it aborts mid-reasoning, at 16000 it returns
+# "screenshot_login_error_invalid_credentials" and scores 100.
+#
+# Reasoning models emit their chain of thought before any content, and that thought
+# scales with the task. Measured on nemotron-3.5-lightning-30b:
+#
+#     trivial prompt ("what is 2+2")        ~400 chars reasoning, answers
+#     summarize_misattribution (8 lines)  19,009 chars reasoning, answers at 8192
+#     summarize (40 tweets)               77,208 chars reasoning, answers at 32000
+#
+# It returns EMPTY at every budget below that, guard on or off, and ignores
+# "detailed thinking off" and "/no_think". So 32000 is not a guess: it is the
+# smallest budget at which the slowest installed reasoner finishes the largest task.
+# Every model is under its context window at this figure (131k-262k), except
+# `foundation` at 4096, which is capped per-model in conf/models/foundation.toml.
 [max_tokens]
-think = 16000
-json = 16000
-summarize = 16000
-filename = 1000
-vlm = 16000
+think = 32000
+json = 32000
+summarize = 32000
+filename = 32000
+vlm = 32000
 
 [prompts]
 filename = """

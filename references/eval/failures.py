@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
 Failure diagnosis module for model evaluation.
-Classifies WHY a model result failed.
+Classifies WHY a model result failed, and carries the remedy for the failure modes
+whose remedy is a harness setting rather than a prompt change.
 """
 
+import os
 import re
 
 from lib.validators_lib import has_item_details
@@ -100,8 +102,11 @@ def _classify_failure(result: dict, task_cfg: dict, score: int, failure_reason: 
             "evidence": (
                 f"{len(reasoning)} chars of reasoning_content, empty content, "
                 f"finish_reason={finish}. Not a prompt-following failure: the model "
-                f"never stopped thinking. A SMALLER max_tokens makes it stop and "
-                f"answer; a larger one makes it worse."
+                f"never stopped thinking, so raise max_tokens for this task. "
+                f"Reasoning scales with the TASK, not with the budget: nemotron "
+                f"needs ~19k chars of reasoning on an 8-line prompt and ~77k on a "
+                f"40-line one, and returns empty at every budget below what it "
+                f"needs. Shrinking the budget does NOT force an answer."
             ),
         }
 
@@ -193,3 +198,30 @@ def _describe_content_failure(parsed, failure_reason: str) -> str:
         keys = list(parsed.keys())[:5]
         return f"Parsed dict with keys {keys}. {failure_reason}"
     return failure_reason
+
+
+# Multiplier for a retry after a reasoning overrun. An overrun means the model wanted
+# MORE room, so the retry gives it more.
+#
+# This used to retry at a flat 512, on the theory that a tight budget forces a model
+# to stop thinking and answer. That generalised from one model and is false for
+# others: nemotron-3.5-lightning returns empty at 512, 2048, 8192 and 16000 alike --
+# guard on or off -- and answers only at 32000, having emitted 77,208 characters of
+# reasoning first. Against that behaviour a 512-token retry does not force an answer,
+# it guarantees a zero, and the zero then averages into the model's quality mean as
+# though it had answered badly.
+REASONING_RETRY_MULTIPLIER = float(os.environ.get("EVAL_REASONING_RETRY_MULT", "2.0"))
+# Ceiling so an escalating retry cannot run away. 64000 is 2x the largest configured
+# budget and inside every installed server model's context window (131k-262k).
+REASONING_RETRY_MAX_TOKENS = int(os.environ.get("EVAL_REASONING_RETRY_TOKENS", "64000"))
+
+
+def reasoning_retry_budget(base_budget: int) -> int:
+    """Token budget for a retry after a reasoning overrun: MORE room, bounded.
+
+    Lives here rather than in run.py because it is the remedy for FAIL_REASONING,
+    and keeping the diagnosis and its remedy apart is how they came to disagree --
+    the evidence string above told the reader to shrink the budget while the retry
+    was shrinking it for them, and both were wrong.
+    """
+    return min(int(base_budget * REASONING_RETRY_MULTIPLIER), REASONING_RETRY_MAX_TOKENS)

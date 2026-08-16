@@ -210,3 +210,63 @@ class TestTheAttributionTagMatcherIsNotMeasuringPunctuation:
             self.CLAIM + "(@Bloomberg | 07:10).", self.SOURCE
         )
         assert (faithful, total) == (0, 1)
+
+
+class TestEveryEvalTaskGetsTheSameTokenBudget:
+    """No task may get a different budget by accident, and for a reasoning model the
+    budget IS the score.
+
+    `get_max_tokens_for_task` reads `[max_tokens]` keyed by task name and falls back
+    to DEFAULT_MAX_TOKENS for anything absent. Only 1 of the 24 eval tasks was ever
+    named in that table, so 23 inherited a different number -- and whether a task got
+    the configured budget or the fallback came down to whether someone had happened
+    to list it.
+
+    That decided real scores. `filename` and `filename_leak` send a byte-identical
+    185-character prompt; `filename` was a config key (1000 tokens) and
+    `filename_leak` was not (16000). nemotron scored 0% and 100%.
+    """
+
+    def test_no_eval_task_is_budgeted_differently(self):
+        from eval.tasks_core import TASKS
+        from lib.config import get_max_tokens_for_task
+
+        budgets = {t: get_max_tokens_for_task(t) for t in TASKS}
+        assert len(set(budgets.values())) == 1, (
+            "eval tasks have different token budgets, so scores are not comparable "
+            f"across them: {sorted(set(budgets.values()))}. Offenders: "
+            f"{ {t: b for t, b in budgets.items() if b != max(budgets.values())} }"
+        )
+
+    def test_the_identical_prompt_pair_gets_an_identical_budget(self):
+        """The pair that proved the defect, pinned by name."""
+        from eval.tasks_core import TASKS
+        from lib.config import get_max_tokens_for_task
+
+        a = TASKS["filename"]["messages"][0]["content"]
+        b = TASKS["filename_leak"]["messages"][0]["content"]
+        assert a == b, "fixture assumption broke: these two no longer share a prompt"
+        assert get_max_tokens_for_task("filename") == get_max_tokens_for_task("filename_leak")
+
+    def test_the_fallback_matches_the_configured_budget(self):
+        """DEFAULT_MAX_TOKENS and conf/config.toml duplicate one number. If they drift,
+        a task's budget silently depends on whether it is named in the config."""
+        from lib.config import get_max_tokens
+        from lib.llm.constants import DEFAULT_MAX_TOKENS
+
+        configured = set(get_max_tokens().values())
+        assert configured, "conf/config.toml has no [max_tokens] entries"
+        assert configured == {DEFAULT_MAX_TOKENS}, (
+            f"conf/config.toml [max_tokens]={sorted(configured)} but "
+            f"DEFAULT_MAX_TOKENS={DEFAULT_MAX_TOKENS}"
+        )
+
+    def test_a_model_whose_context_cannot_hold_the_budget_is_narrowed(self):
+        """foundation's window is 4096 for prompt AND output together, so the global
+        budget must not reach it. get_max_tokens_for_task only ever narrows."""
+        from lib.config import get_max_tokens_for_task
+        from lib.llm.constants import DEFAULT_MAX_TOKENS
+
+        capped = get_max_tokens_for_task("summarize", "foundation")
+        assert capped < DEFAULT_MAX_TOKENS
+        assert capped < 4096, "must leave room for the prompt inside the same window"

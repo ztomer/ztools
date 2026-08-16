@@ -34,7 +34,10 @@ class TestConstants:
         assert DEFAULT_PORT == 1337
         assert DEFAULT_MODEL == "foundation"
         assert DEFAULT_TEMPERATURE == 0.1
-        assert DEFAULT_MAX_TOKENS == 16000
+        # Sized to the measured requirement of the slowest installed reasoner on
+        # the largest task, and must match conf/config.toml [max_tokens] --
+        # test_eval_task_sources.py pins the two together.
+        assert DEFAULT_MAX_TOKENS == 32000
         assert DEFAULT_TIMEOUT == 600
         assert API_TAGS == "/api/tags"
         assert API_GENERATE == "/api/generate"

@@ -6,9 +6,27 @@ whole token budget thinking and returns finish_reason=length with nothing to sco
 
 Before this, the harness recorded that as FORMAT / "Model returned empty response" --
 which reads as a model that cannot follow instructions, so the response is to rewrite
-the prompt. The actual remedy is the opposite direction: a SMALLER token budget forces
-it to stop and answer. Raising the budget makes it strictly worse, because the
-reasoning expands to fill whatever it is given.
+the prompt. It is not a prompt problem, and the separate category is what stops the
+reader going off to fix the wrong thing.
+
+The REMEDY, however, was recorded backwards here for a while, and the correction is
+worth stating because the wrong version was pinned by tests. This file used to claim
+that a SMALLER budget forces the model to stop and answer, and that raising the budget
+makes it strictly worse. That was generalised from one model (bonsai) and is false in
+general. Measured on nemotron-3.5-lightning-30b, which returns EMPTY at 512, 2048,
+8192 and 16000 alike -- guard on or off -- and ignores "detailed thinking off" and
+"/no_think":
+
+    trivial prompt ("what is 2+2")        ~400 chars reasoning, answers
+    summarize_misattribution (8 lines)  19,009 chars reasoning, answers at 8192
+    summarize (40 tweets)               77,208 chars reasoning, answers at 32000
+
+Reasoning scales with the TASK, not with the budget it is handed. So the budget has to
+cover it, and a retry after an overrun escalates rather than shrinks.
+
+The cost of having had this backwards: nemotron placed last on the first full sweep
+(51.3) on zeros that were all reasoning overruns, and ornith-9b second-last (49.5) the
+same way. Excluding those tasks they score 90.8 and 81.4 -- first and fifth.
 
 Five of eleven installed models are qwen3_5-family, so getting this wrong mislabels
 almost half a sweep and burns a full-budget retry per task doing it.
@@ -105,7 +123,7 @@ class TestClassification:
         """The whole reason for a separate category: it must not send the reader off
         to rewrite a prompt that was never the problem."""
         evidence = _classify_failure(overrun(), JSON_TASK, 0, "")["evidence"]
-        assert "SMALLER max_tokens" in evidence
+        assert "raise max_tokens" in evidence
         assert "finish_reason=length" in evidence
 
     def test_content_that_arrived_is_never_an_overrun(self):
@@ -116,21 +134,55 @@ class TestClassification:
         assert _classify_failure(result, TEXT_TASK, 0, "bad")["category"] != FAIL_REASONING
 
 
-class TestTheRetryUsesASmallerBudget:
-    def test_the_retry_budget_is_small_enough_to_force_a_stop(self):
-        """Measured, not chosen: the same model and prompt returns empty at 16000 and
-        valid output at 512."""
-        from eval.run import REASONING_RETRY_MAX_TOKENS
+class TestTheRetryUsesABiggerBudget:
+    """A reasoning overrun means the model wanted MORE room, so the retry gives more.
 
-        assert 0 < REASONING_RETRY_MAX_TOKENS <= 1024, (
-            "a retry budget near the original cannot force the model to stop"
+    This class previously asserted the opposite -- that the retry budget was <= 1024
+    and less than a quarter of the task budget -- on the theory that a tight budget
+    forces a model to stop thinking and answer. That was measured on one model and is
+    false for others. nemotron-3.5-lightning returns empty at 512, 2048, 8192 and
+    16000 alike, guard on or off, and ignores "detailed thinking off" and "/no_think";
+    it answers at 32000, after 77,208 characters of reasoning.
+
+    Against that behaviour a 512-token retry does not force an answer, it guarantees a
+    zero -- and that zero then averages into the model's quality mean as though it had
+    answered badly. nemotron placed LAST on the first full sweep (51.3) almost entirely
+    on such zeros; excluding them it placed first.
+
+    The old assertions were not merely stale, they pinned the defect in place. Kept as
+    a class so the direction cannot silently flip back.
+    """
+
+    def test_the_retry_asks_for_more_room_not_less(self):
+        from eval.failures import REASONING_RETRY_MULTIPLIER
+
+        assert REASONING_RETRY_MULTIPLIER > 1.0, (
+            "a retry at or below the original budget cannot fix an overrun; the model "
+            "already told us the budget was too small"
         )
 
-    def test_it_is_far_below_the_configured_task_budget(self):
-        from eval.run import REASONING_RETRY_MAX_TOKENS
+    def test_the_escalated_budget_exceeds_the_task_budget(self):
+        """The property that matters, computed the way run.py computes it."""
+        from eval.failures import REASONING_RETRY_MAX_TOKENS, REASONING_RETRY_MULTIPLIER
         from lib.config import get_max_tokens_for_task
 
-        assert REASONING_RETRY_MAX_TOKENS < get_max_tokens_for_task("json") / 4
+        base = get_max_tokens_for_task("json")
+        escalated = min(int(base * REASONING_RETRY_MULTIPLIER), REASONING_RETRY_MAX_TOKENS)
+        assert escalated > base
+
+    def test_the_escalation_is_bounded(self):
+        """Unbounded escalation would let one pathological task run until the timeout.
+        The ceiling must still fit the installed models' context windows (131k-262k)."""
+        from eval.failures import REASONING_RETRY_MAX_TOKENS
+
+        assert 0 < REASONING_RETRY_MAX_TOKENS <= 131072
+
+    def test_it_covers_the_budget_nemotron_actually_needed(self):
+        """32000 is the measured requirement of the slowest installed reasoner on the
+        largest task. A ceiling below it would reintroduce the zeros."""
+        from eval.failures import REASONING_RETRY_MAX_TOKENS
+
+        assert REASONING_RETRY_MAX_TOKENS >= 32000
 
 
 class TestThePerModelBudgetCap:
@@ -215,14 +267,18 @@ class TestThePerModelBudgetCap:
         assert get_max_tokens_for_task("filename", "brandname-27b") <= 1000
 
     def test_an_uncapped_model_of_the_same_family_is_untouched(self, capped_family):
-        from lib.config import get_max_tokens_for_task
+        """Derived from the config, not written as a literal: the point is that an
+        uncapped model gets the PLAIN task budget, whatever that budget happens to
+        be. A hardcoded number turns a deliberate budget change into a test failure
+        that says nothing about the cap this test exists for."""
+        from lib.config import get_max_tokens, get_max_tokens_for_task
 
-        assert get_max_tokens_for_task("json", "othermodel-9b") == 16000
+        assert get_max_tokens_for_task("json", "othermodel-9b") == get_max_tokens()["json"]
 
     def test_omitting_the_model_keeps_the_plain_task_budget(self):
-        from lib.config import get_max_tokens_for_task
+        from lib.config import get_max_tokens, get_max_tokens_for_task
 
-        assert get_max_tokens_for_task("json") == 16000
+        assert get_max_tokens_for_task("json") == get_max_tokens()["json"]
 
     def test_no_model_is_capped_in_the_shipped_config(self):
         """A guard on the decision itself, not just the mechanism.
