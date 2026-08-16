@@ -22,6 +22,7 @@ have told you.
 
 import argparse
 import ast
+import os
 import pathlib
 import re
 import subprocess
@@ -90,12 +91,37 @@ def mutable_lines(path):
     return out
 
 
+def purge_bytecode():
+    """Delete every __pycache__ under references/.
+
+    NOT optional, and the reason is subtle enough to have already produced a wrong
+    result. CPython validates a .pyc against the source's (mtime, SIZE). Most of the
+    mutations here are length-preserving by construction -- ">=" becomes "> ",
+    "==" becomes "!=" -- and the write-test-restore cycle takes milliseconds. When a
+    restore lands in the same mtime tick as the mutation and the size is unchanged,
+    the interpreter accepts the MUTATED bytecode as valid for the RESTORED source.
+
+    That corrupts the run in both directions: a mutation can appear to survive
+    because the mutated bytecode was never loaded, and mutated bytecode can outlive
+    the run and fail unrelated tests afterwards. Both happened before this existed.
+    """
+    for cache in REFS.rglob("__pycache__"):
+        for pyc in cache.glob("*.pyc"):
+            try:
+                pyc.unlink()
+            except OSError:
+                pass
+
+
 def run_tests(test_files, timeout=600):
-    cmd = [str(ROOT / ".venv/bin/python"), "-m", "pytest", "-x", "-q",
+    purge_bytecode()
+    cmd = [str(ROOT / ".venv/bin/python"), "-B", "-m", "pytest", "-x", "-q",
            "-p", "no:cacheprovider", "--no-header", "-o", "addopts="]
     cmd += [str(REFS / "tests" / t) for t in test_files]
+    env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1")
     try:
-        proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=timeout)
+        proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
+                              timeout=timeout, env=env)
         return proc.returncode == 0
     except subprocess.TimeoutExpired:
         return False  # a hang is a detection, not a survivor
@@ -154,6 +180,7 @@ def main():
                 passed = run_tests(tests)
             finally:
                 path.write_text(original)
+                purge_bytecode()
             if passed:
                 survivors.append((mod, lineno, label, lines[lineno - 1].strip()[:88]))
                 snippet = lines[lineno - 1].strip()[:70]

@@ -337,37 +337,45 @@ survives. `tools/mutate.py` does this — `--preset scorers`, `--preset validato
 
 | target | mutations | killed | survived | detection |
 |---|---|---|---|---|
-| scorers | 94 | 94 | 0 | **100%** |
-| validators | 194 | 108 | **86** | **56%** |
+| scorers | 94 | 72 | **22** | **77%** |
+| validators | 194 | 103 | **91** | **53%** |
 
-The scorers are genuinely well covered. The validators are not, and the survivors are
-not spread evenly: 52 in `json_validator.py`, 34 in `text_validator.py`, and 33 of
-the 86 are boundary mutations (`>=` silently becoming `>`). Thresholds are being
-exercised somewhere in their range but never AT their edges, which is the one place a
-threshold can be wrong.
+Survivors are concentrated rather than spread: `json_validator.py` 54,
+`text_validator.py` 28, `attribution.py` 9, `scorers_filename.py` 10,
+`scorers_summarize.py` 8. The single largest kind is the boundary mutation — `>=`
+silently becoming `>`, 34 of the validator survivors. Thresholds are exercised
+somewhere in their range but never AT their edges, which is the one place a threshold
+can be wrong. That is where to start.
 
-**That class already produced a live bug**, found while establishing the baseline:
+**The first run of this reported 100% and 56%, and BOTH numbers were wrong.**
+Worth recording, because the failure is not obvious and would recur:
 
-    validate_detailed_json([{"name": "a"}, {"name": "b"}, {"name": "c"}])
-    -> (100, "only 3 items (need 10+); no items with details")
+CPython validates a `.pyc` against the source's **(mtime, size)**. Most mutations
+here are length-preserving by construction — `>=` becomes `> `, `==` becomes `!=` —
+and the write-test-restore cycle takes milliseconds. When a restore lands in the same
+mtime tick as the mutation, with an identical size, the interpreter accepts the
+MUTATED bytecode as valid for the RESTORED source.
 
-A perfect score, returned alongside its own list of failures. Without `source_text`
-the function skips the grounding cap entirely and falls through to
-`min(MAX_SCORE, score)`, by which point structure and uniqueness credit alone reach
-100. So a model that emits bare names with no details scores full marks, provided the
-caller passes no source — which the weekend path does not always do.
+The consequences ran in both directions and neither was visible:
 
-This is the same class as the `filename` task scoring 100 for an unfilled `{text}`
-placeholder, in a different validator: **a scorer that cannot fail a bad answer.**
-Worth fixing before the sweep in item 1 is believed, because a leaderboard built on a
-scorer that returns 100 for empty output ranks nothing.
+- mutated bytecode survived past the run and failed unrelated tests afterwards,
+  which is how a scorer appeared to return `(100, "no items with details")` — a
+  perfect score beside its own failure list. **That bug does not exist.**
+  `validate_detailed_json` returns 35 for detail-free input and 100 for good input,
+  both correct. The reading came entirely from stale bytecode.
+- an "order-dependent test" was diagnosed on the same evidence and is likewise not
+  real.
+- kills were inflated, because a leftover mutated `.pyc` broke tests for a reason
+  unrelated to the mutation under test and was scored as a detection. That is how
+  the scorers read 100%.
 
-**Second finding: the test that catches it is order-dependent.**
-`test_validators.py::test_validate_detailed_json_missing_details` asserts
-`score < 100` and is CORRECT. It fails alone, fails with its own file, and fails in
-every subset tried — yet the full suite is green, so something later in the run
-leaves state that makes it pass. Until that is found, the full-suite green on this
-test is luck, not evidence. Track it down before trusting either result.
+`tools/mutate.py` now purges `__pycache__` before and after every run and executes
+pytest with `-B` and `PYTHONDONTWRITEBYTECODE=1`. The numbers above are from the
+fixed harness, with the full gate green (2217 passed, 95.17%) immediately after.
+
+The general lesson is the one this repo keeps relearning: **calibrate the
+instrument before believing it.** A mutation harness that cannot prove its mutation
+actually loaded is measuring its own caching behaviour.
 
 The seam hazard still applies — splitting a module silently breaks
 `patch.object(module, name)`, because the moved function resolves its globals in the
