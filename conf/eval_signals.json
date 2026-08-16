@@ -2170,6 +2170,14 @@
       "total_retries": 2
     }
   },
+  "qwen3.8-27b-4bit": {
+    "_capabilities": {
+      "cold_start_seconds": 0.79,
+      "decode_tokens_per_sec": 26.08,
+      "prefill_chars_per_sec": 449.5,
+      "prefill_samples": 2
+    }
+  },
   "qwen3.8-27b-mxfp8": {
     "_capabilities": {
       "cold_start_seconds": 182.03,

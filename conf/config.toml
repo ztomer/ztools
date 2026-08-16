@@ -7,12 +7,25 @@ llm_url = "http://localhost:1337"
 # there). lib/model_resolve.py now substitutes at call time and says so, but a
 # substitution is a stopgap that fires on every run — these names are the fix.
 #
-# qwen3.8-27b-mxfp8 is a LIKE-FOR-LIKE stand-in, not a measured winner: same qwen3_5
-# architecture as the model it replaces, largest installed qwen, and it carries a
-# vision_config on disk so it can still serve `vlm`. It has never been evaluated on
-# these tasks. Re-derive the whole table from a sweep (docs/BACKLOG.md item 1) and
-# stamp the date when you do, so the next roster change invalidates it visibly.
-default_model = "qwen3.8-27b-mxfp8"
+# Use the 4-BIT qwen3.8, not the MXFP8 one, and the reason is counter-intuitive
+# enough to write down: the HIGHER bit encoding is unusable on this host. osaurus
+# mmaps weights, and 27GB cannot stay in this machine's page cache, so the MXFP8
+# build re-reads weights from SSD on every token. Same model, same architecture,
+# same machine, measured back to back:
+#
+#     qwen3.8-27b-mxfp8   27GB   TTFT 143.0s   0.08 tok/s   cold start 182s
+#     qwen3.8-27b-4bit    15GB   TTFT  30.7s  26-35 tok/s   cold start 0.8s
+#
+# 326x on decode. Bits buy quality only while the weights stay resident; past that
+# they buy nothing because the model cannot finish. The threshold on this host is
+# between 18GB (fine) and 27GB (dead) -- docs/MODEL_QUIRKS.md lists the five
+# hypotheses ruled out before that one.
+#
+# Still PROVISIONAL as a TASK ASSIGNMENT: the above is a speed argument, not a
+# quality measurement, and nothing here has been evaluated on these tasks. Re-derive
+# the whole table from a sweep (docs/BACKLOG.md item 1) and stamp the date when you
+# do, so the next roster change invalidates it visibly.
+default_model = "qwen3.8-27b-4bit"
 
 # Fallback chain for `rn`'s filename task, tried in order.
 # Top-level keys must stay ABOVE the first [table] header — a bare key after one
@@ -20,7 +33,7 @@ default_model = "qwen3.8-27b-mxfp8"
 # [max_tokens] where get_filename_models() could never see it.
 filename_models = [
   "foundation",
-  "qwen3.8-27b-mxfp8",
+  "qwen3.8-27b-4bit",
 ]
 
 # Order lib/model_resolve.py tries when a configured model is not installed and no
@@ -34,14 +47,14 @@ model_fallback_chain = ["foundation", "qwen", "gemma", "ornith", "nemotron"]
 # harness fixes that stopped `filename` scoring 100 for an unfilled {text} placeholder,
 # so treat them as unverified too — they are merely the ones still installed.
 [best_models]
-think = "qwen3.8-27b-mxfp8"  # provisional, see above
+think = "qwen3.8-27b-4bit"  # provisional, see above
 json = "foundation"
   # Fastest (0.7s) at 100% on filename and 91.6% on file_summary context-bounding.
 summarize = "gemma-4-12b-it-mxfp8"
   # 100% on summarize, flawless ## Executive Summary narrative and connecting verbs.
 filename = "foundation"
   # 100% on filename task, fastest (0.3s).
-vlm = "qwen3.8-27b-mxfp8"  # provisional, see above
+vlm = "qwen3.8-27b-4bit"  # provisional, see above
 
 [timeouts]
 think = 600

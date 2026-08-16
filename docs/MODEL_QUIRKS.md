@@ -48,8 +48,31 @@ entire machine. Watch `vm_stat` pages-free and swap instead.
 The threshold on this host sits between 18GB (ornith-35b, fine) and 27GB (this, dead).
 The fix is a smaller quant, not a faster kernel — and note the direction is
 counter-intuitive: the HIGHER bit encoding is what makes it unusable, because bits buy
-quality only if the weights stay cached. `mlx-community/Qwen3.8-27B-4bit` is 16.1GB and
-keeps vision.
+quality only if the weights stay cached.
+
+**Resolved.** Pulled `mlx-community/Qwen3.8-27B-4bit` (15GB on disk, vision retained)
+and measured it back to back against the MXFP8 build on the same machine:
+
+| variant | on disk | TTFT (1024 tok) | decode | prefill | cold start |
+|---|---|---|---|---|---|
+| qwen3.8-27b-mxfp8 | 27 GB | 143,022 ms | 0.08-0.2 tok/s | 116.7 c/s | 182 s |
+| **qwen3.8-27b-4bit** | **15 GB** | **30,744 ms** | **26-35 tok/s** | **449-643 c/s** | **0.79 s** |
+
+326x on decode, 230x on cold start, from nothing but dropping under the cache
+threshold. That is the confirmation of the diagnosis, not merely a workaround:
+if the cause had been an unsupported kernel, requantizing would not have moved it.
+
+`conf/config.toml` now names `qwen3.8-27b-4bit` for default_model / think / vlm. The
+27GB MXFP8 copy is still installed and still unusable — deleting it frees 27GB.
+
+`osaurus pull` writes to `~/.osaurus/models`, which the server does NOT scan; models
+have to be moved to `~/MLXModels/<org>/<Name>` before `osaurus list` sees them. A pull
+that reports "Done. Model saved to: ..." can therefore leave you with a model the
+server will 404.
+
+`mlx-community/Qwen3.8-27B-MTP-4bit` (260MB drafter, for speculative decoding) is also
+installed but NOT yet wired in — osaurus lists it as a separate model rather than
+pairing it automatically. Unmeasured.
 
 ### Installed roster, measured 2026-08-15
 
@@ -68,7 +91,9 @@ keeps vision.
 | ornith-1.0-35b-jang_4m | qwen3_5_moe | 35B | yes |
 | ornith-1.0-9b-mxfp8 | qwen3_5 | 9B | yes |
 | potion-base-4m | unknown | 4M | no |
-| qwen3.8-27b-mxfp8 | qwen3_5 | 27B | yes |
+| qwen3.8-27b-mxfp8 | qwen3_5 | 27B | yes (UNUSABLE: 0.08 tok/s, see above) |
+| qwen3.8-27b-4bit | qwen3_5 | 27B | yes (15GB, 26-35 tok/s -- use this one) |
+| qwen3.8-27b-mtp-4bit | qwen3_5 | drafter | speculative-decoding weights, unwired |
 
 Two routing bugs fall straight out of it:
 
@@ -84,7 +109,9 @@ Two routing bugs fall straight out of it:
 
 ## TL;DR Cheat Sheet
 
-Start server: `osaurus serve &>/dev/null & sleep 10`
+Start server: `./tools/osaurus_one.sh` -- NEVER by hand. A second osaurus does not
+queue, it loads its own copy of the model, and two of them thrash a machine sized
+for one. The script is idempotent and `--check` exits 1 unless exactly one is up.
 
 ---
 
@@ -107,9 +134,18 @@ warning at the top of this file.**
 
 ## Osaurus Server Rules
 
-1. **Single instance only** - Multiple cause timeouts
-2. **Check before run**: `osaurus status`
+1. **Single instance only** - enforce it with `./tools/osaurus_one.sh`, do not rely on
+   remembering. Two servers do not merely cause timeouts, they silently corrupt
+   MEASUREMENTS: contention shows up as `HTTP 499 request_cancelled`, which from the
+   client is indistinguishable from a slow model.
+2. **Check before run**: `./tools/osaurus_one.sh --check` (exits 1 unless exactly one
+   process is up AND it holds the port). `osaurus status` is weaker -- `osaurus stop`
+   leaves the process resident, so status can read "stopped" while the memory is still
+   occupied.
 3. **Response parsing** - Must read ALL chunks until `done=true`
+4. **A contaminated measurement is permanent.** The recorders keep the SLOWEST
+   observation, so delete the model's `_capabilities` from `conf/eval_signals.json`
+   before re-measuring, or the bad number wins forever.
 
 ---
 
