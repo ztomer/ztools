@@ -348,6 +348,50 @@ def _signals_files_stay_clean(tmp_path_factory):
 
 
 @pytest.fixture(autouse=True, scope="session")
+def _eval_artefacts_stay_in_tmp(tmp_path_factory):
+    """Structural gate: nothing may write eval artefacts into the real config dir.
+
+    `default_eval_dir()` returns ~/.config/ztools, and its docstring says callers
+    "take eval_dir as a parameter and fall back to this, so tests hand in a tmp dir".
+    That is discipline, not a gate, and discipline failed: eval_history.json in the
+    developer's own config directory accumulated `m1`, `m2` and `mock-model` entries
+    from the suite. report_history HAS a test-model filter, but it matches the
+    prefixes ("mock", "test-", "fake") and a fixture called `m1` matches none of them
+    -- a name allowlist always lags behind fixture naming, which is why this is a path
+    redirect instead of another name.
+
+    Patched on every IMPORTER, not on eval.report_core. Each module does
+    `from eval.report_core import default_eval_dir` at import time, so patching the
+    source module rebinds a name nobody reads -- the same seam hazard this repo
+    documents for patch.object across a module split.
+    """
+    from unittest.mock import patch
+
+    import eval.cli_results
+    import eval.outputs
+    import eval.report_history
+    import eval.report_metrics
+
+    tmp = tmp_path_factory.mktemp("eval_artefacts")
+    patches = [
+        patch.object(mod, "default_eval_dir", lambda: tmp)
+        for mod in (
+            eval.report_history,
+            eval.report_metrics,
+            eval.cli_results,
+            eval.outputs,
+        )
+    ]
+    for p in patches:
+        p.start()
+    try:
+        yield tmp
+    finally:
+        for p in patches:
+            p.stop()
+
+
+@pytest.fixture(autouse=True, scope="session")
 def _saved_outputs_stay_in_tmp(tmp_path_factory):
     """Structural gate: saved eval outputs must not land in the real config dir.
 
