@@ -18,9 +18,9 @@
       "total_retries": 1
     },
     "file_summary": {
-      "p95_latency": 284.5,
+      "p95_latency": 278.0,
       "parse_failures": 0,
-      "samples": 5,
+      "samples": 6,
       "timeout": 900,
       "total_retries": 1
     },
@@ -74,17 +74,17 @@
       "total_retries": 2
     },
     "rename_mixed": {
-      "p95_latency": 375.7,
+      "p95_latency": 362.4,
       "parse_failures": 0,
-      "samples": 5,
+      "samples": 6,
       "timeout": 900,
       "total_retries": 1
     },
     "summarize": {
-      "p95_latency": 782.3,
+      "p95_latency": 761.8,
       "parse_failures": 0,
-      "samples": 5,
-      "timeout": 1173,
+      "samples": 6,
+      "timeout": 1142,
       "total_retries": 1
     },
     "summarize_contradiction": {

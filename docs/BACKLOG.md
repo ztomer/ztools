@@ -37,17 +37,17 @@ accumulating here as a graveyard of finished plans.
    and how to fall back on-device. Verified live end to end: bonsai reasons for ~1460
    chars and answers, uncut.
 
-3. **Mutation survivors.** `json_validator.py` is down from 54 survivors to 34
-   (detection 53% -> 67%), and fixing them found a live scorer defect (see the
+3. **Mutation survivors.** `json_validator.py` is down from 54 survivors to 28
+   (detection 53% -> 73%), and fixing them found a live scorer defect (see the
    too-few-items cap, `df474e5`). Remaining, in order of value:
 
    | function | survivors |
    |---|---|
-   | `validate_detailed_json` | 11 |
+   | `validate_detailed_json` | 6 |
    | `check_source_extraction` | 5 |
    | `get_source_matching_details` | 5 |
-   | `_names_match` | 5 |
    | `validate_json` | 4 |
+   | `_names_match` | 4 |
    | `validate_mixed_signal` | 4 |
 
    `text_validator.py` (28 survivors) and the scorers (22) are untouched.

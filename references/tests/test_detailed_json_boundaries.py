@@ -191,3 +191,115 @@ class TestSourceGroundingThresholds:
         with_source = validate_detailed_json(items, source_for(items))[0]
         without = validate_detailed_json(items, "")[0]
         assert without <= with_source
+
+
+# Ten venues with pairwise-disjoint vocabulary. Built deliberately: an earlier
+# fixture reused "Venue"/"Street" across every row, so every item matched the source
+# through shared filler words regardless of what the source actually contained, and
+# the rows were similar enough to trip the near-duplicate cap. A fixture that cannot
+# produce the ratio you are testing tests nothing.
+DISJOINT = [
+    ("aquarium", "harbourfront"), ("planetarium", "riverside"), ("castle", "northgate"),
+    ("observatory", "eastwood"), ("conservatory", "lakeshore"), ("bazaar", "clifftop"),
+    ("orchard", "westmoor"), ("foundry", "brickworks"), ("lighthouse", "saltmarsh"),
+    ("arboretum", "stonebridge"),
+]
+
+
+def distinct(n=10):
+    return [
+        {
+            "name": f"{a.title()} {b.title()}",
+            "location": f"{b.title()} Road",
+            "price": f"${i + 3}",
+            "target_ages": f"{i}-{i + 4}",
+            "weather": "indoor" if i % 2 else "outdoor",
+        }
+        for i, (a, b) in enumerate(DISJOINT[:n])
+    ]
+
+
+def source_covering(items, k):
+    """A source mentioning only the first k items, so the ratio is exactly k/len."""
+    return " ".join(f"{it['name']} on {it['location']}" for it in items[:k])
+
+
+class TestSourceGroundingAtExactThresholds:
+    """SOURCE_THRESHOLD_HIGH / MED / LOW, hit exactly.
+
+    Every one of these was a surviving `>=` -> `>` mutation. Only an input landing
+    precisely on the threshold separates the two, and reaching one needs a fixture
+    where the grounded fraction is controllable -- hence DISJOINT above.
+    """
+
+    def test_the_fixture_produces_the_ratios_these_tests_assume(self):
+        """Calibration. If this fails, every assertion below is meaningless."""
+        from lib.validators.json_validator import check_source_extraction
+
+        items = distinct(10)
+        for k, expected in ((10, 1.0), (8, 0.8), (5, 0.5), (3, 0.3)):
+            assert check_source_extraction(items, source_covering(items, k)) == pytest.approx(
+                expected
+            ), f"{k}/10 did not produce a ratio of {expected}"
+
+    def test_exactly_the_high_threshold_earns_the_high_cap(self):
+        items = distinct(10)
+        assert validate_detailed_json(items, source_covering(items, 8))[0] == 100
+
+    def test_exactly_the_medium_threshold_earns_the_medium_cap(self):
+        items = distinct(10)
+        at_med = validate_detailed_json(items, source_covering(items, 5))[0]
+        assert at_med == 60
+
+    def test_exactly_the_low_threshold_earns_the_low_cap(self):
+        items = distinct(10)
+        assert validate_detailed_json(items, source_covering(items, 3))[0] == 30
+
+    def test_below_the_low_threshold_falls_to_the_no_source_cap(self):
+        items = distinct(10)
+        assert validate_detailed_json(items, source_covering(items, 2))[0] == 15
+
+    def test_the_caps_are_monotonic_in_grounding(self):
+        """More grounding must never score worse."""
+        items = distinct(10)
+        scores = [validate_detailed_json(items, source_covering(items, k))[0]
+                  for k in (2, 3, 5, 8, 10)]
+        assert scores == sorted(scores), scores
+
+    def test_an_unrelated_source_is_reported_as_hallucinated(self):
+        """`failures.append("not from input (hallucinated)")` -- `not removed`
+        survived. Distinct from an ABSENT source, which cannot be assessed at all."""
+        items = distinct(10)
+        score, msg = validate_detailed_json(items, "a paragraph about recycling schedules")
+        assert score == 15
+        assert "hallucinated" in msg
+
+    def test_an_absent_source_is_not_treated_as_hallucination(self):
+        """Without a source there is nothing to contradict, so the grounding caps do
+        not apply -- documented in the function, and easy to mistake for a bug."""
+        items = distinct(10)
+        score, msg = validate_detailed_json(items, "")
+        assert score > 15
+        assert "hallucinated" not in msg
+
+
+class TestDetailRatioThreshold:
+    """`valid_with_details >= len(items) * 0.8` -- another surviving `>=`."""
+
+    def _mixed(self, n_with_details):
+        items = distinct(10)
+        for i in range(n_with_details, 10):
+            items[i] = {"name": items[i]["name"]}      # name only: no detail fields
+        return items
+
+    def test_exactly_eighty_percent_with_details_earns_the_partial_credit(self):
+        items = self._mixed(8)
+        full = distinct(10)
+        assert validate_detailed_json(items, source_covering(full, 10))[0] == 100
+
+    def test_just_below_eighty_percent_does_not(self):
+        items = self._mixed(7)
+        full = distinct(10)
+        at_8 = validate_detailed_json(self._mixed(8), source_covering(full, 10))[0]
+        at_7 = validate_detailed_json(items, source_covering(full, 10))[0]
+        assert at_7 < at_8
