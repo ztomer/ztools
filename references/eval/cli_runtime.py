@@ -107,7 +107,24 @@ def print_memory_usage(out=None):
 
 
 def estimate_model_memory(model: str) -> int:
-    """Estimate memory needed for a model (in GB). Extract size from model name."""
+    """Memory a model needs, in GB, from its weight files where they can be found.
+
+    The parameter count in the NAME is not the answer: qwen3.8-27b-4bit and
+    qwen3.8-27b-mxfp8 are both "27b" and occupy 15GB and 27GB respectively. Reading
+    "27" out of the name warned "Model needs ~27GB, low memory" about the 15GB build
+    while saying nothing useful about the 27GB one, which genuinely did not fit and
+    ran at 0.08 tok/s because of it.
+
+    On-disk weight bytes is the quantity that predicts whether a model fits. Falls
+    back to the name only for models with nothing on disk to measure.
+    """
+    from lib.model_caps import model_disk_bytes
+
+    disk = model_disk_bytes(model)
+    if disk:
+        # Round up: a model needs at least its weights, plus room for activations and
+        # a KV cache, so the honest direction for a memory WARNING is generous.
+        return max(1, -(-disk // 1_073_741_824))
 
     match = re.search(r"(\d+)b", model.lower())
     if match:

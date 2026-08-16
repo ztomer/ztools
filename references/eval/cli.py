@@ -244,7 +244,10 @@ def main():
 
     models_to_test = []
 
-    NON_LLM_KEYWORDS = ["model2vec", "potion", "embedding", "sentence-transform"]
+    from lib.model_caps import is_generative_model
+    from lib.model_resolve import audit_configured_models, format_audit
+
+    from eval.capabilities import record_static_capabilities
 
     if is_server_running():
         osaurus_models = get_models()
@@ -254,15 +257,21 @@ def main():
         # this ran the only symptom was an HTTP 404 from whichever tool hit it first.
         # Audited against the list just fetched — a second request would be both
         # wasteful and a live connection in a path the test suite forbids one in.
-        from lib.model_resolve import audit_configured_models, format_audit
-
         for line in format_audit(audit_configured_models(installed=osaurus_models)):
             cli_runtime.console.print(f"{WARN} {line}" if not line.startswith(" ") else line)
 
+        # Probe once per run and persist, so every offline consumer -- family
+        # routing, VLM selection, the memory estimate -- reads a recorded fact
+        # instead of guessing from the model name. No roster is passed: every field
+        # is derivable from disk, and a second HTTP request here is exactly what the
+        # no-live-server gate exists to catch.
         for m in osaurus_models:
-            m_lower = m.lower()
-            if any(kw in m_lower for kw in NON_LLM_KEYWORDS):
-                cli_runtime.console.print(f"{WARN} Skipping {m} (non-LLM model)")
+            record_static_capabilities(m)
+            # Judged by the model's own config.json rather than by keywords in its
+            # name. The name list ("model2vec", "potion", "embedding", ...) works
+            # until the next embedding model arrives called something else.
+            if not is_generative_model(m):
+                cli_runtime.console.print(f"{WARN} Skipping {m} (not a generative model)")
                 continue
             models_to_test.append((m, "osaurus"))
     else:

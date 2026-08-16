@@ -238,6 +238,125 @@ class TestTheReportReplacesTheHandWrittenTable:
         assert row["decode_tokens_per_sec"] is None
 
 
+class TestTheProbesAreActuallyWiredIn:
+    """The probes existing is not the same as the code using them.
+
+    Each of these covers a production path that used to key on the model name and
+    now reads a probed fact. Without them the module would be correct and unused.
+    """
+
+    def test_family_routing_prefers_the_recorded_architecture(self, models_dir, monkeypatch):
+        """ornith is qwen3_5, so it must reach conf/models/qwen.toml."""
+        from lib import config_getters
+
+        monkeypatch.setattr(
+            "lib.model_caps.recorded_capability",
+            lambda model, key: "qwen3_5" if key == "family" else None,
+        )
+        assert config_getters.get_model_family("ornith-1.0-9b-mxfp8") == "qwen"
+
+    def test_family_routing_falls_back_to_the_name_when_nothing_was_recorded(
+        self, monkeypatch
+    ):
+        """Never depends on the eval having been run."""
+        from lib import config_getters
+
+        monkeypatch.setattr("lib.model_caps.recorded_capability", lambda model, key: None)
+        assert config_getters.get_model_family("gemma-3-4b") == "gemma"
+        assert config_getters.get_model_family("totally-unknown-7b") == "default"
+
+    def test_an_architecture_with_no_config_file_falls_back_to_the_name(self, monkeypatch):
+        """muse_glimmer has no conf/models entry; the mapping must not invent one."""
+        from lib import config_getters
+
+        monkeypatch.setattr(
+            "lib.model_caps.recorded_capability",
+            lambda model, key: "muse_glimmer" if key == "family" else None,
+        )
+        assert config_getters.get_model_family("muse-glimmer-30b-jang_6m") == "default"
+
+    def test_vlm_selection_reads_the_vision_tower_not_the_name(self, models_dir):
+        """The exact roster case the keyword list gets backwards."""
+        from lib.osaurus_models import select_best_vlm_model
+
+        write_model(models_dir, "OsaurusAI", "nemotron-30b", {"model_type": "nemotron_h"})
+        write_model(models_dir, "OsaurusAI", "gemma-4-12B-it-MXFP8", {"vision_config": {}})
+
+        # nemotron sorts first and has no vision; gemma has one and no matching keyword.
+        assert select_best_vlm_model(["nemotron-30b", "gemma-4-12b-it-mxfp8"]) == (
+            "gemma-4-12b-it-mxfp8"
+        )
+
+    def test_vlm_selection_still_guesses_for_models_not_on_disk(self, models_dir):
+        """foundation has no config.json; refusing outright would be worse."""
+        from lib.osaurus_models import select_best_vlm_model
+
+        assert select_best_vlm_model(["something-qwen-vl"]) == "something-qwen-vl"
+
+    def test_vlm_selection_returns_none_when_nothing_qualifies(self, models_dir):
+        from lib.osaurus_models import select_best_vlm_model
+
+        write_model(models_dir, "OsaurusAI", "textonly", {"model_type": "nemotron_h"})
+        assert select_best_vlm_model(["textonly"]) is None
+
+    def test_memory_estimate_uses_disk_not_the_parameter_count_in_the_name(
+        self, models_dir
+    ):
+        """The two qwen3.8 builds are both "27b" and occupy 15GB and 27GB."""
+        from eval.cli_runtime import estimate_model_memory
+
+        write_model(
+            models_dir, "OsaurusAI", "qwen3.8-27b-4bit", {}, shard_sizes=(15 * 1_073_741_824,)
+        )
+        assert estimate_model_memory("qwen3.8-27b-4bit") == 15
+
+    def test_memory_estimate_falls_back_to_the_name_off_disk(self, models_dir):
+        from eval.cli_runtime import estimate_model_memory
+
+        assert estimate_model_memory("mystery-13b") == 13
+        assert estimate_model_memory("no-size-here") == 4
+
+
+class TestRecordingMakesProbesAvailableOffline:
+    def test_it_persists_the_static_facts(self, models_dir, monkeypatch, tmp_path):
+        import eval.signals as signals
+
+        monkeypatch.setattr(signals, "EVAL_SIGNALS_PATH", tmp_path / "sig.json")
+        write_model(
+            models_dir, "OsaurusAI", "M", {"model_type": "qwen3_5", "vision_config": {}},
+            shard_sizes=(2048,),
+        )
+        caps.record_static_capabilities("m")
+
+        stored = signals._load_eval_signals()["m"]["_capabilities"]
+        assert stored["family"] == "qwen3_5"
+        assert stored["vision"] is True
+        assert stored["disk_bytes"] == 2048
+
+    def test_it_overwrites_rather_than_keeping_the_oldest(self, models_dir, monkeypatch, tmp_path):
+        """Unlike the rate recorders: family and vision are facts, not samples."""
+        import eval.signals as signals
+
+        monkeypatch.setattr(signals, "EVAL_SIGNALS_PATH", tmp_path / "sig.json")
+        signals._save_eval_signals({"m": {"_capabilities": {"family": "stale_arch"}}})
+        write_model(models_dir, "OsaurusAI", "M", {"model_type": "qwen3_5"})
+
+        caps.record_static_capabilities("m")
+
+        assert signals._load_eval_signals()["m"]["_capabilities"]["family"] == "qwen3_5"
+
+    def test_it_leaves_measured_rates_alone(self, models_dir, monkeypatch, tmp_path):
+        import eval.signals as signals
+
+        monkeypatch.setattr(signals, "EVAL_SIGNALS_PATH", tmp_path / "sig.json")
+        signals._save_eval_signals({"m": {"_capabilities": {"prefill_chars_per_sec": 900.0}}})
+        write_model(models_dir, "OsaurusAI", "M", {"model_type": "qwen3_5"})
+
+        caps.record_static_capabilities("m")
+
+        assert signals._load_eval_signals()["m"]["_capabilities"]["prefill_chars_per_sec"] == 900.0
+
+
 class TestTheCliSurface:
     """`ev --capabilities` — the command that makes these conclusions reproducible."""
 

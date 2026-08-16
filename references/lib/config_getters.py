@@ -49,9 +49,59 @@ def get_max_tokens_for_task(task: Task) -> int:
     return tokens.get(task_key, _FALLBACK_MAX_TOKENS)
 
 
+def _config_family_for(architecture: str) -> str:
+    """The conf/models/<family>.toml that serves an architecture, or "".
+
+    Architectures carry version and variant suffixes ("<fam>3_5_moe",
+    "<fam>4_unified", "<fam>_h") while the config files are named for the bare
+    family, so the two have to be reconciled. Done by trimming one trailing segment
+    at a time and taking the first name that has a file --
+
+        <fam>3_5_moe -> <fam>3_5 -> <fam>3 -> <fam>   (conf/models/<fam>.toml)
+        <fam>_variant -> <fam> -> ""                  (no file: genuinely unserved)
+
+    rather than by a hand-written architecture-to-family table, which would need
+    editing every time a vendor ships a new suffix and would silently mis-serve
+    until someone noticed.
+    """
+    import re
+
+    candidate = (architecture or "").lower()
+    while candidate:
+        for suffix in ("", "_versions"):
+            if conf_path("models", f"{candidate}{suffix}.toml").exists():
+                return candidate
+        trimmed = re.sub(r"([_.-][^_.-]*|\d+)$", "", candidate)
+        if trimmed == candidate:
+            return ""
+        candidate = trimmed
+    return ""
+
+
 def get_model_family(model: str) -> str:
+    """Which conf/models/*.toml drives this model's prompts and quirks.
+
+    Prefers the architecture `ev --capabilities` recorded, because the NAME does not
+    reliably encode it. Vendors ship models under brand names that share an
+    architecture with a differently-named family, and no substring of such a name
+    reaches the config file written for it — so name matching sent those models to
+    the built-in fallback prompts while the right config sat unused.
+
+    Falls back to name matching when nothing has been recorded — an unprobed model,
+    or any caller running without the signals file — so this never depends on the
+    eval having been run.
+    """
     if not model:
         return "default"
+
+    from .model_caps import recorded_capability
+
+    architecture = recorded_capability(model, "family")
+    if architecture:
+        mapped = _config_family_for(architecture)
+        if mapped:
+            return mapped
+
     model_lower = model.lower()
     if "qwopus" in model_lower:
         return "qwopus"

@@ -61,6 +61,23 @@ _NON_GENERATIVE_ARCHITECTURES = frozenset({"staticmodel", "sentencetransformer"}
 CHARS_PER_TOKEN = int(os.environ.get("TWITTER_CHARS_PER_TOKEN", "3"))
 
 
+def recorded_capability(model: str, key: str):
+    """A capability `ev` probed and wrote to conf/eval_signals.json, or None.
+
+    Read from DISK, never from the server. Two reasons: production paths like
+    `get_model_family` are called constantly and must not do network I/O, and the
+    test suite forbids reaching a live server at all. The probe runs once, in `ev`;
+    everything else consumes what it recorded.
+    """
+    try:
+        from eval.signals import _load_eval_signals
+
+        caps = (_load_eval_signals().get(model) or {}).get("_capabilities") or {}
+        return caps.get(key)
+    except Exception:
+        return None
+
+
 def measured_prefill_rate(model: str) -> float | None:
     """Chars/sec measured for this model by the eval, or None if never run.
 
@@ -184,6 +201,33 @@ def is_generative_model(model: str) -> bool:
         return _is_generative(json.loads(config.read_text()))
     except (OSError, ValueError):
         return True
+
+
+@lru_cache(maxsize=64)
+def probe_family(model: str) -> str | None:
+    """The model's architecture, read from its own config.json `model_type`.
+
+    Deliberately read from DISK rather than from the server's `/api/tags`, even
+    though that endpoint reports the same strings -- checked across the roster,
+    `model_type` and `details.family` agree exactly ("qwen3_5", "gemma4_unified",
+    "qwen3_5_moe", "nemotron_h", "muse_glimmer").
+
+    Reading it offline matters more than it looks. The alternative put a second HTTP
+    request into `ev`'s startup path, where the test suite forbids one, and where
+    `fetch_roster`'s catch-all would have swallowed the block and carried on --
+    which conftest correctly fails the run for. Disk has no such problem, works when
+    the server is down, and costs nothing.
+
+    None means the model is not on disk (foundation), never a guessed family.
+    """
+    config = model_config_path(model)
+    if config is None:
+        return None
+    try:
+        family = json.loads(config.read_text()).get("model_type")
+    except (OSError, ValueError):
+        return None
+    return str(family) if family else None
 
 
 _VISION_KEYS = ("vision_config", "vision_tower", "has_vision", "vision_start_token_id")

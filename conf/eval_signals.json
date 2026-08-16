@@ -129,11 +129,11 @@
       "total_retries": 1
     },
     "weekend_transient": {
-      "p95_latency": 1193.5,
+      "p95_latency": 1167.1,
       "parse_failures": 0,
-      "samples": 4,
-      "timeout": 1790,
-      "total_retries": 2
+      "samples": 5,
+      "timeout": 1750,
+      "total_retries": 3
     },
     "weekend_transient_mixed": {
       "p95_latency": 284.7,

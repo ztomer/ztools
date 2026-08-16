@@ -38,6 +38,7 @@ from lib.model_caps import (
     is_generative_model,
     model_disk_bytes,
     probe_context_window,
+    probe_family,
     probe_vision,
 )
 
@@ -63,11 +64,15 @@ def probe_static_capabilities(model: str, roster: Optional[List[Dict]] = None) -
     """
     details = (roster_entry(model, roster or []).get("details") or {}) if roster else {}
     return {
-        # The architecture the SERVER reports, which is the correct key for
-        # per-family prompt config. Matching on the model name calls bonsai and
-        # ornith "default" when both are qwen3_5, sending them built-in fallback
-        # prompts while conf/models/qwen.toml sits unused.
-        "family": details.get("family") or None,
+        # The real architecture, which is the correct key for per-family prompt
+        # config: matching on the model NAME calls bonsai and ornith "default" when
+        # both are qwen3_5, sending them built-in fallback prompts while
+        # conf/models/qwen.toml sits unused.
+        #
+        # The server and the model's own config.json report identical strings here,
+        # so prefer the roster when a caller already has one and read disk otherwise.
+        # The disk path is what makes this callable with no server at all.
+        "family": details.get("family") or probe_family(model),
         "parameter_size": details.get("parameter_size") or None,
         "quantization": details.get("quantization_level") or None,
         "vision": probe_vision(model),
@@ -178,6 +183,37 @@ def capability_report(models: List[str], roster: List[Dict], signals: Dict) -> L
         caps["model"] = model
         rows.append(caps)
     return rows
+
+
+#: Static probes worth persisting, so offline callers can consume them without a
+#: server. Measured rates are written separately by eval/prefill.py.
+_PERSISTED = ("family", "parameter_size", "quantization", "vision", "generative", "disk_bytes")
+
+
+def record_static_capabilities(model: str, roster: Optional[List[Dict]] = None) -> Dict:
+    """Probe a model and persist the result beside its measured rates.
+
+    This is what turns a probe into something the rest of the codebase can USE.
+    `get_model_family`, VLM selection and the memory estimate all run in contexts
+    with no server and no permission to reach one, so they read what this wrote
+    rather than probing themselves.
+
+    Unlike the rate recorders, this OVERWRITES: `family` and `vision` are facts
+    about the model, not samples of a noisy quantity, so the newest reading is
+    simply the correct one. Keeping the "slowest wins" policy here would pin a
+    model to whatever it looked like the first time it was seen.
+    """
+    from eval.signals import _load_eval_signals, _save_eval_signals
+
+    probed = probe_static_capabilities(model, roster)
+    signals = _load_eval_signals()
+    caps = signals.setdefault(model, {}).setdefault("_capabilities", {})
+    for key in _PERSISTED:
+        value = probed.get(key)
+        if value is not None:
+            caps[key] = value
+    _save_eval_signals(signals)
+    return probed
 
 
 def _gb(value: Optional[int]) -> str:

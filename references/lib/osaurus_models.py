@@ -96,8 +96,35 @@ def get_best_model(task: str = None, env_var: str = DEFAULT_ENV_VAR) -> str:
 
 
 def select_best_vlm_model(available_models: List[str]) -> Optional[str]:
+    """Pick a model that can actually take an image.
+
+    Asks each model's own config.json for a vision tower, and only falls back to
+    DEFAULT_VLM_KEYWORDS for models it cannot find on disk.
+
+    The keyword list is wrong in both directions, which is why it is now the last
+    resort rather than the first: it accepts any model whose NAME contains a matching
+    substring whether or not it has an image tower, and rejects every vision-capable
+    model whose name happens not to. Run `ev --capabilities` for the current roster's
+    actual answers -- a name is not evidence of a capability, and a list of today's
+    exceptions written here would be stale by the next model install.
+
+    Order is preserved, so the caller's preference still decides among models that
+    genuinely have vision.
+    """
+    from lib.model_caps import probe_vision
+
+    unknown = []
+    for model in available_models:
+        vision = probe_vision(model)
+        if vision is True:
+            return model
+        if vision is None:
+            unknown.append(model)
+
+    # Nothing on disk said yes. For models we could not inspect, the keyword guess is
+    # better than refusing outright -- foundation lands here.
     for keyword in DEFAULT_VLM_KEYWORDS:
-        for model in available_models:
+        for model in unknown:
             if keyword.lower() in model.lower():
                 return model
     return None
