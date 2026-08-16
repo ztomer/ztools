@@ -21,7 +21,29 @@
 
 set -uo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Re-exec from an immutable copy of this script.
+#
+# bash reads a script LAZILY, by byte offset, so editing the file while it runs can
+# make the running shell resume mid-token and execute garbage. A sweep runs for
+# hours, which is exactly the window in which someone -- me, during this session --
+# edits the harness to fix something. That edit silently did not take effect (the
+# loop body was already parsed) and could just as easily have corrupted the run.
+#
+# Copying to a temp file and re-execing makes a sweep immune to edits of its own
+# source, and means an edited harness applies to the NEXT run rather than half of
+# this one, which is also the only way its results stay comparable.
+if [ -z "${SWEEP_REEXEC:-}" ]; then
+  # ROOT must be resolved from the ORIGINAL location and carried across. After the
+  # re-exec BASH_SOURCE points at the snapshot in $TMPDIR, and deriving the repo root
+  # from it sends every relative path -- tui/lib.sh, tools/osaurus_one.sh, .venv --
+  # into the temp directory. Caught by running the guard rather than by reading it.
+  SWEEP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  _snapshot="$(mktemp -t sweep_models)"
+  cat "${BASH_SOURCE[0]}" > "$_snapshot"
+  SWEEP_REEXEC=1 SWEEP_ROOT="$SWEEP_ROOT" exec bash "$_snapshot" "$@"
+fi
+
+ROOT="${SWEEP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 # shellcheck disable=SC1091
 source "$ROOT/tui/lib.sh"
 
@@ -119,8 +141,11 @@ for MODEL in $MODELS; do
   # DISTINCT task names, because a retried task logs a second score line and a raw
   # line count then exceeds the number of tasks that exist -- 30 of 23, which is not
   # a progress number, it is a bug wearing one.
+  # `wc -l`, not `grep -c ... || echo 0`: grep -c prints 0 AND exits non-zero when
+  # nothing matches, so the fallback fired too and TASKS_DONE became "0\n0" -- which
+  # then split the status line in two. wc -l succeeds on empty input.
   TASKS_DONE=$(grep -ohE '^[[:space:]]+(·|⚠|✗)[[:space:]]+[a-z_]+:' "$LOG" 2>/dev/null \
-    | tr -d ' ·⚠✗:' | sort -u | grep -c . || echo 0)
+    | tr -d ' ·⚠✗:' | sort -u | wc -l | tr -d ' ')
 
   # Remove any prior line for this model so --resume sees one record per model.
   if [ -s "$STATUS" ]; then

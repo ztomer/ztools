@@ -332,8 +332,8 @@
   },
   "foundation": {
     "_capabilities": {
-      "cold_start_seconds": 1.51,
-      "decode_tokens_per_sec": 66.07,
+      "cold_start_seconds": 1.57,
+      "decode_tokens_per_sec": 36.52,
       "generative": true,
       "prefill_chars_per_sec": 3223.8,
       "prefill_samples": 12
@@ -701,9 +701,9 @@
       "vision": true
     },
     "detailed_json": {
-      "p95_latency": 21.2,
+      "p95_latency": 20.5,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 1
     },
@@ -715,9 +715,9 @@
       "total_retries": 1
     },
     "file_summary_mixed": {
-      "p95_latency": 39.4,
+      "p95_latency": 38.2,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 1
     },
@@ -731,14 +731,14 @@
     "filename_leak": {
       "p95_latency": 0.4,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 1
     },
     "filename_mixed": {
-      "p95_latency": 3.4,
+      "p95_latency": 3.3,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 1
     },
@@ -750,16 +750,16 @@
       "total_retries": 1
     },
     "image_rename_mixed": {
-      "p95_latency": 4.7,
+      "p95_latency": 4.5,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 1
     },
     "json": {
-      "p95_latency": 23.9,
+      "p95_latency": 23.3,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 1
     },
@@ -778,51 +778,51 @@
       "total_retries": 1
     },
     "summarize_contradiction": {
-      "p95_latency": 41.0,
+      "p95_latency": 39.7,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 1
     },
     "summarize_factual_accuracy": {
-      "p95_latency": 40.3,
+      "p95_latency": 39.0,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 1
     },
     "summarize_factual_coverage": {
-      "p95_latency": 42.9,
+      "p95_latency": 41.5,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 1
     },
     "summarize_mixed": {
-      "p95_latency": 41.0,
+      "p95_latency": 39.7,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 1
     },
     "taxes_anomalies": {
-      "p95_latency": 8.6,
+      "p95_latency": 8.3,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 1
     },
     "taxes_audit_readiness": {
-      "p95_latency": 19.2,
+      "p95_latency": 18.5,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 1
     },
     "taxes_synthesis": {
-      "p95_latency": 25.7,
+      "p95_latency": 24.8,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 1
     },
@@ -855,9 +855,9 @@
       "total_retries": 1
     },
     "weekend_transient_schema": {
-      "p95_latency": 32.9,
+      "p95_latency": 31.8,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 1
     }
@@ -886,7 +886,7 @@
       "family": "gemma4",
       "generative": true,
       "prefill_chars_per_sec": 5425.3,
-      "prefill_samples": 4,
+      "prefill_samples": 5,
       "vision": true
     },
     "detailed_json": {
@@ -897,9 +897,9 @@
       "total_retries": 1
     },
     "file_summary": {
-      "p95_latency": 46.7,
+      "p95_latency": 45.3,
       "parse_failures": 0,
-      "samples": 9,
+      "samples": 10,
       "timeout": 900,
       "total_retries": 1
     },
@@ -913,7 +913,7 @@
     "filename": {
       "p95_latency": 0.6,
       "parse_failures": 0,
-      "samples": 9,
+      "samples": 10,
       "timeout": 900,
       "total_retries": 1
     },
@@ -932,9 +932,9 @@
       "total_retries": 1
     },
     "image_rename": {
-      "p95_latency": 5.0,
+      "p95_latency": 4.9,
       "parse_failures": 0,
-      "samples": 4,
+      "samples": 5,
       "timeout": 900,
       "total_retries": 1
     },
@@ -953,16 +953,16 @@
       "total_retries": 1
     },
     "rename_mixed": {
-      "p95_latency": 3.6,
+      "p95_latency": 3.5,
       "parse_failures": 0,
-      "samples": 6,
+      "samples": 7,
       "timeout": 900,
       "total_retries": 1
     },
     "summarize": {
-      "p95_latency": 61.6,
+      "p95_latency": 60.2,
       "parse_failures": 0,
-      "samples": 9,
+      "samples": 10,
       "timeout": 900,
       "total_retries": 2
     },
@@ -988,9 +988,9 @@
       "total_retries": 1
     },
     "summarize_mixed": {
-      "p95_latency": 65.2,
+      "p95_latency": 63.6,
       "parse_failures": 0,
-      "samples": 6,
+      "samples": 7,
       "timeout": 900,
       "total_retries": 1
     },
@@ -1016,30 +1016,30 @@
       "total_retries": 1
     },
     "weekend_fixed": {
-      "p95_latency": 33.9,
+      "p95_latency": 32.6,
       "parse_failures": 0,
-      "samples": 7,
+      "samples": 8,
       "timeout": 900,
       "total_retries": 1
     },
     "weekend_fixed_mixed": {
-      "p95_latency": 19.8,
-      "parse_failures": 0,
-      "samples": 6,
-      "timeout": 900,
-      "total_retries": 1
-    },
-    "weekend_transient": {
-      "p95_latency": 27.4,
+      "p95_latency": 19.3,
       "parse_failures": 0,
       "samples": 7,
       "timeout": 900,
       "total_retries": 1
     },
-    "weekend_transient_mixed": {
-      "p95_latency": 27.3,
+    "weekend_transient": {
+      "p95_latency": 26.6,
       "parse_failures": 0,
-      "samples": 6,
+      "samples": 8,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "weekend_transient_mixed": {
+      "p95_latency": 26.6,
+      "parse_failures": 0,
+      "samples": 7,
       "timeout": 900,
       "total_retries": 1
     },
