@@ -186,3 +186,121 @@ class TestTransportBehaviour:
             "m", [], max_tokens=100, session_factory=Boom(FakeResponse([])),
         )
         assert result["error"] == expected
+
+
+class TestTheGuardIsWiredIntoTheCallPath:
+    """The guard existing is not the same as the eval using it."""
+
+    def _streamed(self, monkeypatch, **streamed):
+        import lib.osaurus_lib as ol
+
+        base = {"content": "", "reasoning_content": "", "finish_reason": "stop",
+                "error": None, "aborted": False, "abort_reason": ""}
+        base.update(streamed)
+        monkeypatch.setattr(
+            "lib.llm.streaming.stream_with_overrun_guard", lambda *a, **k: base
+        )
+        return ol
+
+    def test_stream_guard_off_by_default(self, monkeypatch):
+        """Existing callers must not silently change transport."""
+        from unittest.mock import MagicMock, patch
+
+        import lib.osaurus_lib as ol
+
+        consulted = []
+        monkeypatch.setattr(
+            "lib.llm.streaming.stream_with_overrun_guard",
+            lambda *a, **k: consulted.append(1) or {"error": "x"},
+        )
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = ""
+        resp.json.return_value = {
+            "choices": [{"message": {"content": "blocking"}, "finish_reason": "stop"}]
+        }
+        with patch("lib.osaurus_lib.requests.Session") as sess:
+            sess.return_value.__enter__.return_value.post.return_value = resp
+            out = ol.call("m", [{"role": "user", "content": "hi"}])
+
+        assert out["content"] == "blocking"
+        assert consulted == [], "the stream must not be consulted unless asked for"
+
+    def test_a_clean_stream_short_circuits_the_blocking_request(self, monkeypatch):
+        ol = self._streamed(monkeypatch, content="the answer")
+        posted = []
+        monkeypatch.setattr("lib.osaurus_lib._get_session_context",
+                            lambda: posted.append(1) or (_ for _ in ()).throw(AssertionError))
+
+        out = ol.call("m", [{"role": "user", "content": "hi"}], stream_guard=True)
+
+        assert out["content"] == "the answer"
+        assert posted == [], "blocking request should not have been made"
+
+    def test_an_abort_is_reported_as_an_error_not_an_empty_answer(self, monkeypatch):
+        """Blank content with no error would be scored as the model's considered
+        response. An abort is a failure, and has to say so."""
+        ol = self._streamed(
+            monkeypatch, aborted=True, reasoning_content="x" * 9000,
+            finish_reason="aborted_reasoning_overrun",
+            abort_reason="~3000 tokens of reasoning with no content",
+        )
+        out = ol.call("m", [{"role": "user", "content": "hi"}], stream_guard=True)
+
+        assert out["aborted"] is True
+        assert "Reasoning overrun" in out["error"]
+        assert out["reasoning_content"]
+
+    def test_an_abort_classifies_as_a_reasoning_failure(self, monkeypatch):
+        from eval.failures import FAIL_REASONING, _classify_failure
+
+        ol = self._streamed(
+            monkeypatch, aborted=True, reasoning_content="x" * 9000,
+            finish_reason="aborted_reasoning_overrun", abort_reason="overran",
+        )
+        out = ol.call("m", [{"role": "user", "content": "hi"}], stream_guard=True)
+        out["parsed"] = None
+
+        assert _classify_failure(out, {"parse_json": True}, 0, "")["category"] == (
+            FAIL_REASONING
+        )
+
+    def test_a_stream_error_falls_back_to_the_blocking_path(self, monkeypatch):
+        """The blocking path is what knows how to substitute a deleted model and how
+        to fall back on-device. A stream failure must not cost those."""
+        from unittest.mock import MagicMock, patch
+
+        import lib.osaurus_lib as ol
+
+        monkeypatch.setattr(
+            "lib.llm.streaming.stream_with_overrun_guard",
+            lambda *a, **k: {"error": "Connection failed", "content": "",
+                             "reasoning_content": "", "finish_reason": "",
+                             "aborted": False, "abort_reason": ""},
+        )
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.text = ""
+        resp.json.return_value = {
+            "choices": [{"message": {"content": "from blocking"}, "finish_reason": "stop"}]
+        }
+        with patch("lib.osaurus_lib.requests.Session") as sess:
+            sess.return_value.__enter__.return_value.post.return_value = resp
+            out = ol.call("m", [{"role": "user", "content": "hi"}], stream_guard=True)
+
+        assert out["content"] == "from blocking"
+
+    def test_json_is_still_parsed_from_a_streamed_answer(self, monkeypatch):
+        ol = self._streamed(monkeypatch, content='[{"name": "a"}]')
+        out = ol.call("m", [{"role": "user", "content": "hi"}],
+                      stream_guard=True, parse_json=True)
+        assert out["parsed"] == [{"name": "a"}]
+
+    def test_the_eval_asks_for_the_guard(self):
+        """Read from the source, because a default that silently flips off is the
+        failure this test exists to catch."""
+        import inspect
+
+        from eval.run import _call_model
+
+        assert "stream_guard=True" in inspect.getsource(_call_model)

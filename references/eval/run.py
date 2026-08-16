@@ -191,6 +191,11 @@ def _call_model(
             temperature=EVAL_TEMPERATURE,
             timeout=effective_timeout,
             max_tokens=max_tokens,
+            # Watch the stream and cut a run that has reasoned past the point where
+            # the remaining budget could hold an answer. Without it, a reasoning
+            # overrun is only detectable AFTER paying for the whole budget, and a
+            # sweep pays that once per affected task per model.
+            stream_guard=True,
         )
 
 

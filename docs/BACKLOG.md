@@ -29,11 +29,13 @@ accumulating here as a graveyard of finished plans.
 
 **Open, in rough priority order**
 
-2. **Wire the streaming overrun guard into the eval.** `lib/llm/streaming.py` exists,
-   is tested, and is verified against the live server: bonsai thought for 1371 chars
-   and still answered, and the guard correctly left it alone. It is NOT yet used by
-   `eval/run.py`, which still makes a blocking non-streamed call and can only detect
-   an overrun after paying for the whole budget.
+2. ~~Wire the streaming overrun guard into the eval.~~ **Done.** `eval/run.py` passes
+   `stream_guard=True`, and the guard is wired INSIDE `osaurus_lib.call` rather than
+   replacing the transport, so quirks, JSON extraction, model substitution and the
+   Foundation fallback all still apply. A stream error falls through to the blocking
+   request, because that path is the one that knows how to substitute a deleted model
+   and how to fall back on-device. Verified live end to end: bonsai reasons for ~1460
+   chars and answers, uncut.
 
 3. **91 validator + 22 scorer mutation survivors.** 34 of the validator survivors are
    boundary mutations (`>=` becoming `>`): thresholds exercised somewhere in their

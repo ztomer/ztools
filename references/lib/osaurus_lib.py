@@ -21,10 +21,10 @@ from lib.llm.quirks import apply_model_quirks
 from .config import get_max_tokens_for_task, get_timeout
 from .content_processing import remove_thinking_blocks
 from .logging_config import osaurus_logger as logger
+from .osaurus_degrade import _streamed_with_guard, _try_foundation
 from .osaurus_models import (
     DEFAULT_HOST,
     DEFAULT_PORT,
-    FALLBACK_MODEL,
     check_llm_availability,
     get_api_url,
     get_available_models,
@@ -199,6 +199,7 @@ def call(
     task: str = "think",
     parse_json: bool = False,
     use_foundation: Optional[bool] = None,
+    stream_guard: bool = False,
     _allow_model_substitution: bool = True,
 ) -> dict:
     logger.debug(f"Calling {model} for task '{task}' at {host}:{port}")
@@ -230,6 +231,26 @@ def call(
     if use_foundation is True:
         _try_foundation(True, messages, parse_json, result)
         return result
+
+    # Streamed, with the reasoning-overrun guard. Placed HERE rather than replacing
+    # the transport wholesale so everything around it still applies: quirks were
+    # already applied above, and JSON extraction, model substitution and the
+    # Foundation fallback all live below.
+    #
+    # Only the happy path is served from the stream. Any transport error falls
+    # through to the blocking request, which is what knows how to substitute a
+    # deleted model and how to fall back on-device -- neither of which the stream
+    # can do, and both of which matter more than saving a doomed run.
+    if stream_guard:
+        streamed = _streamed_with_guard(
+            model, messages, max_tokens, host, port, temperature, timeout, task
+        )
+        if streamed is not None:
+            result.update(streamed)
+            result["time"] = round(time.time() - start, 1)
+            if parse_json and result["content"]:
+                result["parsed"] = extract_json(result["content"])
+            return result
 
     try:
         timeout = timeout or get_timeout(task)
@@ -314,6 +335,8 @@ def call(
     return result
 
 
+
+
 def _retry_with_substitute(
     model: str,
     status_code: int,
@@ -343,39 +366,6 @@ def _retry_with_substitute(
     retried["substitution_reason"] = reason
     return retried
 
-
-def _try_foundation(
-    use_foundation: Optional[bool], messages, parse_json: bool, result: dict
-) -> bool:
-    """Attempt the on-device Foundation Models fallback.
-
-    use_foundation: True = force, False = never, None = only if available.
-    On success, fills ``result`` and returns True.
-    """
-    if use_foundation is False:
-        return False
-    try:
-        from lib.foundation_lib import call_foundation, foundation_available
-    except Exception:
-        return False
-    if not foundation_available():
-        return False
-    system = next((m["content"] for m in messages if m.get("role") == "system"), "")
-    user = next((m["content"] for m in messages if m.get("role") == "user"), "")
-    try:
-        raw = call_foundation(system, user, parse_json=parse_json)
-    except Exception as e:
-        logger.warning(f"Foundation fallback failed: {e}")
-        return False
-    if not raw:
-        return False
-    result["content"] = raw
-    result["model"] = FALLBACK_MODEL
-    result["served_by_foundation"] = True
-    if parse_json:
-        result["parsed"] = extract_json(raw)
-    logger.info("Served by on-device Foundation Models")
-    return True
 
 
 def call_with_prompt(
