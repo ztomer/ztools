@@ -253,3 +253,101 @@ class TestFilenameRelevance:
         score, msg = validate_filename("scott_adams_essays", source_text=self.SOURCE)
         assert "weak input coverage" in msg
         assert score > 40
+
+
+class TestFileSummaryRejectsBoilerplate:
+    """A description that says nothing must not score as a description.
+
+    Found by mutation testing the thresholds around it. BOILERPLATE_RE --
+    "not specified|n/a|unknown|not provided" -- has always existed and validate_summary
+    has always checked it, but validate_file_summary did not: its specificity test used
+    a separate local list of generic WORDS ("personal", "document", ...) which none of
+    the boilerplate phrases contain.
+
+    So a file summary whose every description read "not specified" counted every one as
+    SPECIFIC and scored a full 100, indistinguishable from real work. "unknown" scored
+    lower only by accident -- it is shorter than MIN_SPECIFIC_DESC_LEN, so the length
+    test caught what the content test missed.
+    """
+
+    def _summary(self, descs):
+        return [{"path": f"src/mod_{i}/handler.py", "desc": d} for i, d in enumerate(descs)]
+
+    REAL = "parses inbound webhook payloads and validates signatures"
+
+    def test_real_descriptions_score_full(self):
+        from lib.validators.text_validator import validate_file_summary
+
+        assert validate_file_summary(self._summary([self.REAL] * 4))[0] == 100
+
+    @pytest.mark.parametrize("filler", ["not specified", "not provided", "unknown", "n/a"])
+    def test_boilerplate_does_not_score_as_a_description(self, filler):
+        from lib.validators.text_validator import validate_file_summary
+
+        score, msg = validate_file_summary(self._summary([filler] * 4))
+        assert score < 100, f"{filler!r} scored as a real description"
+        assert "generic descriptions only" in msg
+
+    def test_boilerplate_scores_the_same_as_no_description_at_all(self):
+        """Because it conveys the same amount: nothing."""
+        from lib.validators.text_validator import validate_file_summary
+
+        boilerplate = validate_file_summary(self._summary(["not specified"] * 4))[0]
+        empty = validate_file_summary(self._summary([""] * 4))[0]
+        assert boilerplate == empty
+
+    def test_a_short_but_real_description_still_counts(self):
+        """The length floor must not be doing the boilerplate check's job -- a genuine
+        short description is not boilerplate."""
+        from lib.validators.text_validator import validate_file_summary
+
+        assert validate_file_summary(self._summary(["parses webhooks"] * 4))[0] == 100
+
+    def test_a_mix_still_earns_credit_for_the_real_ones(self):
+        from lib.validators.text_validator import validate_file_summary
+
+        mixed = self._summary([self.REAL, "not specified"] * 2)
+        assert validate_file_summary(mixed)[0] > validate_file_summary(
+            self._summary(["not specified"] * 4)
+        )[0]
+
+
+class TestFileSummaryThresholds:
+    """The `>=` boundaries the mutation run flagged, at exactly their limits."""
+
+    def _summary(self, n, real_paths=None, specific=None):
+        real_paths = n if real_paths is None else real_paths
+        specific = n if specific is None else specific
+        return [
+            {
+                "path": f"src/mod_{i}/handler.py" if i < real_paths else f"item{i}",
+                "desc": (
+                    f"parses the {i}th inbound webhook payload and validates it"
+                    if i < specific
+                    else "not specified"
+                ),
+            }
+            for i in range(n)
+        ]
+
+    def test_exactly_the_minimum_item_count_earns_the_count_credit(self):
+        from lib.validators.text_validator import FILE_SUMMARY_MIN_ITEMS, validate_file_summary
+
+        at = validate_file_summary(self._summary(FILE_SUMMARY_MIN_ITEMS))[0]
+        below = validate_file_summary(self._summary(FILE_SUMMARY_MIN_ITEMS - 1))[0]
+        assert at > below
+
+    def test_too_few_items_is_reported(self):
+        from lib.validators.text_validator import FILE_SUMMARY_MIN_ITEMS, validate_file_summary
+
+        _, msg = validate_file_summary(self._summary(FILE_SUMMARY_MIN_ITEMS - 1))
+        assert f"need {FILE_SUMMARY_MIN_ITEMS}+" in msg
+
+    def test_unrealistic_paths_are_reported_and_cost_score(self):
+        """A path with no dot and no slash is not a path."""
+        from lib.validators.text_validator import validate_file_summary
+
+        good = validate_file_summary(self._summary(6))[0]
+        bad_score, bad_msg = validate_file_summary(self._summary(6, real_paths=0))
+        assert bad_score < good
+        assert "unrealistic paths" in bad_msg

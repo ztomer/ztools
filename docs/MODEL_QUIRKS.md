@@ -139,6 +139,32 @@ Two routing bugs fall straight out of it:
 
 ## Scores before 2026-08-16 are not comparable with scores after it
 
+Two scorer defects were fixed on 2026-08-16, both of the same class: a scorer that
+could not fail a bad answer.
+
+**`validate_file_summary` scored boilerplate as real work.** `BOILERPLATE_RE`
+("not specified|n/a|unknown|not provided") has always existed and `validate_summary`
+has always checked it, but the file-summary specificity test used a separate local
+list of generic WORDS ("personal", "document", ...) that none of those phrases
+contain. A summary whose every description read "not specified" counted every one as
+SPECIFIC and scored a full 100 -- identical to one describing real files. "unknown"
+scored lower only by accident: it is shorter than MIN_SPECIFIC_DESC_LEN, so the
+length test caught what the content test missed.
+
+    all "not specified"   before 100   after 60 ("generic descriptions only")
+    all "not provided"    before 100   after 60
+    real descriptions     before 100   after 100
+
+Boilerplate is now excluded from BOTH the specificity count and the set of
+descriptions, so it reaches the "generic descriptions only" failure rather than
+collecting consolation credit for having said something.
+
+**The `file_summary` and `file_summary_mixed` results in any sweep started before
+this are wrong** for models that emitted boilerplate, and both need re-running per
+model. They are 2 of 23 tasks; the other 21 are unaffected.
+
+### The too-few-items cap
+
 `validate_detailed_json` gained a too-few-items CAP. Before it, the count credit was
 additive and the weights summed to 120 against a ceiling of 100, so the 20-point
 overhang absorbed the penalty whole: a 4-item weekend report scored exactly the same

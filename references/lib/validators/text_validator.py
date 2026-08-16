@@ -458,14 +458,28 @@ def validate_file_summary(data: Any, source_text: str = "") -> Tuple[int, str]:
 
     # Quality descriptions (40 pts)
     descs = [str(item.get("desc", "") or item.get("description", "")) for item in items]
-    unique_descs = set(d for d in descs if d)
+    # Boilerplate is not a description. It is excluded here as well as from the
+    # specificity count, so a summary whose every desc reads "not specified" reaches
+    # the "generic descriptions only" failure instead of collecting the consolation
+    # credit for having said something -- it did not say anything.
+    unique_descs = set(d for d in descs if d and not BOILERPLATE_RE.search(d))
 
-    # Check descriptions are specific (not generic phrases)
+    # Check descriptions are specific (not generic phrases, and not boilerplate)
+    #
+    # BOILERPLATE_RE is reused rather than restated. It already defines what a
+    # non-answer looks like -- "not specified", "n/a", "unknown", "not provided" --
+    # and validate_summary has always checked it. This function did not, so a file
+    # summary whose every description read "not specified" counted every one of them
+    # as SPECIFIC and scored a full 100, identical to one with real descriptions.
+    # "unknown" scored lower only by accident: it is shorter than
+    # MIN_SPECIFIC_DESC_LEN, so the length test caught what the content test missed.
     generic_phrases = ["personal", "document", "system", "user's", "folder"]
     specific = sum(
         1
         for d in descs
-        if not any(g in d.lower() for g in generic_phrases) and len(d) > MIN_SPECIFIC_DESC_LEN
+        if not any(g in d.lower() for g in generic_phrases)
+        and not BOILERPLATE_RE.search(d)
+        and len(d) > MIN_SPECIFIC_DESC_LEN
     )
 
     quality_score = 0
