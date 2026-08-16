@@ -25,7 +25,9 @@ __all__ = [
     "measured_prefill_rate",
     "is_generative_model",
     "model_config_path",
+    "model_disk_bytes",
     "probe_context_window",
+    "probe_vision",
     "usable_context_window",
 ]
 
@@ -182,6 +184,71 @@ def is_generative_model(model: str) -> bool:
         return _is_generative(json.loads(config.read_text()))
     except (OSError, ValueError):
         return True
+
+
+_VISION_KEYS = ("vision_config", "vision_tower", "has_vision", "vision_start_token_id")
+
+
+def _has_vision(cfg: dict) -> bool:
+    """Whether this config describes a model with an image tower."""
+    if any(key in cfg for key in _VISION_KEYS):
+        return True
+    for sub in _NESTED_KEYS:
+        nested = cfg.get(sub)
+        if isinstance(nested, dict) and _has_vision(nested):
+            return True
+    return False
+
+
+@lru_cache(maxsize=64)
+def probe_vision(model: str) -> bool | None:
+    """Whether a served model can take images, read from its own config.json.
+
+    None means "cannot tell" -- no config on disk -- never a guessed False, so a
+    caller can distinguish "text-only" from "unknown" instead of silently ruling
+    out a model it failed to find.
+
+    This replaces guessing from the NAME. `lib/osaurus_models.DEFAULT_VLM_KEYWORDS`
+    matches "vl,vision,qwen,llamavl", which on the roster this was written against
+    finds the qwens and misses gemma, ornith, bonsai and muse-glimmer -- every one
+    of which has a vision tower -- while failing to exclude nemotron, the only
+    text-only server model. A name has never been evidence of a capability, and
+    `ev --capabilities` prints the current answer rather than this frozen one.
+    """
+    config = model_config_path(model)
+    if config is None:
+        return None
+    try:
+        return _has_vision(json.loads(config.read_text()))
+    except (OSError, ValueError):
+        return None
+
+
+@lru_cache(maxsize=64)
+def model_disk_bytes(model: str) -> int | None:
+    """Total size of a model's weight files, or None if not found on disk.
+
+    The number that decides whether a model is usable on a given machine, and the
+    one nothing was reading. osaurus mmaps weights, so a model larger than the page
+    cache can hold is re-read from SSD every token: qwen3.8-27b at 27GB measured
+    0.08 tok/s against 80.6 for the LARGER-parameter ornith-35b at 18GB. RSS does
+    not show this -- it read 3.5GB for the 27GB model -- so parameter count and
+    resident size are both the wrong instrument. On-disk bytes is the right one.
+
+    Counts weight shards only. Tokenizers and configs are noise at this scale, and
+    counting the whole directory would include any stray download artifacts.
+    """
+    config = model_config_path(model)
+    if config is None:
+        return None
+    directory = config.parent
+    total = 0
+    try:
+        for weights in directory.glob("*.safetensors"):
+            total += weights.stat().st_size
+    except OSError:
+        return None
+    return total or None
 
 
 def usable_context_window(model: str, default: int, override: int | None = None) -> int:

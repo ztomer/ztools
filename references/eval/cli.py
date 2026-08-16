@@ -151,6 +151,36 @@ from eval.cli_runtime import (  # noqa: E402,F401
 )
 
 
+def _print_capabilities(host=None):
+    """Print the probed capability table for every model the server lists.
+
+    Budget and timeout come from conf/config.toml's `think` slot, addressed as a
+    plain string because `think` is a config key with no member in the Task enum.
+    It is the heaviest configured budget (16000 tokens in the tightest timeout), so
+    a model that clears it clears every other task.
+    """
+    from lib.config import get_timeout
+    from lib.model_resolve import audit_configured_models, fetch_roster, format_audit
+
+    from eval.capabilities import capability_report, format_capability_table
+    from eval.signals import _load_eval_signals
+
+    roster = fetch_roster(host) if host else fetch_roster()
+    if not roster:
+        cli_runtime.console.print(f"{FAIL} Osaurus server not reachable — nothing to probe")
+        return
+    models = [entry["model"] for entry in roster]
+    rows = capability_report(models, roster, _load_eval_signals())
+    from eval.capabilities import expected_output_tokens
+
+    table = format_capability_table(rows, expected_output_tokens(), get_timeout("think"))
+    for line in table:
+        cli_runtime.console.print(line, highlight=False)
+
+    for line in format_audit(audit_configured_models(installed=models)):
+        cli_runtime.console.print(f"{WARN} {line}" if not line.startswith(" ") else line)
+
+
 def main():
     """Main entry point for model evaluation."""
     setup_signals()
@@ -193,7 +223,18 @@ def main():
         help=f"Osaurus/Ollama server URL (default: $OLLAMA_BASE_URL or http://{DEFAULT_HOST}:{DEFAULT_PORT})",
     )
     parser.add_argument("--api-key", default=None, help="Bearer token for the LLM API")
+    parser.add_argument(
+        "--capabilities",
+        action="store_true",
+        help="Probe what each installed model IS (family, vision, size, viability) "
+        "and print it, without running any task. Replaces the hand-maintained "
+        "roster table in docs/MODEL_QUIRKS.md.",
+    )
     args = parser.parse_args()
+
+    if args.capabilities:
+        _print_capabilities(args.host)
+        return
     timeout = args.timeout
 
     if args.host:
