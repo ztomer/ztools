@@ -334,7 +334,7 @@
       "decode_tokens_per_sec": 66.07,
       "generative": true,
       "prefill_chars_per_sec": 3223.8,
-      "prefill_samples": 8
+      "prefill_samples": 10
     },
     "detailed_json": {
       "p95_latency": 32.1,
@@ -344,23 +344,23 @@
       "total_retries": 1
     },
     "file_summary": {
-      "p95_latency": 15.0,
+      "p95_latency": 14.9,
       "parse_failures": 0,
-      "samples": 20,
+      "samples": 21,
       "timeout": 900,
       "total_retries": 1
     },
     "file_summary_mixed": {
-      "p95_latency": 15.7,
+      "p95_latency": 15.5,
       "parse_failures": 0,
-      "samples": 13,
+      "samples": 14,
       "timeout": 900,
       "total_retries": 1
     },
     "filename": {
-      "p95_latency": 4.7,
+      "p95_latency": 4.5,
       "parse_failures": 0,
-      "samples": 23,
+      "samples": 24,
       "timeout": 900,
       "total_retries": 1
     },
@@ -374,21 +374,21 @@
     "filename_mixed": {
       "p95_latency": 1.5,
       "parse_failures": 0,
-      "samples": 13,
+      "samples": 14,
       "timeout": 900,
       "total_retries": 1
     },
     "image_rename": {
       "p95_latency": 2.5,
       "parse_failures": 0,
-      "samples": 9,
+      "samples": 10,
       "timeout": 900,
       "total_retries": 1
     },
     "image_rename_mixed": {
       "p95_latency": 1.9,
       "parse_failures": 0,
-      "samples": 9,
+      "samples": 10,
       "timeout": 900,
       "total_retries": 1
     },
@@ -402,14 +402,14 @@
     "rename_mixed": {
       "p95_latency": 1.6,
       "parse_failures": 0,
-      "samples": 13,
+      "samples": 14,
       "timeout": 900,
       "total_retries": 1
     },
     "summarize": {
       "p95_latency": 15.1,
       "parse_failures": 0,
-      "samples": 25,
+      "samples": 26,
       "timeout": 900,
       "total_retries": 2
     },
@@ -437,7 +437,7 @@
     "summarize_mixed": {
       "p95_latency": 15.3,
       "parse_failures": 0,
-      "samples": 13,
+      "samples": 14,
       "timeout": 900,
       "total_retries": 1
     },
@@ -465,28 +465,28 @@
     "weekend_fixed": {
       "p95_latency": 7.8,
       "parse_failures": 0,
-      "samples": 15,
+      "samples": 16,
       "timeout": 900,
       "total_retries": 1
     },
     "weekend_fixed_mixed": {
       "p95_latency": 6.5,
       "parse_failures": 0,
-      "samples": 13,
+      "samples": 14,
       "timeout": 900,
       "total_retries": 1
     },
     "weekend_transient": {
-      "p95_latency": 9.8,
+      "p95_latency": 9.7,
       "parse_failures": 0,
-      "samples": 15,
+      "samples": 16,
       "timeout": 900,
       "total_retries": 1
     },
     "weekend_transient_mixed": {
       "p95_latency": 8.0,
       "parse_failures": 0,
-      "samples": 13,
+      "samples": 14,
       "timeout": 900,
       "total_retries": 1
     },

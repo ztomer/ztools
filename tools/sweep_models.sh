@@ -26,7 +26,15 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/tui/lib.sh"
 
 STATUS="${SWEEP_STATUS:-$ROOT/.sweep_status}"
-LOGDIR="${SWEEP_LOGDIR:-${TMPDIR:-/tmp}/ztools-sweep}"
+# Per-RUN log directory, with a `latest` symlink.
+#
+# A shared directory outlives its run, and stale logs are indistinguishable from
+# current ones to anything reading them afterwards -- a monitor watching for failure
+# signatures reported seven HTTP 499s and eight INFRA failures from a previous sweep
+# while the live run was perfectly clean. Same class as writing DONE regardless of
+# exit code: the artifact stops describing the run that produced it.
+LOGROOT="${SWEEP_LOGDIR:-${TMPDIR:-/tmp}/ztools-sweep}"
+LOGDIR="$LOGROOT/run-$(date +%Y%m%d-%H%M%S)"
 PER_MODEL_TIMEOUT="${SWEEP_MODEL_TIMEOUT:-14400}"   # 4h; a slow model is not a failure
 RESUME=0
 ONLY_MODEL=""
@@ -51,7 +59,14 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# --resume continues an existing run, so it keeps that run's directory rather than
+# opening a new one -- otherwise half a run's logs would sit in one directory and half
+# in another, which is the confusion this is meant to remove.
+if [ "$RESUME" -eq 1 ] && [ -L "$LOGROOT/latest" ]; then
+  LOGDIR="$(cd "$LOGROOT/latest" 2>/dev/null && pwd)"
+fi
 mkdir -p "$LOGDIR"
+ln -sfn "$LOGDIR" "$LOGROOT/latest"
 touch "$STATUS"
 
 # One server, or the numbers are worthless. See tools/osaurus_one.sh.
