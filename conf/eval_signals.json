@@ -25,9 +25,9 @@
       "total_retries": 1
     },
     "file_summary_mixed": {
-      "p95_latency": 509.1,
+      "p95_latency": 493.2,
       "parse_failures": 0,
-      "samples": 4,
+      "samples": 5,
       "timeout": 900,
       "total_retries": 1
     },
@@ -46,9 +46,9 @@
       "total_retries": 1
     },
     "filename_mixed": {
-      "p95_latency": 379.8,
+      "p95_latency": 368.1,
       "parse_failures": 0,
-      "samples": 4,
+      "samples": 5,
       "timeout": 900,
       "total_retries": 1
     },
@@ -109,10 +109,10 @@
       "total_retries": 1
     },
     "summarize_mixed": {
-      "p95_latency": 667.7,
+      "p95_latency": 649.7,
       "parse_failures": 0,
-      "samples": 4,
-      "timeout": 1001,
+      "samples": 5,
+      "timeout": 974,
       "total_retries": 1
     },
     "taxes_anomalies": {

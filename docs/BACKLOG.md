@@ -50,7 +50,14 @@ accumulating here as a graveyard of finished plans.
    | `_names_match` | 4 |
    | `validate_mixed_signal` | 4 |
 
-   `text_validator.py` (28 survivors) and the scorers (22) are untouched.
+   `text_validator.py` is at 26 (from 28); `validate_summary` 8 -> 6, of which TWO
+   are EQUIVALENT MUTANTS rather than gaps: its specificity tiers (`ratio >= 0.8`,
+   `>= 0.5`) are absorbed by the misattribution cap, because any ratio below 1.0
+   trips that cap and flattens the score to 45. The half-credit tier cannot affect
+   any returned score. Pinned and explained in
+   test_summary_scorer_boundaries.py so nobody re-derives it.
+
+   The scorers (22 survivors) are untouched.
    `python3 tools/mutate.py --preset validators`.
 
    One lesson worth carrying: testing a function's OUTCOME is not testing its
