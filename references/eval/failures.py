@@ -15,6 +15,10 @@ FAIL_TIMEOUT = "TIMEOUT"
 FAIL_PARSE = "PARSE"
 FAIL_FORMAT = "FORMAT"
 FAIL_CONTENT = "CONTENT"
+# A reasoning model that spent its whole budget thinking and returned nothing. Kept
+# separate from FORMAT because the remedy is opposite: FORMAT failures want a clearer
+# prompt, this wants a SMALLER token budget so the model is forced to stop.
+FAIL_REASONING = "REASONING"
 FAIL_NONE = None
 
 # HTTP 5xx, or an explicit overload marker. Matched on the error string because
@@ -75,6 +79,30 @@ def _classify_failure(result: dict, task_cfg: dict, score: int, failure_reason: 
             "category": FAIL_TIMEOUT,
             "reason": error,
             "evidence": f"Model did not respond within {DEFAULT_EVAL_TIMEOUT}s",
+        }
+
+    # Checked BEFORE the parse_json branch. A reasoning model that never stopped
+    # returns empty content, and on a JSON task that reads as "no JSON brackets" --
+    # the same mislabel one level down, and the likelier one, since the weekend tasks
+    # are the hard prompts that trigger it.
+    #
+    # The qwen3_5 family streams its chain of thought into `reasoning_content` and
+    # leaves `content` empty until it stops. Calling that a FORMAT failure reads as a
+    # model that cannot follow instructions, so the response is to rewrite the prompt
+    # -- when the fix is to make it STOP reasoning. Raising the budget makes it
+    # strictly worse: the reasoning expands to fill whatever it is given.
+    reasoning = (result or {}).get("reasoning_content") or ""
+    if not content and reasoning:
+        finish = (result or {}).get("finish_reason") or "unknown"
+        return {
+            "category": FAIL_REASONING,
+            "reason": "Reasoned past the token budget",
+            "evidence": (
+                f"{len(reasoning)} chars of reasoning_content, empty content, "
+                f"finish_reason={finish}. Not a prompt-following failure: the model "
+                f"never stopped thinking. A SMALLER max_tokens makes it stop and "
+                f"answer; a larger one makes it worse."
+            ),
         }
 
     if task_cfg["parse_json"]:

@@ -275,6 +275,17 @@ def call(
         message = resp_data["choices"][0].get("message", {})
         content = message.get("content", "")
         result["content"] = clean_output(content)
+        # Reasoning models (the qwen3_5 family here) stream their chain of thought
+        # into a SEPARATE field and leave `content` empty until reasoning ends. On a
+        # hard prompt they never stop, so the caller sees an empty answer with no
+        # indication why. Carrying both fields is what lets a caller tell "the model
+        # thought until it ran out of budget" from "the model returned nothing" --
+        # two failures with completely different remedies.
+        #
+        # eval/outputs.py already read result["reasoning_content"]; nothing had ever
+        # written it, so every saved output for a reasoning model was blank.
+        result["reasoning_content"] = message.get("reasoning_content") or ""
+        result["finish_reason"] = resp_data["choices"][0].get("finish_reason") or ""
         logger.debug(f"Extracted {len(content)} chars of content")
         if parse_json and content:
             result["parsed"] = extract_json(content)

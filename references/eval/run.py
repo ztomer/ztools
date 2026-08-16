@@ -20,6 +20,7 @@ from eval.failures import (
     FAIL_CONTENT,
     FAIL_INFRA,
     FAIL_NONE,
+    FAIL_REASONING,
     FAIL_TIMEOUT,
     _classify_failure,
 )
@@ -34,6 +35,11 @@ from eval.tasks_core import TASKS, _extract_items_from_text
 from eval.validate import safe_content
 
 MAX_RETRIES = int(os.environ.get("EVAL_MAX_RETRIES", "1"))
+# Budget for a retry after a reasoning overrun. Measured, not chosen: the same model
+# and prompt returns empty at 16000 (finish_reason=length, all budget spent thinking)
+# and valid output at 512 (finish_reason=stop, ~234 completion tokens). Recorded in
+# docs/MODEL_QUIRKS.md.
+REASONING_RETRY_MAX_TOKENS = int(os.environ.get("EVAL_REASONING_RETRY_TOKENS", "512"))
 # Consecutive INFRA/TIMEOUT failures before abandoning a model. Chosen from
 # observation, not taste: a model that can serve at all recovers within a task
 # or two, while qwen3.6-35b returned 46 straight infrastructure failures without
@@ -161,6 +167,7 @@ def _call_model(
     port: int,
     backend: str,
     timeout: int = None,
+    max_tokens: int = None,
 ) -> dict:
     """Call model via the appropriate backend (pure transport, no validation)."""
     effective_timeout = timeout or DEFAULT_EVAL_TIMEOUT
@@ -183,6 +190,7 @@ def _call_model(
             parse_json=task_cfg["parse_json"],
             temperature=EVAL_TEMPERATURE,
             timeout=effective_timeout,
+            max_tokens=max_tokens,
         )
 
 
@@ -298,9 +306,24 @@ def run_eval(
                 )
                 first_attempt_failed = True
 
+            # A retry that repeats the identical call cannot fix a reasoning overrun
+            # -- the model will think itself past the budget again, and each attempt
+            # costs the FULL budget before returning nothing. Retry with a small
+            # budget instead, which is the documented remedy: the same model that
+            # returns empty at max_tokens=16000 returns valid output at 512, because
+            # a tight budget forces it to stop reasoning and answer.
+            retry_tokens = None
+            if attempt > 0 and best_diagnosis.get("category") == FAIL_REASONING:
+                retry_tokens = REASONING_RETRY_MAX_TOKENS
+                eval_logger.warning(
+                    f"Previous attempt reasoned past its budget; retrying with "
+                    f"max_tokens={retry_tokens} to force a stop"
+                )
+
             try:
                 result = _call_model(
-                    model, task_cfg, task_name, host, port, backend, timeout=task_timeout
+                    model, task_cfg, task_name, host, port, backend,
+                    timeout=task_timeout, max_tokens=retry_tokens,
                 )
             except Exception as e:
                 eval_logger.error(f"Model call failed with exception: {e}")

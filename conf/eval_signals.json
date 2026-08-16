@@ -7,7 +7,7 @@
       "family": "qwen3_5",
       "generative": true,
       "prefill_chars_per_sec": 249.2,
-      "prefill_samples": 5,
+      "prefill_samples": 6,
       "vision": true
     },
     "detailed_json": {
@@ -30,11 +30,11 @@
       "total_retries": 1
     },
     "filename": {
-      "p95_latency": 42.4,
+      "p95_latency": 94.4,
       "parse_failures": 0,
-      "samples": 4,
+      "samples": 5,
       "timeout": 900,
-      "total_retries": 2
+      "total_retries": 3
     },
     "filename_leak": {
       "parse_failures": 0,
@@ -119,30 +119,30 @@
       "total_retries": 1
     },
     "weekend_fixed": {
-      "p95_latency": 316.2,
+      "p95_latency": 453.1,
       "parse_failures": 0,
-      "samples": 4,
+      "samples": 5,
       "timeout": 900,
       "total_retries": 1
     },
     "weekend_fixed_mixed": {
-      "p95_latency": 307.4,
+      "p95_latency": 323.6,
       "parse_failures": 0,
-      "samples": 4,
+      "samples": 5,
       "timeout": 900,
       "total_retries": 1
     },
     "weekend_transient": {
-      "p95_latency": 1167.1,
+      "p95_latency": 1159.3,
       "parse_failures": 0,
-      "samples": 5,
-      "timeout": 1750,
-      "total_retries": 3
+      "samples": 6,
+      "timeout": 1738,
+      "total_retries": 4
     },
     "weekend_transient_mixed": {
-      "p95_latency": 284.7,
+      "p95_latency": 522.9,
       "parse_failures": 0,
-      "samples": 4,
+      "samples": 5,
       "timeout": 900,
       "total_retries": 1
     },
