@@ -85,7 +85,11 @@ done
 # opening a new one -- otherwise half a run's logs would sit in one directory and half
 # in another, which is the confusion this is meant to remove.
 if [ "$RESUME" -eq 1 ] && [ -L "$LOGROOT/latest" ]; then
-  LOGDIR="$(cd "$LOGROOT/latest" 2>/dev/null && pwd)"
+  # `pwd -P`, not `pwd`. Bash reports the LOGICAL path by default, so resolving the
+  # `latest` symlink returned ".../latest" rather than the run directory it points
+  # at -- and the `ln -sfn` below then aimed the symlink at itself. Every model in a
+  # resumed sweep failed instantly with "Too many levels of symbolic links".
+  LOGDIR="$(cd "$LOGROOT/latest" 2>/dev/null && pwd -P)"
 fi
 mkdir -p "$LOGDIR"
 ln -sfn "$LOGDIR" "$LOGROOT/latest"
