@@ -1,5 +1,10 @@
 """Config - shim re-exporting from split modules."""
 
+# NOTE: `_config` and `_model_configs_cache` are deliberately NOT re-exported here.
+# Re-exporting mutable module state hands out an import-time alias to the dict
+# OBJECT, which stops tracking the moment anything rebinds the source -- silently,
+# with the two readers disagreeing rather than failing. See `config_getters._cfg`.
+# Read the config through `get_config()` or the typed getters.
 from .config_core import (
     _FALLBACK_MAX_TOKENS,
     _FALLBACK_MODEL,
@@ -8,9 +13,7 @@ from .config_core import (
     Task,
     TaskKeys,
     _auto_load,
-    _config,
     _config_loaded,
-    _model_configs_cache,
     get_config,
     init_config,
     is_config_loaded,
@@ -50,8 +53,6 @@ __all__ = [
     "_FALLBACK_MAX_TOKENS",
     "_FALLBACK_MODEL",
     "_config_loaded",
-    "_config",
-    "_model_configs_cache",
     "_auto_load",
     "init_config",
     "reset_config",

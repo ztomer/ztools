@@ -32,29 +32,74 @@ async def on_mount(self) -> None:
     await self.action_refresh_models()
 
 async def action_refresh_models(self) -> None:
+    """Refresh the roster, and say so when the config names a model it does not contain.
+
+    The audit exists because this function used to hide exactly that. Each dropdown was
+    set to `preferred if preferred in models else models[0]` -- a SILENT substitution.
+    When two configured models were deleted from disk, the TUI opened green, showed a
+    plausible model in every dropdown, and gave no indication that three config slots
+    were dead; the user found out when `wk` failed with HTTP 404. A fallback the user
+    cannot see is indistinguishable from a config that works.
+
+    The roster is fetched once and passed to the audit. `audit_configured_models` will
+    otherwise fetch its own, and a second request here would put a network call into a
+    path the test suite forbids from reaching a server.
+    """
+    from lib.model_resolve import audit_configured_models
+
     status_box = self.query_one("#server-status-box")
     status_box.update("[yellow]Checking Osaurus...[/yellow]")
-    is_running = await asyncio.to_thread(is_server_running)
-    if is_running:
-        models = await asyncio.to_thread(get_models)
-        if models:
-            status_box.update("[green]Server Online[/green]")
-            options = [(m, m) for m in models]
-            for select_id, config_key in (
-                ("#wk-model", "json"),
-                ("#tw-model", "summarize"),
-                ("#ev-model", "think"),
-                ("#rn-model", "filename"),
-            ):
-                try:
-                    widget = self.query_one(select_id)
-                    widget.options = options
-                    preferred = _tool_default_model(config_key)
-                    widget.value = preferred if preferred in models else models[0]
-                except Exception:
-                    pass
-    else:
+    if not await asyncio.to_thread(is_server_running):
         status_box.update("[red]Server Offline[/red]")
+        return
+
+    models = await asyncio.to_thread(get_models)
+    if not models:
+        # Reachable but serving nothing. This used to leave the box reading
+        # "Checking Osaurus..." forever -- a stuck spinner reads as a hung app, not
+        # as the diagnosis it actually is.
+        status_box.update("[red]Server Online, no models[/red]")
+        return
+
+    options = [(m, m) for m in models]
+    substituted = []
+    for select_id, config_key in (
+        ("#wk-model", "json"),
+        ("#tw-model", "summarize"),
+        ("#ev-model", "think"),
+        ("#rn-model", "filename"),
+    ):
+        try:
+            widget = self.query_one(select_id)
+            widget.options = options
+            preferred = _tool_default_model(config_key)
+            if preferred in models:
+                widget.value = preferred
+            else:
+                widget.value = models[0]
+                substituted.append(config_key)
+        except Exception:
+            pass
+
+    report = await asyncio.to_thread(audit_configured_models, models)
+    missing = report.get("missing", [])
+    if missing:
+        # Named per slot, because "a model is missing" is not actionable and
+        # "best_models.summarize = <name>" is the line to edit.
+        detail = ", ".join(s.split(" = ")[0] for s in missing)
+        status_box.update(
+            f"[yellow]{ICON_WARN} Server Online — {len(missing)} config slot(s) "
+            f"not servable: {detail}[/yellow]"
+        )
+    elif substituted:
+        # The audit covers the config slots; this catches a dropdown that fell back
+        # for some other reason, so the two can never silently disagree.
+        status_box.update(
+            f"[yellow]{ICON_WARN} Server Online — substituted: "
+            f"{', '.join(substituted)}[/yellow]"
+        )
+    else:
+        status_box.update(f"[green]{ICON_OK} Server Online[/green]")
 
 async def run_weekend_planner(self) -> None:
     self._update_status("#wk-result-area", "Setting date range (Friday through Sunday)...")

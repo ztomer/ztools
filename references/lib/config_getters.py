@@ -3,38 +3,65 @@
 import sys
 from typing import Dict, List
 
+from . import config_core as _core
 from .config_core import (
     _FALLBACK_MAX_TOKENS,
     _FALLBACK_MODEL,
     _FALLBACK_TIMEOUT,
     Task,
     _auto_load,
-    _config,
-    _model_configs_cache,
 )
 from .config_toml import load_config as _load_config_toml
 from .paths import conf_path
 
 
-def get_timeouts() -> Dict[str, int]:
+def _cfg() -> Dict:
+    """The live config, read THROUGH the module rather than an import-time alias.
+
+    This used to be `from .config_core import _config` at module scope, which binds
+    the dict OBJECT once, at import. `_auto_load` mutates whatever
+    `config_core._config` currently names, so the two stay in sync only while nobody
+    rebinds that name -- and the moment anything does, this module keeps reading a
+    dict that will never be updated again. The failure is silent and asymmetric:
+    `get_config()` returns the real config while `get_best_models()` returns `{}`,
+    so callers disagree about what the configuration says.
+
+    That is not hypothetical. The TUI config audit reported "no drift" (it re-imports
+    `_config` inside the function, so it saw the truth) while the model dropdowns
+    substituted two slots (they went through `get_best_models`, which saw an empty
+    dict). Nothing crashed; the two halves of one screen simply disagreed.
+
+    `_model_configs_cache` had the identical defect, and the workaround was already
+    in the tree -- a fixture in test_config_core_getters.py manually re-aliased
+    `cg._model_configs_cache = cc._model_configs_cache` after every rebind to paper
+    over it. Reading through the module removes the need for that, and makes the
+    desynchronised state unrepresentable rather than merely unlikely.
+    """
     _auto_load()
-    return _config.get("timeouts", {})
+    return _core._config
+
+
+def _model_caches() -> Dict:
+    """Same rule as `_cfg`, for the per-family model config cache."""
+    return _core._model_configs_cache
+
+
+def get_timeouts() -> Dict[str, int]:
+    return _cfg().get("timeouts", {})
 
 
 def get_max_tokens() -> Dict[str, int]:
-    _auto_load()
-    return _config.get("max_tokens", {})
+    return _cfg().get("max_tokens", {})
 
 
 def get_best_models() -> Dict[str, str]:
-    _auto_load()
-    return _config.get("best_models", {})
+    return _cfg().get("best_models", {})
 
 
 def get_best_model(task: Task) -> str:
     models = get_best_models()
     task_key = task.value if isinstance(task, Task) else task
-    return models.get(task_key, _config.get("default_model", _FALLBACK_MODEL))
+    return models.get(task_key, _cfg().get("default_model", _FALLBACK_MODEL))
 
 
 def get_timeout(task: Task) -> int:
@@ -141,14 +168,14 @@ def get_model_family(model: str) -> str:
 
 
 def clear_model_config_cache():
-    _model_configs_cache.clear()
+    _model_caches().clear()
 
 
 def get_model_config(model: str) -> Dict:
     family = get_model_family(model)
     version = model.replace(family + "-", "") if family in model else ""
-    if family in _model_configs_cache:
-        family_config = _model_configs_cache[family]
+    if family in _model_caches():
+        family_config = _model_caches()[family]
         # Looked up by the FULL model id, not gated on `version`. That gate was
         # `family in model` -- it assumed a model's name contains its family, which
         # stops being true the moment the family comes from the architecture instead
@@ -163,7 +190,7 @@ def get_model_config(model: str) -> Dict:
     config_path = conf_path("models", f"{family}.toml")
     if version_config_path.exists():
         loaded = _load_config_toml(version_config_path) or {}
-        _model_configs_cache[family] = loaded
+        _model_caches()[family] = loaded
         if "models" in loaded:
             version_specific = loaded["models"].get(model, {})
             if version_specific:
@@ -173,13 +200,13 @@ def get_model_config(model: str) -> Dict:
                 return merged
         return loaded
     elif config_path.exists():
-        _model_configs_cache[family] = _load_config_toml(config_path) or {}
+        _model_caches()[family] = _load_config_toml(config_path) or {}
     else:
         print(
             f"Warning: No model config found for '{family}', using built-in fallback prompts",
             file=sys.stderr,
         )
-        _model_configs_cache[family] = {
+        _model_caches()[family] = {
             "name": family,
             "timeout": 300,
             "prompts": {
@@ -240,7 +267,7 @@ def get_model_config(model: str) -> Dict:
             },
             "field_mapping": {},
         }
-    family_config = _model_configs_cache.get(
+    family_config = _model_caches().get(
         family, {"name": family, "prompts": {}, "key_mappings": {}, "quirks": []}
     )
     # Merge a per-model section on THIS path too, not only on the cached one. The
@@ -302,8 +329,7 @@ def get_model_prompts_all(model: str) -> Dict[str, str]:
 
 
 def get_filename_models() -> List[str]:
-    _auto_load()
-    models = _config.get("filename_models", [])
+    models = _cfg().get("filename_models", [])
     return models if models else ["foundation"]
 
 
@@ -322,12 +348,10 @@ def _default_fallback_chain() -> List[str]:
 
 def get_model_fallback_chain() -> List[str]:
     """Families lib/model_resolve.py tries when the configured model is gone."""
-    _auto_load()
-    chain = _config.get("model_fallback_chain", [])
+    chain = _cfg().get("model_fallback_chain", [])
     return list(chain) if chain else _default_fallback_chain()
 
 
 def get_filename_prompt() -> str:
-    _auto_load()
-    prompts = _config.get("prompts", {})
+    prompts = _cfg().get("prompts", {})
     return prompts.get("filename", "Give a short summary of: {text}")

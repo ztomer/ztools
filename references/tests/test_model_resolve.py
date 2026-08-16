@@ -117,19 +117,24 @@ class TestSubstituting:
 def config_dict(monkeypatch):
     """Replace the config mapping that config_getters actually reads.
 
-    It must be patched on lib.config_getters, NOT on lib.config_core: config_getters
-    does `from .config_core import _config` at module level, so the name is bound at
-    import time and patching the source module leaves the getter reading the real
-    conf/config.toml. (audit_configured_models imports it inside the function body, so
-    the fake_config fixture above patches config_core instead — the two bindings are
-    genuinely different, which is the whole seam hazard.)
+    Patched on lib.config_core, which is now the only place there is. This fixture
+    used to patch lib.config_getters instead, because that module bound `_config` at
+    import time and patching the source left the getters reading the real
+    conf/config.toml -- while `audit_configured_models`, which imports inside the
+    function body, saw the patch. Two bindings, two answers, from one config.
+
+    That split was not merely awkward to test around; it shipped. The TUI reported a
+    clean config audit while its own dropdowns silently substituted two slots.
+    config_getters reads through the module now (`_cfg`), so patching the source is
+    both correct and sufficient. `_config_loaded` has to be pinned alongside it or
+    `_auto_load` reloads the real file over the top of the fake.
     """
 
     def install(mapping):
-        import lib.config_getters as getters
+        import lib.config_core as core
 
-        monkeypatch.setattr(getters, "_auto_load", lambda: None)
-        monkeypatch.setattr(getters, "_config", mapping)
+        monkeypatch.setattr(core, "_config", mapping)
+        monkeypatch.setattr(core, "_config_loaded", True)
 
     return install
 

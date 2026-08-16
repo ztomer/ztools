@@ -157,15 +157,13 @@ class TestThePerModelBudgetCap:
         import lib.config_getters as getters
 
         monkeypatch.setattr(getters, "get_model_family", lambda model: "testfam")
-        # Injected into the binding config_getters ACTUALLY reads, not into
-        # lib.config_core. config_getters does `from .config_core import
-        # _model_configs_cache` at import, so it holds a reference to the original
-        # dict -- and test_config_core_edges.py REBINDS lib.config_core's attribute to
-        # a fresh dict (`cc._model_configs_cache = {}`). After that runs, the two
-        # modules have different caches, and anything written through config_core is
-        # invisible here. Same seam hazard the repo already documents for
-        # patch.object across a module split.
-        cache = getters._model_configs_cache
+        # There is now exactly one cache to inject into. This used to reach for
+        # `getters._model_configs_cache`, because config_getters held its own
+        # import-time alias and a rebind in test_config_core_edges.py left the two
+        # modules reading different dicts. config_getters reads through the module
+        # now (see `_model_caches`), so writing to config_core is writing to the
+        # only cache there is.
+        cache = getters._model_caches()
         cache.clear()
         cache["testfam"] = {
             "name": "testfam",
