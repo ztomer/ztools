@@ -137,6 +137,28 @@ Two routing bugs fall straight out of it:
 
 ---
 
+## Scores before 2026-08-16 are not comparable with scores after it
+
+`validate_detailed_json` gained a too-few-items CAP. Before it, the count credit was
+additive and the weights summed to 120 against a ceiling of 100, so the 20-point
+overhang absorbed the penalty whole: a 4-item weekend report scored exactly the same
+100 as a 12-item one, on tasks whose entire purpose is producing a list.
+
+    items      before    after
+    2-4          100       85      (forgoes the whole count weight, 15)
+    5-9          100       95      (forgoes the GOOD/OK difference, 5)
+    10+          100      100
+
+The caps are derived from the credit not earned rather than picked, so they stay
+correct if the weights are ever retuned. Found by mutation testing: nine `>=`
+mutations on this function's thresholds survived the entire suite, because the credit
+they gated was invisible under saturation.
+
+An existing integration test asserted the old behaviour with the comment "only fails
+on <10 items check, not penalized" -- the defect written down and accepted.
+
+---
+
 ## TL;DR Cheat Sheet
 
 Start server: `./tools/osaurus_one.sh` -- NEVER by hand. A second osaurus does not

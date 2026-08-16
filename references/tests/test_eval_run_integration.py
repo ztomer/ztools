@@ -28,8 +28,15 @@ class TestRunEvalWithMock:
 
         assert len(results) == 1
         assert results[0]["task"] == "json"
-        # Mock returns 2 valid items → score 100 (only fails on <10 items check, not penalized)
-        assert results[0]["quality_score"] == 100
+        # The mock returns 2 items. This used to assert 100, with the comment "only
+        # fails on <10 items check, not penalized" -- the defect written down and
+        # accepted: the count credit is additive, the weights sum to 120 against a
+        # ceiling of 100, and the overhang absorbed the penalty whole. Too-few-items
+        # is now a cap derived from the credit not earned, so 2 items cannot score
+        # what 10 items score.
+        from lib.validators.json_validator import DETAILED_COUNT_GOOD, MAX_SCORE
+
+        assert results[0]["quality_score"] == MAX_SCORE - DETAILED_COUNT_GOOD
 
     def test_multiple_tasks(self, mock_llm):
         import eval.run as er
@@ -54,8 +61,12 @@ class TestRunEvalWithMock:
             results = er.run_eval("mock-model", tasks=tasks, verbose=False)
 
         result = results[0]
-        # Mock returns valid 2-item JSON → score 100
-        assert result["quality_score"] == 100
+        # 2 items, so the too-few-items cap applies (see test_basic_success). The
+        # point of this test is that a valid response produces a real score and a
+        # result object, not that the score is any particular number.
+        from lib.validators.json_validator import DETAILED_COUNT_GOOD, MAX_SCORE
+
+        assert result["quality_score"] == MAX_SCORE - DETAILED_COUNT_GOOD
         assert result["result"] is not None
 
     def test_custom_response(self, mock_llm):

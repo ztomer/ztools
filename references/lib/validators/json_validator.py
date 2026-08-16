@@ -457,6 +457,23 @@ def validate_detailed_json(data: Any, source_text: str = "") -> Tuple[int, str]:
         failures.append(f"constant across every row: {', '.join(constant_names)}")
         score = min(score, CONSTANT_COLUMN_MAX_SCORE)
 
+    # Too few items, applied as a CAP for the same reason the three below are.
+    #
+    # The count credit above (DETAILED_COUNT_GOOD / _OK) is additive, and the weights
+    # sum to 120 against a ceiling of 100 -- so for well-formed, grounded output the
+    # 20-point overhang absorbed it entirely and a 4-item report scored exactly the
+    # same 100 as a 12-item one. On the weekend tasks, which exist to produce a list
+    # of activities, that is the scorer failing at its main job.
+    #
+    # The cap is DERIVED from the credit that was not earned rather than picked: a
+    # report below MIN_ITEMS_OK forgoes the whole count weight, one between OK and
+    # GOOD forgoes the difference between the two tiers. So the penalty the weights
+    # always intended is the penalty that now actually applies.
+    if len(items) < MIN_ITEMS_OK:
+        score = min(score, MAX_SCORE - DETAILED_COUNT_GOOD)
+    elif len(items) < MIN_ITEMS_GOOD:
+        score = min(score, MAX_SCORE - (DETAILED_COUNT_GOOD - DETAILED_COUNT_OK))
+
     near_dupes = near_duplicate_ratio(items)
     if near_dupes >= NEAR_DUPLICATE_LIMIT:
         failures.append(f"{int(near_dupes * 100)}% of rows repeat an earlier venue")
