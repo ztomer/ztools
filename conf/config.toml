@@ -1,17 +1,28 @@
 llm_url = "http://localhost:1337"
 
-# PROVISIONAL, 2026-08-15. qwen3.6-35b-a3b-mxfp8-mtp and qwen-agentworld-35b-a3b-mxfp8
-# were deleted from disk at some point after the entries below were written, and
-# nothing noticed: the server answered `default_model`, think, vlm and 2 of the 3
-# filename_models with HTTP 404, which broke `wk` outright (both of its tasks routed
-# there). lib/model_resolve.py now substitutes at call time and says so, but a
-# substitution is a stopgap that fires on every run — these names are the fix.
+# DERIVED 2026-08-16 from a full sweep: 11 installed models x 23 eval tasks, scores in
+# ~/.config/ztools/eval_history.json. This replaces the 2026-08-15 PROVISIONAL table,
+# which was a speed argument with no quality measurement behind it.
 #
-# Use the 4-BIT qwen3.8, not the MXFP8 one, and the reason is counter-intuitive
-# enough to write down: the HIGHER bit encoding is unusable on this host. osaurus
-# mmaps weights, and 27GB cannot stay in this machine's page cache, so the MXFP8
-# build re-reads weights from SSD on every token. Same model, same architecture,
-# same machine, measured back to back:
+# HOW THESE WERE CHOSEN. A mean across all 23 tasks is the wrong statistic: the tasks
+# are heterogeneous and most are saturated (9-11 models tie at 100 on `filename`,
+# `json`, `rename_mixed`...). A per-task argmax is equally wrong for the same reason.
+# So each slot is scored ONLY over the eval tasks its own consumer actually exercises:
+#
+#     json      -> wk        weekend_{transient,fixed}[_mixed], _schema, json, detailed_json
+#     summarize -> tw        summarize, _mixed, _contradiction, _factual_{accuracy,coverage}
+#     filename  -> rn        filename, filename_mixed, filename_leak, rename_mixed
+#     think     -> fallback  file_summary[_mixed], taxes_{anomalies,audit_readiness,synthesis}
+#
+# Ties are broken by count of zero scores across all 23, then by overall mean -- a
+# model that collapses completely on some other task is a worse bet in the slot it
+# happens to tie in. `default_model` gets the `think` winner, since it is what every
+# task with no slot of its own lands on.
+#
+# The MXFP8/4-bit finding below still holds and still constrains every choice here:
+# the HIGHER bit encoding is unusable on this host. osaurus mmaps weights, and 27GB
+# cannot stay in this machine's page cache, so the MXFP8 build re-reads weights from
+# SSD on every token. Same model, same architecture, same machine, back to back:
 #
 #     qwen3.8-27b-mxfp8   27GB   TTFT 143.0s   0.08 tok/s   cold start 182s
 #     qwen3.8-27b-4bit    15GB   TTFT  30.7s  26-35 tok/s   cold start 0.8s
@@ -19,21 +30,26 @@ llm_url = "http://localhost:1337"
 # 326x on decode. Bits buy quality only while the weights stay resident; past that
 # they buy nothing because the model cannot finish. The threshold on this host is
 # between 18GB (fine) and 27GB (dead) -- docs/MODEL_QUIRKS.md lists the five
-# hypotheses ruled out before that one.
+# hypotheses ruled out before that one. The 6-bit build (25.8GB) does complete and
+# scored 85.9 overall, but it wins no slot outright, so nothing routes to it.
 #
-# Still PROVISIONAL as a TASK ASSIGNMENT: the above is a speed argument, not a
-# quality measurement, and nothing here has been evaluated on these tasks. Re-derive
-# the whole table from a sweep (docs/BACKLOG.md item 1) and stamp the date when you
-# do, so the next roster change invalidates it visibly.
-default_model = "qwen3.8-27b-4bit"
+# Re-derive after any roster change and stamp the date, so it invalidates visibly.
+default_model = "ornith-1.0-35b-jang_4m"
+  # think-group winner at 88.4 (file_summary 100, the only model to score it at all;
+  # taxes_anomalies 92, synthesis 82). 19.8GB, under the residency ceiling.
 
 # Fallback chain for `rn`'s filename task, tried in order.
 # Top-level keys must stay ABOVE the first [table] header — a bare key after one
 # belongs to that table, which is how this list spent its life inside
 # [max_tokens] where get_filename_models() could never see it.
+# All four filename tasks are saturated -- seven models scored 100/100/100/100 -- so
+# this chain is ordered by the tiebreakers, not by filename score: foundation first
+# (0 zeros anywhere, on-device, always present, 0.3s), then the two highest-scoring
+# installed models that also swept the group.
 filename_models = [
   "foundation",
-  "qwen3.8-27b-4bit",
+  "gemma-4-12b-it-mxfp8",
+  "muse-glimmer-30b-jang_6m",
 ]
 
 # Order lib/model_resolve.py tries when a configured model is not installed and no
@@ -42,19 +58,46 @@ filename_models = [
 # the ones above did. foundation leads because it is on-device and always present.
 model_fallback_chain = ["foundation", "qwen", "gemma", "ornith", "nemotron"]
 
-# json/summarize/filename below are the surviving entries from the task-673 /
-# task-899 sweep (docs/DEEP_MODEL_VS_GEMINI_EVALUATION.md). Those numbers predate the
-# harness fixes that stopped `filename` scoring 100 for an unfilled {text} placeholder,
-# so treat them as unverified too — they are merely the ones still installed.
 [best_models]
-think = "qwen3.8-27b-4bit"  # provisional, see above
-json = "foundation"
-  # Fastest (0.7s) at 100% on filename and 91.6% on file_summary context-bounding.
-summarize = "gemma-4-12b-it-mxfp8"
-  # 100% on summarize, flawless ## Executive Summary narrative and connecting verbs.
+think = "ornith-1.0-35b-jang_4m"
+  # 88.4 on the think group vs 79.2 for the runner-up. Only model that scored
+  # file_summary at all (100; every other model landed on 60, 30 or 0).
+json = "gemma-4-12b-it-mxfp8"
+  # 98.7 on the wk group -- but so did qwen3.8-27b-jang_6d, gemma-4-e4b-it-8bit and
+  # qwen3.8-27b-4bit, all four with the identical [100,100,100,91,100,100,100]. Split
+  # on the tiebreakers: 1 zero across all 23 tasks (vs 2, 2, 3) and the highest
+  # overall mean of any installed model (86.9). The shared 91 is weekend_fixed_mixed,
+  # where every one of the eleven missed the same 2 of 12 signal items -- that is a
+  # prompt or fixture problem, not a model problem, and no choice here fixes it.
+summarize = "gemma-4-e2b-it-8bit"
+  # 89.8 on the tw group vs 78.8 for the runner-up, and it displaces the previous
+  # holder of this slot (gemma-4-12b-it-mxfp8, 64.4). A 5.9GB model beating the 13.4GB
+  # one is surprising enough to have been re-run three times per task; the result is
+  # deterministic, not sampling noise:
+  #
+  #                            contradiction   factual_accuracy
+  #     gemma-4-e2b-it-8bit    100 100 100     67 67 67
+  #     gemma-4-12b-it-mxfp8     0   0   0     34 34
+  #
+  # Both are adversarial: the source contains a self-contradiction, and three planted
+  # falsehoods. The 12B parrots the contradiction verbatim every time and repeats all
+  # three falsehoods; the e2b is the only installed model that clears BOTH gates.
+  # Those are exactly the failures that matter for `tw`, which summarises text nobody
+  # is going to re-read against its source. e2b is weak elsewhere (file_summary 0,
+  # detailed_json 45, weekend_fixed 45) and must not be promoted out of this slot.
 filename = "foundation"
-  # 100% on filename task, fastest (0.3s).
-vlm = "qwen3.8-27b-4bit"  # provisional, see above
+  # 100 on all four filename tasks with 0 zeros anywhere, on-device, 0.3s. Seven
+  # models tied at 100; foundation wins the tiebreakers outright.
+vlm = "gemma-4-12b-it-mxfp8"
+  # UNMEASURED -- and unlike the entries above, this one cannot be derived from the
+  # sweep at all. `image_rename` and `image_rename_mixed` send IMAGE_RENAME_PROMPT as
+  # TEXT; no eval task in the suite feeds an actual image, so those two 100s say
+  # nothing whatsoever about vision. This is a static-probe pick: `vision_config` is
+  # present in the model's config.json (probe_vision in lib/model_caps.py), and among
+  # the vision-capable models it has the best general competence. Ten of the eleven
+  # installed models probe vision-capable, so the probe barely narrows the field.
+  # docs/BACKLOG.md carries the item for a real image task; until that exists, treat
+  # this slot as a guess with a plausible mechanism, not a measurement.
 
 [timeouts]
 think = 600

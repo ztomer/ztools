@@ -195,18 +195,67 @@ for one. The script is idempotent and `--check` exits 1 unless exactly one is up
 
 ## Best Models by Task
 
-**STALE — every qwen3.6 and laguna row below names an uninstalled model. See the
-warning at the top of this file.**
+Derived 2026-08-16 from the full sweep (11 installed models x 23 tasks). Each slot is
+scored only over the eval tasks its own consumer exercises — a mean across all 23 is
+meaningless when most of them are saturated. The reasoning and the tiebreakers are
+written out in `conf/config.toml`; this table is the summary.
 
-| Task | Model | Speed | Command |
-|------|-------|-------|---------|
-| eval weekend | qwen3.6-35b-a3b-mxfp8-mtp | ~45s | `python3 -m eval --task weekend` |
-| rename | laguna-xs.2-mxfp4 | 2.8s | `python3 -m rename` |
-| summarize | gemma-4-12b-it-mxfp8 | ~30s | `python3 -m twitter` |
-| think/analysis | qwen3.6-35b-a3b-mxfp8-mtp | ~45s | `python3 -m eval --task weekend` |
-| json/schema | qwen3.6-35b-a3b-mxfp8-mtp | ~45s | `python3 -m eval --task weekend_transient_schema` |
-| filename | foundation | 0.6s | `python3 -m rename` |
-| filename (fallback) | laguna-xs.2-mxfp4 | 3.1s | `python3 -m rename` |
+| Slot | Model | Group score | Consumer |
+|------|-------|-------------|----------|
+| `json` | gemma-4-12b-it-mxfp8 | 98.7 | `wk` |
+| `summarize` | gemma-4-e2b-it-8bit | 89.8 | `tw` |
+| `filename` | foundation | 100.0 | `rn` |
+| `think` / `default_model` | ornith-1.0-35b-jang_4m | 88.4 | fallback for every unslotted task |
+| `vlm` | gemma-4-12b-it-mxfp8 | **unmeasured** | `rn` image path |
+
+Overall means across all 23 tasks, for context only — do NOT pick a slot with this
+column, it is what the per-slot scoring exists to avoid:
+
+| Model | Mean | Zeros | Size |
+|-------|------|-------|------|
+| gemma-4-12b-it-mxfp8 | 86.9 | 1 | 13.4GB |
+| muse-glimmer-30b-jang_6m | 86.5 | 2 | 27.6GB |
+| qwen3.8-27b-jang_6d (6-bit) | 85.9 | 2 | 25.8GB |
+| gemma-4-e4b-it-8bit | 85.0 | 2 | 9.0GB |
+| ornith-1.0-35b-jang_4m | 84.0 | 2 | 19.8GB |
+| qwen3.8-27b-4bit | 83.3 | 3 | 16.1GB |
+| foundation | 82.6 | 0 | on-device |
+| gemma-4-e2b-it-8bit | 79.8 | 2 | 5.9GB |
+| bonsai-27b-ternary-jang | 76.9 | 3 | 8.0GB |
+| nemotron-3.5-lightning-30b | 51.3 | 10 | 34.0GB |
+| ornith-1.0-9b-mxfp8 | 49.5 | 10 | 10.1GB |
+
+### A 5.9GB model beats the 13.4GB one at summarising, reproducibly
+
+`gemma-4-e2b-it-8bit` took the `summarize` slot away from `gemma-4-12b-it-mxfp8`,
+which is surprising enough that both were re-run three times on the two adversarial
+tasks. The result is deterministic, not sampling noise:
+
+|  | `summarize_contradiction` | `summarize_factual_accuracy` |
+|---|---|---|
+| gemma-4-e2b-it-8bit | 100, 100, 100 | 67, 67, 67 |
+| gemma-4-12b-it-mxfp8 | 0, 0, 0 | 34, 34 |
+
+The source in the first contains a self-contradiction; the second contains three
+planted falsehoods. The 12B parrots the contradiction verbatim every time and repeats
+all three falsehoods. The e2b is the only installed model that clears both gates.
+
+The lesson generalises past these two models: **parameter count predicts fluency, not
+faithfulness.** Fluency is what the saturated tasks measure, which is why nine to
+eleven models tie at 100 on them and why they cannot rank anything. Only the
+adversarial tasks separate the roster, so they should carry the weight in any future
+slot decision. e2b is genuinely weak elsewhere (file_summary 0, detailed_json 45,
+weekend_fixed 45) and must not be promoted out of `summarize` on the strength of this.
+
+### The vision slot is not measured by anything
+
+`image_rename` and `image_rename_mixed` send `IMAGE_RENAME_PROMPT` as **text**. No eval
+task in the suite feeds an actual image. Ten of the eleven installed models score 100
+on both, and those 100s say nothing at all about vision — they measure whether a model
+can emit a filename-shaped string. `best_models.vlm` is therefore a static-probe pick
+(`vision_config` present in config.json, via `probe_vision` in `lib/model_caps.py`),
+not a measurement. The probe barely narrows the field either: ten of eleven claim
+vision. Backlog item 9 covers building a real one.
 
 ---
 

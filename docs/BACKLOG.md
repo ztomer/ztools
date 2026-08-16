@@ -20,12 +20,7 @@ accumulating here as a graveyard of finished plans.
 | — | Sweep harness shipped, truncation visible | `1d9836c` |
 | — | Mutation harness, and the bytecode bug that made its first numbers wrong | `ea0733a`, `137b9fc` |
 | — | Reasoning overrun diagnosed instead of mislabelled | `d22b563` |
-
-**In flight**
-
-1. **The sweep** (item 1 below). Restarted from scratch each time the harness changed,
-   because a sweep whose scoring changes mid-run produces incomparable results. This
-   run is the first on a harness that classifies a reasoning overrun correctly.
+| 1 | The sweep: 11 models x 23 tasks, `best_models` re-derived from it | this commit |
 
 **Open, in rough priority order**
 
@@ -209,6 +204,55 @@ that file for `max_position_embeddings`; `vision_config` is in the same dict).
 nothing; so does one that ranks by latency because a slow model timed out and
 scored 0. Check `conf/eval_signals.json` for learned timeouts before trusting
 any ranking.
+
+**Done, 2026-08-16.** 11 models x 23 tasks, all 11 complete, 0 truncated.
+`best_models` re-derived and the reasoning written into `conf/config.toml`;
+`docs/MODEL_QUIRKS.md` carries the leaderboard and the per-slot table.
+
+The "watch for" note above turned out to be the main finding, so it is worth
+stating plainly rather than leaving as a warning that was heeded:
+
+**The leaderboard DID compress, and that is a property of the task set, not of the
+models.** Nine to eleven of the eleven models tie at 100 on `filename`,
+`filename_mixed`, `filename_leak`, `rename_mixed`, `json`, `image_rename*`,
+`summarize`, `weekend_transient*`. Those tasks cannot rank anything. Every real
+separation came from the five adversarial tasks — `summarize_contradiction`,
+`summarize_factual_accuracy`, `file_summary`, and the two `taxes_*` grounding
+tasks — where the spread is 0 to 100. Consequences, all acted on:
+
+- A mean over all 23 tasks is a **bad statistic** and was not used. Each slot is
+  scored only over the tasks its own consumer exercises. See `conf/config.toml`.
+- Parameter count predicts fluency, not faithfulness. A 5.9GB gemma-4-e2b beat the
+  13.4GB gemma-4-12b on the `summarize` group 89.8 to 64.4, deterministically over
+  three repeats, because the 12B parrots a planted contradiction every single time.
+- The saturated tasks still earn their place as **regression** tests. They just must
+  not be given weight in a ranking.
+
+**Follow-on, still open:** the task set needs more adversarial tasks and fewer
+saturated ones before the next sweep, or the next one will compress the same way.
+`weekend_fixed_mixed` is a concrete lead — all eleven models missed the identical
+2 of 12 signal items, which is a fixture or prompt defect rather than eleven
+coincidences, and no model choice can fix it.
+
+## 9. Nothing in the eval suite ever sends an image
+
+`image_rename` and `image_rename_mixed` send `IMAGE_RENAME_PROMPT` as TEXT. Ten of
+the eleven installed models score 100 on both, which measures only whether a model
+can emit a filename-shaped string — it says nothing about vision. So
+`best_models.vlm` could not be derived from the 2026-08-16 sweep and is currently a
+static-probe pick (`vision_config` present in the model's `config.json`), recorded
+as UNMEASURED in `conf/config.toml`. The probe barely narrows anything either: ten
+of eleven models claim vision.
+
+This is the same class as the `filename`-scores-100-for-an-unfilled-`{text}`-
+placeholder bug (item 1): **a task whose input does not contain the thing being
+tested, passed by a validator that only checks output shape.** Worth grepping the
+remaining tasks for other instances before adding new ones.
+
+**Do this.** Add a task that feeds a real image through the same path `rn` uses,
+with a validator that checks the filename against what is actually IN the picture —
+so a model that cannot see scores badly instead of scoring 100. Then re-derive
+`vlm`. Until then, treat that slot as a guess with a plausible mechanism.
 
 ## 2. Extend the capability probe beyond the context window
 
