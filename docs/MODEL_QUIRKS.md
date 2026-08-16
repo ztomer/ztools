@@ -45,6 +45,36 @@ which is the arithmetic that closes the case.
 RSS is therefore the WRONG instrument here: it reports ~3.5GB for a model consuming the
 entire machine. Watch `vm_stat` pages-free and swap instead.
 
+**Not a configured limit, and not KV pre-allocation** (checked 2026-08-15, because
+"64GB should be enough" is the obvious objection and it deserved an answer). The
+server publishes its own budget at `GET /health` under `ram_feasibility`:
+
+    physical_memory              68.7 GB
+    recommended_max_working_set  55.7 GB   (Metal)
+    gpu_budget                   51.5 GB
+    soft_limit / hard_limit      55.0 / 61.8 GB
+    kv_headroom                   5.2 GB   <- ~20% of weights
+    projected (weights + KV)     31.0 GB   for the 24GB build
+    exceeds_gpu_budget           False
+
+Two things follow. KV headroom is a fraction of WEIGHTS, not the declared context, so
+the 16GB a 262144-token cache would cost is never reserved — the arithmetic that
+suggested otherwise was modelling a system this is not. And the 27GB build projects
+to roughly 33GB against a 51.5GB budget, so no configured cap rejects it: the server
+believes it feasible and admits it.
+
+The knobs exist (`memorySafety.customPhysicalMemoryFraction`,
+`customDefaultMaxKVSize`, `customAllocatorCacheBytes`) and NONE are set, so the
+defaults are in force and they are generous rather than restrictive. Raising them
+would not help.
+
+**Still unexplained**, therefore: why a model the server considers feasible runs at
+0.09 tok/s. The remaining untested candidate is the inline
+`model-mtp-of-00007.safetensors` multi-token-prediction shard that the MXFP8 build
+ships and the 4-bit does not — the server has a native MTP path
+(`batch_diagnostics.native_mtp_models`) which reported 0 with no model resident, so
+it has not been observed under load. Check that before concluding anything further.
+
 The threshold on this host sits between 18GB (ornith-35b, fine) and 27GB (this, dead).
 The fix is a smaller quant, not a faster kernel — and note the direction is
 counter-intuitive: the HIGHER bit encoding is what makes it unusable, because bits buy
