@@ -102,6 +102,11 @@ for MODEL in $MODELS; do
   CODE=$?
 
   ELAPSED=$(( $(date +%s) - START ))
+  # Let the child's buffered output land before counting. `timeout` returning means
+  # the process is gone, not that everything it wrote has reached the file: counting
+  # immediately reported 22 of 23 for a model that had in fact scored all 23, with
+  # the last line appearing a moment later.
+  sleep 1
   # Count tasks that actually reported a score, so a partial run is visible as a
   # number rather than inferred from an exit code alone.
   #
