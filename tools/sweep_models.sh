@@ -104,7 +104,18 @@ for MODEL in $MODELS; do
   ELAPSED=$(( $(date +%s) - START ))
   # Count tasks that actually reported a score, so a partial run is visible as a
   # number rather than inferred from an exit code alone.
-  TASKS_DONE=$(grep -cE '^\s+·\s+\w+: [0-9]+%' "$LOG" 2>/dev/null || echo 0)
+  #
+  # ALL THREE result markers, not just the good one. `ev` prints a scored task as
+  # `· name: 91%` when it passed, `⚠ name: 55%` when it scored poorly and `✗ name: 30%`
+  # when it failed -- all three ARE scores. Counting only `·` reported 20 of 23 for
+  # every model and made a model that scored badly look like a model that ran fewer
+  # tasks, which is the truncated-looks-complete confusion this script exists to
+  # prevent, inverted.
+  # DISTINCT task names, because a retried task logs a second score line and a raw
+  # line count then exceeds the number of tasks that exist -- 30 of 23, which is not
+  # a progress number, it is a bug wearing one.
+  TASKS_DONE=$(grep -ohE '^[[:space:]]+(·|⚠|✗)[[:space:]]+[a-z_]+:' "$LOG" 2>/dev/null \
+    | tr -d ' ·⚠✗:' | sort -u | grep -c . || echo 0)
 
   # Remove any prior line for this model so --resume sees one record per model.
   if [ -s "$STATUS" ]; then
