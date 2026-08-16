@@ -330,12 +330,48 @@ Both read perfectly well. Neither is reachable by grepping for patch counts or
 missing asserts. That is a ~20% blind rate on freshly written, carefully reviewed
 tests, and there is no reason the existing suite's rate is lower.
 
-**So the real item is not a rewrite.** It is: run mutation testing against the
-highest-value modules (the scorers, the validators, `lib/quality*`, `eval/report*`)
-and fix what survives. Cheap version: for each module, break one branch at a time and
-check the suite goes red. The seam hazard still applies — splitting a module silently
-breaks `patch.object(module, name)`, because the moved function resolves its globals
-in the new module and the patch then applies to a name nobody reads.
+**So the real item is not a rewrite.** It is: run mutation testing and fix what
+survives. `tools/mutate.py` does this — `--preset scorers`, `--preset validators`.
+
+### First run, 2026-08-15
+
+| target | mutations | killed | survived | detection |
+|---|---|---|---|---|
+| scorers | 94 | 94 | 0 | **100%** |
+| validators | 194 | 108 | **86** | **56%** |
+
+The scorers are genuinely well covered. The validators are not, and the survivors are
+not spread evenly: 52 in `json_validator.py`, 34 in `text_validator.py`, and 33 of
+the 86 are boundary mutations (`>=` silently becoming `>`). Thresholds are being
+exercised somewhere in their range but never AT their edges, which is the one place a
+threshold can be wrong.
+
+**That class already produced a live bug**, found while establishing the baseline:
+
+    validate_detailed_json([{"name": "a"}, {"name": "b"}, {"name": "c"}])
+    -> (100, "only 3 items (need 10+); no items with details")
+
+A perfect score, returned alongside its own list of failures. Without `source_text`
+the function skips the grounding cap entirely and falls through to
+`min(MAX_SCORE, score)`, by which point structure and uniqueness credit alone reach
+100. So a model that emits bare names with no details scores full marks, provided the
+caller passes no source — which the weekend path does not always do.
+
+This is the same class as the `filename` task scoring 100 for an unfilled `{text}`
+placeholder, in a different validator: **a scorer that cannot fail a bad answer.**
+Worth fixing before the sweep in item 1 is believed, because a leaderboard built on a
+scorer that returns 100 for empty output ranks nothing.
+
+**Second finding: the test that catches it is order-dependent.**
+`test_validators.py::test_validate_detailed_json_missing_details` asserts
+`score < 100` and is CORRECT. It fails alone, fails with its own file, and fails in
+every subset tried — yet the full suite is green, so something later in the run
+leaves state that makes it pass. Until that is found, the full-suite green on this
+test is luck, not evidence. Track it down before trusting either result.
+
+The seam hazard still applies — splitting a module silently breaks
+`patch.object(module, name)`, because the moved function resolves its globals in the
+new module and the patch then applies to a name nobody reads.
 
 ### Original note (kept for the reasoning, not the framing)
 

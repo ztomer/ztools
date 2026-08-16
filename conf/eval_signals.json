@@ -2230,6 +2230,18 @@
       "total_retries": 0
     }
   },
+  "qwen3.8-27b-jang_6d": {
+    "_capabilities": {
+      "cold_start_seconds": 0.95,
+      "decode_tokens_per_sec": 12.54,
+      "disk_bytes": 25820834377,
+      "family": "qwen3_5",
+      "generative": true,
+      "prefill_chars_per_sec": 367.1,
+      "prefill_samples": 2,
+      "vision": true
+    }
+  },
   "qwen3.8-27b-mtp-4bit": {
     "_capabilities": {
       "disk_bytes": 238934137,
