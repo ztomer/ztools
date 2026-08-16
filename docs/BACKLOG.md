@@ -252,6 +252,29 @@ code needs nothing. What the DATA needs is different and narrower:
   resolved path. The protection is real; only the comments name the wrong symbol, and
   they made the gate look absent when it is not.)
 
+**Now derived rather than concluded by hand (`ev --capabilities`).** `eval/capabilities.py`
+probes family, vision, weight-file size, context window, generativeness and viability,
+and prints the roster table that this document used to carry as hand-typed prose. The
+conclusions in the sections above are now things the tool re-derives on demand; if the
+roster changes, re-run the command instead of re-reading the markdown.
+
+**Still to wire: the probes report, but production still guesses.** This is the gap
+that matters most now — having the right answer available is not the same as using it.
+
+- `lib/config_getters.get_model_family` still matches on the model NAME. Point it at
+  the probed `details.family`, keeping the name match as the fallback for when the
+  server is unreachable. Until then bonsai and ornith still get fallback prompts.
+- `lib/osaurus_models.DEFAULT_VLM_KEYWORDS` still selects VLMs by keyword. Point
+  `select_best_vlm_model` at `probe_vision`.
+- `eval/cli.py::NON_LLM_KEYWORDS` still skips embedding models by name. Point it at
+  `is_generative_model`, which already reads the config and is already correct.
+- `eval/cli_runtime.estimate_model_memory` guesses from the model name: it warned
+  "Model needs ~27GB" for the 15GB 4-bit build, because the name says 27b. Point it
+  at `model_disk_bytes`.
+- `MAX_PLAUSIBLE_PREFILL_RATE` is now evidence-based but still a constant. It could be
+  derived from the recorded sample population instead, which would keep it correct as
+  faster models arrive.
+
 **Still to do.**
 - **Vision: probed, not yet wired** (2026-08-15). Every installed model's `config.json`
   was read; the `vision_config` column in item 1's table is the answer, and it
