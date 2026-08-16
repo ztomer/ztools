@@ -20,6 +20,7 @@ from lib.validators.json_validator import (
     _names_match,
     check_source_extraction,
     get_source_matching_details,
+    has_item_details,
 )
 
 
@@ -146,3 +147,73 @@ class TestSourceExtractionRatio:
         the ratio."""
         details = get_source_matching_details([{"location": "somewhere"}], "text")
         assert details["unmatched"] == ["unnamed"]
+
+
+class TestSourceExtractionInternalBoundaries:
+    """The term filters and the verbatim fallback inside check_source_extraction.
+
+    These survived the first round of tests because those exercised the function's
+    OUTCOME (matched / not matched) without landing on the thresholds that decide it.
+    Testing a function's result is not the same as testing its boundaries.
+    """
+
+    SOURCE = "Visit the Royal Ontario Museum and Casa Loma this weekend"
+
+    def test_a_source_of_only_short_and_stopword_terms_grounds_nothing(self):
+        """`if not source_terms: return 0.0`. Terms are filtered by `len >= 3 and not
+        a stopword`; a source that survives neither filter must ground nothing rather
+        than everything."""
+        assert check_source_extraction([{"name": "Royal Ontario Museum"}], "a to be an it of") == 0.0
+
+    def test_two_shared_terms_ground_an_item(self):
+        assert check_source_extraction([{"name": "Royal Ontario Museum"}], self.SOURCE) == 1.0
+
+    def test_a_verbatim_name_grounds_an_item_with_only_one_shared_term(self):
+        """The fallback exists for short names that cannot reach two shared terms."""
+        assert check_source_extraction([{"name": "Casa Loma"}], self.SOURCE) == 1.0
+
+    def test_the_verbatim_fallback_at_exactly_four_characters(self):
+        """`if len(search) >= 4` -- `>=` becoming `>` survived, so exactly 4 is the
+        only input that tests it."""
+        assert check_source_extraction([{"name": "Casa"}], "we went to casa today") == 1.0
+
+    def test_a_three_character_name_is_below_the_verbatim_floor(self):
+        """Present verbatim, but too short to be evidence of anything."""
+        assert check_source_extraction([{"name": "Zoo"}], "we went to zoo today") == 0.0
+
+    def test_a_bare_string_item_is_handled_like_a_named_one(self):
+        assert check_source_extraction(["Royal Ontario Museum"], self.SOURCE) == 1.0
+
+    def test_an_item_whose_values_are_all_falsy_grounds_nothing(self):
+        """`if not item_text: continue` -- an item with nothing in it cannot be
+        grounded, and must not be counted as a match."""
+        assert check_source_extraction([{"name": ""}], self.SOURCE) == 0.0
+
+
+class TestHasItemDetailsBoundary:
+    """`return len(item) >= 2` on both branches -- `>=` becoming `>` survived both."""
+
+    def test_one_field_is_not_details(self):
+        assert has_item_details({"name": "Royal Ontario Museum"}) is False
+
+    def test_exactly_two_fields_is_details(self):
+        assert has_item_details({"name": "Royal Ontario Museum", "location": "Toronto"}) is True
+
+    def test_an_item_with_no_name_field_needs_two_keys(self):
+        """L153: the no-name branch. Reached only by an item with none of the name
+        fields, which the name-bearing tests above never take."""
+        assert has_item_details({"foo": "a", "bar": "b"}) is True
+        assert has_item_details({"foo": "a"}) is False
+
+    def test_a_named_item_without_detail_fields_needs_two_keys(self):
+        """L157: the branch after the detail-field scan finds nothing.
+
+        The earlier two-field test never reached this line -- `location` IS a detail
+        field, so it returned True at the scan and exited. Reaching this boundary
+        needs a second key that is NOT a detail field.
+        """
+        assert has_item_details({"name": "x", "unrelated": "y"}) is True
+        assert has_item_details({"name": "x"}) is False
+
+    def test_a_non_dict_is_never_details(self):
+        assert has_item_details(["name", "location"]) is False

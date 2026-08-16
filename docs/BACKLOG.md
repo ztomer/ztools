@@ -37,9 +37,27 @@ accumulating here as a graveyard of finished plans.
    and how to fall back on-device. Verified live end to end: bonsai reasons for ~1460
    chars and answers, uncut.
 
-3. **91 validator + 22 scorer mutation survivors.** 34 of the validator survivors are
-   boundary mutations (`>=` becoming `>`): thresholds exercised somewhere in their
-   range but never at their edges. `python3 tools/mutate.py --preset validators`.
+3. **Mutation survivors.** `json_validator.py` is down from 54 survivors to 34
+   (detection 53% -> 67%), and fixing them found a live scorer defect (see the
+   too-few-items cap, `df474e5`). Remaining, in order of value:
+
+   | function | survivors |
+   |---|---|
+   | `validate_detailed_json` | 11 |
+   | `check_source_extraction` | 5 |
+   | `get_source_matching_details` | 5 |
+   | `_names_match` | 5 |
+   | `validate_json` | 4 |
+   | `validate_mixed_signal` | 4 |
+
+   `text_validator.py` (28 survivors) and the scorers (22) are untouched.
+   `python3 tools/mutate.py --preset validators`.
+
+   One lesson worth carrying: testing a function's OUTCOME is not testing its
+   BOUNDARIES. `has_item_details` has two `len(item) >= 2` returns on different
+   branches, and a two-field test reached neither -- `location` is a detail field, so
+   it returned True from the scan above and exited. Killing those needed an item whose
+   second key is deliberately NOT a detail field.
 
 4. **Make "does thinking help?" a measured question.** Right now nothing records
    whether a model answered better with reasoning than without. The knob exists --
