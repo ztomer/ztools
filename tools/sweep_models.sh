@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# sweep_models.sh — run the full eval task set against every installed model,
+# one model at a time, resumably, without ever recording a truncated run as complete.
+#
+#   ./tools/sweep_models.sh            sweep every installed model
+#   ./tools/sweep_models.sh --resume   skip models already recorded DONE
+#   ./tools/sweep_models.sh --status   print the status file and exit
+#   ./tools/sweep_models.sh --model X  just one model
+#
+# WHY THIS IS A SHIPPED TOOL AND NOT A SCRATCH SCRIPT. The previous version lived in
+# a scratchpad and wrote its DONE marker regardless of exit code, so a model killed at
+# the `timeout` boundary -- ornith at 16/23 tasks, bonsai at 11/23 -- was recorded as
+# complete and SKIPPED on the next run, silently losing every task it never reached.
+# Worse, it invalidated a comparison nobody knew was invalid: bonsai's mean of 99
+# against ornith's 70 was two different task subsets. A truncated run must LOOK
+# truncated, which is the one thing that script got wrong and the reason this one
+# records the exit code and the task count rather than a bare marker.
+#
+# Serial by construction: the GPU is one shared resource, models are 4-27GB resident,
+# and two concurrent runs measure contention rather than either model.
+
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck disable=SC1091
+source "$ROOT/tui/lib.sh"
+
+STATUS="${SWEEP_STATUS:-$ROOT/.sweep_status}"
+LOGDIR="${SWEEP_LOGDIR:-${TMPDIR:-/tmp}/ztools-sweep}"
+PER_MODEL_TIMEOUT="${SWEEP_MODEL_TIMEOUT:-14400}"   # 4h; a slow model is not a failure
+RESUME=0
+ONLY_MODEL=""
+# Entries the server lists that are not chat models, and so cannot be ranked:
+#   ^potion-   model2vec embeddings; the server answers HTTP 500 "Unsupported model
+#              type: model2vec". `ev` skips these by name too, but doing it here keeps
+#              the sweep's model list honest rather than relying on a downstream skip.
+#   -mtp       speculative-decoding DRAFTER weights (Qwen3.8-27B-MTP-4bit), listed as
+#              a peer of the model they accelerate. Evaluating one measures nothing.
+# Anything else you want out (a model known too slow to finish) goes in --skip, so the
+# reason is stated at the call site instead of buried here where it would rot.
+SKIP_RE="${SWEEP_SKIP:-^potion-|-mtp}"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --resume) RESUME=1; shift ;;
+    --status) [ -f "$STATUS" ] && cat "$STATUS" || echo "(no status file at $STATUS)"; exit 0 ;;
+    --model)  ONLY_MODEL="$2"; shift 2 ;;
+    --skip)   SKIP_RE="$SKIP_RE|$2"; shift 2 ;;
+    -h|--help) sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) die "unknown argument: $1" ;;
+  esac
+done
+
+mkdir -p "$LOGDIR"
+touch "$STATUS"
+
+# One server, or the numbers are worthless. See tools/osaurus_one.sh.
+"$ROOT/tools/osaurus_one.sh" >/dev/null || die "could not establish a single osaurus server"
+
+if [ -n "$ONLY_MODEL" ]; then
+  MODELS="$ONLY_MODEL"
+else
+  MODELS="$(osaurus list 2>/dev/null | grep -vE "$SKIP_RE" | grep -v '^$')"
+fi
+[ -n "$MODELS" ] || die "no models to sweep (skip pattern: $SKIP_RE)"
+info "skipping: $SKIP_RE"
+
+TOTAL="$(printf '%s\n' "$MODELS" | grep -c .)"
+section "Sweeping $TOTAL model(s)"
+info "status: $STATUS"
+info "logs:   $LOGDIR"
+
+i=0
+for MODEL in $MODELS; do
+  i=$((i + 1))
+  if [ "$RESUME" -eq 1 ] && grep -q "^DONE	$MODEL	" "$STATUS" 2>/dev/null; then
+    info "[$i/$TOTAL] $MODEL — already DONE, skipping"
+    continue
+  fi
+
+  LOG="$LOGDIR/$MODEL.log"
+  info "[$i/$TOTAL] $MODEL — running (log: $LOG)"
+  START=$(date +%s)
+
+  timeout "$PER_MODEL_TIMEOUT" "$ROOT/.venv/bin/python" -m eval --model "$MODEL" \
+    > "$LOG" 2>&1
+  CODE=$?
+
+  ELAPSED=$(( $(date +%s) - START ))
+  # Count tasks that actually reported a score, so a partial run is visible as a
+  # number rather than inferred from an exit code alone.
+  TASKS_DONE=$(grep -cE '^\s+·\s+\w+: [0-9]+%' "$LOG" 2>/dev/null || echo 0)
+
+  # Remove any prior line for this model so --resume sees one record per model.
+  if [ -s "$STATUS" ]; then
+    grep -v "	$MODEL	" "$STATUS" > "$STATUS.tmp" 2>/dev/null || true
+    mv "$STATUS.tmp" "$STATUS"
+  fi
+
+  if [ "$CODE" -eq 0 ]; then
+    printf 'DONE\t%s\t%ss\ttasks=%s\texit=0\n' "$MODEL" "$ELAPSED" "$TASKS_DONE" >> "$STATUS"
+    ok "[$i/$TOTAL] $MODEL — done in ${ELAPSED}s, $TASKS_DONE task(s) scored"
+  elif [ "$CODE" -eq 124 ]; then
+    printf 'TRUNCATED\t%s\t%ss\ttasks=%s\texit=124(timeout)\n' "$MODEL" "$ELAPSED" "$TASKS_DONE" >> "$STATUS"
+    warn "[$i/$TOTAL] $MODEL — TRUNCATED at ${PER_MODEL_TIMEOUT}s after $TASKS_DONE task(s);" \
+         "its scores cover a SUBSET and are not comparable with a complete run"
+  else
+    printf 'FAILED\t%s\t%ss\ttasks=%s\texit=%s\n' "$MODEL" "$ELAPSED" "$TASKS_DONE" "$CODE" >> "$STATUS"
+    err "[$i/$TOTAL] $MODEL — FAILED (exit $CODE) after $TASKS_DONE task(s); see $LOG"
+  fi
+done
+
+section "Sweep summary"
+cat "$STATUS"
+INCOMPLETE="$(grep -cE '^(TRUNCATED|FAILED)' "$STATUS" 2>/dev/null || echo 0)"
+if [ "$INCOMPLETE" -gt 0 ]; then
+  warn "$INCOMPLETE model(s) did not finish — do NOT rank those against complete runs"
+  exit 1
+fi
+ok "every model completed"

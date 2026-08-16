@@ -162,3 +162,6 @@ output/
 # Vendored taxes-eval snapshots — sanitized prompts ported from
 # github.com/ztomer/Taxes; safe to commit (no PII).
 !eval_tasks/data/taxes/*.json
+
+# tools/sweep_models.sh run state (machine-specific, regenerated per sweep)
+.sweep_status
