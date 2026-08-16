@@ -60,10 +60,10 @@
       "total_retries": 1
     },
     "image_rename_mixed": {
-      "p95_latency": 1712.0,
+      "p95_latency": 1633.2,
       "parse_failures": 0,
-      "samples": 3,
-      "timeout": 2568,
+      "samples": 4,
+      "timeout": 2449,
       "total_retries": 2
     },
     "json": {
@@ -163,9 +163,9 @@
       "total_retries": 1
     },
     "weekend_transient_schema": {
-      "p95_latency": 441.6,
+      "p95_latency": 434.6,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 1
     }

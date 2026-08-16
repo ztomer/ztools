@@ -178,3 +178,78 @@ class TestPartialAttributionIsFlattenedByTheCap:
     def test_only_complete_faithfulness_escapes_the_cap(self):
         summary = self._summary(5)
         assert validate_summary(summary, source_text=self.SRC)[0] > MISATTRIBUTION_MAX_SCORE
+
+
+class TestFilenameRelevance:
+    """The irrelevance cap, and the sentinel that decides whether it applies at all.
+
+    `filename_relevance` returns -1.0 for "cannot assess" -- no source, or a source
+    with no usable words -- and a real ratio otherwise. `if coverage >= 0.0` is what
+    separates those two, and `>=` becoming `>` survived: under that mutation a
+    filename with EXACTLY zero overlap would skip the relevance block entirely and
+    keep its full score, which is the single case the check exists for.
+
+    The cap itself, `min(FILENAME_IRRELEVANT_MAX_SCORE, score)`, also survived as
+    `max` -- nothing verified it lowers anything.
+    """
+
+    SOURCE = "Scott Adams essays about failure ambition and navigating corporate life"
+
+    def test_zero_overlap_is_assessed_not_skipped(self):
+        """coverage == 0.0 exactly: the boundary between a real ratio and the
+        sentinel. This is the case a `>` would let through at full marks."""
+        from lib.validators.text_validator import filename_relevance
+
+        assert filename_relevance("zzz_qqq_wwww", self.SOURCE) == 0.0
+
+    def test_an_unrelated_filename_is_capped(self):
+        from lib.validators.text_validator import (
+            FILENAME_IRRELEVANT_MAX_SCORE,
+            validate_filename,
+        )
+
+        score, msg = validate_filename("zzz_qqq_wwww", source_text=self.SOURCE)
+        assert score <= FILENAME_IRRELEVANT_MAX_SCORE
+        assert "unrelated to input" in msg
+
+    def test_a_relevant_filename_scores_above_the_cap(self):
+        """Otherwise the cap assertion above could hold for the wrong reason."""
+        from lib.validators.text_validator import (
+            FILENAME_IRRELEVANT_MAX_SCORE,
+            validate_filename,
+        )
+
+        score, _ = validate_filename("scott_adams_essays", source_text=self.SOURCE)
+        assert score > FILENAME_IRRELEVANT_MAX_SCORE
+
+    def test_no_source_returns_the_sentinel_not_zero(self):
+        """`if not source_text: return -1.0` -- the `not` survived. Returning 0.0 here
+        would mark every filename irrelevant whenever the caller passed no source,
+        which is precisely how `summary_request` once scored 100 for naming nothing:
+        the assessment has to be SKIPPED, not failed."""
+        from lib.validators.text_validator import filename_relevance
+
+        assert filename_relevance("scott_adams_essays", "") == -1.0
+
+    def test_a_source_with_no_usable_words_returns_the_sentinel(self):
+        """`if not words: return -1.0`. Stopwords and sub-3-character tokens are
+        stripped; a source left with nothing cannot judge relevance either way."""
+        from lib.validators.text_validator import filename_relevance
+
+        assert filename_relevance("scott_adams_essays", "a to the of") == -1.0
+
+    def test_an_unassessable_source_does_not_cap_the_score(self):
+        from lib.validators.text_validator import (
+            FILENAME_IRRELEVANT_MAX_SCORE,
+            validate_filename,
+        )
+
+        score, _ = validate_filename("scott_adams_essays", source_text="")
+        assert score > FILENAME_IRRELEVANT_MAX_SCORE
+
+    def test_partial_coverage_is_reported_without_capping(self):
+        from lib.validators.text_validator import validate_filename
+
+        score, msg = validate_filename("scott_adams_essays", source_text=self.SOURCE)
+        assert "weak input coverage" in msg
+        assert score > 40
