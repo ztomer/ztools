@@ -14,7 +14,7 @@ accumulating here as a graveyard of finished plans.
 | 0 | Roster drift: config named deleted models, `wk` was dead outright | `c75adcc` |
 | — | Single-server invariant, enforced not remembered | `400cfba`, `9346a9c` |
 | 2 | Prefill re-measured for every model, n>=2 | `1165364`, `aba52b0` |
-| — | qwen3.8 switched to the 4-bit build (326x faster here) | `374d3b1` |
+| — | ~~qwen3.8 switched to the 4-bit build (326x faster here)~~ RETRACTED — the 326x was a 31GB leak, see MODEL_QUIRKS | `374d3b1` |
 | — | Capabilities DERIVED rather than concluded by hand | `22b67c2` |
 | — | Those probes actually WIRED into the four name-guessing consumers | `b7c55a0` |
 | — | Sweep harness shipped, truncation visible | `1d9836c` |
@@ -102,11 +102,24 @@ accumulating here as a graveyard of finished plans.
 7. **The TUI has no config audit.** `ztools` can start clean while the config names an
    unservable model; `ev` checks this, the TUI does not.
 
-8. **Unexplained: why a 27GB model runs at 0.09 tok/s on a 64GB machine.** Ruled out:
-   configured caps, KV pre-allocation, a second server, other apps holding RAM,
-   unsupported architecture, unsupported quantization, corrupt download. See
-   docs/MODEL_QUIRKS.md. Remaining untested candidate: the inline MTP shard the MXFP8
-   build carries and the 4-bit does not.
+8. ~~**Unexplained: why a 27GB model runs at 0.09 tok/s on a 64GB machine.**~~
+   **ANSWERED 2026-08-17: it does not.** A leaked plugin daemon (claude-mem's `bun`
+   worker) held 31GB of the 64, leaving 14.6GB available. Killing it restored 42.6GB,
+   and the same MXFP8 build then measured **14.7 tok/s** against the 0.08 recorded
+   before — 184x off. The 4-bit's advantage is 1.3x, not 326x, which is simply the
+   cost of reading 1.8x the bytes per token.
+
+   **The answer was in the ruled-out list, dismissed with a broken instrument.**
+   "Other apps holding RAM — reproduced with the machine 62% free, top consumer 0.4GB"
+   was wrong twice over: the leaking daemon's RSS really was 0.55GB (its 31GB was
+   compressed and swapped, and RSS only shows what is resident), and "62% free" came
+   from `memory_pressure`, which ignores the compressor — it read "42% free" while
+   `Pages free` was 59MB and 49GB sat compressed into 29GB. The MTP shard was never
+   involved.
+
+   Use `top -l 1 -o mem -stats pid,command,mem,cmprs` (the CMPRS column) and
+   `vm_stat`'s "Pages free" / "occupied by compressor". Never RSS, and never
+   `memory_pressure`'s free percentage.
 
 **Standing lessons this session kept re-teaching**
 
@@ -118,6 +131,13 @@ accumulating here as a graveyard of finished plans.
   on the current roster.
 - Fix the harness before the bug, and stop the run to do it. A sweep left running
   through a known harness defect spends hours producing numbers you will throw away.
+- **Check what else holds the machine before recording any performance number.** The
+  single most expensive error of this session was not a bug in this repo: a leaked
+  plugin daemon held 31GB, every timing taken under it was wrong, and the wrong
+  numbers hardened into `conf/config.toml`, `docs/MODEL_QUIRKS.md` and a
+  `default_model` choice that excluded every model above 18GB. A measurement taken on
+  a contended machine describes the contention. `tools/osaurus_one.sh --check` proves
+  only that ONE osaurus is running — it says nothing about the other 314 processes.
 
 ---
 

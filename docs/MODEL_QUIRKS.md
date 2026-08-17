@@ -17,33 +17,64 @@ Do not adjust these rows. `docs/BACKLOG.md` item 1 re-derives them from a sweep;
 that runs, the only measured claims in this file are the roster table below and the
 2026-08-12 sweep section, and only for the models that still exist.
 
-### qwen3.8-27b-mxfp8 does not fit this machine's page cache (2026-08-15)
+### ~~qwen3.8-27b-mxfp8 does not fit this machine's page cache~~ RETRACTED 2026-08-17
 
-Measured 0.09 tok/s decode and 143s TTFT for a 1024-token prompt — against 80.6 tok/s
-for the LARGER ornith-35b and 65.5 for gemma-4-12b, on an idle 64GB M4 Max. Confirmed
-by three independent instruments: `eval/prefill.py`, `osaurus bench`, and the server's
-own `usage.tokens_per_second` (0.0903).
+**There is no size threshold on this host. The machine was being drained by a leak.**
 
-**It is not a broken kernel and not a bad download.** The obvious suspects were ruled
-out one at a time:
+The original finding — 0.09 tok/s decode, 143s TTFT, "326x slower than the 4-bit",
+"the threshold is between 18GB (fine) and 27GB (dead)" — was measured while
+claude-mem's `bun` worker daemon held **31GB of this machine's 64**. Available memory
+was 14.6GB, so a 27GB model genuinely could not stay resident. Not because 27GB is too
+big for a 64GB box, but because half the box was gone.
 
-| hypothesis | killed by |
-|---|---|
-| hybrid linear-attention unsupported | bonsai-27b has the IDENTICAL arch (qwen3_5, 64 layers, 48 linear + 16 full, interval 4) and runs at 12.8 tok/s |
-| MXFP8 mode unsupported | gemma-4-12b-it-mxfp8 runs at 65.5, ornith-1.0-9b-mxfp8 at 44 |
-| qwen3_5 + MXFP8 combination | ornith-9b is exactly that, at 44 tok/s |
-| corrupt/partial download | all 6 shards + MTP shard present, `.topup_done` written, `osaurus show` reports it correctly |
-| a second osaurus competing | reproduced with exactly one process, verified by `tools/osaurus_one.sh --check` |
-| other apps holding RAM | reproduced with the machine 62% free, top consumer 0.4GB |
+Killing that process returned available memory to 42.6GB. Re-measured immediately
+after — same models, same server, same prompt, machine otherwise idle:
 
-**What it actually is: working set.** osaurus mmaps the weights, so RSS never exceeded
-3.5GB during a decode (it *declined* to 0.1GB) while `Pages free` sat at 0.1-0.9GB with
-3.7GB of swap in use. The 27GB weight file cannot stay in the page cache, so weights are
-re-read from SSD every token — 27GB at 0.09 tok/s is approximately SSD read bandwidth,
-which is the arithmetic that closes the case.
+| build | size | cold TTFT | warm TTFT | decode |
+|---|---|---|---|---|
+| qwen3.8-27b-4bit | 16.1GB | 38.7s | 1.3s | 19.2 tok/s |
+| qwen3.8-27b-jang_6d | 25.8GB | 46.1s | 1.6s | 15.2 tok/s |
+| qwen3.8-27b-mxfp8 | 28.7GB | 41.2s | 1.6s | **14.7 tok/s** |
 
-RSS is therefore the WRONG instrument here: it reports ~3.5GB for a model consuming the
-entire machine. Watch `vm_stat` pages-free and swap instead.
+14.69 against the 0.08 recorded before: **184x off**. The real cost of 1.8x the bytes
+is 1.3x on decode — which is simply what reading more bytes per token costs. All three
+builds are usable, and no model should be excluded here on size grounds.
+
+**Why the investigation reached the wrong answer, which is the part worth keeping.**
+The table of ruled-out hypotheses above contained the correct answer, and it was
+dismissed with a broken instrument:
+
+> | other apps holding RAM | reproduced with the machine 62% free, top consumer 0.4GB |
+
+Both halves of that are measurement errors:
+
+- **"top consumer 0.4GB"** was read from RSS. The leaking daemon's RSS *was* 0.55GB —
+  because its 31GB had been squeezed into the compressor and swapped out. RSS shows
+  what is resident, and a leak that is never touched again is never resident. The
+  section correctly warned that "RSS is the WRONG instrument" for the model, then
+  used RSS to clear the other suspects.
+- **"62% free"** came from a metric that ignores the compressor. `memory_pressure`
+  was reporting "42% free" at a moment when `Pages free` was 59MB and 49GB of data
+  was compressed into 29GB.
+
+**Instruments that would have caught it**, and that any future memory claim here has
+to use:
+
+```bash
+vm_stat | grep -E "Pages free|occupied by compressor"   # free was 59MB, not 42%
+top -l 1 -o mem -n 12 -stats pid,command,mem,cmprs      # CMPRS column: bun 31G
+python -c "import psutil; print(psutil.virtual_memory().available/1024**3)"
+```
+
+`top`'s `CMPRS` column is the one that found it. A process holding 31GB compressed
+appears as 31G there and as 0.55GB in RSS.
+
+The general rule, now a standing one: **a measurement taken on a contended machine
+describes the contention, not the thing measured.** This one hardened into a design
+rule that reached `conf/config.toml`, this document, and a `default_model` choice, and
+would have permanently excluded every model above 18GB from a machine that handles
+them fine. See backlog item 6 — `record_*` keeping the SLOWEST observation is what
+made the bad number impossible to displace.
 
 **Not a configured limit, and not KV pre-allocation** (checked 2026-08-15, because
 "64GB should be enough" is the obvious objection and it deserved an answer). The
@@ -68,17 +99,13 @@ The knobs exist (`memorySafety.customPhysicalMemoryFraction`,
 defaults are in force and they are generous rather than restrictive. Raising them
 would not help.
 
-**Still unexplained**, therefore: why a model the server considers feasible runs at
-0.09 tok/s. The remaining untested candidate is the inline
-`model-mtp-of-00007.safetensors` multi-token-prediction shard that the MXFP8 build
-ships and the 4-bit does not — the server has a native MTP path
-(`batch_diagnostics.native_mtp_models`) which reported 0 with no model resident, so
-it has not been observed under load. Check that before concluding anything further.
+**ANSWERED 2026-08-17, and the answer was not in this list.** A leaked plugin daemon
+held 31GB of the machine's 64, leaving 14.6GB available. The MTP shard was never the
+cause and needed no investigation. See the retraction at the top of this file.
 
-The threshold on this host sits between 18GB (ornith-35b, fine) and 27GB (this, dead).
-The fix is a smaller quant, not a faster kernel — and note the direction is
-counter-intuitive: the HIGHER bit encoding is what makes it unusable, because bits buy
-quality only if the weights stay cached.
+There is no threshold on this host. With the leak cleared (42.6GB available) the MXFP8
+build decodes at 14.7 tok/s against the 4-bit's 19.2 — a 1.3x cost for 1.8x the bytes,
+which is what reading more bytes per token costs.
 
 **Resolved.** Pulled `mlx-community/Qwen3.8-27B-4bit` (15GB on disk, vision retained)
 and measured it back to back against the MXFP8 build on the same machine:
@@ -88,12 +115,16 @@ and measured it back to back against the MXFP8 build on the same machine:
 | qwen3.8-27b-mxfp8 | 27 GB | 143,022 ms | 0.08-0.2 tok/s | 116.7 c/s | 182 s |
 | **qwen3.8-27b-4bit** | **15 GB** | **30,744 ms** | **26-35 tok/s** | **449-643 c/s** | **0.79 s** |
 
-326x on decode, 230x on cold start, from nothing but dropping under the cache
-threshold. That is the confirmation of the diagnosis, not merely a workaround:
-if the cause had been an unsupported kernel, requantizing would not have moved it.
+The "326x" read as proof that requantizing fixed a cache problem. It was not: the
+4-bit was merely small enough to survive in the 14.6GB the leak left behind. On a
+clean machine the same pair measures 19.2 vs 14.7 tok/s. Requantizing moving the
+number is consistent with a memory shortage of ANY cause, so it never distinguished
+"this model is too big for this host" from "something else is eating the host".
 
-`conf/config.toml` now names `qwen3.8-27b-4bit` for default_model / think / vlm. The
-27GB MXFP8 copy is still installed and still unusable — deleting it frees 27GB.
+The MXFP8 build was deleted on the strength of that wrong conclusion and re-pulled
+2026-08-17 (`mlx-community/Qwen3.8-27B-mxfp8`, 28.68GB). It is usable and is included
+in the corrected sweep. Do not delete a model on a performance number measured while
+something else held a third of the machine.
 
 `osaurus pull` writes to `~/.osaurus/models`, which the server does NOT scan; models
 have to be moved to `~/MLXModels/<org>/<Name>` before `osaurus list` sees them. A pull
@@ -121,7 +152,7 @@ pairing it automatically. Unmeasured.
 | ornith-1.0-35b-jang_4m | qwen3_5_moe | 35B | yes |
 | ornith-1.0-9b-mxfp8 | qwen3_5 | 9B | yes |
 | potion-base-4m | unknown | 4M | no |
-| qwen3.8-27b-mxfp8 | qwen3_5 | 27B | yes (UNUSABLE: 0.08 tok/s, see above) |
+| qwen3.8-27b-mxfp8 | qwen3_5 | 27B | yes (14.7 tok/s once the leak was cleared) |
 | qwen3.8-27b-4bit | qwen3_5 | 27B | yes (15GB, 26-35 tok/s -- use this one) |
 | qwen3.8-27b-mtp-4bit | qwen3_5 | drafter | speculative-decoding weights, unwired |
 

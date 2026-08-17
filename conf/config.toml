@@ -19,24 +19,44 @@ llm_url = "http://localhost:1337"
 # happens to tie in. `default_model` gets the `think` winner, since it is what every
 # task with no slot of its own lands on.
 #
-# The MXFP8/4-bit finding below still holds and still constrains every choice here:
-# the HIGHER bit encoding is unusable on this host. osaurus mmaps weights, and 27GB
-# cannot stay in this machine's page cache, so the MXFP8 build re-reads weights from
-# SSD on every token. Same model, same architecture, same machine, back to back:
+# RETRACTED 2026-08-17: there is no "27GB does not fit this host" threshold.
 #
-#     qwen3.8-27b-mxfp8   27GB   TTFT 143.0s   0.08 tok/s   cold start 182s
-#     qwen3.8-27b-4bit    15GB   TTFT  30.7s  26-35 tok/s   cold start 0.8s
+# This file used to say the higher bit encoding was unusable here, citing
+# qwen3.8-27b-mxfp8 at 0.08 tok/s against the 4-bit's 26-35 -- "326x on decode",
+# "the threshold on this host is between 18GB (fine) and 27GB (dead)". That was
+# wrong, and the reason matters more than the number.
 #
-# 326x on decode. Bits buy quality only while the weights stay resident; past that
-# they buy nothing because the model cannot finish. The threshold on this host is
-# between 18GB (fine) and 27GB (dead) -- docs/MODEL_QUIRKS.md lists the five
-# hypotheses ruled out before that one. The 6-bit build (25.8GB) does complete and
-# scored 85.9 overall, but it wins no slot outright, so nothing routes to it.
+# Every one of those readings was taken while a leaked plugin daemon
+# (claude-mem's bun worker) held 31GB of this machine's 64. Available memory was
+# 14.6GB, so a 27GB model genuinely could not stay resident -- not because 27GB is
+# too big for a 64GB box, but because 33GB of it was gone. Killing that process
+# returned available memory to 42.6GB. Re-measured immediately after, same models,
+# same server, same prompt, machine otherwise idle:
+#
+#     build            size     cold TTFT   warm TTFT   decode
+#     qwen3.8-27b-4bit    16.1GB    38.7s       1.3s     19.2 tok/s
+#     qwen3.8-27b-jang_6d 25.8GB    46.1s       1.6s     15.2 tok/s
+#     qwen3.8-27b-mxfp8   28.7GB    41.2s       1.6s     14.7 tok/s
+#
+# MXFP8 measured 14.69 tok/s against the 0.08 recorded before -- 184x off. The real
+# cost of 1.8x the bytes is 1.3x on decode, which is what reading more bytes per
+# token should cost. All three are perfectly usable.
+#
+# THE LESSON, which is the part worth keeping: a measurement taken on a contended
+# machine describes the contention, not the thing measured. It then hardens into a
+# design rule -- this one reached conf/config.toml, docs/MODEL_QUIRKS.md and a
+# default_model choice, and would have permanently excluded every model above 18GB
+# on a machine that handles them fine. Before recording any performance number,
+# check what else holds memory (see backlog item 6); and prefer an estimator that
+# can recover, because `record_*` keeping the SLOWEST observation is what made the
+# bad number permanent.
 #
 # Re-derive after any roster change and stamp the date, so it invalidates visibly.
 default_model = "ornith-1.0-35b-jang_4m"
   # think-group winner at 88.4 (file_summary 100, the only model to score it at all;
-  # taxes_anomalies 92, synthesis 82). 19.8GB, under the residency ceiling.
+  # taxes_anomalies 92, synthesis 82). PROVISIONAL: derived from the sweep that ran
+  # under the leak. The corrected 12-model sweep -- which now includes the restored
+  # MXFP8 build, no longer excluded on false grounds -- supersedes it.
 
 # Fallback chain for `rn`'s filename task, tried in order.
 # Top-level keys must stay ABOVE the first [table] header — a bare key after one
