@@ -137,6 +137,77 @@ Two routing bugs fall straight out of it:
 
 ---
 
+## Why our leaderboard disagreed with published benchmarks
+
+Asked directly, and worth keeping because the answer was not "quantization" or "these
+are unusual community builds". Two causes, both ours.
+
+### 1. The token budget decided the score, not the model
+
+`get_max_tokens_for_task` reads `[max_tokens]` keyed by TASK NAME and falls back to
+`DEFAULT_MAX_TOKENS` for anything absent. Exactly **1 of the 24 eval tasks** was named
+in that table. The other 23 inherited a different number, so whether a task got the
+configured budget or the fallback came down to whether someone had happened to list
+it.
+
+The proof needs no statistics. `filename` and `filename_leak` send a **byte-identical
+185-character prompt**:
+
+| task | in `[max_tokens]`? | budget | nemotron scored |
+|---|---|---|---|
+| `filename` | yes | 1000 | **0%** |
+| `filename_leak` | no | 16000 (fallback) | **100%** |
+
+Re-run directly to confirm: at 1000 it aborts mid-reasoning; at 16000 it returns
+`screenshot_login_error_invalid_credentials`.
+
+**Scale of the distortion.** 19 of 37 zeros across the sweep were reasoning overruns —
+nemotron 10 of 10, ornith-9b 9 of 10 — and those are exactly the two models at the
+bottom. Excluding only the tasks the harness killed:
+
+| model | as measured | excluding harness kills |
+|---|---|---|
+| nemotron-3.5-lightning-30b | 51.3 (last) | **90.8 (first)** |
+| ornith-1.0-9b-mxfp8 | 49.5 | 81.4 |
+
+A 30B model was never plausibly worst. The measurement was wrong.
+
+**Why the budget was too small.** Reasoning models emit their chain of thought before
+any content, and it scales with the TASK, not with the budget handed to them. Measured
+on nemotron:
+
+    trivial ("what is 2+2")             ~400 chars reasoning, answers
+    summarize_misattribution (8 lines) 19,009 chars reasoning, answers at 8192
+    summarize (40 tweets)              77,208 chars reasoning, answers at 32000
+
+It returns EMPTY at every budget below what it needs — guard on or off — and ignores
+`detailed thinking off` and `/no_think`. Both models answer trivial prompts normally
+(~400 chars, `finish=stop`), so the integration was never broken.
+
+Budgets are now a uniform 32000 with a structural test pinning every task to the same
+number, and the overrun retry escalates instead of shrinking. See the commit for the
+full list.
+
+### 2. The suite does not measure scale-dependent capability at all
+
+**Pearson r(parameters, score) = +0.064** across 10 models — and **+0.092** even after
+excluding the two the harness killed. The remaining 8 span just **10.2 points** from 2B
+to 35B.
+
+That is the structural answer. Public benchmarks measure knowledge and reasoning, which
+scale with parameters. This suite measures whether a model honours an output contract:
+emit this JSON shape, end every bullet with `(@handle | time)`, do not invent venues. A
+2B model can honour a contract as well as a 35B one — which is why gemma-4-e2b beat
+gemma-4-12b at summarisation, and why that result is not anomalous.
+
+Consequences: do not read this leaderboard as a capability ranking, and do not expect
+it to track public benchmarks. It answers "which installed model will reliably produce
+what `wk`/`tw`/`rn` need", which is a different and more useful question here.
+
+**Ruled out:** prompt or quirk asymmetry between families. All models receive
+byte-identical messages for a given eval task; quirks are task-gated. Verified, not
+assumed.
+
 ## Scores before 2026-08-16 are not comparable with scores after it
 
 Four scorer defects were fixed on 2026-08-16, all of the same class: a scorer that

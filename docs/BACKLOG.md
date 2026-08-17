@@ -76,6 +76,29 @@ accumulating here as a graveyard of finished plans.
    observation, so a reading taken under memory pressure can never be displaced by a
    correct one. Nothing enforces "delete `_capabilities` before re-measuring".
 
+   **This bit on 2026-08-16, and it is not only a reporting problem.**
+   `_derived_timeout` computes a task's timeout from the recorded decode rate, so a
+   contaminated rate silently sets the timeout too. The recorded values had drifted
+   far from reality:
+
+   | model | recorded | actual | verdict |
+   |---|---|---|---|
+   | nemotron-3.5-lightning-30b | 0.68 tok/s | ~33 tok/s | contaminated |
+   | gemma-4-e2b-it-8bit (2B) | 7.04 tok/s | — | implausible; its 4B sibling does 26.5 |
+   | gemma-4-12b-it-mxfp8 | 309s cold start | — | implausible; a 16GB model loads in 33s |
+
+   Cleared the timing fields (`decode_tokens_per_sec`, `prefill_chars_per_sec`,
+   `prefill_samples`, `cold_start_seconds`) and the learned per-task timeouts for all
+   11 installed models before the corrected re-sweep, keeping the static probes
+   (`family`, `vision`, `disk_bytes`, `generative`). Backup in the session scratchpad.
+
+   **Still open, and this is the actual fix:** keeping the slowest observation is the
+   wrong estimator. It cannot self-correct, and every contending process on the
+   machine biases it in one direction permanently. A median of the last N, or simply
+   the most recent reading taken while `osaurus_one.sh --check` passed, would recover
+   on its own. Until that changes, deleting by hand stays a manual step nobody is
+   reminded to take.
+
 7. **The TUI has no config audit.** `ztools` can start clean while the config names an
    unservable model; `ev` checks this, the TUI does not.
 
