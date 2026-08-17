@@ -27,6 +27,7 @@ result; discovering it again on every run is not.
 
 import json
 import os
+import time
 from typing import Callable, Dict, List, Optional
 
 import requests
@@ -103,6 +104,19 @@ def stream_with_overrun_guard(
     }
     budget_chars = max(1, int(max_tokens * REASONING_OVERRUN_FRACTION * CHARS_PER_TOKEN))
     make_session = session_factory or requests.Session
+    # `timeout` on a streamed request is NOT a total-duration bound. requests applies
+    # it to the connect and then to the gap BETWEEN chunks, so a model emitting one
+    # slow token at a time never trips it and iter_lines() runs unbounded.
+    #
+    # That is not theoretical: it hung a sweep. muse-glimmer (27.6GB, above this
+    # machine's ~27GB page-cache threshold) thrashed its way through a single task for
+    # 97 minutes without finishing one of 24, against a configured 1800s task timeout,
+    # because every individual chunk arrived well inside the read timeout. The sweep
+    # had no way to move on, and a per-model ceiling four hours away was the only
+    # thing that would eventually have stopped it.
+    #
+    # So the deadline is enforced here, in wall-clock, where the chunks are counted.
+    deadline = time.monotonic() + timeout
 
     try:
         with make_session() as session:
@@ -118,6 +132,15 @@ def stream_with_overrun_guard(
                 return result
 
             for raw in response.iter_lines(decode_unicode=True):
+                if time.monotonic() > deadline:
+                    # Distinct from the overrun abort below: that one says "this run
+                    # cannot produce an answer", this one says "it did not produce one
+                    # in the time allowed". Recorded as a timeout so the eval classes
+                    # it as INFRA rather than as a model quality failure.
+                    result["error"] = f"Timeout after {timeout}s (streamed)"
+                    result["finish_reason"] = "stream_deadline_exceeded"
+                    response.close()
+                    return result
                 choice = _deltas(raw if isinstance(raw, str) else (raw or b"").decode())
                 if choice is None:
                     continue

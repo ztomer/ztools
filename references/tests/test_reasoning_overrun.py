@@ -300,3 +300,96 @@ class TestThePerModelBudgetCap:
                     f"{model} is capped in {path.name}; if that is intended, record "
                     f"the measurement that justifies it and update this test"
                 )
+
+
+class TestTheStreamHasAWallClockDeadline:
+    """A slowly-streaming model must not run forever.
+
+    `requests` applies `timeout` to the connect and to the gap BETWEEN chunks, never
+    to the total duration of a streamed response. So a model emitting one slow token
+    at a time satisfies the read timeout on every chunk and `iter_lines()` never
+    returns. The configured task timeout is silently not a bound at all.
+
+    This hung a real sweep: muse-glimmer spent 97 minutes without completing 1 of 24
+    tasks, against a configured 1800s task timeout, because each individual chunk
+    arrived in time. Nothing in the harness could move on.
+
+    The fixture streams chunks that are individually fast but collectively long, which
+    is exactly the case the read timeout cannot see.
+    """
+
+    def _slow_stream(self, n_chunks, per_chunk_seconds, timeout):
+        """A fake SSE stream whose chunks are fast but whose total exceeds `timeout`."""
+        import time as _time
+        from unittest.mock import MagicMock
+
+        import lib.llm.streaming as streaming
+
+        clock = {"t": 0.0}
+        monkey_now = lambda: clock["t"]  # noqa: E731
+
+        def lines(decode_unicode=True):
+            for i in range(n_chunks):
+                clock["t"] += per_chunk_seconds
+                yield (
+                    'data: {"choices":[{"delta":{"reasoning_content":"tick"},'
+                    '"finish_reason":null}]}'
+                )
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.iter_lines = lines
+        session = MagicMock()
+        session.__enter__.return_value = session
+        session.post.return_value = resp
+
+        real_monotonic = _time.monotonic
+        streaming.time.monotonic = monkey_now
+        try:
+            return streaming.stream_with_overrun_guard(
+                "m", [{"role": "user", "content": "hi"}], max_tokens=32000,
+                timeout=timeout, session_factory=lambda: session,
+            ), clock
+        finally:
+            streaming.time.monotonic = real_monotonic
+
+    def test_a_slow_stream_is_cut_at_the_deadline(self):
+        """500 chunks x 10s = 5000s total, but no single gap exceeds a 60s read
+        timeout. Without a wall-clock deadline this returns only when the stream
+        chooses to end."""
+        result, clock = self._slow_stream(500, 10.0, timeout=60)
+        assert "Timeout" in (result.get("error") or ""), result
+        assert result.get("finish_reason") == "stream_deadline_exceeded"
+
+    def test_it_stops_near_the_deadline_not_at_the_end_of_the_stream(self):
+        """Proves the bound is the deadline and not merely the stream running out."""
+        result, clock = self._slow_stream(500, 10.0, timeout=60)
+        assert clock["t"] < 200, (
+            f"consumed {clock['t']}s of stream for a 60s timeout; the deadline is not "
+            "actually bounding the loop"
+        )
+
+    def test_a_stream_that_finishes_inside_the_deadline_is_untouched(self):
+        """Without this the deadline could be firing on every stream, which would look
+        like a fix while breaking every working run."""
+        from unittest.mock import MagicMock
+
+        import lib.llm.streaming as streaming
+
+        def lines(decode_unicode=True):
+            yield 'data: {"choices":[{"delta":{"content":"hello"},"finish_reason":"stop"}]}'
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.iter_lines = lines
+        session = MagicMock()
+        session.__enter__.return_value = session
+        session.post.return_value = resp
+
+        out = streaming.stream_with_overrun_guard(
+            "m", [{"role": "user", "content": "hi"}], max_tokens=32000,
+            timeout=600, session_factory=lambda: session,
+        )
+        assert out["content"] == "hello"
+        assert not out.get("error")
+        assert out.get("finish_reason") == "stop"
