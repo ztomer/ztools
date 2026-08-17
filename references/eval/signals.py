@@ -10,6 +10,11 @@ import json
 import os
 from pathlib import Path
 
+try:
+    import psutil
+except ImportError:  # pragma: no cover - psutil is a hard dep in practice
+    psutil = None
+
 from lib.config import Task, get_timeout
 from lib.paths import conf_dir
 
@@ -125,3 +130,56 @@ def _record_signal(
             per_task["timeout"] = new_timeout
 
     _save_eval_signals(signals)
+
+
+#: Processes named exactly this are osaurus servers. Matched on the process NAME, not
+#: on a command-line substring: a `pgrep -f` for the binary path also matches any shell
+#: whose command line happens to quote that path -- including the diagnostic commands
+#: you run while investigating, which is how a count of "3 servers" turned out to be one
+#: server and two of my own greps.
+OSAURUS_PROCESS_NAME = "osaurus"
+
+
+def count_osaurus_servers() -> int:
+    """How many osaurus servers are running. -1 when it cannot be determined.
+
+    `psutil` is imported at module scope (top of this file) rather than here, so that
+    a test can patch it. Imported inside the function it is unreachable from the
+    outside, and a test that tries to mock it measures the REAL machine instead --
+    which passes or fails depending on what happens to be running, i.e. it tests
+    nothing and reports green.
+    """
+    if psutil is None:
+        return -1
+    try:
+        return sum(
+            1 for p in psutil.process_iter(["name"])
+            if (p.info.get("name") or "") == OSAURUS_PROCESS_NAME
+        )
+    except Exception:
+        return -1
+
+
+def contended_server_warning(model: str, task_name: str) -> str:
+    """Non-empty when more than one osaurus is running, i.e. the measurement is dirty.
+
+    A second server does not queue behind the first, it loads its own copy of the
+    weights. Two of them on a machine sized for one produce evictions, swapping, and
+    requests the server cancels itself with HTTP 499 -- which from the client is
+    indistinguishable from a slow model. That is how qwen3.8-27b got recorded at
+    0.1 tok/s with a 423s cold start.
+
+    Checked PER TASK rather than once per model, because the invariant is not
+    established by having been true at startup. tools/osaurus_one.sh runs once before
+    a model and then hours pass; a second server appeared mid-run at least once, sat
+    idle burning CPU, and was noticed only by accident. The check exists and is
+    correct -- nothing was calling it.
+    """
+    n = count_osaurus_servers()
+    if n <= 1:
+        return ""
+    return (
+        f"{n} osaurus servers running while measuring {model}/{task_name}. They "
+        f"compete for the same GPU and RAM, so this timing is not comparable with "
+        f"the rest of the sweep. Fix with: ./tools/osaurus_one.sh --restart"
+    )

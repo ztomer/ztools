@@ -31,6 +31,7 @@ from eval.signals import (
     DEFAULT_EVAL_TIMEOUT,
     _effective_timeout,
     _record_signal,
+    contended_server_warning,
 )
 from eval.tasks_core import TASKS, _extract_items_from_text
 from eval.validate import safe_content
@@ -287,6 +288,11 @@ def run_eval(
         if "messages" not in task_cfg:
             console.print(f"{WARN} Skipping '{task_name}' (no messages key)")
             continue
+        # The single-server invariant is not established by having been true at
+        # startup. osaurus_one.sh runs once before a model and then hours pass.
+        contended = contended_server_warning(model, task_name)
+        if contended:
+            console.print(f"{WARN} {contended}")
         prompt_chars = sum(
             len(m.get("content") or "") for m in task_cfg.get("messages", [])
         )
