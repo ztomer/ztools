@@ -55,12 +55,19 @@ class FakeApp:
 
 
 def configured_models():
-    """Every model name the config routes to, read live."""
+    """Every model name the config routes to, read live.
+
+    Includes the per-tool sidecar configs (conf/rename.toml), because the audit reads
+    those too. Leaving them out made "a complete roster" incomplete, and the audit
+    correctly reported drift the test had not intended to create.
+    """
     from lib.config import get_best_models, get_filename_models
     from lib.config_core import _auto_load, _config
+    from lib.model_resolve import _sidecar_model_slots
 
     _auto_load()
     names = set(get_best_models().values()) | set(get_filename_models())
+    names |= {model for _slot, model in _sidecar_model_slots()}
     if _config.get("default_model"):
         names.add(_config["default_model"])
     return names

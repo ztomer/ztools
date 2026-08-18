@@ -3,13 +3,11 @@ LLM integration for image renaming - server management, relevance checks, and fi
 """
 
 import base64
-import json
 import os
 import re
 from pathlib import Path
 from typing import Optional
 
-import requests
 from lib.config import Task, get_filename_models, get_model_prompt
 from lib.config_toml import load_config
 from lib.llm.constants import API_CHAT
@@ -38,11 +36,21 @@ PROMPT_IMAGE_TO_FILENAME = (
     "'filename'. Output ONLY the descriptive words."
 )
 
-FILENAME_MODELS = get_filename_models()
+def filename_models() -> list:
+    """The filename fallback chain, resolved at CALL time.
 
-PROMPT_TEXT_TO_FILENAME = (
-    get_model_prompt(FILENAME_MODELS[0], Task.FILENAME) if FILENAME_MODELS else ""
-)
+    This was `FILENAME_MODELS = get_filename_models()` at module scope. An import-time
+    binding cannot see a config change made afterwards, and it freezes whatever the
+    config said the first time anything imported this module -- the same defect class
+    as the `config_getters` alias fixed elsewhere in this repo, surviving in a sibling.
+    """
+    return get_filename_models()
+
+
+def default_filename_prompt() -> str:
+    """Fallback filename template, resolved at call time for the same reason."""
+    models = filename_models()
+    return get_model_prompt(models[0], Task.FILENAME) if models else ""
 
 # Load rename config for overridable paths
 _RENAME_CONFIG_PATH = conf_path("rename.toml")
@@ -65,11 +73,10 @@ APP_LAUNCH_WAIT = 15
 DEFAULT_SERVER_URL = _RENAME_CFG.get("llm_url", "http://localhost:1337")
 API_CHAT_PATH = API_CHAT
 TEXT_PREVIEW_LIMIT = 500
-_relevance_models_str = _RENAME_CFG.get("relevance_check_models") or os.environ.get(
-    "RENAME_RELEVANCE_MODELS",
-    "qwen3.6-27b-mxfp4,gemma-4-26b-a4b-it-mxfp4",  # check-ok: env var fallback
-)
-RELEVANCE_CHECK_MODELS = [m.strip() for m in _relevance_models_str.split(",") if m.strip()]
+# NOTE: no module-level RELEVANCE_CHECK_MODELS. See relevance_check_models(), which
+# resolves at call time so a config change is picked up without a re-import, and whose
+# default is the audited filename chain rather than two hardcoded tags that had been
+# uninstalled for months.
 MIN_CONTENT_LEN = 2
 MAX_FILENAME_WORDS = 6
 # The prompts promise "under 50 characters"; slicing at 35 truncated mid-word
@@ -85,41 +92,79 @@ def ensure_llm_running() -> bool:
     return ensure_server()
 
 
+def relevance_check_models() -> list:
+    """Models to try for the keep/skip decision, resolved at CALL time.
+
+    Bound at call time, not import time. The module-level version of this could not
+    see a config edit made after import, which is the same defect class as the
+    `config_getters` import-time alias fixed elsewhere in this repo.
+    """
+    configured = _RENAME_CFG.get("relevance_check_models") or os.environ.get(
+        "RENAME_RELEVANCE_MODELS", ""
+    )
+    if configured:
+        return [m.strip() for m in configured.split(",") if m.strip()]
+    # Fall back to the audited filename chain rather than to hardcoded tags. The
+    # previous default named qwen3.6-27b-mxfp4 and gemma-4-26b-a4b-it-mxfp4, NEITHER
+    # of which has been installed for some time, so every call 404'd twice and
+    # returned None -- the relevance check was dead for every image and said nothing.
+    # get_filename_models() is derived from an eval sweep and audited against the
+    # roster, so it cannot rot silently in the same way.
+    return get_filename_models()
+
+
+def _shared_call(model: str, messages: list, host: str, timeout: int,
+                 api_key: str = "") -> dict:
+    """Every LLM request from `rn` goes through here, and here goes through
+    `lib.osaurus_lib.call`.
+
+    That client is what supplies model substitution when a configured tag is gone,
+    the streaming wall-clock deadline, per-model quirks and the on-device Foundation
+    fallback. `rn` used to issue its own POSTs and hand-parse NDJSON, so it had none
+    of them: when its models were uninstalled every call 404'd and the functions
+    returned None, which is indistinguishable from "the model had nothing to say".
+
+    The Ollama-style `images` key rides inside the message dict and reaches the
+    payload untouched -- verified, not assumed -- so the vision path needs no special
+    handling here.
+    """
+    from lib.osaurus_lib import call
+
+    result = call(model=model, messages=messages, host=host, task="filename",
+                  timeout=timeout, api_key=api_key)
+    if result.get("substitution_reason"):
+        logger.warning(result["substitution_reason"])
+    return result
+
+
 def is_relevant_with_llm(text: str, host: str, api_key: str = "") -> Optional[bool]:
-    """Ask LLM if image content is relevant worth keeping."""
+    """Ask the LLM whether this image is worth keeping. None = could not decide.
+
+    Routed through `osaurus_lib.call` rather than a raw POST. That is what supplies
+    model substitution when a configured tag is gone (the failure that silently
+    disabled this whole feature), the streaming wall-clock deadline, per-model
+    quirks, and the on-device Foundation fallback. A raw request gets none of them
+    and fails by returning None, which is indistinguishable from "no opinion".
+    """
     prompt = RELEVANCE_CHECK_PROMPT.format(text=text[:TEXT_PREVIEW_LIMIT])
     messages = [{"role": "user", "content": prompt}]
 
-    for model in RELEVANCE_CHECK_MODELS:
+    for model in relevance_check_models():
         try:
-            with requests.Session() as s:
-                resp = s.post(
-                    f"{host}{API_CHAT_PATH}",
-                    json={"model": model, "messages": messages},
-                    timeout=RELEVANCE_CHECK_TIMEOUT,
-                )
-            if resp.status_code != HTTP_STATUS_OK:
-                continue
-            content = ""
-            for line in resp.text.split("\n"):
-                if line.strip():
-                    try:
-                        j = json.loads(line)
-                        content = j.get("message", {}).get("content", "").lower()
-                        break
-                    except Exception:
-                        continue
-
-            if "keep" in content and "skip" not in content:
-                return True
-            elif "skip" in content:
-                return False
+            result = _shared_call(model, messages, host, RELEVANCE_CHECK_TIMEOUT)
         except Exception as e:
             logger.warning(f"Relevance check failed for model {model}: {e}")
             continue
+        if result.get("error"):
+            logger.warning(f"Relevance check error for {model}: {result['error']}")
+            continue
+        content = (result.get("content") or "").lower()
+        if "keep" in content and "skip" not in content:
+            return True
+        if "skip" in content:
+            return False
 
     return None
-
 
 
 def _truncate_on_word_boundary(name: str, limit: int) -> str:
@@ -141,7 +186,7 @@ def _filename_prompt(model: str, text: str) -> str:
     silently killed the whole LLM naming path. Class C1; render_prompt is the one
     renderer that handles both shapes and fails loudly.
     """
-    template = get_model_prompt(model, Task.FILENAME) or PROMPT_TEXT_TO_FILENAME
+    template = get_model_prompt(model, Task.FILENAME) or default_filename_prompt()
     if POSITIONAL_SLOT in template:
         return render_prompt(template, template_id=f"{model}:filename", positional=text)
     return render_prompt(template, template_id=f"{model}:filename", text=text)
@@ -150,30 +195,15 @@ def _filename_prompt(model: str, text: str) -> str:
 def query_llm_for_filename(
     text: str, host: str = DEFAULT_SERVER_URL, model: str = "", api_key: str = ""
 ) -> Optional[str]:
-    for m in FILENAME_MODELS:
+    for m in filename_models():
         try:
             prompt = _filename_prompt(m, text)
             messages = [{"role": "user", "content": prompt}]
 
-            with requests.Session() as sess:
-                resp = sess.post(
-                    f"{host}{API_CHAT_PATH}",
-                    json={"model": m, "messages": messages},
-                    timeout=FILENAME_QUERY_TIMEOUT,
-                )
-            if resp.status_code != HTTP_STATUS_OK:
+            result = _shared_call(m, messages, host, FILENAME_QUERY_TIMEOUT)
+            if result.get("error"):
                 continue
-
-            content = ""
-            for line in resp.text.split("\n"):
-                if line.strip():
-                    try:
-                        j = json.loads(line)
-                        content += j.get("message", {}).get("content", "")
-                        if j.get("done", False):
-                            break
-                    except Exception:
-                        continue
+            content = result.get("content") or ""
 
             if content and len(content) >= MIN_CONTENT_LEN:
                 content = content.strip().lower()
@@ -202,7 +232,7 @@ def query_llm_for_filename(
 
 def query_mlx_for_filename(text: str) -> Optional[str]:
     tried = []
-    for model_name in FILENAME_MODELS:
+    for model_name in filename_models():
         model_path = find_mlx_model(model_name, MLX_MODELS_DIR)
         if not model_path or model_path in tried:
             continue
@@ -221,7 +251,8 @@ def query_mlx_for_filename(text: str) -> Optional[str]:
 
     fallback = find_any_working_mlx_model()
     if fallback and fallback not in tried:
-        prompt = _filename_prompt(FILENAME_MODELS[0] if FILENAME_MODELS else "", text)
+        _models = filename_models()
+        prompt = _filename_prompt(_models[0] if _models else "", text)
         raw = call_mlx(fallback, prompt)
         if raw:
             content = process_mlx_content(raw)
@@ -239,7 +270,7 @@ def query_mlx_for_filename(text: str) -> Optional[str]:
 def query_vlm_for_filename(
     image_path: Path, host: str, model: str, api_key: str = ""
 ) -> Optional[str]:
-    """Query a Vision Language Model to describe the image using direct HTTP requests."""
+    """Ask a vision model to describe the image, through the shared LLM client."""
     prompt = PROMPT_IMAGE_TO_FILENAME
 
     try:
@@ -248,32 +279,11 @@ def query_vlm_for_filename(
 
         messages = [{"role": "user", "content": prompt, "images": [base64_image]}]
 
-        headers = {}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
-
-        with requests.Session() as s:
-            resp = s.post(
-                f"{host}{API_CHAT_PATH}",
-                json={"model": model, "messages": messages},
-                headers=headers,
-                timeout=VLM_QUERY_TIMEOUT,
-            )
-
-        if resp.status_code != HTTP_STATUS_OK:
-            print(f"{FAIL} VLM API Error: {resp.status_code} - {resp.text}")
+        result = _shared_call(model, messages, host, VLM_QUERY_TIMEOUT, api_key)
+        if result.get("error"):
+            print(f"{FAIL} VLM API Error: {result['error']}")
             return None
-
-        content = ""
-        for line in resp.text.split("\n"):
-            if line.strip():
-                try:
-                    j = json.loads(line)
-                    content += j.get("message", {}).get("content", "")
-                    if j.get("done", False):
-                        break
-                except Exception:
-                    continue
+        content = result.get("content") or ""
 
         return _strip_instruction_prefix(content.strip()) if content else None
 

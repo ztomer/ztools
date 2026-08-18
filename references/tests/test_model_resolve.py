@@ -30,16 +30,25 @@ def entry(model, family="unknown", size=""):
 
 @pytest.fixture
 def fake_config(monkeypatch):
-    """Substitute the three config slots the audit reads, leaving conf/ untouched."""
+    """Substitute the config slots the audit reads, leaving conf/ untouched.
 
-    def install(default_model, best_models, filename_models):
+    The sidecar slots (conf/rename.toml and friends) are stubbed to empty here. The
+    audit reads those files from disk, so without this a test that installs three
+    synthetic slots would silently be asserting against those three PLUS whatever
+    `rn` happens to have configured today -- the same "unit test quietly consults the
+    real machine" trap that made the roster filter machine-dependent.
+    """
+
+    def install(default_model, best_models, filename_models, sidecar=()):
         import lib.config as cfg
         import lib.config_core as core
+        import lib.model_resolve as mr
 
         monkeypatch.setattr(cfg, "get_best_models", lambda: best_models)
         monkeypatch.setattr(cfg, "get_filename_models", lambda: filename_models)
         monkeypatch.setattr(core, "_auto_load", lambda: None)
         monkeypatch.setattr(core, "_config", {"default_model": default_model})
+        monkeypatch.setattr(mr, "_sidecar_model_slots", lambda: list(sidecar))
 
     return install
 
@@ -300,7 +309,10 @@ class TestAuditingTheConfig:
             }
         )
         body = "\n".join(lines)
-        assert "2 model(s)" in body
+        # Assert the COUNT and the slot names, not the sentence around them. Pinning
+        # the exact phrasing made this fail on a reword that changed nothing it cares
+        # about ("2 model(s)" -> "2 configured model(s)").
+        assert "2" in body
         assert "default_model = ghost-70b" in body
         assert "best_models.think = ghost-70b" in body
 

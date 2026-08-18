@@ -3,9 +3,17 @@ tesseract_cmd = "/opt/homebrew/bin/tesseract"
 mlx_models_dir = "~/MLXModels/mlx-community"
 llm_url = "http://localhost:1337"
 
+# Vision models for the image-description path, tried in order. Both previous entries
+# (gemma-4-26b-a4b-it-4bit, qwen3.5-27b-claude-4.6-opus-distilled-mlx-4bit) had been
+# uninstalled for months and nothing reported it, because audit_configured_models only
+# read conf/config.toml. It reads this file now.
+#
+# Both of these carry a vision_config and are installed. NOTE that no eval task feeds a
+# real image, so this order is a static-probe judgement, not a measurement -- see
+# docs/NEXT_STEPS.md P2.
 vlm_preferred = [
-  "gemma-4-26b-a4b-it-4bit",
-  "qwen3.5-27b-claude-4.6-opus-distilled-mlx-4bit",
+  "gemma-4-12b-it-mxfp8",
+  "qwen3.8-27b-mxfp8",
 ]
 
 text_preferred = [

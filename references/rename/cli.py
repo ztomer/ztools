@@ -32,11 +32,11 @@ from rename.helpers import (
     ocr_available,
 )
 from rename.llm import (
-    FILENAME_MODELS,
     PROMPT_IMAGE_TO_FILENAME,
-    PROMPT_TEXT_TO_FILENAME,
     RELEVANCE_CHECK_PROMPT,
+    default_filename_prompt,
     ensure_llm_running,
+    filename_models,
     is_relevant_with_llm,
     query_llm_for_filename,
     query_vlm_for_filename,
@@ -57,9 +57,9 @@ __all__ = [
     "_GENERIC_EXTENSIONS",
     "_GENERIC_NAMES",
     "image_extensions",
-    "FILENAME_MODELS",
+    "filename_models",
     "RELEVANCE_CHECK_PROMPT",
-    "PROMPT_TEXT_TO_FILENAME",
+    "default_filename_prompt",
     "PROMPT_IMAGE_TO_FILENAME",
     "rename_image",
     "main",
@@ -89,9 +89,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--model",
-        default=FILENAME_MODELS[0]
-        if FILENAME_MODELS
-        else os.environ.get("RENAME_DEFAULT_FILENAME_MODEL", "foundation"),
+        # Resolved when the parser is BUILT, not when the module is imported, so a
+        # config change is reflected without a re-import.
+        default=(filename_models() or [None])[0]
+        or os.environ.get("RENAME_DEFAULT_FILENAME_MODEL", "foundation"),
         help="LLM model",
     )
     parser.add_argument("--vlm-model", default="", help="VLM model to use when no text is found")

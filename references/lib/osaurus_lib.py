@@ -200,6 +200,7 @@ def call(
     parse_json: bool = False,
     use_foundation: Optional[bool] = None,
     stream_guard: bool = False,
+    api_key: str = "",
     _allow_model_substitution: bool = True,
 ) -> dict:
     logger.debug(f"Calling {model} for task '{task}' at {host}:{port}")
@@ -256,12 +257,14 @@ def call(
         timeout = timeout or get_timeout(task)
         logger.debug(f"Sending request with {len(messages)} messages, timeout={timeout}s")
         with _get_session_context() as s:
-            resp = s.post(
-                url,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=timeout,
-            )
+            headers = {"Content-Type": "application/json"}
+            # `rn` passes a bearer token for remote servers. It used to set this
+            # header on its own raw POST; routing through this client dropped it
+            # until the parameter existed here, which would have broken any
+            # authenticated deployment silently.
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            resp = s.post(url, json=payload, headers=headers, timeout=timeout)
         result["time"] = round(time.time() - start, 1)
         logger.debug(f"Response received in {result['time']}s")
         if resp.status_code != 200:
@@ -281,6 +284,7 @@ def call(
                     task=task,
                     parse_json=parse_json,
                     use_foundation=use_foundation,
+                    api_key=api_key,
                 ),
             )
             if retried is not None:

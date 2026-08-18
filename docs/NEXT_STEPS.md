@@ -11,7 +11,7 @@ the eval machinery. Produced after the session that fixed five measurement defec
 
 ---
 
-## P0. `rn` is outside the protection perimeter (NOT previously on the backlog)
+## ~~P0. `rn` is outside the protection perimeter~~ DONE 2026-08-17
 
 **The invariant.** Every production LLM call goes through `lib/osaurus_lib.call` — which
 knows about model substitution on a 404, the stream wall-clock deadline, quirks, and the
@@ -44,7 +44,21 @@ packages for direct `requests` calls to LLM chat endpoints outside `lib/`, prove
 by running it against HEAD; (b) an audit test with a fixture `rename.toml` naming an
 absent model. Wire (a) into pre-commit beside the file-size hook.
 
-**Effort.** ~1 day. P2 depends on it.
+**Done.** All three `rn` call sites route through `lib.osaurus_lib.call` via one
+`_shared_call` helper. The relevance check was verified DEAD against the live server
+(returned None for every input) and verified alive afterwards (True on useful content,
+False on junk). `audit_configured_models` now reads per-tool configs, which immediately
+surfaced the two uninstalled `vlm_preferred` models; both replaced with installed
+vision-capable ones. Import-time `FILENAME_MODELS`/`PROMPT_TEXT_TO_FILENAME` are now
+call-time seams.
+
+Two things this turned up that the plan did not predict: routing through the shared
+client silently DROPPED the `Authorization` header, because `call` had no `api_key`
+parameter -- a real regression, now fixed and pinned. And the first version of the
+perimeter gate keyed on an endpoint LITERAL, so it read green while two raw POSTs sat
+in the very file it was written to catch (`rename/llm.py` refers to its endpoint
+through an imported constant). The gate now keys on the POST itself and is verified
+against a planted offender.
 
 ---
 

@@ -153,6 +153,37 @@ def substitute_model(
     )
 
 
+#: conf/<tool>.toml keys that name model tags. `rn` keeps its own preferences here
+#: rather than in conf/config.toml, so the audit did not look at them -- and both
+#: entries under `vlm_preferred` named models that had been uninstalled for months
+#: with nothing reporting it. An audit that covers only the file you remembered is
+#: how drift stays invisible in the file you did not.
+SIDECAR_MODEL_KEYS = {
+    "rename.toml": ("vlm_preferred", "text_preferred", "relevance_check_models"),
+}
+
+
+def _sidecar_model_slots() -> List[Tuple[str, str]]:
+    """(slot, model) pairs from the per-tool config files."""
+    from lib.config_toml import load_config
+    from lib.paths import conf_path
+
+    out: List[Tuple[str, str]] = []
+    for filename, keys in SIDECAR_MODEL_KEYS.items():
+        try:
+            cfg = load_config(conf_path(filename)) or {}
+        except Exception:
+            continue
+        for key in keys:
+            value = cfg.get(key)
+            if isinstance(value, str):
+                value = [v.strip() for v in value.split(",") if v.strip()]
+            for i, model in enumerate(value or []):
+                if isinstance(model, str) and model:
+                    out.append((f"{filename}:{key}[{i}]", model))
+    return out
+
+
 def audit_configured_models(
     installed: Optional[Iterable[str]] = None,
     host: str = DEFAULT_HOST,
@@ -187,6 +218,7 @@ def audit_configured_models(
         slots.append((f"best_models.{task}", model))
     for i, model in enumerate(get_filename_models()):
         slots.append((f"filename_models[{i}]", model))
+    slots.extend(_sidecar_model_slots())
 
     ok = [f"{slot} = {model}" for slot, model in slots if model in installed]
     bad = [f"{slot} = {model}" for slot, model in slots if model not in installed]
@@ -219,8 +251,8 @@ def format_audit(report: Dict[str, List[str]]) -> List[str]:
     if report.get("unreachable") or not report.get("missing"):
         return lines
     lines.append(
-        f"conf/config.toml names {len(report['missing'])} model(s) the server cannot "
-        "serve; each falls back at call time with a warning:"
+        f"{len(report['missing'])} configured model(s) the server cannot serve; each "
+        "falls back at call time with a warning. The slot name gives the file:"
     )
     lines.extend(f"  {slot}" for slot in report["missing"])
     lines.append("Re-derive these from an eval sweep rather than editing them by hand.")
