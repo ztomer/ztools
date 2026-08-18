@@ -481,3 +481,42 @@ def _tracked_config_stays_clean():
         "conf/eval_signals.json. Check `git diff` on the listed files to tell "
         "which: eval writes latency and _capabilities records."
     )
+
+
+@pytest.fixture(autouse=True)
+def no_real_server_restart():
+    """Structural gate: no test may restart or quit the real osaurus server.
+
+    `flush_between_models` used to hand-roll its restart with `osascript` and
+    `open -n -a osaurus`. When it was changed to delegate to
+    `tools/osaurus_one.sh --restart`, two tests in TestFlushBetweenModels that had
+    never patched `subprocess.run` began executing the REAL script: a unit run
+    killed the developer's osaurus, waited out a relaunch, and took 89 seconds.
+    Nothing failed loudly -- the tests just got slow and the server pid changed
+    underneath whatever else was using it.
+
+    `no_real_llm_server` blocks the SOCKET, so it could not see this: the damage
+    was done by spawning a process, not by opening a connection. Blocking the
+    spawn is the missing half.
+
+    Tests that need to assert on the restart path patch `subprocess.run`
+    themselves, which replaces this wrapper and is exactly the intended usage.
+    """
+    import subprocess
+    from unittest.mock import patch
+
+    real_run = subprocess.run
+    forbidden = ("osaurus_one.sh", "quit app \"osaurus\"", "-a osaurus")
+
+    def guarded_run(*args, **kwargs):
+        argv = args[0] if args else kwargs.get("args", [])
+        rendered = " ".join(str(a) for a in argv) if isinstance(argv, (list, tuple)) else str(argv)
+        if any(token in rendered for token in forbidden):
+            raise RuntimeError(
+                "real osaurus restart blocked in tests — this would kill the "
+                f"developer's running server. Patch subprocess.run in the test. Got: {rendered}"
+            )
+        return real_run(*args, **kwargs)
+
+    with patch("subprocess.run", guarded_run):
+        yield

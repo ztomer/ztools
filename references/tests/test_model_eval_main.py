@@ -1,5 +1,6 @@
 """Tests for model_eval main() flow."""
 
+import pathlib
 import sys
 from unittest.mock import MagicMock, patch
 
@@ -545,10 +546,25 @@ class TestFlushBetweenModels:
         out = capsys.readouterr().out
         assert "Flushing" in out
 
-    def test_flush_with_error_triggers_restart(self, mock_llm, monkeypatch, capsys):
+    def test_flush_with_error_restarts_through_osaurus_one_not_open_n(
+        self, mock_llm, monkeypatch, capsys
+    ):
+        """The restart must go through tools/osaurus_one.sh, never `open -n`.
+
+        This test previously asserted the OPPOSITE -- that flush ran `osascript
+        quit` and then `open`. That pinned a real defect: `open -n` forces a NEW
+        osaurus instance, which is the second server osaurus_one.sh exists to
+        prevent, and two servers each load their own copy of the model. A sweep
+        lost three models to it before anyone read the flag.
+        """
         import eval.cli as model_eval
+        import eval.cli_runtime as cli_runtime
 
         monkeypatch.setattr(sys, "argv", ["eval.cli"])
+        monkeypatch.setattr(cli_runtime, "RESTART_READY_BUDGET", 0)
+        monkeypatch.setattr(
+            cli_runtime, "osaurus_one_script", lambda: pathlib.Path("/fake/osaurus_one.sh")
+        )
         with (
             patch.object(model_eval, "init_config"),
             patch.object(model_eval, "is_server_running", return_value=True),
@@ -558,26 +574,50 @@ class TestFlushBetweenModels:
             patch.object(model_eval, "run_eval", return_value=[]),
             patch("eval.cli_runtime.call", return_value={"error": "fail"}),
             patch.object(model_eval, "_print_results"),
-            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "estimate_model_memory", return_value=4),
             patch.object(model_eval, "get_memory_percent", return_value=50.0),
             patch("subprocess.run") as mock_subprocess,
             patch("time.sleep"),
-            patch("requests.Session") as mock_session,
         ):
-            s = mock_session.return_value.__enter__.return_value
-            mock_resp = MagicMock()
-            mock_resp.status_code = 200
-            s.get.return_value = mock_resp
+            mock_subprocess.return_value = MagicMock(returncode=0, stdout="", stderr="")
             model_eval.main()
-        # subprocess was called for both quit and open. Verify the right commands.
+
         sub_calls = [str(c) for c in mock_subprocess.call_args_list]
-        # Quit command (osascript)
-        assert any("osascript" in s and "quit" in s for s in sub_calls)
-        # Open command
-        assert any("open" in s and "osaurus" in s for s in sub_calls)
+        assert any("osaurus_one.sh" in s and "--restart" in s for s in sub_calls), sub_calls
+        assert not any("-n" in s and "open" in s for s in sub_calls), (
+            f"`open -n` starts a SECOND server: {sub_calls}"
+        )
+        assert not any("osascript" in s for s in sub_calls), (
+            f"the quit must be osaurus_one.sh's job, not a raw osascript: {sub_calls}"
+        )
+
+    def test_an_unrecoverable_server_is_announced_not_silent(
+        self, mock_llm, monkeypatch, capsys
+    ):
+        """The old code exhausted its retries and printed NOTHING, then ran the
+        model anyway -- which is how a column of INFRA zeros reached the results
+        table with no warning above it."""
+        import eval.cli as model_eval
+        import eval.cli_runtime as cli_runtime
+
+        monkeypatch.setattr(sys, "argv", ["eval.cli"])
+        monkeypatch.setattr(cli_runtime, "osaurus_one_script", lambda: None)
+        with (
+            patch.object(model_eval, "init_config"),
+            patch.object(model_eval, "is_server_running", return_value=True),
+            patch.object(model_eval, "is_server_responsive", return_value=True),
+            patch.object(model_eval, "get_models", return_value=["m1", "m2"]),
+            patch.object(model_eval, "build_tasks_from_model", return_value={}),
+            patch.object(model_eval, "run_eval", return_value=[]),
+            patch("eval.cli_runtime.call", return_value={"error": "fail"}),
+            patch.object(model_eval, "_print_results"),
+            patch.object(model_eval, "estimate_model_memory", return_value=4),
+            patch.object(model_eval, "get_memory_percent", return_value=50.0),
+            patch("time.sleep"),
+        ):
+            model_eval.main()
         out = capsys.readouterr().out
-        assert "Flush failed" in out or "restart" in out.lower()
+        assert "NOT quality results" in out, out
 
     def test_flush_subprocess_error_caught(self, mock_llm, monkeypatch, capsys):
         import eval.cli as model_eval
@@ -597,17 +637,14 @@ class TestFlushBetweenModels:
             patch.object(model_eval, "get_memory_percent", return_value=50.0),
             patch("subprocess.run", side_effect=Exception("cmd error")),
             patch("time.sleep"),
-            patch("requests.Session") as mock_session,
         ):
-            s = mock_session.return_value.__enter__.return_value
-            s.get.return_value = MagicMock(status_code=200)
-            # Should not raise — exception caught
+            # A restart that raises must degrade ONE model, not abort a sweep
+            # that has already spent hours. Previously this escaped and killed main().
             model_eval.main()
         out = capsys.readouterr().out
-        # We got to the flush step
         assert "Flushing" in out
-        # And the error was caught (no traceback printed to stdout)
         assert "Traceback" not in out
+        assert "NOT quality results" in out, out
 
     def test_flush_request_error_caught(self, mock_llm, monkeypatch, capsys):
         import eval.cli as model_eval
@@ -651,14 +688,17 @@ class TestFlushBetweenModels:
             patch.object(model_eval, "run_eval", return_value=[]),
             patch("eval.cli_runtime.call", side_effect=Exception("api boom")),
             patch.object(model_eval, "_print_results"),
-            patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "estimate_model_memory", return_value=4),
             patch.object(model_eval, "get_memory_percent", return_value=50.0),
             patch("time.sleep"),
+            # Without this the restart path executed the REAL osaurus_one.sh and
+            # this unit test killed the developer's server. conftest now blocks
+            # that outright; patching here is what the gate asks for.
+            patch("subprocess.run") as mock_subprocess,
         ):
+            mock_subprocess.return_value = MagicMock(returncode=1, stdout="", stderr="no")
             model_eval.main()
         out = capsys.readouterr().out
-        # Outer try/except caught the exception
         assert "Flush error" in out and "api boom" in out
 
 

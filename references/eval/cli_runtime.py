@@ -29,16 +29,19 @@ DEFAULT_SERVER_PORT = 1337
 
 # Timeouts for server checks (seconds)
 SERVER_RESPONSIVE_TIMEOUT = 5
-RESTART_CHECK_TIMEOUT = int(os.environ.get("EVAL_RESTART_TIMEOUT", "2"))
 FLUSH_CALL_TIMEOUT = 30
 
 # Sleep durations during model flush (seconds)
-FLUSH_QUIT_WAIT = 3
-FLUSH_RESTART_WAIT = 8
 FLUSH_SETTLE_WAIT = 2
 
-# Retries for server restart check
-RESTART_CHECK_RETRIES = 5
+#: How long to keep trying a real completion after a restart, and the gap between
+#: tries. A 13-35GB model does not become servable in the ~21s the previous budget
+#: allowed, and the sweep then recorded INFRA zeros for a server that was merely
+#: still loading.
+RESTART_READY_BUDGET = int(os.environ.get("EVAL_RESTART_BUDGET", "180"))
+RESTART_READY_GAP = 5
+#: `osaurus_one.sh --restart` has to kill, wait out a quit, relaunch and poll.
+OSAURUS_ONE_TIMEOUT = 240
 
 
 
@@ -185,37 +188,130 @@ def update_config(best_models: dict, out=None):
         tomli_w.dump(config, f)
 
 
-def flush_between_models(prev_model: str, next_model: str, out=None) -> None:
+def osaurus_one_script():
+    """Path to tools/osaurus_one.sh, or None when running from an install.
+
+    The wheel does not ship `tools/`, so this legitimately returns None and the
+    caller must degrade with a stated reason rather than inventing a path.
+    """
+    from lib.paths import repo_root
+
+    root = repo_root()
+    if root is None:
+        return None
+    script = root / "tools" / "osaurus_one.sh"
+    return script if script.is_file() else None
+
+
+def restart_server(out=None) -> bool:
+    """Restart osaurus through the ONE sanctioned path, or say why we could not.
+
+    This used to be hand-rolled here: `osascript` quit, `sleep 3`, then
+    `open -n -a osaurus`. Three things were wrong with it and all three were live.
+
+    `open -n` forces a NEW INSTANCE. That is exactly the second server
+    `tools/osaurus_one.sh` exists to prevent -- two servers do not queue, they each
+    load their own copy of the model, which is what produced the 0.1 tok/s decode and
+    the 423s cold start already recorded in CLAUDE.md. The quit was never verified
+    either, so the new instance could race a still-dying one for port 1337.
+
+    The script already does this correctly: it enumerates every osaurus pid, escalates
+    to SIGKILL, and polls until the port actually answers. Calling it here removes a
+    parallel reimplementation of an invariant the repo had already centralised.
+    """
     out = out or console
     import subprocess
 
+    script = osaurus_one_script()
+    if script is None:
+        out.print(
+            f"{WARN} tools/osaurus_one.sh not found (running from an install?) — "
+            "cannot enforce the single-server invariant; skipping restart"
+        )
+        return False
+    try:
+        proc = subprocess.run(
+            [str(script), "--restart"],
+            capture_output=True,
+            text=True,
+            timeout=OSAURUS_ONE_TIMEOUT,
+        )
+    except Exception as e:
+        # Deliberately broad. This function's contract is "return a bool, never
+        # raise": a failed restart must degrade one model, not abort a sweep that
+        # has already spent hours. A narrower catch let a subprocess error escape
+        # flush_between_models and take main() down with it.
+        out.print(f"{FAIL} osaurus_one.sh --restart could not run: {e}")
+        return False
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+        out.print(
+            f"{FAIL} osaurus_one.sh --restart failed (exit {proc.returncode})"
+            + (f": {detail[-1]}" if detail else "")
+        )
+        return False
+    out.print(f"{STEP} Server restarted via osaurus_one.sh")
+    return True
+
+
+def wait_until_model_serves(model: str, out=None, budget: int | None = None) -> bool:
+    """Poll a real completion until `model` answers, or the budget runs out.
+
+    Deliberately NOT a GET on the model-list endpoint. That is what this code used
+    to check, and it returns 200 as soon as the HTTP layer is up -- which is why the
+    sweep printed "Server restarted" and "Server: OK" and then failed every
+    completion. Listing models proves the server is listening; it proves nothing
+    about whether a 13-35GB model can be loaded and served.
+    """
+    out = out or console
+    # Resolved at CALL time. As a default argument this bound at import time, so
+    # patching RESTART_READY_BUDGET could not shorten it and the suite sat through
+    # the full wait -- the same import-time-alias defect fixed elsewhere in this repo.
+    budget = RESTART_READY_BUDGET if budget is None else budget
+    deadline = time.monotonic() + budget
+    last = ""
+    while time.monotonic() < deadline:
+        try:
+            r = call(model, [{"role": "user", "content": "ok"}], timeout=FLUSH_CALL_TIMEOUT)
+            if not r.get("error"):
+                return True
+            last = str(r.get("error"))
+        except Exception as e:  # transport down entirely
+            last = str(e)
+        time.sleep(RESTART_READY_GAP)
+    out.print(f"{WARN} {model} still not serving after {budget}s" + (f" ({last})" if last else ""))
+    return False
+
+
+def flush_between_models(prev_model: str, next_model: str, out=None) -> None:
+    """Warm `next_model` before it is timed, restarting the server if it will not.
+
+    Returns without raising in every path. A server that cannot be recovered is
+    announced loudly rather than left for the caller to discover as a column of
+    INFRA zeros -- the previous version printed nothing at all when its restart
+    checks were exhausted and ran the model anyway.
+    """
+    out = out or console
     out.print(f"{STEP} Flushing {prev_model} -> {next_model}...")
     try:
         r = call(next_model, [{"role": "user", "content": "ok"}], timeout=FLUSH_CALL_TIMEOUT)
-        if r.get("error"):
-            out.print(f"{WARN} Flush failed, attempting restart...")
-            try:
-                subprocess.run(["osascript", "-e", 'quit app "osaurus"'], capture_output=True)
-            except Exception:
-                pass
-            time.sleep(FLUSH_QUIT_WAIT)
-            try:
-                subprocess.run(["open", "-n", "-a", "osaurus"], capture_output=True)
-            except Exception:
-                pass
-            time.sleep(FLUSH_RESTART_WAIT)
-            for _ in range(RESTART_CHECK_RETRIES):
-                try:
-                    import requests
-
-                    with requests.Session() as s:
-                        _llm_host = os.environ.get("OLLAMA_BASE_URL", "http://localhost:1337")
-                        resp = s.get(f"{_llm_host}{API_TAGS}", timeout=RESTART_CHECK_TIMEOUT)
-                    if resp.status_code == 200:
-                        out.print(f"{STEP} Server restarted")
-                        break
-                except Exception:
-                    time.sleep(FLUSH_SETTLE_WAIT)
+        if not r.get("error"):
+            time.sleep(FLUSH_SETTLE_WAIT)
+            return
+        out.print(f"{WARN} Flush failed ({r.get('error')}), attempting restart...")
     except Exception as e:
-        out.print(f"{FAIL} Flush error: {e}")
+        out.print(f"{WARN} Flush error: {e}; attempting restart...")
+
+    if not restart_server(out=out):
+        out.print(
+            f"{FAIL} Could not restart the server before {next_model}. Its scores are "
+            "NOT quality results."
+        )
+        return
+    if not wait_until_model_serves(next_model, out=out):
+        out.print(
+            f"{FAIL} Server is up but {next_model} does not serve. Its scores are "
+            "NOT quality results."
+        )
+        return
     time.sleep(FLUSH_SETTLE_WAIT)
