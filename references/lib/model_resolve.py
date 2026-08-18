@@ -52,9 +52,30 @@ def fetch_roster(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> List[Dic
         resp = requests.get(f"{url}{API_TAGS}", timeout=ROSTER_TIMEOUT)
         if resp.status_code != 200:
             return []
-        return [m for m in resp.json().get("models", []) if m.get("model")]
+        entries = [m for m in resp.json().get("models", []) if m.get("model")]
     except Exception:
         return []
+    return _drop_uncorroborated(entries)
+
+
+def _drop_uncorroborated(entries: List[Dict]) -> List[Dict]:
+    """Remove roster entries with nothing on disk behind them.
+
+    Done HERE, at the boundary where the claim enters the process, rather than inside
+    `substitute_model`. Putting it in the selector made a pure function depend on the
+    filesystem: the same roster produced different answers on different machines, and
+    a unit test with synthetic model names silently started consulting real
+    directories. Filtering at the fetch keeps selection pure and gives every
+    downstream consumer -- substitution, the audit, the TUI -- the same trustworthy
+    list.
+
+    If NOTHING is corroborated the original list is returned unchanged. That case is
+    far more likely to mean the probe is broken than that the server is serving twelve
+    models which do not exist, and silently emptying the roster would turn a
+    diagnosable problem into "no models installed".
+    """
+    kept = [e for e in entries if disk_corroborated(e.get("model", ""))]
+    return kept if kept else entries
 
 
 def _parameter_billions(entry: Dict) -> float:
@@ -169,7 +190,14 @@ def audit_configured_models(
 
     ok = [f"{slot} = {model}" for slot, model in slots if model in installed]
     bad = [f"{slot} = {model}" for slot, model in slots if model not in installed]
-    return {"installed": ok, "missing": bad, "unreachable": False}
+    # A slot naming a model the roster advertises but disk does not back is NOT
+    # "installed" -- it is a call-time failure waiting to happen, and reporting it as
+    # healthy is exactly how a deleted model keeps its slot until someone runs the tool.
+    stale = sorted({
+        model for _slot, model in slots
+        if model in installed and not disk_corroborated(model)
+    })
+    return {"installed": ok, "missing": bad, "stale": stale, "unreachable": False}
 
 
 def format_audit(report: Dict[str, List[str]]) -> List[str]:
@@ -179,12 +207,64 @@ def format_audit(report: Dict[str, List[str]]) -> List[str]:
     the user the server is down, and a second message saying the roster could not be
     read is noise on top of a diagnosis they have.
     """
+    lines: List[str] = []
+    if report.get("stale"):
+        lines.append(
+            "the server advertises "
+            f"{len(report['stale'])} model(s) with nothing on disk behind them; its "
+            "roster is cached and a restart is overdue:"
+        )
+        lines.extend(f"  {name}" for name in report["stale"])
+        lines.append("Fix with: ./tools/osaurus_one.sh --restart")
     if report.get("unreachable") or not report.get("missing"):
-        return []
-    lines = [
+        return lines
+    lines.append(
         f"conf/config.toml names {len(report['missing'])} model(s) the server cannot "
         "serve; each falls back at call time with a warning:"
-    ]
+    )
     lines.extend(f"  {slot}" for slot in report["missing"])
     lines.append("Re-derive these from an eval sweep rather than editing them by hand.")
     return lines
+
+
+def disk_corroborated(model: str) -> bool:
+    """Does anything on this machine back up the roster's claim to serve `model`?
+
+    `/api/tags` is a CLAIM, not proof. osaurus keeps its roster in memory, so a model
+    deleted from disk stays advertised until the server is restarted -- and a request
+    for it then hangs or 404s rather than failing at selection time, which is the
+    point where a stand-in could still have been chosen. That happened twice in one
+    day, with qwen3.8-27b-4bit and nemotron.
+
+    Corroboration is `probe_context_window(model) is not None`, which is true by two
+    independent routes and false only when neither holds:
+
+        a config.json on disk        every model osaurus serves from MODELS_DIR
+        a documented context window  conf/models/<family>.toml, for on-device models
+
+    That second route is why this is not a plain file check. `foundation` is Apple's
+    on-device model: it has no config.json and never will, so "no files therefore
+    gone" would discard the single most reliable model in the roster. Measured:
+
+        foundation             no config.json, documented 4096  -> corroborated
+        gemma-4-12b-it-mxfp8   config.json found                -> corroborated
+        qwen3.8-27b-4bit       neither (deleted)                -> NOT corroborated
+    """
+    from lib.model_caps import probe_context_window
+
+    try:
+        return probe_context_window(model) is not None
+    except Exception:
+        # An unreadable probe is not evidence of absence. Keep the entry: wrongly
+        # dropping a servable model is worse than keeping a stale one, because the
+        # stale one still degrades loudly at call time.
+        return True
+
+
+def stale_roster_entries(roster: Iterable[Dict]) -> List[str]:
+    """Roster entries with nothing on disk behind them, i.e. a restart is overdue."""
+    return [
+        entry["model"]
+        for entry in (roster or [])
+        if entry.get("model") and not disk_corroborated(entry["model"])
+    ]

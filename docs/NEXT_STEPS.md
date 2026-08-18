@@ -116,7 +116,7 @@ estimator converges — run against the current slowest-wins code first, where i
 
 ---
 
-## P4. Corroborate roster claims with disk
+## ~~P4. Corroborate roster claims with disk~~ DONE 2026-08-17
 
 osaurus advertises deleted models from an in-memory cache until restarted, so `/api/tags`
 is a claim, not proof. Every consumer of `get_models` — substitution, audits, the TUI — can
@@ -125,7 +125,14 @@ in-roster-but-not-on-disk as "stale roster, restart osaurus" and exclude it from
 substitution candidates; treat an unfindable probe (foundation) as unknown-keep, never as
 missing.
 
-**Effort.** Half a day. Independent.
+**Done.** `disk_corroborated` accepts EITHER a config.json on disk OR a documented
+context window in `conf/models/`, which is what keeps `foundation` -- Apple's on-device
+model, no config.json, ever -- from being discarded as missing. Filtering happens in
+`fetch_roster`, not in `substitute_model`: the first attempt put it in the selector and
+made a pure function depend on the filesystem, so four existing unit tests with
+synthetic rosters began consulting real directories. An entirely uncorroborated roster
+is kept unchanged, because that far more likely means the probe broke than that the
+server is serving twelve models which do not exist.
 
 ---
 
