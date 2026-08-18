@@ -68,9 +68,14 @@ accumulating here as a graveyard of finished plans.
    experiment is available and has never been run. Probe `emits_reasoning` into
    `_capabilities`, then run one task both ways per model and record which wins.
 
-5. **`_estimate_timeout` uses one of the three quantities `ev` measures.** Prefill is
-   read back per model; decode and cold start use flat constants (8 tok/s, 120s)
-   while the measured values sit in `conf/eval_signals.json`.
+5. ~~**`_estimate_timeout` uses one of the three quantities `ev` measures.**~~
+   **FIXED 2026-08-18.** All three terms now read the measured per-model value when
+   one exists. The constants were wrong in both directions at once: nemotron decodes
+   ~20x slower than the 8 tok/s constant, and foundation loads ~75x faster than the
+   120s one. A 20k-char prompt now estimates 75s for gemma-4-12b and 60s for
+   foundation, against a flat 412s for an unmeasured model — which keeps the
+   deliberately pessimistic fallback, because guessing fast kills a request that was
+   working and guessing slow only costs waiting.
 
 6. **A contaminated measurement is permanent.** The recorders keep the SLOWEST
    observation, so a reading taken under memory pressure can never be displaced by a
@@ -92,12 +97,25 @@ accumulating here as a graveyard of finished plans.
    11 installed models before the corrected re-sweep, keeping the static probes
    (`family`, `vision`, `disk_bytes`, `generative`). Backup in the session scratchpad.
 
-   **Still open, and this is the actual fix:** keeping the slowest observation is the
-   wrong estimator. It cannot self-correct, and every contending process on the
-   machine biases it in one direction permanently. A median of the last N, or simply
-   the most recent reading taken while `osaurus_one.sh --check` passed, would recover
-   on its own. Until that changes, deleting by hand stays a manual step nobody is
-   reminded to take.
+   **FIXED 2026-08-18.** `eval/samples.py` keeps a bounded history per quantity, each
+   sample tagged with whether the machine was quiet when it was taken, and derives the
+   estimate as the MEDIAN OF RECENT CLEAN SAMPLES. A bad reading is outvoted instead
+   of enshrined: 0.68 tok/s recovers to 33.0 after three clean samples, where the old
+   min-keeping rule stayed at 0.68 forever.
+
+   Contention is gated on PRESSURE (swap, compressor), not on free memory — after a
+   sweep the page cache legitimately holds tens of GB and "available" drops to ~12GB
+   on a healthy box, so a headroom threshold would refuse to record on exactly the
+   machine you most want readings from. Thresholds calibrated against the two observed
+   states (leak: swap 12.88GB / compressor 29.3GB; healthy: 1.43GB / 5.1GB) and both
+   directions are pinned by tests.
+
+   Existing scalars migrate as a single sample tagged `legacy` and UNCLEAN — they were
+   recorded under the old rule and some during the leak, so they cannot be trusted as
+   baselines, but discarding them would throw away the only reading some models have.
+
+   The pessimism the old rule was protecting now lives where it belongs: in the
+   FALLBACK for a model nothing has measured.
 
 7. **The TUI has no config audit.** `ztools` can start clean while the config names an
    unservable model; `ev` checks this, the TUI does not.

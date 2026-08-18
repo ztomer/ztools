@@ -32,6 +32,7 @@ import uuid
 from lib.model_caps import CHARS_PER_TOKEN, probe_context_window
 from lib.osaurus_lib import call
 
+from eval.samples import add_sample, migrate_scalar
 from eval.signals import DEFAULT_EVAL_TIMEOUT, _load_eval_signals, _save_eval_signals
 
 # Prefill probe sizing. Big enough that per-request overhead does not dominate,
@@ -167,47 +168,46 @@ def measure_prefill_rate(model: str, host: str, port: int, transport=None) -> fl
 
 
 def _record_cold_start(model: str, seconds: float) -> None:
-    """Store how long this model takes to become ready, measured not assumed.
-
-    The SLOWEST observation wins, as with the rates: a timeout has to cover a
-    cold load from disk, not a lucky warm one.
-    """
-    if not seconds or seconds <= 0:
-        return
-    signals = _load_eval_signals()
-    caps = signals.setdefault(model, {}).setdefault("_capabilities", {})
-    previous = caps.get("cold_start_seconds")
-    caps["cold_start_seconds"] = round(max(previous, seconds) if previous else seconds, 2)
-    _save_eval_signals(signals)
+    """Store how long this model takes to become ready, measured not assumed."""
+    _record_sample("cold_start_seconds", model, seconds)
 
 
 def _record_decode_rate(model: str, rate: float) -> None:
-    """Store measured generation speed (tokens/sec) alongside the prefill rate.
+    """Store measured generation speed (tokens/sec)."""
+    _record_sample("decode_tokens_per_sec", model, rate)
 
-    Slowest observation wins, for the same reason: a timeout has to hold on a
-    bad run rather than a lucky one.
+
+def _record_sample(key: str, model: str, value: float) -> None:
+    """Add one observation of `key` for `model` and re-derive the estimate.
+
+    These three recorders used to keep the EXTREME observation -- slowest rate,
+    longest cold start. Right for a timeout, fatal for a measurement: the extreme is
+    exactly what a contended machine produces, and nothing could ever displace it. A
+    leaked daemon held 31GB for a day and the resulting numbers (nemotron at 0.68
+    tok/s against ~33 actual) became permanent, reaching conf/config.toml and a
+    default_model choice. Re-measuring on a healthy machine changed nothing.
+
+    Now: median of recent samples taken while the machine was quiet. A bad reading is
+    outvoted instead of enshrined. See eval/samples.py.
     """
-    if not rate or rate <= 0:
+    if not value or value <= 0:
         return
     signals = _load_eval_signals()
     caps = signals.setdefault(model, {}).setdefault("_capabilities", {})
-    previous = caps.get("decode_tokens_per_sec")
-    caps["decode_tokens_per_sec"] = round(min(previous, rate) if previous else rate, 2)
+    migrate_scalar(caps, key)
+    add_sample(caps, key, value)
     _save_eval_signals(signals)
 
 
 def record_prefill_rate(model: str, rate: float | None) -> None:
     """Store a measured prefill rate as a per-model capability.
 
-    Kept at the model level, not per task: it is a property of the model and the
-    host. The slowest observation wins, because a timeout has to be long enough
-    on a bad run, not merely on a lucky one.
+    Kept at the model level, not per task: it is a property of the model and the host.
     """
     if not rate or rate <= 0:
         return
+    _record_sample("prefill_chars_per_sec", model, rate)
     signals = _load_eval_signals()
     caps = signals.setdefault(model, {}).setdefault("_capabilities", {})
-    previous = caps.get("prefill_chars_per_sec")
-    caps["prefill_chars_per_sec"] = min(previous, rate) if previous else rate
     caps["prefill_samples"] = caps.get("prefill_samples", 0) + 1
     _save_eval_signals(signals)

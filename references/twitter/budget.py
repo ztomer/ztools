@@ -100,14 +100,40 @@ def _prefill_rate_for_model(model: str = None) -> float:
         return PREFILL_CHARS_PER_SEC
 
 
+def _measured_or(model: str, key: str, fallback: float) -> float:
+    """A per-model measurement if `ev` has one, else the pessimistic constant.
+
+    All three terms of the timeout are measured per model by `ev` and, until now,
+    only prefill was read back -- decode and cold start used flat constants while the
+    real values sat in conf/eval_signals.json. That made the estimate wrong in both
+    directions at once: nemotron decodes ~20x slower than the 8 tok/s constant, and
+    foundation loads ~75x faster than the 120s one.
+
+    The fallback stays deliberately pessimistic. Guessing slow makes the tool wait
+    longer than it needs to; guessing fast makes it kill a request that was working.
+    Those are not symmetric, and only one of them loses output.
+    """
+    try:
+        from lib.model_caps import recorded_capability
+
+        measured = recorded_capability(model or "", key)
+        return float(measured) if measured and float(measured) > 0 else fallback
+    except Exception:
+        return fallback
+
+
 def _estimate_timeout(prompt: str, model: str = None) -> int:
     """Dynamic request timeout scaled to input size + expected output.
 
     timeout = cold-start load + prefill(input) + decode(output), clamped to
     [MIN_TIMEOUT, MAX_TIMEOUT]. Larger timelines and slower models get more time
     instead of a flat cap that a big prompt on a 35B model blows through.
+
+    Every term is now the MEASURED per-model value where one exists.
     """
     prefill = len(prompt) / max(1, _prefill_rate_for_model(model))
-    decode = _output_tokens_for_model(model) / max(1, DECODE_TOKENS_PER_SEC)
-    estimate = COLD_START_BASE + prefill + decode
+    decode_rate = _measured_or(model, "decode_tokens_per_sec", DECODE_TOKENS_PER_SEC)
+    cold_start = _measured_or(model, "cold_start_seconds", COLD_START_BASE)
+    decode = _output_tokens_for_model(model) / max(1, decode_rate)
+    estimate = cold_start + prefill + decode
     return int(max(MIN_TIMEOUT, min(MAX_TIMEOUT, estimate)))

@@ -121,7 +121,7 @@ P5.
 
 ---
 
-## P3. Self-correcting estimator (backlog 6) + all three quantities in the timeout (backlog 5)
+## ~~P3. Self-correcting estimator + all three quantities in the timeout~~ DONE 2026-08-18
 
 One change closes both. `record_prefill_rate` / `_record_decode_rate` /
 `_record_cold_start` (`references/eval/prefill.py:169-213`) keep the **slowest** observation
@@ -139,7 +139,11 @@ decode and cold-start terms at `recorded_capability`, keeping the pessimistic fa
 **Verification.** Record one contaminated-slow sample then N good ones and assert the
 estimator converges — run against the current slowest-wins code first, where it stays stuck.
 
-**Effort.** ~1 day. Independent.
+**Done.** Both backlog items closed. `eval/samples.py` holds the history and the
+median-of-clean-samples estimator; `twitter/budget.py` reads all three measured
+quantities. The test that asserted "slowest observation wins" was rewritten rather
+than deleted — it pinned the defect, and the rewrite records why the old reasoning
+(right for a timeout, fatal for a measurement) was seductive.
 
 ---
 

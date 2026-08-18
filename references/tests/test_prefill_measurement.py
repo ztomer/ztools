@@ -109,15 +109,32 @@ class TestRecordedRateIsStoredPerModel:
         assert stored["model-a"]["_capabilities"]["prefill_chars_per_sec"] == 1322.0
         assert stored["model-a"]["_capabilities"]["prefill_samples"] == 1
 
-    def test_slowest_observation_wins(self, signals_file):
-        """A timeout has to be long enough on a bad run, not on a lucky one."""
+    def test_the_median_wins_not_the_slowest(self, signals_file):
+        """This test used to assert the SLOWEST observation won, on the reasoning
+        that a timeout must hold on a bad run rather than a lucky one.
+
+        That reasoning is right for a timeout and fatal for a measurement. The
+        extreme is exactly what a contended machine produces, and keeping it meant
+        nothing could ever displace it: a leaked daemon held 31GB for a day, and the
+        readings taken under it (nemotron 0.68 tok/s against ~33 actual) survived
+        every subsequent re-measurement on a healthy machine. They reached
+        conf/config.toml and a default_model choice, and the only cure was deleting
+        the file by hand.
+
+        The old assertion was not stale, it PINNED the defect. See eval/samples.py --
+        the estimate is now the median of recent samples taken while the machine was
+        quiet, so a bad reading is outvoted instead of enshrined. The pessimism that
+        rule was protecting lives where it belongs: in the FALLBACK for a model
+        nothing has measured (twitter/budget.py), which is still deliberately slow.
+        """
         eval_prefill.record_prefill_rate("model-a", 3000.0)
         eval_prefill.record_prefill_rate("model-a", 900.0)
         eval_prefill.record_prefill_rate("model-a", 2500.0)
 
         caps = json.loads(signals_file.read_text())["model-a"]["_capabilities"]
-        assert caps["prefill_chars_per_sec"] == 900.0
+        assert caps["prefill_chars_per_sec"] == 2500.0, "median of the three, not the min"
         assert caps["prefill_samples"] == 3
+        assert len(caps["prefill_chars_per_sec_samples"]) == 3
 
     def test_unmeasurable_rate_is_not_recorded(self, signals_file):
         eval_prefill.record_prefill_rate("model-a", None)
