@@ -8,6 +8,7 @@ import json
 import os
 import re
 
+from lib import gpu_lock
 from lib.config_getters import get_max_tokens_for_task
 from lib.logging_config import osaurus_logger as eval_logger
 from lib.mlx_lib import call as mlx_call
@@ -288,6 +289,10 @@ def run_eval(
         if "messages" not in task_cfg:
             console.print(f"{WARN} Skipping '{task_name}' (no messages key)")
             continue
+        # Progress, not duration: the lock's wedge ceiling runs from the last beat,
+        # so a healthy multi-hour run never loses the GPU to a peer while a hung one
+        # still does. A no-op when this process holds no lock. See lib/gpu_lock.py.
+        gpu_lock.heartbeat()
         # The single-server invariant is not established by having been true at
         # startup. osaurus_one.sh runs once before a model and then hours pass.
         contended = contended_server_warning(model, task_name)

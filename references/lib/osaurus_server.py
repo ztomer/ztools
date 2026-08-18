@@ -5,6 +5,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from . import gpu_lock
 from .logging_config import osaurus_logger as logger
 from .osaurus_models import DEFAULT_HOST, DEFAULT_PORT, get_models, is_server_running
 from .tui import die, err
@@ -65,7 +66,39 @@ def _is_osaurus_process(pid: int) -> bool:
     return False
 
 
-def _kill_osaurus():
+def _kill_osaurus() -> bool:
+    """Quit osaurus. Returns False, having done nothing, if it is not ours to quit.
+
+    THE SERVER IS A MACHINE-WIDE SINGLETON AND THIS FUNCTION IS NOT THE ONLY
+    CALLER. It runs from the twitter summariser, the weekend planner and
+    `check_server_or_die` -- ordinary tools whose reaction to a wedged-looking
+    server is to quit it and start a fresh one. That is correct on an idle
+    machine and destructive on this one: several agent sessions run here at once,
+    and quitting the server a peer is measuring against evicts its model
+    mid-measurement. The peer sees HTTP 499 request_cancelled and a decode rate
+    an order of magnitude low, which is indistinguishable from a genuinely slow
+    model -- and `eval/samples.py` records it as a CLEAN sample, because
+    `machine_is_uncontended()` gates on swap and compressor and cannot see the
+    GPU at all. It then enters that model's median as though the box were quiet.
+
+    So the quit REFUSES rather than queues. Queueing would be wrong here: these
+    callers are trying to recover a server for their own request, not to reserve
+    the GPU, and blocking a tweet summary for the hours an eval runs helps
+    nobody. Refusing degrades with a stated reason and leaves the peer's
+    measurement intact -- the honest failure. Our own lock does not count; an
+    eval that holds the GPU is entitled to restart the server it owns.
+    """
+    blocked_by = gpu_lock.foreign_holder()
+    if blocked_by:
+        logger.warning(
+            "refusing to quit osaurus: %s holds the GPU lock and is measuring "
+            "against this server. Quitting it would evict that run's model "
+            "mid-measurement, and the ruined timing would be filed as a CLEAN "
+            "sample -- the contention guard reads swap and compressor, not the GPU.",
+            blocked_by,
+        )
+        return False
+
     try:
         subprocess.run(
             [OSASCRIPT_CMD, OSASCRIPT_FLAG, OSASCRIPT_QUIT_CMD],
@@ -91,6 +124,7 @@ def _kill_osaurus():
         except (ProcessLookupError, ValueError, OSError) as e:
             logger.debug(f"Failed to kill process {pid}: {e}")
         PID_FILE.unlink(missing_ok=True)
+    return True
 
 
 def _osaurus_process_exists() -> bool:
@@ -132,7 +166,12 @@ def _wait_until_down(timeout: int = SHUTDOWN_WAIT) -> bool:
 
 
 def restart_server(app_path: str = DEFAULT_APP_PATH, wait: int = SERVER_WAIT) -> bool:
-    _kill_osaurus()
+    # A refused quit must not fall through to the relaunch. Launching while a peer
+    # still holds a live server is how a SECOND osaurus appears, and two of them on
+    # a machine sized for one is the original contamination: each loads its own
+    # copy of the weights, both swap, and both sets of numbers are ruined.
+    if not _kill_osaurus():
+        return False
     if not _wait_until_down():
         logger.warning(
             "osaurus still answering after quit; relaunching anyway may race with shutdown"
@@ -308,7 +347,12 @@ def check_server_or_die(
         host_str = host if host.startswith("http") else f"http://{host}:{port}"
         err(f"Osaurus server not reachable at {host_str}")
         print("  Install: brew install --cask osaurus")
-        print("  Start:   osaurus serve &>/dev/null &   (or launch the Osaurus.app GUI)")
+        # Deliberately NOT `osaurus serve &`. A hand-started server checks for no
+        # existing one and takes no GPU lock, so this advice was a recipe for two
+        # servers on a machine sized for one -- and that contention is invisible to
+        # the sample guard, which reads swap and compressor and not the GPU.
+        # osaurus_one.sh is idempotent and refuses under a peer's run.
+        print("  Start:   ./tools/osaurus_one.sh   (never start one by hand)")
         die("Start the server and retry.", code=1)
 
     if model:

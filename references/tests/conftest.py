@@ -326,6 +326,31 @@ def no_real_browsers_or_cookies(request):
             p.stop()
 
 
+@pytest.fixture(autouse=True)
+def _gpu_lock_never_touches_the_real_one(tmp_path, monkeypatch):
+    """Structural gate: no test may read or write the machine-wide GPU lock.
+
+    /tmp/mac-osaurus-gpu.lock is shared by every checkout, worktree and agent
+    session on this Mac, and a real eval may be holding it right now. Without
+    this redirect the suite would be coupled to that: tests of the quit-refusal
+    path would pass or fail depending on whether a colleague session happened to
+    be measuring, and a test that acquires would BLOCK a real eval -- the exact
+    harm the lock exists to prevent, caused by the tests for it.
+
+    Function-scoped so each test gets a clean, empty lock, and the module's
+    `_held` flag is reset on both sides: it is process-global, so one test that
+    acquires would otherwise leave every later test believing it holds the lock.
+    """
+    import lib.gpu_lock as gl
+
+    monkeypatch.setenv(gl.DIR_ENV, str(tmp_path / "gpu.lock"))
+    monkeypatch.delenv(gl.OWNER_ENV, raising=False)
+    gl._held = False
+    yield
+    gl._held = False
+    os.environ.pop(gl.OWNER_ENV, None)
+
+
 @pytest.fixture(autouse=True, scope="session")
 def _signals_files_stay_clean(tmp_path_factory):
     """Structural gate: `pytest` must not dirty tracked config.

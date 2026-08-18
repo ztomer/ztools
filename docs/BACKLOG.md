@@ -180,6 +180,16 @@ deferral without one gets silently re-litigated)
   `default_model` choice that excluded every model above 18GB. A measurement taken on
   a contended machine describes the contention. `tools/osaurus_one.sh --check` proves
   only that ONE osaurus is running — it says nothing about the other 314 processes.
+- **One healthy server is not the same as an idle one.** Counting processes says
+  nothing about who is USING the one it finds. Since several agent sessions now run
+  on this Mac concurrently, the GPU and the server are held under a machine-wide lock
+  (`/tmp/mac-osaurus-gpu.lock`), and `--check` reports the holder as well as the
+  count. Deliberately scoped: the lock is taken per EVAL RUN, not for a whole sweep.
+  `tools/sweep_models.sh` therefore yields it between models, and a peer that claims
+  it there makes the sweep's next model fail loudly with the holder's name rather
+  than contend silently. That is the intended trade — a sweep can run for days, and
+  a hold that long would starve every other tool on the machine and outlive any
+  wedge ceiling worth having.
 
 ---
 

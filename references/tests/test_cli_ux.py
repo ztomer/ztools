@@ -40,7 +40,13 @@ def test_server_down_dies_with_guidance(mock_osaurus_server, capsys):
     assert exit_mock.called
     assert "Osaurus server not reachable" in out
     assert "brew install --cask osaurus" in out
-    assert "osaurus serve" in out
+    # Points at osaurus_one.sh, NOT at `osaurus serve &`, which this assertion used
+    # to pin. A hand-started server checks for no existing one and takes no GPU
+    # lock, so following that advice while another agent session is mid-eval
+    # produces two servers on a machine sized for one -- contention the sample
+    # guard cannot see, since it reads swap and compressor and not the GPU.
+    assert "./tools/osaurus_one.sh" in out
+    assert "never start one by hand" in out
 
 
 def test_rename_dry_run_is_default(mock_osaurus_server, capsys, tmp_path):
