@@ -318,7 +318,7 @@ Still open:
   `json`, `image_rename*`) still rank nothing and should keep their place only as
   regression tests.
 
-## 9. Nothing in the eval suite ever sends an image
+## ~~9. Nothing in the eval suite ever sends an image~~ DONE 2026-08-18
 
 `image_rename` and `image_rename_mixed` send `IMAGE_RENAME_PROMPT` as TEXT. Ten of
 the eleven installed models score 100 on both, which measures only whether a model

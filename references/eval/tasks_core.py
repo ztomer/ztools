@@ -41,6 +41,7 @@ from lib.validators.text_validator_mixed import (
     validate_no_leak,
     validate_strict_schema,
 )
+from lib.validators.vision_validator import validate_image_description
 
 from eval.tasks_prompts import (
     CONTRADICTION_PHRASE,
@@ -60,6 +61,7 @@ from eval.tasks_prompts import (
     WEEKEND_USR_FIXED_MIXED,
     WEEKEND_USR_TRANSIENT_MIXED,
 )
+from eval.vision_fixtures import image_message
 
 
 def _extract_items_from_text(text: str) -> List[Dict]:
@@ -299,6 +301,25 @@ TASKS = {
         "validator": validate_factual_accuracy,
         "parse_json": False,
         "validator_kwargs": {"falsehood_phrases": FALSEHOOD_PHRASES},
+    },
+    "image_real": {
+        # The ONLY task in this suite that sends an actual image.
+        #
+        # `image_rename` and `image_rename_mixed` send their prompt as TEXT, so ten
+        # models scoring 100 on them proved only that a model can emit a
+        # filename-shaped string -- and `best_models.vlm` had to be marked UNMEASURED
+        # because of it. Building this task also revealed that rn's vision transport
+        # was silently dropping the image entirely, so every score here before
+        # 2026-08-18 would have been measuring hallucination.
+        #
+        # Same payload shape rn uses (OpenAI content parts + image_url data URIs), so
+        # a pass here is evidence about the path that actually ships.
+        "messages": image_message(
+            "Describe each of the three images separately, in a few words each. "
+            "Name the main colour and shape of each. No preamble."
+        ),
+        "validator": validate_image_description,
+        "parse_json": False,
     },
     "summarize_misattribution": {
         # Ranks models on attribution, which `summarize` cannot: its timeline gives

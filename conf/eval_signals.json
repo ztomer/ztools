@@ -320,8 +320,8 @@
       "cold_start_seconds": 0.85,
       "decode_tokens_per_sec": 68.01,
       "generative": true,
-      "prefill_chars_per_sec": 3671.5,
-      "prefill_samples": 1
+      "prefill_chars_per_sec": 3642.7,
+      "prefill_samples": 2
     },
     "detailed_json": {
       "p95_latency": 26.6,
@@ -363,6 +363,11 @@
       "parse_failures": 0,
       "samples": 19,
       "timeout": 900,
+      "total_retries": 1
+    },
+    "image_real": {
+      "parse_failures": 0,
+      "samples": 1,
       "total_retries": 1
     },
     "image_rename": {
@@ -500,7 +505,7 @@
       "family": "gemma4_unified",
       "generative": true,
       "prefill_chars_per_sec": 1487.8,
-      "prefill_samples": 1,
+      "prefill_samples": 2,
       "vision": true
     },
     "detailed_json": {
@@ -542,6 +547,13 @@
       "p95_latency": 4.8,
       "parse_failures": 0,
       "samples": 8,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "image_real": {
+      "p95_latency": 2.9,
+      "parse_failures": 0,
+      "samples": 1,
       "timeout": 900,
       "total_retries": 0
     },
@@ -887,8 +899,8 @@
       "disk_bytes": 8965299280,
       "family": "gemma4",
       "generative": true,
-      "prefill_chars_per_sec": 6461.5,
-      "prefill_samples": 1,
+      "prefill_chars_per_sec": 5808.5,
+      "prefill_samples": 2,
       "vision": true
     },
     "detailed_json": {
@@ -932,6 +944,13 @@
       "samples": 9,
       "timeout": 900,
       "total_retries": 1
+    },
+    "image_real": {
+      "p95_latency": 2.3,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
     },
     "image_rename": {
       "p95_latency": 4.8,
@@ -2754,7 +2773,7 @@
       "family": "qwen3_5",
       "generative": true,
       "prefill_chars_per_sec": 469.7,
-      "prefill_samples": 1,
+      "prefill_samples": 2,
       "vision": true
     },
     "detailed_json": {
@@ -2794,6 +2813,13 @@
     },
     "filename_mixed": {
       "p95_latency": 7.6,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "image_real": {
+      "p95_latency": 8.1,
       "parse_failures": 0,
       "samples": 1,
       "timeout": 900,

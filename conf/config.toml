@@ -125,12 +125,23 @@ filename = "foundation"
   # against gemma-4-12b's 651s). Four models tied at 100; foundation wins every
   # tiebreaker.
 vlm = "gemma-4-12b-it-mxfp8"
-  # STILL UNMEASURED, and still cannot be derived from this sweep. `image_rename` and
-  # `image_rename_mixed` send their prompt as TEXT -- no eval task feeds an actual
-  # image -- so those scores say only that a model can emit a filename-shaped string.
-  # This remains a static-probe pick (vision_config present in the model's config.json)
-  # among the vision-capable models with the best general competence.
-  # docs/NEXT_STEPS.md P2 builds a real image task through rn's own transport.
+  # VISION now VERIFIED, ranking still not possible -- and the distinction matters.
+  #
+  # The `image_real` task (added 2026-08-18) sends three real images through the same
+  # payload shape `rn` uses and scores keyword recall against their known contents.
+  # It is calibrated: the identical prompt with the images STRIPPED scores 0 on the
+  # same model that scores 100 with them attached, so it measures sight rather than
+  # vocabulary.
+  #
+  # gemma-4-12b-it-mxfp8, qwen3.8-27b-mxfp8 and gemma-4-e4b-it-8bit all score 100.
+  # That is a capability GATE, not a ranking: it proves a model can see and would
+  # catch a regression, but it cannot order three models that all pass. This slot is
+  # therefore still decided on general competence among models proven to have vision
+  # -- which is a better basis than the previous static config.json probe, but is not
+  # a measurement of vision QUALITY. Separating these three needs harder images.
+  #
+  # `foundation` cannot take images at all (it errors), so it is excluded here
+  # regardless of being the best model for the text filename path.
 
 # Timeouts are a FLOOR, not a ceiling: eval/signals.py takes
 # max(learned, configured, DEFAULT_EVAL_TIMEOUT, derived-from-measured-rates). These

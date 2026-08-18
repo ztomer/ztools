@@ -87,7 +87,7 @@ and `weekend_fixed_mixed` must go red at 91.
 
 ---
 
-## P2. A real image task through `rn`'s real path (backlog 9)
+## ~~P2. A real image task through `rn`'s real path~~ DONE 2026-08-18
 
 **Beyond the known gap.** `best_models.vlm` is UNMEASURED because no eval task sends an
 image. The deeper problem: nothing proves `query_vlm_for_filename`'s transport works at
@@ -104,7 +104,20 @@ checks expected keywords per image.
 failure, and run a text-only model (nemotron) and require a bad score. Keep the
 cross-image control as a permanent test so the validator cannot decay into shape-checking.
 
-**Effort.** ~1 day. Depends on P0.
+**Done.** The probe-first step earned its place: it found the transport was silently
+dropping every image, so the task built in the stated order would have measured
+hallucination. Transport fixed first (see MODEL_QUIRKS), then `image_real` added --
+three deterministic PIL-drawn fixtures with no text, sent as OpenAI content parts
+through the shape `rn` uses, scored on keyword recall against known contents.
+
+Calibrated as required: the identical prompt with images STRIPPED scores 0 on the same
+model that scores 100 with them attached. The cross-image control is a permanent test.
+
+Outcome to be precise about: it is a capability GATE, not a ranking. gemma-4-12b,
+qwen3.8-27b-mxfp8 and gemma-4-e4b all score 100, so it proves vision and would catch a
+regression, but it cannot order models that all pass. `best_models.vlm` says exactly
+that now instead of UNMEASURED. Separating them needs harder images -- a candidate for
+P5.
 
 ---
 
