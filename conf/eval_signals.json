@@ -1,13 +1,52 @@
 {
   "bonsai-27b-ternary-jang": {
     "_capabilities": {
-      "cold_start_seconds": 7.48,
-      "decode_tokens_per_sec": 11.25,
+      "cold_start_seconds": 4.29,
+      "cold_start_seconds_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 7.48
+        },
+        {
+          "clean": true,
+          "ts": 1787070108.2,
+          "v": 4.2939
+        }
+      ],
+      "decode_tokens_per_sec": 31.47,
+      "decode_tokens_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 11.25
+        },
+        {
+          "clean": true,
+          "ts": 1787070110.3,
+          "v": 31.4684
+        }
+      ],
       "disk_bytes": 8027892216,
       "family": "qwen3_5",
       "generative": true,
-      "prefill_chars_per_sec": 703.1,
-      "prefill_samples": 1,
+      "prefill_chars_per_sec": 651.1,
+      "prefill_chars_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 703.1
+        },
+        {
+          "clean": true,
+          "ts": 1787070141.0,
+          "v": 651.1
+        }
+      ],
+      "prefill_samples": 2,
       "vision": true
     },
     "detailed_json": {
@@ -37,6 +76,13 @@
       "samples": 9,
       "timeout": 900,
       "total_retries": 5
+    },
+    "filename_injection": {
+      "p95_latency": 35.0,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
     },
     "filename_leak": {
       "p95_latency": 95.9,
@@ -896,7 +942,7 @@
   },
   "gemma-4-e2b-it-8bit": {
     "_capabilities": {
-      "cold_start_seconds": 9.3,
+      "cold_start_seconds": 8.7,
       "cold_start_seconds_samples": [
         {
           "clean": false,
@@ -908,9 +954,14 @@
           "clean": true,
           "ts": 1787068731.6,
           "v": 9.3016
+        },
+        {
+          "clean": true,
+          "ts": 1787070184.4,
+          "v": 8.094
         }
       ],
-      "decode_tokens_per_sec": 98.96,
+      "decode_tokens_per_sec": 104.56,
       "decode_tokens_per_sec_samples": [
         {
           "clean": false,
@@ -922,12 +973,17 @@
           "clean": true,
           "ts": 1787068732.3,
           "v": 98.9576
+        },
+        {
+          "clean": true,
+          "ts": 1787070185.0,
+          "v": 110.1724
         }
       ],
       "disk_bytes": 5899567172,
       "family": "gemma4",
       "generative": true,
-      "prefill_chars_per_sec": 20578.2,
+      "prefill_chars_per_sec": 20315.95,
       "prefill_chars_per_sec_samples": [
         {
           "clean": false,
@@ -939,9 +995,14 @@
           "clean": true,
           "ts": 1787068733.3,
           "v": 20578.2
+        },
+        {
+          "clean": true,
+          "ts": 1787070186.0,
+          "v": 20053.7
         }
       ],
-      "prefill_samples": 2,
+      "prefill_samples": 3,
       "vision": true
     },
     "detailed_json": {
@@ -971,6 +1032,13 @@
       "samples": 7,
       "timeout": 900,
       "total_retries": 1
+    },
+    "filename_injection": {
+      "p95_latency": 0.2,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
     },
     "filename_leak": {
       "p95_latency": 0.4,
@@ -1474,13 +1542,52 @@
   },
   "muse-glimmer-30b-jang_6m": {
     "_capabilities": {
-      "cold_start_seconds": 17.98,
-      "decode_tokens_per_sec": 18.22,
+      "cold_start_seconds": 10.87,
+      "cold_start_seconds_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 17.98
+        },
+        {
+          "clean": true,
+          "ts": 1787070197.3,
+          "v": 10.8678
+        }
+      ],
+      "decode_tokens_per_sec": 17.28,
+      "decode_tokens_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 18.22
+        },
+        {
+          "clean": true,
+          "ts": 1787070201.0,
+          "v": 17.2767
+        }
+      ],
       "disk_bytes": 27566984848,
       "family": "muse_glimmer",
       "generative": true,
-      "prefill_chars_per_sec": 700.6,
-      "prefill_samples": 1,
+      "prefill_chars_per_sec": 410.7,
+      "prefill_chars_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 700.6
+        },
+        {
+          "clean": true,
+          "ts": 1787070249.7,
+          "v": 410.7
+        }
+      ],
+      "prefill_samples": 2,
       "vision": true
     },
     "detailed_json": {
@@ -1510,6 +1617,13 @@
       "samples": 5,
       "timeout": 900,
       "total_retries": 1
+    },
+    "filename_injection": {
+      "p95_latency": 64.8,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
     },
     "filename_leak": {
       "p95_latency": 32.0,
@@ -2219,13 +2333,52 @@
   },
   "ornith-1.0-9b-mxfp8": {
     "_capabilities": {
-      "cold_start_seconds": 6.46,
-      "decode_tokens_per_sec": 35.49,
+      "cold_start_seconds": 4.09,
+      "cold_start_seconds_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 6.46
+        },
+        {
+          "clean": true,
+          "ts": 1787070319.4,
+          "v": 4.0938
+        }
+      ],
+      "decode_tokens_per_sec": 28.97,
+      "decode_tokens_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 35.49
+        },
+        {
+          "clean": true,
+          "ts": 1787070321.6,
+          "v": 28.9716
+        }
+      ],
       "disk_bytes": 10146782760,
       "family": "qwen3_5",
       "generative": true,
-      "prefill_chars_per_sec": 1643.1,
-      "prefill_samples": 2,
+      "prefill_chars_per_sec": 1288.2,
+      "prefill_chars_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 1643.1
+        },
+        {
+          "clean": true,
+          "ts": 1787070337.2,
+          "v": 1288.2
+        }
+      ],
+      "prefill_samples": 3,
       "vision": true
     },
     "detailed_json": {
@@ -2254,6 +2407,13 @@
       "samples": 9,
       "timeout": 900,
       "total_retries": 3
+    },
+    "filename_injection": {
+      "p95_latency": 51.9,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
     },
     "filename_leak": {
       "p95_latency": 28.6,
@@ -3485,6 +3645,14 @@
       "parse_failures": 0,
       "samples": 1,
       "total_retries": 0
+    }
+  },
+  "raptor-v1-26b-a4b-vl-jang": {
+    "_capabilities": {
+      "disk_bytes": 12971234019,
+      "family": "gemma4",
+      "generative": true,
+      "vision": true
     }
   }
 }

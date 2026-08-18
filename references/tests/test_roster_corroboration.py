@@ -27,23 +27,44 @@ class TestTheDiscriminatorSeparatesTheThreeCases:
     on-device model and a deleted one, every assertion below would be vacuous."""
 
     def test_a_model_with_a_config_on_disk_is_corroborated(self):
-        with patch("lib.model_caps.probe_context_window", return_value=131072):
+        with (
+            patch("lib.model_caps.model_config_path", return_value="/models/g/config.json"),
+            patch("lib.model_caps._documented_context_window", return_value=None),
+        ):
             assert mr.disk_corroborated("gemma-4-12b-it-mxfp8") is True
 
     def test_an_on_device_model_with_no_files_is_still_corroborated(self):
         """foundation: no config.json, but conf/models/foundation.toml documents 4096.
         Dropping it would be the worst possible outcome of this check."""
-        with patch("lib.model_caps.probe_context_window", return_value=4096):
+        with (
+            patch("lib.model_caps.model_config_path", return_value=None),
+            patch("lib.model_caps._documented_context_window", return_value=4096),
+        ):
             assert mr.disk_corroborated("foundation") is True
 
     def test_a_model_with_neither_is_not_corroborated(self):
-        with patch("lib.model_caps.probe_context_window", return_value=None):
+        with (
+            patch("lib.model_caps.model_config_path", return_value=None),
+            patch("lib.model_caps._documented_context_window", return_value=None),
+        ):
             assert mr.disk_corroborated("qwen3.8-27b-4bit") is False
+
+    def test_an_embedding_model_with_no_context_window_is_corroborated(self):
+        """The false positive the first version shipped. `potion-base-4m` has a
+        config.json and 15MB on disk but no max_position_embeddings, and was dropped
+        from the roster as absent -- the exact mistake this function's docstring
+        promises not to make. Corroboration asks "is it on disk", not "does it report
+        a context window"."""
+        with (
+            patch("lib.model_caps.model_config_path", return_value="/models/potion/config.json"),
+            patch("lib.model_caps._documented_context_window", return_value=None),
+        ):
+            assert mr.disk_corroborated("potion-base-4m") is True
 
     def test_an_unreadable_probe_keeps_the_entry(self):
         """Absence of evidence is not evidence of absence. Wrongly dropping a servable
         model is worse than keeping a stale one, which still fails loudly later."""
-        with patch("lib.model_caps.probe_context_window", side_effect=OSError("boom")):
+        with patch("lib.model_caps.model_config_path", side_effect=OSError("boom")):
             assert mr.disk_corroborated("anything") is True
 
 
@@ -54,11 +75,11 @@ class TestStaleEntriesAreIdentified:
         return None if name == "deleted-model" else 4096
 
     def test_only_the_uncorroborated_entry_is_stale(self):
-        with patch("lib.model_caps.probe_context_window", side_effect=self._probe):
+        with patch("lib.model_caps.model_config_path", side_effect=self._probe):
             assert mr.stale_roster_entries(self.ROSTER) == ["deleted-model"]
 
     def test_a_fully_backed_roster_reports_nothing(self):
-        with patch("lib.model_caps.probe_context_window", return_value=4096):
+        with patch("lib.model_caps.model_config_path", return_value="/x/config.json"):
             assert mr.stale_roster_entries(self.ROSTER) == []
 
     def test_an_empty_roster_is_not_an_error(self):
@@ -85,14 +106,14 @@ class TestFilteringHappensAtTheFetchBoundary:
         return None if name == "qwen3.8-27b-4bit" else 262144
 
     def test_a_stale_entry_is_dropped_before_anyone_sees_it(self):
-        with patch("lib.model_caps.probe_context_window", side_effect=self._probe):
+        with patch("lib.model_caps.model_config_path", side_effect=self._probe):
             kept = mr._drop_uncorroborated(self.ROSTER)
         assert [e["model"] for e in kept] == ["qwen3.8-27b-mxfp8"]
 
     def test_substitution_downstream_therefore_cannot_pick_it(self):
         """The property that matters, exercised through the real path: filter first,
         then select."""
-        with patch("lib.model_caps.probe_context_window", side_effect=self._probe):
+        with patch("lib.model_caps.model_config_path", side_effect=self._probe):
             roster = mr._drop_uncorroborated(self.ROSTER)
         pick, reason = mr.substitute_model("qwen3.8-27b-4bit", roster)
         assert pick == "qwen3.8-27b-mxfp8"
@@ -101,7 +122,7 @@ class TestFilteringHappensAtTheFetchBoundary:
     def test_substitute_model_itself_stays_pure(self):
         """It must NOT consult the filesystem. Given a roster it uses that roster,
         whatever is or is not on this machine."""
-        with patch("lib.model_caps.probe_context_window",
+        with patch("lib.model_caps.model_config_path",
                    side_effect=AssertionError("substitute_model touched the disk")):
             pick, _ = mr.substitute_model("gone", [{"model": "only-option"}])
         assert pick == "only-option"
@@ -110,7 +131,7 @@ class TestFilteringHappensAtTheFetchBoundary:
         """Far likelier to mean the probe is broken than that the server is serving
         twelve models which do not exist. Emptying the roster would turn a diagnosable
         problem into 'no models installed'."""
-        with patch("lib.model_caps.probe_context_window", return_value=None):
+        with patch("lib.model_caps.model_config_path", return_value=None), patch("lib.model_caps._documented_context_window", return_value=None):
             kept = mr._drop_uncorroborated(self.ROSTER)
         assert kept == self.ROSTER
 

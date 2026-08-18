@@ -274,6 +274,10 @@ def disk_corroborated(model: str) -> bool:
         a config.json on disk        every model osaurus serves from MODELS_DIR
         a documented context window  conf/models/<family>.toml, for on-device models
 
+    Deliberately NOT "the model reports a context window": an embedding model has
+    files and a config but no max_position_embeddings, and treating that as absent
+    drops a model that is plainly installed.
+
     That second route is why this is not a plain file check. `foundation` is Apple's
     on-device model: it has no config.json and never will, so "no files therefore
     gone" would discard the single most reliable model in the roster. Measured:
@@ -282,10 +286,19 @@ def disk_corroborated(model: str) -> bool:
         gemma-4-12b-it-mxfp8   config.json found                -> corroborated
         qwen3.8-27b-4bit       neither (deleted)                -> NOT corroborated
     """
-    from lib.model_caps import probe_context_window
+    from lib.model_caps import _documented_context_window, model_config_path
 
     try:
-        return probe_context_window(model) is not None
+        # "Has a config.json on disk" OR "is documented in conf/models/". NOT
+        # `probe_context_window is not None`, which is how this was first written and
+        # is a different question: it additionally requires the config to CONTAIN a
+        # context window. `potion-base-4m` is an embedding model -- 15MB and a
+        # config.json on disk, no max_position_embeddings -- so it was dropped from
+        # the roster as absent. Exactly the false positive this function's own
+        # docstring promises not to make.
+        # bool(), not the raw `or` result: the annotation says bool, and returning
+        # 4096 or None instead would make `is True` / `is False` checks lie.
+        return bool(model_config_path(model) is not None or _documented_context_window(model))
     except Exception:
         # An unreadable probe is not evidence of absence. Keep the entry: wrongly
         # dropping a servable model is worse than keeping a stale one, because the
