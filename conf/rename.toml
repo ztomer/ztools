@@ -3,20 +3,15 @@ tesseract_cmd = "/opt/homebrew/bin/tesseract"
 mlx_models_dir = "~/MLXModels/mlx-community"
 llm_url = "http://localhost:1337"
 
-# Vision models for the image-description path, tried in order. Both previous entries
-# (gemma-4-26b-a4b-it-4bit, qwen3.5-27b-claude-4.6-opus-distilled-mlx-4bit) had been
-# uninstalled for months and nothing reported it, because audit_configured_models only
-# read conf/config.toml. It reads this file now.
+# NOTE: `rn` does NOT keep its own vision or filename preference lists.
 #
-# Both of these carry a vision_config and are installed. NOTE that no eval task feeds a
-# real image, so this order is a static-probe judgement, not a measurement -- see
-# docs/BACKLOG.md.
-vlm_preferred = [
-  "gemma-4-12b-it-mxfp8",
-  "qwen3.8-27b-mxfp8",
-]
-
-text_preferred = [
-  "gemma-4-e2b-it-8bit",
-  "foundation",
-]
+# There used to be `vlm_preferred` and `text_preferred` here. Nothing read them --
+# the vision path takes `best_models.vlm` (cli.py) and the filename path takes
+# `get_filename_models()` (llm.py), both DERIVED from the eval sweep and audited
+# against the live roster. A hand-typed list shadowing a derived one is the
+# parallel-pipeline drift this repo keeps paying for, and these two had already
+# rotted once: both entries named models uninstalled for months.
+#
+# `relevance_check_models` is the one model key this file may legitimately carry.
+# Leave it UNSET unless you are deliberately overriding: unset it falls back to the
+# same sweep-derived filename chain, which cannot rot silently.

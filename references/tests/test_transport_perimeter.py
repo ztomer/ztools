@@ -9,7 +9,8 @@ tool was inside, and the consequences were live rather than theoretical:
     distinguish from "the model had no opinion". The relevance feature was dead and
     silent. Verified against the live server before the fix, and after.
 
-  * `conf/rename.toml` named two more uninstalled models under `vlm_preferred`.
+  * `conf/rename.toml` named two more uninstalled models under `vlm_preferred`
+    (since deleted -- nothing read them; see the file's own note).
     `audit_configured_models` only read `conf/config.toml`, so neither `ev` nor the
     TUI audit could see them. An audit that covers only the file you remembered is
     how drift stays invisible in the file you did not.
@@ -88,19 +89,32 @@ class TestEveryConfigFileNamingModelsIsAudited:
 
         with (
             patch("lib.model_resolve._sidecar_model_slots",
-                  return_value=[("rename.toml:vlm_preferred[0]", "long-gone-model")]),
+                  return_value=[("rename.toml:relevance_check_models[0]", "long-gone-model")]),
             patch("lib.config.get_best_models", return_value={}),
             patch("lib.config.get_filename_models", return_value=[]),
         ):
             report = audit_configured_models(["live-model"])
         assert any("long-gone-model" in m for m in report["missing"]), report
 
-    def test_the_slot_name_says_which_file_to_edit(self):
-        """`best_models.json` and `rename.toml:vlm_preferred[0]` live in different
-        files; a bare model name would not tell you where to go."""
-        from lib.model_resolve import _sidecar_model_slots
+    def test_the_slot_name_says_which_file_to_edit(self, tmp_path, monkeypatch):
+        """`best_models.json` and a sidecar slot live in different files; a bare
+        model name would not tell you where to go.
 
-        for slot, _model in _sidecar_model_slots():
+        Driven from a SYNTHETIC config, not the real one. The previous version
+        looped over `_sidecar_model_slots()` directly, so it asserted nothing at all
+        on the day conf/rename.toml stopped carrying model keys -- an empty loop
+        body is a green test that checks nothing. The count assertion below is what
+        keeps it honest.
+        """
+        import lib.model_resolve as mr
+
+        monkeypatch.setattr(mr, "SIDECAR_MODEL_KEYS", {"fake.toml": ("models",)})
+        monkeypatch.setattr("lib.config_toml.load_config", lambda p: {"models": ["a", "b"]})
+        monkeypatch.setattr("lib.paths.conf_path", lambda *a: tmp_path / "fake.toml")
+
+        slots = mr._sidecar_model_slots()
+        assert len(slots) == 2, f"nothing to check: {slots!r}"
+        for slot, _model in slots:
             assert ".toml:" in slot, f"{slot!r} does not name its file"
 
     # NOTE: no "the real configs are currently clean" test here. It needs a live

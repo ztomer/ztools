@@ -121,47 +121,41 @@ deferral without one gets silently re-litigated)
   the thing keeping this bounded. Replace it the moment an on-device model that
   resists exists.
 
-- **Taxes eval import, requested 2026-08-18.** The Taxes project offers three
-  pipelines whose verdict is ARITHMETIC rather than a keyword rubric — drivers that
-  must sum to a computed delta, citations that must trace to a fact id, flags that
-  must be a subset of deterministic ones. That does not saturate, which is the
-  problem this suite has. Owner accepted the cross-project duplication knowingly
-  ("we're a standalone project"), so ztools takes a SNAPSHOT, not a live dependency.
+- **The grounded Taxes tasks are wired — the winnability gate is the load-bearing
+  part.** `taxes_{yoy_narrative,qa,slip_qa}` now register alongside the rubric three,
+  scored by `lib/validators/taxes_grounded.py` against each snapshot's `grounding`
+  block rather than a keyword rubric.
 
-  Two conditions, agreed with them: the existing `rubric` stays alongside the new
-  `grounding` block (disagreement between the two is signal), and `grounding` carries
-  the INPUTS — fact pack and computed tax effects — so the verdict is recomputed here
-  rather than imported. A boolean that cannot be rechecked is exactly the
-  trusted-not-verified number this repo spent three days undoing.
+  Kept here because it records a CLASS, not a plan: these three carry NO `rubric`, so
+  grounding is the only signal and a wrong check has nothing to disagree with it.
+  `test_taxes_grounded.py` therefore builds every ideal answer FROM the grounding
+  block and asserts it scores exactly 100 before any model score is trusted, and five
+  mutants of the validator each fail a DIFFERENT named test — the instrument is
+  calibrated, not assumed. Two things worth carrying:
 
-  **Export DELIVERED 2026-08-18** — `taxes_{yoy_narrative,qa,slip_qa}.sanitized.json`
-  are vendored. Each carries `grounding.kind` and `grounding.rule` (the check in
-  prose, so it need not be reverse-engineered from field names) plus a `scale_factor`
-  recording the sanitisation. The originals' `rubric` is byte-for-byte untouched;
-  `model_hint` is dropped from all six, since a stale field nothing reads is still a
-  trap for whoever assumes it does.
+  - The first mutant sweep was run without `PYTHONDONTWRITEBYTECODE` and reported the
+    same two failures for two different mutants — the bytecode cache again, exactly
+    the failure this repo already recorded once for the mutation harness. A mutation
+    result that repeats across different mutants is a cache artifact, not a finding.
+  - The reconciliation rule grades the MODEL's `drivers[].delta_cad` against the
+    attribution block; it is not a self-consistency check on the reference data. An
+    earlier paraphrase in this file had it the second way. With only 3-6 drivers
+    allowed against 12 tax effects plus `rules_effect_cad`, a winnable answer MUST
+    group the remainder into one driver whose value is a SUM — which is why the
+    validator accepts subset sums and not just single values.
 
-  **NOT YET WIRED, and I was wrong about why.** I told them the loader would pick the
-  files up with no code change. It will not: `_register_taxes_tasks`
-  (`references/eval/tasks_core.py:378`) iterates an explicit `validators` dict of the
-  three original names, not a directory scan. They checked before reshaping anything
-  and corrected me. Remaining work here:
+- **`vlm_preferred` / `text_preferred` deleted from `conf/rename.toml`, not wired.**
+  Nothing read them: the vision path takes `best_models.vlm` and the filename path
+  `get_filename_models()`, both derived from the eval sweep. Wiring a hand-typed list
+  over a measured one is the parallel-pipeline drift class, and these had already
+  rotted once. `relevance_check_models` stays as the one legitimate sidecar key, so
+  `SIDECAR_MODEL_KEYS` keeps its reason to exist.
 
-  1. Write three validators against the grounding blocks:
-     - `yoy_narrative`  `arithmetic_reconciliation` — `sum(attribution.drivers[].tax_effect_cad) + attribution.rules_effect_cad == attribution.total_tax_delta_cad` within `tolerance_abs_cad`/`tolerance_pct`
-     - `qa`             `citation_and_number_grounding` — every cited id in `known_fact_ids`, every number in `known_amounts`
-     - `slip_qa`        `flag_subset_and_number_grounding` — highlighted ids a subset of `known_flag_ids`
-  2. Add the three names to the `validators` dict so they register.
-  3. Apply the winnability gate: build each task's ideal answer FROM its own
-     `grounding` block and assert it scores 100, before trusting any model score.
-
-  One caution for whoever does it: unlike the original three these carry NO `rubric`,
-  so grounding is the only signal. If the arithmetic check is wrong there is no second
-  opinion to disagree with it — which is exactly the argument for step 3.
-- **`vlm_preferred` / `text_preferred` in `conf/rename.toml` are audited but unread.**
-  No production code consults them; only `audit_configured_models` does. Either wire
-  them up or delete them — an audited key nothing uses trains the reader to ignore the
-  audit.
+  The class worth keeping: deleting them emptied `_sidecar_model_slots()`, which
+  turned `test_the_slot_name_says_which_file_to_edit` into a loop over nothing — a
+  GREEN test asserting exactly zero things. It now runs against a synthetic config
+  and asserts the slot count first. **Any test whose only assertion is inside a `for`
+  over production config goes vacuous the day that config changes.**
 
 **Standing lessons this session kept re-teaching**
 

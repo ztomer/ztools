@@ -153,13 +153,17 @@ def substitute_model(
     )
 
 
-#: conf/<tool>.toml keys that name model tags. `rn` keeps its own preferences here
-#: rather than in conf/config.toml, so the audit did not look at them -- and both
-#: entries under `vlm_preferred` named models that had been uninstalled for months
-#: with nothing reporting it. An audit that covers only the file you remembered is
-#: how drift stays invisible in the file you did not.
+#: conf/<tool>.toml keys that name model tags. Per-tool configs can name models the
+#: audit would otherwise never look at -- `vlm_preferred` and `text_preferred` in
+#: rename.toml named models uninstalled for months with nothing reporting it, because
+#: the audit read only conf/config.toml. An audit that covers only the file you
+#: remembered is how drift stays invisible in the file you did not.
+#:
+#: Those two keys are gone now (nothing read them; the picks are sweep-derived), so
+#: `relevance_check_models` is the only sidecar key left. Keep this mechanism: it is
+#: what makes the NEXT per-tool model key auditable on the day someone adds it.
 SIDECAR_MODEL_KEYS = {
-    "rename.toml": ("vlm_preferred", "text_preferred", "relevance_check_models"),
+    "rename.toml": ("relevance_check_models",),
 }
 
 

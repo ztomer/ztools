@@ -22,6 +22,11 @@ from lib.validators.json_validator import (
     validate_detailed_json,
     validate_mixed_signal,
 )
+from lib.validators.taxes_grounded import (
+    validate_taxes_qa,
+    validate_taxes_slip_qa,
+    validate_taxes_yoy_narrative,
+)
 from lib.validators.taxes_validator import (
     validate_taxes_anomalies,
     validate_taxes_audit_readiness,
@@ -387,6 +392,12 @@ def _register_taxes_tasks() -> None:
         "anomalies": validate_taxes_anomalies,
         "audit_readiness": validate_taxes_audit_readiness,
         "synthesis": validate_taxes_synthesis,
+        # The grounded three. These carry a `grounding` block and no `rubric`,
+        # so their verdict is arithmetic and set-membership rather than keyword
+        # hits -- which is why they were imported: the rubric tasks saturate.
+        "yoy_narrative": validate_taxes_yoy_narrative,
+        "qa": validate_taxes_qa,
+        "slip_qa": validate_taxes_slip_qa,
     }
     for name, validator in validators.items():
         snapshot = eval_tasks_path("data", "taxes", f"taxes_{name}.sanitized.json")
