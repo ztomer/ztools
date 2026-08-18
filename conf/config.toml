@@ -110,7 +110,7 @@ json = "gemma-4-12b-it-mxfp8"
   # gemma-4-e4b-it-8bit -- the group is fully saturated now that weekend_fixed_mixed no
   # longer punishes obedience, so this slot is decided ENTIRELY by the tiebreakers:
   # fewest zeros across all 24 (1, vs 2) and then the highest overall mean (87.3).
-  # Worth knowing that this slot no longer discriminates; see docs/NEXT_STEPS.md P5.
+  # Worth knowing that this slot no longer discriminates; see docs/BACKLOG.md, "Still open from that phase".
 summarize = "gemma-4-e2b-it-8bit"
   # 89.5 on the tw group vs 81.3 for the runner-up, and it beats models six times its
   # size. A 5.9GB model taking this slot is surprising enough that it was re-run three

@@ -3,9 +3,15 @@
 One forward-looking file. Completed work is pruned to git history rather than
 accumulating here as a graveyard of finished plans.
 
+The numbered sections further down are the exception, kept deliberately: each records
+a DEFECT CLASS and how it was caught, not a plan that was executed. They are reference
+material for the next investigation, and the standing lessons above are the index into
+them. If a section stops teaching something and merely records that work happened,
+delete it.
+
 ---
 
-## Current state, 2026-08-16
+## Current state, 2026-08-18
 
 **Done and committed**
 
@@ -20,17 +26,10 @@ accumulating here as a graveyard of finished plans.
 | — | Sweep harness shipped, truncation visible | `1d9836c` |
 | — | Mutation harness, and the bytecode bug that made its first numbers wrong | `ea0733a`, `137b9fc` |
 | — | Reasoning overrun diagnosed instead of mislabelled | `d22b563` |
-| 1 | The sweep: 11 models x 23 tasks, `best_models` re-derived from it | this commit |
+| 1 | The sweep: 11 models x 23 tasks, `best_models` re-derived from it | `83990b9` |
+| — | P0-P5 phase: rn inside the transport perimeter, winnable tasks, a real image task, self-correcting estimator, disk-corroborated roster, adversarial tasks | `d9f5a7a`..`82a9556` |
 
-**Open, in rough priority order**
-
-2. ~~Wire the streaming overrun guard into the eval.~~ **Done.** `eval/run.py` passes
-   `stream_guard=True`, and the guard is wired INSIDE `osaurus_lib.call` rather than
-   replacing the transport, so quirks, JSON extraction, model substitution and the
-   Foundation fallback all still apply. A stream error falls through to the blocking
-   request, because that path is the one that knows how to substitute a deleted model
-   and how to fall back on-device. Verified live end to end: bonsai reasons for ~1460
-   chars and answers, uncut.
+**Open**
 
 3. **Mutation survivors.** `json_validator.py` is down from 54 survivors to 28
    (detection 53% -> 73%), and fixing them found a live scorer defect (see the
@@ -61,83 +60,44 @@ accumulating here as a graveyard of finished plans.
    it returned True from the scan above and exited. Killing those needed an item whose
    second key is deliberately NOT a detail field.
 
-4. **Make "does thinking help?" a measured question.** Right now nothing records
-   whether a model answered better with reasoning than without. The knob exists --
-   `"default_chat_template_kwargs": {"enable_thinking": false}` in a model's own
-   `generation_config.json`, which osaurus reads and no installed model sets -- so the
-   experiment is available and has never been run. Probe `emits_reasoning` into
-   `_capabilities`, then run one task both ways per model and record which wins.
+   *(Items 2, 5, 6, 7 and 8 were completed and are pruned to git history per the rule
+   at the top of this file: streaming guard `d22b563`, all-three-quantities timeout
+   and self-correcting estimator `41cd438`, TUI config audit `ff542ee`, and the
+   27GB-model question answered by the leak retraction `6f9b085`. Item 4 moved to
+   "Deliberately NOT doing" below, with its reason.)*
 
-5. ~~**`_estimate_timeout` uses one of the three quantities `ev` measures.**~~
-   **FIXED 2026-08-18.** All three terms now read the measured per-model value when
-   one exists. The constants were wrong in both directions at once: nemotron decodes
-   ~20x slower than the 8 tok/s constant, and foundation loads ~75x faster than the
-   120s one. A 20k-char prompt now estimates 75s for gemma-4-12b and 60s for
-   foundation, against a flat 412s for an unmeasured model — which keeps the
-   deliberately pessimistic fallback, because guessing fast kills a request that was
-   working and guessing slow only costs waiting.
+**Deliberately NOT doing** (decided during the P0-P5 phase; reasons kept because a
+deferral without one gets silently re-litigated)
 
-6. **A contaminated measurement is permanent.** The recorders keep the SLOWEST
-   observation, so a reading taken under memory pressure can never be displaced by a
-   correct one. Nothing enforces "delete `_capabilities` before re-measuring".
+- **"Does thinking help?" (item 4 below).** No consumer for the answer — no knob or slot
+  choice hinges on it. Measurement without a decision attached.
+- **The mutation-survivor campaign (item 3) as a scheduled item.** Survivors are
+  concentrated in the validator files ordinary work already touches. Kill them in
+  passing; do not grind.
+- **New ranking statistics.** "The eval cannot rank" is mitigated by per-slot scoring and
+  addressed by fixing TASKS — removing a fake ceiling, making `vlm` measurable, adding
+  adversarial separation. A composite score polishes a statistic instead of fixing tasks.
+- **Adopting `osaurus bench`.** Swapping instruments immediately after calibrating one
+  repeats the class of error this repo keeps paying for. Evaluate later against a
+  known-warm model; if adopted, DELETE the homegrown probe rather than running both.
+- **De-saturating the saturated tasks.** They are regression tests now, correctly
+  weighted at zero for ranking.
 
-   **This bit on 2026-08-16, and it is not only a reporting problem.**
-   `_derived_timeout` computes a task's timeout from the recorded decode rate, so a
-   contaminated rate silently sets the timeout too. The recorded values had drifted
-   far from reality:
+**Still open from that phase**
 
-   | model | recorded | actual | verdict |
-   |---|---|---|---|
-   | nemotron-3.5-lightning-30b | 0.68 tok/s | ~33 tok/s | contaminated |
-   | gemma-4-e2b-it-8bit (2B) | 7.04 tok/s | — | implausible; its 4B sibling does 26.5 |
-   | gemma-4-12b-it-mxfp8 | 309s cold start | — | implausible; a 16GB model loads in 33s |
-
-   Cleared the timing fields (`decode_tokens_per_sec`, `prefill_chars_per_sec`,
-   `prefill_samples`, `cold_start_seconds`) and the learned per-task timeouts for all
-   11 installed models before the corrected re-sweep, keeping the static probes
-   (`family`, `vision`, `disk_bytes`, `generative`). Backup in the session scratchpad.
-
-   **FIXED 2026-08-18.** `eval/samples.py` keeps a bounded history per quantity, each
-   sample tagged with whether the machine was quiet when it was taken, and derives the
-   estimate as the MEDIAN OF RECENT CLEAN SAMPLES. A bad reading is outvoted instead
-   of enshrined: 0.68 tok/s recovers to 33.0 after three clean samples, where the old
-   min-keeping rule stayed at 0.68 forever.
-
-   Contention is gated on PRESSURE (swap, compressor), not on free memory — after a
-   sweep the page cache legitimately holds tens of GB and "available" drops to ~12GB
-   on a healthy box, so a headroom threshold would refuse to record on exactly the
-   machine you most want readings from. Thresholds calibrated against the two observed
-   states (leak: swap 12.88GB / compressor 29.3GB; healthy: 1.43GB / 5.1GB) and both
-   directions are pinned by tests.
-
-   Existing scalars migrate as a single sample tagged `legacy` and UNCLEAN — they were
-   recorded under the old rule and some during the leak, so they cannot be trusted as
-   baselines, but discarding them would throw away the only reading some models have.
-
-   The pessimism the old rule was protecting now lives where it belongs: in the
-   FALLBACK for a model nothing has measured.
-
-7. **The TUI has no config audit.** `ztools` can start clean while the config names an
-   unservable model; `ev` checks this, the TUI does not.
-
-8. ~~**Unexplained: why a 27GB model runs at 0.09 tok/s on a 64GB machine.**~~
-   **ANSWERED 2026-08-17: it does not.** A leaked plugin daemon (claude-mem's `bun`
-   worker) held 31GB of the 64, leaving 14.6GB available. Killing it restored 42.6GB,
-   and the same MXFP8 build then measured **14.7 tok/s** against the 0.08 recorded
-   before — 184x off. The 4-bit's advantage is 1.3x, not 326x, which is simply the
-   cost of reading 1.8x the bytes per token.
-
-   **The answer was in the ruled-out list, dismissed with a broken instrument.**
-   "Other apps holding RAM — reproduced with the machine 62% free, top consumer 0.4GB"
-   was wrong twice over: the leaking daemon's RSS really was 0.55GB (its 31GB was
-   compressed and swapped, and RSS only shows what is resident), and "62% free" came
-   from `memory_pressure`, which ignores the compressor — it read "42% free" while
-   `Pages free` was 59MB and 49GB sat compressed into 29GB. The MTP shard was never
-   involved.
-
-   Use `top -l 1 -o mem -stats pid,command,mem,cmprs` (the CMPRS column) and
-   `vm_stat`'s "Pages free" / "occupied by compressor". Never RSS, and never
-   `memory_pressure`'s free percentage.
+- **The vision task is a GATE, not a ranking.** `image_real` proves a model can see and
+  would catch a transport regression, but gemma-4-12b, qwen3.8-27b-mxfp8 and gemma-4-e4b
+  all score 100, so it cannot order them. `best_models.vlm` is therefore still chosen on
+  general competence among models PROVEN to have vision. Separating them needs harder
+  images — more objects, occlusion, counting, relative position.
+- **`rn` has no on-device fallback.** `foundation` was removed from `filename_models`
+  because it obeys prompt injection even when the text is framed as data (3 of 3 runs).
+  If the server is down, `rn` now fails rather than naming files from an untrusted
+  instruction. Revisit if an on-device model that resists becomes available.
+- **`vlm_preferred` / `text_preferred` in `conf/rename.toml` are audited but unread.**
+  No production code consults them; only `audit_configured_models` does. Either wire
+  them up or delete them — an audited key nothing uses trains the reader to ignore the
+  audit.
 
 **Standing lessons this session kept re-teaching**
 

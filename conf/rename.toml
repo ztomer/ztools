@@ -10,7 +10,7 @@ llm_url = "http://localhost:1337"
 #
 # Both of these carry a vision_config and are installed. NOTE that no eval task feeds a
 # real image, so this order is a static-probe judgement, not a measurement -- see
-# docs/NEXT_STEPS.md P2.
+# docs/BACKLOG.md.
 vlm_preferred = [
   "gemma-4-12b-it-mxfp8",
   "qwen3.8-27b-mxfp8",
