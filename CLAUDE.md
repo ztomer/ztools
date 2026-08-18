@@ -51,10 +51,18 @@ cannot drift.
   answering) and `--check` exits 1 when there is not exactly one.
 - **Never measure with anything else running against the GPU.** One command at a
   time, serially — including your own background jobs.
-- **A contaminated measurement is permanent.** `record_prefill_rate` and
-  `_record_decode_rate` keep the SLOWEST observation, so a number taken under
-  memory pressure can never be displaced by a correct one. Delete the model's
-  `_capabilities` entry in `conf/eval_signals.json` before re-measuring.
+- **A contaminated measurement is outvoted, not permanent — but the guard is
+  blind to the GPU.** This used to say a bad reading could never be displaced and
+  that you had to delete the model's `_capabilities` entry by hand. That stopped
+  being true when `eval/samples.py` landed: samples are a LIST, and the estimate is
+  the MEDIAN OF THE LAST 5 CLEAN SAMPLES (`SAMPLE_WINDOW`), so recovery is "take
+  another clean sample". Two things that ARE still true and matter more:
+  - `machine_is_uncontended()` gates on SWAP (<=8GB) and COMPRESSOR (<=15GB) only.
+    It cannot see GPU utilisation, so a competing Metal/GPU workload is recorded as
+    CLEAN and enters the median as though the box were quiet.
+  - The median only protects a model that HAS history. A new or thinly-sampled
+    model's estimate is essentially its one sample, so first measurements are the
+    exposed case. Still measure serially with nothing else on the GPU.
 - Quick mode for iteration: `python3 -m eval --model <model> --task <task> --quick`
 - Add discovered learnings to `docs/MODEL_QUIRKS.md` immediately when found
 

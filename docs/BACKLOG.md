@@ -481,14 +481,18 @@ code needs nothing. What the DATA needs is different and narrower:
   other applications holding RAM, and a second osaurus process (which does not queue
   behind the first — it loads its own copy of whatever model it is asked for).
 
-  The permanence is the sharp edge: `record_prefill_rate` and `_record_decode_rate`
-  keep the SLOWEST observation, deliberately, so that a timeout is sized for a bad run
-  rather than a lucky one. The same policy means a reading taken under memory pressure
-  can never be displaced by a correct one. Re-measuring is not enough — the model's
-  `_capabilities` entry has to be deleted first.
+  The permanence WAS the sharp edge: `record_prefill_rate` and `_record_decode_rate`
+  kept the SLOWEST observation, deliberately, so that a timeout is sized for a bad run
+  rather than a lucky one — which also meant a reading taken under memory pressure
+  could never be displaced. `eval/samples.py` fixed that: samples are a list and the
+  estimate is the median of the last 5 clean ones.
 
   `tools/osaurus_one.sh` now enforces the single-server invariant and is the documented
-  way to start the server. **Still open:** nothing enforces "delete before re-measure".
+  way to start the server. The "delete before re-measure" gap is CLOSED — not by
+  enforcing the delete but by removing the need for it. What replaced it is a narrower
+  hole worth naming: `machine_is_uncontended()` gates on swap and compressor only, so
+  it is blind to GPU contention, and the median only protects models that already have
+  samples. A model's FIRST measurement has nothing to outvote it.
   Consider a `--remeasure` flag on `ev` that clears a model's capabilities first, or
   recording every sample with a timestamp so a contaminated era can be dropped instead
   of poisoning the minimum forever.

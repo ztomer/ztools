@@ -484,9 +484,12 @@ vision. Backlog item 9 covers building a real one.
    leaves the process resident, so status can read "stopped" while the memory is still
    occupied.
 3. **Response parsing** - Must read ALL chunks until `done=true`
-4. **A contaminated measurement is permanent.** The recorders keep the SLOWEST
-   observation, so delete the model's `_capabilities` from `conf/eval_signals.json`
-   before re-measuring, or the bad number wins forever.
+4. **A contaminated measurement is outvoted, not permanent — and the guard cannot
+   see the GPU.** The recorders no longer keep the SLOWEST observation; `eval/samples.py`
+   keeps a list and reports the median of the last 5 CLEAN samples, so re-measuring is
+   enough and the hand-delete step is obsolete. But `machine_is_uncontended()` reads
+   swap and compressor only, so a competing GPU workload is recorded as clean, and a
+   model with one sample has no median to hide behind.
 
 ---
 
