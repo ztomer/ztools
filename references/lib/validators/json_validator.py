@@ -15,6 +15,7 @@ from lib.validators.constants import (
     SOURCE_THRESHOLD_LOW,
     SOURCE_THRESHOLD_MED,
 )
+from lib.validators.prompt_contract import parse_signal_noise, requested_item_count
 from lib.validators.report_defects import (
     constant_column_ratio,
     generic_location_ratio,
@@ -295,26 +296,6 @@ def _names_match(a: str, b: str) -> bool:
     return (len(longest_a) >= 5 and longest_a in nb) or (len(longest_b) >= 5 and longest_b in na)
 
 
-def parse_signal_noise(source_text: str) -> Tuple[List[str], List[str]]:
-    """Split a mixed prompt (signal + NOISE section) into (signal_names, noise_names)."""
-    if "NOISE" not in source_text:
-        return [], []
-    signal_part, noise_part = source_text.split("NOISE", 1)
-    return _extract_bullets(signal_part), _extract_bullets(noise_part)
-
-
-def _extract_bullets(text: str) -> List[str]:
-    out = []
-    for line in text.split("\n"):
-        line = line.strip()
-        if line.startswith("- "):
-            content = line[2:].strip()
-            name = content.split(":")[0].strip()
-            if name:
-                out.append(name)
-    return out
-
-
 def validate_mixed_signal(
     data: Any,
     source_text: str = "",
@@ -357,7 +338,14 @@ def validate_mixed_signal(
 
     total_signal = len(signal_set)
     total_noise = len(noise_set)
-    recall = min(1.0, tp / total_signal) if total_signal else 1.0
+
+    # Recall is measured against what the PROMPT ASKED FOR, not against every signal
+    # item present. Where those differ, scoring against the larger number punishes
+    # obedience -- see lib/validators/prompt_contract for the case that cost eleven
+    # models 9 points each for following instructions.
+    asked_for = requested_item_count(source_text)
+    expected_signal = min(asked_for, total_signal) if asked_for else total_signal
+    recall = min(1.0, tp / expected_signal) if expected_signal else 1.0
     precision = (
         min(1.0, tp / (tp + fp)) if (tp + fp) else (1.0 if tp == 0 and total_signal == 0 else 0.0)
     )
@@ -366,8 +354,8 @@ def validate_mixed_signal(
     failures = []
     if fp > 0:
         failures.append(f"included {fp}/{total_noise} noise items")
-    if tp < total_signal:
-        failures.append(f"missed {total_signal - tp}/{total_signal} signal items")
+    if tp < expected_signal:
+        failures.append(f"missed {expected_signal - tp}/{expected_signal} signal items")
     return score, "; ".join(failures)
 
 

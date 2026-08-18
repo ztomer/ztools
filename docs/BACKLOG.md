@@ -299,9 +299,21 @@ Still open:
 - **Trap density is the lever.** An earlier draft injected the same traps into the
   full 40-tweet timeline; everything scored 96-99 because one error was diluted
   across forty easy bullets. New adversarial tasks should be short and dense.
-- `weekend_fixed_mixed` — all eleven models missed the identical 2 of 12 signal
-  items, which is a fixture or prompt defect rather than eleven coincidences, and no
-  model choice can fix it.
+- ~~`weekend_fixed_mixed` — all eleven models missed the identical 2 of 12 signal
+  items~~ **FIXED 2026-08-17, and the reading was wrong.** They missed nothing. The
+  prompt shows 12 signal venues and asks the model to "find 10"; `validate_mixed_signal`
+  computed recall over all 12, so obeying the instruction scored
+  `100 * (0.5 * 10/12 + 0.5) = 91` while ignoring it and returning all 12 scored 100.
+  The task paid models less for doing as they were told.
+
+  Recall is now measured against what the prompt ASKED FOR, read out of the prompt text
+  (`lib/validators/prompt_contract.requested_item_count`) rather than configured beside
+  it, so the two contracts cannot drift. Re-scored from saved outputs: all twelve models
+  move 91 -> 98-100, and the task still discriminates (ornith-35b 99, ornith-9b 98).
+
+  Class-level gate in `test_task_winnability.py`: for every mechanically-scorable task,
+  the ideal answer built from that task's own data must score 100, and obeying a count
+  must never score worse than ignoring it. Verified red against the old denominator.
 - The remaining saturated tasks (`filename`, `filename_mixed`, `rename_mixed`,
   `json`, `image_rename*`) still rank nothing and should keep their place only as
   regression tests.

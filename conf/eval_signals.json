@@ -1305,9 +1305,10 @@
       "vision": false
     },
     "detailed_json": {
-      "p95_latency": 150.6,
+      "p95_latency": 318.0,
       "parse_failures": 0,
-      "samples": 2,
+      "samples": 3,
+      "timeout": 900,
       "total_retries": 1
     },
     "file_summary": {
@@ -1318,9 +1319,9 @@
       "total_retries": 0
     },
     "file_summary_mixed": {
-      "p95_latency": 278.3,
+      "p95_latency": 270.9,
       "parse_failures": 0,
-      "samples": 4,
+      "samples": 5,
       "timeout": 900,
       "total_retries": 0
     },
@@ -1332,16 +1333,16 @@
       "total_retries": 3
     },
     "filename_leak": {
-      "p95_latency": 25.4,
+      "p95_latency": 25.1,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 0
     },
     "filename_mixed": {
-      "p95_latency": 137.1,
+      "p95_latency": 133.5,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 0
     },
@@ -1353,16 +1354,17 @@
       "total_retries": 1
     },
     "image_rename_mixed": {
-      "p95_latency": 422.4,
+      "p95_latency": 410.0,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 0
     },
     "json": {
-      "p95_latency": 105.9,
+      "p95_latency": 157.8,
       "parse_failures": 0,
-      "samples": 2,
+      "samples": 3,
+      "timeout": 900,
       "total_retries": 0
     },
     "rename_mixed": {
@@ -1380,47 +1382,59 @@
       "total_retries": 2
     },
     "summarize_contradiction": {
-      "p95_latency": 1371.5,
+      "p95_latency": 1341.8,
       "parse_failures": 0,
-      "samples": 3,
-      "timeout": 2057,
-      "total_retries": 3
+      "samples": 4,
+      "timeout": 2012,
+      "total_retries": 4
     },
     "summarize_factual_accuracy": {
-      "p95_latency": 814.1,
-      "parse_failures": 0,
-      "samples": 2,
-      "total_retries": 2
-    },
-    "summarize_factual_coverage": {
-      "p95_latency": 661.5,
-      "parse_failures": 0,
-      "samples": 2,
-      "total_retries": 2
-    },
-    "summarize_mixed": {
-      "p95_latency": 1918.6,
+      "p95_latency": 810.8,
       "parse_failures": 0,
       "samples": 3,
-      "timeout": 2877,
+      "timeout": 1216,
       "total_retries": 3
     },
-    "taxes_anomalies": {
-      "p95_latency": 54.4,
+    "summarize_factual_coverage": {
+      "p95_latency": 843.7,
       "parse_failures": 0,
-      "samples": 2,
+      "samples": 3,
+      "timeout": 1265,
+      "total_retries": 2
+    },
+    "summarize_misattribution": {
+      "p95_latency": 111.7,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "summarize_mixed": {
+      "p95_latency": 1865.1,
+      "parse_failures": 0,
+      "samples": 4,
+      "timeout": 2797,
+      "total_retries": 4
+    },
+    "taxes_anomalies": {
+      "p95_latency": 57.4,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
       "total_retries": 0
     },
     "taxes_audit_readiness": {
-      "p95_latency": 121.2,
+      "p95_latency": 134.8,
       "parse_failures": 0,
-      "samples": 2,
+      "samples": 3,
+      "timeout": 900,
       "total_retries": 0
     },
     "taxes_synthesis": {
-      "p95_latency": 322.9,
+      "p95_latency": 395.2,
       "parse_failures": 0,
-      "samples": 2,
+      "samples": 3,
+      "timeout": 900,
       "total_retries": 1
     },
     "weekend_fixed": {
@@ -1452,9 +1466,9 @@
       "total_retries": 1
     },
     "weekend_transient_schema": {
-      "p95_latency": 273.9,
+      "p95_latency": 267.9,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 0
     }
@@ -1763,13 +1777,13 @@
   },
   "ornith-1.0-9b-mxfp8": {
     "_capabilities": {
-      "cold_start_seconds": 3.97,
-      "decode_tokens_per_sec": 45.88,
+      "cold_start_seconds": 6.46,
+      "decode_tokens_per_sec": 35.49,
       "disk_bytes": 10146782760,
       "family": "qwen3_5",
       "generative": true,
-      "prefill_chars_per_sec": 1913.0,
-      "prefill_samples": 1,
+      "prefill_chars_per_sec": 1643.1,
+      "prefill_samples": 2,
       "vision": true
     },
     "detailed_json": {
