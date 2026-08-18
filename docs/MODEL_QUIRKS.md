@@ -168,6 +168,42 @@ Two routing bugs fall straight out of it:
 
 ---
 
+## `rn` was renaming images from hallucinated descriptions (fixed 2026-08-18)
+
+osaurus exposes an OpenAI-compatible endpoint and **silently drops** the Ollama-style
+`{"images": [b64]}` key inside a message. It does not error; it answers as though no
+image were attached. `rn` used that key, so every image it renamed was described from
+nothing.
+
+Measured against the live server with a picture of a red circle:
+
+| payload | model's reply |
+|---|---|
+| `{"images": [b64]}` | "Please provide the image you are referring to..." |
+| no image at all | "Please provide the image you are referring to..." |
+| content parts + `image_url` | **"Red semi-circle."** |
+
+The first two being identical is the proof: the key was ignored.
+
+Three unmistakable, mutually unrelated fixtures through the old path:
+
+| image | before (blind) | after |
+|---|---|---|
+| red circle | "large white building blue sky" | "red curved shape" |
+| white dots on navy | "large brown dog" | "small white circles" |
+| green + yellow bars | "large brown bear forest" | "...tan rectangle, ...green rectangle" |
+
+**The lesson, which is why P2 in the plan said "probe first".** The plan assumed this
+transport worked and only needed an eval task built on top. Had that been done in the
+stated order, the new task would have measured hallucination and produced a confident
+`best_models.vlm` ranking from it. Nothing in the codebase had ever verified that an
+image reached a model -- `image_rename` sends its prompt as TEXT, so ten models scoring
+100 on it proved only that they can emit a filename-shaped string.
+
+Also fixed alongside: `apply_model_quirks` assumed `content` is a string and raised
+`AttributeError: 'list' object has no attribute 'lower'` on multimodal messages. Quirks
+reword prompts; a list of content parts has no prose to reword, so it passes through.
+
 ## Why our leaderboard disagreed with published benchmarks
 
 Asked directly, and worth keeping because the answer was not "quantization" or "these

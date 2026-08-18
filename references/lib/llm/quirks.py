@@ -51,6 +51,16 @@ def apply_model_quirks(messages: List[Dict[str, Any]], model: str) -> List[Dict[
         content = msg.get("content", "")
         role = msg.get("role", ROLE_USER)
 
+        # Multimodal messages carry a LIST of content parts
+        # ([{"type": "text", ...}, {"type": "image_url", ...}]) rather than prose.
+        # Every rewrite below is a string operation, so this used to raise
+        # AttributeError: 'list' object has no attribute 'lower' the moment `rn`
+        # started sending images through the shared client. These quirks reword
+        # prompts; there is no prose here to reword, so pass the message through.
+        if not isinstance(content, str):
+            updated.append(msg)
+            continue
+
         if family == QWEN_FAMILY and role == ROLE_SYSTEM:
             # Prepend JSON trigger for qwen models to prevent thinking output
             # Skip if content already says no JSON or plain text

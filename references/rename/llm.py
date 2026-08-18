@@ -277,7 +277,35 @@ def query_vlm_for_filename(
         with open(image_path, "rb") as f:
             base64_image = base64.b64encode(f.read()).decode("utf-8")
 
-        messages = [{"role": "user", "content": prompt, "images": [base64_image]}]
+        # OpenAI content-parts, NOT the Ollama-style {"images": [b64]} key.
+        #
+        # osaurus exposes an OpenAI-compatible endpoint and SILENTLY DROPS the Ollama
+        # key -- it does not error, it just answers as though no image were attached.
+        # Measured against the live server with a picture of a red circle:
+        #
+        #     {"images": [b64]}            "Please provide the image you are
+        #                                   referring to..."   (identical to sending
+        #                                                       no image at all)
+        #     content parts + image_url    "Red semi-circle."
+        #
+        # So `rn` was renaming every image from a HALLUCINATED description. Three
+        # unmistakable and mutually unrelated fixtures produced "large white building
+        # blue sky", "large brown dog" and "large brown bear forest" -- none of which
+        # was in any of them. Confident, plausible, and wrong, which is worse than an
+        # error because it gets written to the filename.
+        mime = "image/png" if image_path.suffix.lower() == ".png" else "image/jpeg"
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime};base64,{base64_image}"},
+                    },
+                ],
+            }
+        ]
 
         result = _shared_call(model, messages, host, VLM_QUERY_TIMEOUT, api_key)
         if result.get("error"):
