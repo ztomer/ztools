@@ -1,0 +1,796 @@
+{
+  "task": "qa",
+  "year": 2025,
+  "filer": "primary",
+  "model_hint": "qwen3.8-27b-mxfp8",
+  "captured_at": "2026-08-18T14:29:06",
+  "source_repo": "github.com/<user>/Taxes",
+  "source_module": "scripts/snapshot_eval_prompts.py::qa",
+  "system": "RESIDENCY FACTS (non-negotiable — derived from profile +\nload_locations(); do NOT infer residency from any other\nsignal in the data, especially not from donation-receipt\nor charity addresses):\n- Tax residency jurisdictions: ['CA']\n- Provincial residency in 2025:\n  - CA/MB from 2025-01-01 to 2025-09-30\n  - CA/ON from 2025-10-01 to 2025-12-31\n\nYou are a senior Canadian tax accountant specializing in cross-border filing for individuals with employment income, foreign property, and RSU compensation.\n\nOUTPUT FORMAT — CRITICAL:\n- Output ONLY the final analysis. ABSOLUTELY NO internal reasoning, thinking, planning, or meta-commentary.\n- NEVER use <think>, <thinking>, <reasoning>, or similar tags.\n- NEVER start with \"Let me...\", \"I'll...\", \"I need to...\", \"Looking at...\", \"Based on...\", \"Actually...\", \"Wait...\", \"However...\" or ANY preamble/self-talk.\n- NEVER include phrases like \"I should...\", \"I notice...\", \"The instructions say...\", \"Re-reading...\", \"I think...\", or document your analysis process.\n- Do NOT use markdown tables. Use bullet points only.\n- Do NOT repeat information already provided in the context data.\n- Start IMMEDIATELY with the first section heading (e.g., \"**Missing documents**\" or \"**1. Missing Documents**\").\n- If your output includes ANY reasoning or self-talk, the ENTIRE response is invalid.\n\nDATA ACCURACY (CRITICAL):\n- ONLY report a document as missing if the context data explicitly says \"MISSING\"\n- If the context shows a document as \"DONE\", it IS present — do NOT report it as missing\n- Do NOT invent or assume document statuses. Use ONLY the status from the context data.\n- If a deadline says \"COMPLETED — docs received\", do NOT report it as overdue or action needed.\n\nRESPONSE GUIDELINES:\n- Lead with what's MISSING and what ACTION is needed\n- Provide dollar estimates where possible (rough is fine — state assumptions)\n- Include a tax owed/refund estimate when sufficient data is available\n- Keep responses under 150 words per category, under 250 words for synthesis\n- Skip sections with nothing to report\n- Be specific: \"$2,400 WFH deduction\" not \"you may be eligible for deductions\"\n\nIMPORTANT RULES — follow these exactly (see tax_rules.yaml for year-specific details):\n- WFH flat-rate method ($2/day) EXPIRED after 2022. Only the detailed method (T2200) is available for 2023+.\n- T2200S (simplified form) is DISCONTINUED. Only T2200 is accepted.\n- RESP contributions are NOT tax-deductible and NOT reported on T1. Do not recommend RESP actions in tax filings. CESG (20% match, max $500/yr per child) is the benefit. EAPs taxable to student on withdrawal.\n- T1135 late-filing penalty: $25/day, max $2,500. Gross negligence: up to $12,000. Do NOT cite $100 base penalty.\n- WFH 'workspace percentage' means the ratio of dedicated workspace area to total home area, NOT occupancy time.\n- RRSP contribution deadline for tax year N is 60 days after Dec 31 of year N (typically March 1 or 2 of year N+1).\n- Childcare expenses: claimed by the lower-income spouse. Limits: $8,000/child under 7, $5,000/child 7-16.",
+  "user": "You are answering a tax question for the primary filer about tax year 2025 (prior year 2024).\n\nBelow is the complete set of quotable facts. Each has a stable `id` you reference in citations. You may NOT introduce numbers that aren't here; if the question can't be answered from these facts, say so plainly.\n\n```json\n[\n  {\n    \"id\": \"t1.2025.income.employment\",\n    \"category\": \"t1_line\",\n    \"label\": \"Employment income (T1 line 10100)\",\n    \"value\": 168638.78,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.income.interest\",\n    \"category\": \"t1_line\",\n    \"label\": \"Interest income (T1 line 12100)\",\n    \"value\": 9159.42,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.income.rental_net\",\n    \"category\": \"t1_line\",\n    \"label\": \"Net rental income (T1 line 12600)\",\n    \"value\": 12146.53,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.income.capital_gains\",\n    \"category\": \"t1_line\",\n    \"label\": \"Capital gains (T1 line 12700)\",\n    \"value\": 147.62,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.income.total\",\n    \"category\": \"t1_line\",\n    \"label\": \"Total income\",\n    \"value\": 190092.35,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.deductions.rrsp\",\n    \"category\": \"t1_line\",\n    \"label\": \"RRSP deduction (T1 line 20800)\",\n    \"value\": 20366.0,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.deductions.cpp_enhanced\",\n    \"category\": \"t1_line\",\n    \"label\": \"Enhanced CPP (T1 line 22215)\",\n    \"value\": 644.24,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.deductions.wfh\",\n    \"category\": \"t1_line\",\n    \"label\": \"WFH expenses (T1 line 22900)\",\n    \"value\": 2746.32,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.deductions.other_deductions\",\n    \"category\": \"t1_line\",\n    \"label\": \"Other deductions (T1 line 23200)\",\n    \"value\": 111.71,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.deductions.total\",\n    \"category\": \"t1_line\",\n    \"label\": \"Total deductions\",\n    \"value\": 23868.26,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.net_income\",\n    \"category\": \"t1_line\",\n    \"label\": \"Net income\",\n    \"value\": 166224.09,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.taxable_income\",\n    \"category\": \"t1_line\",\n    \"label\": \"Taxable income\",\n    \"value\": 166076.47,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.fed.gross\",\n    \"category\": \"t1_line\",\n    \"label\": \"Federal tax (gross)\",\n    \"value\": 39673.04,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.fed.credits\",\n    \"category\": \"t1_line\",\n    \"label\": \"Federal non-refundable credits\",\n    \"value\": 1778.05,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.fed.donation_credit\",\n    \"category\": \"t1_line\",\n    \"label\": \"Federal donation credit\",\n    \"value\": 1395.39,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.fed.ftc\",\n    \"category\": \"t1_line\",\n    \"label\": \"Federal foreign tax credit (T2209)\",\n    \"value\": 8475.69,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.fed.final\",\n    \"category\": \"t1_line\",\n    \"label\": \"Federal tax (after credits)\",\n    \"value\": 28023.91,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.prov.gross\",\n    \"category\": \"t1_line\",\n    \"label\": \"Provincial tax (gross)\",\n    \"value\": 24351.06,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.prov.credits\",\n    \"category\": \"t1_line\",\n    \"label\": \"Provincial non-refundable credits\",\n    \"value\": 520.44,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.prov.donation_credit\",\n    \"category\": \"t1_line\",\n    \"label\": \"Provincial donation credit\",\n    \"value\": 471.87,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.prov.final\",\n    \"category\": \"t1_line\",\n    \"label\": \"Provincial tax (after credits)\",\n    \"value\": 23358.75,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.total_tax\",\n    \"category\": \"t1_line\",\n    \"label\": \"Total tax\",\n    \"value\": 51382.66,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.source_deducted\",\n    \"category\": \"t1_line\",\n    \"label\": \"Tax withheld at source\",\n    \"value\": 50484.35,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2025.balance\",\n    \"category\": \"t1_line\",\n    \"label\": \"Balance (owing if positive, refund if negative)\",\n    \"value\": 898.31,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2025,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.income.employment\",\n    \"category\": \"t1_line\",\n    \"label\": \"Employment income (T1 line 10100)\",\n    \"value\": 191736.64,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.income.interest\",\n    \"category\": \"t1_line\",\n    \"label\": \"Interest income (T1 line 12100)\",\n    \"value\": 15124.3,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.income.total\",\n    \"category\": \"t1_line\",\n    \"label\": \"Total income\",\n    \"value\": 206860.93,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.deductions.rpp\",\n    \"category\": \"t1_line\",\n    \"label\": \"RPP deduction (T1 line 20700)\",\n    \"value\": 27.59,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.deductions.cpp_enhanced\",\n    \"category\": \"t1_line\",\n    \"label\": \"Enhanced CPP (T1 line 22215)\",\n    \"value\": 502.67,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.deductions.total\",\n    \"category\": \"t1_line\",\n    \"label\": \"Total deductions\",\n    \"value\": 530.26,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.net_income\",\n    \"category\": \"t1_line\",\n    \"label\": \"Net income\",\n    \"value\": 206330.67,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.taxable_income\",\n    \"category\": \"t1_line\",\n    \"label\": \"Taxable income\",\n    \"value\": 206330.67,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.fed.gross\",\n    \"category\": \"t1_line\",\n    \"label\": \"Federal tax (gross)\",\n    \"value\": 53522.3,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.fed.credits\",\n    \"category\": \"t1_line\",\n    \"label\": \"Federal non-refundable credits\",\n    \"value\": 1786.55,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.fed.ftc\",\n    \"category\": \"t1_line\",\n    \"label\": \"Federal foreign tax credit (T2209)\",\n    \"value\": 922.37,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.fed.final\",\n    \"category\": \"t1_line\",\n    \"label\": \"Federal tax (after credits)\",\n    \"value\": 50813.39,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.prov.gross\",\n    \"category\": \"t1_line\",\n    \"label\": \"Provincial tax (gross)\",\n    \"value\": 32786.2,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.prov.credits\",\n    \"category\": \"t1_line\",\n    \"label\": \"Provincial non-refundable credits\",\n    \"value\": 504.84,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.prov.final\",\n    \"category\": \"t1_line\",\n    \"label\": \"Provincial tax (after credits)\",\n    \"value\": 32281.37,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.total_tax\",\n    \"category\": \"t1_line\",\n    \"label\": \"Total tax\",\n    \"value\": 83094.75,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.source_deducted\",\n    \"category\": \"t1_line\",\n    \"label\": \"Tax withheld at source\",\n    \"value\": 51107.59,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"t1.2024.balance\",\n    \"category\": \"t1_line\",\n    \"label\": \"Balance (owing if positive, refund if negative)\",\n    \"value\": 31987.16,\n    \"source\": \"compute_t1_return\",\n    \"year\": 2024,\n    \"details\": {}\n  },\n  {\n    \"id\": \"slip.t4.0.box14_employment_income\",\n    \"category\": \"t4\",\n    \"label\": \"T4 box 14 \\u2014 employment income (AKAMAI TECHNOLOGIES INC)\",\n    \"value\": 168638.78,\n    \"source\": \"2025 T4.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"AKAMAI TECHNOLOGIES INC\",\n      \"box\": \"box14_employment_income\"\n    }\n  },\n  {\n    \"id\": \"slip.t4.0.box16_cpp\",\n    \"category\": \"t4\",\n    \"label\": \"T4 box 16 \\u2014 CPP contributions (AKAMAI TECHNOLOGIES INC)\",\n    \"value\": 2419.84,\n    \"source\": \"2025 T4.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"AKAMAI TECHNOLOGIES INC\",\n      \"box\": \"box16_cpp\"\n    }\n  },\n  {\n    \"id\": \"slip.t4.0.box18_ei_premiums\",\n    \"category\": \"t4\",\n    \"label\": \"T4 box 18 \\u2014 EI premiums (AKAMAI TECHNOLOGIES INC)\",\n    \"value\": 646.32,\n    \"source\": \"2025 T4.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"AKAMAI TECHNOLOGIES INC\",\n      \"box\": \"box18_ei_premiums\"\n    }\n  },\n  {\n    \"id\": \"slip.t4.0.box22_tax_deducted\",\n    \"category\": \"t4\",\n    \"label\": \"T4 box 22 \\u2014 tax deducted (AKAMAI TECHNOLOGIES INC)\",\n    \"value\": 50484.35,\n    \"source\": \"2025 T4.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"AKAMAI TECHNOLOGIES INC\",\n      \"box\": \"box22_tax_deducted\"\n    }\n  },\n  {\n    \"id\": \"slip.t4.0.box38_security_options\",\n    \"category\": \"t4\",\n    \"label\": \"T4 box 38 \\u2014 security options (RSU/ESPP) (AKAMAI TECHNOLOGIES INC)\",\n    \"value\": 45514.68,\n    \"source\": \"2025 T4.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"AKAMAI TECHNOLOGIES INC\",\n      \"box\": \"box38_security_options\"\n    }\n  },\n  {\n    \"id\": \"slip.t4.0.box40_other_taxable\",\n    \"category\": \"t4\",\n    \"label\": \"T4 box 40 \\u2014 other taxable benefits (AKAMAI TECHNOLOGIES INC)\",\n    \"value\": 237.54,\n    \"source\": \"2025 T4.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"AKAMAI TECHNOLOGIES INC\",\n      \"box\": \"box40_other_taxable\"\n    }\n  },\n  {\n    \"id\": \"slip.t5.0.box13_interest\",\n    \"category\": \"t5\",\n    \"label\": \"T5 box 13 \\u2014 interest (Interactive Brokers Canada Inc.)\",\n    \"value\": 115.55,\n    \"source\": \"U16001354.2025.T5.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"Interactive Brokers Canada Inc.\",\n      \"box\": \"box13_interest\"\n    }\n  },\n  {\n    \"id\": \"slip.t5.0.box15_foreign_income\",\n    \"category\": \"t5\",\n    \"label\": \"T5 box 15 \\u2014 foreign income (Interactive Brokers Canada Inc.)\",\n    \"value\": 18146.91,\n    \"source\": \"U16001354.2025.T5.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"Interactive Brokers Canada Inc.\",\n      \"box\": \"box15_foreign_income\"\n    }\n  },\n  {\n    \"id\": \"slip.t5.0.box16_foreign_tax_paid\",\n    \"category\": \"t5\",\n    \"label\": \"T5 box 16 \\u2014 foreign tax paid (Interactive Brokers Canada Inc.)\",\n    \"value\": 1725.78,\n    \"source\": \"U16001354.2025.T5.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"Interactive Brokers Canada Inc.\",\n      \"box\": \"box16_foreign_tax_paid\"\n    }\n  },\n  {\n    \"id\": \"slip.1042s.0.gross_income\",\n    \"category\": \"1042s\",\n    \"label\": \"1042-S box 2 \\u2014 gross income USD (Interactive Brokers Canada Inc.)\",\n    \"value\": 6.6,\n    \"source\": \"[SPOUSE]_U16001354.2025.1042S.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"Interactive Brokers Canada Inc.\",\n      \"box\": \"gross_income\"\n    }\n  },\n  {\n    \"id\": \"slip.1042s.1.gross_income\",\n    \"category\": \"1042s\",\n    \"label\": \"1042-S box 2 \\u2014 gross income USD (Interactive Brokers Canada Inc.)\",\n    \"value\": 63.58,\n    \"source\": \"[SPOUSE]_U16536250.2025.1042S.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"Interactive Brokers Canada Inc.\",\n      \"box\": \"gross_income\"\n    }\n  },\n  {\n    \"id\": \"slip.1042s.1.federal_tax_withheld\",\n    \"category\": \"1042s\",\n    \"label\": \"1042-S box 7a \\u2014 federal tax withheld USD (Interactive Brokers Canada Inc.)\",\n    \"value\": 9.6,\n    \"source\": \"[SPOUSE]_U16536250.2025.1042S.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"Interactive Brokers Canada Inc.\",\n      \"box\": \"federal_tax_withheld\"\n    }\n  },\n  {\n    \"id\": \"slip.1042s.2.gross_income\",\n    \"category\": \"1042s\",\n    \"label\": \"1042-S box 2 \\u2014 gross income USD (Interactive Brokers Canada Inc.)\",\n    \"value\": 62.98,\n    \"source\": \"U15985348.2025.1042S.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"Interactive Brokers Canada Inc.\",\n      \"box\": \"gross_income\"\n    }\n  },\n  {\n    \"id\": \"slip.1042s.2.federal_tax_withheld\",\n    \"category\": \"1042s\",\n    \"label\": \"1042-S box 7a \\u2014 federal tax withheld USD (Interactive Brokers Canada Inc.)\",\n    \"value\": 9.6,\n    \"source\": \"U15985348.2025.1042S.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"Interactive Brokers Canada Inc.\",\n      \"box\": \"federal_tax_withheld\"\n    }\n  },\n  {\n    \"id\": \"slip.1042s.3.gross_income\",\n    \"category\": \"1042s\",\n    \"label\": \"1042-S box 2 \\u2014 gross income USD (Interactive Brokers Canada Inc.)\",\n    \"value\": 21.59,\n    \"source\": \"U16001354.2025.1042S.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"Interactive Brokers Canada Inc.\",\n      \"box\": \"gross_income\"\n    }\n  },\n  {\n    \"id\": \"slip.rrsp.0.total\",\n    \"category\": \"rrsp\",\n    \"label\": \"RRSP receipt total (RRSP receipt #1)\",\n    \"value\": 3341.93,\n    \"source\": \"2025_1_3_RRSP_Tax_receipt.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"RRSP receipt #1\"\n    }\n  },\n  {\n    \"id\": \"slip.rrsp.1.total\",\n    \"category\": \"rrsp\",\n    \"label\": \"RRSP receipt total (RRSP receipt #2)\",\n    \"value\": 14868.13,\n    \"source\": \"2025_3_12_RRSP_Tax_receipt.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"RRSP receipt #2\"\n    }\n  },\n  {\n    \"id\": \"slip.rrsp.2.total\",\n    \"category\": \"rrsp\",\n    \"label\": \"RRSP receipt total (RRSP receipt #3)\",\n    \"value\": 2706.44,\n    \"source\": \"2026Q1_RRSP_Receipt.pdf\",\n    \"year\": 2025,\n    \"details\": {\n      \"issuer\": \"RRSP receipt #3\"\n    }\n  },\n  {\n    \"id\": \"profile.wfh_total_sqft\",\n    \"category\": \"profile\",\n    \"label\": \"Profile: wfh_total_sqft\",\n    \"value\": 1379.65,\n    \"source\": \"profile.yaml\",\n    \"year\": null,\n    \"details\": {\n      \"key\": \"wfh_total_sqft\"\n    }\n  },\n  {\n    \"id\": \"profile.wfh_workspace_sqft\",\n    \"category\": \"profile\",\n    \"label\": \"Profile: wfh_workspace_sqft\",\n    \"value\": 230.94,\n    \"source\": \"profile.yaml\",\n    \"year\": null,\n    \"details\": {\n      \"key\": \"wfh_workspace_sqft\"\n    }\n  },\n  {\n    \"id\": \"profile.wfh_percentage\",\n    \"category\": \"profile\",\n    \"label\": \"Profile: wfh_percentage\",\n    \"value\": 9.99,\n    \"source\": \"profile.yaml\",\n    \"year\": null,\n    \"details\": {\n      \"key\": \"wfh_percentage\"\n    }\n  },\n  {\n    \"id\": \"profile.property_address\",\n    \"category\": \"profile\",\n    \"label\": \"Profile: property_address\",\n    \"value\": \"89 Laskin, Vaughan, Ontario\",\n    \"source\": \"profile.yaml\",\n    \"year\": null,\n    \"details\": {\n      \"key\": \"property_address\"\n    }\n  },\n  {\n    \"id\": \"profile.tax_year\",\n    \"category\": \"profile\",\n    \"label\": \"Profile: tax_year\",\n    \"value\": 1215.29,\n    \"source\": \"profile.yaml\",\n    \"year\": null,\n    \"details\": {\n      \"key\": \"tax_year\"\n    }\n  }\n]\n```\n\nThe user's question:\n\n> Why is my refund smaller than last year?\n\n**Respond with valid JSON only**, matching exactly this schema:\n\n```json\n{\n  \"prose\": \"<plain-English answer, 1-4 short paragraphs>\",\n  \"citations\": [\n    {\"fact_id\": \"<id from the list above>\", \"note\": \"<one-sentence reason you cited it>\"}\n  ]\n}\n```\n\nRules:\n- Every `fact_id` in `citations` MUST appear in the facts above.\n- Every dollar amount in your prose MUST match a fact's `value`.\n- If nothing in the facts answers the question, say so and leave `citations` as `[]`.\n- Return JSON only. No markdown fence, no preamble.",
+  "question": "Why is my refund smaller than last year?",
+  "facts": [
+    {
+      "id": "t1.2025.income.employment",
+      "category": "t1_line",
+      "label": "Employment income (T1 line 10100)",
+      "value": 168638.78,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.income.interest",
+      "category": "t1_line",
+      "label": "Interest income (T1 line 12100)",
+      "value": 9159.42,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.income.rental_net",
+      "category": "t1_line",
+      "label": "Net rental income (T1 line 12600)",
+      "value": 12146.53,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.income.capital_gains",
+      "category": "t1_line",
+      "label": "Capital gains (T1 line 12700)",
+      "value": 147.62,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.income.total",
+      "category": "t1_line",
+      "label": "Total income",
+      "value": 190092.35,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.deductions.rrsp",
+      "category": "t1_line",
+      "label": "RRSP deduction (T1 line 20800)",
+      "value": 20366.0,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.deductions.cpp_enhanced",
+      "category": "t1_line",
+      "label": "Enhanced CPP (T1 line 22215)",
+      "value": 644.24,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.deductions.wfh",
+      "category": "t1_line",
+      "label": "WFH expenses (T1 line 22900)",
+      "value": 2746.32,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.deductions.other_deductions",
+      "category": "t1_line",
+      "label": "Other deductions (T1 line 23200)",
+      "value": 111.71,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.deductions.total",
+      "category": "t1_line",
+      "label": "Total deductions",
+      "value": 23868.26,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.net_income",
+      "category": "t1_line",
+      "label": "Net income",
+      "value": 166224.09,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.taxable_income",
+      "category": "t1_line",
+      "label": "Taxable income",
+      "value": 166076.47,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.fed.gross",
+      "category": "t1_line",
+      "label": "Federal tax (gross)",
+      "value": 39673.04,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.fed.credits",
+      "category": "t1_line",
+      "label": "Federal non-refundable credits",
+      "value": 1778.05,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.fed.donation_credit",
+      "category": "t1_line",
+      "label": "Federal donation credit",
+      "value": 1395.39,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.fed.ftc",
+      "category": "t1_line",
+      "label": "Federal foreign tax credit (T2209)",
+      "value": 8475.69,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.fed.final",
+      "category": "t1_line",
+      "label": "Federal tax (after credits)",
+      "value": 28023.91,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.prov.gross",
+      "category": "t1_line",
+      "label": "Provincial tax (gross)",
+      "value": 24351.06,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.prov.credits",
+      "category": "t1_line",
+      "label": "Provincial non-refundable credits",
+      "value": 520.44,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.prov.donation_credit",
+      "category": "t1_line",
+      "label": "Provincial donation credit",
+      "value": 471.87,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.prov.final",
+      "category": "t1_line",
+      "label": "Provincial tax (after credits)",
+      "value": 23358.75,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.total_tax",
+      "category": "t1_line",
+      "label": "Total tax",
+      "value": 51382.66,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.source_deducted",
+      "category": "t1_line",
+      "label": "Tax withheld at source",
+      "value": 50484.35,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2025.balance",
+      "category": "t1_line",
+      "label": "Balance (owing if positive, refund if negative)",
+      "value": 898.31,
+      "source": "compute_t1_return",
+      "year": 2025,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.income.employment",
+      "category": "t1_line",
+      "label": "Employment income (T1 line 10100)",
+      "value": 191736.64,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.income.interest",
+      "category": "t1_line",
+      "label": "Interest income (T1 line 12100)",
+      "value": 15124.3,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.income.total",
+      "category": "t1_line",
+      "label": "Total income",
+      "value": 206860.93,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.deductions.rpp",
+      "category": "t1_line",
+      "label": "RPP deduction (T1 line 20700)",
+      "value": 27.59,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.deductions.cpp_enhanced",
+      "category": "t1_line",
+      "label": "Enhanced CPP (T1 line 22215)",
+      "value": 502.67,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.deductions.total",
+      "category": "t1_line",
+      "label": "Total deductions",
+      "value": 530.26,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.net_income",
+      "category": "t1_line",
+      "label": "Net income",
+      "value": 206330.67,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.taxable_income",
+      "category": "t1_line",
+      "label": "Taxable income",
+      "value": 206330.67,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.fed.gross",
+      "category": "t1_line",
+      "label": "Federal tax (gross)",
+      "value": 53522.3,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.fed.credits",
+      "category": "t1_line",
+      "label": "Federal non-refundable credits",
+      "value": 1786.55,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.fed.ftc",
+      "category": "t1_line",
+      "label": "Federal foreign tax credit (T2209)",
+      "value": 922.37,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.fed.final",
+      "category": "t1_line",
+      "label": "Federal tax (after credits)",
+      "value": 50813.39,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.prov.gross",
+      "category": "t1_line",
+      "label": "Provincial tax (gross)",
+      "value": 32786.2,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.prov.credits",
+      "category": "t1_line",
+      "label": "Provincial non-refundable credits",
+      "value": 504.84,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.prov.final",
+      "category": "t1_line",
+      "label": "Provincial tax (after credits)",
+      "value": 32281.37,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.total_tax",
+      "category": "t1_line",
+      "label": "Total tax",
+      "value": 83094.75,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.source_deducted",
+      "category": "t1_line",
+      "label": "Tax withheld at source",
+      "value": 51107.59,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "t1.2024.balance",
+      "category": "t1_line",
+      "label": "Balance (owing if positive, refund if negative)",
+      "value": 31987.16,
+      "source": "compute_t1_return",
+      "year": 2024,
+      "details": {}
+    },
+    {
+      "id": "slip.t4.0.box14_employment_income",
+      "category": "t4",
+      "label": "T4 box 14 — employment income (AKAMAI TECHNOLOGIES INC)",
+      "value": 168638.78,
+      "source": "2025 T4.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "AKAMAI TECHNOLOGIES INC",
+        "box": "box14_employment_income"
+      }
+    },
+    {
+      "id": "slip.t4.0.box16_cpp",
+      "category": "t4",
+      "label": "T4 box 16 — CPP contributions (AKAMAI TECHNOLOGIES INC)",
+      "value": 2419.84,
+      "source": "2025 T4.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "AKAMAI TECHNOLOGIES INC",
+        "box": "box16_cpp"
+      }
+    },
+    {
+      "id": "slip.t4.0.box18_ei_premiums",
+      "category": "t4",
+      "label": "T4 box 18 — EI premiums (AKAMAI TECHNOLOGIES INC)",
+      "value": 646.32,
+      "source": "2025 T4.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "AKAMAI TECHNOLOGIES INC",
+        "box": "box18_ei_premiums"
+      }
+    },
+    {
+      "id": "slip.t4.0.box22_tax_deducted",
+      "category": "t4",
+      "label": "T4 box 22 — tax deducted (AKAMAI TECHNOLOGIES INC)",
+      "value": 50484.35,
+      "source": "2025 T4.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "AKAMAI TECHNOLOGIES INC",
+        "box": "box22_tax_deducted"
+      }
+    },
+    {
+      "id": "slip.t4.0.box38_security_options",
+      "category": "t4",
+      "label": "T4 box 38 — security options (RSU/ESPP) (AKAMAI TECHNOLOGIES INC)",
+      "value": 45514.68,
+      "source": "2025 T4.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "AKAMAI TECHNOLOGIES INC",
+        "box": "box38_security_options"
+      }
+    },
+    {
+      "id": "slip.t4.0.box40_other_taxable",
+      "category": "t4",
+      "label": "T4 box 40 — other taxable benefits (AKAMAI TECHNOLOGIES INC)",
+      "value": 237.54,
+      "source": "2025 T4.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "AKAMAI TECHNOLOGIES INC",
+        "box": "box40_other_taxable"
+      }
+    },
+    {
+      "id": "slip.t5.0.box13_interest",
+      "category": "t5",
+      "label": "T5 box 13 — interest (Interactive Brokers Canada Inc.)",
+      "value": 115.55,
+      "source": "U16001354.2025.T5.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "Interactive Brokers Canada Inc.",
+        "box": "box13_interest"
+      }
+    },
+    {
+      "id": "slip.t5.0.box15_foreign_income",
+      "category": "t5",
+      "label": "T5 box 15 — foreign income (Interactive Brokers Canada Inc.)",
+      "value": 18146.91,
+      "source": "U16001354.2025.T5.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "Interactive Brokers Canada Inc.",
+        "box": "box15_foreign_income"
+      }
+    },
+    {
+      "id": "slip.t5.0.box16_foreign_tax_paid",
+      "category": "t5",
+      "label": "T5 box 16 — foreign tax paid (Interactive Brokers Canada Inc.)",
+      "value": 1725.78,
+      "source": "U16001354.2025.T5.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "Interactive Brokers Canada Inc.",
+        "box": "box16_foreign_tax_paid"
+      }
+    },
+    {
+      "id": "slip.1042s.0.gross_income",
+      "category": "1042s",
+      "label": "1042-S box 2 — gross income USD (Interactive Brokers Canada Inc.)",
+      "value": 6.6,
+      "source": "[SPOUSE]_U16001354.2025.1042S.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "Interactive Brokers Canada Inc.",
+        "box": "gross_income"
+      }
+    },
+    {
+      "id": "slip.1042s.1.gross_income",
+      "category": "1042s",
+      "label": "1042-S box 2 — gross income USD (Interactive Brokers Canada Inc.)",
+      "value": 63.58,
+      "source": "[SPOUSE]_U16536250.2025.1042S.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "Interactive Brokers Canada Inc.",
+        "box": "gross_income"
+      }
+    },
+    {
+      "id": "slip.1042s.1.federal_tax_withheld",
+      "category": "1042s",
+      "label": "1042-S box 7a — federal tax withheld USD (Interactive Brokers Canada Inc.)",
+      "value": 9.6,
+      "source": "[SPOUSE]_U16536250.2025.1042S.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "Interactive Brokers Canada Inc.",
+        "box": "federal_tax_withheld"
+      }
+    },
+    {
+      "id": "slip.1042s.2.gross_income",
+      "category": "1042s",
+      "label": "1042-S box 2 — gross income USD (Interactive Brokers Canada Inc.)",
+      "value": 62.98,
+      "source": "U15985348.2025.1042S.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "Interactive Brokers Canada Inc.",
+        "box": "gross_income"
+      }
+    },
+    {
+      "id": "slip.1042s.2.federal_tax_withheld",
+      "category": "1042s",
+      "label": "1042-S box 7a — federal tax withheld USD (Interactive Brokers Canada Inc.)",
+      "value": 9.6,
+      "source": "U15985348.2025.1042S.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "Interactive Brokers Canada Inc.",
+        "box": "federal_tax_withheld"
+      }
+    },
+    {
+      "id": "slip.1042s.3.gross_income",
+      "category": "1042s",
+      "label": "1042-S box 2 — gross income USD (Interactive Brokers Canada Inc.)",
+      "value": 21.59,
+      "source": "U16001354.2025.1042S.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "Interactive Brokers Canada Inc.",
+        "box": "gross_income"
+      }
+    },
+    {
+      "id": "slip.rrsp.0.total",
+      "category": "rrsp",
+      "label": "RRSP receipt total (RRSP receipt #1)",
+      "value": 3341.93,
+      "source": "2025_1_3_RRSP_Tax_receipt.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "RRSP receipt #1"
+      }
+    },
+    {
+      "id": "slip.rrsp.1.total",
+      "category": "rrsp",
+      "label": "RRSP receipt total (RRSP receipt #2)",
+      "value": 14868.13,
+      "source": "2025_3_12_RRSP_Tax_receipt.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "RRSP receipt #2"
+      }
+    },
+    {
+      "id": "slip.rrsp.2.total",
+      "category": "rrsp",
+      "label": "RRSP receipt total (RRSP receipt #3)",
+      "value": 2706.44,
+      "source": "2026Q1_RRSP_Receipt.pdf",
+      "year": 2025,
+      "details": {
+        "issuer": "RRSP receipt #3"
+      }
+    },
+    {
+      "id": "profile.wfh_total_sqft",
+      "category": "profile",
+      "label": "Profile: wfh_total_sqft",
+      "value": 1379.65,
+      "source": "profile.yaml",
+      "year": null,
+      "details": {
+        "key": "wfh_total_sqft"
+      }
+    },
+    {
+      "id": "profile.wfh_workspace_sqft",
+      "category": "profile",
+      "label": "Profile: wfh_workspace_sqft",
+      "value": 230.94,
+      "source": "profile.yaml",
+      "year": null,
+      "details": {
+        "key": "wfh_workspace_sqft"
+      }
+    },
+    {
+      "id": "profile.wfh_percentage",
+      "category": "profile",
+      "label": "Profile: wfh_percentage",
+      "value": 9.99,
+      "source": "profile.yaml",
+      "year": null,
+      "details": {
+        "key": "wfh_percentage"
+      }
+    },
+    {
+      "id": "profile.property_address",
+      "category": "profile",
+      "label": "Profile: property_address",
+      "value": "89 Laskin, Vaughan, Ontario",
+      "source": "profile.yaml",
+      "year": null,
+      "details": {
+        "key": "property_address"
+      }
+    },
+    {
+      "id": "profile.tax_year",
+      "category": "profile",
+      "label": "Profile: tax_year",
+      "value": 1215.29,
+      "source": "profile.yaml",
+      "year": null,
+      "details": {
+        "key": "tax_year"
+      }
+    }
+  ],
+  "scale_factor": 0.5998467892757261,
+  "verdict": {
+    "kind": "citation_and_number_grounding",
+    "rule": "every citations[].fact_id must appear in known_fact_ids; every dollar figure quoted in prose must equal a value in known_amounts (within rounding to the cent).",
+    "known_fact_ids": [
+      "t1.2025.income.employment",
+      "t1.2025.income.interest",
+      "t1.2025.income.rental_net",
+      "t1.2025.income.capital_gains",
+      "t1.2025.income.total",
+      "t1.2025.deductions.rrsp",
+      "t1.2025.deductions.cpp_enhanced",
+      "t1.2025.deductions.wfh",
+      "t1.2025.deductions.other_deductions",
+      "t1.2025.deductions.total",
+      "t1.2025.net_income",
+      "t1.2025.taxable_income",
+      "t1.2025.fed.gross",
+      "t1.2025.fed.credits",
+      "t1.2025.fed.donation_credit",
+      "t1.2025.fed.ftc",
+      "t1.2025.fed.final",
+      "t1.2025.prov.gross",
+      "t1.2025.prov.credits",
+      "t1.2025.prov.donation_credit",
+      "t1.2025.prov.final",
+      "t1.2025.total_tax",
+      "t1.2025.source_deducted",
+      "t1.2025.balance",
+      "t1.2024.income.employment",
+      "t1.2024.income.interest",
+      "t1.2024.income.total",
+      "t1.2024.deductions.rpp",
+      "t1.2024.deductions.cpp_enhanced",
+      "t1.2024.deductions.total",
+      "t1.2024.net_income",
+      "t1.2024.taxable_income",
+      "t1.2024.fed.gross",
+      "t1.2024.fed.credits",
+      "t1.2024.fed.ftc",
+      "t1.2024.fed.final",
+      "t1.2024.prov.gross",
+      "t1.2024.prov.credits",
+      "t1.2024.prov.final",
+      "t1.2024.total_tax",
+      "t1.2024.source_deducted",
+      "t1.2024.balance",
+      "slip.t4.0.box14_employment_income",
+      "slip.t4.0.box16_cpp",
+      "slip.t4.0.box18_ei_premiums",
+      "slip.t4.0.box22_tax_deducted",
+      "slip.t4.0.box38_security_options",
+      "slip.t4.0.box40_other_taxable",
+      "slip.t5.0.box13_interest",
+      "slip.t5.0.box15_foreign_income",
+      "slip.t5.0.box16_foreign_tax_paid",
+      "slip.1042s.0.gross_income",
+      "slip.1042s.1.gross_income",
+      "slip.1042s.1.federal_tax_withheld",
+      "slip.1042s.2.gross_income",
+      "slip.1042s.2.federal_tax_withheld",
+      "slip.1042s.3.gross_income",
+      "slip.rrsp.0.total",
+      "slip.rrsp.1.total",
+      "slip.rrsp.2.total",
+      "profile.wfh_total_sqft",
+      "profile.wfh_workspace_sqft",
+      "profile.wfh_percentage",
+      "profile.property_address",
+      "profile.tax_year"
+    ],
+    "known_amounts": [
+      6.6,
+      9.6,
+      9.99,
+      21.59,
+      27.59,
+      62.98,
+      63.58,
+      111.71,
+      115.55,
+      147.62,
+      230.94,
+      237.54,
+      471.87,
+      502.67,
+      504.84,
+      520.44,
+      530.26,
+      644.24,
+      646.32,
+      898.31,
+      922.37,
+      1215.29,
+      1379.65,
+      1395.39,
+      1725.78,
+      1778.05,
+      1786.55,
+      2419.84,
+      2706.44,
+      2746.32,
+      3341.93,
+      8475.69,
+      9159.42,
+      12146.53,
+      14868.13,
+      15124.3,
+      18146.91,
+      20366.0,
+      23358.75,
+      23868.26,
+      24351.06,
+      28023.91,
+      31987.16,
+      32281.37,
+      32786.2,
+      39673.04,
+      45514.68,
+      50484.35,
+      50813.39,
+      51107.59,
+      51382.66,
+      53522.3,
+      83094.75,
+      166076.47,
+      166224.09,
+      168638.78,
+      190092.35,
+      191736.64,
+      206330.67,
+      206860.93
+    ]
+  },
+  "sanitized": true,
+  "sanitized_at": "2026-08-18T14:29:06"
+}
