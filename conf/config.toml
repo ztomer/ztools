@@ -1,23 +1,40 @@
 llm_url = "http://localhost:1337"
 
-# DERIVED 2026-08-16 from a full sweep: 11 installed models x 23 eval tasks, scores in
-# ~/.config/ztools/eval_history.json. This replaces the 2026-08-15 PROVISIONAL table,
-# which was a speed argument with no quality measurement behind it.
+# DERIVED 2026-08-17 from the corrected sweep: 24 eval tasks, over the 9 models that are
+# both INSTALLED and complete at 24/24. Scores in ~/.config/ztools/eval_history.json.
 #
-# HOW THESE WERE CHOSEN. A mean across all 23 tasks is the wrong statistic: the tasks
-# are heterogeneous and most are saturated (9-11 models tie at 100 on `filename`,
-# `json`, `rename_mixed`...). A per-task argmax is equally wrong for the same reason.
-# So each slot is scored ONLY over the eval tasks its own consumer actually exercises:
+# This supersedes the 2026-08-16 table, which was measured while a leaked plugin daemon
+# held 31GB of this machine's 64 -- see the retraction below -- and before four scorer
+# defects were fixed (token budget, attribution source, attribution tag matching, and
+# the weekend_fixed_mixed recall denominator).
+#
+# HOW THESE WERE CHOSEN. A mean across all 24 tasks is the wrong statistic: the tasks
+# are heterogeneous and most are saturated. A per-task argmax is equally wrong for the
+# same reason. So each slot is scored ONLY over the eval tasks its own consumer
+# exercises:
 #
 #     json      -> wk        weekend_{transient,fixed}[_mixed], _schema, json, detailed_json
-#     summarize -> tw        summarize, _mixed, _contradiction, _factual_{accuracy,coverage}
+#     summarize -> tw        summarize, _mixed, _contradiction, _misattribution,
+#                            _factual_{accuracy,coverage}
 #     filename  -> rn        filename, filename_mixed, filename_leak, rename_mixed
 #     think     -> fallback  file_summary[_mixed], taxes_{anomalies,audit_readiness,synthesis}
 #
-# Ties are broken by count of zero scores across all 23, then by overall mean -- a
-# model that collapses completely on some other task is a worse bet in the slot it
-# happens to tie in. `default_model` gets the `think` winner, since it is what every
-# task with no slot of its own lands on.
+# Ties are broken by count of zero scores across all 24, then by overall mean -- a model
+# that collapses completely on some other task is a worse bet in the slot it happens to
+# tie in. `default_model` gets the `think` winner, since it is what every task with no
+# slot of its own lands on.
+#
+# EXCLUDED, and why, because a model absent from a derivation looks like an oversight:
+#   nemotron-3.5-lightning-30b   DELETED. It completes and scores 85.4 (6th of 11), but
+#                                takes 3.8 HOURS for the 24 tasks that gemma-4-12b does
+#                                in 651s -- ~20x slower, for a LOWER score -- and it is
+#                                not uniquely best at a single task. Strictly dominated.
+#   qwen3.8-27b-4bit             DELETED. 84.3, beaten by the same family's MXFP8 build
+#                                (86.9) which is also faster over the suite.
+#   ornith-1.0-9b-mxfp8          INSTALLED but only 5/24 this run. Not ranked rather
+#                                than ranked on a subset: the tasks a truncated run
+#                                misses are the ones at the end, so its average would
+#                                be biased toward the easy half.
 #
 # RETRACTED 2026-08-17: there is no "27GB does not fit this host" threshold.
 #
@@ -53,10 +70,11 @@ llm_url = "http://localhost:1337"
 #
 # Re-derive after any roster change and stamp the date, so it invalidates visibly.
 default_model = "ornith-1.0-35b-jang_4m"
-  # think-group winner at 88.4 (file_summary 100, the only model to score it at all;
-  # taxes_anomalies 92, synthesis 82). PROVISIONAL: derived from the sweep that ran
-  # under the leak. The corrected 12-model sweep -- which now includes the restored
-  # MXFP8 build, no longer excluded on false grounds -- supersedes it.
+  # Same model as best_models.think, and for the same reason: this is where every task
+  # WITHOUT a slot of its own lands, which is the think group by definition. 88.4 vs
+  # 80.8 for the runner-up, the widest margin of any slot, and the only model to score
+  # file_summary above 60. 19.8GB. No longer provisional: derived from the corrected
+  # sweep on a machine that is not being drained.
 
 # Fallback chain for `rn`'s filename task, tried in order.
 # Top-level keys must stay ABOVE the first [table] header — a bare key after one
@@ -80,44 +98,39 @@ model_fallback_chain = ["foundation", "qwen", "gemma", "ornith", "nemotron"]
 
 [best_models]
 think = "ornith-1.0-35b-jang_4m"
-  # 88.4 on the think group vs 79.2 for the runner-up. Only model that scored
-  # file_summary at all (100; every other model landed on 60, 30 or 0).
+  # 88.4 on the think group vs 80.8 for the runner-up -- the widest margin of any slot.
+  # The only model to score file_summary at all (100; every other lands on 60 or below).
 json = "gemma-4-12b-it-mxfp8"
-  # 98.7 on the wk group -- but so did qwen3.8-27b-jang_6d, gemma-4-e4b-it-8bit and
-  # qwen3.8-27b-4bit, all four with the identical [100,100,100,91,100,100,100]. Split
-  # on the tiebreakers: 1 zero across all 23 tasks (vs 2, 2, 3) and the highest
-  # overall mean of any installed model (86.9). The shared 91 is weekend_fixed_mixed,
-  # where every one of the eleven missed the same 2 of 12 signal items -- that is a
-  # prompt or fixture problem, not a model problem, and no choice here fixes it.
+  # 100.0 on all seven wk tasks. So did qwen3.8-27b-mxfp8, qwen3.8-27b-jang_6d and
+  # gemma-4-e4b-it-8bit -- the group is fully saturated now that weekend_fixed_mixed no
+  # longer punishes obedience, so this slot is decided ENTIRELY by the tiebreakers:
+  # fewest zeros across all 24 (1, vs 2) and then the highest overall mean (87.3).
+  # Worth knowing that this slot no longer discriminates; see docs/NEXT_STEPS.md P5.
 summarize = "gemma-4-e2b-it-8bit"
-  # 89.8 on the tw group vs 78.8 for the runner-up, and it displaces the previous
-  # holder of this slot (gemma-4-12b-it-mxfp8, 64.4). A 5.9GB model beating the 13.4GB
-  # one is surprising enough to have been re-run three times per task; the result is
-  # deterministic, not sampling noise:
+  # 89.5 on the tw group vs 81.3 for the runner-up, and it beats models six times its
+  # size. A 5.9GB model taking this slot is surprising enough that it was re-run three
+  # times per adversarial task; the result is deterministic, not sampling noise.
   #
-  #                            contradiction   factual_accuracy
-  #     gemma-4-e2b-it-8bit    100 100 100     67 67 67
-  #     gemma-4-12b-it-mxfp8     0   0   0     34 34
+  # It wins on the two tasks that actually separate models here. On
+  # summarize_contradiction it scores 100 where gemma-4-12b scores 0 -- the 12B parrots
+  # a planted self-contradiction verbatim, every time. On summarize_factual_accuracy it
+  # scores 67 against 34 and 0 for larger models. Those are the failures `tw` exists to
+  # avoid: it summarises text nobody will re-read against its source.
   #
-  # Both are adversarial: the source contains a self-contradiction, and three planted
-  # falsehoods. The 12B parrots the contradiction verbatim every time and repeats all
-  # three falsehoods; the e2b is the only installed model that clears BOTH gates.
-  # Those are exactly the failures that matter for `tw`, which summarises text nobody
-  # is going to re-read against its source. e2b is weak elsewhere (file_summary 0,
-  # detailed_json 45, weekend_fixed 45) and must not be promoted out of this slot.
+  # It is weak elsewhere (file_summary 0, detailed_json 45) and must not be promoted
+  # out of this slot on the strength of this.
 filename = "foundation"
-  # 100 on all four filename tasks with 0 zeros anywhere, on-device, 0.3s. Seven
-  # models tied at 100; foundation wins the tiebreakers outright.
+  # 100 on all four rn tasks with ZERO zeros across all 24 -- the only model with none.
+  # On-device, always present, and the fastest thing here (198s for the whole suite
+  # against gemma-4-12b's 651s). Four models tied at 100; foundation wins every
+  # tiebreaker.
 vlm = "gemma-4-12b-it-mxfp8"
-  # UNMEASURED -- and unlike the entries above, this one cannot be derived from the
-  # sweep at all. `image_rename` and `image_rename_mixed` send IMAGE_RENAME_PROMPT as
-  # TEXT; no eval task in the suite feeds an actual image, so those two 100s say
-  # nothing whatsoever about vision. This is a static-probe pick: `vision_config` is
-  # present in the model's config.json (probe_vision in lib/model_caps.py), and among
-  # the vision-capable models it has the best general competence. Ten of the eleven
-  # installed models probe vision-capable, so the probe barely narrows the field.
-  # docs/BACKLOG.md carries the item for a real image task; until that exists, treat
-  # this slot as a guess with a plausible mechanism, not a measurement.
+  # STILL UNMEASURED, and still cannot be derived from this sweep. `image_rename` and
+  # `image_rename_mixed` send their prompt as TEXT -- no eval task feeds an actual
+  # image -- so those scores say only that a model can emit a filename-shaped string.
+  # This remains a static-probe pick (vision_config present in the model's config.json)
+  # among the vision-capable models with the best general competence.
+  # docs/NEXT_STEPS.md P2 builds a real image task through rn's own transport.
 
 # Timeouts are a FLOOR, not a ceiling: eval/signals.py takes
 # max(learned, configured, DEFAULT_EVAL_TIMEOUT, derived-from-measured-rates). These
