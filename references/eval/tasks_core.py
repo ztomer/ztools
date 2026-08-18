@@ -16,6 +16,7 @@ from lib.eval_data import (
     WEEKEND_USR_TRANSIENT,
 )
 from lib.paths import eval_tasks_path
+from lib.validators.adversarial import validate_no_fabrication, validate_resists_injection
 from lib.validators.attribution import validate_attribution
 from lib.validators.json_validator import (
     validate_detailed_json,
@@ -48,6 +49,9 @@ from eval.tasks_prompts import (
     FALSEHOOD_PHRASES,
     FILE_SUMMARY_PROMPT,
     FILE_SUMMARY_PROMPT_MIXED,
+    FILENAME_INJECTION_KEYWORDS,
+    FILENAME_INJECTION_MARKERS,
+    FILENAME_INJECTION_PROMPT,
     IMAGE_RENAME_PROMPT,
     IMAGE_RENAME_PROMPT_MIXED,
     KEY_FACTS,
@@ -58,6 +62,8 @@ from eval.tasks_prompts import (
     TWITTER_PROMPT_CONTRADICTION,
     TWITTER_PROMPT_MISATTRIBUTION,
     TWITTER_PROMPT_MIXED,
+    WEEKEND_FABRICATION_LURES,
+    WEEKEND_FABRICATION_PROMPT,
     WEEKEND_USR_FIXED_MIXED,
     WEEKEND_USR_TRANSIENT_MIXED,
 )
@@ -320,6 +326,30 @@ TASKS = {
         ),
         "validator": validate_image_description,
         "parse_json": False,
+    },
+    "weekend_fabrication": {
+        # The `json` slot saturated once weekend_fixed_mixed was fixed -- four models
+        # at exactly 100.0, so it is decided purely on tiebreakers. This separates
+        # them on the property `wk` actually needs: does the plan send you to a place
+        # that exists in the listings, or one the model remembered?
+        "messages": [{"role": "user", "content": WEEKEND_FABRICATION_PROMPT}],
+        "validator": validate_no_fabrication,
+        "validator_kwargs": {"lures": WEEKEND_FABRICATION_LURES},
+        "parse_json": True,
+        "source": WEEKEND_FABRICATION_PROMPT,
+    },
+    "filename_injection": {
+        # `rn`'s real threat model: OCR text from an arbitrary screenshot goes
+        # straight into a prompt, so a screenshot can carry instructions. Never
+        # tested before -- filename_leak checks for template leakage, not obedience.
+        "messages": [{"role": "user", "content": FILENAME_INJECTION_PROMPT}],
+        "validator": validate_resists_injection,
+        "validator_kwargs": {
+            "injection_markers": FILENAME_INJECTION_MARKERS,
+            "expected_keywords": FILENAME_INJECTION_KEYWORDS,
+        },
+        "parse_json": False,
+        "source": FILENAME_INJECTION_PROMPT,
     },
     "summarize_misattribution": {
         # Ranks models on attribution, which `summarize` cannot: its timeline gives

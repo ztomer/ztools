@@ -317,11 +317,95 @@
   },
   "foundation": {
     "_capabilities": {
-      "cold_start_seconds": 0.85,
-      "decode_tokens_per_sec": 68.01,
+      "cold_start_seconds": 0.97,
+      "cold_start_seconds_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 0.85
+        },
+        {
+          "clean": true,
+          "ts": 1787068392.8,
+          "v": 1.9173
+        },
+        {
+          "clean": true,
+          "ts": 1787068398.7,
+          "v": 0.1773
+        },
+        {
+          "clean": true,
+          "ts": 1787068717.1,
+          "v": 1.1042
+        },
+        {
+          "clean": true,
+          "ts": 1787068902.0,
+          "v": 0.8438
+        }
+      ],
+      "decode_tokens_per_sec": 68.74,
+      "decode_tokens_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 68.01
+        },
+        {
+          "clean": true,
+          "ts": 1787068394.0,
+          "v": 53.6507
+        },
+        {
+          "clean": true,
+          "ts": 1787068399.6,
+          "v": 69.2544
+        },
+        {
+          "clean": true,
+          "ts": 1787068717.9,
+          "v": 74.9309
+        },
+        {
+          "clean": true,
+          "ts": 1787068902.9,
+          "v": 68.2217
+        }
+      ],
       "generative": true,
-      "prefill_chars_per_sec": 3642.7,
-      "prefill_samples": 2
+      "prefill_chars_per_sec": 3811.35,
+      "prefill_chars_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 3642.7
+        },
+        {
+          "clean": true,
+          "ts": 1787068396.2,
+          "v": 3356.9
+        },
+        {
+          "clean": true,
+          "ts": 1787068401.7,
+          "v": 3643.6
+        },
+        {
+          "clean": true,
+          "ts": 1787068719.8,
+          "v": 3979.1
+        },
+        {
+          "clean": true,
+          "ts": 1787068904.8,
+          "v": 4030.1
+        }
+      ],
+      "prefill_samples": 6
     },
     "detailed_json": {
       "p95_latency": 26.6,
@@ -350,6 +434,13 @@
       "samples": 29,
       "timeout": 900,
       "total_retries": 1
+    },
+    "filename_injection": {
+      "p95_latency": 0.3,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
     },
     "filename_leak": {
       "p95_latency": 0.8,
@@ -461,6 +552,13 @@
       "timeout": 900,
       "total_retries": 1
     },
+    "weekend_fabrication": {
+      "p95_latency": 2.3,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 0
+    },
     "weekend_fixed": {
       "p95_latency": 7.8,
       "parse_failures": 0,
@@ -499,13 +597,97 @@
   },
   "gemma-4-12b-it-mxfp8": {
     "_capabilities": {
-      "cold_start_seconds": 11.73,
-      "decode_tokens_per_sec": 30.23,
+      "cold_start_seconds": 5.14,
+      "cold_start_seconds_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 11.73
+        },
+        {
+          "clean": true,
+          "ts": 1787067965.1,
+          "v": 5.5532
+        },
+        {
+          "clean": true,
+          "ts": 1787067989.5,
+          "v": 0.1348
+        },
+        {
+          "clean": true,
+          "ts": 1787068541.2,
+          "v": 5.1228
+        },
+        {
+          "clean": true,
+          "ts": 1787068773.6,
+          "v": 5.1537
+        }
+      ],
+      "decode_tokens_per_sec": 34.27,
+      "decode_tokens_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 30.23
+        },
+        {
+          "clean": true,
+          "ts": 1787067966.9,
+          "v": 35.5944
+        },
+        {
+          "clean": true,
+          "ts": 1787067991.4,
+          "v": 33.739
+        },
+        {
+          "clean": true,
+          "ts": 1787068543.0,
+          "v": 34.8074
+        },
+        {
+          "clean": true,
+          "ts": 1787068776.3,
+          "v": 23.8251
+        }
+      ],
       "disk_bytes": 13360263832,
       "family": "gemma4_unified",
       "generative": true,
-      "prefill_chars_per_sec": 1487.8,
-      "prefill_samples": 2,
+      "prefill_chars_per_sec": 1137.15,
+      "prefill_chars_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 1487.8
+        },
+        {
+          "clean": true,
+          "ts": 1787067980.9,
+          "v": 1438.0
+        },
+        {
+          "clean": true,
+          "ts": 1787068007.3,
+          "v": 1257.3
+        },
+        {
+          "clean": true,
+          "ts": 1787068565.5,
+          "v": 889.7
+        },
+        {
+          "clean": true,
+          "ts": 1787068796.0,
+          "v": 1017.0
+        }
+      ],
+      "prefill_samples": 6,
       "vision": true
     },
     "detailed_json": {
@@ -533,6 +715,13 @@
       "p95_latency": 1.2,
       "parse_failures": 0,
       "samples": 11,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "filename_injection": {
+      "p95_latency": 0.7,
+      "parse_failures": 0,
+      "samples": 1,
       "timeout": 900,
       "total_retries": 0
     },
@@ -648,6 +837,13 @@
       "timeout": 900,
       "total_retries": 0
     },
+    "weekend_fabrication": {
+      "p95_latency": 12.4,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 0
+    },
     "weekend_fixed": {
       "p95_latency": 29.5,
       "parse_failures": 0,
@@ -700,13 +896,52 @@
   },
   "gemma-4-e2b-it-8bit": {
     "_capabilities": {
-      "cold_start_seconds": 15.76,
-      "decode_tokens_per_sec": 30.49,
+      "cold_start_seconds": 9.3,
+      "cold_start_seconds_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 15.76
+        },
+        {
+          "clean": true,
+          "ts": 1787068731.6,
+          "v": 9.3016
+        }
+      ],
+      "decode_tokens_per_sec": 98.96,
+      "decode_tokens_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 30.49
+        },
+        {
+          "clean": true,
+          "ts": 1787068732.3,
+          "v": 98.9576
+        }
+      ],
       "disk_bytes": 5899567172,
       "family": "gemma4",
       "generative": true,
-      "prefill_chars_per_sec": 9876.4,
-      "prefill_samples": 1,
+      "prefill_chars_per_sec": 20578.2,
+      "prefill_chars_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 9876.4
+        },
+        {
+          "clean": true,
+          "ts": 1787068733.3,
+          "v": 20578.2
+        }
+      ],
+      "prefill_samples": 2,
       "vision": true
     },
     "detailed_json": {
@@ -842,6 +1077,13 @@
       "timeout": 900,
       "total_retries": 1
     },
+    "weekend_fabrication": {
+      "p95_latency": 2.1,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
     "weekend_fixed": {
       "p95_latency": 17.8,
       "parse_failures": 0,
@@ -894,13 +1136,97 @@
   },
   "gemma-4-e4b-it-8bit": {
     "_capabilities": {
-      "cold_start_seconds": 17.25,
-      "decode_tokens_per_sec": 34.83,
+      "cold_start_seconds": 9.13,
+      "cold_start_seconds_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 17.25
+        },
+        {
+          "clean": true,
+          "ts": 1787068370.0,
+          "v": 9.8822
+        },
+        {
+          "clean": true,
+          "ts": 1787068382.9,
+          "v": 0.1426
+        },
+        {
+          "clean": true,
+          "ts": 1787068707.1,
+          "v": 9.6901
+        },
+        {
+          "clean": true,
+          "ts": 1787068915.8,
+          "v": 8.5691
+        }
+      ],
+      "decode_tokens_per_sec": 62.04,
+      "decode_tokens_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 34.83
+        },
+        {
+          "clean": true,
+          "ts": 1787068371.2,
+          "v": 55.6621
+        },
+        {
+          "clean": true,
+          "ts": 1787068384.0,
+          "v": 59.9582
+        },
+        {
+          "clean": true,
+          "ts": 1787068708.1,
+          "v": 67.9517
+        },
+        {
+          "clean": true,
+          "ts": 1787068916.8,
+          "v": 64.1308
+        }
+      ],
       "disk_bytes": 8965299280,
       "family": "gemma4",
       "generative": true,
-      "prefill_chars_per_sec": 5808.5,
-      "prefill_samples": 2,
+      "prefill_chars_per_sec": 4121.3,
+      "prefill_chars_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 5808.5
+        },
+        {
+          "clean": true,
+          "ts": 1787068377.0,
+          "v": 3473.7
+        },
+        {
+          "clean": true,
+          "ts": 1787068389.3,
+          "v": 3785.5
+        },
+        {
+          "clean": true,
+          "ts": 1787068710.8,
+          "v": 7295.2
+        },
+        {
+          "clean": true,
+          "ts": 1787068921.3,
+          "v": 4457.1
+        }
+      ],
+      "prefill_samples": 6,
       "vision": true
     },
     "detailed_json": {
@@ -930,6 +1256,13 @@
       "samples": 12,
       "timeout": 900,
       "total_retries": 1
+    },
+    "filename_injection": {
+      "p95_latency": 0.6,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
     },
     "filename_leak": {
       "p95_latency": 0.5,
@@ -1042,6 +1375,13 @@
       "samples": 6,
       "timeout": 900,
       "total_retries": 1
+    },
+    "weekend_fabrication": {
+      "p95_latency": 5.0,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 0
     },
     "weekend_fixed": {
       "p95_latency": 30.6,
@@ -1494,13 +1834,82 @@
   },
   "ornith-1.0-35b-jang_4m": {
     "_capabilities": {
-      "cold_start_seconds": 12.42,
-      "decode_tokens_per_sec": 67.69,
+      "cold_start_seconds": 8.21,
+      "cold_start_seconds_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 12.42
+        },
+        {
+          "clean": true,
+          "ts": 1787068410.8,
+          "v": 8.536
+        },
+        {
+          "clean": true,
+          "ts": 1787068449.7,
+          "v": 0.1451
+        },
+        {
+          "clean": true,
+          "ts": 1787068933.8,
+          "v": 8.2118
+        }
+      ],
+      "decode_tokens_per_sec": 49.32,
+      "decode_tokens_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 67.69
+        },
+        {
+          "clean": true,
+          "ts": 1787068412.1,
+          "v": 49.3214
+        },
+        {
+          "clean": true,
+          "ts": 1787068451.3,
+          "v": 40.5703
+        },
+        {
+          "clean": true,
+          "ts": 1787068935.0,
+          "v": 57.2275
+        }
+      ],
       "disk_bytes": 19792976640,
       "family": "qwen3_5_moe",
       "generative": true,
-      "prefill_chars_per_sec": 4522.1,
-      "prefill_samples": 1,
+      "prefill_chars_per_sec": 2450.4,
+      "prefill_chars_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 4522.1
+        },
+        {
+          "clean": true,
+          "ts": 1787068420.7,
+          "v": 2331.1
+        },
+        {
+          "clean": true,
+          "ts": 1787068459.4,
+          "v": 2450.4
+        },
+        {
+          "clean": true,
+          "ts": 1787068939.4,
+          "v": 4495.9
+        }
+      ],
+      "prefill_samples": 4,
       "vision": true
     },
     "detailed_json": {
@@ -1530,6 +1939,13 @@
       "samples": 4,
       "timeout": 900,
       "total_retries": 2
+    },
+    "filename_injection": {
+      "p95_latency": 20.7,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
     },
     "filename_leak": {
       "p95_latency": 13.2,
@@ -1635,6 +2051,13 @@
       "samples": 3,
       "timeout": 900,
       "total_retries": 1
+    },
+    "weekend_fabrication": {
+      "p95_latency": 44.3,
+      "parse_failures": 0,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 0
     },
     "weekend_fixed": {
       "p95_latency": 382.6,
@@ -2767,13 +3190,97 @@
   },
   "qwen3.8-27b-mxfp8": {
     "_capabilities": {
-      "cold_start_seconds": 28.38,
-      "decode_tokens_per_sec": 13.2,
+      "cold_start_seconds": 25.76,
+      "cold_start_seconds_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 28.38
+        },
+        {
+          "clean": true,
+          "ts": 1787068045.0,
+          "v": 36.5099
+        },
+        {
+          "clean": true,
+          "ts": 1787068298.7,
+          "v": 1.2981
+        },
+        {
+          "clean": true,
+          "ts": 1787068608.8,
+          "v": 30.1026
+        },
+        {
+          "clean": true,
+          "ts": 1787068828.3,
+          "v": 21.422
+        }
+      ],
+      "decode_tokens_per_sec": 9.09,
+      "decode_tokens_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 13.2
+        },
+        {
+          "clean": true,
+          "ts": 1787068213.4,
+          "v": 0.3801
+        },
+        {
+          "clean": true,
+          "ts": 1787068306.3,
+          "v": 8.433
+        },
+        {
+          "clean": true,
+          "ts": 1787068615.3,
+          "v": 9.7527
+        },
+        {
+          "clean": true,
+          "ts": 1787068833.0,
+          "v": 13.6641
+        }
+      ],
       "disk_bytes": 28660735192,
       "family": "qwen3_5",
       "generative": true,
-      "prefill_chars_per_sec": 469.7,
-      "prefill_samples": 2,
+      "prefill_chars_per_sec": 422.05,
+      "prefill_chars_per_sec_samples": [
+        {
+          "clean": false,
+          "legacy": true,
+          "ts": 0.0,
+          "v": 469.7
+        },
+        {
+          "clean": true,
+          "ts": 1787068266.6,
+          "v": 376.1
+        },
+        {
+          "clean": true,
+          "ts": 1787068356.1,
+          "v": 402.1
+        },
+        {
+          "clean": true,
+          "ts": 1787068660.6,
+          "v": 442.0
+        },
+        {
+          "clean": true,
+          "ts": 1787068869.9,
+          "v": 543.4
+        }
+      ],
+      "prefill_samples": 6,
       "vision": true
     },
     "detailed_json": {
@@ -2799,6 +3306,13 @@
     },
     "filename": {
       "p95_latency": 1.6,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "filename_injection": {
+      "p95_latency": 2.6,
       "parse_failures": 0,
       "samples": 1,
       "timeout": 900,
@@ -2913,6 +3427,13 @@
       "p95_latency": 64.7,
       "parse_failures": 0,
       "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_fabrication": {
+      "p95_latency": 35.8,
+      "parse_failures": 0,
+      "samples": 3,
       "timeout": 900,
       "total_retries": 0
     },
