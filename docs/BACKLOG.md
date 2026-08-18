@@ -134,10 +134,30 @@ deferral without one gets silently re-litigated)
   rather than imported. A boolean that cannot be rechecked is exactly the
   trusted-not-verified number this repo spent three days undoing.
 
-  Blocked on their export. Files land at
-  `eval_tasks/data/taxes/taxes_<name>.sanitized.json` and the existing loader picks
-  them up with no code change; a validator that recomputes the arithmetic is the work
-  on this side.
+  **Export DELIVERED 2026-08-18** — `taxes_{yoy_narrative,qa,slip_qa}.sanitized.json`
+  are vendored. Each carries `grounding.kind` and `grounding.rule` (the check in
+  prose, so it need not be reverse-engineered from field names) plus a `scale_factor`
+  recording the sanitisation. The originals' `rubric` is byte-for-byte untouched;
+  `model_hint` is dropped from all six, since a stale field nothing reads is still a
+  trap for whoever assumes it does.
+
+  **NOT YET WIRED, and I was wrong about why.** I told them the loader would pick the
+  files up with no code change. It will not: `_register_taxes_tasks`
+  (`references/eval/tasks_core.py:378`) iterates an explicit `validators` dict of the
+  three original names, not a directory scan. They checked before reshaping anything
+  and corrected me. Remaining work here:
+
+  1. Write three validators against the grounding blocks:
+     - `yoy_narrative`  `arithmetic_reconciliation` — `sum(attribution.drivers[].tax_effect_cad) + attribution.rules_effect_cad == attribution.total_tax_delta_cad` within `tolerance_abs_cad`/`tolerance_pct`
+     - `qa`             `citation_and_number_grounding` — every cited id in `known_fact_ids`, every number in `known_amounts`
+     - `slip_qa`        `flag_subset_and_number_grounding` — highlighted ids a subset of `known_flag_ids`
+  2. Add the three names to the `validators` dict so they register.
+  3. Apply the winnability gate: build each task's ideal answer FROM its own
+     `grounding` block and assert it scores 100, before trusting any model score.
+
+  One caution for whoever does it: unlike the original three these carry NO `rubric`,
+  so grounding is the only signal. If the arithmetic check is wrong there is no second
+  opinion to disagree with it — which is exactly the argument for step 3.
 - **`vlm_preferred` / `text_preferred` in `conf/rename.toml` are audited but unread.**
   No production code consults them; only `audit_configured_models` does. Either wire
   them up or delete them — an audited key nothing uses trains the reader to ignore the
