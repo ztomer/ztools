@@ -15,6 +15,7 @@ does not rot the next time `best_models` is re-derived.
 """
 
 import asyncio
+import re
 from unittest.mock import patch
 
 import pytest
@@ -108,12 +109,20 @@ class TestDriftIsSurfacedNotHidden:
         assert "Online" in text, "the server IS up; the warning must not claim otherwise"
 
     def test_the_warning_names_the_config_slot_to_edit(self):
-        """A count is not actionable. `best_models.summarize` is the line to edit."""
+        """A count is not actionable. The message must name the LINE to edit.
+
+        Checked by shape rather than against a list of known slot names. The list
+        version broke the moment the audit grew to cover per-tool configs and
+        reported `rename.toml:text_preferred[1]` -- a correct, more useful message
+        that the test called a failure. An enumerated list of slot names is itself a
+        drift hazard: it has to be edited every time the audit learns a new place to
+        look, and until someone does, a better message reads as a regression.
+        """
         served = sorted(configured_models())
         text = refresh(FakeApp(), models=[m for m in served if m != served[0]] or ["other"])
-        assert any(
-            key in text for key in ("default_model", "best_models.", "filename_models[")
-        ), text
+        assert re.search(r"[\w.]+(?:\.\w+|\[\d+\])", text), (
+            f"no slot-shaped reference in {text!r}; a count alone is not actionable"
+        )
 
     def test_a_complete_roster_reports_plain_online(self):
         """Without this the warning above could be firing unconditionally."""

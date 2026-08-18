@@ -279,12 +279,31 @@ def get_model_config(model: str) -> Dict:
 
 
 def _merge_model_section(family_config: Dict, model: str) -> Dict:
-    """Overlay `[models."<model>"]` onto its family config, if present."""
+    """Overlay `[models."<model>"]` onto its family config, if present.
+
+    Nested tables merge KEY BY KEY rather than wholesale. A shallow `update` means a
+    per-model section that sets one prompt silently DELETES every other prompt the
+    family defines, which is not what "overlay" means and not what the TOML looks
+    like it does.
+
+    That shipped: `[models."gemma-4-E2B-it-8bit".prompts]` sets `weekend_transient`
+    alone, so that model had one prompt where its siblings had five. Invisible while
+    nothing routed filenames to it -- and the moment conf/config.toml did, `rn`
+    rendered an EMPTY filename prompt, because the family's `filename` template had
+    been dropped by an override that never mentioned it.
+    """
     section = (family_config.get("models") or {}).get(model)
     if not section:
         return family_config
     merged = {k: v for k, v in family_config.items() if k != "models"}
-    merged.update(section)
+    for key, value in section.items():
+        existing = merged.get(key)
+        if isinstance(existing, dict) and isinstance(value, dict):
+            combined = dict(existing)
+            combined.update(value)
+            merged[key] = combined
+        else:
+            merged[key] = value
     return merged
 
 
