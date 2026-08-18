@@ -31,8 +31,8 @@ delete it.
 
 **Open**
 
-3. **Mutation survivors.** `json_validator.py` is down from 54 survivors to 28
-   (detection 53% -> 73%), and fixing them found a live scorer defect (see the
+3. **Mutation survivors.** `json_validator.py` is down from 54 survivors to 23
+   (detection 53% -> 78%), and fixing them found a live scorer defect (see the
    too-few-items cap, `df474e5`). Remaining, in order of value:
 
    | function | survivors |
@@ -59,6 +59,25 @@ delete it.
    branches, and a two-field test reached neither -- `location` is a detail field, so
    it returned True from the scan above and exited. Killing those needed an item whose
    second key is deliberately NOT a detail field.
+
+   **2026-08-18, the same lesson in two sharper forms.** Both survivors killed that
+   day lived because the OUTCOME had more than one route to it:
+
+   - `_names_match` has a shared-token rule AND a longest-token fallback. The existing
+     test asserted "Royal Ontario Museum" matches "Ontario Royal Gallery", which is
+     true under `>= 2` and STILL true under `> 2`, because "ontario" (7 chars) then
+     matches through the fallback. Killing it needed a pair where no token is long
+     enough for the fallback: "Blue Fox Cafe" / "Fox Blue Diner".
+   - The fallback is itself an `or` of two clauses, so a fixture satisfying the second
+     cannot test the first. "Rogers Diner" / "Bank Diner" matches through
+     `longest_b`, leaving the first `>= 5` untouched. Isolating clause one needed a
+     5-character token that appears INSIDE a longer word: "Cocoa Fox" /
+     "Cocoabean Elm".
+
+   And one made while fixing it: a new test asserted `score < 100` where the correct
+   answer is 0 and the mutant produced 50. The bound was satisfied by both, so it
+   could not see the change it was written to catch. **Assert the value, not a range,
+   whenever the range admits the mutant.**
 
    *(Items 2, 5, 6, 7 and 8 were completed and are pruned to git history per the rule
    at the top of this file: streaming guard `d22b563`, all-three-quantities timeout

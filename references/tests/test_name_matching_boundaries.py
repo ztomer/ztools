@@ -217,3 +217,67 @@ class TestHasItemDetailsBoundary:
 
     def test_a_non_dict_is_never_details(self):
         assert has_item_details(["name", "location"]) is False
+
+
+class TestBranchesReachableByOnlyOnePath:
+    """Survivors that lived because two branches could produce the same outcome.
+
+    `test_exactly_two_shared_tokens_match` above uses "Royal Ontario Museum" vs
+    "Ontario Royal Gallery" and asserts True. It passes with `len(ta & tb) >= 2`
+    AND with `> 2`, because when the shared-token rule fails the longest-token
+    fallback rescues it: "ontario" is 7 characters and appears in the other name.
+    The test asserts the OUTCOME, and the outcome has two roads to it.
+
+    Killing these needs a fixture where the branch under test is the ONLY road.
+    """
+
+    #: Two shared tokens, and every token too short (or absent) for the >=5 fallback:
+    #: longest of {fox, blue, cafe} is 4 characters, and "diner" does not appear in
+    #: the other name. So the >=2 rule alone decides.
+    ONLY_SHARED_TOKENS = ("Blue Fox Cafe", "Fox Blue Diner")
+
+    def test_exactly_two_shared_tokens_is_the_only_route_here(self):
+        """Calibration: prove the fallback cannot also produce this match."""
+        from lib.validators.json_validator import _name_tokens
+
+        a, b = self.ONLY_SHARED_TOKENS
+        ta, tb = _name_tokens(a), _name_tokens(b)
+        assert len(ta & tb) == 2
+        assert a.lower() not in b.lower() and b.lower() not in a.lower()
+        assert max(len(t) for t in ta) < 5, "a >=5 token would let the fallback match"
+        assert not any(len(t) >= 5 and t in a.lower() for t in tb)
+
+    def test_two_shared_tokens_match_without_help_from_the_fallback(self):
+        """`>= 2` becoming `> 2` is invisible to a fixture the fallback can rescue."""
+        assert _names_match(*self.ONLY_SHARED_TOKENS) is True
+
+    def test_one_shared_token_with_no_long_token_does_not_match(self):
+        """The other side of the same boundary."""
+        assert _names_match("Blue Fox Cafe", "Fox Elm Diner") is False
+
+    #: The fallback is `(len(longest_a) >= 5 and longest_a in nb) or (len(longest_b)
+    #: >= 5 and longest_b in na)`. An `or` means a fixture that satisfies the SECOND
+    #: clause cannot test the first: "Rogers Diner" vs "Bank Diner" matches through
+    #: longest_b ("diner" in "rogers diner"), so mutating the first `>= 5` changes
+    #: nothing and the mutant lives.
+    #:
+    #: Here only clause ONE can fire: "cocoa" is exactly 5 and appears inside
+    #: "cocoabean", while longest_b ("cocoabean", 9) does not appear in "cocoa fox".
+    ONLY_CLAUSE_ONE = ("Cocoa Fox", "Cocoabean Elm")
+
+    def test_the_fixture_isolates_the_first_fallback_clause(self):
+        """Calibration, because an `or` hides which side did the work."""
+        from lib.validators.json_validator import _name_tokens
+
+        a, b = self.ONLY_CLAUSE_ONE
+        ta, tb = _name_tokens(a), _name_tokens(b)
+        assert not (ta & tb), "shared tokens would match before the fallback"
+        assert max(ta, key=len) in b.lower(), "clause one must be able to fire"
+        assert max(tb, key=len) not in a.lower(), "clause two must NOT also fire"
+
+    def test_exactly_five_characters_passes_the_fallback_floor(self):
+        """`>= 5` becoming `> 5` is only visible at exactly 5, through clause one."""
+        assert _names_match(*self.ONLY_CLAUSE_ONE) is True
+
+    def test_a_four_character_token_is_below_the_fallback_floor(self):
+        assert _names_match("Rogers Cafe", "Bank Cafe") is False

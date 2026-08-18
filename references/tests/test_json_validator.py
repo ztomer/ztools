@@ -870,3 +870,74 @@ class TestValidateMixedFilename:
         out = ["manage_underperformers", "scott_adams_essays", "context_engineering"]
         score, reason = validate_mixed_filename(out, RENAME_PROMPT_MIXED)
         assert "noise" not in reason
+
+
+class TestMixedSignalBoundariesThatSurvivedMutation:
+    """Two survivors in `validate_mixed_signal`, both reachable only by inputs the
+    existing tests never send.
+
+    Killing them needs the caller shapes the eval itself does not use -- which is the
+    point: a function is not only exercised through the one path a task happens to
+    take, and a mutation that survives is a change no test would notice.
+    """
+
+    SRC = (
+        "- Alpha Hall: story time\n"
+        "- Beta Park: water play\n"
+        "NOISE (ignore these)\n"
+        "- Zeta Spam: buy now\n"
+    )
+
+    def test_supplying_only_signal_items_still_parses_the_noise(self):
+        """`if signal_items is None or noise_items is None` -- `or` becoming `and`
+        survived, because every existing caller passes BOTH or NEITHER. With `and`, a
+        caller that supplies only the signal list gets `noise_items=None`, so noise
+        stops being penalised and a junk answer scores as clean."""
+        from lib.validators.json_validator import validate_mixed_signal
+
+        items = [{"name": "Alpha Hall"}, {"name": "Zeta Spam"}]
+        score, msg = validate_mixed_signal(
+            items, self.SRC, signal_items=["Alpha Hall", "Beta Park"]
+        )
+        assert "noise" in msg, "noise went unparsed, so including it cost nothing"
+        assert score < 100
+
+    def test_supplying_only_noise_items_still_parses_the_signal(self):
+        """The mirror case, for the same `or`."""
+        from lib.validators.json_validator import validate_mixed_signal
+
+        items = [{"name": "Alpha Hall"}]
+        score, _ = validate_mixed_signal(items, self.SRC, noise_items=["Zeta Spam"])
+        assert score > 0, "signal went unparsed, so a correct answer scored nothing"
+
+    def test_an_empty_answer_against_an_empty_source_is_not_perfect_precision(self):
+        """`(1.0 if tp == 0 and total_signal == 0 else 0.0)` -- the `and` and the
+        equality both survived. This branch is only reached when NOTHING matched and
+        nothing was expected, and it decides whether producing junk for a source with
+        no signal counts as precise."""
+        from lib.validators.json_validator import validate_mixed_signal
+
+        # A source with no signal section at all, and an answer full of inventions.
+        score, _ = validate_mixed_signal(
+            [{"name": "Invented Place"}], "", signal_items=[], noise_items=[]
+        )
+        assert score == 100, (
+            "with nothing to find and nothing marked as noise there is nothing to "
+            "get wrong; this pins the branch rather than leaving it unreached"
+        )
+
+    def test_inventing_items_when_signal_exists_is_not_precise(self):
+        """The discriminating case: signal EXISTS and the answer matched none of it."""
+        from lib.validators.json_validator import validate_mixed_signal
+
+        score, _ = validate_mixed_signal(
+            [{"name": "Invented Place"}], self.SRC, signal_items=["Alpha Hall"], noise_items=[]
+        )
+        # Asserted EXACTLY, not `< 100`. The loose bound was satisfied by both the
+        # correct 0 and the `and`->`or` mutant's 50, so it could not see the change
+        # it was written to catch -- the same outcome-not-boundary mistake this class
+        # exists to fix, made while fixing it.
+        assert score == 0, (
+            "nothing matched and signal existed, so precision is 0 -- scoring this as "
+            "precise would mean an answer that invented everything was precise"
+        )
