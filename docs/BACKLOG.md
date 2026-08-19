@@ -11,7 +11,7 @@ delete it.
 
 ---
 
-## Current state, 2026-08-18
+## Current state, 2026-08-19
 
 **Done and committed**
 
@@ -30,6 +30,26 @@ delete it.
 | — | P0-P5 phase: rn inside the transport perimeter, winnable tasks, a real image task, self-correcting estimator, disk-corroborated roster, adversarial tasks | `d9f5a7a`..`82a9556` |
 
 **Open**
+
+1. **qwen3.8-27b-mxfp8 (new MTP build) has NO valid measurement.** Its only samples
+   were taken while the compressor held 18.07GB, so all three are tagged unclean and
+   the model has no usable estimate. It needs a run on a genuinely quiet machine --
+   deferred 2026-08-19 to after a reboot, because the box was at 27.91GB compressor
+   with 26.7GB available and the top 20 processes accounted for only 3.6GB of it.
+
+   Two things to settle when it runs, not before:
+   - Whether a 27GB model can be measured on this 64GB box AT ALL. The eval prints
+     "needs ~27GB, low memory - will be slower" and proceeds. Warn-and-continue is
+     the shape this repo keeps paying for; a refusal may be the honest answer.
+   - The old-build samples were cleared by hand (printed first). If the tag is
+     reused again for another rebuild, that is the ONE case where
+     delete-before-remeasure is still correct -- see CLAUDE.md.
+
+2. **`ornith-1.0-9b-mxfp8` is unmeasured and wedges the server.** Its 2026-08-19 run
+   is PARTIAL (11/30, 6 timeouts) and must not be quoted. It left osaurus at 75% CPU
+   with 0.7GB resident refusing completions, and `osaurus stop` did not kill it. The
+   watchdog now bounds the damage; it does not make the model measurable. Historical
+   mean is 25% over 55 runs, so the cost/benefit of ever ranking it is poor.
 
 3. **Mutation survivors.** `json_validator.py` is down from 54 survivors to 23
    (detection 53% -> 78%), and fixing them found a live scorer defect (see the
@@ -263,152 +283,19 @@ while its own dropdowns silently substituted two slots. Three workarounds for th
 binding already existed in the test suite; the binding itself is now fixed and all
 three are gone. See `config_getters._cfg` for the class.
 
-## 1. Sweep zeval across every installed model, and derive the quirks from it
+## 9. A task whose input lacks the thing being tested (class, found 2026-08-18)
 
-**Why now.** The eval harness only recently started measuring anything real:
-the `filename` task was scoring 100 for naming an unfilled `{text}` placeholder,
-and `validate_summary` scored template leakage 90/100 with an empty failure
-reason. Every `best_models` entry in `conf/config.toml` predates those fixes, so
-the current model assignments were chosen by a harness that could not tell good
-output from bad. They need to be re-derived, not adjusted.
+`image_rename` and `image_rename_mixed` sent their prompt as TEXT. Ten of eleven
+models scored 100 on both, which measured only whether a model can emit a
+filename-shaped string -- it said nothing about vision. Same class as `filename`
+scoring 100 for naming an unfilled `{text}` placeholder:
 
-**Scope.** 11 models are installed, re-listed 2026-08-15 (the previous list was
-stale — see item 0). `family` is `details.family` from `/api/tags`, i.e. the real
-architecture rather than a guess from the name; `vision` is whether the model's own
-`config.json` carries a `vision_config`:
+**a task whose input does not contain the thing being tested, passed by a validator
+that only checks output shape.**
 
-| model | family | size | vision |
-|---|---|---|---|
-| foundation | foundation | — | n/a (on-device) |
-| bonsai-27b-ternary-jang | qwen3_5 | 27B | yes |
-| gemma-4-12b-it-mxfp8 | gemma4_unified | 12B | yes |
-| gemma-4-e2b-it-8bit | gemma4 | 2B | yes |
-| gemma-4-e4b-it-8bit | gemma4 | 4B | yes |
-| muse-glimmer-30b-jang_6m | muse_glimmer | 30B | yes |
-| nemotron-3.5-lightning-30b-a3b-mxfp8 | nemotron_h | 30B | **no** |
-| ornith-1.0-35b-jang_4m | qwen3_5_moe | 35B | yes |
-| ornith-1.0-9b-mxfp8 | qwen3_5 | 9B | yes |
-| potion-base-4m | unknown | 4M | no |
-| qwen3.8-27b-mxfp8 | qwen3_5 | 27B | yes |
-
-Two things fall out of that table, both of which change what this sweep has to test:
-
-**The name-prefix family matcher is wrong.** `lib/config_getters.py::get_model_family`
-keys on the model NAME, so `bonsai-*` and `ornith-*` resolve to `"default"` and get the
-built-in fallback prompts — but both are `qwen3_5`, the family `conf/models/qwen.toml`
-was written for. They may need no new config at all, just correct routing. Only
-`muse_glimmer` and `unknown` (potion) are genuinely unserved families. Test the
-architecture-keyed routing against the name-keyed one as part of the sweep rather than
-assuming either.
-
-**The VLM keyword heuristic is wrong in the other direction.**
-`lib/osaurus_models.py::DEFAULT_VLM_KEYWORDS` is `vl,vision,qwen,llamavl`, so it finds
-the qwens and misses gemma, ornith, bonsai and muse-glimmer — every one of which has a
-vision tower. Meanwhile nemotron, the ONLY text-only server model, is not excluded by
-anything. Replace the keyword match with the `config.json` probe (item 2 already reads
-that file for `max_position_embeddings`; `vision_config` is in the same dict).
-
-**Do this.**
-1. Run the full task set per model, one at a time — the GPU is a single shared
-   resource and concurrent runs thrash it.
-2. Read raw output per model, not just scores, and record per-model quirks in
-   `docs/MODEL_QUIRKS.md`: thinking-block behaviour, JSON compliance, whether
-   "Output JSON now." is needed, instruction-leak patterns, format drift.
-3. Create `conf/models/<family>.toml` for any family showing a systematic quirk.
-4. Re-derive `best_models` from the results, and record WHEN it was derived so
-   the next harness change invalidates it visibly.
-
-**Watch for.** A leaderboard that compresses (everything 90-100) measures
-nothing; so does one that ranks by latency because a slow model timed out and
-scored 0. Check `conf/eval_signals.json` for learned timeouts before trusting
-any ranking.
-
-**Done, 2026-08-16.** 11 models x 23 tasks, all 11 complete, 0 truncated.
-`best_models` re-derived and the reasoning written into `conf/config.toml`;
-`docs/MODEL_QUIRKS.md` carries the leaderboard and the per-slot table.
-
-The "watch for" note above turned out to be the main finding, so it is worth
-stating plainly rather than leaving as a warning that was heeded:
-
-**The leaderboard DID compress, and that is a property of the task set, not of the
-models.** Nine to eleven of the eleven models tie at 100 on `filename`,
-`filename_mixed`, `filename_leak`, `rename_mixed`, `json`, `image_rename*`,
-`summarize`, `weekend_transient*`. Those tasks cannot rank anything. Every real
-separation came from the five adversarial tasks — `summarize_contradiction`,
-`summarize_factual_accuracy`, `file_summary`, and the two `taxes_*` grounding
-tasks — where the spread is 0 to 100. Consequences, all acted on:
-
-- A mean over all 23 tasks is a **bad statistic** and was not used. Each slot is
-  scored only over the tasks its own consumer exercises. See `conf/config.toml`.
-- Parameter count predicts fluency, not faithfulness. A 5.9GB gemma-4-e2b beat the
-  13.4GB gemma-4-12b on the `summarize` group 89.8 to 64.4, deterministically over
-  three repeats, because the 12B parrots a planted contradiction every single time.
-- The saturated tasks still earn their place as **regression** tests. They just must
-  not be given weight in a ranking.
-
-**Follow-on, in progress.** The task set needs more adversarial tasks and fewer
-saturated ones before the next sweep, or the next one will compress the same way.
-
-Done so far (2026-08-16): `summarize_misattribution`, an 8-line trap-dense timeline
-graded on attribution ratio. It ranks where `summarize` could not — 86 to 100 across
-five models, each slip a real trap hit. Building it found two live defects and one
-method worth keeping:
-
-- `summarize` passed no `source`, so validate_summary's misattribution cap could
-  never fire. Fixed — but fixing it did NOT de-saturate the task. The models really
-  do attribute correctly on that timeline. Saturation was in the input's difficulty,
-  not only in the scorer. Adding a source to a too-easy task buys nothing.
-- `_BULLET_TAG_RE` anchored on `\)\s*$`, so any bullet ending in a full stop or an
-  extra bracket parsed as untagged, and the attribution check silently skipped it —
-  in `tw` as well as the eval. Two of the three most-used models punctuate.
-- **Read the raw output behind a surprising score before recording it.** The regex
-  bug surfaced as `0%, no attributed bullets` for a model whose output was correct,
-  and the identical 0 for a model that genuinely failed the trap. Same reading, right
-  and wrong answers.
-
-Still open:
-
-- **Trap density is the lever.** An earlier draft injected the same traps into the
-  full 40-tweet timeline; everything scored 96-99 because one error was diluted
-  across forty easy bullets. New adversarial tasks should be short and dense.
-- ~~`weekend_fixed_mixed` — all eleven models missed the identical 2 of 12 signal
-  items~~ **FIXED 2026-08-17, and the reading was wrong.** They missed nothing. The
-  prompt shows 12 signal venues and asks the model to "find 10"; `validate_mixed_signal`
-  computed recall over all 12, so obeying the instruction scored
-  `100 * (0.5 * 10/12 + 0.5) = 91` while ignoring it and returning all 12 scored 100.
-  The task paid models less for doing as they were told.
-
-  Recall is now measured against what the prompt ASKED FOR, read out of the prompt text
-  (`lib/validators/prompt_contract.requested_item_count`) rather than configured beside
-  it, so the two contracts cannot drift. Re-scored from saved outputs: all twelve models
-  move 91 -> 98-100, and the task still discriminates (ornith-35b 99, ornith-9b 98).
-
-  Class-level gate in `test_task_winnability.py`: for every mechanically-scorable task,
-  the ideal answer built from that task's own data must score 100, and obeying a count
-  must never score worse than ignoring it. Verified red against the old denominator.
-- The remaining saturated tasks (`filename`, `filename_mixed`, `rename_mixed`,
-  `json`, `image_rename*`) still rank nothing and should keep their place only as
-  regression tests.
-
-## ~~9. Nothing in the eval suite ever sends an image~~ DONE 2026-08-18
-
-`image_rename` and `image_rename_mixed` send `IMAGE_RENAME_PROMPT` as TEXT. Ten of
-the eleven installed models score 100 on both, which measures only whether a model
-can emit a filename-shaped string — it says nothing about vision. So
-`best_models.vlm` could not be derived from the 2026-08-16 sweep and is currently a
-static-probe pick (`vision_config` present in the model's `config.json`), recorded
-as UNMEASURED in `conf/config.toml`. The probe barely narrows anything either: ten
-of eleven models claim vision.
-
-This is the same class as the `filename`-scores-100-for-an-unfilled-`{text}`-
-placeholder bug (item 1): **a task whose input does not contain the thing being
-tested, passed by a validator that only checks output shape.** Worth grepping the
-remaining tasks for other instances before adding new ones.
-
-**Do this.** Add a task that feeds a real image through the same path `rn` uses,
-with a validator that checks the filename against what is actually IN the picture —
-so a model that cannot see scores badly instead of scoring 100. Then re-derive
-`vlm`. Until then, treat that slot as a guess with a plausible mechanism.
+Grep for siblings before adding any new task. Fixed by `image_real`, which feeds a
+real image through the path `rn` uses -- though see the GATE-vs-ranking entry above:
+it proves vision and still cannot ORDER the models that have it.
 
 ## 2. Extend the capability probe beyond the context window
 

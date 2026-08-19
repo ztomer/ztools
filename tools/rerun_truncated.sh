@@ -5,12 +5,22 @@
 # reasoning models blow past it: nemotron averages 838s/task because it emits up to 77k
 # characters of reasoning before answering, and ornith-9b is the same shape. Both were
 # cut off mid-sweep -- nemotron at 17 of 24, ornith-9b at 13 of 24 -- and a model
-# measured on a subset cannot be ranked against models measured on all 24. Worse, the
-# tasks they miss are the LAST ones, which are the largest prompts, so the subset is
-# biased toward the easy end.
+# measured on a subset cannot be ranked against models measured on the full set.
+# Worse, the tasks they miss are the LAST ones, which are the largest prompts, so the
+# subset is biased toward the easy end. (Task counts in this comment are historical --
+# the suite has grown since; read the count from the run, never from here.)
 #
-# The per-TASK timeout is deliberately untouched: it derives from measured rates and
-# already sits at ~7055s for every task, so it was never the constraint.
+# The per-TASK timeout USED to be described here as "never the constraint" because it
+# derives from measured rates and sat around 7055s. That was wrong, and the correction
+# matters: the derivation reads the machine as it is, so a contended box measures slow
+# rates, slow rates INFLATE the timeout, and the inflated timeout permits a longer
+# stall. qwen3.8-27b-mxfp8 earned a 2-hour per-task ceiling from a decode rate of
+# 0.1158 tok/s and then sat wedged for 83 minutes having completed nothing.
+#
+# Two things changed as a result, and this script relies on both: _derived_timeout now
+# uses CLEAN samples only (falling back to the 900s floor rather than trusting a
+# reading the sampler already distrusted), and eval/watchdog.py abandons a model that
+# completes no task inside MODEL_STALL_SECONDS regardless of what any timeout believes.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"

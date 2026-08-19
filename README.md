@@ -165,7 +165,12 @@ python3 -m eval --task weekend_fixed
 python3 -m eval --model qwen3.6-35b-a3b-mxfp4
 ```
 
-**Tasks:** `weekend_transient`, `weekend_fixed`, `summarize`, `filename`, `file_summary`, `taxes_anomalies`, `taxes_audit_readiness`, `taxes_synthesis`
+**Tasks:** `weekend_transient`, `weekend_fixed`, `summarize`, `filename`, `file_summary`, `taxes_anomalies`, `taxes_audit_readiness`, `taxes_synthesis`, `taxes_yoy_narrative`, `taxes_qa`, `taxes_slip_qa`, plus the mixed-signal, adversarial and vision variants — 30 in total; `python3 -m eval` prints the count it actually loaded.
+
+The last three are scored by arithmetic and set membership rather than a keyword
+rubric, against a `grounding` block shipped inside each snapshot. `taxes_yoy_narrative`
+is the one that ranks; `taxes_slip_qa` saturates and is a hallucination GATE, like
+`image_real`.
 
 Adaptive timeout: p95 latency per (model, task) × 1.5. Persisted in `conf/eval_signals.json`.
 
@@ -224,7 +229,8 @@ lib/                     # Shared infrastructure
     ├── helpers.py       # Shared validation helpers
     ├── text_validator.py# Text/entity validation
     ├── json_validator.py# JSON structure validation
-    └── taxes_validator.py# Tax-domain validators
+    ├── taxes_validator.py# Tax-domain validators (rubric-scored)
+    └── taxes_grounded.py # Tax-domain validators (grounding-scored)
 
 tui/                     # Textual TUI dashboard (ztools command)
 ├── app.py               # Dashboard entry point + scheduler tab
