@@ -9,12 +9,13 @@ import json
 import statistics
 import time
 
-from lib.tui import STEP
+from lib.tui import STEP, WARN
 
 # Resolved through the module object, not by name: that keeps ONE patch
 # point (eval.report_core.console / ._get_eval_dir) for the whole report
 # surface, which is the seam the tests use.
 from eval import report_core
+from eval.completeness import is_complete
 from eval.report_core import _make_table, default_eval_dir
 
 # Only UNAMBIGUOUS test doubles. `mock-model` sat at mean 100 and topped the
@@ -45,6 +46,7 @@ def save_historical_results(
         except Exception:
             pass
 
+    quarantined = []
     for r in all_results:
         model = r["model"]
         # Test doubles must not enter the production leaderboard: `mock-model`
@@ -54,6 +56,18 @@ def save_historical_results(
         if model not in history:
             history[model] = []
 
+        # MARKED, not dropped. A truncated run's individual task scores are real
+        # -- the task that completed completed -- and deleting them would throw
+        # away evidence. What is NOT real is any aggregate over them, because the
+        # subset that finished is the subset the model found easy. So the entries
+        # are written with the verdict attached and `load_historical_stats`
+        # refuses to average them. Writing them to a separate quarantine FILE was
+        # the first design and was wrong: a second store is a second thing
+        # consumers forget to read, which is the parallel-pipeline drift class.
+        complete = is_complete(r)
+        if not complete:
+            quarantined.append((model, (r.get("completeness") or {}).get("reason", "")))
+
         for res in r.get("results", []):
             entry = {
                 "date": time.strftime("%Y-%m-%d"),
@@ -62,7 +76,17 @@ def save_historical_results(
                 "score": res.get("quality_score", 0),
                 "time": res.get("time"),
             }
+            if not complete:
+                entry["complete"] = False
             history[model].append(entry)
+
+    # Never silent: something that refuses to count data says so at the moment it
+    # refuses, or the next session reads a smaller mean and cannot tell why.
+    for model, reason in quarantined:
+        report_core.console.print(
+            f"{WARN} {model}: entries recorded but EXCLUDED from historical "
+            f"averages -- {reason}"
+        )
 
     for model in history:
         history[model] = history[model][-100:]
@@ -95,7 +119,15 @@ def load_historical_stats(eval_dir=None) -> dict:
         # `if e.get("score")` is falsy for 0, so every total failure was
         # dropped from mean/median/min — a model that scored 0 on half its runs
         # looked identical to one that never failed.
-        scores = [e["score"] for e in entries if e.get("score") is not None]
+        #
+        # Entries from a truncated run are excluded here rather than at write
+        # time. `ornith-1.0-9b-mxfp8` has 55 entries and its 11-of-30 run is
+        # among them; averaging them reports the model's easy tasks as its
+        # score. `complete` is absent on every entry written before this existed,
+        # and absent means complete -- see eval/completeness.is_complete.
+        countable = [e for e in entries if e.get("complete", True)]
+        excluded = len(entries) - len(countable)
+        scores = [e["score"] for e in countable if e.get("score") is not None]
         if scores:
             stats[model] = {
                 "mean": statistics.mean(scores),
@@ -103,7 +135,11 @@ def load_historical_stats(eval_dir=None) -> dict:
                 "stdev": statistics.stdev(scores) if len(scores) > 1 else 0,
                 "min": min(scores),
                 "max": max(scores),
-                "runs": len(entries),
+                "runs": len(countable),
+                # Surfaced, not hidden: a model whose history is mostly truncated
+                # runs has a `runs` count that no longer matches its entry count,
+                # and that discrepancy is itself the finding.
+                "excluded": excluded,
             }
 
     return stats

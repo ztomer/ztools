@@ -576,5 +576,18 @@ def deterministic_machine_contention():
     """
     from unittest.mock import patch
 
-    with patch("eval.samples.machine_is_uncontended", return_value=True):
+    # The memory readings are pinned for the same reason and by the same rule.
+    # `oversize_refusal` consults `is_thrashing()` and `reclaimable_available_gb()`
+    # when its callers do not inject them, so without this a test asserting that
+    # a 70GB model is refused would pass on a 64GB laptop and fail on a 128GB
+    # one -- a test outcome decided by the developer's hardware.
+    #
+    # 64GB is this project's reference machine. Tests that exercise the pressure
+    # or headroom branches inject `thrashing=`/`available_gb=` explicitly, which
+    # is why those parameters exist.
+    with (
+        patch("eval.samples.machine_is_uncontended", return_value=True),
+        patch("eval.memory.is_thrashing", return_value=False),
+        patch("eval.memory.reclaimable_available_gb", return_value=64.0),
+    ):
         yield

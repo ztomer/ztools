@@ -28,15 +28,41 @@ import statistics
 import time
 from typing import Dict, List, Optional
 
+from eval import memory
+
+# Re-exported: these moved to eval/memory.py so the oversize refusal and the
+# sample-clean gate share ONE definition of "the machine is thrashing" rather
+# than two that drift. Callers importing them from here keep working.
+from eval.memory import MAX_CLEAN_COMPRESSOR_GB, MAX_CLEAN_SWAP_GB
+
 #: How many recent samples the estimate considers. Small enough to track a real
 #: change in the machine, large enough that one bad reading cannot carry the median.
 SAMPLE_WINDOW = 5
-#: Above these, the machine is swapping or compressing hard and any timing taken on it
-#: describes the contention rather than the model. Calibrated against the two observed
-#: states: during the 31GB leak swap was 12.88GB and the compressor held 29.3GB;
-#: healthy after a full sweep they were 1.43GB and 5.1GB.
-MAX_CLEAN_SWAP_GB = 8.0
-MAX_CLEAN_COMPRESSOR_GB = 15.0
+
+
+def gpu_is_contended() -> bool:
+    """Is another session measuring against the GPU right now?
+
+    Swap and compressor cannot see this. A peer agent session running its own
+    eval leaves both quiet while competing for the exact resource being timed,
+    so its contention was recorded as a CLEAN sample -- the documented hole in
+    the guard below, and the reason `restart_server` already consults this same
+    predicate before evicting a peer's model.
+
+    BE CLEAR WHAT THIS BUYS. It catches a peer holding the machine-wide GPU lock,
+    which is the failure this repo actually recorded. It does NOT catch GPU work
+    that never takes the lock -- Blender, a game, a video encode -- because
+    nothing short of real GPU telemetry does and `powermetrics` needs sudo. A
+    gate that overstates its coverage is worse than one that admits its hole.
+    """
+    try:
+        from lib import gpu_lock
+
+        return gpu_lock.foreign_holder() is not None
+    except Exception:
+        # Cannot tell, so claim nothing. Returning True here would tag every
+        # sample on a machine without the lock module as contended.
+        return False
 
 
 def machine_is_uncontended() -> bool:
@@ -46,21 +72,18 @@ def machine_is_uncontended() -> bool:
     cache legitimately holds tens of GB of model weights and "available" drops to
     ~12GB on a perfectly healthy box, so a headroom threshold refuses to record on
     exactly the machine you most want readings from.
+
+    Plus the GPU: see `gpu_is_contended` for what that check does and does not
+    cover.
     """
-    try:
-        import re
-        import subprocess
-
-        import psutil
-
-        swap_gb = psutil.swap_memory().used / 1024**3
-        vm = subprocess.run(["vm_stat"], capture_output=True, text=True, timeout=10).stdout
-        match = re.search(r"occupied by compressor:\s+(\d+)", vm)
-        compressor_gb = (int(match.group(1)) * 16384 / 1024**3) if match else 0.0
-    except Exception:
+    if gpu_is_contended():
+        return False
+    reading = memory.pressure()
+    if reading is None:
         # Cannot tell. Record the sample as unverified rather than dropping it or
         # calling it clean -- both would be inventing an answer.
         return False
+    swap_gb, compressor_gb = reading
     return swap_gb <= MAX_CLEAN_SWAP_GB and compressor_gb <= MAX_CLEAN_COMPRESSOR_GB
 
 

@@ -147,9 +147,11 @@ from eval.cli_runtime import (  # noqa: E402,F401
     hold_gpu_for_eval,
     is_server_responsive,
     load_tasks_from_config,
+    oversize_refusal,
     print_memory_usage,
     update_config,
 )
+from eval.completeness import assess as assess_completeness  # noqa: E402
 
 
 def _print_capabilities(host=None):
@@ -224,6 +226,13 @@ def main():
         help=f"Osaurus/Ollama server URL (default: $OLLAMA_BASE_URL or http://{DEFAULT_HOST}:{DEFAULT_PORT})",
     )
     parser.add_argument("--api-key", default=None, help="Bearer token for the LLM API")
+    parser.add_argument(
+        "--allow-oversize",
+        action="store_true",
+        help="Measure a model that does not fit in available memory anyway. Off by "
+        "default: a timing taken while the box swaps describes the swapping, and "
+        "hardens into config exactly like a real number.",
+    )
     parser.add_argument(
         "--capabilities",
         action="store_true",
@@ -389,20 +398,19 @@ def main():
 
         mem_pct = get_memory_percent()
         model_mem_gb = estimate_model_memory(model)
-        _total_gb = (
-            os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE") / (1024**3)
-            if hasattr(os, "sysconf")
-            else 64
-        )
-        avail_mem_gb = (100 - mem_pct) / 100 * _total_gb
 
         if mem_pct > MEMORY_WARNING_THRESHOLD:
             cli_runtime.console.print(f"{WARN} Memory at {mem_pct}% - model may be slow")
 
-        if model_mem_gb > avail_mem_gb * 0.8:
-            cli_runtime.console.print(
-                f"{WARN} Model needs ~{model_mem_gb}GB, low memory - will be slower"
-            )
+        # Deliberately NOT passing a headroom figure computed here. This used to
+        # hand over `(100 - mem_pct) / 100 * total`, and a percentage-of-total is
+        # the wrong quantity twice: it ignores what the kernel would reclaim, and
+        # it made a 64GB box with 7.2GB genuinely in use look nearly full. The
+        # gate reads what is RECLAIMABLE itself -- see eval/memory.py.
+        refusal = oversize_refusal(model_mem_gb, allow=args.allow_oversize)
+        if refusal:
+            cli_runtime.console.print(f"{FAIL} Skipping {model}: {refusal}")
+            continue
 
         if not is_server_responsive():
             cli_runtime.console.print(f"{FAIL} Server not responsive - attempting restart...")
@@ -438,7 +446,13 @@ def main():
             )
             cli_runtime.console.print(f"{status} {model} ({backend}): {avg:.0f}% avg")
 
-        all_results.append({"model": model, "backend": backend, "results": results})
+        # Derived, not reported by the abandon paths -- see eval/completeness.py.
+        meta = assess_completeness(tasks_to_run, results)
+        if not meta["complete"]:
+            cli_runtime.console.print(f"{WARN} {model}: INCOMPLETE run -- {meta['reason']}")
+        all_results.append(
+            {"model": model, "backend": backend, "results": results, "completeness": meta}
+        )
         for r in results:
             task = r["task"]
             score = r["quality_score"]

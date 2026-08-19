@@ -472,7 +472,14 @@ class TestMainFlow:
         assert "95.0%" in out
 
     def test_model_too_big_for_memory(self, mock_llm, monkeypatch, capsys):
-        """Model too big for available memory — warning."""
+        """Model too big for available memory — REFUSED, not warned.
+
+        This assertion used to be `"70GB" in out`, which was satisfied by the
+        warn-and-continue line it was written for AND by the refusal that
+        replaced it: the test could not see the change in consequence, only the
+        number. Warn-and-continue is what produced qwen3.8-27b-mxfp8's 0.1158
+        tok/s reading and the ~138,000s derived timeout that followed from it.
+        """
         import eval.cli as model_eval
 
         monkeypatch.setattr(sys, "argv", ["eval.cli"])
@@ -482,7 +489,7 @@ class TestMainFlow:
             patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "get_models", return_value=["m1-70b"]),
             patch.object(model_eval, "build_tasks_from_model", return_value={}),
-            patch.object(model_eval, "run_eval", return_value=[]),
+            patch.object(model_eval, "run_eval", return_value=[]) as ran,
             patch.object(model_eval, "_print_results"),
             patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "estimate_model_memory", return_value=70),
@@ -490,8 +497,15 @@ class TestMainFlow:
         ):
             model_eval.main()
         out = capsys.readouterr().out
-        # 70b model with 50% memory free (32GB) → too big
-        assert "70GB" in out or "70b" in out
+        # 70GB of weights against 32GB available → refused, and the model is
+        # SKIPPED rather than measured under swap.
+        assert "Skipping m1-70b" in out
+        assert "70GB" in out and "64GB reclaimable" in out
+        assert "EVAL_ALLOW_OVERSIZE" in out, "the refusal must name its escape hatch"
+        # The REFUSAL, not just the message. Printing "Skipping" and then
+        # measuring anyway is the warn-and-continue bug wearing a new word, and
+        # a mutation that deleted the `continue` passed every assertion above.
+        ran.assert_not_called()
 
     def test_server_not_responsive(self, mock_llm, monkeypatch, capsys):
         """Server not responsive — print FAIL."""

@@ -11,6 +11,9 @@ from pathlib import Path
 from lib.tui import STEP, console
 from rich.table import Table
 
+from eval.completeness import is_complete
+from eval.discrimination import is_gate, ranking_mean
+
 
 def default_eval_dir() -> Path:
     """Where eval artefacts live when the caller does not say otherwise.
@@ -51,9 +54,22 @@ def print_cross_model_comparison(all_results: list, out=None) -> None:
     if not models:
         return
 
-    first_results = all_results[0].get("results", [])
-    if not first_results:
-        # Print empty table with header
+    # The row set is the UNION across models, not the first model's results.
+    # Taking it from all_results[0] made the table order-dependent twice over:
+    # when the first model's run was truncated, every task it never reached was
+    # dropped as a ROW, silently hiding those scores for every OTHER model too;
+    # and when the first model returned nothing at all, the whole table printed
+    # empty while later models had full results. Same class as the mean over a
+    # short run -- one incomplete run quietly redefining "all the tasks".
+    tasks = []
+    for r in all_results:
+        for res in r.get("results", []):
+            name = res.get("task")
+            if name is not None and name not in tasks:
+                tasks.append(name)
+
+    if not tasks:
+        # Header-only table: no model reported a single task.
         columns = [{"name": "Task", "justify": "left"}]
         for m in models:
             columns.append({"name": m[:15], "justify": "right", "style": "dim"})
@@ -68,10 +84,6 @@ def print_cross_model_comparison(all_results: list, out=None) -> None:
                 col["name"], style=col.get("style", ""), justify=col.get("justify", "left")
             )
         out.print(table)
-        return
-
-    tasks = [res["task"] for res in first_results]
-    if not tasks:
         return
 
     columns = [{"name": "Task", "justify": "left"}]
@@ -100,7 +112,13 @@ def print_cross_model_comparison(all_results: list, out=None) -> None:
 
 
 def compute_score_stats(all_results: list) -> dict:
-    """Compute aggregate statistics for each model."""
+    """Compute aggregate statistics for each model.
+
+    `count` was already recorded and nothing ever compared it to the number of
+    tasks the run was asked for, so a mean over 11 tasks and a mean over 30
+    printed identically. `complete` is that comparison, carried so the printer
+    can say which is which -- see eval/completeness.py.
+    """
     stats = {}
 
     for r in all_results:
@@ -110,6 +128,7 @@ def compute_score_stats(all_results: list) -> dict:
         if not scores:
             continue
 
+        results = r.get("results", [])
         stats[model] = {
             "mean": statistics.mean(scores),
             "median": statistics.median(scores),
@@ -117,13 +136,26 @@ def compute_score_stats(all_results: list) -> dict:
             "min": min(scores),
             "max": max(scores),
             "count": len(scores),
+            "complete": is_complete(r),
+            # Gates cannot order the models that pass them, so counting them
+            # pulls every model toward the same number. `mean` is kept beside it
+            # because a gate FAILURE is real information -- it just is not a
+            # ranking. See eval/discrimination.py.
+            "ranking_mean": ranking_mean(results),
+            "gate_tasks": sum(1 for res in results if is_gate(res.get("task"))),
         }
 
     return stats
 
 
 def print_score_stats(stats: dict, out=None) -> None:
-    """Print score statistics table using Rich Table."""
+    """Print score statistics table using Rich Table.
+
+    `Mean` is the RANKING mean -- gate tasks excluded, because a task every
+    model passes cannot order the models that pass it. `All` is the mean over
+    every task, kept beside it because a gate FAILURE is real information.
+    They are equal for any run containing no gate tasks.
+    """
     out = out or console
     if not stats:
         return
@@ -131,22 +163,39 @@ def print_score_stats(stats: dict, out=None) -> None:
     columns = [
         {"name": "Model", "justify": "left"},
         {"name": "Mean", "justify": "right", "style": "cyan"},
+        {"name": "All", "justify": "right", "style": "dim"},
         {"name": "Med", "justify": "right", "style": "cyan"},
         {"name": "Stdev", "justify": "right", "style": "yellow"},
         {"name": "Min", "justify": "right", "style": "green"},
         {"name": "Max", "justify": "right", "style": "green"},
+        {"name": "N", "justify": "right", "style": "dim"},
     ]
 
+    def _ranking(s):
+        # Absent on stats dicts built before this existed, and on hand-built
+        # ones in tests. Falling back to the plain mean keeps those honest
+        # rather than reporting a zero.
+        return s.get("ranking_mean", s["mean"])
+
     rows = []
-    for model, s in sorted(stats.items(), key=lambda x: x[1]["mean"], reverse=True):
+    for model, s in sorted(stats.items(), key=lambda x: _ranking(x[1]), reverse=True):
+        # The mark rides on the MEAN, not on a separate column, because the mean
+        # is the number that gets copied into a table and quoted six weeks later.
+        # A truncated run reported bonsai at 62% against a real 79%, and the
+        # thing that made it dangerous was that it looked like every other cell.
+        incomplete = not s.get("complete", True)
+        mean = f"{_ranking(s):.1f}" + (" (partial)" if incomplete else "")
+        count = str(s.get("count", 0)) + ("?" if incomplete else "")
         rows.append(
             [
                 model,
+                mean,
                 f"{s['mean']:.1f}",
                 f"{s['median']:.1f}",
                 f"{s['stdev']:.1f}",
                 str(s["min"]),
                 str(s["max"]),
+                count,
             ]
         )
 

@@ -6,9 +6,10 @@ Split out of cli.py for the repo's 500-line limit.
 
 import json
 
-from lib.tui import STEP
+from lib.tui import STEP, WARN
 
 from eval import cli_runtime
+from eval.discrimination import disagreements
 from eval.report import (
     categorize_failures,
     compute_error_rates,
@@ -39,6 +40,12 @@ def _print_results(all_results, best_scores, best_models_dict, eval_dir=None):
 
     stats = compute_score_stats(all_results)
     print_score_stats(stats)
+
+    # The gate list is a record of a measurement, so every run re-checks it
+    # against its own data. A hand-typed list nothing verifies is how
+    # `conf/config.toml` came to name models that had been deleted from disk.
+    for note in disagreements(all_results):
+        cli_runtime.console.print(f"{WARN} task classification: {note}")
 
     categories = categorize_failures(all_results)
     print_failure_summary(categories)

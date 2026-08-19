@@ -25,6 +25,7 @@ from lib.signal_handling import register_cleanup
 # module, keeping ONE patch point (eval.cli_runtime.console) for all three.
 from lib.tui import FAIL, STEP, WARN, console
 
+from eval import memory
 from eval.run import MEMORY_WARNING_THRESHOLD
 
 # Default server port
@@ -162,6 +163,88 @@ def estimate_model_memory(model: str) -> int:
     if match:
         return int(match.group(1))
     return 4
+
+
+#: Fraction of RECLAIMABLE memory a model's weights may occupy before the eval
+#: refuses to run it. Weights are only part of the footprint -- activations and
+#: the KV cache come on top -- so the headroom is not slack, it is the rest of
+#: the model.
+#:
+#: PROVISIONAL. The number that would settle it is a measurement of
+#: qwen3.8-27b-mxfp8 (28.8GB on disk) on a quiet 64GB box, which has not been
+#: taken: its only samples were recorded while the compressor held 18.07GB and
+#: are tagged unclean. Until then 0.8 is carried forward unchanged from the
+#: warning this refusal replaces, so the gate changes the CONSEQUENCE without
+#: silently also changing the threshold.
+OVERSIZE_MEMORY_FRACTION = 0.8
+
+#: Escape hatch for the deliberate case: measuring whether an oversize model can
+#: run here AT ALL is a legitimate experiment, and the refusal must not make it
+#: impossible -- only conscious.
+OVERSIZE_OVERRIDE_ENV = "EVAL_ALLOW_OVERSIZE"
+
+
+def oversize_refusal(
+    model_gb: float,
+    available_gb: float = None,
+    allow: bool = False,
+    thrashing: bool = None,
+) -> str:
+    """Why this model must not be measured here, or "" to proceed.
+
+    WHY A REFUSAL AND NOT A WARNING. The line this replaces printed "low memory
+    - will be slower" and ran the model anyway. Warn-and-continue is the shape
+    this repo keeps paying for: it produced a 0.1158 tok/s decode reading for
+    qwen3.8-27b-mxfp8, which `max_tokens / decode` turned into a ~138,000s
+    derived timeout, which then permitted a wedged server to idle 83 minutes. A
+    number measured under thrashing is not a slow measurement, it is a
+    measurement of the thrashing -- and it hardens into config and docs exactly
+    like a real one.
+
+    WHY PRESSURE IS ASKED FIRST. The first version of this gate asked only about
+    headroom, and headroom is the quantity `eval/memory.py` documents as
+    misleading here: after a sweep the page cache holds the previous model's
+    weights as `active` file-backed pages, which psutil does not report as
+    available even though the kernel evicts them for free. That gate would
+    refuse a model that runs fine, on exactly the machine you most want readings
+    from. Swap and compressor are unambiguous by comparison -- they describe a
+    machine that is ALREADY paying for memory it does not have.
+
+    So: thrashing is disqualifying on its own, and headroom is measured against
+    what is RECLAIMABLE rather than what is merely free.
+
+    Both `available_gb` and `thrashing` are injectable so every branch is
+    testable without a 28.8GB model or a deliberately wrecked machine.
+    """
+    if allow or os.environ.get(OVERSIZE_OVERRIDE_ENV):
+        return ""
+
+    if thrashing is None:
+        thrashing = memory.is_thrashing()
+    if thrashing:
+        reading = memory.pressure()
+        detail = ""
+        if reading:
+            detail = f" (swap {reading[0]:.1f}GB, compressor {reading[1]:.1f}GB)"
+        return (
+            f"the machine is already paging{detail}. A timing taken here would "
+            f"describe the paging, not the model. Wait for it to settle, or set "
+            f"{OVERSIZE_OVERRIDE_ENV}=1 to measure it deliberately."
+        )
+    # None means "cannot tell", which is not "fine" -- but it is also not
+    # evidence of thrashing, so it does not refuse on its own. The headroom
+    # check below still applies.
+
+    if available_gb is None:
+        available_gb = memory.reclaimable_available_gb()
+    if model_gb <= available_gb * OVERSIZE_MEMORY_FRACTION:
+        return ""
+    return (
+        f"needs ~{model_gb:.0f}GB against {available_gb:.0f}GB reclaimable "
+        f"(limit {OVERSIZE_MEMORY_FRACTION:.0%}). A timing taken here would "
+        f"describe the swapping, not the model. Re-run on a quieter machine, or "
+        f"set {OVERSIZE_OVERRIDE_ENV}=1 to measure it deliberately."
+    )
 
 
 # ==========================================================
