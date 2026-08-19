@@ -63,6 +63,19 @@ cannot drift.
   - The median only protects a model that HAS history. A new or thinly-sampled
     model's estimate is essentially its one sample, so first measurements are the
     exposed case. Still measure serially with nothing else on the GPU.
+  - **A REPLACED BUILD under the same name is NOT fixed by another clean sample.**
+    Contention is what the median outvotes. If the artifact behind a name changes
+    (a rebuild, a requant, an MTP variant shipped as the old tag), the old samples
+    describe a model that no longer exists and will outvote the new one for five
+    readings. Clear that model's `_capabilities` by hand in that case, and only
+    that case. Print what you cleared so nothing vanishes silently.
+  - **The `clean` flag is only as useful as its consumers.** It was recorded for
+    months while `_derived_timeout` read the raw scalar and never asked, so a
+    thrashing box measured decode at 0.1158 tok/s, `max_tokens / decode` came to
+    ~138,000s, and the resulting 2-hour per-task ceiling let a wedged server idle
+    83 minutes. A contended machine makes measurements slow, slow measurements
+    inflate the derived timeout, and the inflated timeout permits a longer stall.
+    `eval/watchdog.py` is the backstop that depends on no measurement at all.
 - Quick mode for iteration: `python3 -m eval --model <model> --task <task> --quick`
 - Add discovered learnings to `docs/MODEL_QUIRKS.md` immediately when found
 
