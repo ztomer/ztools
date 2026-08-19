@@ -17,6 +17,7 @@ import pytest
 from eval.memory import (
     MAX_CLEAN_COMPRESSOR_GB,
     MAX_CLEAN_SWAP_GB,
+    NotSupportedHere,
     is_thrashing,
     pressure,
     reclaimable_available_gb,
@@ -100,19 +101,30 @@ class TestReclaimableAvailable:
         # 64GB machine: whatever we add, it cannot claim more than exists.
         assert reclaimable_available_gb() < 64
 
-    def test_an_unreadable_machine_reports_zero_not_infinity(self, monkeypatch):
-        def boom():
-            raise RuntimeError("no psutil")
+    def test_a_broken_vm_stat_raises_rather_than_guessing(self, monkeypatch):
+        """It used to catch this and return psutil's figure alone.
 
-        monkeypatch.setattr("psutil.virtual_memory", boom)
-        assert reclaimable_available_gb() == 0.0
-
-    def test_a_broken_vm_stat_still_returns_the_psutil_figure(self, monkeypatch):
+        That turned "vm_stat is broken" into a number that looks fine and is
+        simply wrong -- the exact failure this module exists to stop. Every
+        quantity here comes from vm_stat; without it there is no answer to give.
+        """
         _fake_psutil(monkeypatch, available_gb=45.6)
         monkeypatch.setattr(
             "subprocess.run", lambda *a, **k: (_ for _ in ()).throw(OSError("nope"))
         )
-        assert reclaimable_available_gb() == pytest.approx(45.6, abs=0.1)
+        with pytest.raises(OSError):
+            reclaimable_available_gb()
+
+    def test_a_non_macos_platform_is_a_hard_failure(self, monkeypatch):
+        """House rule #3: an unsupported platform fails, it does not degrade.
+
+        The eval path is macOS-only end to end -- osaurus, Metal, the GPU lock --
+        so a Linux branch here would be dead code whose only effect is to turn a
+        missing tool into a plausible number.
+        """
+        monkeypatch.setattr("sys.platform", "linux")
+        with pytest.raises(NotSupportedHere, match="macOS"):
+            reclaimable_available_gb()
 
 
 class TestPressure:

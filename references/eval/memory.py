@@ -33,7 +33,27 @@ evicts instantly and costs nothing; swap traffic and a full compressor are the
 states where a timing describes the machine instead of the model.
 """
 
+import sys
 from typing import Optional, Tuple
+
+
+class NotSupportedHere(RuntimeError):
+    """Raised when asked to read memory on a platform this repo does not target.
+
+    House rule #3: an unsupported platform is a HARD FAILURE, never a fallback
+    that continues anyway. The eval path is macOS-only end to end -- osaurus,
+    Metal, the GPU lock -- so a Linux "degrade gracefully" branch here would be
+    dead code whose only effect is to turn a missing tool into a plausible
+    number. Every quantity in this module comes from vm_stat.
+    """
+
+
+def _require_macos() -> None:
+    if sys.platform != "darwin":
+        raise NotSupportedHere(
+            f"memory readings require macOS vm_stat; this is {sys.platform}. "
+            "The eval path (osaurus, Metal, the GPU lock) is macOS-only."
+        )
 
 #: Above these the machine is swapping or compressing hard, and any timing taken
 #: on it describes the contention rather than the model. Calibrated against the
@@ -53,6 +73,7 @@ def _vm_stat() -> dict:
     import re
     import subprocess
 
+    _require_macos()
     out = subprocess.run(["vm_stat"], capture_output=True, text=True, timeout=10).stdout
     page = _DEFAULT_PAGE_SIZE
     header = re.search(r"page size of (\d+)", out)
@@ -109,22 +130,19 @@ def reclaimable_available_gb() -> float:
     understate what is reclaimable, never overstate it. Understating means the
     gate occasionally refuses something that would have fit, which is the safe
     direction for a gate whose failure mode is producing a wrong number.
+
+    Raises rather than degrading. An earlier version caught everything and
+    returned psutil's figure alone, which turned "vm_stat is broken" into a
+    number that looks fine and is simply wrong -- the failure this whole module
+    exists to stop.
     """
-    try:
-        import psutil
+    import psutil
 
-        available = psutil.virtual_memory().available / _BYTES_PER_GB
-    except Exception:
-        return 0.0
-
-    try:
-        stats = _vm_stat()
-        file_backed = stats.get("File-backed pages", 0.0)
-        inactive = stats.get("Pages inactive", 0.0)
-        speculative = stats.get("Pages speculative", 0.0)
-        purgeable = stats.get("Pages purgeable", 0.0)
-        active_file_backed = max(0.0, file_backed - inactive - speculative)
-        return available + active_file_backed + purgeable
-    except Exception:
-        # The psutil figure alone is still a real answer, just a stricter one.
-        return available
+    available = psutil.virtual_memory().available / _BYTES_PER_GB
+    stats = _vm_stat()
+    file_backed = stats.get("File-backed pages", 0.0)
+    inactive = stats.get("Pages inactive", 0.0)
+    speculative = stats.get("Pages speculative", 0.0)
+    purgeable = stats.get("Pages purgeable", 0.0)
+    active_file_backed = max(0.0, file_backed - inactive - speculative)
+    return available + active_file_backed + purgeable
