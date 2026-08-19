@@ -17,7 +17,44 @@ Do not adjust these rows. `docs/BACKLOG.md` item 1 re-derives them from a sweep;
 that runs, the only measured claims in this file are the roster table below and the
 2026-08-12 sweep section, and only for the models that still exist.
 
-### The compressor fills after a thrashing model and does NOT drain (2026-08-19)
+### The compressor fills after a thrashing model, and DRAINS ON ITS OWN (2026-08-19)
+
+**CORRECTED, same day.** An earlier version of this section said the compressor does
+not drain and that "a reboot is the only remedy recorded so far". Both claims were
+wrong, and the second one is worse than wrong -- a reboot surrenders the whole
+machine to avoid diagnosing a number.
+
+What actually happened: the compressor stood at 29.4GB, and about ten minutes later,
+with no intervention of any kind, it was at 3.0GB. Measured at the same moment as the
+29.4GB reading, over a ten-second window:
+
+    Compressions      +0
+    Swapins           +0
+    Swapouts          +0
+    Pageouts          +0
+    Decompressions    +41
+
+Nothing was happening. The level was RESIDUE from the page-in storm -- a record of
+work already finished -- and it drained on its own schedule.
+
+**The bug was in the guard, not the machine.** `machine_is_uncontended()` gated on a
+compressor LEVEL, so it called an idle box contended and blocked measurement that
+would have been perfectly valid. `eval/memory.py` now requires a large compressor to
+be corroborated by an active COMPRESSION RATE before calling it thrashing; swap in
+use still decides on its own, because swap already written to disk is unambiguous.
+
+One methodological note worth keeping. The first diagnosis of the 29.4GB was "no
+process owns it", from `ps -axo rss` -- and RSS cannot see compressed pages, since
+not being resident is what compressed means. That instrument was structurally blind
+to the quantity in question. Re-measured with `top`'s CMPRS column, the top 20
+processes accounted for 3.7GB, which matches the 3.6GB the backlog recorded for the
+same signature. So the ownership gap was real; the level was simply not a problem.
+
+The timeline below is left as measured, because the RISE is real and still worth
+knowing -- a thrashing model does fill the compressor. Only the "does not drain"
+conclusion was false.
+
+
 
 `docs/BACKLOG.md` recorded this as an unexplained blocker -- the box sat at 27.91GB
 compressor "with the top 20 processes accounting for only 3.6GB of it", which is why
@@ -43,17 +80,19 @@ when you go looking for an owner.
 
 Two operational consequences:
 
-- **`machine_is_uncontended()` gates on compressor <= 15GB, so nothing can be
-  measured cleanly in this state.** That is the guard working, not failing: samples
-  taken here would describe the compressor. It also means one thrashing model
-  poisons the measurement environment for every model measured after it.
+- **`machine_is_uncontended()` used to gate on compressor <= 15GB alone, and that
+  was a FALSE POSITIVE**, not the guard working. It blocked measurement on an idle
+  box. The level is now only disqualifying when an active compression rate
+  corroborates it.
 - **Measure the big/thrashing candidates LAST in a sweep**, or reboot between them.
   `tools/sweep_models.sh` yields the GPU lock between models but has no notion of a
   model having wrecked the page cache for its successors.
 
-Not established: whether the compressor drains on its own given long enough. It had
-not moved in the 30 minutes between the run finishing and the next reading, and had
-risen further after unrelated CPU work. A reboot is the only remedy recorded so far.
+RESOLVED, see the correction at the top of this section: it drains on its own. It had
+not moved in the 30 minutes between the run finishing and the next reading, and rose
+further after unrelated CPU work, which is what made "does not drain" look true --
+but ten minutes after that it had fallen to 3.0GB unaided. A level that is checked
+too few times looks permanent.
 
 ### qwen3.8-27b-mxfp8: the tag now holds a DIFFERENT, MTP build at 0.11 tok/s (2026-08-19)
 

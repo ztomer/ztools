@@ -17,7 +17,10 @@ import pytest
 from eval.memory import (
     MAX_CLEAN_COMPRESSOR_GB,
     MAX_CLEAN_SWAP_GB,
+    MIN_ACTIVE_COMPRESSION_RATE,
+    RATE_WINDOW_SECONDS,
     NotSupportedHere,
+    compression_rate,
     is_thrashing,
     pressure,
     reclaimable_available_gb,
@@ -127,6 +130,69 @@ class TestReclaimableAvailable:
             reclaimable_available_gb()
 
 
+class TestCompressionRate:
+    """The rate itself, not a monkeypatched stand-in for it.
+
+    Every is_thrashing test patches `compression_rate` wholesale, so none of them
+    exercise its internals -- a mutation that read the GB-scaled counters instead
+    of the raw ones survived the entire suite. Compressions is an EVENT count;
+    scaling it by the page size turns a rate of thousands into 0.00008 and makes
+    a thrashing box read clean.
+    """
+
+    def _counter_pair(self, monkeypatch, first, second):
+        outputs = iter(
+            [
+                "Mach Virtual Memory Statistics: (page size of 16384 bytes)\n"
+                f"Compressions:  {first}.\n",
+                "Mach Virtual Memory Statistics: (page size of 16384 bytes)\n"
+                f"Compressions:  {second}.\n",
+            ]
+        )
+        monkeypatch.setattr(
+            "subprocess.run",
+            lambda *a, **k: type("R", (), {"stdout": next(outputs)})(),
+        )
+        monkeypatch.setattr("time.sleep", lambda _s: None)
+
+    def test_the_rate_is_raw_events_per_second(self, monkeypatch):
+        """5000 compressions across the window is 5000/s, not 5000 x page size."""
+        self._counter_pair(monkeypatch, 1_000_000, 1_005_000)
+        assert compression_rate() == pytest.approx(5000.0 / RATE_WINDOW_SECONDS)
+
+    def test_the_window_actually_divides(self, monkeypatch):
+        """A window of 1.0 cannot see a missing division.
+
+        The obvious test -- 5000 events, assert 5000/s -- passes whether or not
+        the code divides by the window, because the window IS 1.0. Same shape as
+        the `_names_match` fixture already recorded in BACKLOG: a case that is
+        true under both the original and the mutant tests nothing. Use a window
+        the division can be seen through.
+        """
+        monkeypatch.setattr("eval.memory.RATE_WINDOW_SECONDS", 2.0)
+        self._counter_pair(monkeypatch, 1_000_000, 1_005_000)
+        assert compression_rate() == pytest.approx(2500.0)
+
+    def test_an_idle_machine_rates_zero(self, monkeypatch):
+        """Measured on this box: Compressions moved by exactly 0 over 10 seconds."""
+        self._counter_pair(monkeypatch, 229_828_396, 229_828_396)
+        assert compression_rate() == 0.0
+
+    def test_a_counter_that_went_backwards_is_clamped(self, monkeypatch):
+        """Counters reset; a negative rate must not read as 'very idle'."""
+        self._counter_pair(monkeypatch, 5_000, 100)
+        assert compression_rate() == 0.0
+
+    def test_a_missing_counter_is_cannot_tell(self, monkeypatch):
+        self._counter_pair(monkeypatch, 1, 2)
+        monkeypatch.setattr(
+            "subprocess.run",
+            lambda *a, **k: type("R", (), {"stdout": "Pages free: 12.\n"})(),
+        )
+        monkeypatch.setattr("time.sleep", lambda _s: None)
+        assert compression_rate() is None
+
+
 class TestPressure:
     def test_a_quiet_machine_is_not_thrashing(self, monkeypatch):
         _fake_vm_stat(monkeypatch, IDLE_MAC)
@@ -138,16 +204,62 @@ class TestPressure:
         _fake_psutil(monkeypatch, available_gb=45.6, swap_gb=MAX_CLEAN_SWAP_GB + 1)
         assert is_thrashing() is True
 
-    def test_a_full_compressor_is_thrashing(self, monkeypatch):
-        """The 31GB-leak state: compressor at 29.3GB, swap at 12.88GB."""
-        pages = int((MAX_CLEAN_COMPRESSOR_GB + 5) * 1024**3 / 16384)
+    def test_a_full_compressor_that_is_IDLE_is_not_thrashing(self, monkeypatch):
+        """The false positive that cost real time, pinned.
+
+        A box read 29.4GB compressor with the VM subsystem doing nothing --
+        Compressions +0 over ten seconds -- and a level-only guard called it
+        thrashing. It drained to 3.0GB unaided about ten minutes later. The
+        recommendation that followed from that false positive was to reboot the
+        machine, which is not a fix for anything. A level is residue; only a
+        rate is pressure.
+        """
+        pages = int((MAX_CLEAN_COMPRESSOR_GB + 15) * 1024**3 / 16384)
+        _fake_vm_stat(
+            monkeypatch,
+            "Mach Virtual Memory Statistics: (page size of 16384 bytes)\n"
+            f"Pages occupied by compressor:  {pages}.\n"
+            "Compressions:  229828396.\n",
+        )
+        _fake_psutil(monkeypatch, available_gb=10.0, swap_gb=0.0)
+        monkeypatch.setattr("eval.memory.compression_rate", lambda: 0.0)
+        assert is_thrashing() is False
+
+    def test_a_full_compressor_that_is_WORKING_is_thrashing(self, monkeypatch):
+        """Same level, live compressor. This is the case the level was proxying for."""
+        pages = int((MAX_CLEAN_COMPRESSOR_GB + 15) * 1024**3 / 16384)
         _fake_vm_stat(
             monkeypatch,
             "Mach Virtual Memory Statistics: (page size of 16384 bytes)\n"
             f"Pages occupied by compressor:  {pages}.\n",
         )
         _fake_psutil(monkeypatch, available_gb=10.0, swap_gb=0.0)
+        monkeypatch.setattr(
+            "eval.memory.compression_rate", lambda: MIN_ACTIVE_COMPRESSION_RATE * 10
+        )
         assert is_thrashing() is True
+
+    def test_swap_in_use_is_thrashing_without_consulting_the_rate(self, monkeypatch):
+        """Swap already written to disk is unambiguous; no rate needed."""
+        _fake_vm_stat(monkeypatch, IDLE_MAC)
+        _fake_psutil(monkeypatch, available_gb=10.0, swap_gb=MAX_CLEAN_SWAP_GB + 5)
+
+        def must_not_be_called():
+            raise AssertionError("swap alone must decide; the rate costs a sleep")
+
+        monkeypatch.setattr("eval.memory.compression_rate", must_not_be_called)
+        assert is_thrashing() is True
+
+    def test_an_unreadable_rate_with_a_high_level_says_cannot_tell(self, monkeypatch):
+        pages = int((MAX_CLEAN_COMPRESSOR_GB + 15) * 1024**3 / 16384)
+        _fake_vm_stat(
+            monkeypatch,
+            "Mach Virtual Memory Statistics: (page size of 16384 bytes)\n"
+            f"Pages occupied by compressor:  {pages}.\n",
+        )
+        _fake_psutil(monkeypatch, available_gb=10.0, swap_gb=0.0)
+        monkeypatch.setattr("eval.memory.compression_rate", lambda: None)
+        assert is_thrashing() is None
 
     def test_cannot_tell_is_none_not_false(self, monkeypatch):
         """None and False must not be conflated: one is ignorance, one is a verdict."""

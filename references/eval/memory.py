@@ -62,14 +62,46 @@ def _require_macos() -> None:
 MAX_CLEAN_SWAP_GB = 8.0
 MAX_CLEAN_COMPRESSOR_GB = 15.0
 
+#: Seconds between the two vm_stat samples that decide whether the machine is
+#: ACTIVELY compressing. Short enough not to slow a caller noticeably, long
+#: enough that an idle box reliably reports zero.
+RATE_WINDOW_SECONDS = 1.0
+
+#: Compressed pages per second above which the compressor is doing real work.
+#: Measured idle on this box: Compressions moved by EXACTLY 0 over 10 seconds,
+#: so any sustained nonzero rate is signal. The floor is a noise margin, not a
+#: calibrated threshold -- it has never been measured against a genuinely
+#: thrashing machine, and should be when the chance arises.
+MIN_ACTIVE_COMPRESSION_RATE = 100.0
+
 _BYTES_PER_GB = 1024**3
 #: vm_stat reports counts of pages; Apple silicon uses 16KB pages. Read from the
 #: header rather than assumed, because a wrong page size scales every figure here.
 _DEFAULT_PAGE_SIZE = 16384
 
 
+def _vm_stat_raw() -> dict:
+    """vm_stat's counters as raw page/event counts, keyed by their own labels.
+
+    Separate from `_vm_stat` because not every counter is a page count:
+    Compressions, Decompressions, Swapins and Swapouts are EVENT counts, and
+    scaling them by the page size would silently turn a rate into nonsense.
+    """
+    import re
+    import subprocess
+
+    _require_macos()
+    out = subprocess.run(["vm_stat"], capture_output=True, text=True, timeout=10).stdout
+    stats = {}
+    for line in out.splitlines():
+        match = re.match(r'^"?([A-Za-z][^:"]*)"?:\s+(\d+)', line)
+        if match:
+            stats[match.group(1).strip()] = int(match.group(2))
+    return stats
+
+
 def _vm_stat() -> dict:
-    """vm_stat's counters in GB, keyed by their own labels. {} when unreadable."""
+    """vm_stat's PAGE counters in GB, keyed by their own labels."""
     import re
     import subprocess
 
@@ -104,16 +136,65 @@ def pressure() -> Optional[Tuple[float, float]]:
         return None
 
 
+def compression_rate() -> Optional[float]:
+    """Pages compressed per second, sampled over RATE_WINDOW_SECONDS.
+
+    THE POINT OF THIS FUNCTION. A compressor LEVEL is residue, not pressure. It
+    records how much the machine compressed at some point in the past, it drains
+    on its own schedule, and it says nothing about now. Measured on this box:
+    after one thrashing model the compressor stood at 29.4GB with the VM
+    subsystem completely idle -- Compressions +0, Swapins +0, Swapouts +0,
+    Pageouts +0 over ten seconds -- and it fell to 3.0GB by itself about ten
+    minutes later, with no intervention.
+
+    A rate cannot be residue. If the counter is moving, the machine is paying
+    for memory right now; if it is not, the machine is not, however large the
+    level happens to be.
+    """
+    import time
+
+    try:
+        before = _vm_stat_raw().get("Compressions")
+        if before is None:
+            return None
+        time.sleep(RATE_WINDOW_SECONDS)
+        after = _vm_stat_raw().get("Compressions")
+        if after is None:
+            return None
+    except Exception:
+        return None
+    return max(0.0, (after - before) / RATE_WINDOW_SECONDS)
+
+
 def is_thrashing() -> Optional[bool]:
     """Is the machine paging hard enough that timings describe IT, not the model?
 
     Tri-state on purpose: None is "cannot tell", and is not the same as False.
+
+    Swap is checked as a LEVEL because swap in use is unambiguous -- the machine
+    has already been forced to write pages to disk. The compressor is checked as
+    a level AND a rate together, because the level alone produced a false
+    positive that cost real time: a box reading 29.4GB compressor, which a
+    level-only guard called thrashing, was doing zero compressions per second
+    and drained to 3.0GB unaided. The recommendation that followed from that
+    false positive was to reboot the machine, which is not a fix for anything.
+
+    So a large compressor only counts when the compressor is actually working.
     """
     reading = pressure()
     if reading is None:
         return None
     swap_gb, compressor_gb = reading
-    return swap_gb > MAX_CLEAN_SWAP_GB or compressor_gb > MAX_CLEAN_COMPRESSOR_GB
+    if swap_gb > MAX_CLEAN_SWAP_GB:
+        return True
+    if compressor_gb <= MAX_CLEAN_COMPRESSOR_GB:
+        return False
+    rate = compression_rate()
+    if rate is None:
+        # A high level and no way to tell whether it is live. Say so rather than
+        # guessing in either direction.
+        return None
+    return rate >= MIN_ACTIVE_COMPRESSION_RATE
 
 
 def reclaimable_available_gb() -> float:
