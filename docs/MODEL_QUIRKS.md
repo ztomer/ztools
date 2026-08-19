@@ -127,14 +127,32 @@ either side:
     free                    0.2 -> 0.3 GB
     compressor              14.9 -> 18.6 GB
 
-**The model re-reads roughly half of itself from SSD for every token.** That is the
-page-cache exhaustion mechanism the section below retracted, and it is real for THIS
-build -- the retraction was right about the leak and right about the old build, and
-neither fact transfers to the artifact now on disk.
+**The model re-reads roughly half of itself from SSD for every token** on a cold
+cache. That page-in storm is real and measured.
 
-What is NOT established: whether the cause is the MTP shard being mishandled or a
-dense-model size cliff between 25.8GB (`qwen3.8-27b-jang_6d`, 12.8 tok/s) and 28.8GB.
-Both are consistent with the evidence. The MTP correlation is suggestive -- the two
+**But it is NOT the cause of the slowness -- CORRECTED 2026-08-19, same day.** An
+earlier version of this section presented the page-in storm as the mechanism. It is
+not. Re-measured while the weights were still cached from a previous run:
+
+    cold cache   30 tokens / 268.8s = 0.112 tok/s   417.6 GB paged in
+    warm cache   20 tokens /  81.0s = 0.247 tok/s   ~0.1 GB paged in
+                                                    (median 87.7 pages/s)
+
+Removing the page-in storm entirely -- a roughly 4000x reduction in paging -- only
+DOUBLES the speed. The floor is about 0.25 tok/s, still ~70x slower than every peer
+on this roster. Whatever is wrong with this build is wrong in compute, not in
+paging; the thrashing is a consequence of the model being resident and slow, not the
+reason it is slow.
+
+This matters beyond one model: "it is slow because it does not fit" is the
+explanation this repo has now reached twice for this tag, and it has been wrong both
+times. The first time a 31GB leak was the real cause; this time the cause is still
+unidentified.
+
+What is NOT established: the cause. A dense-model SIZE CLIFF is now unlikely -- the
+warm measurement shows the model slow with the weights already in cache, which is
+exactly the case a size cliff would explain away. That leaves the MTP shard being
+mishandled as the leading candidate, and it is still unverified. The MTP correlation is suggestive -- the two
 other MTP-tagged models this roster has held, `qwen3.6-27b-mxfp8-mtp` and
 `qwen3.6-35b-a3b-mxfp8-mtp`, sit at historical means of 51 and 33 -- but suggestive is
 not measured. Separating them needs a non-MTP build at the same size.

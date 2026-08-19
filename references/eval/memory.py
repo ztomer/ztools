@@ -171,30 +171,43 @@ def is_thrashing() -> Optional[bool]:
 
     Tri-state on purpose: None is "cannot tell", and is not the same as False.
 
-    Swap is checked as a LEVEL because swap in use is unambiguous -- the machine
-    has already been forced to write pages to disk. The compressor is checked as
-    a level AND a rate together, because the level alone produced a false
-    positive that cost real time: a box reading 29.4GB compressor, which a
-    level-only guard called thrashing, was doing zero compressions per second
-    and drained to 3.0GB unaided. The recommendation that followed from that
-    false positive was to reboot the machine, which is not a fix for anything.
+    THIS GATES ON LEVELS, AND THE RATE VERSION WAS MEASURED AND REJECTED.
 
-    So a large compressor only counts when the compressor is actually working.
+    A compressor level is residue: it records work already finished and drains on
+    its own (29.4GB -> 3.0GB in about ten minutes, unaided). That is a real flaw,
+    and it makes this check over-cautious -- it will call a recently-busy machine
+    contended when the box is fine.
+
+    The obvious fix was to require an active COMPRESSION RATE, and it was worse.
+    Measured against a run known to be thrashing (compressor climbing 2.5 ->
+    28.4GB), sampled once a second:
+
+        comp_rate          median 0/s, max 625,472/s, ZERO in 76 of 83 samples
+        level_delta_gb_s   median 0/s,               ZERO in 78 of 80 samples
+
+    Both counters are BURSTY. A one-second sample of a genuinely thrashing
+    machine reads zero about 95% of the time, so a rate-gated guard would have
+    cleared a contaminated run nineteen times in twenty.
+
+    That is the wrong direction to fail in. An over-cautious guard costs a
+    retried measurement; an under-cautious one writes a contaminated number into
+    eval_signals.json, where it feeds the median, sizes the derived timeout, and
+    hardens into config and docs. That mechanism is how MODEL_QUIRKS.md came to
+    record 14.7 tok/s for a model that does 0.11.
+
+    So this deliberately keeps the false-positive behaviour until a signal is
+    found that is reliable under load. The candidate, from the same measurement,
+    is PAGE-IN RATE -- the only signal that never read zero (0 of 80), at a
+    median of 87.7 pages/s warm against roughly 101,800 pages/s during the
+    thrashing run, a separation of three orders of magnitude. It is not adopted
+    yet because a legitimate model LOAD also pages in heavily, and telling a cold
+    start apart from thrashing needs its own measurement.
     """
     reading = pressure()
     if reading is None:
         return None
     swap_gb, compressor_gb = reading
-    if swap_gb > MAX_CLEAN_SWAP_GB:
-        return True
-    if compressor_gb <= MAX_CLEAN_COMPRESSOR_GB:
-        return False
-    rate = compression_rate()
-    if rate is None:
-        # A high level and no way to tell whether it is live. Say so rather than
-        # guessing in either direction.
-        return None
-    return rate >= MIN_ACTIVE_COMPRESSION_RATE
+    return swap_gb > MAX_CLEAN_SWAP_GB or compressor_gb > MAX_CLEAN_COMPRESSOR_GB
 
 
 def reclaimable_available_gb() -> float:

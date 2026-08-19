@@ -17,7 +17,6 @@ import pytest
 from eval.memory import (
     MAX_CLEAN_COMPRESSOR_GB,
     MAX_CLEAN_SWAP_GB,
-    MIN_ACTIVE_COMPRESSION_RATE,
     RATE_WINDOW_SECONDS,
     NotSupportedHere,
     compression_rate,
@@ -204,15 +203,23 @@ class TestPressure:
         _fake_psutil(monkeypatch, available_gb=45.6, swap_gb=MAX_CLEAN_SWAP_GB + 1)
         assert is_thrashing() is True
 
-    def test_a_full_compressor_that_is_IDLE_is_not_thrashing(self, monkeypatch):
-        """The false positive that cost real time, pinned.
+    def test_a_full_compressor_is_thrashing_even_when_the_counters_look_idle(
+        self, monkeypatch
+    ):
+        """The guard stays OVER-cautious, deliberately, and this pins why.
 
-        A box read 29.4GB compressor with the VM subsystem doing nothing --
-        Compressions +0 over ten seconds -- and a level-only guard called it
-        thrashing. It drained to 3.0GB unaided about ten minutes later. The
-        recommendation that followed from that false positive was to reboot the
-        machine, which is not a fix for anything. A level is residue; only a
-        rate is pressure.
+        A rate-gated version of this check was written and then measured against
+        a run known to be thrashing (compressor climbing 2.5 -> 28.4GB). The
+        compression counter read ZERO in 76 of 83 one-second samples, and the
+        compressor-level delta read zero in 78 of 80: both counters are bursty,
+        so a rate gate clears a contaminated machine about 19 times in 20.
+
+        An over-cautious guard costs a retried measurement. An under-cautious one
+        writes a contaminated number into eval_signals.json, where it feeds the
+        median, sizes the derived timeout, and hardens into config and docs --
+        the mechanism that put 14.7 tok/s in MODEL_QUIRKS.md for a model that
+        does 0.11. Until a signal is reliable under load, this fails toward
+        refusing to record.
         """
         pages = int((MAX_CLEAN_COMPRESSOR_GB + 15) * 1024**3 / 16384)
         _fake_vm_stat(
@@ -222,44 +229,13 @@ class TestPressure:
             "Compressions:  229828396.\n",
         )
         _fake_psutil(monkeypatch, available_gb=10.0, swap_gb=0.0)
-        monkeypatch.setattr("eval.memory.compression_rate", lambda: 0.0)
-        assert is_thrashing() is False
-
-    def test_a_full_compressor_that_is_WORKING_is_thrashing(self, monkeypatch):
-        """Same level, live compressor. This is the case the level was proxying for."""
-        pages = int((MAX_CLEAN_COMPRESSOR_GB + 15) * 1024**3 / 16384)
-        _fake_vm_stat(
-            monkeypatch,
-            "Mach Virtual Memory Statistics: (page size of 16384 bytes)\n"
-            f"Pages occupied by compressor:  {pages}.\n",
-        )
-        _fake_psutil(monkeypatch, available_gb=10.0, swap_gb=0.0)
-        monkeypatch.setattr(
-            "eval.memory.compression_rate", lambda: MIN_ACTIVE_COMPRESSION_RATE * 10
-        )
         assert is_thrashing() is True
 
-    def test_swap_in_use_is_thrashing_without_consulting_the_rate(self, monkeypatch):
-        """Swap already written to disk is unambiguous; no rate needed."""
+    def test_swap_in_use_is_thrashing(self, monkeypatch):
+        """Swap already written to disk is unambiguous."""
         _fake_vm_stat(monkeypatch, IDLE_MAC)
         _fake_psutil(monkeypatch, available_gb=10.0, swap_gb=MAX_CLEAN_SWAP_GB + 5)
-
-        def must_not_be_called():
-            raise AssertionError("swap alone must decide; the rate costs a sleep")
-
-        monkeypatch.setattr("eval.memory.compression_rate", must_not_be_called)
         assert is_thrashing() is True
-
-    def test_an_unreadable_rate_with_a_high_level_says_cannot_tell(self, monkeypatch):
-        pages = int((MAX_CLEAN_COMPRESSOR_GB + 15) * 1024**3 / 16384)
-        _fake_vm_stat(
-            monkeypatch,
-            "Mach Virtual Memory Statistics: (page size of 16384 bytes)\n"
-            f"Pages occupied by compressor:  {pages}.\n",
-        )
-        _fake_psutil(monkeypatch, available_gb=10.0, swap_gb=0.0)
-        monkeypatch.setattr("eval.memory.compression_rate", lambda: None)
-        assert is_thrashing() is None
 
     def test_cannot_tell_is_none_not_false(self, monkeypatch):
         """None and False must not be conflated: one is ignorance, one is a verdict."""
