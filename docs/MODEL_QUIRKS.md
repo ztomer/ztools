@@ -17,6 +17,44 @@ Do not adjust these rows. `docs/BACKLOG.md` item 1 re-derives them from a sweep;
 that runs, the only measured claims in this file are the roster table below and the
 2026-08-12 sweep section, and only for the models that still exist.
 
+### The compressor fills after a thrashing model and does NOT drain (2026-08-19)
+
+`docs/BACKLOG.md` recorded this as an unexplained blocker -- the box sat at 27.91GB
+compressor "with the top 20 processes accounting for only 3.6GB of it", which is why
+item 1 was deferred to after a reboot. Same signature reproduced today, this time
+with a suspect.
+
+Timeline on one uptime, starting from a fresh boot:
+
+    boot + 3 min                   compressor  0.0 GB   swap 0.00 GB
+    after the qwen3.8-27b-mxfp8 run  "         18.6 GB   swap 0.74 GB
+    30 min later, model unloaded     "         18.9 GB   swap 0.74 GB
+    after one full pytest run        "         29.4 GB   swap 0.74 GB
+
+At that last reading no process explained it: the largest RSS on the box was 0.39GB,
+the top ten summed to about 2GB, and psutil reported 4.2GB used. The page accounting
+adds up to the full 64GB only because the compressor holds 29.4 of it.
+
+**The suspect is the page-in storm, not a leak.** The model re-read 417.6GB from SSD
+across 30 tokens (14.25 GB/token). Servicing that evicts anonymous memory into the
+compressor, and macOS does not proactively decompress it afterwards -- so the
+pressure OUTLIVES the process that caused it, by hours, and looks exactly like a leak
+when you go looking for an owner.
+
+Two operational consequences:
+
+- **`machine_is_uncontended()` gates on compressor <= 15GB, so nothing can be
+  measured cleanly in this state.** That is the guard working, not failing: samples
+  taken here would describe the compressor. It also means one thrashing model
+  poisons the measurement environment for every model measured after it.
+- **Measure the big/thrashing candidates LAST in a sweep**, or reboot between them.
+  `tools/sweep_models.sh` yields the GPU lock between models but has no notion of a
+  model having wrecked the page cache for its successors.
+
+Not established: whether the compressor drains on its own given long enough. It had
+not moved in the 30 minutes between the run finishing and the next reading, and had
+risen further after unrelated CPU work. A reboot is the only remedy recorded so far.
+
 ### qwen3.8-27b-mxfp8: the tag now holds a DIFFERENT, MTP build at 0.11 tok/s (2026-08-19)
 
 **The 14.7 tok/s table below is correct for the build that was on disk on 2026-08-17,
