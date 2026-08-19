@@ -7,6 +7,7 @@ Contains the main eval loop, model calling, and validation orchestration.
 import json
 import os
 import re
+import time
 
 from lib.config_getters import get_max_tokens_for_task
 from lib.logging_config import osaurus_logger as eval_logger
@@ -35,6 +36,7 @@ from eval.signals import (
 )
 from eval.tasks_core import TASKS, _extract_items_from_text
 from eval.validate import safe_content
+from eval.watchdog import check_stall
 
 MAX_RETRIES = int(os.environ.get("EVAL_MAX_RETRIES", "1"))
 # Consecutive INFRA/TIMEOUT failures before abandoning a model. Chosen from
@@ -56,6 +58,8 @@ MAX_CONSECUTIVE_INFRA_FAILURES = int(os.environ.get("EVAL_MAX_INFRA_FAILURES", "
 # non-determinism, only the sampling that dominated it.
 EVAL_TEMPERATURE = float(os.environ.get("EVAL_TEMPERATURE", "0"))
 MEMORY_WARNING_THRESHOLD = 80
+
+
 
 
 
@@ -283,6 +287,7 @@ def run_eval(
             console.print(f"{STEP} {model} prefill: {rate:,.0f} chars/sec")
 
     consecutive_infra = 0
+    last_completion = time.monotonic()
 
     for task_name, task_cfg in tasks.items():
         if "messages" not in task_cfg:
@@ -296,6 +301,9 @@ def run_eval(
         prompt_chars = sum(
             len(m.get("content") or "") for m in task_cfg.get("messages", [])
         )
+        if check_stall(model, last_completion):
+            break
+
         task_timeout = _effective_timeout(
             model, task_name, prompt_chars, get_max_tokens_for_task(task_name)
         )
@@ -420,6 +428,7 @@ def run_eval(
                 break
         else:
             consecutive_infra = 0
+            last_completion = time.monotonic()
 
         status_symbol = STEP if status == "ok" else (WARN if status == "partial" else FAIL)
         category_tag = f" [{category}]" if category else ""

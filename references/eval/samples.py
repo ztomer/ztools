@@ -114,3 +114,26 @@ def migrate_scalar(caps: Dict, key: str) -> None:
     caps[f"{key}_samples"] = [
         {"v": round(float(value), 4), "ts": 0.0, "clean": False, "legacy": True}
     ]
+
+
+def clean_estimate(caps: Dict, key: str) -> Optional[float]:
+    """The estimate for `key`, but ONLY when a clean sample backs it.
+
+    `estimate_from` deliberately falls back to unclean samples so a model
+    measured only under load still reports something rather than nothing. That is
+    right for display and wrong for sizing a timeout, and the difference was not
+    academic: qwen3.8-27b-mxfp8 was measured on a box whose compressor held
+    18.07GB, recorded decode at 0.1158 tok/s, and `max_tokens / decode` alone came
+    to ~138,000s. Capped at MAX_EVAL_TIMEOUT that still bought a 2-hour per-task
+    timeout, so a wedged server sat unnoticed for 83 minutes.
+
+    A contended machine makes measurements slow, slow measurements inflate the
+    timeout, and the inflated timeout permits a longer stall. The estimator
+    self-corrects in the WRONG direction, so the timeout path asks for clean
+    samples only and takes the documented floor when there are none.
+    """
+    history = caps.get(f"{key}_samples") or []
+    clean = [s["v"] for s in history if s.get("clean")][-SAMPLE_WINDOW:]
+    if not clean:
+        return None
+    return statistics.median(clean)

@@ -520,3 +520,26 @@ def no_real_server_restart():
 
     with patch("subprocess.run", guarded_run):
         yield
+
+
+@pytest.fixture(autouse=True)
+def deterministic_machine_contention():
+    """Structural gate: no test outcome may depend on the developer's memory pressure.
+
+    `add_sample` tags every sample by calling `machine_is_uncontended()`, which
+    reads live swap and compressor figures. That was harmless while the flag only
+    steered a median, and stopped being harmless the moment `_derived_timeout`
+    began consulting it: the timeout tests in test_prefill_measurement.py record
+    rates and assert on the derived timeout, so they PASSED on a quiet machine and
+    FAILED on a busy one -- three of them went red purely because the compressor
+    was at 18GB while the suite ran.
+
+    Pinned clean here. Tests that exercise contention patch `psutil`/`vm_stat`
+    themselves (test_self_correcting_samples.py) or pass `clean=` to `add_sample`
+    explicitly, both of which still work: those import the function by value or
+    bypass it entirely.
+    """
+    from unittest.mock import patch
+
+    with patch("eval.samples.machine_is_uncontended", return_value=True):
+        yield

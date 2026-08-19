@@ -18,6 +18,8 @@ except ImportError:  # pragma: no cover - psutil is a hard dep in practice
 from lib.config import Task, get_timeout
 from lib.paths import conf_dir
 
+from eval.samples import clean_estimate
+
 DEFAULT_EVAL_TIMEOUT = int(os.environ.get("EVAL_DEFAULT_TIMEOUT", "900"))
 
 # Learned per-model timeouts. This file is tracked, so a test run that exercises the
@@ -66,9 +68,13 @@ def _derived_timeout(model: str, prompt_chars: int, max_tokens: int) -> int:
     means killing a request that was working.
     """
     caps = (_load_eval_signals().get(model) or {}).get("_capabilities") or {}
-    prefill = caps.get("prefill_chars_per_sec")
-    decode = caps.get("decode_tokens_per_sec")
-    cold_start = caps.get("cold_start_seconds")
+    # CLEAN samples only. The plain scalars fall back to readings taken under
+    # load, and sizing a timeout from those makes the ceiling grow exactly when
+    # the machine is least able to meet it. See clean_estimate's docstring for the
+    # 2-hour timeout that let a wedged server idle for 83 minutes.
+    prefill = clean_estimate(caps, "prefill_chars_per_sec")
+    decode = clean_estimate(caps, "decode_tokens_per_sec")
+    cold_start = clean_estimate(caps, "cold_start_seconds")
     # Every term measured, or no answer at all. Filling a missing one with a
     # plausible constant is how a guess ends up wearing a measurement's
     # authority -- the caller keeps its documented floor instead.
