@@ -326,6 +326,31 @@ def no_real_browsers_or_cookies(request):
             p.stop()
 
 
+@pytest.fixture(autouse=True)
+def _gpu_lock_never_touches_the_real_one(tmp_path, monkeypatch):
+    """Structural gate: no test may read or write the machine-wide GPU lock.
+
+    /tmp/mac-osaurus-gpu.lock is shared by every checkout, worktree and agent
+    session on this Mac, and a real eval may be holding it right now. Without
+    this redirect the suite would be coupled to that: tests of the quit-refusal
+    path would pass or fail depending on whether a colleague session happened to
+    be measuring, and a test that acquires would BLOCK a real eval -- the exact
+    harm the lock exists to prevent, caused by the tests for it.
+
+    Function-scoped so each test gets a clean, empty lock, and the module's
+    `_held` flag is reset on both sides: it is process-global, so one test that
+    acquires would otherwise leave every later test believing it holds the lock.
+    """
+    import lib.gpu_lock as gl
+
+    monkeypatch.setenv(gl.DIR_ENV, str(tmp_path / "gpu.lock"))
+    monkeypatch.delenv(gl.OWNER_ENV, raising=False)
+    gl._held = False
+    yield
+    gl._held = False
+    os.environ.pop(gl.OWNER_ENV, None)
+
+
 @pytest.fixture(autouse=True, scope="session")
 def _signals_files_stay_clean(tmp_path_factory):
     """Structural gate: `pytest` must not dirty tracked config.
@@ -484,7 +509,7 @@ def _tracked_config_stays_clean():
 
 
 @pytest.fixture(autouse=True)
-def no_real_server_restart():
+def no_real_server_restart(request):
     """Structural gate: no test may restart or quit the real osaurus server.
 
     `flush_between_models` used to hand-roll its restart with `osascript` and
@@ -504,6 +529,16 @@ def no_real_server_restart():
     """
     import subprocess
     from unittest.mock import patch
+
+    # test_gpu_lock_shell.py drives the REAL osaurus_one.sh on purpose, against a
+    # stubbed PATH and a tmp-dir lock, so it never reaches the developer's server.
+    # This gate matched on the script NAME and blocked all eight of those tests.
+    # A blanket ban that also bans the legitimate case gets weakened or deleted;
+    # an explicit opt-out keeps the ban meaningful. Same shape as
+    # @pytest.mark.real_cookie_discovery above.
+    if "sandboxed_server_script" in request.keywords:
+        yield
+        return
 
     real_run = subprocess.run
     forbidden = ("osaurus_one.sh", "quit app \"osaurus\"", "-a osaurus")

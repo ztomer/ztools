@@ -48,9 +48,27 @@ cannot drift.
   `HTTP 499 request_cancelled` — which from the client is indistinguishable from a
   slow model. That is not hypothetical: it recorded qwen3.8-27b at 0.1 tok/s decode
   and a 423s cold start. The script is idempotent (a no-op when one is already
-  answering) and `--check` exits 1 when there is not exactly one.
+  answering) and `--check` exits 1 when there is not exactly one — or when another
+  session holds the GPU lock.
 - **Never measure with anything else running against the GPU.** One command at a
   time, serially — including your own background jobs.
+- **The GPU and the osaurus server are held under a machine-wide lock**
+  (`/tmp/mac-osaurus-gpu.lock`; `tools/gpu_lock.sh` + `lib/gpu_lock.py`), because
+  several agent sessions run on this Mac concurrently and ONE healthy server is not
+  enough on its own: restarting the server a peer is mid-measurement against
+  corrupts that run exactly as badly as a second server does. The eval entry point
+  holds it for the whole run; `osaurus_one.sh` holds it while it mutates the server;
+  both `quit app "osaurus"` call sites REFUSE, with a stated reason, when another
+  session holds it. WHY A LOCK RATHER THAN TRUSTING THE SAMPLE MEDIAN: `eval/samples.py`
+  outvotes a bad reading only when it knows the reading is bad, and
+  `machine_is_uncontended()` gates on swap and compressor — it cannot see the GPU, so a
+  peer's eval is recorded as a CLEAN sample. The median also only protects a model that
+  HAS history; a first measurement is its own estimate. Nothing to clean up by hand — a
+  dead owner's lock is reclaimed (PID plus process start time, so a recycled PID cannot
+  impersonate it), and the
+  wedge ceiling measures PROGRESS via a per-task heartbeat rather than wall clock,
+  so an honest multi-hour run never loses its lock. Blocked? `--check` names the
+  holder. Deliberately NOT the desktop lock at `/tmp/mac-desktop-ui.lock`.
 - **A contaminated measurement is outvoted, not permanent — but the guard is
   blind to the GPU.** This used to say a bad reading could never be displaced and
   that you had to delete the model's `_capabilities` entry by hand. That stopped

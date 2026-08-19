@@ -144,6 +144,7 @@ from eval.cli_runtime import (  # noqa: E402,F401
     estimate_model_memory,
     flush_between_models,
     get_memory_percent,
+    hold_gpu_for_eval,
     is_server_responsive,
     load_tasks_from_config,
     print_memory_usage,
@@ -242,6 +243,18 @@ def main():
     if args.api_key:
         os.environ["OLLAMA_API_KEY"] = args.api_key
 
+    # Claim the GPU before anything reaches the server, and hold it for the whole
+    # run. Below this line every number produced is only worth recording if no
+    # other session restarts osaurus underneath it -- and on this machine several
+    # agent sessions run at once. Taken AFTER --capabilities returns: that path
+    # only reads recorded facts and a model list, so making a read-only report
+    # queue behind a peer's measurement would be pure obstruction.
+    #
+    # Raises GpuBusy rather than degrading. A run that cannot get the GPU has
+    # nothing useful to do: proceeding would produce a full set of results that
+    # look ordinary and are quietly wrong, which is worse than not running.
+    hold_gpu_for_eval(f"eval {args.model or 'all models'} (pid {os.getpid()})")
+
     models_to_test = []
 
     from lib.model_caps import is_generative_model
@@ -278,7 +291,13 @@ def main():
         cli_runtime.console.print(
             f"{WARN} Osaurus server not running — install/start it to evaluate local models:"
         )
-        cli_runtime.console.print("  brew install --cask osaurus && osaurus serve &>/dev/null &")
+        cli_runtime.console.print("  brew install --cask osaurus")
+        # Not `osaurus serve &`, which this line used to advise. A hand-started
+        # server takes no GPU lock and checks for no existing one, so following
+        # that advice on a machine already running an eval produces the two-server
+        # contention the whole lock exists to prevent -- and the sample guard,
+        # which reads swap and compressor, records the result as CLEAN.
+        cli_runtime.console.print("  ./tools/osaurus_one.sh   (never start one by hand)")
 
     if args.model:
         models_to_test = [(m, b) for m, b in models_to_test if m == args.model]

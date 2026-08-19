@@ -1,10 +1,31 @@
 """Tests for model_eval main() flow."""
 
 import pathlib
+import subprocess
 import sys
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+_REAL_SUBPROCESS_RUN = subprocess.run
+
+
+def _only_osaurus_commands_fail(cmd, *args, **kwargs):
+    """Break the quit/relaunch commands, and nothing else.
+
+    `patch("subprocess.run", side_effect=Exception(...))` reaches EVERY caller in
+    the process, not the one under test -- patching an attribute of a shared
+    stdlib module always does. That went unnoticed until the GPU lock started
+    shelling out to `ps` on the same code path, and this test failed on a
+    collaborator it never meant to touch. Failing only the commands whose error
+    handling is the subject says what the test means, and cannot be broken by an
+    unrelated caller appearing downstream. The real `run` is captured at import,
+    before any patch, so the pass-through is genuinely unpatched.
+    """
+    parts = cmd if isinstance(cmd, (list, tuple)) else [cmd]
+    if "osaurus" in " ".join(str(part) for part in parts):
+        raise Exception("cmd error")
+    return _REAL_SUBPROCESS_RUN(cmd, *args, **kwargs)
 
 
 class TestMainFlow:
@@ -635,7 +656,7 @@ class TestFlushBetweenModels:
             patch.object(model_eval, "is_server_responsive", return_value=True),
             patch.object(model_eval, "estimate_model_memory", return_value=4),
             patch.object(model_eval, "get_memory_percent", return_value=50.0),
-            patch("subprocess.run", side_effect=Exception("cmd error")),
+            patch("subprocess.run", side_effect=_only_osaurus_commands_fail),
             patch("time.sleep"),
         ):
             # A restart that raises must degrade ONE model, not abort a sweep
@@ -699,7 +720,10 @@ class TestFlushBetweenModels:
             mock_subprocess.return_value = MagicMock(returncode=1, stdout="", stderr="no")
             model_eval.main()
         out = capsys.readouterr().out
-        assert "Flush error" in out and "api boom" in out
+        # One message for both the error-dict and the exception path. They used to
+        # diverge, and the exception route skipped the GPU-lock guard the other
+        # honoured -- so the strings were unified along with the control flow.
+        assert "Flush failed" in out and "api boom" in out
 
 
 class TestMainBlock:

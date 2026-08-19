@@ -781,3 +781,90 @@ Signature to recognise: a test that fails while the source you just read plainly
 contains the passing value. Verify with
 `python -c "import m; print(m.CONST)"` -- when that disagrees with the file, it is
 the cache, not your reasoning.
+
+## Testing a machine-wide lock, and three ways the tests can lie (August 2026)
+
+The GPU/osaurus lock (`lib/gpu_lock.py` + `tools/gpu_lock.sh`) is guarded by
+`test_gpu_lock.py`, `test_gpu_lock_call_sites.py` and `test_gpu_lock_shell.py`. Four
+patterns from writing them generalise to anything that touches shared machine state.
+
+**1. A lock is only testable through an explicit path seam, and the seam needs its own
+gate.** The lock's whole correctness rests on `/tmp/mac-osaurus-gpu.lock` being
+machine-wide, so tests must not touch it: a real eval may be holding it right now, and a
+test that acquires would block it — the exact harm the lock exists to prevent, caused by
+the tests for it. `ZTOOLS_GPU_LOCK_DIR` redirects it, an autouse conftest fixture points
+it at `tmp_path` per test, and two tests hold the seam honest — one asserts the DEFAULT is
+still the machine-wide path, one asserts the redirect is actually in force. Without the
+second, every other test in the file could be silently exercising the real lock and
+passing for the wrong reason.
+
+**2. `patch("subprocess.run")` reaches every caller in the process, not the one under
+test.** Patching an attribute of a shared stdlib module always does. Three separate
+failures came from this in one change:
+
+- An existing test used `patch("subprocess.run", side_effect=Exception("cmd error"))` to
+  exercise one error path. The moment the lock started shelling out to `ps` on the same
+  code path, that test failed on a collaborator it never meant to touch.
+- `patch.object(srv.subprocess, "run")` broke the lock's liveness probe, so it reported
+  every owner as an impostor, and the test passed or failed for reasons unrelated to its
+  subject.
+- Patching only `Popen` breaks it too — `subprocess.run` is *implemented on* `Popen`.
+
+Use a **pass-through spy**: record the commands you care about, delegate the rest to the
+real function captured at import time.
+
+```python
+_REAL_RUN = subprocess.run
+
+def _spy_run(calls):
+    def run(cmd, *args, **kwargs):
+        parts = cmd if isinstance(cmd, (list, tuple)) else [cmd]
+        if parts and str(parts[0]) == "ps":      # the collaborator, not the subject
+            return _REAL_RUN(cmd, *args, **kwargs)
+        calls.append(" ".join(str(p) for p in parts))
+        return MagicMock(returncode=0, stdout="")
+    return run
+```
+
+**3. Never hand code-under-test a PID that points at the test runner.** The shell fixture
+stubbed `pgrep` to echo `os.getpid()`, which reads as harmless until you remember what
+`osaurus_one.sh` does with that number: `stop_all` SIGTERMs and then SIGKILLs it. The
+first mutation run that removed the lock from the script reached `stop_all` and killed
+pytest (`exit 143`, no test output, looks like a hang). Spawn a disposable process
+(`subprocess.Popen(["sleep", "600"])`) and hand over ITS pid.
+
+**4. Gate the CLASS, then calibrate the gate both ways.** Guarding the two known
+`quit app "osaurus"` sites leaves the failure mode alive — the next tool that quits a slow
+server reintroduces it, and every existing test stays green because none of them knows the
+new site exists. `TestNoUnguardedServerMutationCanBeAdded` scans the repo for every command
+that stops or starts the server and requires each file to be on an allowlist with its
+guard. Two traps in writing it:
+
+- **Substrings match prose.** `"osaurus serve"` also matches "osaurus servers" and
+  "osaurus serves from MODELS_DIR", which dragged four innocent files onto the allowlist.
+  Word-anchor the patterns (`\bosaurus serve\b`).
+- **Narrowing a scan can silently disable it.** Stripping `#` comment lines is right (a
+  comment cannot execute) but is exactly the kind of edit that turns a gate into a no-op.
+  So assert BOTH directions on the same command: executable line caught, commented-out
+  line ignored.
+
+The scan found two real defects on its first run, neither of which any existing test
+covered: `eval/run_weekend_eval.sh` restarted the server with a bare `osaurus serve &` on
+any failed curl — no check for an existing one, so a transient failure left TWO servers —
+and two user-facing messages advised starting a server by hand, contradicting the
+documented rule and bypassing the lock.
+
+**Do not edit the tree while a coverage run is in flight.** One run in this change
+reported 94.66% against a 95 floor and looked like a regression; four other runs of the
+same tree reported 95.26% with byte-identical per-file tables. The outlier was measured
+while source files were being edited in another window — coverage read a tree that moved
+underneath it. Same class as the hazard `tools/sweep_models.sh` documents for its own
+source (bash reads a script lazily by byte offset). Before believing a coverage number
+that surprises you, re-run it on a quiet tree and diff the TABLES, not just the totals:
+the totals cannot tell a real regression from a contaminated measurement, and the per-file
+diff answers it in one line.
+
+**Mutation coverage.** All eighteen deliberate breaks of the lock (both languages, both
+call sites, the entry-point wiring, and the class gate itself) were caught by a NAMED
+failing test, not merely by a red run. A red run with no `FAILED` line is a crash or a
+hang, not a gate doing its job — check for the name, not the exit code.

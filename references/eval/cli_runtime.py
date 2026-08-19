@@ -5,6 +5,7 @@ Split out of cli.py for the repo's 500-line limit. cli.py re-exports these, so
 `from eval.cli import check_memory_safe` and friends keep working.
 """
 
+import atexit
 import os
 import re
 import sys
@@ -12,10 +13,12 @@ import time
 
 import requests
 import tomli_w
+from lib import gpu_lock
 from lib.config import get_model_prompts_all
 from lib.llm.constants import API_TAGS
 from lib.osaurus_lib import call
 from lib.paths import conf_path
+from lib.signal_handling import register_cleanup
 
 # cli_runtime is the lowest layer of the CLI split (cli.py imports it), so it
 # owns the console seam: cli.py and cli_results.py resolve it through this
@@ -43,6 +46,32 @@ RESTART_READY_GAP = 5
 #: `osaurus_one.sh --restart` has to kill, wait out a quit, relaunch and poll.
 OSAURUS_ONE_TIMEOUT = 240
 
+
+def hold_gpu_for_eval(label: str, out=None, timeout: int = gpu_lock.DEFAULT_TIMEOUT) -> None:
+    """Take the GPU lock for the whole run, and arrange for it to come back.
+
+    An eval is exactly the run this repo's worst silent failure happens to.
+    Several agent sessions run on this Mac at once, and any of them restarting
+    osaurus mid-measurement -- via tools/osaurus_one.sh, or via any tool whose
+    reaction to a slow server is to quit it -- evicts this run's model. The
+    symptom is HTTP 499 request_cancelled and a rate an order of magnitude low,
+    which looks exactly like a slow model -- and `eval/samples.py` files it as a
+    CLEAN sample, because `machine_is_uncontended()` reads swap and compressor and
+    cannot see the GPU. The median outvotes noise it can detect; this it cannot.
+
+    Held for the whole process rather than per model: the invariant is not
+    established by having been true at startup, which is the same lesson the
+    per-task contention warning already encodes.
+
+    THREE releases, because a run dies in more ways than it exits.
+    `register_cleanup` covers SIGINT/SIGTERM, `atexit` covers a normal return and
+    an unhandled exception, and the lock's own liveness check covers SIGKILL --
+    which runs neither. Release is idempotent, so overlapping paths are free.
+    """
+    out = out or console
+    gpu_lock.acquire(label, timeout=timeout, log=lambda msg: out.print(msg))
+    register_cleanup(gpu_lock.release)
+    atexit.register(gpu_lock.release)
 
 
 # ==========================================================
@@ -222,6 +251,24 @@ def restart_server(out=None) -> bool:
     out = out or console
     import subprocess
 
+    # Not ours to restart. A foreign holder means a DIFFERENT session is measuring
+    # against this server, and restarting it would evict that run's model
+    # mid-measurement: the peer sees HTTP 499 request_cancelled and records a rate
+    # an order of magnitude low -- as a CLEAN sample, because the sample guard
+    # reads swap and compressor and is blind to the GPU.
+    #
+    # The check lives HERE rather than at the call site. flush_between_models had
+    # it, and that left two ways past: a transport EXCEPTION reached the restart
+    # without passing the guard, and eval/watchdog.py calls this function directly.
+    # A guard every caller has to remember is a guard that one of them will not.
+    blocked_by = gpu_lock.foreign_holder()
+    if blocked_by:
+        out.print(
+            f"{WARN} {blocked_by} holds the GPU — not restarting osaurus under "
+            "another session's measurement"
+        )
+        return False
+
     script = osaurus_one_script()
     if script is None:
         out.print(
@@ -298,9 +345,12 @@ def flush_between_models(prev_model: str, next_model: str, out=None) -> None:
         if not r.get("error"):
             time.sleep(FLUSH_SETTLE_WAIT)
             return
-        out.print(f"{WARN} Flush failed ({r.get('error')}), attempting restart...")
+        why = r.get("error")
     except Exception as e:
-        out.print(f"{WARN} Flush error: {e}; attempting restart...")
+        # Same route as an error dict. These used to diverge, and the exception
+        # path skipped the GPU-lock guard that the error path honoured.
+        why = e
+    out.print(f"{WARN} Flush failed ({why}), attempting restart...")
 
     if not restart_server(out=out):
         out.print(

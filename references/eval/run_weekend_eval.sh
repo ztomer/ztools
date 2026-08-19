@@ -4,13 +4,20 @@
 
 set -euo pipefail
 
+# Resolved from this script's own location, not from $PWD: it is run from the repo
+# root by hand and from elsewhere by anything that wraps it.
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
 DIR="${DIR:-/tmp/weekend_eval_results}"
 mkdir -p "$DIR"
 
-# Track background processes for cleanup
-OSAURUS_PID=""
 CLEANUP_DONE=false
 
+# This script no longer owns a server process, so it no longer kills one on the way
+# out. It used to track an OSAURUS_PID it had started itself; the server is now
+# established through tools/osaurus_one.sh, which is machine-wide by design. Killing
+# it here would tear down a server that outlives this run and that another session
+# may be using -- the opposite of what interrupting one eval should do.
 cleanup() {
     if [ "$CLEANUP_DONE" = true ]; then
         return
@@ -18,12 +25,6 @@ cleanup() {
     CLEANUP_DONE=true
     echo ""
     echo "=== Interrupted — cleaning up ==="
-    if [ -n "$OSAURUS_PID" ] && kill -0 "$OSAURUS_PID" 2>/dev/null; then
-        echo "Stopping Osaurus (PID $OSAURUS_PID)..."
-        kill "$OSAURUS_PID" 2>/dev/null || true
-        sleep 1
-        kill -9 "$OSAURUS_PID" 2>/dev/null || true
-    fi
     echo "Cleanup complete. Results in $DIR"
     exit 130
 }
@@ -66,17 +67,22 @@ for m in $MODELS; do
   python3 -m eval --model "$m" --task weekend_transient --quick 2>&1 | tee "$DIR/${m}_transient.txt"
 
   # Check if server died (no response or connection error)
+  #
+  # Recovered through tools/osaurus_one.sh, never by starting one here. The
+  # predecessor ran `osaurus serve &` on any failed curl, which was wrong twice
+  # over. It never checked whether a server was ALREADY running, so one
+  # transient curl failure left TWO of them competing for the same GPU and RAM --
+  # contention the sample guard cannot see, since it reads swap and compressor and
+  # not the GPU, so the ruined timing is filed as CLEAN. And it bypassed the GPU
+  # lock, so it could start a server on another session's measurement. osaurus_one.sh
+  # is idempotent, enforces exactly one, and takes the lock -- which also means it
+  # REFUSES rather than restarting under a peer that is mid-eval.
   if ! curl -sf http://localhost:1337/models > /dev/null 2>&1; then
     echo "⚠ Server unreachable after $m — restarting..."
-    osaurus serve &>/dev/null &
-    OSAURUS_PID=$!
-    sleep 15
-    if ! curl -sf http://localhost:1337/models > /dev/null 2>&1; then
-      echo "⚠ Server failed to restart — check Osaurus"
-      kill "$OSAURUS_PID" 2>/dev/null || true
+    if ! "$ROOT/tools/osaurus_one.sh" --restart >/dev/null; then
+      echo "⚠ Server failed to restart — check Osaurus, or whether a peer holds the GPU"
       exit 1
     fi
-    OSAURUS_PID=""
   fi
 
   echo "=== $m: weekend_fixed ==="
@@ -84,15 +90,10 @@ for m in $MODELS; do
 
   if ! curl -sf http://localhost:1337/models > /dev/null 2>&1; then
     echo "⚠ Server unreachable after $m — restarting..."
-    osaurus serve &>/dev/null &
-    OSAURUS_PID=$!
-    sleep 15
-    if ! curl -sf http://localhost:1337/models > /dev/null 2>&1; then
-      echo "⚠ Server failed to restart — check Osaurus"
-      kill "$OSAURUS_PID" 2>/dev/null || true
+    if ! "$ROOT/tools/osaurus_one.sh" --restart >/dev/null; then
+      echo "⚠ Server failed to restart — check Osaurus, or whether a peer holds the GPU"
       exit 1
     fi
-    OSAURUS_PID=""
   fi
 done
 

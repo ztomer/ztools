@@ -20,17 +20,29 @@
 #
 #   ./tools/osaurus_one.sh              ensure one server on the default port
 #   ./tools/osaurus_one.sh --port 1337  ensure one on a specific port
-#   ./tools/osaurus_one.sh --check      report only, exit 1 if not exactly one
+#   ./tools/osaurus_one.sh --check      report only; exit 1 unless exactly one
+#                                      server is up AND the gpu is unheld
 #   ./tools/osaurus_one.sh --restart    stop whatever is there, start one clean
 #
 # Deterministic: same end state whether it started with zero, one or several
 # servers, and it prints which of those it found.
+#
+# ONE SERVER IS NOT ENOUGH ON ITS OWN, which is why this script now also takes the
+# GPU lock. Counting processes proves nothing about who is USING the one it finds.
+# Several agent sessions run concurrently on this Mac; stopping and restarting the
+# single healthy server that another session is mid-measurement against corrupts
+# that session's numbers just as thoroughly as a second server would -- and the
+# sample guard cannot see it, because machine_is_uncontended() reads swap and
+# compressor and never the GPU, so the ruined timing is filed as a CLEAN sample.
+# See tools/gpu_lock.sh.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck disable=SC1091
 source "$ROOT/tui/lib.sh"
+# shellcheck disable=SC1091
+source "$ROOT/tools/gpu_lock.sh"
 
 PORT="${OSAURUS_PORT:-1337}"
 MODE="ensure"
@@ -42,7 +54,7 @@ while [ $# -gt 0 ]; do
     --port)    PORT="$2"; shift 2 ;;
     --check)   MODE="check"; shift ;;
     --restart) MODE="restart"; shift ;;
-    -h|--help) sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,36p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *)         die "unknown argument: $1" ;;
   esac
 done
@@ -113,23 +125,56 @@ stop_all() {
 # Newline-separated string, not a bash array: `mapfile` is a bash 4 builtin and
 # macOS ships bash 3.2, so a script that needs it only runs where someone already
 # installed a newer bash. Word-splitting a list of PIDs is safe -- they are digits.
-FOUND="$(server_pids)"
-COUNT="$(printf '%s' "$FOUND" | grep -c . || true)"
-FIRST="$(printf '%s\n' "$FOUND" | head -1)"
+survey() {
+  FOUND="$(server_pids)"
+  COUNT="$(printf '%s' "$FOUND" | grep -c . || true)"
+  FIRST="$(printf '%s\n' "$FOUND" | head -1)"
+}
+survey
 
 if [ "$MODE" = "check" ]; then
+  # --check is READ-ONLY, so it does not take the lock -- taking it would make a
+  # diagnostic command block on, or steal from, the very run it is reporting on.
+  # It reports ownership instead, and treats a foreign holder as a failure for the
+  # same reason it treats two processes as one: the question --check answers is
+  # "is it safe to measure now", and it is not safe to measure on a GPU another
+  # session is already measuring on. A server that is single, healthy and BUSY
+  # produces numbers as contaminated as a server that is doubled.
+  HOLDER="$(gpu_lock_foreign_holder)"
   case "$COUNT" in
     0) err "no osaurus process running"; exit 1 ;;
     1) if [ -z "$(listener_pids)" ]; then
          err "one osaurus process ($(describe "$FIRST")) but nothing listening on $PORT"
          exit 1
        fi
+       if [ -n "$HOLDER" ]; then
+         err "one osaurus process, serving $PORT — $(describe "$FIRST")"
+         err "but the gpu is held by $HOLDER — measurements taken now are not trustworthy"
+         exit 1
+       fi
        ok "exactly one osaurus process, serving $PORT — $(describe "$FIRST")"; exit 0 ;;
     *) err "$COUNT osaurus processes — measurements taken now are not trustworthy"
        for pid in $FOUND; do err "  $(describe "$pid")"; done
+       [ -n "$HOLDER" ] && err "  gpu also held by $HOLDER"
        exit 1 ;;
   esac
 fi
+
+# Everything past here MUTATES the server. Hold the GPU lock for all of it, and
+# release it on the way out however that happens -- a clean exit, a `die`, or a
+# Ctrl-C -- so a killed run does not wedge every eval on the machine.
+#
+# Released at exit rather than held for the caller's benefit: this script's job is
+# to make the server right, not to reserve it. The eval entry point takes its own
+# lock for the duration of its run, which is the hold that actually matters.
+trap 'gpu_lock_release' EXIT INT TERM
+gpu_lock_acquire "osaurus_one.sh --$MODE (port $PORT)"
+
+# Re-survey. The census above was taken BEFORE the lock, and acquiring it can mean
+# waiting out a peer that was itself starting or stopping servers -- so acting on
+# the pre-lock list would kill PIDs that no longer exist and miss the ones that now
+# do. Everything the lock protects has to be observed from inside the lock.
+survey
 
 if [ "$MODE" = "restart" ] && [ "$COUNT" -gt 0 ]; then
   info "restart requested; stopping $COUNT server(s) on port $PORT"

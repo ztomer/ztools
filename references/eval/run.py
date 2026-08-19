@@ -9,6 +9,7 @@ import os
 import re
 import time
 
+from lib import gpu_lock
 from lib.config_getters import get_max_tokens_for_task
 from lib.logging_config import osaurus_logger as eval_logger
 from lib.mlx_lib import call as mlx_call
@@ -28,6 +29,7 @@ from eval.failures import (
 )
 from eval.outputs import save_output
 from eval.prefill import measure_prefill_rate, record_prefill_rate
+from eval.result_format import _quality_results_to_eval_format
 from eval.signals import (
     DEFAULT_EVAL_TIMEOUT,
     _effective_timeout,
@@ -37,6 +39,9 @@ from eval.signals import (
 from eval.tasks_core import TASKS, _extract_items_from_text
 from eval.validate import safe_content
 from eval.watchdog import check_stall
+
+#: Re-exported for `from eval.run import ...` callers; see eval/result_format.py.
+__all__ = ["_quality_results_to_eval_format"]
 
 MAX_RETRIES = int(os.environ.get("EVAL_MAX_RETRIES", "1"))
 # Consecutive INFRA/TIMEOUT failures before abandoning a model. Chosen from
@@ -200,30 +205,6 @@ def _call_model(
         )
 
 
-def _quality_results_to_eval_format(scorecards: list, model: str) -> list[dict]:
-    """Convert quality.py ScoreCards to model_eval's result format."""
-    results = []
-    for sc in scorecards:
-        failures = [f for d in sc.dimensions for f in d.failures]
-        composite = sc.composite
-        status = "ok" if composite >= 90 else ("partial" if composite >= 50 else "fail")
-        results.append(
-            {
-                "task": sc.task,
-                "case_id": sc.case_id,
-                "status": status,
-                "quality_score": round(composite, 1),
-                "time": round(sc.elapsed, 1),
-                "error": None,
-                "failure_reason": "; ".join(failures) if failures else "",
-                "failure_category": None,
-                "failure_evidence": "",
-                "result": {"model": model, "time": sc.elapsed, "content": sc.output},
-            }
-        )
-    return results
-
-
 def run_eval_quick(
     model: str,
     tasks: dict = None,
@@ -293,6 +274,10 @@ def run_eval(
         if "messages" not in task_cfg:
             console.print(f"{WARN} Skipping '{task_name}' (no messages key)")
             continue
+        # Progress, not duration: the lock's wedge ceiling runs from the last beat,
+        # so a healthy multi-hour run never loses the GPU to a peer while a hung one
+        # still does. A no-op when this process holds no lock. See lib/gpu_lock.py.
+        gpu_lock.heartbeat()
         # The single-server invariant is not established by having been true at
         # startup. osaurus_one.sh runs once before a model and then hours pass.
         contended = contended_server_warning(model, task_name)

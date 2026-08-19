@@ -403,7 +403,8 @@ on <10 items check, not penalized" -- the defect written down and accepted.
 
 Start server: `./tools/osaurus_one.sh` -- NEVER by hand. A second osaurus does not
 queue, it loads its own copy of the model, and two of them thrash a machine sized
-for one. The script is idempotent and `--check` exits 1 unless exactly one is up.
+for one. The script is idempotent and `--check` exits 1 unless exactly one is up
+AND no other session holds the GPU lock.
 
 ---
 
@@ -480,16 +481,41 @@ vision. Backlog item 9 covers building a real one.
    MEASUREMENTS: contention shows up as `HTTP 499 request_cancelled`, which from the
    client is indistinguishable from a slow model.
 2. **Check before run**: `./tools/osaurus_one.sh --check` (exits 1 unless exactly one
-   process is up AND it holds the port). `osaurus status` is weaker -- `osaurus stop`
-   leaves the process resident, so status can read "stopped" while the memory is still
-   occupied.
-3. **Response parsing** - Must read ALL chunks until `done=true`
-4. **A contaminated measurement is outvoted, not permanent — and the guard cannot
+   process is up, it holds the port, AND no other session holds the GPU lock).
+   `osaurus status` is weaker -- `osaurus stop` leaves the process resident, so status
+   can read "stopped" while the memory is still occupied.
+3. **One session at a time, enforced by a machine-wide lock.** Several agent sessions
+   now run on this Mac concurrently, and ONE healthy server is not enough on its own:
+   restarting the server a peer is measuring against corrupts that run exactly as
+   badly as a second server would. `/tmp/mac-osaurus-gpu.lock` (see `tools/gpu_lock.sh`
+   and `lib/gpu_lock.py`) is held for the whole of an eval and for any server mutation.
+   - Deliberately NOT the desktop lock at `/tmp/mac-desktop-ui.lock`. Different
+     resources; sharing a name would make every screenshot run a false "GPU busy".
+   - The two `quit app "osaurus"` call sites REFUSE, with a stated reason, when
+     another session holds it. They do not queue: a tweet summary should not block
+     for the hours an eval runs.
+   - Its wedge ceiling measures PROGRESS, not duration -- the eval heartbeats after
+     every task -- because an honest run holds the GPU for hours and a wall-clock
+     ceiling would reclaim the lock out from under a healthy measurement.
+   - Held by a dead session? It reclaims itself (PID plus process start time, so a
+     recycled PID cannot impersonate the owner). Nothing to clean up by hand.
+   - Blocked? `./tools/osaurus_one.sh --check` names the holder.
+   - Why a lock rather than trusting the sample median: `eval/samples.py` estimates
+     from the median of the last 5 CLEAN samples, but `machine_is_uncontended()`
+     gates on SWAP and COMPRESSOR and cannot see the GPU, so a peer's eval is
+     recorded as CLEAN and enters the median as though the box were quiet. And the
+     median only protects a model that HAS history — a first measurement is its own
+     estimate. The lock covers exactly what that guard is blind to.
+4. **Response parsing** - Must read ALL chunks until `done=true`
+5. **A contaminated measurement is outvoted, not permanent — and the guard cannot
    see the GPU.** The recorders no longer keep the SLOWEST observation; `eval/samples.py`
    keeps a list and reports the median of the last 5 CLEAN samples, so re-measuring is
    enough and the hand-delete step is obsolete. But `machine_is_uncontended()` reads
-   swap and compressor only, so a competing GPU workload is recorded as clean, and a
-   model with one sample has no median to hide behind.
+   swap and compressor only, so a competing GPU workload is recorded as clean (the
+   lock in item 3 covers exactly that), and a model with one sample has no median to
+   hide behind. The hand-delete step survives for ONE case: a REPLACED BUILD shipped
+   under the same tag, where the old samples describe a model that no longer exists
+   and no amount of clean re-measurement outvotes them.
 
 
 ### raptor-v1-26b-a4b-vl-jang (measured 2026-08-19)
