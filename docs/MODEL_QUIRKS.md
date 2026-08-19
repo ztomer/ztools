@@ -17,7 +17,57 @@ Do not adjust these rows. `docs/BACKLOG.md` item 1 re-derives them from a sweep;
 that runs, the only measured claims in this file are the roster table below and the
 2026-08-12 sweep section, and only for the models that still exist.
 
-### ~~qwen3.8-27b-mxfp8 does not fit this machine's page cache~~ RETRACTED 2026-08-17
+### qwen3.8-27b-mxfp8: the tag now holds a DIFFERENT, MTP build at 0.11 tok/s (2026-08-19)
+
+**The 14.7 tok/s table below is correct for the build that was on disk on 2026-08-17,
+and that build is gone.** Every weight shard in
+`~/MLXModels/OsaurusAI/Qwen3.8-27B-MXFP8` now dates from Aug 18 20:59-21:34, and the
+directory contains a shard the old one did not:
+
+    model-mtp-of-00007.safetensors    0.41 GB    Aug 18 21:25
+
+This is the case CLAUDE.md singles out as the ONE where clearing `_capabilities` by
+hand is correct: the artifact behind a name changed, so old samples describe a model
+that no longer exists. Note that `config.json` carries NO `mtp`/`nextn`/`predict`
+keys -- checking it says the build is a plain `qwen3_5`. The MTP weights are visible
+only as a SHARD FILENAME. A config probe cannot detect this; `ls` can.
+
+Measured 2026-08-19 on a quiet box (swap 0, compressor 11.7GB, 44.5GB reclaimable
+before load, GPU lock held, nothing else running):
+
+| method | result |
+|---|---|
+| eval harness, one task | 0.195 tok/s, tagged clean |
+| direct request, 20 tokens | 180.7s -> 0.11 tok/s |
+| direct request, 40 tokens | 348.8s -> 0.11 tok/s |
+
+Linear in token count, so it is decode cost and not cold start. And the mechanism,
+measured at the boundary rather than inferred -- 30 tokens with vm_stat sampled
+either side:
+
+    pageins during decode   27,366,430 pages = 417.6 GB read from SSD
+    per token               14.25 GB
+    free                    0.2 -> 0.3 GB
+    compressor              14.9 -> 18.6 GB
+
+**The model re-reads roughly half of itself from SSD for every token.** That is the
+page-cache exhaustion mechanism the section below retracted, and it is real for THIS
+build -- the retraction was right about the leak and right about the old build, and
+neither fact transfers to the artifact now on disk.
+
+What is NOT established: whether the cause is the MTP shard being mishandled or a
+dense-model size cliff between 25.8GB (`qwen3.8-27b-jang_6d`, 12.8 tok/s) and 28.8GB.
+Both are consistent with the evidence. The MTP correlation is suggestive -- the two
+other MTP-tagged models this roster has held, `qwen3.6-27b-mxfp8-mtp` and
+`qwen3.6-35b-a3b-mxfp8-mtp`, sit at historical means of 51 and 33 -- but suggestive is
+not measured. Separating them needs a non-MTP build at the same size.
+
+**Size alone does not predict this.** `nemotron-3.5-lightning-30b-a3b-mxfp8` is 34.0GB
+-- LARGER -- and runs at 6.84 tok/s, because an MoE with 3B active parameters touches
+only its active experts per token. Any gate that reads on-disk bytes, including
+`estimate_model_memory` and the oversize refusal, cannot tell these two apart.
+
+### ~~qwen3.8-27b-mxfp8 does not fit this machine's page cache~~ RETRACTED 2026-08-17 (superseded, see above)
 
 **There is no size threshold on this host. The machine was being drained by a leak.**
 

@@ -59,6 +59,17 @@ llm_url = "http://localhost:1337"
 # cost of 1.8x the bytes is 1.3x on decode, which is what reading more bytes per
 # token should cost. All three are perfectly usable.
 #
+# SUPERSEDED 2026-08-19 for qwen3.8-27b-mxfp8 ONLY. That 14.7 tok/s row describes a
+# build that is no longer on disk. Every weight shard under
+# ~/MLXModels/OsaurusAI/Qwen3.8-27B-MXFP8 now dates from Aug 18, and the directory
+# gained `model-mtp-of-00007.safetensors` -- an MTP build shipped under the old tag.
+# Re-measured on a quiet box: 0.11 tok/s, confirmed by the eval harness and by two
+# direct requests, with 417.6GB paged in from SSD across 30 tokens (14.25 GB/token).
+# It re-reads half of itself per token and cannot be evaluated here.
+#
+# The 4-bit and jang_6d rows above are unaffected. See docs/MODEL_QUIRKS.md for the
+# measurement and for what is NOT established (MTP mishandling vs a dense size cliff).
+#
 # THE LESSON, which is the part worth keeping: a measurement taken on a contended
 # machine describes the contention, not the thing measured. It then hardens into a
 # design rule -- this one reached conf/config.toml, docs/MODEL_QUIRKS.md and a
