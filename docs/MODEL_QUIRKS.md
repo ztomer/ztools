@@ -151,8 +151,50 @@ unidentified.
 
 What is NOT established: the cause. A dense-model SIZE CLIFF is now unlikely -- the
 warm measurement shows the model slow with the weights already in cache, which is
-exactly the case a size cliff would explain away. That leaves the MTP shard being
-mishandled as the leading candidate, and it is still unverified. The MTP correlation is suggestive -- the two
+exactly the case a size cliff would explain away.
+
+**MTP IS CONFIRMED PRESENT AND ENABLED** (2026-08-19), from three places in the
+artifact rather than inferred from the tag:
+
+    config.json        mtp.fc, mtp.layers.0.self_attn.*, mtp.layers.0.mlp.*
+                       (quantized tensors, in the 152KB quantization block)
+    jang_config.json   mtp.artifact_available  true      mtp.tensor_count 31
+                       mtp.runtime_available   FALSE     mtp.trained_multi_step true
+                       drop_mtp                false     runtime.mtp_mode
+                                                         "preserved_enabled"
+    on disk            model-mtp-of-00007.safetensors  0.41 GB
+                       vmlx_mtp_tuning.json
+
+The bundle ships a speculative-decode head marked `preserved_enabled` on a runtime
+that reports it as UNAVAILABLE, and the tuning file is candid that nothing was
+measured:
+
+    "best_depth": 1
+    "note":   "Conservative UNMEASURED default: 1 draft/step. Run a depth sweep ..."
+    "reason": "stamped by stamp_qwen38_27b; recommendation, not measurement"
+
+Note the shape of the detection problem: `config.json`'s TOP-LEVEL keys say plain
+`qwen3_5`, `osaurus show` reports plain `qwen3_5`, and `eval/capabilities.py` probes
+config.json. A capability probe cannot see this build's MTP head. Only reading the
+quantization block, the vendor sidecar, or `ls` can.
+
+**Still not PROVEN as the cause, and the reason is a missing control.** The clean
+test is a same-family non-MTP build at similar size, and both candidates are gone
+from disk -- `qwen3.8-27b-jang_6d` (12.8 tok/s) and `qwen3.8-27b-4bit` (21.9 tok/s)
+have signals in history but no files. The only installed comparison,
+`muse-glimmer-30b-jang_6m` at 17.6 tok/s, differs in TWO ways at once: no MTP head
+AND `cache_type: kv` against this model's `hybrid`. One control with two variables
+cannot isolate a cause.
+
+Nor is there a server-side A/B: `osaurus` exposes no MTP, depth or speculative-decode
+option in its CLI, so the head cannot be disabled at serve time. `drop_mtp: false`
+implies the bundle CAN be built without the head, which would be the direct test if
+the stamping tool is available.
+
+One untested alternative worth recording rather than chasing: `osaurus show` reports
+a context length of 262,144 on a `hybrid` cache. If the KV cache is sized from the
+declared maximum rather than the request, that is its own candidate for a 70x
+slowdown, and it has not been measured. The MTP correlation is suggestive -- the two
 other MTP-tagged models this roster has held, `qwen3.6-27b-mxfp8-mtp` and
 `qwen3.6-35b-a3b-mxfp8-mtp`, sit at historical means of 51 and 33 -- but suggestive is
 not measured. Separating them needs a non-MTP build at the same size.
