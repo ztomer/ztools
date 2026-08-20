@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Structural gate: prohibit `#[allow]` attributes in Rust source.
-
+"""
+Structural gate: prohibit `#[allow]` attributes in Rust source.
 This gate ensures no `#[allow]` attributes remain in the Rust codebase,
 enforcing the house rule that all unsafe/partial work must be explicitly
 documented rather than silently suppressed.
@@ -14,7 +14,6 @@ Exits with status 0 if no `#[allow]` attributes found; 1 otherwise.
 from pathlib import Path
 import re
 import sys
-
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
@@ -47,7 +46,6 @@ def main() -> int:
 
     print("OK: No `#[allow]` attributes found in Rust source.")
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())
