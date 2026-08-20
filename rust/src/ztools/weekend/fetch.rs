@@ -1,12 +1,18 @@
+use chrono::NaiveDate;
+
 use super::WeekendEvent;
-use super::{_seasonal_keywords, call_osaurus_json, search_duckduckgo_html};
+use super::{
+    _seasonal_keywords, call_osaurus_json, in_window_count, prioritise_in_window,
+    search_duckduckgo_html,
+};
 
 pub fn fetch_duckduckgo_events(
     location: &str,
-    d1: &str,
-    d2: &str,
+    d1: NaiveDate,
+    d2: NaiveDate,
     config: &crate::config::ZtoolsConfig,
 ) -> (Vec<WeekendEvent>, String) {
+    let (d1_str, d2_str) = (d1.format("%Y-%m-%d").to_string(), d2.format("%Y-%m-%d").to_string());
     let now = chrono::Local::now();
     let month_name = now.format("%B").to_string();
     let year = now.format("%Y").to_string();
@@ -68,6 +74,19 @@ pub fn fetch_duckduckgo_events(
     }
     let raw_text = cleaned.join("\n");
 
+    // Make the in-window candidates visible WITHOUT removing the rest. Filtering
+    // here instead was tried and reverted (in the Python pipeline): it starved
+    // the draft and the model invented events. The marked corpus is also what
+    // the provenance gate judges against, matching the Python flow.
+    let total = raw_text.lines().filter(|l| !l.trim().is_empty()).count();
+    let in_window = in_window_count(&raw_text, d1, d2);
+    let marked_text = prioritise_in_window(&raw_text, d1, d2);
+    if total > 0 {
+        println!(
+            "→ Candidates: {in_window}/{total} mention a date this weekend"
+        );
+    }
+
     let prompt = format!(
         "You are an expert family activity planner. Extract up to 10 time-limited events happening STRICTLY this weekend (between {} and {}) in {} from the text below.\n\
         Output JSON now. Use EXACT schema:\n\
@@ -79,16 +98,17 @@ pub fn fetch_duckduckgo_events(
         - If the source does not state a value, output an empty string \"\".\n\
         - start_date / end_date: ISO YYYY-MM-DD\n\
         - description: 1-2 sentence short summary of what makes it appealing for kids.\n\
+        - Lines prefixed [THIS WEEKEND] definitely happen in the plan window; prefer them.\n\
         \n\
         Search results:\n\
         {}\n\
         \n\
         Output ONLY JSON.",
-        d1, d2, location, d1, d2, raw_text
+        d1_str, d2_str, location, d1_str, d2_str, marked_text
     );
 
     let events = call_osaurus_json(&prompt, config).unwrap_or_default();
-    (events, raw_text)
+    (events, marked_text)
 }
 /// Default Open-Meteo URL builder for Vaughan / GTA.
 fn open_meteo_url(friday_date: &str, sunday_date: &str) -> String {

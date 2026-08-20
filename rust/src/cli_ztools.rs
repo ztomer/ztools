@@ -71,7 +71,7 @@ pub(crate) fn weekend_plan(
     let dates_str = format!("{} to {}", friday.format("%b %d"), sunday.format("%b %d"));
 
     let (transient, corpus) =
-        crate::ztools::weekend::fetch_duckduckgo_events(&location, &d1, &d2, config);
+        crate::ztools::weekend::fetch_duckduckgo_events(&location, friday, sunday, config);
     // Provenance FIRST: a row that traces to nothing we fetched is invention,
     // and there is no point judging an invented row's dates or weather label.
     let (transient, provenance_notes) =

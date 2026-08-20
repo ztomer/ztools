@@ -320,7 +320,12 @@ fn test_fetch_duckduckgo_events() {
         llm_timeout_secs: 1,
         ..crate::config::ZtoolsConfig::default()
     };
-    let (events, corpus) = fetch_duckduckgo_events("Vaughan", "2026-08-07", "2026-08-09", &config);
+    let (events, corpus) = fetch_duckduckgo_events(
+        "Vaughan",
+        chrono::NaiveDate::parse_from_str("2026-08-07", "%Y-%m-%d").unwrap(),
+        chrono::NaiveDate::parse_from_str("2026-08-09", "%Y-%m-%d").unwrap(),
+        &config,
+    );
     assert!(
         events.is_empty(),
         "unreachable search and model must yield nothing, not invented events: {events:?}"

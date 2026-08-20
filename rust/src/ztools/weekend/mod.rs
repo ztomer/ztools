@@ -3,11 +3,13 @@ pub mod dates;
 pub mod enforce;
 pub mod fetch;
 pub mod format;
+pub mod supply;
 pub use constants::*;
 pub use dates::*;
 pub use enforce::*;
 pub use fetch::*;
 pub use format::*;
+pub use supply::*;
 /// Native Rust Weekend Planner module.
 use serde::{Deserialize, Serialize};
 

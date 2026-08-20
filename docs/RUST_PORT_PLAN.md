@@ -212,7 +212,16 @@ Status: **partially done — twitter summarize prompt shared, in progress.**
       significant words present in the normalised corpus) and
       `drop_unsourced_rows` ported to `enforce.rs` and run FIRST in the dispatch,
       before any shape check. Tests proved to fail when `row_is_sourced` was
-      forced false. Remaining: supply in-window counting, the 4-phase prompt
+      forced false.
+    - **supply in-window counting DONE**: `prioritise_in_window` /
+      `in_window_count` / `mentions_window` ported to
+      `rust/src/ztools/weekend/supply.rs` using the SAME `find_dates_in` scanner
+      the enforcer uses, wired into `fetch_duckduckgo_events`: the corpus is
+      stably partitioned (marked `[THIS WEEKEND]` lines floated, nothing
+      removed) before the model sees it, and the operator sees
+      `in_window/total mention a date this weekend` -- the number that
+      separates a supply problem from a model problem. Tests proved to fail
+      when `mentions_window` was forced false. Remaining: the 4-phase prompt
       pipeline.
 3. **rename**: port `helpers.py` text cleaning (pure); port VLM call path to the
    osaurus vision API (no local MLX yet).

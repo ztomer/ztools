@@ -71,8 +71,8 @@ fn call_osaurus_json_parses_mock_llm_response() {
     let config = config_with_url(&format!("http://127.0.0.1:{port}"));
     let (events, corpus) = ztools::weekend::fetch_duckduckgo_events(
         "Vaughan",
-        "2026-08-07",
-        "2026-08-09",
+        chrono::NaiveDate::parse_from_str("2026-08-07", "%Y-%m-%d").unwrap(),
+        chrono::NaiveDate::parse_from_str("2026-08-09", "%Y-%m-%d").unwrap(),
         &config,
     );
     // The function may return events or empty depending on the LLM response
