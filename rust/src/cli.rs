@@ -71,7 +71,26 @@ enum Cmd {
 
 /// Parse the CLI, resolve config, and dispatch to the tool handlers.
 pub fn run() -> Result<()> {
-    let cli = Cli::parse();
+    let mut args: Vec<std::ffi::OsString> = std::env::args_os().collect();
+    if let Some(first) = args.first() {
+        let prog = std::path::Path::new(first)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        let subcommand = match prog {
+            "weekend" | "weekend-plan" => Some("weekend-plan"),
+            "twitter" | "twitter-summarize" => Some("twitter-summarize"),
+            "image-renamer" | "rename_images" | "rename-images" => Some("image-renamer"),
+            "model-eval" | "oeval" => Some("model-eval"),
+            _ => None,
+        };
+        if let Some(sub) = subcommand {
+            if args.len() == 1 || args.get(1).and_then(|s| s.to_str()) != Some(sub) {
+                args.insert(1, sub.into());
+            }
+        }
+    }
+    let cli = Cli::parse_from(args);
     // An explicit `--config` is authoritative: the file is exactly what runs,
     // so a test (or a CI job) can point the URLs at stubs without the dynamic
     // `[best_models]` override reaching out to the operator's real config.
