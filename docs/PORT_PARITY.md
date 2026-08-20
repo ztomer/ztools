@@ -101,6 +101,16 @@ the Rust binary's notion of which model is best.
   `fetch_duckduckgo_events` returns the fetched corpus so the provenance gate has
   ground truth. `enforce.rs` was split out past the 500-line cap: constants into
   `weekend/constants.rs`, dates into `weekend/dates.rs`.
+- [x] **5c. Weekend 4-phase pipeline (extract → draft → refine → structure) +
+  supply prioritisation** — 2026-08-19: `weekend/prompts.rs` ports the phase
+  templates verbatim with a C1-checking renderer, `weekend/phases.rs` ports
+  `extract_sources` (adaptive batching, raw pass-through on failure),
+  `draft_activities`, `refine_draft`, `structure_to_json` and `condense_weather`
+  behind a `PlanContext`, and `weekend/supply.rs` ports `prioritise_in_window`
+  / `in_window_count` using the SAME date scanner as the enforcer. Weather now
+  precedes the pipeline (matching Python); the monolithic prompt remains as the
+  fallback when a phase stalls. Phase tests prove the degrade-not-starve
+  fallbacks (each proved-fail-first).
 - [x] **6. Greedy decoding across all LLM callers** (temperature 0.0) — for deterministic reproducible leaderboard outputs.
 - [x] **7. Derived request timeouts** from measured cold-start / prefill / decode rates.
 

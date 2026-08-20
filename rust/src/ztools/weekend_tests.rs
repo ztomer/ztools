@@ -320,10 +320,19 @@ fn test_fetch_duckduckgo_events() {
         llm_timeout_secs: 1,
         ..crate::config::ZtoolsConfig::default()
     };
+    let ctx = crate::ztools::weekend::PlanContext {
+        location: "Vaughan".into(),
+        ages: "6-12".into(),
+        date_range: "Aug 7 to Aug 9".into(),
+        year: 2026,
+        exclusions: "none".into(),
+    };
     let (events, corpus) = fetch_duckduckgo_events(
         "Vaughan",
         chrono::NaiveDate::parse_from_str("2026-08-07", "%Y-%m-%d").unwrap(),
         chrono::NaiveDate::parse_from_str("2026-08-09", "%Y-%m-%d").unwrap(),
+        "sunny",
+        &ctx,
         &config,
     );
     assert!(
@@ -354,3 +363,5 @@ fn sample_event(name: &str, location: &str, score: f32) -> crate::ztools::weeken
 mod weekend_parse_tests;
 
 mod weekend_filter_tests;
+
+mod weekend_phases_tests;

@@ -221,8 +221,19 @@ Status: **partially done — twitter summarize prompt shared, in progress.**
       removed) before the model sees it, and the operator sees
       `in_window/total mention a date this weekend` -- the number that
       separates a supply problem from a model problem. Tests proved to fail
-      when `mentions_window` was forced false. Remaining: the 4-phase prompt
-      pipeline.
+      when `mentions_window` was forced false.
+    - **4-phase prompt pipeline DONE**: `weekend/prompts.rs` (verbatim port of
+      the extract/draft/refine/structure templates + the C1-checking `render`)
+      and `weekend/phases.rs` (`extract_sources` with adaptive batching,
+      `draft_activities`, `refine_draft`, `structure_to_json`, `condense_weather`,
+      plus `PlanContext` so the year/date-range/ages/exclusions cannot disagree
+      across phases) replace the single-shot prompt in `fetch_duckduckgo_events`,
+      with the old monolithic prompt retained as the fallback when the draft
+      phase stalls (the Python original does the same). Weather is fetched
+      BEFORE the pipeline so the draft can condition on it, matching the Python
+      ordering. Phase tests prove the degrade-not-starve fallbacks
+      (proved-fail-first against a neutered pass-through and a neutered refine
+      fallback). Phase 2 (weekend) is complete.
 3. **rename**: port `helpers.py` text cleaning (pure); port VLM call path to the
    osaurus vision API (no local MLX yet).
 4. **eval**: port `validate.py` JSON validator + `content_processing` cleaning

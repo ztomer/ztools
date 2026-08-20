@@ -69,9 +69,35 @@ pub(crate) fn weekend_plan(
     let d1 = friday.format("%Y-%m-%d").to_string();
     let d2 = sunday.format("%Y-%m-%d").to_string();
     let dates_str = format!("{} to {}", friday.format("%b %d"), sunday.format("%b %d"));
+    let year = friday.year();
 
-    let (transient, corpus) =
-        crate::ztools::weekend::fetch_duckduckgo_events(&location, friday, sunday, config);
+    // Weather is needed BEFORE the pipeline: the draft and structure phases
+    // condition their suggestions and weather labels on the forecast.
+    let raw_weather = crate::ztools::weekend::fetch_weather(&d1, &d2);
+    let weather_str = crate::ztools::weekend::format_weather_display(&raw_weather);
+
+    let exclusions = crate::ztools::weekend::load_exclusions(config);
+    let exclusions_str = if exclusions.is_empty() {
+        "none".to_string()
+    } else {
+        exclusions.join(", ")
+    };
+    let ctx = crate::ztools::weekend::PlanContext {
+        location: location.clone(),
+        ages: ages.clone(),
+        date_range: dates_str.clone(),
+        year,
+        exclusions: exclusions_str,
+    };
+
+    let (transient, corpus) = crate::ztools::weekend::fetch_duckduckgo_events(
+        &location,
+        friday,
+        sunday,
+        &weather_str,
+        &ctx,
+        config,
+    );
     // Provenance FIRST: a row that traces to nothing we fetched is invention,
     // and there is no point judging an invented row's dates or weather label.
     let (transient, provenance_notes) =
@@ -121,8 +147,6 @@ pub(crate) fn weekend_plan(
     {
         println!("→ {note}");
     }
-    let raw_weather = crate::ztools::weekend::fetch_weather(&d1, &d2);
-    let weather_str = crate::ztools::weekend::format_weather_display(&raw_weather);
 
     crate::ztools::weekend::apply_scores(&mut fixed, &weather_str, &ages);
     crate::ztools::weekend::apply_scores(&mut transient, &weather_str, &ages);

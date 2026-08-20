@@ -69,10 +69,19 @@ fn call_osaurus_json_parses_mock_llm_response() {
         r#"{"choices":[{"message":{"content":"{\"transient_events\":[{\"name\":\"Test Event\",\"location\":\"Toronto\"}]}"}}]}"#,
     );
     let config = config_with_url(&format!("http://127.0.0.1:{port}"));
+    let ctx = ztools::weekend::PlanContext {
+        location: "Vaughan".into(),
+        ages: "6-12".into(),
+        date_range: "Aug 7 to Aug 9".into(),
+        year: 2026,
+        exclusions: "none".into(),
+    };
     let (events, corpus) = ztools::weekend::fetch_duckduckgo_events(
         "Vaughan",
         chrono::NaiveDate::parse_from_str("2026-08-07", "%Y-%m-%d").unwrap(),
         chrono::NaiveDate::parse_from_str("2026-08-09", "%Y-%m-%d").unwrap(),
+        "sunny",
+        &ctx,
         &config,
     );
     // The function may return events or empty depending on the LLM response

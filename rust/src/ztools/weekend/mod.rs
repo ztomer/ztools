@@ -3,12 +3,16 @@ pub mod dates;
 pub mod enforce;
 pub mod fetch;
 pub mod format;
+pub mod phases;
+pub mod prompts;
 pub mod supply;
 pub use constants::*;
 pub use dates::*;
 pub use enforce::*;
 pub use fetch::*;
 pub use format::*;
+pub use phases::*;
+pub use prompts::*;
 pub use supply::*;
 /// Native Rust Weekend Planner module.
 use serde::{Deserialize, Serialize};
@@ -238,22 +242,7 @@ fn call_osaurus_json(
     prompt: &str,
     config: &crate::config::ZtoolsConfig,
 ) -> Option<Vec<WeekendEvent>> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(config.llm_timeout_secs))
-        .build()
-        .ok()?;
-    let payload = serde_json::json!({
-        "model": config.weekend_model,
-        "messages": [{"role": "user", "content": prompt}],
-        "response_format": {"type": "json_object"},
-        "temperature": 0.0
-    });
-
-    let url = format!(
-        "{}/v1/chat/completions",
-        config.osaurus_url.trim_end_matches('/')
-    );
-    let resp: serde_json::Value = client.post(&url).json(&payload).send().ok()?.json().ok()?;
+    let resp = phases::call_llm_json(None, prompt, config)?;
     parse_llm_events(&resp)
 }
 

@@ -2,17 +2,18 @@ use chrono::NaiveDate;
 
 use super::WeekendEvent;
 use super::{
-    _seasonal_keywords, call_osaurus_json, in_window_count, prioritise_in_window,
-    search_duckduckgo_html,
+    _seasonal_keywords, condense_weather, draft_activities, extract_sources, in_window_count,
+    prioritise_in_window, refine_draft, search_duckduckgo_html, structure_to_json, PlanContext,
 };
 
-pub fn fetch_duckduckgo_events(
-    location: &str,
+/// Search the aggregator for event snippets and return the cleaned, deduped,
+/// in-window-prioritised corpus. This is the ground truth the provenance gate
+/// judges extracted rows against.
+fn fetch_events_corpus(
     d1: NaiveDate,
     d2: NaiveDate,
     config: &crate::config::ZtoolsConfig,
-) -> (Vec<WeekendEvent>, String) {
-    let (d1_str, d2_str) = (d1.format("%Y-%m-%d").to_string(), d2.format("%Y-%m-%d").to_string());
+) -> String {
     let now = chrono::Local::now();
     let month_name = now.format("%B").to_string();
     let year = now.format("%Y").to_string();
@@ -82,11 +83,24 @@ pub fn fetch_duckduckgo_events(
     let in_window = in_window_count(&raw_text, d1, d2);
     let marked_text = prioritise_in_window(&raw_text, d1, d2);
     if total > 0 {
-        println!(
-            "→ Candidates: {in_window}/{total} mention a date this weekend"
-        );
+        println!("→ Candidates: {in_window}/{total} mention a date this weekend");
     }
+    marked_text
+}
 
+/// The monolithic single-shot extraction used as a fallback when the 4-phase
+/// pipeline stalls. The Python original falls back to this when a draft fails.
+fn monolithic_transient(
+    corpus: &str,
+    location: &str,
+    d1: NaiveDate,
+    d2: NaiveDate,
+    config: &crate::config::ZtoolsConfig,
+) -> Vec<WeekendEvent> {
+    let (d1_str, d2_str) = (
+        d1.format("%Y-%m-%d").to_string(),
+        d2.format("%Y-%m-%d").to_string(),
+    );
     let prompt = format!(
         "You are an expert family activity planner. Extract up to 10 time-limited events happening STRICTLY this weekend (between {} and {}) in {} from the text below.\n\
         Output JSON now. Use EXACT schema:\n\
@@ -104,12 +118,46 @@ pub fn fetch_duckduckgo_events(
         {}\n\
         \n\
         Output ONLY JSON.",
-        d1_str, d2_str, location, d1_str, d2_str, marked_text
+        d1_str, d2_str, location, d1_str, d2_str, corpus
     );
-
-    let events = call_osaurus_json(&prompt, config).unwrap_or_default();
-    (events, marked_text)
+    super::call_osaurus_json(&prompt, config).unwrap_or_default()
 }
+
+/// Run the full transient pipeline for a weekend: fetch -> prioritise ->
+/// extract -> draft -> refine -> structure, with a monolithic fallback when a
+/// phase yields nothing. Returns the structured events plus the corpus they
+/// were judged against.
+pub fn fetch_duckduckgo_events(
+    location: &str,
+    d1: NaiveDate,
+    d2: NaiveDate,
+    weather_str: &str,
+    ctx: &PlanContext,
+    config: &crate::config::ZtoolsConfig,
+) -> (Vec<WeekendEvent>, String) {
+    let corpus = fetch_events_corpus(d1, d2, config);
+
+    let weather_condensed = condense_weather(weather_str, config);
+    let cleaned = extract_sources(&corpus, location, config);
+
+    let events = if let Some(draft) = draft_activities(
+        &weather_condensed,
+        &cleaned,
+        ctx,
+        config,
+    ) {
+        let refined = refine_draft(&draft, config);
+        structure_to_json(&refined, &weather_condensed, ctx.year, config)
+            .unwrap_or_default()
+    } else {
+        // A dead draft phase must not starve the plan: fall back to the
+        // monolithic prompt rather than returning nothing.
+        monolithic_transient(&corpus, location, d1, d2, config)
+    };
+
+    (events, corpus)
+}
+
 /// Default Open-Meteo URL builder for Vaughan / GTA.
 fn open_meteo_url(friday_date: &str, sunday_date: &str) -> String {
     format!(
