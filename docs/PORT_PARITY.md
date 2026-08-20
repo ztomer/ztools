@@ -145,9 +145,18 @@ the Rust binary's notion of which model is best.
   ` thinking` / ` response` bytes — a trap: `<thinking>` with the full word
   does NOT match and silently skips cleaning, so fixtures must carry the exact
   reference bytes (verify by hexdump; the display layer renders angle brackets
-  into spaces and the reverse on input). `bin/ab_test` now asserts the Python
-  clean+validate on the same fixtures the Rust tests use, so either side
-  drifting fails the harness.
+  into spaces and the reverse on input).
+- [x] **9. Twitter Live Timeline Browser Scraping Parity** — 2026-08-20
+  (`rust/src/ztools/twitter/`): Integrated live Camoufox anti-detect Firefox browser
+  automation with automatic session discovery across Zen Browser, Firefox, LibreWolf,
+  and Chrome SQLite stores (`browser.rs`), semantic embedding clustering (`embeddings.rs`),
+  UTF-8 safe signature truncation, non-blocking stdin handling, and caching.
+- [x] **10. Resilient DuckDuckGo Event Scraping & Git Hook Quality Gates** — 2026-08-20
+  (`rust/src/ztools/weekend/mod.rs`): Added DuckDuckGo GET scraping with dual HTML snippet
+  parsers (`result__snippet` and `result-snippet`) and automatic fallback to
+  `https://lite.duckduckgo.com/lite/` when challenged. Added native Rust quality gates
+  (`cargo clippy --all-targets -- -D warnings` and `cargo test`) to `.githooks/pre-commit`
+  and `.githooks/pre-push`.
 
 ## How this gets resolved & verified: Deep A/B Testing
 
