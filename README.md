@@ -26,12 +26,12 @@ Installs five `PATH` commands behind a `uv`-managed venv:
 
 | Command | Module | Notes |
 |---------|--------|-------|
-| `twitter-summarize` (`twitter`) | `routines` | High-performance native Rust Twitter summarizer |
-| `weekend-plan` (`weekend`) | `routines` | High-performance native Rust weekend planner |
-| `image-renamer` (`rename_images`) | `routines` | High-performance native Rust image renamer |
-| `model-eval` (`oeval`) | `routines` | High-performance native Rust model quality benchmark |
+| `twitter-summarize` (`twitter`) | `rust/` | High-performance native Rust Twitter summarizer |
+| `weekend-plan` (`weekend`) | `rust/` | High-performance native Rust weekend planner |
+| `image-renamer` (`rename_images`) | `rust/` | High-performance native Rust image renamer |
+| `model-eval` (`oeval`) | `rust/` | High-performance native Rust model quality benchmark |
 | `ab_test` | `bin/ab_test` | Side-by-side performance benchmark comparing Rust vs Python references |
-| `ztools` | `routines` | Native routines launcher and dashboard |
+| `ztools` | `rust/` | Native Rust launcher for the four tools |
 
 ## Quick Start (from a checkout)
 

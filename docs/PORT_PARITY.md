@@ -4,8 +4,8 @@ Two implementations of the same four tools exist, and they have already drifted.
 
 - **Python** — `references/**` in this repo, entry points `tw` / `wk` / `rn` / `ev`
   (only inside `.venv/bin`, so they need the venv active).
-- **Rust** — `~/Projects/routines/src/ztools/*.rs`, subcommands `twitter-summarize`,
-  `weekend-plan`, `image-renamer`, `model-eval`.
+- **Rust** — `rust/src/ztools/*.rs` in this repo, subcommands `twitter-summarize`,
+  `weekend-plan`, `image-renamer`, `model-eval` behind the `ztools` binary.
 
 **The Rust port exists to escape the venv/uv dependency: one static binary, no Python
 startup.** That is a real goal and it is why the port stays. This file is the price of
@@ -29,20 +29,20 @@ dead since 16 Jul.
 
 ### 1. The summarizer prompt is duplicated, not shared
 
-`routines/src/ztools/twitter.rs:105` carries its own copy of the instruction text
+`rust/src/ztools/twitter.rs:107` carries its own copy of the instruction text
 ("Use connecting phrases and narrative verbs to show how events relate"), mirroring
 `references/eval/tasks_prompts.py: TWITTER_PROMPT`. Nothing derives one from the other.
 Every prompt improvement therefore has to be made twice or it silently applies to half
 the runs.
 
 The Rust side reads exactly one thing from this repo — `~/Projects/ztools/conf/weekend.toml`
-(`config_ztools.rs:73`). Prompts are not in shared config.
+(`rust/src/config.rs:73`). Prompts are not in shared config.
 
 ### 2. Model selection has already diverged, and the Rust default is not the measured best
 
 | | twitter/summarize | source |
 |---|---|---|
-| Rust | `gemma-4-e4b-it-8bit` (hardcoded default) | `config_ztools.rs:76-81` |
+| Rust | `gemma-4-e2b-it-8bit` (hardcoded default) | `rust/src/config.rs:76-84` |
 | Python | `summarize = gemma-4-12b-it-mxfp8`, `json = foundation` | `conf/config.toml [best_models]` |
 
 The 2026-08-12 sweep ranks `gemma-4-e4b-it-8bit` at 82.1 and `muse-glimmer-30b-jang_6m`
@@ -58,11 +58,11 @@ the Rust binary's notion of which model is best.
 ## Resolved & Ported into Rust (The Parity Roadmap)
 
 - [x] **1. Broken Model & Packaging Defect Detection**
-  - Ported to `routines/src/ztools/model_health.rs`.
+  - Ported to `rust/src/ztools/model_health.rs`.
   - Offline inspection: detects unsupported MTP speculative drafting shards (`*mtp*.safetensors`) when `runtime_available = false`, missing safetensors shards referenced in `model.safetensors.index.json`, and incomplete download artifacts (`*.incomplete`).
   - Viability guard: checks decode rate against `THRASHING_DECODE_TOKENS_PER_SEC` (1.0 tok/s) and refuses broken models before running tasks.
 - [x] **2. Best Model Matrix & Dynamic Configuration**
-  - Synchronized `config_ztools.rs` with the 30-task benchmark winners:
+  - Synchronized `rust/src/config.rs` with the 30-task benchmark winners:
     - `json` / Weekend: `qwen3.8-27b-8bit` (100% across all 7 weekend/json tasks).
     - `filename` / Renaming: `gemma-4-e2b-it-8bit` (100% quality + 100% prompt injection resistance).
     - `summarize` / Twitter: `gemma-4-e2b-it-8bit` (top contradiction & factual accuracy resistance).
@@ -87,7 +87,7 @@ By automated **behavioral A/B testing** using `bin/ab_test --functional`:
 1. **Defect Probe Parity**: Run test model fixture bundles (clean, broken MTP, missing index shards, incomplete downloads) through both Rust and Python, asserting identical diagnostic verdicts.
 2. **Security & Prompt Injection Parity**: Run adversarial OCR inputs through both Python `rn` and Rust `image-renamer`, asserting that neither is compromised and both emit identical sanitized filenames.
 3. **Prompt & Date Parity**: Verify tweet payload timestamps and weekend event date schemas match between Python and Rust.
-4. **Rust Quality Gates**: `cargo llvm-cov --all-targets --fail-under-lines 95` and 400-line cap per file in `~/Projects/routines`.
+4. **Rust Quality Gates**: `cargo clippy --all-targets -D warnings` and the 500-line cap per file in `~/Projects/ztools/rust`.
 
 ## The standing hazard
 

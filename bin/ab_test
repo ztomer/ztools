@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A/B parity + timing between the native Rust `routines` build and the Python
+# A/B parity + timing between the native Rust `ztools` build and the Python
 # reference implementations.
 #
 # Tests both:
@@ -12,16 +12,16 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PY="$ROOT/.venv/bin/python"
 [ -x "$PY" ] || PY="python3"
 
-if command -v routines >/dev/null 2>&1; then
-    RUST="routines"
-elif [ -x "$HOME/Projects/routines/target/release/routines" ]; then
-    RUST="$HOME/Projects/routines/target/release/routines"
-elif [ -x "$HOME/Projects/routines/target/debug/routines" ]; then
-    RUST="$HOME/Projects/routines/target/debug/routines"
-else
-    echo "✗ routines binary not found — building debug binary..." >&2
-    (cd "$HOME/Projects/routines" && cargo build --quiet)
-    RUST="$HOME/Projects/routines/target/debug/routines"
+RUST=""
+if command -v ztools >/dev/null 2>&1 && [ "$(head -c 2 "$(command -v ztools)")" != '#!' ]; then
+    RUST="ztools"
+elif [ -x "$ROOT/bin/ztools" ]; then
+    RUST="$ROOT/bin/ztools"
+fi
+if [ -z "$RUST" ]; then
+    echo "✗ ztools binary not found — building release binary..." >&2
+    (cd "$ROOT/rust" && cargo build --quiet --release)
+    RUST="$ROOT/bin/ztools"
 fi
 
 echo "============================================================"
@@ -124,11 +124,11 @@ with tempfile.TemporaryDirectory() as tmp:
         failures=$((failures + 1))
     fi
 
-    # Run Rust unit tests for ztools
-    if (cd "$HOME/Projects/routines" && cargo test --quiet --lib ztools); then
-        echo "  ✓ Rust ztools unit & parity tests passed"
+    # Run Rust tests for the ztools crate
+    if (cd "$ROOT/rust" && cargo test --quiet); then
+        echo "  ✓ Rust ztools unit, integration & parity tests passed"
     else
-        echo "  ✗ Rust ztools unit tests failed"
+        echo "  ✗ Rust ztools tests failed"
         failures=$((failures + 1))
     fi
     echo ""

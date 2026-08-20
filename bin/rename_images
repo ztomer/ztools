@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
-# Fast shim to the native Rust `routines` binary for image renaming.
+# Thin shim onto the native Rust `ztools` binary. Resolve a real `ztools` from
+# PATH first (never this shim itself); otherwise resolve the crate build output
+# via cargo metadata.
 set -euo pipefail
 
-SUB="image-renamer"
-if command -v routines >/dev/null 2>&1; then
-  exec routines "$SUB" "$@"
+FOUND="$(command -v ztools 2>/dev/null || true)"
+if [ -n "$FOUND" ] && [ "$(head -c 2 "$FOUND" 2>/dev/null)" != '#!' ]; then
+  exec ztools "image-renamer" "$@"
 fi
-DEV_BUILD="$HOME/Projects/routines/target/release/routines"
-if [ -x "$DEV_BUILD" ]; then
-  exec "$DEV_BUILD" "$SUB" "$@"
-fi
-echo "✗ routines binary not found on PATH (and no dev build at $DEV_BUILD)" >&2
+TARGET_DIR="$(cargo metadata --manifest-path "$HOME/Projects/ztools/rust/Cargo.toml" --format-version 1 --no-deps 2>/dev/null | jq -r '.target_directory' 2>/dev/null)"
+for variant in release debug; do
+  BIN="$TARGET_DIR/$variant/ztools"
+  if [ -x "$BIN" ]; then
+    exec "$BIN" "image-renamer" "$@"
+  fi
+done
+echo "✗ ztools binary not found on PATH (and no build at $TARGET_DIR)" >&2
 exit 1
