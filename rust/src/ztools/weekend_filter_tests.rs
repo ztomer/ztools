@@ -24,7 +24,11 @@ fn event(name: &str, location: &str, description: &str) -> WeekendEvent {
         description: description.into(),
         is_transient: true,
         score: 4.0,
-    }
+        start_date: "".into(),
+        end_date: "".into(),
+        weather: "".into(),
+        duration: "".into(),
+}
 }
 
 /// A title in a script the plan cannot render is not a GTA venue — it is a
@@ -148,15 +152,36 @@ fn an_event_without_a_location_renders_as_its_name_alone() {
 /// not evidence that a column never varies.
 #[test]
 fn a_single_row_flags_no_constant_columns() {
-    assert!(flag_constant_columns(&[]).is_empty());
-    assert!(flag_constant_columns(&[event("Solo", "Vaughan", "d")]).is_empty());
+    let suspects = std::collections::HashMap::from([(
+        "Target Age(s)".to_string(),
+        vec!["6-12".to_string()],
+    )]);
+    assert!(flag_constant_columns(&[], &suspects).is_empty());
+    assert!(flag_constant_columns(&[event("Solo", "Vaughan", "d")], &suspects).is_empty());
 }
 
 #[test]
-fn identical_columns_across_rows_are_flagged() {
-    let flags = flag_constant_columns(&[event("A", "Vaughan", "d"), event("B", "Markham", "d")]);
-    assert!(flags.contains(&"price".to_string()), "{flags:?}");
-    assert!(flags.contains(&"target_ages".to_string()), "{flags:?}");
+fn identical_columns_across_rows_are_flagged_only_when_a_suspect_value() {
+    let suspects = std::collections::HashMap::from([(
+        "Target Age(s)".to_string(),
+        vec!["6-12".to_string()],
+    )]);
+    // target_ages = "6-12" on both rows AND it is the configured suspect -> flagged.
+    let flags = flag_constant_columns(
+        &[event("A", "Vaughan", "d"), event("B", "Markham", "d")],
+        &suspects,
+    );
+    assert!(
+        flags.iter().any(|f| f.contains("Target Age(s)")),
+        "{flags:?}"
+    );
+    // Same constant but no suspect configured -> NOT the C4 defect.
+    let none: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    assert!(flag_constant_columns(
+        &[event("A", "Vaughan", "d"), event("B", "Markham", "d")],
+        &none
+    )
+    .is_empty());
 }
 
 /// A forecast line the parser cannot decompose is passed through verbatim

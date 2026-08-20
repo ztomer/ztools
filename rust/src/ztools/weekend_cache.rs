@@ -253,7 +253,11 @@ pub fn load_cached_activities(
             dates: "Year-Round".into(),
             description: "800 acres of outdoor hiking trails, pond dipping, and interactive nature exhibits great for ages 6-13.".into(),
             is_transient: false, score: 0.0,
-        },
+            start_date: "".into(),
+            end_date: "".into(),
+            weather: "".into(),
+            duration: "".into(),
+},
         WeekendEvent {
             name: "Air Riderz Trampoline Park".into(),
             location: "Vaughan".into(),
@@ -263,7 +267,11 @@ pub fn load_cached_activities(
             dates: "Year-Round".into(),
             description: "Indoor trampoline zone, 24ft climbing walls, dodgeball court, and ninja warrior obstacle course.".into(),
             is_transient: false, score: 0.0,
-        },
+            start_date: "".into(),
+            end_date: "".into(),
+            weather: "".into(),
+            duration: "".into(),
+},
         WeekendEvent {
             name: "Playdium Vaughan Arcade & VR".into(),
             location: "Vaughan".into(),
@@ -273,7 +281,11 @@ pub fn load_cached_activities(
             dates: "Year-Round".into(),
             description: "40,000 sq ft venue featuring high-tech arcade games, virtual reality arenas, and indoor ropes courses.".into(),
             is_transient: false, score: 0.0,
-        },
+            start_date: "".into(),
+            end_date: "".into(),
+            weather: "".into(),
+            duration: "".into(),
+},
         WeekendEvent {
             name: "Mount Nemo Conservation Area".into(),
             location: "Halton / GTA".into(),
@@ -283,7 +295,11 @@ pub fn load_cached_activities(
             dates: "Year-Round".into(),
             description: "Escarpment cliffside walking trails, cliffside lookout points, and limestone cave exploration.".into(),
             is_transient: false, score: 0.0,
-        },
+            start_date: "".into(),
+            end_date: "".into(),
+            weather: "".into(),
+            duration: "".into(),
+},
         WeekendEvent {
             name: "McMichael Canadian Art Collection Trails".into(),
             location: "Kleinburg / Vaughan".into(),
@@ -293,7 +309,11 @@ pub fn load_cached_activities(
             dates: "Year-Round".into(),
             description: "100-acre outdoor sculpture park, pine forest trails, and hands-on family art activities.".into(),
             is_transient: false, score: 0.0,
-        },
+            start_date: "".into(),
+            end_date: "".into(),
+            weather: "".into(),
+            duration: "".into(),
+},
     ];
 
     let all_transient = vec![
@@ -306,7 +326,11 @@ pub fn load_cached_activities(
             dates: "Aug 08".into(),
             description: "Free hands-on STEM experiment and creative tech coding activity for kids ages 6-13.".into(),
             is_transient: true, score: 0.0,
-        },
+            start_date: "".into(),
+            end_date: "".into(),
+            weather: "".into(),
+            duration: "".into(),
+},
         WeekendEvent {
             name: "GTA Outdoor Nature Trail Discovery Walk".into(),
             location: "Kortright Conservation".into(),
@@ -316,7 +340,11 @@ pub fn load_cached_activities(
             dates: "Aug 09".into(),
             description: "Guided family nature walk with wildlife tracking, pond exploration, and bug identification.".into(),
             is_transient: true, score: 0.0,
-        },
+            start_date: "".into(),
+            end_date: "".into(),
+            weather: "".into(),
+            duration: "".into(),
+},
         WeekendEvent {
             name: "High Park Family Birding & Biodiversity Tour".into(),
             location: "Toronto / High Park".into(),
@@ -326,7 +354,11 @@ pub fn load_cached_activities(
             dates: "Aug 08".into(),
             description: "Interactive woodland nature walk and birdwatching session tailored for young explorers.".into(),
             is_transient: true, score: 0.0,
-        },
+            start_date: "".into(),
+            end_date: "".into(),
+            weather: "".into(),
+            duration: "".into(),
+},
     ];
 
     let fixed = super::weekend::drop_excluded_places(all_fixed, &exclusions).0;

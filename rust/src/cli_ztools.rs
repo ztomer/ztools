@@ -72,12 +72,37 @@ pub(crate) fn weekend_plan(
 
     let transient = crate::ztools::weekend::fetch_duckduckgo_events(&location, &d1, &d2, config);
     let exclusions = crate::ztools::weekend::load_exclusions(config);
-    let (mut transient, drop_notes) =
+    let (transient, drop_notes) =
         crate::ztools::weekend::drop_excluded_places(transient, &exclusions);
     for note in &drop_notes {
         println!("→ {note}");
     }
-    let (_, mut fixed) = crate::ztools::weekend::load_cached_activities(config);
+    let (_, fixed) = crate::ztools::weekend::load_cached_activities(config);
+
+    let (mut fixed, weather_notes) = crate::ztools::weekend::correct_weather_labels(fixed);
+    let (mut transient, weather_notes_t) =
+        crate::ztools::weekend::correct_weather_labels(transient);
+    for note in weather_notes.iter().chain(weather_notes_t.iter()) {
+        println!("→ {note}");
+    }
+
+    // Constant-column check runs LAST, over what survived; it reports and
+    // changes nothing. The configured family range is the one suspect that is
+    // not a literal (C4).
+    let mut suspects: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    suspects.insert("Target Age(s)".to_string(), vec![ages.clone()]);
+    for (label, values) in crate::ztools::weekend::PROMPT_CONSTANTS {
+        suspects.insert(
+            label.to_string(),
+            values.iter().map(|s| s.to_string()).collect(),
+        );
+    }
+    for note in crate::ztools::weekend::flag_constant_columns(&fixed, &suspects)
+        .into_iter()
+        .chain(crate::ztools::weekend::flag_constant_columns(&transient, &suspects))
+    {
+        println!("→ {note}");
+    }
     let raw_weather = crate::ztools::weekend::fetch_weather(&d1, &d2);
     let weather_str = crate::ztools::weekend::format_weather_display(&raw_weather);
 

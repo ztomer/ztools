@@ -10,7 +10,7 @@
 //! `(kept_events, notes)`; the notes are surfaced to the operator rather than
 //! discarded, so a filtered run says what it dropped and why.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use super::WeekendEvent;
 
@@ -36,6 +36,34 @@ pub const SEASONAL_EVENT_MARKERS: &[&str] = &[
     "expo",
     "pumpkin",
     "maple",
+];
+
+/// Venue words that settle indoor/outdoor without consulting a forecast. Kept
+/// deliberately small: only terms where an "outdoor" label is unambiguously
+/// wrong. These are STEMS, matched as substrings, so plurals are covered:
+/// "librar" catches both "library" and "libraries".
+pub const INDOOR_MARKERS: &[&str] = &[
+    "indoor",
+    "trampoline park",
+    "museum",
+    "play centre",
+    "play center",
+    "playground",
+    "librar",
+    "cinema",
+    "aquarium",
+    "arcade",
+    "bowling",
+];
+
+pub const OUTDOOR_MARKERS: &[&str] = &[
+    "high park",
+    "conservation",
+    "nature walk",
+    "botanical garden",
+    "provincial park",
+    "national park",
+    "hiking trail",
 ];
 
 /// Fold typographic punctuation and whitespace for constraint matching.
@@ -214,6 +242,123 @@ pub fn drop_excluded_places(
         }
     }
     (kept, notes)
+}
+
+/// C5. Correct weather label inversions (indoor/outdoor).
+///
+/// Local LLMs occasionally invert weather labels (e.g. High Park or Nature Walk
+/// labeled as 'indoor', or Trampoline Park labeled as 'outdoor'). Only
+/// clear-cut cases are corrected; ambiguous venues are left alone.
+pub fn correct_weather_labels(mut events: Vec<WeekendEvent>) -> (Vec<WeekendEvent>, Vec<String>) {
+    let mut notes = Vec::new();
+    for ev in events.iter_mut() {
+        let weather = ev.weather.to_lowercase();
+        let text = normalize_for_match(&format!("{} {}", ev.name, ev.location));
+        if weather == "outdoor" {
+            if let Some(marker) = INDOOR_MARKERS.iter().find(|m| text.contains(*m)) {
+                ev.weather = "indoor".to_string();
+                notes.push(format!(
+                    "corrected '{}' from 'outdoor' to 'indoor' (name contains {marker:?})",
+                    ev.name
+                ));
+            }
+        } else if weather == "indoor" {
+            if let Some(marker) = OUTDOOR_MARKERS.iter().find(|m| text.contains(*m)) {
+                ev.weather = "outdoor".to_string();
+                notes.push(format!(
+                    "corrected '{}' from 'indoor' to 'outdoor' (name contains {marker:?})",
+                    ev.name
+                ));
+            }
+        }
+    }
+    (events, notes)
+}
+
+/// Fields whose value the prompt asks the model to always supply, paired with
+/// the aliases the parsed item may carry them under. These are the columns a
+/// model fills mechanically when it has nothing real to say.
+pub const CONSTANT_COLUMN_FIELDS: &[(&str, &[&str])] = &[
+    ("Target Age(s)", &["target_ages", "age_group"]),
+    ("Estimated Price", &["price", "cost"]),
+    ("Duration", &["duration"]),
+];
+
+/// The values that actually shipped, filled from the instructions rather than
+/// from any event. Kept as data so a fourth instance is one line, not a new
+/// check -- and so the historical evidence for this class stays readable.
+pub const PROMPT_CONSTANTS: &[(&str, &[&str])] = &[
+    ("Estimated Price", &["$18-35", "18-35"]),
+    ("Duration", &["2-3 hours"]),
+];
+
+/// A column of one row is trivially constant. Flagging it would be noise, and a
+/// check that cries wolf on every single-row table is a check the reader learns
+/// to skip.
+const MIN_ROWS_FOR_CONSTANT: usize = 2;
+
+fn column_value(ev: &WeekendEvent, aliases: &[&str]) -> String {
+    for alias in aliases {
+        let value = match *alias {
+            "target_ages" | "age_group" => &ev.target_ages,
+            "price" | "cost" => &ev.price,
+            "duration" => &ev.duration,
+            _ => "",
+        };
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    String::new()
+}
+
+/// Report columns that are identical on every row **and** equal to a value the
+/// configuration or the prompt supplied.
+///
+/// The conjunction is what makes it precise. *Constant* alone fires on a
+/// genuinely uniform column (every event in one city). *Equal to a configured
+/// value* alone fires on the one row that legitimately matches. Together they
+/// say: this column was answered from the question.
+///
+/// Returns notes and **changes nothing**. A mechanically-filled column is a
+/// signal that the extraction is wrong, not a reason to delete the rows.
+pub fn flag_constant_columns(
+    events: &[WeekendEvent],
+    suspects: &HashMap<String, Vec<String>>,
+) -> Vec<String> {
+    if events.len() < MIN_ROWS_FOR_CONSTANT {
+        return Vec::new();
+    }
+
+    let mut notes = Vec::new();
+    for (label, aliases) in CONSTANT_COLUMN_FIELDS {
+        let values: Vec<String> = events.iter().map(|ev| column_value(ev, aliases)).collect();
+        let first = &values[0];
+        if first.is_empty() {
+            continue;
+        }
+        // `if first.is_empty()` above is load-bearing: it is what keeps an empty
+        // column from ever matching. A blank cell is an honest "unknown".
+        if values[1..].iter().any(|v| !v.eq_ignore_ascii_case(first)) {
+            continue;
+        }
+        let suspects_for_label = suspects.get(*label).map(|v| v.as_slice()).unwrap_or(&[]);
+        let is_suspect = suspects_for_label
+            .iter()
+            .filter(|s| !s.trim().is_empty())
+            .any(|s| first.eq_ignore_ascii_case(s.trim()));
+        if !is_suspect {
+            continue;
+        }
+        notes.push(format!(
+            "{label}: every one of {} rows reads {first:?}, which is the configured \
+             value -- the column was answered from the prompt, not from the events. \
+             Rows kept; treat the column as unverified.",
+            events.len()
+        ));
+    }
+    notes
 }
 
 #[cfg(test)]

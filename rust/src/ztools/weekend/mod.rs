@@ -19,6 +19,16 @@ pub struct WeekendEvent {
     pub is_transient: bool,
     #[serde(default)]
     pub score: f32,
+    /// Raw fields the enforcement suite needs beyond the rendered columns.
+    /// `dates` holds the display form; these carry the parseable source values.
+    #[serde(default)]
+    pub start_date: String,
+    #[serde(default)]
+    pub end_date: String,
+    #[serde(default)]
+    pub weather: String,
+    #[serde(default)]
+    pub duration: String,
 }
 
 pub use super::weekend_cache::{
@@ -157,7 +167,13 @@ struct WeekendEventLlm {
     #[serde(default)]
     start_date: String,
     #[serde(default)]
+    end_date: String,
+    #[serde(default)]
     day: String,
+    #[serde(default)]
+    weather: String,
+    #[serde(default)]
+    duration: String,
     #[serde(default)]
     description: String,
 }
@@ -201,6 +217,10 @@ pub fn parse_llm_events(resp: &serde_json::Value) -> Option<Vec<WeekendEvent>> {
                     e.day
                 },
                 dates: e.start_date.clone(),
+                start_date: e.start_date.clone(),
+                end_date: e.end_date,
+                weather: e.weather,
+                duration: e.duration,
                 is_transient: true,
                 score: 0.0,
             })

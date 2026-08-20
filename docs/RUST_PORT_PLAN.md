@@ -194,9 +194,14 @@ Status: **partially done — twitter summarize prompt shared, in progress.**
      possessive handling, seasonal-event exceptions, `drop_excluded_places`
      wired into `weekend_cache` and the `weekend_plan` dispatch. Ported test
      suite proved-fail-first against the old weaker matcher (the "Sky Zone
-     Toronto" interpolated case failed before the port). Remaining: C3 window /
-     day-reconcile, C5 weather labels, provenance, constant-column upgrade
-     (the latter two need new `WeekendEvent` fields).
+     Toronto" interpolated case failed before the port).
+   - **C5 weather labels + C4 constant-columns DONE**: `correct_weather_labels`
+     (indoor/outdoor markers) and the suspect-conjunction
+     `flag_constant_columns` (label/alias based, case- and space-insensitive,
+     "rows kept" notes) ported and wired into the dispatch; `WeekendEvent` now
+     carries `start_date`/`end_date`/`weather`/`duration` so enforcement sees
+     the raw parsed values. Both test suites proved to fail when neutered.
+     Remaining: C3 window / day-reconcile, provenance.
 3. **rename**: port `helpers.py` text cleaning (pure); port VLM call path to the
    osaurus vision API (no local MLX yet).
 4. **eval**: port `validate.py` JSON validator + `content_processing` cleaning

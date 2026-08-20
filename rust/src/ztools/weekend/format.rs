@@ -182,23 +182,6 @@ pub fn format_weekend_plan(
 
     out
 }
-pub fn flag_constant_columns(events: &[WeekendEvent]) -> Vec<String> {
-    if events.len() < 2 {
-        return Vec::new();
-    }
-    let mut flags = Vec::new();
-    let first_price = &events[0].price;
-    let first_ages = &events[0].target_ages;
-
-    if events.iter().all(|e| &e.price == first_price) {
-        flags.push("price".to_string());
-    }
-    if events.iter().all(|e| &e.target_ages == first_ages) {
-        flags.push("target_ages".to_string());
-    }
-
-    flags
-}
 pub fn format_weather_display(raw: &str) -> String {
     let mut parts = Vec::new();
     for line in raw.lines() {
