@@ -87,11 +87,11 @@ fn eval_model_returns_results_for_each_test_case() {
     let url = format!("http://127.0.0.1:{port}");
     let results =
         ztools::model_eval::eval_model(&url, "llama-3", &default_config()).unwrap();
-    // There are 4 test cases.
+    // There are 5 test cases.
     assert_eq!(
         results.len(),
-        4,
-        "expected 4 results, got {}",
+        5,
+        "expected 5 results, got {}",
         results.len()
     );
     for r in &results {
@@ -126,8 +126,60 @@ fn eval_all_models_evaluates_every_available_model() {
     let (port, _handle) = mock_llm_server();
     let url = format!("http://127.0.0.1:{port}");
     let results = ztools::model_eval::eval_all_models(&url, &default_config()).unwrap();
-    // 2 models (llama-3, qwen-7b) x 4 test cases = 8 results.
-    assert_eq!(results.len(), 8, "expected 8, got {}", results.len());
+    // 2 models (llama-3, qwen-7b) x 5 test cases = 10 results.
+    assert_eq!(results.len(), 10, "expected 10, got {}", results.len());
+}
+
+/// Same as `mock_llm_server`, but the image-renamer answer is wrapped in a
+/// ` thinking... response` block, so its `NotContains(" ")` check can only pass
+/// if `eval_model` cleans the output before judging it.
+fn mock_llm_server_with_thinking() -> (u16, thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let handle = thread::spawn(move || {
+        for stream in listener.incoming() {
+            let mut stream = match stream {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let mut buf = [0u8; 8192];
+            let _ = stream.read(&mut buf);
+            let req = String::from_utf8_lossy(&buf);
+            let content = if req.contains("red sports car") {
+                r#"<think>inner</think> red_car.jpg"#
+            } else {
+                r#"{"transient_events":[{"name":"Summer Rib Fest"},{"name":"Magic Show"}]}"#
+            };
+            let response = format!(r#"{{"choices":[{{"message":{{"content":"{content}"}}}}]}}"#);
+            let http = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{}",
+                response.len(),
+                response
+            );
+            let _ = stream.write_all(http.as_bytes());
+            let _ = stream.flush();
+        }
+    });
+    thread::sleep(std::time::Duration::from_millis(50));
+    (port, handle)
+}
+
+#[test]
+fn eval_model_cleans_thinking_before_scoring() {
+    let (port, _handle) = mock_llm_server_with_thinking();
+    let url = format!("http://127.0.0.1:{port}");
+    let results = ztools::model_eval::eval_model(&url, "llama-3", &default_config()).unwrap();
+    let renaming = results
+        .iter()
+        .find(|r| r.test_name.contains("Image Renamer"))
+        .expect("renamer case missing");
+    // The filename is buried in a thinking block; the NotContains(" ") check
+    // only passes once the content_processing port strips it.
+    assert_eq!(
+        (renaming.passed, renaming.status.as_str()),
+        (renaming.total, "passed"),
+        "thinking block was not cleaned before scoring: {renaming:?}"
+    );
 }
 
 #[test]

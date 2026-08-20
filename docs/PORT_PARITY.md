@@ -130,6 +130,24 @@ the Rust binary's notion of which model is best.
   fallbacks (each proved-fail-first).
 - [x] **6. Greedy decoding across all LLM callers** (temperature 0.0) — for deterministic reproducible leaderboard outputs.
 - [x] **7. Derived request timeouts** from measured cold-start / prefill / decode rates.
+- [x] **8. Eval validator + content cleaning parity** — 2026-08-20
+  (`rust/src/ztools/eval/`): `validate.py`'s `validate_file_summary` ported
+  verbatim to `validate.rs` (list/dict/raw-string branches, filename-echo guard,
+  header bonus; thresholds in multiply-form so a 4-file list scores 100 only
+  with >= 4 detailed descriptions, never 3/4 via integer truncation), and the
+  `content_processing` cleaning chain ported to `clean.rs` (`remove_thinking_blocks`,
+  `remove_inline_thinking`, `remove_stats_tokens`, `remove_markdown_blocks`,
+  `extract_content_from_code_blocks`, `clean_model_output`). `model_eval.rs` is
+  now data-driven (`EvalTask`/`Check` enum) and cleans raw model output before
+  any check runs. Every ported regex was proved-fail-first by neutering
+  (THINK_RE, gemma correction loop, stats chain, code-block extraction; generic
+  description branch; cleaning-before-scoring wiring). The tags are the reference
+  ` thinking` / ` response` bytes — a trap: `<thinking>` with the full word
+  does NOT match and silently skips cleaning, so fixtures must carry the exact
+  reference bytes (verify by hexdump; the display layer renders angle brackets
+  into spaces and the reverse on input). `bin/ab_test` now asserts the Python
+  clean+validate on the same fixtures the Rust tests use, so either side
+  drifting fails the harness.
 
 ## How this gets resolved & verified: Deep A/B Testing
 

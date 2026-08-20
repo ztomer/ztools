@@ -168,6 +168,51 @@ assert prioritise_in_window("First\nAug 8 happening", fri, sun).startswith("[THI
         failures=$((failures + 1))
     fi
 
+    # Ported eval parity: the content_processing cleaning and validate.py
+    # file-summary scorer the Rust tests in rust/src/ztools/eval/ assert on,
+    # run through the Python references so either side drifting fails here.
+    if (cd "$ROOT" && PYTHONPATH="$ROOT/references" "$PY" -c '
+from lib.content_processing import (
+    clean_model_output, remove_thinking_blocks, remove_stats_tokens,
+    remove_inline_thinking, extract_content_from_code_blocks,
+)
+from eval.validate import validate_file_summary
+
+# cleaning parity (same fixtures as rust/src/ztools/eval/clean.rs)
+assert clean_model_output("<think>skip</think> body\nstats:100;50") == "body"
+assert remove_thinking_blocks(
+    "Here\x27s a thinking process: I should analyze this. Output: The answer is 42."
+) == "The answer is 42."
+assert remove_stats_tokens("content\nstats:2114;97.2952") == "content"
+collapsed = remove_inline_thinking(
+    "Let\x27s pick Zoo? No. Let\x27s pick Park? No. Let\x27s pick Museum? No. final"
+)
+assert "reasoning truncated" in collapsed and "Zoo" not in collapsed
+assert extract_content_from_code_blocks("```json\n{\"key\": \"value\"}\n```") == "{\"key\": \"value\"}"
+
+# validate_file_summary parity (same fixtures as rust/src/ztools/eval/validate.rs)
+s100, m100 = validate_file_summary(
+    [{"path": "a.py", "desc": "parses config files and loads settings"},
+     {"path": "b.py", "desc": "validates JSON output format"},
+     {"path": "c.py", "desc": "fetches data from external API"},
+     {"path": "d.py", "desc": "handles error processing logic"}]
+)
+assert s100 == 100 and m100 == "", (s100, m100)
+s85, m85 = validate_file_summary(
+    [{"path": "config_loader.py", "desc": "config loader"},
+     {"path": "b.py", "desc": "validates JSON output format"},
+     {"path": "c.py", "desc": "fetches data from external API"},
+     {"path": "d.py", "desc": "handles error processing logic"}]
+)
+assert s85 == 85 and "filename-only" in m85, (s85, m85)
+assert "no headers" in validate_file_summary("hello")[1]
+' ); then
+        echo "  ✓ Eval validator & cleaning parity verified"
+    else
+        echo "  ✗ Eval validator & cleaning parity failed"
+        failures=$((failures + 1))
+    fi
+
     # Run Rust tests for the ztools crate
     if (cd "$ROOT/rust" && cargo test --quiet); then
         echo "  ✓ Rust ztools unit, integration & parity tests passed"

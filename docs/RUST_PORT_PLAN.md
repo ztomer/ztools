@@ -108,7 +108,7 @@ the machinery that makes them robust, safe, and observable is still Python-only.
 
 ### 3.4 model-eval — gap list
 - **Tasks**: 30 tasks with bundled snapshot data (`eval/tasks_core.py`, `tasks_prompts.py`, `eval_tasks/`) vs 4 hardcoded prompts.
-- **Validators**: `lib/validators/*` — taxes grounding (rubric + grounding-scored), JSON structure, text/entity, vision, adversarial, attribution, hallucination/source-matching. Rust checks are string `contains`.
+- **Validators**: `lib/validators/*` — taxes grounding (rubric + grounding-scored), JSON structure, text/entity, vision, adversarial, attribution, hallucination/source-matching. Rust has `validate_file_summary` (`eval/validate.rs`) and a data-driven `Check` enum (contains / json-array-length / file-summary threshold) on 5 tasks.
 - **Measurement integrity**: `eval/samples.py` median-of-5, `capabilities.py`, `prefill.py`/`signals.py` adaptive timeouts, `watchdog.py`, `memory.py`, `eval/memory` rate signal, GPU lock (`lib/gpu_lock.py`), contamination handling — none in Rust.
 - **Reporting**: `report_classes*.py`, failure classification, `benchmark_quality.py`, discrimination/completeness analysis.
 - **Model quirks**: `lib/llm/quirks.py` + `eval/explore_quirks.py` ("Output JSON now." for qwen3.6, etc.).
@@ -117,7 +117,7 @@ the machinery that makes them robust, safe, and observable is still Python-only.
 - `lib/osaurus_server.py` — server lifecycle (start/restart, PID guard)
 - `lib/osaurus_lib.py`, `lib/osaurus_output.py`, `lib/osaurus_degrade.py` — API wrapper, output cleaning, degrade-with-reason
 - `lib/mlx_lib.py`, `lib/mlx_vlm.py`, `lib/foundation_lib.py` — on-device fallbacks
-- `lib/content_processing.py` — thinking-block removal, stats stripping
+- `lib/content_processing.py` — thinking-block removal, stats stripping (ported: `eval/clean.rs`, Phase 2 item 4)
 - `lib/llm/{client,protocol,fallback,quirks,parsing,streaming,constants}.py`
 - `lib/signal_handling.py`, `lib/tui.py` (Kare style), `lib/paths.py`, `lib/logging_config.py`
 - `lib/model_resolve.py`, `lib/model_caps.py`, `lib/gpu_lock.py`
@@ -243,11 +243,26 @@ Status: **partially done — twitter summarize prompt shared, in progress.**
    meaningless stems fall back to a clean of the stem when no vision model is
    configured. All ported behaviors proved-fail-first. `image_renamer.rs` split
    into `rename/{mod,helpers,vlm}.rs` (500-line cap).
-4. **eval**: port `validate.py` JSON validator + `content_processing` cleaning
-   (thinking-block removal); load the 30 tasks from `eval_tasks/` instead of
-   hardcoded cases.
+4. **eval** — DONE (2026-08-20): `validate.py` (`validate_file_summary`) ported
+   verbatim to `eval/validate.rs` (list/dict/raw-string branches, filename-echo
+   guard, header bonus; thresholds use multiply-form so a 4-file list cannot
+   score 100 on 3 detailed descriptions) and `content_processing` cleaning ported
+   to `eval/clean.rs` (thinking-block, inline COT, stats, markdown, code-block
+   extraction — `  thinking`/` response` tags byte-identical to Python, verified
+   by hexdump because the display layer renders angle brackets into spaces).
+   `model_eval.rs` is now data-driven (`EvalTask`/`Check` enum: contains, json
+   array length, file-summary threshold) with `eval_model` cleaning raw output
+   before checks. All clean.rs regexes (THINK, gemma loop, stats, code block)
+   proved fail-first, plus the validate generic-desc branch and the
+   cleaning-before-scoring wiring (`eval_model_cleans_thinking_before_scoring`).
+   Loading the 30 `eval_tasks/` tasks is left open (data-driven harness in
+   place).
 5. Extend `bin/ab_test --functional` to cover every ported behavior (assert
-   identical verdicts on both sides).
+   identical verdicts on both sides) — DONE (2026-08-20) for eval: the parity
+   block runs the Python clean + validate on the same fixtures the Rust tests
+   assert, and fails if either side drifts. Note: the fixture must use the real
+   `  thinking`/` response` tag bytes — the angle-bracket form does not match
+   the reference regex and the check goes red.
 
 Exit criteria: the A/B harness runs green on the new behaviors; both
 implementations agree on the shared surface.
