@@ -259,6 +259,61 @@ pub(crate) fn _seasonal_keywords(month_name: &str) -> Option<&'static str> {
     }
 }
 
+fn parse_snippets_from_html(html: &str) -> Vec<String> {
+    let mut snippets = Vec::new();
+    let mut search_idx = 0;
+
+    while search_idx < html.len() {
+        let find_standard = html[search_idx..].find("class=\"result__snippet\"");
+        let find_lite = html[search_idx..].find("class=\"result-snippet\"");
+
+        let (start, pattern_len) = match (find_standard, find_lite) {
+            (Some(s1), Some(s2)) => {
+                if s1 <= s2 {
+                    (s1, 23)
+                } else {
+                    (s2, 22)
+                }
+            }
+            (Some(s1), None) => (s1, 23),
+            (None, Some(s2)) => (s2, 22),
+            (None, None) => break,
+        };
+
+        let absolute_start = search_idx + start;
+        if let Some(tag_end) = html[absolute_start..].find('>') {
+            let text_start = absolute_start + tag_end + 1;
+            let end_a = html[text_start..].find("</a>");
+            let end_td = html[text_start..].find("</td>");
+            let text_end_opt = match (end_a, end_td) {
+                (Some(a), Some(td)) => Some(a.min(td)),
+                (Some(a), None) => Some(a),
+                (None, Some(td)) => Some(td),
+                (None, None) => None,
+            };
+
+            if let Some(text_end) = text_end_opt {
+                let snippet = &html[text_start..text_start + text_end];
+                let clean_snippet = snippet
+                    .replace("<b>", "")
+                    .replace("</b>", "")
+                    .replace("&#x27;", "'")
+                    .replace("&amp;", "&")
+                    .replace("&quot;", "\"")
+                    .trim()
+                    .to_string();
+                if !clean_snippet.is_empty() {
+                    snippets.push(clean_snippet);
+                }
+                search_idx = text_start + text_end;
+                continue;
+            }
+        }
+        search_idx = absolute_start + pattern_len;
+    }
+    snippets
+}
+
 fn search_duckduckgo_html(query: &str, url: &str) -> Vec<String> {
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
@@ -267,51 +322,54 @@ fn search_duckduckgo_html(query: &str, url: &str) -> Vec<String> {
 
     let user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-    // Try GET first (html.duckduckgo.com returns HTTP 200 with snippets on GET)
-    let res = client
+    // 1. Try GET first on primary URL
+    let mut snippets = Vec::new();
+    if let Ok(resp) = client
         .get(url)
         .query(&[("q", query)])
         .header("User-Agent", user_agent)
-        .send();
-
-    let res = match res {
-        Ok(resp) if resp.status().is_success() => Ok(resp),
-        _ => client
-            .post(url)
-            .form(&[("q", query)])
-            .header("User-Agent", user_agent)
-            .send(),
-    };
-
-    let mut snippets = Vec::new();
-    if let Ok(resp) = res {
-        if let Ok(html) = resp.text() {
-            let mut search_idx = 0;
-            while let Some(start) = html[search_idx..].find("class=\"result__snippet\"") {
-                let absolute_start = search_idx + start;
-                if let Some(href_end) = html[absolute_start..].find('>') {
-                    let text_start = absolute_start + href_end + 1;
-                    if let Some(text_end) = html[text_start..].find("</a>") {
-                        let snippet = &html[text_start..text_start + text_end];
-                        let clean_snippet = snippet
-                            .replace("<b>", "")
-                            .replace("</b>", "")
-                            .replace("&#x27;", "'")
-                            .replace("&amp;", "&")
-                            .replace("&quot;", "\"")
-                            .trim()
-                            .to_string();
-                        if !clean_snippet.is_empty() {
-                            snippets.push(clean_snippet);
-                        }
-                        search_idx = text_start + text_end;
-                        continue;
-                    }
-                }
-                search_idx = absolute_start + 23;
+        .send()
+    {
+        if resp.status().is_success() {
+            if let Ok(html) = resp.text() {
+                snippets = parse_snippets_from_html(&html);
             }
         }
     }
+
+    // 2. Fall back to DDG Lite if GET returned 0 snippets or was rate-limited
+    if snippets.is_empty() {
+        let lite_url = "https://lite.duckduckgo.com/lite/";
+        if let Ok(resp) = client
+            .post(lite_url)
+            .form(&[("q", query)])
+            .header("User-Agent", user_agent)
+            .send()
+        {
+            if resp.status().is_success() {
+                if let Ok(html) = resp.text() {
+                    snippets = parse_snippets_from_html(&html);
+                }
+            }
+        }
+    }
+
+    // 3. Fall back to POST on primary URL
+    if snippets.is_empty() {
+        if let Ok(resp) = client
+            .post(url)
+            .form(&[("q", query)])
+            .header("User-Agent", user_agent)
+            .send()
+        {
+            if resp.status().is_success() {
+                if let Ok(html) = resp.text() {
+                    snippets = parse_snippets_from_html(&html);
+                }
+            }
+        }
+    }
+
     snippets
 }
 
