@@ -1,6 +1,7 @@
 //! Unit tests for Rust Image Renamer module.
 
 use super::*;
+use crate::ztools::rename::vlm;
 
 #[test]
 fn test_clean_filename_basic() {
@@ -177,4 +178,81 @@ fn test_query_vlm_for_filename_mock_server_sends_data_uri() {
     assert!(payload.contains("iVBORw0KGgp")); // base64 of the PNG header
 
     let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+// Mutant tests for renamer robustness
+
+#[test]
+fn mutant_ocr_single_char_rejected() {
+    let mutants = vec!["a", "I", "X", ""];
+    for m in mutants {
+        let generic = is_generic_name(m);
+        let non_human = is_non_human_readable(m);
+        assert!(generic || non_human, "Single char should be generic or non-human-readable");
+    }
+}
+
+#[test]
+fn mutant_ocr_empty_rejected() {
+    let empty = "";
+    assert!(is_non_human_readable(empty), "Empty string should be non-human-readable");
+    assert!(!is_meaningful_text(empty, 2), "Empty string should not be meaningful text");
+}
+
+#[test]
+fn mutant_words_to_filename_digits_only() {
+    assert!(vlm::words_to_filename("1234 5678", 50, 6).is_none());
+    assert!(vlm::words_to_filename("00000", 50, 6).is_none());
+}
+
+#[test]
+fn mutant_words_to_filename_mixed_alpha_digits() {
+    let result = vlm::words_to_filename("Apple 123 Store", 50, 6).unwrap();
+    let has_alpha = result.chars().any(|c| c.is_alphabetic());
+    assert!(has_alpha, "words_to_filename result '{}' should contain alphabetic chars", result);
+}
+
+#[test]
+fn mutant_truncation_boundary() {
+    let result = vlm::truncate_on_word_boundary("apple_foldable_iphone_launch_delayed", 20);
+    let underscore_pos = result.rfind('_');
+    assert!(underscore_pos.is_some(), "Truncated result should contain _");
+    if let Some(pos) = underscore_pos {
+        let before_underscore = &result[..=pos];
+        assert!(before_underscore.len() <= 20, "Before underscore segment should be <= 20 chars");
+    }
+}
+
+#[test]
+fn mutant_acceptable_name_generic_rejected() {
+    assert!(acceptable_name("image", 50).is_none());
+    assert!(acceptable_name("screenshot", 50).is_none());
+    assert!(acceptable_name("text", 50).is_none());
+    assert!(acceptable_name("filename", 50).is_none());
+}
+
+#[test]
+fn mutant_acceptable_name_short_rejected() {
+    assert!(acceptable_name("a", 50).is_none());
+    assert!(acceptable_name("ab", 50).is_none());
+}
+
+#[test]
+fn mutant_strip_injection_prefix() {
+    assert_eq!(strip_instruction_prefix("Here is the filename: tax_return_2026.pdf"), "tax_return_2026.pdf");
+    assert_eq!(strip_instruction_prefix("The file is: meeting_notes_v1.png"), "meeting_notes_v1.png");
+    assert_eq!(strip_instruction_prefix("suggested name: invoice"), "invoice");
+    assert_eq!(strip_instruction_prefix("renamed to: screenshot"), "screenshot");
+    assert_eq!(strip_instruction_prefix("  plain content  "), "plain content");
+}
+
+#[test]
+fn mutant_clean_filename_edge_cases() {
+    assert_eq!(clean_filename("Hello World! 2026", 50), "hello_world_2026");
+    assert_eq!(clean_filename("   ", 50), "unnamed");
+    assert_eq!(clean_filename("Special @#$% Symbols!", 30), "special_symbols");
+    let long = "This is an extremely long title that exceeds the maximum length constraint for filenames";
+    let result = clean_filename(long, 20);
+    assert!(result.len() <= 20, "Result should be <= 20 chars");
+    assert!(!result.ends_with('_'), "Result '{}' should not end with _", result);
 }

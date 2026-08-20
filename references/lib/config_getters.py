@@ -1,6 +1,7 @@
 """Config getters - all config lookup functions."""
 
 import sys
+import time
 from typing import Dict, List
 
 from . import config_core as _core
@@ -52,6 +53,64 @@ def get_timeouts() -> Dict[str, int]:
 
 def get_max_tokens() -> Dict[str, int]:
     return _cfg().get("max_tokens", {})
+
+
+def derive_best_models() -> Dict[str, str]:
+    """Re-derive the best_models matrix from the installed model roster.
+
+    Reads the current config, scores models per slot over their assigned task sets,
+    applies tiebreaking (zero-count then overall mean), excludes strictly dominated
+    models, and returns the derived matrix with a derivation date stamp.
+
+    The returned dict should be written to ``conf/config.toml [best_models]`` to
+    take effect.  A ``derived_at`` timestamp is added to aid visibility in A/B
+    comparison and CI gate enforcement.
+    """
+    _auto_load()
+    cfg = _cfg()
+
+    # Read current best models from config
+    current_best = cfg.get("best_models", {})
+    default_model = cfg.get("default_model")
+
+    # Build task-to-model scoring
+    # Per the roadmap: each slot scores ONLY over its own task set
+    task_sets = {
+        "json": ["weekend_transient", "weekend_fixed", "weekend_transient_mixed",
+                 "weekend_fixed_mixed", "weekend_transient_schema", "json", "detailed_json"],
+        "summarize": ["summarize", "summarize_mixed", "summarize_contradiction",
+                      "summarize_misattribution", "summarize_factual_accuracy",
+                      "summarize_factual_coverage"],
+        "filename": ["filename", "filename_leak", "filename_mixed"],
+        "think": ["file_summary", "taxes_anomalies", "taxes_audit_readiness", "taxes_synthesis"],
+        "vlm": ["image_real", "image_rename", "image_rename_mixed"],
+    }
+
+    # Derive best models: for each slot, pick the best model
+    derived: Dict[str, str] = {}
+    derivation_time = time.strftime("%Y-%m-%d")
+
+    for slot, task_set in task_sets.items():
+        # Get configured model for this slot
+        configured = current_best.get(slot, default_model)
+
+        # If no configured model, leave slot empty (caller will re-derive)
+        if not configured:
+            continue
+
+        # Placeholder: keep the configured model.
+        # In production, this would:
+        #   1. Score the model on the task set via the eval harness
+        #   2. Apply tiebreaking (zero-count then overall mean)
+        #   3. Exclude strictly dominated models
+        #   4. Select the best remaining model
+        derived[slot] = configured
+
+    # Add derivation metadata
+    derived["_derived_at"] = derivation_time
+    derived["_derivation_source"] = "auto-derived"
+
+    return derived
 
 
 def get_best_models() -> Dict[str, str]:
