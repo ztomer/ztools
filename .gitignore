@@ -165,3 +165,6 @@ output/
 
 # tools/sweep_models.sh run state (machine-specific, regenerated per sweep)
 .sweep_status
+
+# opencode agent session state
+.opencode/
