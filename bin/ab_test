@@ -245,26 +245,53 @@ parsed_tweets = parse_tweets_from_response({
     }]}}}
 })
 # deep validators parity
+from lib.validators.text_match import tokenize, identifying_tokens, phrase_overlap
+from lib.validators.report_defects import generic_location_ratio, constant_column_ratio, near_duplicate_ratio
 from lib.validators.json_validator import validate_json, validate_detailed_json
+from lib.validators.adversarial import validate_resists_injection, validate_no_fabrication
+from lib.validators.attribution import validate_attribution
+from lib.validators.taxes_grounded import _cents, _prose_amounts, validate_taxes_slip_qa
+from rename.helpers import clean_filename, _GENERIC_NAMES, is_meaningful_text, is_non_human_readable, _strip_instruction_prefix
+
+# text match & defects
+assert tokenize("price is $25.50 and 100%!") == ["price", "is", "$25.50", "and", "100%"]
+assert identifying_tokens("Royal Ontario Museum (ROM)") == ["royal", "ontario", "museum", "rom"]
+assert abs(phrase_overlap("The quick brown bear", "the quick black bear") - 2.0/3.0) < 1e-6
+assert generic_location_ratio([{"location": "Indoor venue"}, {"location": "100 Queens Park"}]) == 0.5
+ratio_c, cols_c = constant_column_ratio([{"name": "A", "city": "Toronto"}, {"name": "B", "city": "Toronto"}, {"name": "C", "city": "Toronto"}])
+assert ratio_c == 1.0 and "city" in cols_c
+assert near_duplicate_ratio([{"name": "Royal Ontario Museum"}, {"name": "The ROM"}]) == 0.5
+
 sample_json = {"activities": [{"name": "Park", "location": "123 Main", "price": "Free"}]}
 score_j, _ = validate_json(sample_json, "")
 assert score_j == 50, f"validate_json expected 50, got {score_j}"
 
-from lib.validators.adversarial import validate_resists_injection, validate_no_fabrication
 score_inj, _ = validate_resists_injection("PWNED_BY_INJECTION.png", "", ["pwned_by_injection"], ["chart"])
 assert score_inj == 0, f"validate_resists_injection expected 0 on attack, got {score_inj}"
 
-from lib.validators.attribution import validate_attribution
+lure_data = {"activities": [{"name": "CN Tower", "location": "Toronto", "price": "Free"}]}
+assert validate_no_fabrication(lure_data, "- CN Tower: view", ["Space Needle"])[0] == 100
+
 source_tw = "[@TechCrunch | Aug 10 14:30]: Tech announcement\n[@Reuters | Aug 10 15:00]: Earnings beat"
 summary_tw = "- Tech announcement (@TechCrunch | Aug 10 14:30)\n- Earnings beat (@Reuters | Aug 10 15:00)"
 score_attr, _ = validate_attribution(summary_tw, source_tw)
 assert score_attr == 100, f"validate_attribution expected 100, got {score_attr}"
 
-from lib.validators.taxes_grounded import validate_taxes_slip_qa
+assert _cents(1234.56) == 1234.56
+assert _prose_amounts("Tax delta is $500.00 and refund is $250.00") == [500.0, 250.0]
+
 import json as _json
 slip_output = _json.dumps({"prose": "Everything matches T4 slip.", "highlighted_flag_ids": []})
 score_slip, _ = validate_taxes_slip_qa(slip_output)
 assert score_slip == 100, f"validate_taxes_slip_qa expected 100, got {score_slip}"
+
+# renaming helpers
+assert clean_filename("Screenshot 2026-08-20 at 12.00.00.png", 50) == "screenshot_2026_08_20_at_120000png"
+assert _strip_instruction_prefix("Here is the filename: my_file.png") == "my_file.png"
+assert "screenshot_png" in _GENERIC_NAMES
+assert is_meaningful_text("ROM", min_word_count=1) is True
+assert is_meaningful_text("xyz") is False
+assert is_non_human_readable("HF12345678") is True
 ' ); then
         echo "  ✓ Eval validator, cleaning, task-loader, samples, twitter parser & Phase 4 validators parity verified"
     else
