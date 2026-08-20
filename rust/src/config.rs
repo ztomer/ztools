@@ -43,6 +43,11 @@ pub struct ZtoolsConfig {
     pub weekend_model: String,
     #[serde(default = "default_image_renamer_model")]
     pub image_renamer_model: String,
+    /// Vision model for naming images with no readable text. Empty means the
+    /// VLM path is unavailable (the Python CLI requires an explicit
+    /// `--vlm-model` too), and such images fall back to a clean of the stem.
+    #[serde(default = "default_image_renamer_vlm_model")]
+    pub image_renamer_vlm_model: String,
     #[serde(default = "default_llm_timeout_secs")]
     pub llm_timeout_secs: u64,
     #[serde(default = "default_llm_extended_timeout_secs")]
@@ -87,6 +92,9 @@ fn default_weekend_model() -> String {
 }
 fn default_image_renamer_model() -> String {
     "gemma-4-e2b-it-8bit".to_string()
+}
+fn default_image_renamer_vlm_model() -> String {
+    String::new()
 }
 fn default_llm_timeout_secs() -> u64 {
     120
@@ -144,6 +152,7 @@ impl Default for ZtoolsConfig {
             twitter_model: default_twitter_model(),
             weekend_model: default_weekend_model(),
             image_renamer_model: default_image_renamer_model(),
+            image_renamer_vlm_model: default_image_renamer_vlm_model(),
             llm_timeout_secs: default_llm_timeout_secs(),
             llm_extended_timeout_secs: default_llm_extended_timeout_secs(),
             llm_quick_timeout_secs: default_llm_quick_timeout_secs(),

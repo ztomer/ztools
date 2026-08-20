@@ -74,6 +74,23 @@ the Rust binary's notion of which model is best.
 - [x] **3. Image Renamer Security & Untrusted Framing**
   - Wrapped extracted image text inside `<<<BEGIN_UNTRUSTED_DOCUMENT` delimiters to prevent OCR prompt injection attacks (`filename_injection` defense).
   - Stripped markdown code blocks, conversational prefixes (`"Here is the filename:"`), and file extensions during sanitization.
+  - **2026-08-20 upgrade (rename port, `rust/src/ztools/rename/`)**: `image_renamer.rs`
+    exceeded the 500-line cap and was split into a package. `helpers.rs` ports the pure
+    text cleaning from `rename/helpers.py` with exact Python semantics — `clean_filename`
+    (which does NOT strip prefixes or fences — that is `strip_instruction_prefix`'s job;
+    dots glue "jpg" onto the stem exactly as Python does), `is_meaningful_text` (the
+    single-word acronym and all-caps guards, `min_word_count` floor),
+    `is_non_human_readable` (a plain lowercase hex string is NOT flagged here — the
+    meaningfulness check catches it), `is_generic_name` (12 bases × 9 extensions), and
+    word-boundary truncation. `vlm.rs` ports the LLM naming paths from `rename/llm.py`:
+    `query_llm_filename` word-extracts the reply (`[a-z0-9]+`, MAX_FILENAME_WORDS=6 /
+    MAX_FILENAME_LEN=50) and `query_vlm_for_filename` sends the image via OpenAI-style
+    content parts with a base64 data URI — deliberately NOT the Ollama `images` key,
+    which osaurus silently drops (the VLM then hallucinates from no image at all).
+    A new `image_renamer_vlm_model` config field (default empty = VLM unavailable)
+    gates the vision path; meaningless stems fall back to a clean of the stem when no
+    vision model is configured. Each ported behavior was proved-fail-first (VLM data
+    URI, meaningfulness threshold, non-human-readable guard).
 - [x] **4. Twitter Summarizer Prompt & Timestamp Parity (C2a fix)**
   - Synchronized prompt instructions with `TWITTER_PROMPT`.
   - Formatted tweet timestamps as `%b %d %H:%M` in the prompt payload to prevent date-dropping at the LLM boundary.

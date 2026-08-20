@@ -2,6 +2,7 @@
 
 pub mod embeddings;
 pub mod image_renamer;
+pub mod rename;
 pub mod model_eval;
 pub mod model_health;
 pub mod twitter;
