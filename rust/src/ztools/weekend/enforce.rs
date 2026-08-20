@@ -12,6 +12,8 @@
 
 use std::collections::{HashMap, HashSet};
 
+use chrono::{Datelike, NaiveDate};
+
 use super::WeekendEvent;
 
 /// Connector words carry no identifying signal, so requiring them would make a
@@ -296,6 +298,128 @@ pub const PROMPT_CONSTANTS: &[(&str, &[&str])] = &[
 /// check that cries wolf on every single-row table is a check the reader learns
 /// to skip.
 const MIN_ROWS_FOR_CONSTANT: usize = 2;
+
+/// Does this row's date range overlap `[start, end]`?
+///
+/// Returns Some(true)/Some(false), or None when the row carries no parseable
+/// date. A long-running exhibition (e.g. late June to mid August) is IN the
+/// plan if it spans the weekend, even though neither of its endpoints falls
+/// inside it. There is one decision, in one place.
+pub fn window_overlap(ev: &WeekendEvent, start: NaiveDate, end: NaiveDate) -> Option<bool> {
+    let year = start.year();
+    let first = super::dates::parse_any_date(&ev.start_date, year);
+    let last = super::dates::parse_any_date(&ev.end_date, year);
+    let (mut first, mut last) = match (first, last) {
+        (Some(f), Some(l)) => (f, l),
+        (Some(f), None) => (f, f),
+        (None, Some(l)) => (l, l),
+        (None, None) => return None,
+    };
+    if last < first {
+        std::mem::swap(&mut first, &mut last);
+    }
+    Some(!(last < start || first > end))
+}
+
+/// C3. A dated event outside the plan's weekend is dropped.
+///
+/// Only rows that actually carry a parseable date are judged. A row with no
+/// date is NOT dropped here -- undated rows are class C7's problem, and
+/// silently discarding them would hide that rather than fix it.
+pub fn drop_events_outside_window(
+    events: Vec<WeekendEvent>,
+    start: NaiveDate,
+    end: NaiveDate,
+) -> (Vec<WeekendEvent>, Vec<String>) {
+    let mut kept = Vec::new();
+    let mut notes = Vec::new();
+    for ev in events {
+        let overlaps = window_overlap(&ev, start, end);
+        let Some(overlaps) = overlaps else {
+            kept.push(ev);
+            continue;
+        };
+        if !overlaps {
+            let year = start.year();
+            let starts = super::dates::parse_any_date(&ev.start_date, year);
+            let ends = super::dates::parse_any_date(&ev.end_date, year);
+            let first = starts.or(ends);
+            let last = ends.or(starts);
+            if let (Some(first), Some(last)) = (first, last) {
+                notes.push(format!(
+                    "dropped '{}' — runs {}..{}, outside {}..{}",
+                    ev.name, first, last, start, end
+                ));
+            }
+        } else {
+            kept.push(ev);
+        }
+    }
+    (kept, notes)
+}
+
+/// Make `day` agree with the row's own dates, or blank it.
+///
+/// Where the row's dates overlap the plan window, `day` is derived from them.
+/// Where they do not overlap at all the row is left for
+/// `drop_events_outside_window`. Where there are no dates, `day` is left
+/// alone: it cannot be verified, and inventing one would be class C4 again.
+pub fn reconcile_day_with_dates(
+    mut events: Vec<WeekendEvent>,
+    start: NaiveDate,
+    end: NaiveDate,
+) -> (Vec<WeekendEvent>, Vec<String>) {
+    let mut notes = Vec::new();
+    for ev in events.iter_mut() {
+        let year = start.year();
+        let mut first = match super::dates::parse_any_date(&ev.start_date, year) {
+            Some(d) => d,
+            None => continue,
+        };
+        let mut last = super::dates::parse_any_date(&ev.end_date, year).unwrap_or(first);
+        if last < first {
+            std::mem::swap(&mut first, &mut last);
+        }
+
+        let lo = first.max(start);
+        let hi = last.min(end);
+        if lo > hi {
+            continue; // entirely outside the window; not this function's job
+        }
+
+        let mut covered = Vec::new();
+        let mut cursor = lo;
+        while cursor <= hi {
+            covered.push(cursor.format("%A").to_string());
+            cursor = cursor.succ_opt().unwrap();
+        }
+
+        let stated = ev.day.trim().to_string();
+        if !stated.is_empty() && covered.contains(&stated) {
+            continue;
+        }
+        let corrected = if covered.len() == 1 {
+            covered[0].clone()
+        } else {
+            String::new()
+        };
+        ev.day = corrected.clone();
+        if !stated.is_empty() {
+            notes.push(format!(
+                "'{}': day {stated:?} is not within {}..{} — {}",
+                ev.name,
+                first,
+                last,
+                if corrected.is_empty() {
+                    "cleared".to_string()
+                } else {
+                    format!("corrected to {corrected:?}")
+                }
+            ));
+        }
+    }
+    (events, notes)
+}
 
 fn column_value(ev: &WeekendEvent, aliases: &[&str]) -> String {
     for alias in aliases {

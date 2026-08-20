@@ -201,7 +201,14 @@ Status: **partially done — twitter summarize prompt shared, in progress.**
      "rows kept" notes) ported and wired into the dispatch; `WeekendEvent` now
      carries `start_date`/`end_date`/`weather`/`duration` so enforcement sees
      the raw parsed values. Both test suites proved to fail when neutered.
-     Remaining: C3 window / day-reconcile, provenance.
+   - **C3 window + day-reconcile DONE**: `find_dates_in` ported to
+     `rust/src/ztools/weekend/dates.rs` (ISO + named-month shapes, explicit-year
+     wins, durations excluded, shared with the enforcer so a future
+     prioritiser cannot drift); `window_overlap`, `drop_events_outside_window`
+     and `reconcile_day_with_dates` wired into the dispatch. Window tests proved
+     to fail when `window_overlap` was neutered. Remaining: provenance
+     (`drop_unsourced_rows`), supply in-window counting, the 4-phase prompt
+     pipeline.
 3. **rename**: port `helpers.py` text cleaning (pure); port VLM call path to the
    osaurus vision API (no local MLX yet).
 4. **eval**: port `validate.py` JSON validator + `content_processing` cleaning

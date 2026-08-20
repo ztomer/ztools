@@ -79,6 +79,16 @@ pub(crate) fn weekend_plan(
     }
     let (_, fixed) = crate::ztools::weekend::load_cached_activities(config);
 
+    // C3: a dated transient event outside the plan's weekend is dropped; then
+    // each surviving row's `day` is reconciled with its own dates.
+    let (transient, window_notes) =
+        crate::ztools::weekend::drop_events_outside_window(transient, friday, sunday);
+    let (transient, day_notes) =
+        crate::ztools::weekend::reconcile_day_with_dates(transient, friday, sunday);
+    for note in window_notes.iter().chain(day_notes.iter()) {
+        println!("→ {note}");
+    }
+
     let (mut fixed, weather_notes) = crate::ztools::weekend::correct_weather_labels(fixed);
     let (mut transient, weather_notes_t) =
         crate::ztools::weekend::correct_weather_labels(transient);
