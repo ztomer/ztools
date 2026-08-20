@@ -80,6 +80,15 @@ the Rust binary's notion of which model is best.
 - [x] **5. Weekend Planner Schema & Exclusion Filtering (C2b, C8 fixes)**
   - Aligned JSON schema to include `start_date`, `end_date`, `price`, `day`, `weather`.
   - Matched candidate events against exclusion patterns from `conf/weekend.toml`.
+  - **2026-08-19 upgrade:** the Rust matcher was a weaker port (whitespace-only
+    tokenisation) and silently missed interpolated/reordered venue names — "Sky
+    Zone Toronto" escaped while the Python side dropped it. Replaced with the
+    faithful port (`rust/src/ztools/weekend/enforce.rs`): typographic-punctuation
+    folding, connector-word and possessive handling, parenthetical stripping,
+    token-subset + containment matching, and the C8 seasonal-event exception,
+    wired into `weekend_cache` and the `weekend_plan` dispatch. Tests ported from
+    `test_report_class_fixes.py` were proven to fail against the old matcher
+    before the new one landed.
 - [x] **6. Greedy decoding across all LLM callers** (temperature 0.0) — for deterministic reproducible leaderboard outputs.
 - [x] **7. Derived request timeouts** from measured cold-start / prefill / decode rates.
 

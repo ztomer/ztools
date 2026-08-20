@@ -2,7 +2,7 @@
 
 use std::fs;
 
-use super::weekend::{matches_exclusion, WeekendEvent};
+use super::weekend::WeekendEvent;
 
 /// Check if a title refers to a directory page, list article, social video, or round-up.
 pub fn is_directory_or_list_page(title: &str) -> bool {
@@ -329,25 +329,9 @@ pub fn load_cached_activities(
         },
     ];
 
-    let fixed = all_fixed
-        .into_iter()
-        .filter(|ev| {
-            let combined = format!("{} {}", ev.name, ev.location);
-            !exclusions
-                .iter()
-                .any(|excl| matches_exclusion(&combined, excl))
-        })
-        .collect();
+    let fixed = super::weekend::drop_excluded_places(all_fixed, &exclusions).0;
 
-    let transient = all_transient
-        .into_iter()
-        .filter(|ev| {
-            let combined = format!("{} {}", ev.name, ev.location);
-            !exclusions
-                .iter()
-                .any(|excl| matches_exclusion(&combined, excl))
-        })
-        .collect();
+    let transient = super::weekend::drop_excluded_places(all_transient, &exclusions).0;
 
     (transient, fixed)
 }

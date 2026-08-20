@@ -70,7 +70,13 @@ pub(crate) fn weekend_plan(
     let d2 = sunday.format("%Y-%m-%d").to_string();
     let dates_str = format!("{} to {}", friday.format("%b %d"), sunday.format("%b %d"));
 
-    let mut transient = crate::ztools::weekend::fetch_duckduckgo_events(&location, &d1, &d2, config);
+    let transient = crate::ztools::weekend::fetch_duckduckgo_events(&location, &d1, &d2, config);
+    let exclusions = crate::ztools::weekend::load_exclusions(config);
+    let (mut transient, drop_notes) =
+        crate::ztools::weekend::drop_excluded_places(transient, &exclusions);
+    for note in &drop_notes {
+        println!("→ {note}");
+    }
     let (_, mut fixed) = crate::ztools::weekend::load_cached_activities(config);
     let raw_weather = crate::ztools::weekend::fetch_weather(&d1, &d2);
     let weather_str = crate::ztools::weekend::format_weather_display(&raw_weather);

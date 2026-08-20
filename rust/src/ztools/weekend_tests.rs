@@ -5,22 +5,19 @@ use super::*;
 #[test]
 fn test_matches_exclusion() {
     assert!(matches_exclusion(
-        "Sky Zone Trampoline Park, Toronto",
-        "Sky Zone Toronto"
+        "Sky Zone Toronto",
+        "Sky Zone Trampoline Park, Toronto"
     ));
     assert!(matches_exclusion(
-        "Canada Day at Your Toronto Zoo",
-        "Toronto Zoo"
+        "Toronto Zoo",
+        "Canada Day at Your Toronto Zoo"
     ));
-    assert!(!matches_exclusion("Toronto Islands Park", "Toronto Zoo"));
+    assert!(!matches_exclusion("Toronto Zoo", "Toronto Islands Park"));
 }
 
 #[test]
 fn test_matches_exclusion_possessives() {
-    assert!(matches_exclusion(
-        "Ripley's Aquarium of Canada",
-        "Ripley’s Aquarium"
-    ));
+    assert!(matches_exclusion("Ripley's Aquarium", "Ripley’s Aquarium of Canada"));
 }
 
 #[test]
@@ -50,8 +47,8 @@ fn test_filter_exclusions() {
         },
     ];
     let exclusions = vec!["Toronto Zoo".into()];
-    let filtered = filter_exclusions(events, &exclusions);
-    assert_eq!(filtered.len(), 1);
+    let (filtered, notes) = drop_excluded_places(events, &exclusions);
+    assert_eq!(filtered.len(), 1, "{notes:?}");
     assert_eq!(filtered[0].name, "Local Library Story Time");
 }
 

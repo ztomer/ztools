@@ -1,10 +1,10 @@
+pub mod enforce;
 pub mod fetch;
 pub mod format;
+pub use enforce::*;
 pub use fetch::*;
 pub use format::*;
 /// Native Rust Weekend Planner module.
-use std::collections::HashSet;
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -19,40 +19,6 @@ pub struct WeekendEvent {
     pub is_transient: bool,
     #[serde(default)]
     pub score: f32,
-}
-
-/// Token-set exclusion matcher preventing excluded venues from appearing in plans.
-pub fn matches_exclusion(entry: &str, exclusion: &str) -> bool {
-    let norm = |s: &str| {
-        s.to_lowercase()
-            .chars()
-            .filter(|c| c.is_alphanumeric() || c.is_whitespace())
-            .collect::<String>()
-    };
-    let entry_tokens: HashSet<_> = norm(entry).split_whitespace().map(String::from).collect();
-    let excl_tokens: Vec<_> = norm(exclusion)
-        .split_whitespace()
-        .map(String::from)
-        .collect();
-
-    if excl_tokens.is_empty() {
-        return false;
-    }
-
-    excl_tokens.iter().all(|t| entry_tokens.contains(t))
-}
-
-/// Filter events against user-configured exclusions.
-pub fn filter_exclusions(events: Vec<WeekendEvent>, exclusions: &[String]) -> Vec<WeekendEvent> {
-    events
-        .into_iter()
-        .filter(|ev| {
-            let combined = format!("{} {}", ev.name, ev.location);
-            !exclusions
-                .iter()
-                .any(|excl| matches_exclusion(&combined, excl))
-        })
-        .collect()
 }
 
 pub use super::weekend_cache::{
