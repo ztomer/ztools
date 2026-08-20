@@ -34,14 +34,14 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 pub fn cluster_tweets(
     tweets: &[Tweet],
     base_url: &str,
-    config: &crate::config::ZtoolsConfig,
+    _config: &crate::config::ZtoolsConfig,
 ) -> Result<Vec<Vec<Tweet>>> {
     if tweets.is_empty() {
         return Ok(Vec::new());
     }
 
     let client = Client::builder()
-        .timeout(Duration::from_secs(config.llm_extended_timeout_secs))
+        .timeout(Duration::from_secs(3))
         .build()?;
 
     let url = format!("{}/v1/embeddings", base_url.trim_end_matches('/'));
@@ -55,10 +55,12 @@ pub fn cluster_tweets(
 
     let resp = client.post(&url).json(&req).send();
 
-    // Fallback if embeddings fail: just return each tweet in its own cluster
     let Ok(resp) = resp else {
         return Ok(tweets.iter().map(|t| vec![t.clone()]).collect());
     };
+    if !resp.status().is_success() {
+        return Ok(tweets.iter().map(|t| vec![t.clone()]).collect());
+    }
 
     let Ok(embed_resp) = resp.json::<EmbedResponse>() else {
         return Ok(tweets.iter().map(|t| vec![t.clone()]).collect());

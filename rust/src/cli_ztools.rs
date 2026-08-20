@@ -13,14 +13,25 @@ use crate::config::ZtoolsConfig;
 
 pub(crate) fn twitter_summarize(
     config: &ZtoolsConfig,
-    json: String,
+    json: Option<String>,
     model: Option<String>,
     md_out: Option<PathBuf>,
+    use_cache: bool,
+    fetch_only: bool,
+    debug: bool,
+    since: Option<String>,
+    login: bool,
 ) -> Result<()> {
+    if login {
+        println!("· Launching browser for x.com sign-in...");
+        return crate::ztools::twitter::browser::login_live();
+    }
+
     let mut tweets = Vec::new();
-    if json == "-" {
-        use std::io::IsTerminal;
-        if !std::io::stdin().is_terminal() {
+    let mut explicit_source = false;
+
+    if let Some(path_or_dash) = json {
+        if path_or_dash == "-" {
             let mut buffer = String::new();
             if std::io::Read::read_to_string(&mut std::io::stdin(), &mut buffer).is_ok() {
                 if let Ok(parsed) =
@@ -29,15 +40,53 @@ pub(crate) fn twitter_summarize(
                     tweets = parsed;
                 }
             }
+        } else if std::path::Path::new(&path_or_dash).exists() {
+            if let Ok(content) = std::fs::read_to_string(&path_or_dash) {
+                if let Ok(parsed) =
+                    serde_json::from_str::<Vec<crate::ztools::twitter::Tweet>>(&content)
+                {
+                    tweets = parsed;
+                }
+            }
         }
-    } else if std::path::Path::new(&json).exists() {
-        if let Ok(content) = std::fs::read_to_string(&json) {
-            if let Ok(parsed) = serde_json::from_str::<Vec<crate::ztools::twitter::Tweet>>(&content)
-            {
-                tweets = parsed;
+        explicit_source = true;
+    }
+
+    if !explicit_source {
+        if use_cache {
+            let candidates = [
+                dirs::home_dir().map(|h| h.join(".twitter_summary_debug_cache.json")),
+                dirs::home_dir().map(|h| h.join(".cache/twitter/debug_tweets.json")),
+            ];
+            for candidate in candidates.into_iter().flatten() {
+                if candidate.exists() {
+                    if let Ok(content) = std::fs::read_to_string(&candidate) {
+                        if let Ok(parsed) = serde_json::from_str::<Vec<crate::ztools::twitter::Tweet>>(&content) {
+                            if !parsed.is_empty() {
+                                tweets = parsed;
+                                println!("· Using {} cached tweets from {}", tweets.len(), candidate.display());
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            if tweets.is_empty() {
+                anyhow::bail!("No cached tweets found. Run without --use-cache first to scrape live tweets.");
+            }
+        } else {
+            tweets = crate::ztools::twitter::browser::collect_tweets_live(since.as_deref(), debug)?;
+            if tweets.is_empty() {
+                println!("· No tweets found in the timeline window.");
+                return Ok(());
+            }
+            if fetch_only {
+                println!("✓ {} tweets fetched and cached. (--fetch-only provided, exiting)", tweets.len());
+                return Ok(());
             }
         }
     }
+
     let path = crate::ztools::twitter::run_summary(&tweets, None, None, model.as_deref(), config)?;
     if let Ok(doc) = std::fs::read_to_string(&path) {
         println!("{}", doc);

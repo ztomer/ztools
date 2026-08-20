@@ -31,14 +31,29 @@ enum Cmd {
     /// Run native Rust Twitter timeline summarizer.
     TwitterSummarize {
         /// Optional path to tweets JSON file or stdin `-`.
-        #[arg(long, default_value = "-")]
-        json: String,
+        #[arg(long)]
+        json: Option<String>,
         /// Model to use on Osaurus server.
         #[arg(long)]
         model: Option<String>,
         /// Optional path to write markdown summary.
         #[arg(long)]
         md_out: Option<PathBuf>,
+        /// Use cached tweets from last run instead of fetching new ones.
+        #[arg(long)]
+        use_cache: bool,
+        /// Collect tweets, save them to cache, and exit without summarizing.
+        #[arg(long)]
+        fetch_only: bool,
+        /// Show browser window and verbose output.
+        #[arg(long)]
+        debug: bool,
+        /// Override start time (e.g. '24h' or ISO 8601).
+        #[arg(long)]
+        since: Option<String>,
+        /// Open browser to log in to x.com.
+        #[arg(long)]
+        login: bool,
     },
     /// Run native Rust Weekend planner.
     WeekendPlan {
@@ -111,7 +126,14 @@ pub fn run() -> Result<()> {
             json,
             model,
             md_out,
-        } => crate::cli_ztools::twitter_summarize(&config, json, model, md_out),
+            use_cache,
+            fetch_only,
+            debug,
+            since,
+            login,
+        } => crate::cli_ztools::twitter_summarize(
+            &config, json, model, md_out, use_cache, fetch_only, debug, since, login,
+        ),
         Cmd::WeekendPlan {
             location,
             ages,

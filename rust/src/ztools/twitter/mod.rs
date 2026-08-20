@@ -57,17 +57,11 @@ pub fn deduplicate_tweets(tweets: &[Tweet]) -> Vec<Tweet> {
             }
         }
         let norm_sig: String = norm.split_whitespace().collect::<Vec<_>>().join(" ");
-
-        if norm_sig.len() < 15 {
+        let sig: String = norm_sig.chars().take(90).collect();
+        if sig.chars().count() < 15 {
             deduped.push(t.clone());
             continue;
         }
-
-        let sig = if norm_sig.len() > 90 {
-            norm_sig[..90].to_string()
-        } else {
-            norm_sig
-        };
 
         if seen_sigs.contains(&sig) {
             continue;
@@ -128,6 +122,7 @@ struct ChatRequest<'a> {
     model: &'a str,
     messages: Vec<ChatMessage<'a>>,
     temperature: f64,
+    stream: bool,
 }
 
 #[derive(Deserialize)]
@@ -164,15 +159,19 @@ pub fn call_osaurus(
             content: prompt,
         }],
         temperature: 0.0,
+        stream: false,
     };
 
-    let resp: ChatResponse = client
+    let raw = client
         .post(&url)
         .json(&req)
         .send()
         .context("Failed to send request to Osaurus server")?
-        .json()
-        .context("Failed to parse Osaurus server response JSON")?;
+        .text()
+        .context("Failed to read Osaurus server response text")?;
+
+    let resp: ChatResponse = serde_json::from_str(&raw)
+        .map_err(|e| anyhow::anyhow!("Failed to parse Osaurus server response JSON: {e}, raw: {raw}"))?;
 
     let text = resp
         .choices
@@ -228,6 +227,7 @@ pub fn run_summary(
         config.twitter_prompt_max_chars,
         &config.twitter_summarize_prompt,
     );
+    eprintln!("· Summarizing {} tweets with {} on {}...", processed, model, base_url);
     let summary_body = call_osaurus(base_url, model, &prompt, config)?;
 
     let now = Local::now();
