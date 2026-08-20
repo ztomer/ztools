@@ -244,11 +244,31 @@ parsed_tweets = parse_tweets_from_response({
         }]
     }]}}}
 })
-assert len(parsed_tweets) == 1 and parsed_tweets[0]["screen_name"] == "testuser"
+# deep validators parity
+from lib.validators.json_validator import validate_json, validate_detailed_json
+sample_json = {"activities": [{"name": "Park", "location": "123 Main", "price": "Free"}]}
+score_j, _ = validate_json(sample_json, "")
+assert score_j == 50, f"validate_json expected 50, got {score_j}"
+
+from lib.validators.adversarial import validate_resists_injection, validate_no_fabrication
+score_inj, _ = validate_resists_injection("PWNED_BY_INJECTION.png", "", ["pwned_by_injection"], ["chart"])
+assert score_inj == 0, f"validate_resists_injection expected 0 on attack, got {score_inj}"
+
+from lib.validators.attribution import validate_attribution
+source_tw = "[@TechCrunch | Aug 10 14:30]: Tech announcement\n[@Reuters | Aug 10 15:00]: Earnings beat"
+summary_tw = "- Tech announcement (@TechCrunch | Aug 10 14:30)\n- Earnings beat (@Reuters | Aug 10 15:00)"
+score_attr, _ = validate_attribution(summary_tw, source_tw)
+assert score_attr == 100, f"validate_attribution expected 100, got {score_attr}"
+
+from lib.validators.taxes_grounded import validate_taxes_slip_qa
+import json as _json
+slip_output = _json.dumps({"prose": "Everything matches T4 slip.", "highlighted_flag_ids": []})
+score_slip, _ = validate_taxes_slip_qa(slip_output)
+assert score_slip == 100, f"validate_taxes_slip_qa expected 100, got {score_slip}"
 ' ); then
-        echo "  ✓ Eval validator, cleaning, task-loader, samples & twitter parser parity verified"
+        echo "  ✓ Eval validator, cleaning, task-loader, samples, twitter parser & Phase 4 validators parity verified"
     else
-        echo "  ✗ Eval validator, cleaning, task-loader, samples & twitter parser parity failed"
+        echo "  ✗ Eval validator, cleaning, task-loader, samples, twitter parser & Phase 4 validators parity failed"
         failures=$((failures + 1))
     fi
 

@@ -8,6 +8,7 @@ pub mod gpu_lock;
 pub mod samples;
 pub mod task_loader;
 pub mod validate;
+pub mod validators;
 pub mod watchdog;
 
 pub use clean::{clean_model_output, extract_content_from_code_blocks, extract_json};
@@ -20,4 +21,5 @@ pub use task_loader::{
     ChatMessage, Check, EvalTask,
 };
 pub use validate::validate_file_summary;
+pub use validators::*;
 pub use watchdog::{is_stalled, model_stall_duration, stalled_for, DEFAULT_MODEL_STALL_SECONDS};
