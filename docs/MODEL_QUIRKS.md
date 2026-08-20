@@ -94,10 +94,16 @@ further after unrelated CPU work, which is what made "does not drain" look true 
 but ten minutes after that it had fallen to 3.0GB unaided. A level that is checked
 too few times looks permanent.
 
-### qwen3.8-27b-mxfp8: the tag now holds a DIFFERENT, MTP build at 0.11 tok/s (2026-08-19)
+### qwen3.8-27b-8bit: RESOLVED with clean build at 17.0 tok/s, 88.0% mean (2026-08-19)
+
+**RESOLVED.** The broken `Qwen3.8-27B-MXFP8` build carrying the uncalibrated MTP shard
+was removed and replaced with `mlx-community/Qwen3.8-27B-8bit` (`qwen3.8-27b-8bit`, 27.5 GB).
+Full 30-task eval completed at **88.0% mean**, with **17.0 tok/s decode** and **650.2 chars/s prefill**.
+
+### Previous investigation: qwen3.8-27b-mxfp8 MTP build regression (2026-08-19)
 
 **The 14.7 tok/s table below is correct for the build that was on disk on 2026-08-17,
-and that build is gone.** Every weight shard in
+and that build was overwritten on Aug 18.** Every weight shard in
 `~/MLXModels/OsaurusAI/Qwen3.8-27B-MXFP8` now dates from Aug 18 20:59-21:34, and the
 directory contains a shard the old one did not:
 
@@ -339,8 +345,8 @@ pairing it automatically. Unmeasured.
 | ornith-1.0-35b-jang_4m | qwen3_5_moe | 35B | yes |
 | ornith-1.0-9b-mxfp8 | qwen3_5 | 9B | yes |
 | potion-base-4m | unknown | 4M | no |
-| qwen3.8-27b-mxfp8 | qwen3_5 | 27B | yes (14.7 tok/s once the leak was cleared) |
-| qwen3.8-27b-4bit | qwen3_5 | 27B | yes (15GB, 26-35 tok/s -- use this one) |
+| qwen3.8-27b-8bit | qwen3_5 | 27B | yes (17.0 tok/s decode, 650 chars/s prefill, 88.0% mean across 30 tasks) |
+| qwen3.8-27b-4bit | qwen3_5 | 27B | yes (15GB, 26-35 tok/s -- alternative) |
 | qwen3.8-27b-mtp-4bit | qwen3_5 | drafter | speculative-decoding weights, unwired |
 
 Two routing bugs fall straight out of it:

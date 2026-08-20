@@ -140,6 +140,7 @@ __all__ = [
 from eval import cli_runtime
 from eval.cli_results import _print_results  # noqa: E402,F401
 from eval.cli_runtime import (  # noqa: E402,F401
+    broken_model_refusal,
     check_memory_safe,
     estimate_model_memory,
     flush_between_models,
@@ -410,6 +411,11 @@ def main():
         refusal = oversize_refusal(model_mem_gb, allow=args.allow_oversize)
         if refusal:
             cli_runtime.console.print(f"{FAIL} Skipping {model}: {refusal}")
+            continue
+
+        broken_refusal = broken_model_refusal(model, allow=args.allow_oversize)
+        if broken_refusal:
+            cli_runtime.console.print(f"{FAIL} Skipping broken model {model}: {broken_refusal}")
             continue
 
         if not is_server_responsive():

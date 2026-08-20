@@ -27,6 +27,7 @@ __all__ = [
     "model_config_path",
     "model_disk_bytes",
     "probe_context_window",
+    "probe_model_defects",
     "probe_vision",
     "usable_context_window",
 ]
@@ -314,3 +315,72 @@ def usable_context_window(model: str, default: int, override: int | None = None)
     if probed:
         return probed
     return default
+
+
+@lru_cache(maxsize=64)
+def probe_model_defects(model: str) -> list[str]:
+    """Static packaging anomalies in a model directory that make it unviable.
+
+    Identifies structural defects without sending a generation request:
+    - Unsupported MTP (speculative decoding) shard on an unaccelerated runtime
+    - Missing safetensors shards referenced in index
+    - Incomplete download artifacts
+    """
+    config = model_config_path(model)
+    if config is None:
+        return []
+    directory = config.parent
+    defects = []
+
+    # 1. MTP shard with unsupported / unaccelerated runtime
+    mtp_shards = sorted(directory.glob("*mtp*.safetensors")) + sorted(
+        directory.glob("model-mtp-*.safetensors")
+    )
+    # Deduplicate shard paths
+    mtp_shards = list(dict.fromkeys(mtp_shards))
+    if mtp_shards:
+        jang_cfg = directory / "jang_config.json"
+        if jang_cfg.is_file():
+            try:
+                jdata = json.loads(jang_cfg.read_text())
+                mtp_info = jdata.get("mtp", {})
+                runtime_info = jdata.get("runtime", {})
+                if (
+                    mtp_info.get("runtime_available") is False
+                    or runtime_info.get("mtp_mode") == "preserved_enabled"
+                ):
+                    defects.append(
+                        f"unsupported MTP speculative shard ({mtp_shards[0].name}) "
+                        "with runtime_available=false (causes ~0.1 tok/s stall)"
+                    )
+            except (OSError, ValueError):
+                pass
+        else:
+            defects.append(f"unintegrated MTP speculative shard ({mtp_shards[0].name})")
+
+    # 2. Missing safetensor shards referenced in index
+    index_file = directory / "model.safetensors.index.json"
+    if index_file.is_file():
+        try:
+            idata = json.loads(index_file.read_text())
+            weight_map = idata.get("weight_map", {})
+            expected_shards = set(weight_map.values())
+            missing = [s for s in expected_shards if not (directory / s).is_file()]
+            if missing:
+                missing_list = sorted(missing)
+                defects.append(
+                    f"missing {len(missing)} safetensor shard(s) in index: {missing_list}"
+                )
+        except (OSError, ValueError):
+            pass
+
+    # 3. Incomplete download artifacts
+    incomplete = list(directory.glob("*.incomplete"))
+    if (directory / ".cache").is_dir():
+        incomplete.extend((directory / ".cache").glob("**/*.incomplete"))
+    if incomplete:
+        count = len(incomplete)
+        defects.append(f"incomplete download artifacts ({count} .incomplete file(s) present)")
+
+    return defects
+

@@ -2,6 +2,7 @@
 state_file = "~/.twitter_summary_state.json"
 output_dir = "~/Documents/twitter_summaries"
 llm_url = "http://localhost:1337"
-model = "gemma-4-26b-a4b-it-4bit"
+model = "gemma-4-e2b-it-8bit"
 chrome_cookies_db = "~/Library/Application Support/Google/Chrome/Default/Cookies"
 max_scrolls = 1200
+

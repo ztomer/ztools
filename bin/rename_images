@@ -1,30 +1,14 @@
 #!/usr/bin/env bash
-# ZTools wrapper: execs the uv-managed venv console script for this tool.
-# `rename_images` operates on the current directory by default (mirrors the old
-# zsh function, which passed $PWD). The venv is built by the Homebrew formula at
-# install time; if it is missing this wrapper self-heals from pkgshare source.
+# Fast shim to the native Rust `routines` binary for image renaming.
 set -euo pipefail
 
-TOOL="rn"
-EXTRA="vision"
-
-SELF="$(readlink -f "${BASH_SOURCE[0]:-$0}")"
-PREFIX="$(cd "$(dirname "$SELF")/.." && pwd)"
-LIBEXEC="$PREFIX/libexec/ztools"
-VENV="$LIBEXEC/venv"
-SRC="$PREFIX/share/ztools"
-PY="$VENV/bin/python"
-
-if [ ! -x "$PY" ]; then
-  echo "→ bootstrapping rename_images venv (one-time)..." >&2
-  command -v uv >/dev/null 2>&1 || { echo "✗ uv is required: https://docs.astral.sh/uv/" >&2; exit 1; }
-  mkdir -p "$LIBEXEC"
-  uv venv "$VENV" >&2
-  if [ -d "$SRC" ]; then
-    uv pip install --python "$PY" "$SRC/.[$EXTRA]" >&2
-  else
-    uv pip install --python "$PY" "otools[$EXTRA]" >&2
-  fi
+SUB="image-renamer"
+if command -v routines >/dev/null 2>&1; then
+  exec routines "$SUB" "$@"
 fi
-
-exec "$VENV/bin/$TOOL" "$PWD" "$@"
+DEV_BUILD="$HOME/Projects/routines/target/release/routines"
+if [ -x "$DEV_BUILD" ]; then
+  exec "$DEV_BUILD" "$SUB" "$@"
+fi
+echo "✗ routines binary not found on PATH (and no dev build at $DEV_BUILD)" >&2
+exit 1

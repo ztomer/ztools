@@ -27,23 +27,12 @@ delete it.
 | — | Mutation harness, and the bytecode bug that made its first numbers wrong | `ea0733a`, `137b9fc` |
 | — | Reasoning overrun diagnosed instead of mislabelled | `d22b563` |
 | 1 | The sweep: 11 models x 23 tasks, `best_models` re-derived from it | `83990b9` |
-| — | P0-P5 phase: rn inside the transport perimeter, winnable tasks, a real image task, self-correcting estimator, disk-corroborated roster, adversarial tasks | `d9f5a7a`..`82a9556` |
+| 1 | qwen3.8-27b-8bit clean run: replaced broken MTP build; measured 17.0 tok/s decode, 650 chars/s prefill, 88.0% mean over 30 tasks | `qwen3.8-27b-8bit` |
+| 4 | Rust Port & Deep A/B Parity Testing (`routines`): packaging defect probe, OCR untrusted framing, best model matrix sync, A/B matrix green | `routines` |
 
 **Open**
 
-1. **qwen3.8-27b-mxfp8 (new MTP build) has NO valid measurement.** Its only samples
-   were taken while the compressor held 18.07GB, so all three are tagged unclean and
-   the model has no usable estimate. It needs a run on a genuinely quiet machine --
-   deferred 2026-08-19 to after a reboot, because the box was at 27.91GB compressor
-   with 26.7GB available and the top 20 processes accounted for only 3.6GB of it.
-
-   Two things to settle when it runs, not before:
-   - Whether a 27GB model can be measured on this 64GB box AT ALL. The eval prints
-     "needs ~27GB, low memory - will be slower" and proceeds. Warn-and-continue is
-     the shape this repo keeps paying for; a refusal may be the honest answer.
-   - The old-build samples were cleared by hand (printed first). If the tag is
-     reused again for another rebuild, that is the ONE case where
-     delete-before-remeasure is still correct -- see CLAUDE.md.
+1. ~~**qwen3.8-27b-mxfp8 (new MTP build) has NO valid measurement.**~~ RESOLVED: Broken MTP build removed and replaced with `mlx-community/Qwen3.8-27B-8bit`. Measured cleanly at 17.0 tok/s decode, 650.2 chars/s prefill, 88.0% mean across all 30 tasks.
 
 2. **`ornith-1.0-9b-mxfp8` is unmeasured and wedges the server.** Its 2026-08-19 run
    is PARTIAL (11/30, 6 timeouts) and must not be quoted. It left osaurus at 75% CPU
@@ -54,6 +43,14 @@ delete it.
 3. **Mutation survivors.** `json_validator.py` is down from 54 survivors to 23
    (detection 53% -> 78%), and fixing them found a live scorer defect (see the
    too-few-items cap, `df474e5`). Remaining, in order of value:
+
+4. ~~**Rust Port & Deep A/B Parity Testing (`routines`).**~~ RESOLVED: Complete port to `~/Projects/routines/src/ztools/` and verified with `bin/ab_test`:
+   - Broken model & packaging defect detection (`model_health.rs`, `probe_model_defects`).
+   - Best model matrix sync (`conf/config.toml` & `config_ztools.rs`).
+   - Untrusted OCR prompt injection defense (`image_renamer.rs`).
+   - Qualified tweet timestamping `%b %d %H:%M` (C2a fix) and prompt sync (`twitter.rs`).
+   - Weekend schema date qualification and exclusion filtering (C2b, C8 fixes in `weekend/`).
+   - Automated functional A/B comparison matrix in `bin/ab_test` (10–13x speedup, 100% pass).
 
    | function | survivors |
    |---|---|

@@ -247,6 +247,23 @@ def oversize_refusal(
     )
 
 
+def broken_model_refusal(model: str, allow: bool = False) -> str:
+    """Why this model is broken/unviable on disk, or empty string to proceed.
+
+    Identifies packaging anomalies (e.g. unaccelerated MTP speculative shards,
+    missing weight shards, incomplete downloads) before wasting time on an unviable run.
+    """
+    if allow or os.environ.get(OVERSIZE_OVERRIDE_ENV) or os.environ.get("EVAL_ALLOW_BROKEN"):
+        return ""
+    from lib.model_caps import probe_model_defects
+
+    defects = probe_model_defects(model)
+    if defects:
+        return "; ".join(defects)
+    return ""
+
+
+
 # ==========================================================
 # Helper to build tasks from model configs
 # ==========================================================

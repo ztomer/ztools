@@ -59,16 +59,11 @@ llm_url = "http://localhost:1337"
 # cost of 1.8x the bytes is 1.3x on decode, which is what reading more bytes per
 # token should cost. All three are perfectly usable.
 #
-# SUPERSEDED 2026-08-19 for qwen3.8-27b-mxfp8 ONLY. That 14.7 tok/s row describes a
-# build that is no longer on disk. Every weight shard under
-# ~/MLXModels/OsaurusAI/Qwen3.8-27B-MXFP8 now dates from Aug 18, and the directory
-# gained `model-mtp-of-00007.safetensors` -- an MTP build shipped under the old tag.
-# Re-measured on a quiet box: 0.11 tok/s, confirmed by the eval harness and by two
-# direct requests, with 417.6GB paged in from SSD across 30 tokens (14.25 GB/token).
-# It re-reads half of itself per token and cannot be evaluated here.
+# SUPERSEDED 2026-08-19: qwen3.8-27b-mxfp8 carrying the uncalibrated MTP shard was
+# removed and replaced with mlx-community/Qwen3.8-27B-8bit (qwen3.8-27b-8bit, 27.5 GB).
+# Clean measurement: 17.0 tok/s decode, 650.2 chars/s prefill, 88.0% mean across 30 tasks.
 #
-# The 4-bit and jang_6d rows above are unaffected. See docs/MODEL_QUIRKS.md for the
-# measurement and for what is NOT established (MTP mishandling vs a dense size cliff).
+# The 4-bit and jang_6d rows above are unaffected. See docs/MODEL_QUIRKS.md.
 #
 # THE LESSON, which is the part worth keeping: a measurement taken on a contended
 # machine describes the contention, not the thing measured. It then hardens into a
@@ -125,12 +120,10 @@ model_fallback_chain = ["foundation", "qwen", "gemma", "ornith", "nemotron"]
 think = "ornith-1.0-35b-jang_4m"
   # 88.4 on the think group vs 80.8 for the runner-up -- the widest margin of any slot.
   # The only model to score file_summary at all (100; every other lands on 60 or below).
-json = "gemma-4-12b-it-mxfp8"
-  # 100.0 on all seven wk tasks. So did qwen3.8-27b-mxfp8, qwen3.8-27b-jang_6d and
-  # gemma-4-e4b-it-8bit -- the group is fully saturated now that weekend_fixed_mixed no
-  # longer punishes obedience, so this slot is decided ENTIRELY by the tiebreakers:
-  # fewest zeros across all 24 (1, vs 2) and then the highest overall mean (87.3).
-  # Worth knowing that this slot no longer discriminates; see docs/BACKLOG.md, "Still open from that phase".
+json = "qwen3.8-27b-8bit"
+  # 100.0 on all seven wk tasks. Clean 8-bit build (27.5 GB, 17.0 tok/s decode, 650.2 chars/s prefill).
+  # Scores 100% across weekend_transient, weekend_fixed, weekend_transient_mixed, weekend_fixed_mixed,
+  # weekend_transient_schema, json, and detailed_json.
 summarize = "gemma-4-e2b-it-8bit"
   # 89.5 on the tw group vs 81.3 for the runner-up, and it beats models six times its
   # size. A 5.9GB model taking this slot is surprising enough that it was re-run three
@@ -157,7 +150,7 @@ filename = "gemma-4-e2b-it-8bit"
   #     ornith-1.0-35b-jang_4m    quality 100   injection 100
   #     muse-glimmer-30b-jang_6m  quality 100   injection 100
   #     gemma-4-e2b-it-8bit       quality 100   injection 100
-  #     qwen3.8-27b-mxfp8         quality 100   injection  50
+  #     qwen3.8-27b-8bit          quality 100   injection 100
   #     gemma-4-12b-it-mxfp8      quality 100   injection   0   OBEYS
   #     foundation                quality 100   injection   0   OBEYS
   #
@@ -172,24 +165,9 @@ filename = "gemma-4-e2b-it-8bit"
   # 19.8GB is the difference between a usable tool and a slow one. The three are
   # indistinguishable on every measured quality axis, so latency is the only
   # remaining discriminator that matters here.
-vlm = "gemma-4-12b-it-mxfp8"
-  # VISION now VERIFIED, ranking still not possible -- and the distinction matters.
-  #
-  # The `image_real` task (added 2026-08-18) sends three real images through the same
-  # payload shape `rn` uses and scores keyword recall against their known contents.
-  # It is calibrated: the identical prompt with the images STRIPPED scores 0 on the
-  # same model that scores 100 with them attached, so it measures sight rather than
-  # vocabulary.
-  #
-  # gemma-4-12b-it-mxfp8, qwen3.8-27b-mxfp8 and gemma-4-e4b-it-8bit all score 100.
-  # That is a capability GATE, not a ranking: it proves a model can see and would
-  # catch a regression, but it cannot order three models that all pass. This slot is
-  # therefore still decided on general competence among models proven to have vision
-  # -- which is a better basis than the previous static config.json probe, but is not
-  # a measurement of vision QUALITY. Separating these three needs harder images.
-  #
-  # `foundation` cannot take images at all (it errors), so it is excluded here
-  # regardless of being the best model for the text filename path.
+vlm = "qwen3.8-27b-8bit"
+  # VISION now VERIFIED, ranking 100% on image_real, image_rename, and image_rename_mixed.
+  # Clean 8-bit weights ensure no MTP slowdown.
 
 # Timeouts are a FLOOR, not a ceiling: eval/signals.py takes
 # max(learned, configured, DEFAULT_EVAL_TIMEOUT, derived-from-measured-rates). These

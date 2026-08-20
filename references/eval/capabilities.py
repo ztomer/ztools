@@ -39,6 +39,7 @@ from lib.model_caps import (
     model_disk_bytes,
     probe_context_window,
     probe_family,
+    probe_model_defects,
     probe_vision,
 )
 
@@ -79,6 +80,7 @@ def probe_static_capabilities(model: str, roster: Optional[List[Dict]] = None) -
         "generative": is_generative_model(model),
         "context_window": probe_context_window(model),
         "disk_bytes": model_disk_bytes(model),
+        "defects": probe_model_defects(model),
     }
 
 
@@ -119,8 +121,19 @@ def assess_viability(capabilities: Dict, output_tokens: int, timeout_seconds: in
 
     "unknown" is a real answer: an unmeasured model is not assumed good OR bad.
     """
+    defects = capabilities.get("defects") or []
     decode = capabilities.get("decode_tokens_per_sec")
     needed = required_decode_rate(output_tokens, timeout_seconds)
+
+    if defects:
+        return {
+            "verdict": "broken",
+            "measured_decode": decode,
+            "required_decode": round(needed, 2) if needed else None,
+            "seconds_for_output": round(output_tokens / decode, 1) if decode else None,
+            "defects": defects,
+        }
+
     if decode is None or needed is None:
         return {"verdict": "unknown", "measured_decode": decode, "required_decode": needed}
 
@@ -145,6 +158,9 @@ def explain_viability(model: str, assessment: Dict, disk_bytes: Optional[int]) -
     needed = assessment.get("required_decode")
     gb = f"{disk_bytes / 1_073_741_824:.1f}GB" if disk_bytes else "unknown size"
 
+    if verdict == "broken":
+        defects = "; ".join(assessment.get("defects") or ["unidentified packaging defect"])
+        return f"{model}: BROKEN — {defects}. Remove broken artifact or pull clean build."
     if verdict == "unknown":
         return f"{model}: never measured — run `ev --model {model}` before trusting it"
     if verdict == "thrashing":
@@ -245,7 +261,7 @@ def format_capability_table(
             f"{str(row.get('decode_tokens_per_sec') or '-'):>7} "
             f"{assessment['verdict']:>9}"
         )
-        if assessment["verdict"] in ("thrashing", "too_slow", "unknown"):
+        if assessment["verdict"] in ("broken", "thrashing", "too_slow", "unknown"):
             notes.append(explain_viability(row["model"], assessment, row.get("disk_bytes")))
         if row.get("generative") is False:
             notes.append(f"{row['model']}: not a generative model — cannot be ranked")

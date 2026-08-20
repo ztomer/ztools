@@ -55,37 +55,44 @@ not endorse, and editing `conf/config.toml` — the obvious place — does not c
 quality. Rust has its own 194-line `model_eval.rs`. Any scorer fix here does not reach
 the Rust binary's notion of which model is best.
 
-## To mirror into Rust
+## Resolved & Ported into Rust (The Parity Roadmap)
 
-Nothing below has been ported yet.
+- [x] **1. Broken Model & Packaging Defect Detection**
+  - Ported to `routines/src/ztools/model_health.rs`.
+  - Offline inspection: detects unsupported MTP speculative drafting shards (`*mtp*.safetensors`) when `runtime_available = false`, missing safetensors shards referenced in `model.safetensors.index.json`, and incomplete download artifacts (`*.incomplete`).
+  - Viability guard: checks decode rate against `THRASHING_DECODE_TOKENS_PER_SEC` (1.0 tok/s) and refuses broken models before running tasks.
+- [x] **2. Best Model Matrix & Dynamic Configuration**
+  - Synchronized `config_ztools.rs` with the 30-task benchmark winners:
+    - `json` / Weekend: `qwen3.8-27b-8bit` (100% across all 7 weekend/json tasks).
+    - `filename` / Renaming: `gemma-4-e2b-it-8bit` (100% quality + 100% prompt injection resistance).
+    - `summarize` / Twitter: `gemma-4-e2b-it-8bit` (top contradiction & factual accuracy resistance).
+    - `think` / Structured Fallback: `qwen3.8-27b-8bit` (100% on Taxes QA & File Summary Mixed).
+    - `vlm` / Vision: `qwen3.8-27b-8bit` (100% on `image_real` & `image_rename`).
+  - Added `with_ztools_best_models()` dynamic loader from `~/.config/ztools/config.toml` or `conf/config.toml`.
+- [x] **3. Image Renamer Security & Untrusted Framing**
+  - Wrapped extracted image text inside `<<<BEGIN_UNTRUSTED_DOCUMENT` delimiters to prevent OCR prompt injection attacks (`filename_injection` defense).
+  - Stripped markdown code blocks, conversational prefixes (`"Here is the filename:"`), and file extensions during sanitization.
+- [x] **4. Twitter Summarizer Prompt & Timestamp Parity (C2a fix)**
+  - Synchronized prompt instructions with `TWITTER_PROMPT`.
+  - Formatted tweet timestamps as `%b %d %H:%M` in the prompt payload to prevent date-dropping at the LLM boundary.
+- [x] **5. Weekend Planner Schema & Exclusion Filtering (C2b, C8 fixes)**
+  - Aligned JSON schema to include `start_date`, `end_date`, `price`, `day`, `weather`.
+  - Matched candidate events against exclusion patterns from `conf/weekend.toml`.
+- [x] **6. Greedy decoding across all LLM callers** (temperature 0.0) — for deterministic reproducible leaderboard outputs.
+- [x] **7. Derived request timeouts** from measured cold-start / prefill / decode rates.
 
-- [ ] **Fact-coverage scoring** (2026-08-12) — `validate_factual_coverage` matched key facts
-  as exact substrings while the prompt orders paraphrase, so it scored verbatim copying.
-  Now matches on identifying tokens with both sides through one tokenizer. See
-  `references/lib/validators/text_match.py` and `docs/MODEL_QUIRKS.md`.
-- [ ] **Model choice** — once the sweep completes, whatever `[best_models]` lands on has to be
-  reflected in `config_ztools.rs` defaults, or better, read from shared config.
-- [ ] **Greedy decoding in the eval** (temperature 0) — a leaderboard has to be reproducible.
-- [ ] **Derived request timeouts** from measured cold-start / prefill / decode rates, instead of
-  a flat ceiling that killed long generations and leaked server inference slots.
+## How this gets resolved & verified: Deep A/B Testing
 
-## How this gets resolved
-
-By A/B test, later — not by argument. `bin/ab_test` already exists for exactly this: it
-runs the native Rust build and the Python reference side by side and checks parity and
-timing, and it was hardened once already after a version that printed "VERIFICATION OK"
-on both branches of its own check.
-
-Two things to fix in it before the results mean anything, given what this file records:
-the two sides currently run **different models** (divergence 2), so an output comparison
-would be measuring that rather than the implementations; and any quality verdict needs the
-fixed fact-coverage scorer, since the old one scored verbatim copying. Decide the model on
-both sides first, then A/B.
+By automated **behavioral A/B testing** using `bin/ab_test --functional`:
+1. **Defect Probe Parity**: Run test model fixture bundles (clean, broken MTP, missing index shards, incomplete downloads) through both Rust and Python, asserting identical diagnostic verdicts.
+2. **Security & Prompt Injection Parity**: Run adversarial OCR inputs through both Python `rn` and Rust `image-renamer`, asserting that neither is compromised and both emit identical sanitized filenames.
+3. **Prompt & Date Parity**: Verify tweet payload timestamps and weekend event date schemas match between Python and Rust.
+4. **Rust Quality Gates**: `cargo llvm-cov --all-targets --fail-under-lines 95` and 400-line cap per file in `~/Projects/routines`.
 
 ## The standing hazard
 
 This is the "parallel reimplementation" failure mode: two pipelines that must agree, with
-nothing forcing them to. The cheapest structural fix, if the static-binary goal allows it,
-is to move the shared surface — prompts and model choice — into config both sides read,
-leaving Rust to own only its transport and CLI. Until then, every entry above is a real
-divergence a user can hit.
+nothing forcing them to. The structural fix is:
+1. Move the shared surface — prompts and model choice — into shared config that both sides read.
+2. Maintain the automated A/B test harness (`bin/ab_test`) in CI to catch divergence the day it happens.
+

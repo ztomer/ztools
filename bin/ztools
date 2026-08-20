@@ -1,27 +1,13 @@
 #!/usr/bin/env bash
-# ZTools wrapper: execs the uv-managed venv console script for the unified TUI.
+# Fast shim to the native Rust `routines` binary.
 set -euo pipefail
 
-TOOL="ztools"
-EXTRA="tui"
-
-SELF="$(readlink -f "${BASH_SOURCE[0]:-$0}")"
-PREFIX="$(cd "$(dirname "$SELF")/.." && pwd)"
-LIBEXEC="$PREFIX/libexec/ztools"
-VENV="$LIBEXEC/venv"
-SRC="$PREFIX/share/ztools"
-PY="$VENV/bin/python"
-
-if [ ! -x "$PY" ]; then
-  echo "→ bootstrapping $TOOL venv (one-time)..." >&2
-  command -v uv >/dev/null 2>&1 || { echo "✗ uv is required: https://docs.astral.sh/uv/" >&2; exit 1; }
-  mkdir -p "$LIBEXEC"
-  uv venv "$VENV" >&2
-  if [ -d "$SRC" ]; then
-    uv pip install --python "$PY" "$SRC/.[$EXTRA]" >&2
-  else
-    uv pip install --python "$PY" "otools[$EXTRA]" >&2
-  fi
+if command -v routines >/dev/null 2>&1; then
+  exec routines "$@"
 fi
-
-exec "$VENV/bin/$TOOL" "$@"
+DEV_BUILD="$HOME/Projects/routines/target/release/routines"
+if [ -x "$DEV_BUILD" ]; then
+  exec "$DEV_BUILD" "$@"
+fi
+echo "✗ routines binary not found on PATH (and no dev build at $DEV_BUILD)" >&2
+exit 1
