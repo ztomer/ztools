@@ -49,7 +49,7 @@ ztools/
 │   └── weekend.toml        # Excluded venues and default activity seeds
 ├── docs/                   # Developer documentation and quality specs
 │   ├── PORT_PARITY.md      # Parity ledger and benchmark comparisons
-│   ├── RUST_PORT_PLAN.md   # Architectural roadmap and port milestones
+│   ├── ROADMAP.md   # Architectural roadmap and port milestones; items 1–4 active, items 5–10 completed with defect classes in git history
 │   └── MODEL_QUIRKS.md     # Observed model quirks and workarounds
 ├── references/             # Historical Python implementations used for A/B testing
 ├── rust/                   # Native Rust crate (ztools)

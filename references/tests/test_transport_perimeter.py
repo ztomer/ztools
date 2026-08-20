@@ -119,7 +119,7 @@ class TestEveryConfigFileNamingModelsIsAudited:
 
     # NOTE: no "the real configs are currently clean" test here. It needs a live
     # roster, and references/tests/conftest.py blocks real server connections on
-    # purpose -- docs/BACKLOG.md item 7 records that pytest cannot be the gate for
+    # purpose -- docs/ROADMAP.md item 7 records that pytest cannot be the gate for
     # roster checks. That check runs at runtime, in `ev` and the TUI startup audit.
 
 

@@ -1,11 +1,8 @@
 name: Quality Gate
 
 # Structural gate (not disciplinary): blocks merges that regress code quality.
-# Two independent checks, both must pass:
-#   1. Ruff: zero warnings/errors on *changed* Python files (legacy debt is not
-#      re-litigated here — only new code is held to the standard, matching the
-#      config-debt gate philosophy).
-#   2. Coverage: repo-wide line coverage must be > 95% (fail_under=95).
+# Rust-only gate: clippy + cargo test. No Python checks — Python reference
+# is preserved for A/B parity verification only; production runs execute Rust.
 on:
   push:
     branches: ["main", "master"]
@@ -18,23 +15,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Install tooling
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install ruff pytest pytest-cov pytest-asyncio
-          python3 -m pip install -e ".[weekend,twitter,oeval,vision,tui,web,browser]"
-
-      - name: Ruff lint (warnings are errors)
-        run: ruff check .
-
-      - name: Python tests with coverage gate (>95%)
-        run: |
-          python3 -m pytest --cov --cov-report=term-missing --cov-fail-under=95 .
 
       - name: Rust tests and clippy
         run: |

@@ -11,7 +11,7 @@ over all 12, so the obedient answer scored
     100 * (0.5 * 10/12 + 0.5 * 1.0) = 91
 
 while ignoring the instruction and returning all 12 scored 100. Every one of eleven
-models landed on exactly 91, and it was recorded in docs/BACKLOG.md as "all eleven
+models landed on exactly 91, and it was recorded in docs/ROADMAP.md as "all eleven
 missed the identical 2 of 12 signal items -- a fixture or prompt defect rather than
 eleven coincidences". They had not missed anything. They had done as they were told,
 and the task paid them less for it.

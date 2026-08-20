@@ -42,7 +42,7 @@ The Rust binary `ztools` is the primary implementation; Python `references/` (~2
 ---
 
 ### Items 5–10 — Completed (pruned to git history)
-All 10 roadmap items were verified through A/B testing. Items 5–10 and their detailed A/B verification records have been moved to git history; their defect classes are recorded in `BACKLOG.md`.
+All 10 roadmap items were verified through A/B testing. Items 5–10 and their detailed A/B verification records have been moved to git history; their defect classes are recorded in git history alongside this repo's port work.
 
 ---
 

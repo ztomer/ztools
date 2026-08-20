@@ -11,7 +11,7 @@ The instance: `weekend_fixed_mixed` shows the model 12 signal venues and asks it
     obeying the prompt (10 of 12, no noise)   -> 91, "missed 2/12 signal items"
     ignoring it        (all 12, no noise)     -> 100
 
-All eleven models in the 2026-08-16 sweep scored exactly 91. docs/BACKLOG.md recorded
+All eleven models in the 2026-08-16 sweep scored exactly 91. docs/ROADMAP.md recorded
 that as "a fixture or prompt defect rather than eleven coincidences" -- correct, but
 the reading was that the models missed two items. They missed nothing. The task paid
 them less for doing as they were told, and taught the leaderboard that disobedience
