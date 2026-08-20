@@ -1,13 +1,14 @@
 # Rust Port of ZTools — Status, Gaps, and Bridge Plan
 
-Status as of 2026-08-19. Deliverable: a single forward-looking plan for (1) moving
+Status as of 2026-08-20. Deliverable: a single forward-looking plan for (1) moving
 the Rust port out of `routines` and into this repo, and (2) closing the feature
 gaps against the Python reference.
 
-**Phase 0 (relocation) is DONE.** The port now lives in this repo at `rust/`
-(binary `ztools`), the `routines` tree has no ztools references left, and the
-launch/A-B plumbing points at the new crate. The rest of this plan is the
-forward-looking bridge work.
+**Phase 0 (relocation) is DONE** and **Phase 2 (parity) is DONE** — every
+tool (twitter, weekend, rename, eval) has its pure-logic Python behavior
+ported, tested prove-fail-first, and wired into `bin/ab_test`. The port is
+**Python-free end to end by design**; what remains is Phases 1, 3–5, scheduled
+in execution order at Phase 3.
 
 ---
 
@@ -166,7 +167,9 @@ gate both pass.
 
 ### Phase 1 — Shared config & prompt surface (kill the drift class)
 
-Status: **partially done — twitter summarize prompt shared, in progress.**
+Status: **partially done — twitter summarize prompt shared.** The remaining
+Phase 1 items (weekend/rename prompts, full config matrix) are scheduled as
+Phase 3 Step 1.
 
 1. ~~Move prompt texts into `conf/` read by both Rust and Python~~ — the twitter
    summarize instruction block is DONE: `conf/prompts.toml`
@@ -255,9 +258,9 @@ Status: **partially done — twitter summarize prompt shared, in progress.**
    array length, file-summary threshold) with `eval_model` cleaning raw output
    before checks. All clean.rs regexes (THINK, gemma loop, stats, code block)
    proved fail-first, plus the validate generic-desc branch and the
-   cleaning-before-scoring wiring (`eval_model_cleans_thinking_before_scoring`).
-   Loading the 30 `eval_tasks/` tasks is left open (data-driven harness in
-   place).
+cleaning-before-scoring wiring (`eval_model_cleans_thinking_before_scoring`).
+    Loading the 30 `eval_tasks/` tasks is the last eval follow-up — see Phase 3,
+    Step 2.
 5. Extend `bin/ab_test --functional` to cover every ported behavior (assert
    identical verdicts on both sides) — DONE (2026-08-20) for eval: the parity
    block runs the Python clean + validate on the same fixtures the Rust tests
@@ -268,49 +271,104 @@ Status: **partially done — twitter summarize prompt shared, in progress.**
 Exit criteria: the A/B harness runs green on the new behaviors; both
 implementations agree on the shared surface.
 
-### Phase 3 — The native-only wins (why the port exists)
+### Phase 3 — Native-only wins, executed in order
 
 The point of the port is one static binary, no venv, no Python startup. The two
-formerly-Python seams now have native Rust replacements, so the port stays
+formerly-Python seams have native Rust replacements, so the port stays
 **Python-free end to end** — the only external dependency is the Camoufox
-Firefox binary itself (C++-level stealth lives in the binary, not in a driver):
-1. **twitter collection**: `camoufox-rs` (github.com/9prodhi/camoufox-rs) drives
-   the Camoufox Firefox binary over the Juggler protocol via `-juggler-pipe` —
-   process launch, null-delimited JSON framing, `Browser`/`BrowserContext`/
-   `MainFrame` wrappers, `navigate`/`evaluate`/`screenshot`, 60s request
-   deadlines. This replaces `twitter/browser.py` + `browser_launch.py` and the
-   Playwright wrapper entirely; the scroll loop, stagnation/budget limits and
-   logged-out detection port as pure logic (Phase 2 item 1). Cookies come from
-   `decrypt-cookies` (Chrome keychain + Firefox `cookies.sqlite`), replacing
-   `cookies.py` / `cookies_firefox.py`. The pipeline seam stays the JSON cache
-   already read by `twitter.rs`.
-2. **model-eval measurement**: port the GPU-lock (`/tmp/mac-osaurus-gpu.lock`),
-   watchdog heartbeat, and median-of-5 sampling to Rust — the integrity logic is
-   pure; only the osaurus probe is I/O.
-3. **rename OCR**: replace tesseract with a pure-Rust engine — `ocrs`
-   (robertknight, Apache-2.0, ONNX models), `rusto-rs`/`ocr-rs` (PaddleOCR on
-   MNN, sub-second Apple Silicon), or `oar-ocr` (PP-OCRv6 + Candle). Rust owns
-   naming/security on extracted text, as today; the VLM path (`rename/vlm.rs`)
-   is already native.
+Firefox binary itself (C++-level stealth lives in the binary, not in a driver).
 
-Exit criteria: scheduled jobs (`routines.toml`) can run the Rust binary for
-summarize/rename/plan, and the twitter collection path runs native (Camoufox
-binary + Juggler client + native cookie reader) — no Python anywhere in the
-port.
+**Ordering rule** (house standards): foundation before features, gates before
+drift, **parity proven before replacement**. The remaining work runs cheapest
+and most self-contained first, the risky browser lift last, so a blocked
+dependency cannot stall the rest. Steps 1–5 below are the roadmap; each carries
+its implementation, its testing, and its Python-parity verification.
+
+**Step 1 — Phase 1 cleanup: shared prompts + full config** (kills the drift
+class before more ports land against parallel copies)
+- *Implementation*: move the weekend schemas and the rename task restatement
+  into `conf/prompts.toml`; Rust `config.rs` and Python read the same file.
+  Extend `ZtoolsConfig` to load the full `[best_models]` matrix, weekend
+  exclusions, and eval signal thresholds.
+- *Testing*: drift-gate tests per prompt on the proven pattern
+  (`test_twitter_prompt_matches_shared_conf`) — neuter the embedded fallback →
+  red. Config-loading unit tests.
+- *Parity*: `bin/ab_test` renders each shared prompt through both sides and
+  asserts byte-identical output; a config block asserts both sides resolve the
+  same model per task.
+
+**Step 2 — Load the 30 `eval_tasks/` into the data-driven harness** (last eval
+follow-up; the harness is already in place)
+- *Implementation*: read `eval_tasks/` JSON into `EvalTask` (prompt + checks);
+  drop the hardcoded cases, keeping 5 as smoke fixtures.
+- *Testing*: every loaded task parses and type-checks; an unknown check name
+  fails to compile; a poisoned fixture fails loudly.
+- *Parity*: `bin/ab_test` loads the same JSON on both sides; assert identical
+  task lists and identical verdicts on canned model outputs.
+
+**Step 3 — model-eval measurement integrity** (self-contained; improves the
+numbers everything else trusts)
+- *Implementation*: port the GPU lock (`/tmp/mac-osaurus-gpu.lock`), watchdog
+  heartbeat, and median-of-5 sampling to `eval/` modules; wire into the eval
+  flow.
+- *Testing*: deterministic unit tests — median over clean/contaminated windows,
+  lock acquire/release/dead-owner reclaim, heartbeat progress under a long run.
+  No LLM, no live server. Prove-fail-first: force a contaminated window →
+  estimate shifts; kill the heartbeat → wedge detected.
+- *Parity*: `bin/ab_test` runs Python `samples.py` and the Rust estimator on
+  identical sample lists; assert equal estimates and equal contamination
+  verdicts.
+
+**Step 4 — rename OCR, pure Rust** (offline and deterministic, so parity is
+cleanly provable)
+- *Implementation*: probe-first engine choice (`ocrs` vs `rusto-rs`/`ocr-rs` vs
+  `oar-ocr`) against the reference fixtures; add `rename/ocr.rs` behind a narrow
+  trait; wire it in where the stem is meaningless and no VLM is configured
+  (VLM path already native).
+- *Testing*: engine unit tests on fixture images (extraction → meaningfulness →
+  filename); existing cleaning/naming tests unchanged. Prove-fail-first: neuter
+  the OCR return → wrong filename.
+- *Parity*: `bin/ab_test` runs reference tesseract and the Rust engine over the
+  same fixture images; assert identical extracted text and identical final
+  filenames, including the hex / meaningless / all-caps cases.
+
+**Step 5 — twitter collection (riskiest, last; probe before commit)**
+- *Implementation*: **probe `camoufox-rs` first** — drive a real Camoufox
+  binary on this machine (navigate / evaluate / scroll / screenshot) before
+  committing the crate. Then port `browser_parse`, the scroll loop with
+  budget/scroll-stop conditions, cookies via `decrypt-cookies`/`cookie-scoop`,
+  and logged-out detection. Pipeline seam stays the JSON cache `twitter.rs`
+  already reads.
+- *Testing*: parse unit tests against the recorded timeline fixture; scroll-loop
+  tests with a fake frame (deterministic scrollY / stagnation / budget);
+  cookie-reader tests against a fixture cookies DB, never a real browser.
+  Prove-fail-first per behavior.
+- *Parity*: replay both drivers over the recorded timeline fixture; assert
+  identical parsed tweet JSON and identical budget/scroll-stop decisions. A
+  live-X run is user-POV smoke validation, not the gate.
+
+Exit criteria: scheduled jobs (`routines.toml`) run the Rust binary for
+summarize/rename/plan; the twitter collection path runs native (Camoufox binary
++ Juggler client + native cookie reader); `bin/ab_test` is green on every block
+above — no Python anywhere in the port.
 
 ### Phase 4 — Full evaluator parity (largest, lowest priority)
 
 Port the real scorers/validators that rank models: taxes grounding, adversarial,
 attribution, quality scorers, report classes. This is the biggest lift
 (~1,000+ LOC of validator logic) and only matters if `model-eval` is a product
-surface. Defer unless interactive `oeval` is used over the Python one.
+surface. **Deferred** unless interactive `oeval` is used over the Python one.
+If it is picked up: same discipline as Phase 3 Steps 2–4 — per-validator
+implementation, deterministic unit tests with prove-fail-first neuters, and a
+`bin/ab_test` block running both validators on identical fixtures.
 
 ### Phase 5 — Decommission
 
-- When the A/B harness shows parity on the shared surface for N consecutive
-  weeks, move `references/` Python tool entry points behind the Rust binary
-  (like `bin/ztools` already does). No browser/OCR seam remains to preserve —
-  the port is Python-free end to end.
+- Gate: `bin/ab_test` green on the full shared surface for N consecutive weeks
+  before anything below moves.
+- Move `references/` Python tool entry points behind the Rust binary (like
+  `bin/ztools` already does). No browser/OCR seam remains to preserve — the port
+  is Python-free end to end.
 - Prune completed plan work to git history (house rule: one backlog file).
 
 ---
