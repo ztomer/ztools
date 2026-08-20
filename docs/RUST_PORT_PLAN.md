@@ -84,8 +84,8 @@ the machinery that makes them robust, safe, and observable is still Python-only.
 ## 3. Gap inventory (Python-only features the port lacks)
 
 ### 3.1 twitter — gap list
-- **Collection**: `twitter/browser.py` (441 L), `browser_launch.py`, `browser_parse.py` — camoufox/playwright scroll loop, stagnation/budget limits (`budget.py`), logged-out detection. Rust reads a JSON file/stdin/cache only.
-- **Cookies & session**: `cookies.py` (Chrome keychain decrypt), `cookies_firefox.py`, `session.py` (`--login`).
+- **Collection**: `twitter/browser.py` (441 L), `browser_launch.py`, `browser_parse.py` — camoufox/playwright scroll loop, stagnation/budget limits (`budget.py`), logged-out detection. Rust reads a JSON file/stdin/cache only. Native replacement exists (Phase 3): `camoufox-rs` drives the Camoufox Firefox binary over Juggler (`navigate`/`evaluate`/`screenshot`), so no Python browser wrapper is needed.
+- **Cookies & session**: `cookies.py` (Chrome keychain decrypt), `cookies_firefox.py`, `session.py` (`--login`). Native Rust: `decrypt-cookies` (Chrome/Edge/Firefox, tested incl. macOS) or `cookie-scoop` (Chrome/Firefox/Safari, macOS keychain via `security`).
 - **Resilience**: MLX fallback when the server is down (`summarize.py`, `lib/mlx_lib.py`).
 - **Run state**: `--since` resolution, `last_run` state, `--use-cache`, `--fetch-only`, `--clean` (`cli.py`).
 - **Signal handling**: Ctrl+C drain (`lib/signal_handling.py`).
@@ -101,8 +101,8 @@ the machinery that makes them robust, safe, and observable is still Python-only.
 - **Per-model field mapping** (`get_model_field_mapping`), foundation fallback.
 
 ### 3.3 image-renamer — gap list
-- **OCR**: `rename/helpers.py` — tesseract text extraction from the actual image. Rust only cleans the filename *stem*; it never reads image content.
-- **VLM**: `lib/mlx_vlm.py`, `rename/llm.py` — vision LLM for images with no usable text.
+- **OCR**: `rename/helpers.py` — tesseract text extraction from the actual image. Rust only cleans the filename *stem*; it never reads image content. Native replacement (Phase 3): pure-Rust engines — `ocrs` (robertknight), `rusto-rs`/`ocr-rs` (PaddleOCR on Alibaba MNN), or `oar-ocr` (PP-OCRv6 + Candle, CPU/Metal).
+- **VLM**: `lib/mlx_vlm.py`, `rename/llm.py` — vision LLM for images with no usable text. **Ported** (Phase 2 item 3): `rename/vlm.rs` sends base64 data-URI content parts to osaurus; no MLX fallback yet.
 - **Relevance gate** (`--force`), `--pattern`, `--max-length`, `--no-ocr`, `--test`, MLX fallback.
 - **Security**: untrusted framing exists in Rust (`image_renamer.rs:21`), but with no OCR path it guards an empty channel.
 
@@ -186,7 +186,8 @@ Status: **partially done — twitter summarize prompt shared, in progress.**
 
 1. **twitter**: port `budget.py`/scroll-stop conditions as pure functions;
    port `output.py` markdown template; port `--since`/state logic; port signal
-   drain semantics. (No browser yet — collection stays Python until Phase 3.)
+   drain semantics. (Browser collection is Phase 3; its Juggler client and
+   cookie reader are native Rust, so the whole tool stays Python-free.)
 2. **weekend**: port `enforce.py` constraint suite (all pure string/date checks);
    port `supply.py` in-window counting; port the 4-phase prompt pipeline.
    - **C8 exclusion enforcement DONE** (`rust/src/ztools/weekend/enforce.rs`):
@@ -269,20 +270,33 @@ implementations agree on the shared surface.
 
 ### Phase 3 — The native-only wins (why the port exists)
 
-The point of the port is one static binary, no venv, no Python startup. Land
-the features that only make sense native:
-1. **twitter collection**: a Rust scroll driver for camoufox? No — collection
-   needs a real browser; keep it Python-side via the launcher (exec
-   `uv run -m twitter --fetch-only` then feed JSON to the Rust summarizer).
-   The pipeline seam is the JSON cache already read by `twitter.rs`.
+The point of the port is one static binary, no venv, no Python startup. The two
+formerly-Python seams now have native Rust replacements, so the port stays
+**Python-free end to end** — the only external dependency is the Camoufox
+Firefox binary itself (C++-level stealth lives in the binary, not in a driver):
+1. **twitter collection**: `camoufox-rs` (github.com/9prodhi/camoufox-rs) drives
+   the Camoufox Firefox binary over the Juggler protocol via `-juggler-pipe` —
+   process launch, null-delimited JSON framing, `Browser`/`BrowserContext`/
+   `MainFrame` wrappers, `navigate`/`evaluate`/`screenshot`, 60s request
+   deadlines. This replaces `twitter/browser.py` + `browser_launch.py` and the
+   Playwright wrapper entirely; the scroll loop, stagnation/budget limits and
+   logged-out detection port as pure logic (Phase 2 item 1). Cookies come from
+   `decrypt-cookies` (Chrome keychain + Firefox `cookies.sqlite`), replacing
+   `cookies.py` / `cookies_firefox.py`. The pipeline seam stays the JSON cache
+   already read by `twitter.rs`.
 2. **model-eval measurement**: port the GPU-lock (`/tmp/mac-osaurus-gpu.lock`),
    watchdog heartbeat, and median-of-5 sampling to Rust — the integrity logic is
    pure; only the osaurus probe is I/O.
-3. **rename OCR**: keep tesseract via `uv run` seam (same pattern as twitter
-   collection); Rust owns naming/security once text is extracted.
+3. **rename OCR**: replace tesseract with a pure-Rust engine — `ocrs`
+   (robertknight, Apache-2.0, ONNX models), `rusto-rs`/`ocr-rs` (PaddleOCR on
+   MNN, sub-second Apple Silicon), or `oar-ocr` (PP-OCRv6 + Candle). Rust owns
+   naming/security on extracted text, as today; the VLM path (`rename/vlm.rs`)
+   is already native.
 
 Exit criteria: scheduled jobs (`routines.toml`) can run the Rust binary for
-summarize/rename/plan; Python stays only for browser/OCR seams.
+summarize/rename/plan, and the twitter collection path runs native (Camoufox
+binary + Juggler client + native cookie reader) — no Python anywhere in the
+port.
 
 ### Phase 4 — Full evaluator parity (largest, lowest priority)
 
@@ -295,7 +309,8 @@ surface. Defer unless interactive `oeval` is used over the Python one.
 
 - When the A/B harness shows parity on the shared surface for N consecutive
   weeks, move `references/` Python tool entry points behind the Rust binary
-  (like `bin/ztools` already does), keep Python only for browser/OCR seams.
+  (like `bin/ztools` already does). No browser/OCR seam remains to preserve —
+  the port is Python-free end to end.
 - Prune completed plan work to git history (house rule: one backlog file).
 
 ---
