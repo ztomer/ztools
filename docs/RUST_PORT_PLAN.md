@@ -234,8 +234,15 @@ Status: **partially done — twitter summarize prompt shared, in progress.**
       ordering. Phase tests prove the degrade-not-starve fallbacks
       (proved-fail-first against a neutered pass-through and a neutered refine
       fallback). Phase 2 (weekend) is complete.
-3. **rename**: port `helpers.py` text cleaning (pure); port VLM call path to the
-   osaurus vision API (no local MLX yet).
+3. **rename** — DONE (2026-08-20): `helpers.py` text cleaning ported verbatim
+   (prefix/fence stripping is `strip_instruction_prefix`'s job; `clean_filename`
+   glues dots exactly as Python; plain lowercase hex is NOT non-human-readable)
+   and the VLM call path ported to the osaurus vision API via OpenAI content
+   parts with a base64 data URI — NOT the Ollama `images` key, which osaurus
+   silently drops. New `image_renamer_vlm_model` config gates the vision path;
+   meaningless stems fall back to a clean of the stem when no vision model is
+   configured. All ported behaviors proved-fail-first. `image_renamer.rs` split
+   into `rename/{mod,helpers,vlm}.rs` (500-line cap).
 4. **eval**: port `validate.py` JSON validator + `content_processing` cleaning
    (thinking-block removal); load the 30 tasks from `eval_tasks/` instead of
    hardcoded cases.
