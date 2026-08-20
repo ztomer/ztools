@@ -86,7 +86,10 @@ pub fn extract_sources(
 ) -> String {
     let lines: Vec<&str> = raw_text
         .lines()
-        .filter(|l| l.trim_start().starts_with("- "))
+        .filter(|l| {
+            let t = l.trim_start();
+            t.starts_with("- ") || t.starts_with("[THIS WEEKEND]")
+        })
         .collect();
     if lines.is_empty() {
         return raw_text.to_string();
