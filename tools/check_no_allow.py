@@ -11,9 +11,9 @@ Usage (pre-commit / pre-push):
 Exits with status 0 if no `#[allow]` attributes found; 1 otherwise.
 """
 
-import sys
 import re
 from pathlib import Path
+import sys
 
 
 def main() -> int:
