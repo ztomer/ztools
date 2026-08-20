@@ -105,20 +105,20 @@ class TestKillOsaurusRefusesUnderAPeer:
         the lock would break the one workflow it exists to protect."""
         import lib.osaurus_server as srv
 
-        gpu_lock.acquire("my own eval", log=lambda _: None)
-        calls = []
-        with patch.object(srv.subprocess, "run", _spy_run(calls)), \
-             patch.object(srv, "PID_FILE", Path(tmp_path) / "absent.pid"):
-            assert srv._kill_osaurus() is True
-        assert any("osascript" in call for call in calls)
+        with gpu_lock.gpu_lock("my own eval"):
+            calls = []
+            with patch.object(srv.subprocess, "run", _spy_run(calls)), \
+                 patch.object(srv, "PID_FILE", Path(tmp_path) / "absent.pid"):
+                assert srv._kill_osaurus() is True
+            assert any("osascript" in call for call in calls)
 
-    def test_the_refusal_says_who_and_why(self, caplog):
+    def test_the_refusal_says_who_and_why(self, capsys):
         import lib.osaurus_server as srv
 
         _peer_holds("eval qwen3.8-27b (pid 4321)")
-        with caplog.at_level("WARNING"):
-            srv._kill_osaurus()
-        assert "qwen3.8-27b" in caplog.text
+        srv._kill_osaurus()
+        captured = capsys.readouterr()
+        assert "qwen3.8-27b" in captured.err
 
 
 class TestRestartServerRefusesUnderAPeer:
