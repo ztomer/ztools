@@ -13,7 +13,7 @@ on:
 
 jobs:
   gate:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,11 +27,17 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install ruff pytest pytest-cov pytest-asyncio
-          python3 -m pip install -e ".[weekend,twitter,oeval,vision]"
+          python3 -m pip install -e ".[weekend,twitter,oeval,vision,tui,web,browser]"
 
       - name: Ruff lint (warnings are errors)
         run: ruff check .
 
-      - name: Tests with coverage gate (>95%)
+      - name: Python tests with coverage gate (>95%)
         run: |
           python3 -m pytest --cov --cov-report=term-missing --cov-fail-under=95 .
+
+      - name: Rust tests and clippy
+        run: |
+          cd rust
+          cargo clippy --all-targets -- -D warnings
+          cargo test
