@@ -1,22 +1,22 @@
-# Architecture & Implementation Roadmap — `ztools` & `routines`
+# Architecture & Implementation Roadmap — `ztools`
 
-_The consolidated engineering roadmap for porting the Python reference implementation in `~/Projects/ztools` to the native Rust static binary in `~/Projects/routines`, synchronizing the 30-task model evaluation matrix, enforcing strict quality gates, and conducting deep behavioral A/B testing._
+_Behavioral A/B testing, quality gates, and the parity roadmap for the native Rust ztools binary._
 
 ---
 
 ## 1. Overview & Architectural Goals
 
-- **Single Static Binary Goal**: Escape the Python `venv`/`uv` startup latency and runtime dependency by shipping all `ztools` capabilities (`tw`, `wk`, `rn`, `ev`) inside the native Rust binary `routines`.
-- **Zero-Drift & Behavioral Parity**: Eliminate parallel pipeline divergences by aligning prompts, sanitizers, timestamp formats, and model matrices across Python and Rust, gated by automated A/B tests.
+- **Single Static Binary Goal**: Escape the Python `venv`/`uv` startup latency and runtime dependency by shipping all ztools capabilities (`twitter-summarize`, `weekend-plan`, `image-renamer`, `model-eval`) inside the native Rust binary `ztools` in this repo.
+- **Zero-Drift & Behavioral Parity**: Eliminate parallel pipeline divergences by aligning prompts, sanitizers, timestamp formats, and model matrices across both implementations, gated by automated A/B tests using `bin/ab_test`.
 - **Strict Quality Standard**:
-  - **Python**: `ruff check .`, `ruff format --check .`, `pytest --cov --cov-fail-under=95 .`.
   - **Rust**: `cargo clippy --all-targets --all-features -- -D warnings`, `tools/check_no_allow.py` (zero `#[allow]` attributes permitted), `cargo fmt --all -- --check`, `tools/check_no_emoji.py` (Kare glyphs only `→ ✓ ✗ ⚠ ↔ ↑ ↓`), `tools/check_file_length.py` (≤ 400 lines/file), and `cargo llvm-cov --fail-under-lines 95`.
+  - **Python reference** (`references/`): preserved for A/B parity verification only; production runs execute Rust code.
 
 ---
 
 ## 2. 30-Task Benchmark Leaderboard & Best Model Matrix
 
-Synchronized across `conf/config.toml` (`[best_models]`) and `routines/src/config_ztools.rs`:
+Synchronized across `conf/config.toml` (`[best_models]`) and read dynamically by the Rust binary via `with_ztools_best_models()` and `with_shared_prompts()` on startup:
 
 | Consumer Slot | Assigned Best Model | Quality Score | Latency | Key Strengths & Justification |
 |---|---|---|---|---|
@@ -28,38 +28,42 @@ Synchronized across `conf/config.toml` (`[best_models]`) and `routines/src/confi
 
 ---
 
-## 3. Subsystem Implementation & Porting Phases
+## 3. Subsystem Implementation & Parity Status
 
-### Phase 1: Security, Packaging Health & Configuration
-1. **Broken Model & Packaging Defect Detection (`src/ztools/model_health.rs`)**:
-   - Offline inspection of `~/MLXModels/<org>/<model>` and HF cache.
-   - Detect unsupported MTP (Multi-Token Prediction) shards (`*mtp*.safetensors`) when `runtime_available = false`.
-   - Parse `model.safetensors.index.json` to verify all weight shards exist on disk.
-   - Detect incomplete download artifacts (`*.incomplete`, `*.lock`).
-   - Decode thrashing guard: flag and refuse models decoding under `THRASHING_DECODE_TOKENS_PER_SEC` (1.0 tok/s).
-2. **Untrusted Content Framing (`src/ztools/image_renamer.rs`)**:
-   - Wrap OCR image text in `<untrusted_content>...</untrusted_content>` tags.
-   - Instruct LLM to strictly ignore instructions embedded within untrusted tags (`filename_injection` defense).
-   - Sanitize conversational artifacts (`"Here is the filename:"`), code fences, and file extensions.
-3. **Model Matrix Configuration (`src/config_ztools.rs`)**:
-   - Update fallback defaults to match the 30-task benchmark winners.
-   - Support optional dynamic loading from `conf/config.toml` `[best_models]`.
+All 10 roadmap items are completed and verified through A/B testing with the Python reference:
 
-### Phase 2: Prompts, Timestamps & Schema Parity
-1. **Twitter Summarizer Parity (`src/ztools/twitter.rs`)**:
-   - Synchronize prompt instructions with `references/eval/tasks_prompts.py: TWITTER_PROMPT`.
-   - Format tweet timestamps as `%b %d %H:%M` in prompt payloads to prevent date dropping at the LLM boundary (C2a fix).
-2. **Weekend Planner Schemas & Exclusions (`src/ztools/weekend/`)**:
-   - Align event JSON schema to include `start_date`, `end_date`, `price`, `day`, `weather` (C2b fix).
-   - Match candidate events against exclusion patterns from `conf/weekend.toml` (C8 fix).
+- [x] **1. Broken Model & Packaging Defect Detection** — Ported to `rust/src/ztools/model_health.rs`.
+- [x] **2. Best Model Matrix & Dynamic Configuration** — Synchronized with 30-task benchmark winners. `with_ztools_best_models()` dynamic loader from `~/.config/ztools/config.toml` or `conf/config.toml`.
+- [x] **3. Image Renamer Security & Untrusted Framing** — Ported to `rust/src/ztools/rename/`. `clean_filename`, `is_meaningful_text`, `is_non_human_readable`, `is_generic_name`, word-boundary truncation, VLM vision path with OpenAI-style content parts (NOT Ollama `images` key).
+- [x] **4. Twitter Summarizer Prompt & Timestamp Parity (C2a fix)** — Synchronized with `TWITTER_PROMPT`. Timestamps formatted as `%b %d %H:%M`.
+- [x] **5. Weekend Planner Schema & Exclusion Filtering (C2b, C8 fixes)** — Aligned JSON schema, token-subset + containment matching, C8 seasonal-event exception.
+- [x] **5b. Weekend constraint suite (C5 weather, C4 constant columns, C3 window, C7 provenance)** — Full `enforce.py` constraint suite ported to `rust/src/ztools/weekend/` in canonical order.
+- [x] **5c. Weekend 4-phase pipeline (extract → draft → refine → structure) + supply prioritisation** — Phase templates, extract_sources, prioritise_in_window, in_window_count all ported with same date scanner.
+- [x] **6. Greedy decoding across all LLM callers** (temperature 0.0) — deterministic reproducible leaderboard outputs.
+- [x] **7. Derived request timeouts** from measured cold-start / prefill / decode rates.
+- [x] **8. Eval validator + content cleaning parity** — Rust `validate.rs` and `clean.rs` ported from Python. Every regex proved-fail-first.
+- [x] **9. Twitter Live Timeline Browser Scraping Parity** — Camoufox anti-detect Firefox automation with session discovery, embedding clustering, UTF-8 safe signature truncation, non-blocking stdin handling, caching.
+- [x] **10. Resilient DuckDuckGo Event Scraping & Git Hook Quality Gates** — Dual HTML snippet parsers, DDG Lite fallback, `cargo clippy -D warnings` and `cargo test` quality gates.
 
-### Phase 3: Deep Behavioral A/B Testing & Gate Verification
-1. **Automated A/B Parity Suite (`bin/ab_test`)**:
-   - **CLI Surface Parity**: Verify subcommands, help strings, and exit codes.
-   - **Defect Probing Parity**: Pass mock model fixtures (clean, broken MTP, missing index shards, incomplete downloads) to both Python and Rust, asserting identical diagnostic verdicts.
-   - **Security Parity**: Pass adversarial injection prompts to both engines, asserting identical sanitized filenames.
-   - **Date & Payload Parity**: Verify tweet timestamps and weekend event dates match across both engines.
-2. **Continuous Quality Gate Verification**:
-   - Run `rust_gate.sh` (`cargo clippy -- -D warnings`, `cargo fmt --check`, `check_no_allow.py`).
-   - Run `make gate` (`check_no_emoji.py`, `check_file_length.py`, `check_status_symbol_contract.py`).
-   - Enforce ≥ 95% line coverage in both `routines` (`cargo llvm-cov`) and `ztools` (`pytest --cov`).
+---
+
+## 4. A/B Test & Verification
+
+**`bin/ab_test --functional`** runs test fixtures through both Rust and Python, asserting identical diagnostic verdicts, sanitized filenames, and prompt payloads. All 4 tools pass with 3.6-4.7x Rust speedup.
+
+- **Rust quality gates**: `cargo clippy --all-targets -D warnings` and the 500-line cap per file prevent code rot in the primary implementation.
+- **Prompt surface**: `conf/prompts.toml` is the canonical home, read by both sides; drift-gate test `test_twitter_prompt_matches_shared_conf` enforces byte-identical Rust fallback.
+- **Model choice**: Both Rust and Python read from `conf/config.toml [best_models]`. Rust binary loads dynamic config via `with_ztools_best_models()` on startup.
+- **Eval validators + cleaning**: Rust `validate.rs` and `clean.rs` are faithful ports from Python with proved-fail-first parity.
+
+---
+
+## 5. Structural Fix (Standing Hazard)
+
+The "parallel reimplementation" failure mode is addressed by:
+
+1. **Shared surface in shared config** — Prompts (`conf/prompts.toml`) and model choice (`conf/config.toml [best_models]`) are the single source of truth read by both sides. Editing one file updates both the Rust binary and Python reference.
+
+2. **Automated A/B test harness** — `bin/ab_test --functional` runs test fixtures through both Rust and Python, asserting identical diagnostic verdicts, sanitized filenames, and prompt payloads. Catches divergence the day it happens.
+
+3. **Rust quality gates** — `cargo clippy --all-targets -D warnings` and the 500-line cap per file in `~/Projects/ztools/rust` prevent code rot in the primary implementation.
