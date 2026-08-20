@@ -85,7 +85,11 @@ fn test_scan_and_rename() {
     let img_path = temp_dir.join("IMG 9999.png");
     let _ = std::fs::write(&img_path, b"dummy png");
 
-    let config = crate::config::ZtoolsConfig::default();
+    let config = crate::config::ZtoolsConfig {
+        image_renamer_vlm_model: String::new(),
+        image_renamer_model: String::new(),
+        ..Default::default()
+    };
     let candidates = scan_and_rename(&temp_dir, "*.png", false, 10, &config).unwrap();
     assert_eq!(candidates.len(), 1);
     assert!(candidates[0].changed);

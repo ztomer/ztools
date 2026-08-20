@@ -133,7 +133,8 @@ pub(crate) fn weekend_plan(
     // Constant-column check runs LAST, over what survived; it reports and
     // changes nothing. The configured family range is the one suspect that is
     // not a literal (C4).
-    let mut suspects: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    let mut suspects: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
     suspects.insert("Target Age(s)".to_string(), vec![ages.clone()]);
     for (label, values) in crate::ztools::weekend::PROMPT_CONSTANTS {
         suspects.insert(
@@ -143,7 +144,9 @@ pub(crate) fn weekend_plan(
     }
     for note in crate::ztools::weekend::flag_constant_columns(&fixed, &suspects)
         .into_iter()
-        .chain(crate::ztools::weekend::flag_constant_columns(&transient, &suspects))
+        .chain(crate::ztools::weekend::flag_constant_columns(
+            &transient, &suspects,
+        ))
     {
         println!("→ {note}");
     }
@@ -165,7 +168,12 @@ pub(crate) fn weekend_plan(
         println!("✓ saved to {}", out_path.display());
     }
 
-    crate::ztools::weekend::print_weekend_plan_gorgeous(&dates_str, &weather_str, &fixed, &transient);
+    crate::ztools::weekend::print_weekend_plan_gorgeous(
+        &dates_str,
+        &weather_str,
+        &fixed,
+        &transient,
+    );
     Ok(())
 }
 

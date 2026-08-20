@@ -9,8 +9,18 @@ use regex::Regex;
 /// Generic LLM outputs that are not real filenames. The bases alone, plus each
 /// base combined with each image extension.
 const GENERIC_BASES: &[&str] = &[
-    "text", "file", "image", "unnamed", "output", "filename", "none", "screenshot", "document",
-    "note", "empty", "blank",
+    "text",
+    "file",
+    "image",
+    "unnamed",
+    "output",
+    "filename",
+    "none",
+    "screenshot",
+    "document",
+    "note",
+    "empty",
+    "blank",
 ];
 
 const GENERIC_EXTENSIONS: &[&str] = &[
@@ -179,23 +189,37 @@ mod tests {
     fn clean_filename_matches_python_contract() {
         assert_eq!(clean_filename("Hello World! 2026", 50), "hello_world_2026");
         assert_eq!(clean_filename("   ", 50), "unnamed");
-        assert_eq!(clean_filename("Special @#$% Symbols!", 30), "special_symbols");
+        assert_eq!(
+            clean_filename("Special @#$% Symbols!", 30),
+            "special_symbols"
+        );
         let long = "This is an extremely long title that exceeds the maximum length constraint for filenames";
         assert_eq!(clean_filename(long, 20), "this_is_an_extremely");
     }
 
     #[test]
     fn strip_instruction_prefix_matches_python_contract() {
-        assert_eq!(strip_instruction_prefix("Here is the filename: tax_return_2026.pdf"),
-                   "tax_return_2026.pdf");
-        assert_eq!(strip_instruction_prefix("The file is: meeting_notes_v1.png"),
-                   "meeting_notes_v1.png");
-        assert_eq!(strip_instruction_prefix("suggested name: invoice"),
-                   "invoice");
-        assert_eq!(strip_instruction_prefix("renamed to: screenshot"),
-                   "screenshot");
+        assert_eq!(
+            strip_instruction_prefix("Here is the filename: tax_return_2026.pdf"),
+            "tax_return_2026.pdf"
+        );
+        assert_eq!(
+            strip_instruction_prefix("The file is: meeting_notes_v1.png"),
+            "meeting_notes_v1.png"
+        );
+        assert_eq!(
+            strip_instruction_prefix("suggested name: invoice"),
+            "invoice"
+        );
+        assert_eq!(
+            strip_instruction_prefix("renamed to: screenshot"),
+            "screenshot"
+        );
         // No prefix: unchanged apart from trimming.
-        assert_eq!(strip_instruction_prefix("  plain content  "), "plain content");
+        assert_eq!(
+            strip_instruction_prefix("  plain content  "),
+            "plain content"
+        );
     }
 
     #[test]

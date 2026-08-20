@@ -32,7 +32,9 @@ fn fresh(name: &str) -> PathBuf {
 /// Run the binary with `HOME` inside the sandbox and the stub `--config`.
 fn ztool(home: &std::path::Path) -> Command {
     let mut c = Command::new(bin());
-    c.env("HOME", home).arg("--config").arg(home.join("ztools.toml"));
+    c.env("HOME", home)
+        .arg("--config")
+        .arg(home.join("ztools.toml"));
     c
 }
 
@@ -215,7 +217,13 @@ fn image_renamer_dry_run_proposes_names_without_touching_files() {
     fs::write(pics.join("My Vacation Photo.PNG"), b"x").unwrap();
     fs::write(pics.join("notes.txt"), b"not an image").unwrap();
 
-    let stdout = stdout_of(&ztool(&home).arg("image-renamer").arg(&pics).output().unwrap());
+    let stdout = stdout_of(
+        &ztool(&home)
+            .arg("image-renamer")
+            .arg(&pics)
+            .output()
+            .unwrap(),
+    );
     assert!(stdout.contains("DRY-RUN"), "{stdout}");
     assert!(stdout.contains("1 file(s) processed"), "{stdout}");
     assert!(stdout.contains("my_vacation_photo.png"), "{stdout}");
@@ -255,7 +263,13 @@ fn image_renamer_dry_run_on_empty_dir() {
     let pics = home.join("pics");
     fs::create_dir_all(&pics).unwrap();
 
-    let stdout = stdout_of(&ztool(&home).arg("image-renamer").arg(&pics).output().unwrap());
+    let stdout = stdout_of(
+        &ztool(&home)
+            .arg("image-renamer")
+            .arg(&pics)
+            .output()
+            .unwrap(),
+    );
     assert!(stdout.contains("0 file(s) processed"), "{stdout}");
     assert!(stdout.contains("DRY-RUN"), "{stdout}");
 }
@@ -323,7 +337,12 @@ fn weekend_plan_says_so_when_nothing_is_on() {
         ),
     );
     let md_out = home.join("weekend.md");
-    let out = ztool(&home).arg("weekend-plan").arg("--md-out").arg(&md_out).output().unwrap();
+    let out = ztool(&home)
+        .arg("weekend-plan")
+        .arg("--md-out")
+        .arg(&md_out)
+        .output()
+        .unwrap();
     stdout_of(&out);
     let doc = fs::read_to_string(&md_out).unwrap();
     assert!(

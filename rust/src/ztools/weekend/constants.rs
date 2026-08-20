@@ -89,4 +89,3 @@ pub fn flag_constant_columns(
     }
     notes
 }
-

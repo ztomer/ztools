@@ -140,15 +140,9 @@ pub fn fetch_duckduckgo_events(
     let weather_condensed = condense_weather(weather_str, config);
     let cleaned = extract_sources(&corpus, location, config);
 
-    let events = if let Some(draft) = draft_activities(
-        &weather_condensed,
-        &cleaned,
-        ctx,
-        config,
-    ) {
+    let events = if let Some(draft) = draft_activities(&weather_condensed, &cleaned, ctx, config) {
         let refined = refine_draft(&draft, config);
-        structure_to_json(&refined, &weather_condensed, ctx.year, config)
-            .unwrap_or_default()
+        structure_to_json(&refined, &weather_condensed, ctx.year, config).unwrap_or_default()
     } else {
         // A dead draft phase must not starve the plan: fall back to the
         // monolithic prompt rather than returning nothing.

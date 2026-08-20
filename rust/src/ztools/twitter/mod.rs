@@ -1,4 +1,14 @@
-//! Native Rust Twitter summarizer module.
+//! Native Rust Twitter summarizer and browser collection module.
+
+pub mod browser;
+pub mod browser_parse;
+pub mod cookies;
+
+pub use browser::{BrowserCollector, CamoufoxConfig, MockBrowserCollector};
+pub use browser_parse::parse_tweets_from_response;
+pub use cookies::{
+    find_firefox_profile_dbs, has_session_cookie, Cookie, DEFAULT_DOMAINS, SESSION_COOKIE_NAME,
+};
 
 use std::collections::HashSet;
 use std::fs;
@@ -283,5 +293,5 @@ pub fn check_summary_quality(summary: &str) -> (Vec<String>, bool) {
 }
 
 #[cfg(test)]
-#[path = "twitter_tests.rs"]
+#[path = "tests.rs"]
 mod tests;

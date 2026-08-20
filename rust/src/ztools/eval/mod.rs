@@ -4,7 +4,20 @@
 //! text the Python eval does.
 
 pub mod clean;
+pub mod gpu_lock;
+pub mod samples;
+pub mod task_loader;
 pub mod validate;
+pub mod watchdog;
 
-pub use clean::{clean_model_output, extract_content_from_code_blocks};
+pub use clean::{clean_model_output, extract_content_from_code_blocks, extract_json};
+pub use gpu_lock::{
+    foreign_holder, lock_dir, GpuLockGuard, DEFAULT_LOCK_DIR, DEFAULT_MAX_IDLE_SECS,
+};
+pub use samples::{add_sample, clean_estimate, estimate_from, median, Sample, SAMPLE_WINDOW};
+pub use task_loader::{
+    get_built_in_smoke_tasks, load_all_eval_tasks, load_taxes_tasks_from_dir, run_check,
+    ChatMessage, Check, EvalTask,
+};
 pub use validate::validate_file_summary;
+pub use watchdog::{is_stalled, model_stall_duration, stalled_for, DEFAULT_MODEL_STALL_SECONDS};

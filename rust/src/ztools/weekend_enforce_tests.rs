@@ -7,10 +7,9 @@
 //! a note rather than failing silently.
 
 use crate::ztools::weekend::{
-    correct_weather_labels, drop_events_outside_window, drop_excluded_places,
-    drop_unsourced_rows, find_dates_in, flag_constant_columns, in_window_count,
-    matches_exclusion, parse_any_date, reconcile_day_with_dates, row_is_sourced,
-    window_overlap, WeekendEvent,
+    correct_weather_labels, drop_events_outside_window, drop_excluded_places, drop_unsourced_rows,
+    find_dates_in, flag_constant_columns, in_window_count, matches_exclusion, parse_any_date,
+    reconcile_day_with_dates, row_is_sourced, window_overlap, WeekendEvent,
 };
 use chrono::NaiveDate;
 use std::collections::HashMap;
@@ -34,7 +33,7 @@ fn event(name: &str, location: &str) -> WeekendEvent {
         end_date: "".into(),
         weather: "".into(),
         duration: "".into(),
-}
+    }
 }
 
 /// The CLASS: the config's wording is not a contiguous substring of the scraped
@@ -43,7 +42,10 @@ fn event(name: &str, location: &str) -> WeekendEvent {
 #[test]
 fn matcher_survives_reordering_interpolation_and_punctuation() {
     let should_match = [
-        ("Sky Zone Toronto", "Sky Zone Trampoline Park (Vaughan/Toronto)"),
+        (
+            "Sky Zone Toronto",
+            "Sky Zone Trampoline Park (Vaughan/Toronto)",
+        ),
         ("Canada's Wonderland", "Wonderland Canada thrill rides"),
         ("Ripley's", "Ripley\u{2019}s Aquarium of Canada"),
         ("Museum of Illusions", "Illusions Museum Toronto"),
@@ -97,8 +99,7 @@ fn seasonal_event_exception_is_kept_but_generic_visit_is_dropped() {
     let exclusions = vec!["Toronto Zoo".to_string()];
     let seasonal = event("Terra Lumina Light Festival at Toronto Zoo", "Toronto Zoo");
     let generic = event("A Day at Your Toronto Zoo", "Toronto Zoo");
-    let (kept, notes) =
-        drop_excluded_places(vec![seasonal.clone(), generic.clone()], &exclusions);
+    let (kept, notes) = drop_excluded_places(vec![seasonal.clone(), generic.clone()], &exclusions);
     assert_eq!(kept.len(), 1, "{notes:?}");
     assert_eq!(kept[0].name, "Terra Lumina Light Festival at Toronto Zoo");
     assert!(
@@ -149,7 +150,10 @@ fn an_impossible_weather_label_is_corrected() {
     tramp.weather = "outdoor".into();
     let (fixed, notes) = correct_weather_labels(vec![tramp]);
     assert_eq!(fixed[0].weather, "indoor", "{notes:?}");
-    assert!(!notes.is_empty() && notes[0].contains("trampoline park"), "{notes:?}");
+    assert!(
+        !notes.is_empty() && notes[0].contains("trampoline park"),
+        "{notes:?}"
+    );
 }
 
 /// The reverse inversion: High Park / nature walk labeled "indoor".
@@ -159,7 +163,10 @@ fn an_outdoor_venue_labeled_indoor_is_corrected() {
     park.weather = "indoor".into();
     let (fixed, notes) = correct_weather_labels(vec![park]);
     assert_eq!(fixed[0].weather, "outdoor", "{notes:?}");
-    assert!(!notes.is_empty() && notes[0].contains("high park"), "{notes:?}");
+    assert!(
+        !notes.is_empty() && notes[0].contains("high park"),
+        "{notes:?}"
+    );
 }
 
 /// Ambiguous venues are left alone -- a generic cafe is not corrected either way.
@@ -248,11 +255,12 @@ fn a_column_that_varies_is_not_flagged() {
 /// suspect list itself contains the empty string.
 #[test]
 fn empty_cells_are_not_a_constant_column() {
-    assert!(
-        flag_constant_columns(&rows_with(4, "target_ages", ""), &suspects("6-13")).is_empty()
-    );
+    assert!(flag_constant_columns(&rows_with(4, "target_ages", ""), &suspects("6-13")).is_empty());
     let mut pathological = suspects("6-13");
-    pathological.insert("Target Age(s)".to_string(), vec!["6-13".to_string(), "".to_string()]);
+    pathological.insert(
+        "Target Age(s)".to_string(),
+        vec!["6-13".to_string(), "".to_string()],
+    );
     assert!(flag_constant_columns(&rows_with(4, "target_ages", ""), &pathological).is_empty());
 }
 
@@ -306,7 +314,11 @@ fn dates_parse_across_the_supported_shapes() {
     assert!(find_dates_in("2-3 hours", 2026).is_empty());
     // The shared parse is what window_overlap uses.
     assert_eq!(
-        window_overlap(&dated("e", "Aug 15", "Aug 16"), d(2026, 8, 7), d(2026, 8, 9)),
+        window_overlap(
+            &dated("e", "Aug 15", "Aug 16"),
+            d(2026, 8, 7),
+            d(2026, 8, 9)
+        ),
         Some(false)
     );
 }
@@ -371,14 +383,20 @@ fn reconcile_day_derives_or_clears() {
     single.day = "Monday".into();
     let (fixed, notes) = reconcile_day_with_dates(vec![single], start, end);
     assert_eq!(fixed[0].day, "Saturday", "{notes:?}");
-    assert!(!notes.is_empty() && notes[0].contains("corrected"), "{notes:?}");
+    assert!(
+        !notes.is_empty() && notes[0].contains("corrected"),
+        "{notes:?}"
+    );
 
     // Multi-day range with a stated day outside it -> cleared, not guessed.
     let mut multi = dated("Long", "2026-08-07", "2026-08-09");
     multi.day = "Monday".into();
     let (fixed, notes) = reconcile_day_with_dates(vec![multi], start, end);
     assert_eq!(fixed[0].day, "", "{notes:?}");
-    assert!(!notes.is_empty() && notes[0].contains("cleared"), "{notes:?}");
+    assert!(
+        !notes.is_empty() && notes[0].contains("cleared"),
+        "{notes:?}"
+    );
 
     // A row entirely outside the window is not this function's job.
     let mut old = dated("Old", "2026-07-01", "2026-07-01");
@@ -454,7 +472,8 @@ fn sunday() -> chrono::NaiveDate {
 /// group; out-of-window lines stay below in their own order.
 #[test]
 fn in_window_lines_float_to_the_top_marked_but_nothing_is_removed() {
-    let corpus = "First entry\nAug 15 festival all month\nSecond entry\nAug 8 happening this weekend";
+    let corpus =
+        "First entry\nAug 15 festival all month\nSecond entry\nAug 8 happening this weekend";
     let out = crate::ztools::weekend::prioritise_in_window(corpus, friday(), sunday());
     let lines: Vec<&str> = out.lines().collect();
     // Both in-window lines (Aug 8) float up, marked; everything else follows in order.
@@ -464,7 +483,10 @@ fn in_window_lines_float_to_the_top_marked_but_nothing_is_removed() {
     assert_eq!(lines[1], "First entry");
     assert_eq!(lines[2], "Aug 15 festival all month");
     assert_eq!(lines[3], "Second entry");
-    assert!(out.contains("Aug 15 festival all month"), "nothing may be removed");
+    assert!(
+        out.contains("Aug 15 festival all month"),
+        "nothing may be removed"
+    );
 }
 
 /// A corpus with no dated candidates is unchanged verbatim -- inventing a
@@ -482,5 +504,8 @@ fn corpus_with_no_dated_candidates_is_returned_unchanged() {
 fn in_window_count_counts_only_lines_that_mention_the_window() {
     let corpus = "Aug 8 festival\nEvergreen\nAug 9 show\nAug 15 out of window";
     assert_eq!(in_window_count(corpus, friday(), sunday()), 2);
-    assert_eq!(in_window_count("no dates here at all", friday(), sunday()), 0);
+    assert_eq!(
+        in_window_count("no dates here at all", friday(), sunday()),
+        0
+    );
 }

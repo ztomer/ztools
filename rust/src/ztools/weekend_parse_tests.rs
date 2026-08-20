@@ -150,7 +150,7 @@ fn test_apply_scores_sorts_by_score() {
             end_date: "".into(),
             weather: "".into(),
             duration: "".into(),
-},
+        },
         crate::ztools::weekend::WeekendEvent {
             name: "B".into(),
             location: "Vaughan".into(),
@@ -165,7 +165,7 @@ fn test_apply_scores_sorts_by_score() {
             end_date: "".into(),
             weather: "".into(),
             duration: "".into(),
-},
+        },
     ];
     crate::ztools::weekend::apply_scores(&mut events, "sunny clear warm", "6-12");
     assert!(events[0].score >= events[1].score);
@@ -189,7 +189,7 @@ fn test_compute_score_indoor_gets_bonus() {
         end_date: "".into(),
         weather: "".into(),
         duration: "".into(),
-};
+    };
     let score = crate::ztools::weekend::compute_score(&ev, "rain precipitation", "all");
     // 5 fields = 3.0 base, +1.0 indoor, +0.5 location > 5 chars = 4.5 / 2 = 2.25.
     assert!((score - 2.25).abs() < 0.01, "expected ~2.25, got {score}");
@@ -212,7 +212,7 @@ fn test_compute_score_age_overlap_bonus() {
         end_date: "".into(),
         weather: "".into(),
         duration: "".into(),
-};
+    };
     let score = crate::ztools::weekend::compute_score(&ev, "cloudy", "6-12");
     // 5 fields = 3.0, age overlap (6-12 ∩ 6-12 = 7 ≥ 2) = +3.0,
     // price not free = +0.5, location > 5 = +0.5. Total 7.0 / 2 = 3.5.
@@ -236,7 +236,7 @@ fn test_compute_score_caps_at_5() {
         end_date: "".into(),
         weather: "".into(),
         duration: "".into(),
-};
+    };
     let score = crate::ztools::weekend::compute_score(&ev, "sunny clear warm", "6-12");
     assert!(score <= 5.0, "score should cap at 5.0, got {score}");
     assert!(score >= 4.5, "perfect event should score high, got {score}");
@@ -275,7 +275,7 @@ fn test_apply_scores_empty_ages() {
         end_date: "".into(),
         weather: "".into(),
         duration: "".into(),
-}];
+    }];
     crate::ztools::weekend::apply_scores(&mut events, "rain", "");
     assert!(events[0].score > 0.0);
 }

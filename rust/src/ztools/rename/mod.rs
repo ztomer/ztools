@@ -6,12 +6,14 @@
 //! module owns the decision flow and the filesystem walk.
 
 pub mod helpers;
+pub mod ocr;
 pub mod vlm;
 
 pub use helpers::{
     clean_filename, is_generic_name, is_meaningful_text, is_non_human_readable,
     strip_instruction_prefix,
 };
+pub use ocr::{extract_first_line, extract_full_text, ocr_available, OcrEngine, TesseractEngine};
 pub use vlm::{acceptable_name, query_llm_filename, query_vlm_for_filename};
 
 use std::fs;
@@ -49,7 +51,10 @@ fn dedupe_path(new_path: &Path) -> PathBuf {
     if !new_path.exists() {
         return new_path.to_path_buf();
     }
-    let stem = new_path.file_stem().and_then(|s| s.to_str()).unwrap_or("name");
+    let stem = new_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("name");
     let ext = new_path.extension().and_then(|e| e.to_str()).unwrap_or("");
     for counter in 1..=100 {
         let candidate = new_path.with_file_name(if ext.is_empty() {
@@ -64,22 +69,33 @@ fn dedupe_path(new_path: &Path) -> PathBuf {
     new_path.to_path_buf()
 }
 
-/// Name one image: text path when the available text is meaningful, the VLM
+/// Name one image: OCR / text path when the available text is meaningful, the VLM
 /// when it is not (and a vision model is configured), and a plain clean of the
-/// text otherwise. Mirrors `rename/cli.py::rename_image` modulo the OCR seam:
-/// this build has no tesseract yet, so the file stem is the only text source.
+/// text otherwise. Mirrors `rename/cli.py::rename_image`.
 fn name_image(
     path: &Path,
     stem: &str,
     max_len: usize,
     config: &crate::config::ZtoolsConfig,
 ) -> String {
-    let meaningful = !is_non_human_readable(stem) && is_meaningful_text(stem, 2);
+    let ocr_text =
+        if !config.image_renamer_model.is_empty() || !config.image_renamer_vlm_model.is_empty() {
+            extract_first_line(path)
+        } else {
+            None
+        };
+    let text_to_use = ocr_text.as_deref().unwrap_or(stem);
+    let meaningful = !is_non_human_readable(text_to_use) && is_meaningful_text(text_to_use, 2);
 
     let candidate = if meaningful {
-        query_llm_filename(&config.osaurus_url, &config.image_renamer_model, stem, config)
-            .ok()
-            .filter(|n| !is_generic_name(n) && n.len() >= 4)
+        query_llm_filename(
+            &config.osaurus_url,
+            &config.image_renamer_model,
+            text_to_use,
+            config,
+        )
+        .ok()
+        .filter(|n| !is_generic_name(n) && n.len() >= 4)
     } else if !config.image_renamer_vlm_model.is_empty() {
         query_vlm_for_filename(
             path,
@@ -93,7 +109,7 @@ fn name_image(
         None
     };
 
-    candidate.unwrap_or_else(|| clean_filename(stem, max_len))
+    candidate.unwrap_or_else(|| clean_filename(text_to_use, max_len))
 }
 
 /// Scan a directory for image files and propose clean renames.

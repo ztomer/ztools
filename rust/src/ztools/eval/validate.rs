@@ -293,7 +293,8 @@ mod tests {
 
     #[test]
     fn string_with_headers_scores_20() {
-        let content = "## Main module\nhandles configuration and api calls\n## Utils\nvalidation helpers";
+        let content =
+            "## Main module\nhandles configuration and api calls\n## Utils\nvalidation helpers";
         let (score, msg) = validate_file_summary(content);
         assert_eq!(score, 20);
         assert!(msg.contains("no headers"));

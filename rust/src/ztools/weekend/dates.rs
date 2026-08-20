@@ -57,9 +57,7 @@ pub fn find_dates_in(value: &str, year: i32) -> Vec<NaiveDate> {
         if chars[i + 4] != '-' || chars[i + 7] != '-' {
             continue;
         }
-        let all_digits = (0..10).all(|k| {
-            k == 4 || k == 7 || chars[i + k].is_ascii_digit()
-        });
+        let all_digits = (0..10).all(|k| k == 4 || k == 7 || chars[i + k].is_ascii_digit());
         if !all_digits {
             continue;
         }
@@ -135,5 +133,3 @@ pub fn find_dates_in(value: &str, year: i32) -> Vec<NaiveDate> {
 pub fn parse_any_date(value: &str, year: i32) -> Option<NaiveDate> {
     find_dates_in(value, year).into_iter().next()
 }
-
-

@@ -206,10 +206,49 @@ s85, m85 = validate_file_summary(
 )
 assert s85 == 85 and "filename-only" in m85, (s85, m85)
 assert "no headers" in validate_file_summary("hello")[1]
+
+# eval tasks parity: all 6 taxes tasks exist and have valid user prompts and rubrics
+from eval.tasks_core import TASKS
+for t in ["taxes_anomalies", "taxes_audit_readiness", "taxes_synthesis", "taxes_qa", "taxes_slip_qa", "taxes_yoy_narrative"]:
+    assert t in TASKS, f"Missing task {t} in TASKS"
+    assert len(TASKS[t]["messages"]) >= 1
+
+# samples median parity: contaminated reading outvoted by clean window
+from eval.samples import estimate_from, clean_estimate
+history = [{"v": 100.0, "clean": False}, {"v": 30.0, "clean": True}, {"v": 32.0, "clean": True}, {"v": 31.0, "clean": True}]
+assert estimate_from(history) == 31.0, f"Expected 31.0, got {estimate_from(history)}"
+assert clean_estimate({"val_samples": [{"v": 50.0, "clean": False}]}, "val") is None
+
+# watchdog stall detection parity
+from eval.watchdog import stalled_for
+assert stalled_for(100.0, now=150.0) == 50.0
+
+# twitter browser graphql parse parity
+from twitter.browser_parse import parse_tweets_from_response
+parsed_tweets = parse_tweets_from_response({
+    "data": {"home": {"home_timeline_urt": {"instructions": [{
+        "type": "TimelineAddEntries",
+        "entries": [{
+            "content": {
+                "itemContent": {
+                    "itemType": "TimelineTweet",
+                    "tweet_results": {
+                        "result": {
+                            "__typename": "Tweet",
+                            "core": {"user_results": {"result": {"core": {"screen_name": "testuser"}}}},
+                            "legacy": {"full_text": "Hello world tweet", "created_at": "Thu Aug 20 12:00:00 +0000 2026", "favorite_count": 10, "retweet_count": 2}
+                        }
+                    }
+                }
+            }
+        }]
+    }]}}}
+})
+assert len(parsed_tweets) == 1 and parsed_tweets[0]["screen_name"] == "testuser"
 ' ); then
-        echo "  ✓ Eval validator & cleaning parity verified"
+        echo "  ✓ Eval validator, cleaning, task-loader, samples & twitter parser parity verified"
     else
-        echo "  ✗ Eval validator & cleaning parity failed"
+        echo "  ✗ Eval validator, cleaning, task-loader, samples & twitter parser parity failed"
         failures=$((failures + 1))
     fi
 

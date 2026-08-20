@@ -88,9 +88,11 @@ pub fn run() -> Result<()> {
             .with_shared_prompts(),
     };
     match cli.cmd {
-        Cmd::TwitterSummarize { json, model, md_out } => {
-            crate::cli_ztools::twitter_summarize(&config, json, model, md_out)
-        }
+        Cmd::TwitterSummarize {
+            json,
+            model,
+            md_out,
+        } => crate::cli_ztools::twitter_summarize(&config, json, model, md_out),
         Cmd::WeekendPlan {
             location,
             ages,

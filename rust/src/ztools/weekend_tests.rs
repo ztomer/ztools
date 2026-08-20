@@ -17,7 +17,10 @@ fn test_matches_exclusion() {
 
 #[test]
 fn test_matches_exclusion_possessives() {
-    assert!(matches_exclusion("Ripley's Aquarium", "Ripley’s Aquarium of Canada"));
+    assert!(matches_exclusion(
+        "Ripley's Aquarium",
+        "Ripley’s Aquarium of Canada"
+    ));
 }
 
 #[test]
@@ -37,7 +40,7 @@ fn test_filter_exclusions() {
             end_date: "".into(),
             weather: "".into(),
             duration: "".into(),
-},
+        },
         WeekendEvent {
             name: "Local Library Story Time".into(),
             location: "Vaughan Library".into(),
@@ -52,7 +55,7 @@ fn test_filter_exclusions() {
             end_date: "".into(),
             weather: "".into(),
             duration: "".into(),
-},
+        },
     ];
     let exclusions = vec!["Toronto Zoo".into()];
     let (filtered, notes) = drop_excluded_places(events, &exclusions);
@@ -77,7 +80,7 @@ fn test_flag_constant_columns() {
             end_date: "".into(),
             weather: "".into(),
             duration: "".into(),
-},
+        },
         WeekendEvent {
             name: "Event 2".into(),
             location: "Toronto".into(),
@@ -92,7 +95,7 @@ fn test_flag_constant_columns() {
             end_date: "".into(),
             weather: "".into(),
             duration: "".into(),
-},
+        },
     ];
 
     // The column is constant AND carries the configured family range, so it is
@@ -102,7 +105,10 @@ fn test_flag_constant_columns() {
     let constants = flag_constant_columns(&events, &suspects);
     assert_eq!(constants.len(), 1, "{constants:?}");
     assert!(constants[0].contains("Target Age(s)"), "{constants:?}");
-    assert!(constants[0].to_lowercase().contains("kept"), "{constants:?}");
+    assert!(
+        constants[0].to_lowercase().contains("kept"),
+        "{constants:?}"
+    );
 
     // Same constant, but no suspect value configured: NOT the C4 defect.
     let none: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
@@ -224,7 +230,7 @@ fn test_format_weekend_plan_empty_and_populated() {
         end_date: "".into(),
         weather: "".into(),
         duration: "".into(),
-}];
+    }];
     let plan2 = format_weekend_plan(
         &transient,
         &[],
@@ -262,7 +268,7 @@ fn test_apply_scores_sorts_by_score() {
             end_date: "".into(),
             weather: "".into(),
             duration: "".into(),
-},
+        },
         crate::ztools::weekend::WeekendEvent {
             name: "B".into(),
             location: "Vaughan".into(),
@@ -277,7 +283,7 @@ fn test_apply_scores_sorts_by_score() {
             end_date: "".into(),
             weather: "".into(),
             duration: "".into(),
-},
+        },
     ];
     // Event B has more populated fields (outdoor description) and matching ages.
     crate::ztools::weekend::apply_scores(&mut events, "sunny clear warm", "6-12");
@@ -302,7 +308,7 @@ fn test_apply_scores_empty_ages() {
         end_date: "".into(),
         weather: "".into(),
         duration: "".into(),
-}];
+    }];
     // Empty age range: no age bonus, but populated fields still score.
     crate::ztools::weekend::apply_scores(&mut events, "rain", "");
     assert!(events[0].score > 0.0);

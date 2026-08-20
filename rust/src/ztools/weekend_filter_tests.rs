@@ -28,7 +28,7 @@ fn event(name: &str, location: &str, description: &str) -> WeekendEvent {
         end_date: "".into(),
         weather: "".into(),
         duration: "".into(),
-}
+    }
 }
 
 /// A title in a script the plan cannot render is not a GTA venue — it is a
@@ -152,20 +152,16 @@ fn an_event_without_a_location_renders_as_its_name_alone() {
 /// not evidence that a column never varies.
 #[test]
 fn a_single_row_flags_no_constant_columns() {
-    let suspects = std::collections::HashMap::from([(
-        "Target Age(s)".to_string(),
-        vec!["6-12".to_string()],
-    )]);
+    let suspects =
+        std::collections::HashMap::from([("Target Age(s)".to_string(), vec!["6-12".to_string()])]);
     assert!(flag_constant_columns(&[], &suspects).is_empty());
     assert!(flag_constant_columns(&[event("Solo", "Vaughan", "d")], &suspects).is_empty());
 }
 
 #[test]
 fn identical_columns_across_rows_are_flagged_only_when_a_suspect_value() {
-    let suspects = std::collections::HashMap::from([(
-        "Target Age(s)".to_string(),
-        vec!["6-12".to_string()],
-    )]);
+    let suspects =
+        std::collections::HashMap::from([("Target Age(s)".to_string(), vec!["6-12".to_string()])]);
     // target_ages = "6-12" on both rows AND it is the configured suspect -> flagged.
     let flags = flag_constant_columns(
         &[event("A", "Vaughan", "d"), event("B", "Markham", "d")],

@@ -9,8 +9,8 @@
 use std::cmp;
 
 use super::prompts::{
-    render, PHASE_DRAFT_TRANSIENT, PHASE_EXTRACT_EVENTS, PHASE_REFINE, PHASE_STRUCTURE_TRANSIENT_SYSTEM,
-    PHASE_STRUCTURE_USER, PHASE_WEATHER_CONDENSE, CARRY_FIELDS,
+    render, CARRY_FIELDS, PHASE_DRAFT_TRANSIENT, PHASE_EXTRACT_EVENTS, PHASE_REFINE,
+    PHASE_STRUCTURE_TRANSIENT_SYSTEM, PHASE_STRUCTURE_USER, PHASE_WEATHER_CONDENSE,
 };
 
 pub const WEATHER_PREVIEW_LIMIT: usize = 200;
@@ -79,7 +79,11 @@ pub fn condense_weather(weather_str: &str, config: &crate::config::ZtoolsConfig)
 /// raw rather than dropping it. The Python original persists batch sizes to a
 /// signals file; this port keeps them in-memory per run, which is what the
 /// shapes actually depend on.
-pub fn extract_sources(raw_text: &str, location: &str, config: &crate::config::ZtoolsConfig) -> String {
+pub fn extract_sources(
+    raw_text: &str,
+    location: &str,
+    config: &crate::config::ZtoolsConfig,
+) -> String {
     let lines: Vec<&str> = raw_text
         .lines()
         .filter(|l| l.trim_start().starts_with("- "))
@@ -164,7 +168,10 @@ pub fn structure_to_json(
 ) -> Option<Vec<super::WeekendEvent>> {
     let sys = render(
         PHASE_STRUCTURE_TRANSIENT_SYSTEM,
-        &[("year", &year.to_string()), ("weather_condensed", weather_condensed)],
+        &[
+            ("year", &year.to_string()),
+            ("weather_condensed", weather_condensed),
+        ],
     );
     let usr = render(PHASE_STRUCTURE_USER, &[("draft_text", text)]);
     let resp = call_llm_json(Some(&sys), &usr, config)?;

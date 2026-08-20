@@ -48,6 +48,9 @@ pub struct ZtoolsConfig {
     /// `--vlm-model` too), and such images fall back to a clean of the stem.
     #[serde(default = "default_image_renamer_vlm_model")]
     pub image_renamer_vlm_model: String,
+    /// Structured reasoning / fallback model (from [best_models].think).
+    #[serde(default = "default_think_model")]
+    pub think_model: String,
     #[serde(default = "default_llm_timeout_secs")]
     pub llm_timeout_secs: u64,
     #[serde(default = "default_llm_extended_timeout_secs")]
@@ -94,7 +97,10 @@ fn default_image_renamer_model() -> String {
     "gemma-4-e2b-it-8bit".to_string()
 }
 fn default_image_renamer_vlm_model() -> String {
-    String::new()
+    "qwen3.8-27b-8bit".to_string()
+}
+fn default_think_model() -> String {
+    "ornith-1.0-35b-jang_4m".to_string()
 }
 fn default_llm_timeout_secs() -> u64 {
     120
@@ -153,6 +159,7 @@ impl Default for ZtoolsConfig {
             weekend_model: default_weekend_model(),
             image_renamer_model: default_image_renamer_model(),
             image_renamer_vlm_model: default_image_renamer_vlm_model(),
+            think_model: default_think_model(),
             llm_timeout_secs: default_llm_timeout_secs(),
             llm_extended_timeout_secs: default_llm_extended_timeout_secs(),
             llm_quick_timeout_secs: default_llm_quick_timeout_secs(),
@@ -183,6 +190,12 @@ impl ZtoolsConfig {
                             }
                             if let Some(m) = best.get("filename").and_then(|v| v.as_str()) {
                                 self.image_renamer_model = m.to_string();
+                            }
+                            if let Some(m) = best.get("vlm").and_then(|v| v.as_str()) {
+                                self.image_renamer_vlm_model = m.to_string();
+                            }
+                            if let Some(m) = best.get("think").and_then(|v| v.as_str()) {
+                                self.think_model = m.to_string();
                             }
                             break;
                         }
@@ -234,6 +247,8 @@ mod tests {
         assert_eq!(cfg.twitter_model, "gemma-4-e2b-it-8bit");
         assert_eq!(cfg.weekend_model, "qwen3.8-27b-8bit");
         assert_eq!(cfg.image_renamer_model, "gemma-4-e2b-it-8bit");
+        assert_eq!(cfg.image_renamer_vlm_model, "qwen3.8-27b-8bit");
+        assert_eq!(cfg.think_model, "ornith-1.0-35b-jang_4m");
         assert_eq!(cfg.llm_timeout_secs, 120);
     }
 
@@ -243,6 +258,8 @@ mod tests {
         assert!(!cfg.twitter_model.is_empty());
         assert!(!cfg.weekend_model.is_empty());
         assert!(!cfg.image_renamer_model.is_empty());
+        assert!(!cfg.image_renamer_vlm_model.is_empty());
+        assert!(!cfg.think_model.is_empty());
     }
 
     /// The drift gate for the shared prompt surface: `conf/prompts.toml` is the
@@ -255,9 +272,13 @@ mod tests {
     fn test_twitter_prompt_matches_shared_conf() {
         use std::path::Path;
         let manifest = env!("CARGO_MANIFEST_DIR");
-        let conf_path = Path::new(manifest).parent().unwrap().join("conf/prompts.toml");
-        let content = std::fs::read_to_string(&conf_path)
-            .unwrap_or_else(|e| panic!("conf/prompts.toml missing at {}: {e}", conf_path.display()));
+        let conf_path = Path::new(manifest)
+            .parent()
+            .unwrap()
+            .join("conf/prompts.toml");
+        let content = std::fs::read_to_string(&conf_path).unwrap_or_else(|e| {
+            panic!("conf/prompts.toml missing at {}: {e}", conf_path.display())
+        });
         let val: toml::Value = toml::from_str(&content).expect("conf/prompts.toml must parse");
         let shared = val
             .get("twitter")

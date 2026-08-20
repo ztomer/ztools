@@ -66,8 +66,7 @@ fn default_config() -> ZtoolsConfig {
 fn get_available_models_filters_foundation_and_diffusion() {
     let (port, _handle) = mock_llm_server();
     let url = format!("http://127.0.0.1:{port}");
-    let models =
-        ztools::model_eval::get_available_models(&url, &default_config()).unwrap();
+    let models = ztools::model_eval::get_available_models(&url, &default_config()).unwrap();
     // foundation-model and diffusion-xl are filtered out.
     assert!(models.contains(&"llama-3".to_string()), "got: {models:?}");
     assert!(models.contains(&"qwen-7b".to_string()), "got: {models:?}");
@@ -85,8 +84,7 @@ fn get_available_models_filters_foundation_and_diffusion() {
 fn eval_model_returns_results_for_each_test_case() {
     let (port, _handle) = mock_llm_server();
     let url = format!("http://127.0.0.1:{port}");
-    let results =
-        ztools::model_eval::eval_model(&url, "llama-3", &default_config()).unwrap();
+    let results = ztools::model_eval::eval_model(&url, "llama-3", &default_config()).unwrap();
     // There are 5 test cases.
     assert_eq!(
         results.len(),

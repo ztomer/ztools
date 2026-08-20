@@ -148,6 +148,53 @@ play centres, trampoline parks), \"both\" for flexible activities.
 
 Output ONLY JSON.";
 
+pub const PHASE_EXTRACT_VENUES: &str = "\
+Extract family-friendly venues from the search results below. For each venue,
+list its name, location, price if available, and what it offers for kids.
+Ignore irrelevant search results, ads, and navigation text.
+
+Search results:
+{raw_text}
+
+List each relevant venue with key details, one per line.";
+
+pub const PHASE_DRAFT_FIXED: &str = "\
+You are an expert family activity planner. Suggest 10 specific weekend activities for
+families with kids ages {age_range} in {location}. Include a diverse mix of
+year-round venues, outdoor seasonal places (parks, conservation areas, farms),
+and indoor family spots. The year is {year}; the weekend is {date_range}.
+
+Weather: {weather_condensed}
+Prefer outdoor activities when clear/warm, and indoor venues when precipitation is expected.
+
+Available venues:
+{cleaned_sources}
+
+Output one line per suggestion in this EXACT format:
+NAME | LOCATION | DATES | PRICE | AGES | description (highlight features/exhibits)
+
+{carry}DO NOT suggest any of these places -- the family has already ruled them out, and
+a suggestion naming one is dropped after the fact, wasting a slot that could
+have held a real option: {exclusions}";
+
+pub const PHASE_STRUCTURE_FIXED_SYSTEM: &str = "\
+Output JSON now. Use EXACT schema:
+{\"fixed_activities\": [{\"name\": \"str\", \"location\": \"str\",
+\"target_ages\": \"str\", \"price\": \"str\", \"weather\": \"str\"}]}
+
+Rules for every field:
+- Copy values from the source text. NEVER invent one.
+- If the source does not state a value, output an empty string \"\" for it.
+  An empty field is CORRECT and expected. Do not guess a typical price or age
+  range, and do not repeat a value from another row.
+
+Weather: {weather_condensed}
+Set weather from the activity type and the forecast above: \"outdoor\" for
+outdoor activities (parks, zoo, sports), \"indoor\" for indoor venues (museums,
+play centres, trampoline parks), \"both\" for flexible activities.
+
+Output ONLY JSON.";
+
 pub const PHASE_STRUCTURE_USER: &str = "Convert these activities to the schema:
 
 {draft_text}";
@@ -222,5 +269,46 @@ mod tests {
             &[("year", "2026"), ("weather_condensed", "sunny")],
         );
         assert_renders_clean(PHASE_STRUCTURE_USER, &[("draft_text", "draft")]);
+    }
+
+    #[test]
+    fn test_weekend_prompts_match_shared_conf() {
+        use std::path::Path;
+        let manifest = env!("CARGO_MANIFEST_DIR");
+        let conf_path = Path::new(manifest)
+            .parent()
+            .unwrap()
+            .join("conf/prompts.toml");
+        let content = std::fs::read_to_string(&conf_path).unwrap_or_else(|e| {
+            panic!("conf/prompts.toml missing at {}: {e}", conf_path.display())
+        });
+        let val: toml::Value = toml::from_str(&content).expect("conf/prompts.toml must parse");
+        let wk = val
+            .get("weekend")
+            .expect("conf/prompts.toml needs [weekend]");
+
+        let get_inst = |k: &str| -> &str {
+            wk.get(k)
+                .and_then(|v| v.get("instructions"))
+                .and_then(|i| i.as_str())
+                .unwrap_or_else(|| panic!("missing [weekend.{k}].instructions"))
+        };
+
+        assert_eq!(PHASE_WEATHER_CONDENSE, get_inst("weather_condense"));
+        assert_eq!(CARRY_FIELDS, get_inst("carry_fields"));
+        assert_eq!(PHASE_EXTRACT_EVENTS, get_inst("extract_events"));
+        assert_eq!(PHASE_EXTRACT_VENUES, get_inst("extract_venues"));
+        assert_eq!(PHASE_DRAFT_TRANSIENT, get_inst("draft_transient"));
+        assert_eq!(PHASE_DRAFT_FIXED, get_inst("draft_fixed"));
+        assert_eq!(PHASE_REFINE, get_inst("refine"));
+        assert_eq!(
+            PHASE_STRUCTURE_TRANSIENT_SYSTEM,
+            get_inst("structure_transient_system")
+        );
+        assert_eq!(
+            PHASE_STRUCTURE_FIXED_SYSTEM,
+            get_inst("structure_fixed_system")
+        );
+        assert_eq!(PHASE_STRUCTURE_USER, get_inst("structure_user"));
     }
 }

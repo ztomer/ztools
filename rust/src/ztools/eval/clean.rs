@@ -55,8 +55,12 @@ pub fn remove_thinking_blocks(content: &str) -> String {
     let mut c = content.to_string();
 
     c = compile(THINK_RE).replace_all(&c, "").into_owned();
-    c = compile(GEMMA_THOUGHT_MATCH_RE).replace_all(&c, "").into_owned();
-    c = compile(GEMMA_THOUGHT_UNMATCH_RE).replace_all(&c, "").into_owned();
+    c = compile(GEMMA_THOUGHT_MATCH_RE)
+        .replace_all(&c, "")
+        .into_owned();
+    c = compile(GEMMA_THOUGHT_UNMATCH_RE)
+        .replace_all(&c, "")
+        .into_owned();
     c = compile(GEMMA_CHANNEL_RE).replace_all(&c, "").into_owned();
     c = compile(CHANNEL_RE).replace_all(&c, "").into_owned();
     c = compile(THINKING_MARKER_RE).replace_all(&c, "").into_owned();
@@ -151,6 +155,39 @@ pub fn extract_content_from_code_blocks(content: &str) -> Option<String> {
         .map(|m| m.as_str().trim().to_string())
 }
 
+/// Extract the largest JSON value from cleaned model output: prefer a markdown
+/// code block, else the outermost `[...]`/`{...}` span.
+pub fn extract_json(content: &str) -> Option<serde_json::Value> {
+    if let Some(block) = extract_content_from_code_blocks(content) {
+        if let Ok(v) = serde_json::from_str(&block) {
+            return Some(v);
+        }
+    }
+
+    let starts: Vec<usize> = content
+        .char_indices()
+        .filter(|(_, c)| *c == '[' || *c == '{')
+        .map(|(i, _)| i)
+        .collect();
+    let ends: Vec<usize> = content
+        .char_indices()
+        .filter(|(_, c)| *c == ']' || *c == '}')
+        .map(|(i, _)| i)
+        .collect();
+
+    for start in &starts {
+        for end in ends.iter().rev() {
+            if end < start {
+                continue;
+            }
+            if let Ok(v) = serde_json::from_str(&content[*start..=*end]) {
+                return Some(v);
+            }
+        }
+    }
+    serde_json::from_str(content).ok()
+}
+
 /// Comprehensive cleanup in the Python order: thinking blocks, inline
 /// reasoning, stats tokens, markdown fences.
 pub fn clean_model_output(content: &str) -> String {
@@ -198,7 +235,10 @@ mod tests {
 
     #[test]
     fn unmatched_end_think_tag() {
-        assert_eq!(remove_thinking_blocks("keep this</think>discard this"), "discard this");
+        assert_eq!(
+            remove_thinking_blocks("keep this</think>discard this"),
+            "discard this"
+        );
     }
 
     #[test]
@@ -220,7 +260,10 @@ mod tests {
 
     #[test]
     fn stats_tokens_removed() {
-        assert_eq!(remove_stats_tokens("content\nstats:2114;97.2952"), "content");
+        assert_eq!(
+            remove_stats_tokens("content\nstats:2114;97.2952"),
+            "content"
+        );
         assert_eq!(remove_stats_tokens("stats:123;45.67"), "");
         assert_eq!(remove_stats_tokens("text\u{fffe}text"), "texttext");
         assert_eq!(remove_stats_tokens(""), "");

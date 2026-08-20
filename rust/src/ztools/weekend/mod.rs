@@ -13,9 +13,9 @@ pub use fetch::*;
 pub use format::*;
 pub use phases::*;
 pub use prompts::*;
-pub use supply::*;
 /// Native Rust Weekend Planner module.
 use serde::{Deserialize, Serialize};
+pub use supply::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WeekendEvent {

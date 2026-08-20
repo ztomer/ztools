@@ -208,7 +208,8 @@ pub fn is_seasonal_event_exception(name: &str, hit_exclusion: &str) -> bool {
     let hit_norm = normalize_for_match(hit_exclusion);
 
     let has_event_marker = SEASONAL_EVENT_MARKERS.iter().any(|m| name_norm.contains(m));
-    let is_more_specific = name_norm.split_whitespace().count() > hit_norm.split_whitespace().count();
+    let is_more_specific =
+        name_norm.split_whitespace().count() > hit_norm.split_whitespace().count();
 
     has_event_marker && is_more_specific
 }
@@ -228,10 +229,7 @@ pub fn drop_excluded_places(
             .cloned();
         if let Some(hit) = hit {
             if is_seasonal_event_exception(&ev.name, &hit) {
-                notes.push(format!(
-                    "kept seasonal event '{}' at '{}'",
-                    ev.name, hit
-                ));
+                notes.push(format!("kept seasonal event '{}' at '{}'", ev.name, hit));
                 kept.push(ev);
             } else {
                 notes.push(format!(
@@ -421,7 +419,10 @@ pub fn row_is_sourced(name: &str, corpus_normalized: &str) -> bool {
     if words.is_empty() {
         return true;
     }
-    let hits = words.iter().filter(|w| corpus_normalized.contains(w.as_str())).count();
+    let hits = words
+        .iter()
+        .filter(|w| corpus_normalized.contains(w.as_str()))
+        .count();
     (hits as f32 / words.len() as f32) >= PROVENANCE_MIN_COVERAGE
 }
 
