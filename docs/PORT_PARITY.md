@@ -89,6 +89,18 @@ the Rust binary's notion of which model is best.
     wired into `weekend_cache` and the `weekend_plan` dispatch. Tests ported from
     `test_report_class_fixes.py` were proven to fail against the old matcher
     before the new one landed.
+- [x] **5b. Weekend constraint suite (C5 weather, C4 constant columns, C3 window,
+  C7 provenance)** — 2026-08-19: the full `enforce.py` constraint suite is now
+  ported to `rust/src/ztools/weekend/` and wired into the `weekend_plan`
+  dispatch in canonical order: provenance (`drop_unsourced_rows`, C7) → exclusion
+  (`drop_excluded_places`, C8) → window (`drop_events_outside_window` + day
+  reconcile, C3) → weather labels (C5) → constant columns (C4). The C5 weather
+  correction and C4 suspect-conjunction tests proved to fail when neutered;
+  window tests proved to fail when `window_overlap` was neutered; provenance
+  tests proved to fail when `row_is_sourced` was forced false.
+  `fetch_duckduckgo_events` returns the fetched corpus so the provenance gate has
+  ground truth. `enforce.rs` was split out past the 500-line cap: constants into
+  `weekend/constants.rs`, dates into `weekend/dates.rs`.
 - [x] **6. Greedy decoding across all LLM callers** (temperature 0.0) — for deterministic reproducible leaderboard outputs.
 - [x] **7. Derived request timeouts** from measured cold-start / prefill / decode rates.
 

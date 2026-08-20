@@ -70,7 +70,15 @@ pub(crate) fn weekend_plan(
     let d2 = sunday.format("%Y-%m-%d").to_string();
     let dates_str = format!("{} to {}", friday.format("%b %d"), sunday.format("%b %d"));
 
-    let transient = crate::ztools::weekend::fetch_duckduckgo_events(&location, &d1, &d2, config);
+    let (transient, corpus) =
+        crate::ztools::weekend::fetch_duckduckgo_events(&location, &d1, &d2, config);
+    // Provenance FIRST: a row that traces to nothing we fetched is invention,
+    // and there is no point judging an invented row's dates or weather label.
+    let (transient, provenance_notes) =
+        crate::ztools::weekend::drop_unsourced_rows(transient, &corpus);
+    for note in &provenance_notes {
+        println!("→ {note}");
+    }
     let exclusions = crate::ztools::weekend::load_exclusions(config);
     let (transient, drop_notes) =
         crate::ztools::weekend::drop_excluded_places(transient, &exclusions);

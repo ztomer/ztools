@@ -320,11 +320,12 @@ fn test_fetch_duckduckgo_events() {
         llm_timeout_secs: 1,
         ..crate::config::ZtoolsConfig::default()
     };
-    let events = fetch_duckduckgo_events("Vaughan", "2026-08-07", "2026-08-09", &config);
+    let (events, corpus) = fetch_duckduckgo_events("Vaughan", "2026-08-07", "2026-08-09", &config);
     assert!(
         events.is_empty(),
         "unreachable search and model must yield nothing, not invented events: {events:?}"
     );
+    assert!(corpus.is_empty());
 }
 
 fn sample_event(name: &str, location: &str, score: f32) -> crate::ztools::weekend::WeekendEvent {

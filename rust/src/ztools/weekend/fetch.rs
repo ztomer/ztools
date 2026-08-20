@@ -6,7 +6,7 @@ pub fn fetch_duckduckgo_events(
     d1: &str,
     d2: &str,
     config: &crate::config::ZtoolsConfig,
-) -> Vec<WeekendEvent> {
+) -> (Vec<WeekendEvent>, String) {
     let now = chrono::Local::now();
     let month_name = now.format("%B").to_string();
     let year = now.format("%Y").to_string();
@@ -87,7 +87,8 @@ pub fn fetch_duckduckgo_events(
         d1, d2, location, d1, d2, raw_text
     );
 
-    call_osaurus_json(&prompt, config).unwrap_or_default()
+    let events = call_osaurus_json(&prompt, config).unwrap_or_default();
+    (events, raw_text)
 }
 /// Default Open-Meteo URL builder for Vaughan / GTA.
 fn open_meteo_url(friday_date: &str, sunday_date: &str) -> String {

@@ -10,7 +10,7 @@
 //! `(kept_events, notes)`; the notes are surfaced to the operator rather than
 //! discarded, so a filtered run says what it dropped and why.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use chrono::{Datelike, NaiveDate};
 
@@ -277,28 +277,6 @@ pub fn correct_weather_labels(mut events: Vec<WeekendEvent>) -> (Vec<WeekendEven
     (events, notes)
 }
 
-/// Fields whose value the prompt asks the model to always supply, paired with
-/// the aliases the parsed item may carry them under. These are the columns a
-/// model fills mechanically when it has nothing real to say.
-pub const CONSTANT_COLUMN_FIELDS: &[(&str, &[&str])] = &[
-    ("Target Age(s)", &["target_ages", "age_group"]),
-    ("Estimated Price", &["price", "cost"]),
-    ("Duration", &["duration"]),
-];
-
-/// The values that actually shipped, filled from the instructions rather than
-/// from any event. Kept as data so a fourth instance is one line, not a new
-/// check -- and so the historical evidence for this class stays readable.
-pub const PROMPT_CONSTANTS: &[(&str, &[&str])] = &[
-    ("Estimated Price", &["$18-35", "18-35"]),
-    ("Duration", &["2-3 hours"]),
-];
-
-/// A column of one row is trivially constant. Flagging it would be noise, and a
-/// check that cries wolf on every single-row table is a check the reader learns
-/// to skip.
-const MIN_ROWS_FOR_CONSTANT: usize = 2;
-
 /// Does this row's date range overlap `[start, end]`?
 ///
 /// Returns Some(true)/Some(false), or None when the row carries no parseable
@@ -421,68 +399,66 @@ pub fn reconcile_day_with_dates(
     (events, notes)
 }
 
-fn column_value(ev: &WeekendEvent, aliases: &[&str]) -> String {
-    for alias in aliases {
-        let value = match *alias {
-            "target_ages" | "age_group" => &ev.target_ages,
-            "price" | "cost" => &ev.price,
-            "duration" => &ev.duration,
-            _ => "",
-        };
-        let trimmed = value.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
-    }
-    String::new()
+/// A row's name must be traceable to the fetched corpus. Below this fraction of
+/// the name's significant words appearing in the corpus, the row is invention.
+const PROVENANCE_MIN_COVERAGE: f32 = 0.6;
+
+/// Content words of a venue/event name, folded for matching.
+fn significant_words(text: &str) -> Vec<String> {
+    normalize_for_match(text)
+        .split_whitespace()
+        .filter(|w| w.len() > 2 && !CONNECTORS.contains(w))
+        .map(String::from)
+        .collect()
 }
 
-/// Report columns that are identical on every row **and** equal to a value the
-/// configuration or the prompt supplied.
+/// Whether this row's name traces back to the corpus we actually fetched.
 ///
-/// The conjunction is what makes it precise. *Constant* alone fires on a
-/// genuinely uniform column (every event in one city). *Equal to a configured
-/// value* alone fires on the one row that legitimately matches. Together they
-/// say: this column was answered from the question.
+/// The corpus is passed already-normalised. A row with no name is kept: an
+/// unnamed row is class C7's problem, not provenance's.
+pub fn row_is_sourced(name: &str, corpus_normalized: &str) -> bool {
+    let words = significant_words(name);
+    if words.is_empty() {
+        return true;
+    }
+    let hits = words.iter().filter(|w| corpus_normalized.contains(w.as_str())).count();
+    (hits as f32 / words.len() as f32) >= PROVENANCE_MIN_COVERAGE
+}
+
+/// Drop rows whose name appears nowhere in the fetched corpus.
 ///
-/// Returns notes and **changes nothing**. A mechanically-filled column is a
-/// signal that the extraction is wrong, not a reason to delete the rows.
-pub fn flag_constant_columns(
-    events: &[WeekendEvent],
-    suspects: &HashMap<String, Vec<String>>,
-) -> Vec<String> {
-    if events.len() < MIN_ROWS_FOR_CONSTANT {
-        return Vec::new();
+/// This is the gate that was missing: every other check asked whether a row was
+/// well-formed, in-window or non-excluded -- none asked whether it was real. A
+/// starved pipeline fabricates confidently, and confident fabrication is
+/// exactly what survives shape checks.
+///
+/// Applied ONLY when a corpus is available; with no corpus there is nothing to
+/// judge against and dropping would be worse than keeping.
+pub fn drop_unsourced_rows(
+    events: Vec<WeekendEvent>,
+    corpus: &str,
+) -> (Vec<WeekendEvent>, Vec<String>) {
+    if corpus.is_empty() || events.is_empty() {
+        return (events, Vec::new());
+    }
+    let corpus_normalized = normalize_for_match(corpus);
+    if corpus_normalized.is_empty() {
+        return (events, Vec::new());
     }
 
+    let mut kept = Vec::new();
     let mut notes = Vec::new();
-    for (label, aliases) in CONSTANT_COLUMN_FIELDS {
-        let values: Vec<String> = events.iter().map(|ev| column_value(ev, aliases)).collect();
-        let first = &values[0];
-        if first.is_empty() {
-            continue;
+    for ev in events {
+        if row_is_sourced(&ev.name, &corpus_normalized) {
+            kept.push(ev);
+        } else {
+            notes.push(format!(
+                "dropped unsourced row (not in fetched corpus): {}",
+                ev.name
+            ));
         }
-        // `if first.is_empty()` above is load-bearing: it is what keeps an empty
-        // column from ever matching. A blank cell is an honest "unknown".
-        if values[1..].iter().any(|v| !v.eq_ignore_ascii_case(first)) {
-            continue;
-        }
-        let suspects_for_label = suspects.get(*label).map(|v| v.as_slice()).unwrap_or(&[]);
-        let is_suspect = suspects_for_label
-            .iter()
-            .filter(|s| !s.trim().is_empty())
-            .any(|s| first.eq_ignore_ascii_case(s.trim()));
-        if !is_suspect {
-            continue;
-        }
-        notes.push(format!(
-            "{label}: every one of {} rows reads {first:?}, which is the configured \
-             value -- the column was answered from the prompt, not from the events. \
-             Rows kept; treat the column as unverified.",
-            events.len()
-        ));
     }
-    notes
+    (kept, notes)
 }
 
 #[cfg(test)]

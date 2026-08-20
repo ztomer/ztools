@@ -8,8 +8,8 @@
 
 use crate::ztools::weekend::{
     correct_weather_labels, drop_events_outside_window, drop_excluded_places,
-    find_dates_in, flag_constant_columns, matches_exclusion, parse_any_date,
-    reconcile_day_with_dates, window_overlap, WeekendEvent,
+    drop_unsourced_rows, find_dates_in, flag_constant_columns, matches_exclusion,
+    parse_any_date, reconcile_day_with_dates, row_is_sourced, window_overlap, WeekendEvent,
 };
 use chrono::NaiveDate;
 use std::collections::HashMap;
@@ -396,4 +396,43 @@ fn reconcile_day_derives_or_clears() {
         "{}",
         fixed[0].day
     );
+}
+
+// ---------------------------------------------------------------------------
+// Provenance gate (drop_unsourced_rows / row_is_sourced)
+// ---------------------------------------------------------------------------
+
+/// A name that traces to the fetched corpus survives; an invented one is dropped.
+#[test]
+fn a_row_that_traces_to_the_corpus_survives_but_invention_is_dropped() {
+    let corpus = "Harbour Kite Festival at Pier 4 Toronto this weekend";
+    let real = event("Harbour Kite Festival", "Pier 4");
+    let invented = event("Quantum Levitation Workshop", "Mississauga");
+    let (kept, notes) = drop_unsourced_rows(vec![real, invented], corpus);
+    assert_eq!(kept.len(), 1, "{notes:?}");
+    assert_eq!(kept[0].name, "Harbour Kite Festival");
+    assert_eq!(notes.len(), 1, "{notes:?}");
+    assert!(notes[0].contains("Quantum Levitation"), "{notes:?}");
+}
+
+/// Coverage is a fraction, not all-or-nothing: 2 of 3 significant words is
+/// enough (0.66 >= 0.6), one of three is not (0.33 < 0.6).
+#[test]
+fn provenance_coverage_is_a_fraction_not_all_or_nothing() {
+    let corpus = "apple banana cherry daily events in vaughan";
+    // "apple banana" both in corpus -> 2/2 kept.
+    assert!(row_is_sourced("Apple Banana Festival", corpus));
+    // "apple plum" -> plum missing, 1/2 = 0.5 < 0.6 -> dropped.
+    assert!(!row_is_sourced("Apple Plum Festival", corpus));
+}
+
+/// An unnamed row has nothing to check; empty corpus judges nothing.
+#[test]
+fn unnamed_rows_and_empty_corpus_are_never_dropped() {
+    assert!(row_is_sourced("", "anything"));
+    assert!(row_is_sourced("   ", "anything"));
+
+    let (kept, notes) = drop_unsourced_rows(vec![event("X", "Y")], "");
+    assert_eq!(kept.len(), 1);
+    assert!(notes.is_empty());
 }

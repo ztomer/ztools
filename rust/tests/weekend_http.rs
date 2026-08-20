@@ -69,7 +69,7 @@ fn call_osaurus_json_parses_mock_llm_response() {
         r#"{"choices":[{"message":{"content":"{\"transient_events\":[{\"name\":\"Test Event\",\"location\":\"Toronto\"}]}"}}]}"#,
     );
     let config = config_with_url(&format!("http://127.0.0.1:{port}"));
-    let events = ztools::weekend::fetch_duckduckgo_events(
+    let (events, corpus) = ztools::weekend::fetch_duckduckgo_events(
         "Vaughan",
         "2026-08-07",
         "2026-08-09",
@@ -78,4 +78,5 @@ fn call_osaurus_json_parses_mock_llm_response() {
     // The function may return events or empty depending on the LLM response
     // shape, but it must not panic. The dispatch + HTTP + parse cycle runs.
     let _ = events.len();
+    let _ = corpus.len();
 }

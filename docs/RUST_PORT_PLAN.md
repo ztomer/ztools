@@ -205,10 +205,15 @@ Status: **partially done — twitter summarize prompt shared, in progress.**
      `rust/src/ztools/weekend/dates.rs` (ISO + named-month shapes, explicit-year
      wins, durations excluded, shared with the enforcer so a future
      prioritiser cannot drift); `window_overlap`, `drop_events_outside_window`
-     and `reconcile_day_with_dates` wired into the dispatch. Window tests proved
-     to fail when `window_overlap` was neutered. Remaining: provenance
-     (`drop_unsourced_rows`), supply in-window counting, the 4-phase prompt
-     pipeline.
+      and `reconcile_day_with_dates` wired into the dispatch. Window tests proved
+      to fail when `window_overlap` was neutered.
+    - **C7 provenance gate DONE**: `fetch_duckduckgo_events` now returns the
+      fetched corpus alongside the events; `row_is_sourced` (>= 0.6 of the name's
+      significant words present in the normalised corpus) and
+      `drop_unsourced_rows` ported to `enforce.rs` and run FIRST in the dispatch,
+      before any shape check. Tests proved to fail when `row_is_sourced` was
+      forced false. Remaining: supply in-window counting, the 4-phase prompt
+      pipeline.
 3. **rename**: port `helpers.py` text cleaning (pure); port VLM call path to the
    osaurus vision API (no local MLX yet).
 4. **eval**: port `validate.py` JSON validator + `content_processing` cleaning
