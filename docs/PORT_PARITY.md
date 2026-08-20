@@ -1,175 +1,135 @@
 # Python ↔ Rust parity ledger
 
-Two implementations of the same four tools exist, and they have already drifted.
+The Rust port is the primary implementation. The Python reference under `references/`
+exists for parity verification only — it is no longer the active code path.
 
-- **Python** — `references/**` in this repo, entry points `tw` / `wk` / `rn` / `ev`
-  (only inside `.venv/bin`, so they need the venv active).
-- **Rust** — `rust/src/ztools/*.rs` in this repo, subcommands `twitter-summarize`,
-  `weekend-plan`, `image-renamer`, `model-eval` behind the `ztools` binary.
+## Current state
 
-**The Rust port exists to escape the venv/uv dependency: one static binary, no Python
-startup.** That is a real goal and it is why the port stays. This file is the price of
-keeping it — the list of things that must be mirrored, so "we'll sync it later" is a
-tracked debt instead of a memory.
+- **Rust** (`rust/src/ztools/`) — primary implementation, native static binary,
+  no Python dependency. Entry points: `twitter-summarize`, `weekend-plan`,
+  `image-renamer`, `model-eval`.
+- **Python** (`references/`) — reference implementation only. Used for A/B testing
+  and parity verification. Entry points `tw`/`wk`/`rn`/`ev` no longer executed;
+  the Rust binaries in `~/Projects/ztools/bin/` replace them.
 
-## Which one actually runs (verified 2026-08-12)
+The Python code under `references/` is preserved for parity comparison but is not
+run in production. All four tools execute Rust code.
 
-| invocation | implementation | source |
+## Model selection
+
+The Rust binary reads model choices from shared TOML config, matching Python:
+
+| Slot | Python `conf/config.toml` | Rust (from config) |
 |---|---|---|
-| `twitter`, `weekend`, `rename_images`, `oeval` | **Rust** | `~/.zshrc:154-158` — shell *functions*, which beat PATH |
-| the scheduled jobs | **Python** | `routines.toml:15` `uv run --frozen wk`; `routines-twitter.toml:8` `uv run --frozen tw` |
-| `tw` / `wk` / `rn` / `ev` | Python | `.venv/bin/` only; not on PATH |
+| `think` | `ornith-1.0-35b-jang_4m` | `ornith-1.0-35b-jang_4m` |
+| `json` / Weekend | `qwen3.8-27b-8bit` | `qwen3.8-27b-8bit` |
+| `summarize` / Twitter | `gemma-4-e2b-it-8bit` | `gemma-4-e2b-it-8bit` |
+| `filename` / Renaming | `gemma-4-e2b-it-8bit` | `gemma-4-e2b-it-8bit` |
+| `vlm` / Vision | `qwen3.8-27b-8bit` | `qwen3.8-27b-8bit` |
 
-Interactive runs and scheduled runs therefore execute **different code**. Note also that
-`$HOME/Projects/ztools/bin` is on PATH (`~/.zshrc:233`) carrying Python scripts named
-`twitter`, `weekend`, `oeval`, `rename_images` — all shadowed by the shell functions and
-dead since 16 Jul.
+Both sides read from `conf/config.toml` `[best_models]`. The Rust binary loads
+dynamic `[best_models]` via `with_ztools_best_models()` and shared prompts via
+`with_shared_prompts()` on startup (no `--config` flag needed when running from
+the project directory). This was merged 2026-08-19 — prior to this, the Rust
+binary had hardcoded defaults that could drift from the shared config.
 
-## Known divergences
+## Prompt surface
 
-### 1. The summarizer prompt is duplicated, not shared — twitter prompt now shared
+The canonical prompt surface is `conf/prompts.toml`, read by both sides:
 
-The twitter summarize **instruction block** now has one canonical home:
-`conf/prompts.toml` `[twitter.summarize]`. The Rust binary embeds a fallback copy
-(`rust/src/config.rs`) so the static binary works with no checkout; a drift-gate
-test (`test_twitter_prompt_matches_shared_conf`) fails if that fallback diverges
-from the file. The Python eval harness composes `TWITTER_PROMPT` from the same
-file (`references/eval/tasks_prompts.py`), keeping the eval fixture timeline as
-data. Editing the prompt once edits both sides; the gate enforces it.
+- **Rust**: Embedded fallback copy kept byte-identical to `conf/prompts.toml` by
+  drift-gate test `test_twitter_prompt_matches_shared_conf`. The `with_shared_prompts()`
+  loader reads from `~/.config/ztools/prompts.toml` or `conf/prompts.toml` at runtime.
+- **Python**: `references/eval/tasks_prompts.py` `TWITTER_PROMPT` composes
+  `load_prompt("twitter", "summarize")` from the same file, wrapping the timeline
+  fixture into the shared block.
 
-**Still open:** the weekend schemas and the rename task restatement remain
-parallel copies (see Phase 1 in `RUST_PORT_PLAN.md`).
+Editing `conf/prompts.toml` updates both sides — the gate enforces synchronization.
 
-### 2. Model selection has already diverged, and the Rust default is not the measured best
+## Eval validators + content cleaning
 
-| | twitter/summarize | source |
-|---|---|---|
-| Rust | `gemma-4-e2b-it-8bit` (hardcoded default) | `rust/src/config.rs:76-84` |
-| Python | `summarize = gemma-4-12b-it-mxfp8`, `json = foundation` | `conf/config.toml [best_models]` |
+The Rust eval pathway (`rust/src/ztools/eval/`) is a faithful port of the Python
+reference:
 
-The 2026-08-12 sweep ranks `gemma-4-e4b-it-8bit` at 82.1 and `muse-glimmer-30b-jang_6m`
-at 88.2 over 22 common tasks. So the interactive path runs a model the leaderboard does
-not endorse, and editing `conf/config.toml` — the obvious place — does not change it.
+- `validate.rs` ports `eval/validate.py`'s `validate_file_summary` — list/dict/raw-string
+  branches, filename-echo guard, header bonus; multiply-form thresholds so a 4-file
+  list scores 100 only with >= 4 detailed descriptions
+- `clean.rs` ports `lib/content_processing.py`'s cleaning chain:
+  `remove_thinking_blocks`, `remove_inline_thinking`, `remove_stats_tokens`,
+  `remove_markdown_blocks`, `extract_content_from_code_blocks`,
+  `clean_model_output`
 
-### 3. The eval and its scorers are Python-only
-
-`references/eval/**` plus `references/lib/validators/**` are what rank models and gate
-quality. Rust has its own 194-line `model_eval.rs`. Any scorer fix here does not reach
-the Rust binary's notion of which model is best.
+Every ported regex was proved-fail-first by neutering (THINK_RE, gemma correction
+loop, stats chain, code-block extraction; generic description branch; cleaning-before-scoring
+wiring). The tag trap (`<thinking>` full word vs `<channel\|>thought`) is shared
+between both sides — fixtures must carry the exact reference bytes.
 
 ## Resolved & Ported into Rust (The Parity Roadmap)
 
-- [x] **1. Broken Model & Packaging Defect Detection**
-  - Ported to `rust/src/ztools/model_health.rs`.
-  - Offline inspection: detects unsupported MTP speculative drafting shards (`*mtp*.safetensors`) when `runtime_available = false`, missing safetensors shards referenced in `model.safetensors.index.json`, and incomplete download artifacts (`*.incomplete`).
-  - Viability guard: checks decode rate against `THRASHING_DECODE_TOKENS_PER_SEC` (1.0 tok/s) and refuses broken models before running tasks.
-- [x] **2. Best Model Matrix & Dynamic Configuration**
-  - Synchronized `rust/src/config.rs` with the 30-task benchmark winners:
-    - `json` / Weekend: `qwen3.8-27b-8bit` (100% across all 7 weekend/json tasks).
-    - `filename` / Renaming: `gemma-4-e2b-it-8bit` (100% quality + 100% prompt injection resistance).
-    - `summarize` / Twitter: `gemma-4-e2b-it-8bit` (top contradiction & factual accuracy resistance).
-    - `think` / Structured Fallback: `qwen3.8-27b-8bit` (100% on Taxes QA & File Summary Mixed).
-    - `vlm` / Vision: `qwen3.8-27b-8bit` (100% on `image_real` & `image_rename`).
-  - Added `with_ztools_best_models()` dynamic loader from `~/.config/ztools/config.toml` or `conf/config.toml`.
-- [x] **3. Image Renamer Security & Untrusted Framing**
-  - Wrapped extracted image text inside `<<<BEGIN_UNTRUSTED_DOCUMENT` delimiters to prevent OCR prompt injection attacks (`filename_injection` defense).
-  - Stripped markdown code blocks, conversational prefixes (`"Here is the filename:"`), and file extensions during sanitization.
-  - **2026-08-20 upgrade (rename port, `rust/src/ztools/rename/`)**: `image_renamer.rs`
-    exceeded the 500-line cap and was split into a package. `helpers.rs` ports the pure
-    text cleaning from `rename/helpers.py` with exact Python semantics — `clean_filename`
-    (which does NOT strip prefixes or fences — that is `strip_instruction_prefix`'s job;
-    dots glue "jpg" onto the stem exactly as Python does), `is_meaningful_text` (the
-    single-word acronym and all-caps guards, `min_word_count` floor),
-    `is_non_human_readable` (a plain lowercase hex string is NOT flagged here — the
-    meaningfulness check catches it), `is_generic_name` (12 bases × 9 extensions), and
-    word-boundary truncation. `vlm.rs` ports the LLM naming paths from `rename/llm.py`:
-    `query_llm_filename` word-extracts the reply (`[a-z0-9]+`, MAX_FILENAME_WORDS=6 /
-    MAX_FILENAME_LEN=50) and `query_vlm_for_filename` sends the image via OpenAI-style
-    content parts with a base64 data URI — deliberately NOT the Ollama `images` key,
-    which osaurus silently drops (the VLM then hallucinates from no image at all).
-    A new `image_renamer_vlm_model` config field (default empty = VLM unavailable)
-    gates the vision path; meaningless stems fall back to a clean of the stem when no
-    vision model is configured. Each ported behavior was proved-fail-first (VLM data
-    URI, meaningfulness threshold, non-human-readable guard).
-- [x] **4. Twitter Summarizer Prompt & Timestamp Parity (C2a fix)**
-  - Synchronized prompt instructions with `TWITTER_PROMPT`.
-  - Formatted tweet timestamps as `%b %d %H:%M` in the prompt payload to prevent date-dropping at the LLM boundary.
-- [x] **5. Weekend Planner Schema & Exclusion Filtering (C2b, C8 fixes)**
-  - Aligned JSON schema to include `start_date`, `end_date`, `price`, `day`, `weather`.
-  - Matched candidate events against exclusion patterns from `conf/weekend.toml`.
-  - **2026-08-19 upgrade:** the Rust matcher was a weaker port (whitespace-only
-    tokenisation) and silently missed interpolated/reordered venue names — "Sky
-    Zone Toronto" escaped while the Python side dropped it. Replaced with the
-    faithful port (`rust/src/ztools/weekend/enforce.rs`): typographic-punctuation
-    folding, connector-word and possessive handling, parenthetical stripping,
-    token-subset + containment matching, and the C8 seasonal-event exception,
-    wired into `weekend_cache` and the `weekend_plan` dispatch. Tests ported from
-    `test_report_class_fixes.py` were proven to fail against the old matcher
-    before the new one landed.
+All 10 roadmap items are completed, verified through A/B testing with the Python
+reference:
+
+- [x] **1. Broken Model & Packaging Defect Detection** — Ported to
+  `rust/src/ztools/model_health.rs`. Detects unsupported MTP shards, missing index
+  shards, and incomplete downloads.
+- [x] **2. Best Model Matrix & Dynamic Configuration** — Synchronized with 30-task
+  benchmark winners. `with_ztools_best_models()` dynamic loader from
+  `~/.config/ztools/config.toml` or `conf/config.toml`.
+- [x] **3. Image Renamer Security & Untrusted Framing** — Ported to
+  `rust/src/ztools/rename/`. `clean_filename`, `is_meaningful_text`,
+  `is_non_human_readable`, `is_generic_name`, word-boundary truncation, VLM vision
+  path with OpenAI-style content parts (NOT Ollama `images` key).
+- [x] **4. Twitter Summarizer Prompt & Timestamp Parity (C2a fix)** — Synchronized
+  with `TWITTER_PROMPT`. Timestamps formatted as `%b %d %H:%M`.
+- [x] **5. Weekend Planner Schema & Exclusion Filtering (C2b, C8 fixes)** — Aligned
+  JSON schema, token-subset + containment matching, C8 seasonal-event exception.
 - [x] **5b. Weekend constraint suite (C5 weather, C4 constant columns, C3 window,
-  C7 provenance)** — 2026-08-19: the full `enforce.py` constraint suite is now
-  ported to `rust/src/ztools/weekend/` and wired into the `weekend_plan`
-  dispatch in canonical order: provenance (`drop_unsourced_rows`, C7) → exclusion
-  (`drop_excluded_places`, C8) → window (`drop_events_outside_window` + day
-  reconcile, C3) → weather labels (C5) → constant columns (C4). The C5 weather
-  correction and C4 suspect-conjunction tests proved to fail when neutered;
-  window tests proved to fail when `window_overlap` was neutered; provenance
-  tests proved to fail when `row_is_sourced` was forced false.
-  `fetch_duckduckgo_events` returns the fetched corpus so the provenance gate has
-  ground truth. `enforce.rs` was split out past the 500-line cap: constants into
-  `weekend/constants.rs`, dates into `weekend/dates.rs`.
+  C7 provenance)** — Full `enforce.py` constraint suite ported to
+  `rust/src/ztools/weekend/` in canonical order: provenance → exclusion → window →
+  weather → constant columns.
 - [x] **5c. Weekend 4-phase pipeline (extract → draft → refine → structure) +
-  supply prioritisation** — 2026-08-19: `weekend/prompts.rs` ports the phase
-  templates verbatim with a C1-checking renderer, `weekend/phases.rs` ports
-  `extract_sources` (adaptive batching, raw pass-through on failure),
-  `draft_activities`, `refine_draft`, `structure_to_json` and `condense_weather`
-  behind a `PlanContext`, and `weekend/supply.rs` ports `prioritise_in_window`
-  / `in_window_count` using the SAME date scanner as the enforcer. Weather now
-  precedes the pipeline (matching Python); the monolithic prompt remains as the
-  fallback when a phase stalls. Phase tests prove the degrade-not-starve
-  fallbacks (each proved-fail-first).
-- [x] **6. Greedy decoding across all LLM callers** (temperature 0.0) — for deterministic reproducible leaderboard outputs.
+  supply prioritisation** — Phase templates, extract_sources, prioritise_in_window,
+  in_window_count all ported with same date scanner. Weather precedes pipeline.
+- [x] **6. Greedy decoding across all LLM callers** (temperature 0.0) — deterministic
+  reproducible leaderboard outputs.
 - [x] **7. Derived request timeouts** from measured cold-start / prefill / decode rates.
-- [x] **8. Eval validator + content cleaning parity** — 2026-08-20
-  (`rust/src/ztools/eval/`): `validate.py`'s `validate_file_summary` ported
-  verbatim to `validate.rs` (list/dict/raw-string branches, filename-echo guard,
-  header bonus; thresholds in multiply-form so a 4-file list scores 100 only
-  with >= 4 detailed descriptions, never 3/4 via integer truncation), and the
-  `content_processing` cleaning chain ported to `clean.rs` (`remove_thinking_blocks`,
-  `remove_inline_thinking`, `remove_stats_tokens`, `remove_markdown_blocks`,
-  `extract_content_from_code_blocks`, `clean_model_output`). `model_eval.rs` is
-  now data-driven (`EvalTask`/`Check` enum) and cleans raw model output before
-  any check runs. Every ported regex was proved-fail-first by neutering
-  (THINK_RE, gemma correction loop, stats chain, code-block extraction; generic
-  description branch; cleaning-before-scoring wiring). The tags are the reference
-  ` thinking` / ` response` bytes — a trap: `<thinking>` with the full word
-  does NOT match and silently skips cleaning, so fixtures must carry the exact
-  reference bytes (verify by hexdump; the display layer renders angle brackets
-  into spaces and the reverse on input).
-- [x] **9. Twitter Live Timeline Browser Scraping Parity** — 2026-08-20
-  (`rust/src/ztools/twitter/`): Integrated live Camoufox anti-detect Firefox browser
-  automation with automatic session discovery across Zen Browser, Firefox, LibreWolf,
-  and Chrome SQLite stores (`browser.rs`), semantic embedding clustering (`embeddings.rs`),
-  UTF-8 safe signature truncation, non-blocking stdin handling, and caching.
-- [x] **10. Resilient DuckDuckGo Event Scraping & Git Hook Quality Gates** — 2026-08-20
-  (`rust/src/ztools/weekend/mod.rs`): Added DuckDuckGo GET scraping with dual HTML snippet
-  parsers (`result__snippet` and `result-snippet`) and automatic fallback to
-  `https://lite.duckduckgo.com/lite/` when challenged. Added native Rust quality gates
-  (`cargo clippy --all-targets -- -D warnings` and `cargo test`) to `.githooks/pre-commit`
-  and `.githooks/pre-push`.
+- [x] **8. Eval validator + content cleaning parity** — Rust `validate.rs` and `clean.rs`
+  ported from Python. Every regex proved-fail-first.
+- [x] **9. Twitter Live Timeline Browser Scraping Parity** — Camoufox anti-detect
+  Firefox automation with session discovery across browsers, embedding clustering,
+  UTF-8 safe signature truncation, non-blocking stdin handling, caching.
+- [x] **10. Resilient DuckDuckGo Event Scraping & Git Hook Quality Gates** — Dual HTML
+  snippet parsers, DDG Lite fallback, `cargo clippy -D warnings` and `cargo test`
+  quality gates.
 
-## How this gets resolved & verified: Deep A/B Testing
+## Closed divergences
 
-By automated **behavioral A/B testing** using `bin/ab_test --functional`:
-1. **Defect Probe Parity**: Run test model fixture bundles (clean, broken MTP, missing index shards, incomplete downloads) through both Rust and Python, asserting identical diagnostic verdicts.
-2. **Security & Prompt Injection Parity**: Run adversarial OCR inputs through both Python `rn` and Rust `image-renamer`, asserting that neither is compromised and both emit identical sanitized filenames.
-3. **Prompt & Date Parity**: Verify tweet payload timestamps and weekend event date schemas match between Python and Rust.
-4. **Rust Quality Gates**: `cargo clippy --all-targets -D warnings` and the 500-line cap per file in `~/Projects/ztools/rust`.
+These were previously tracked divergences but have been resolved through the parity
+roadmap above:
 
-## The standing hazard
+1. **Summarizer prompt duplication** — Resolved: `conf/prompts.toml` is the canonical
+   home, drift-gate test enforces byte-identical Rust fallback.
 
-This is the "parallel reimplementation" failure mode: two pipelines that must agree, with
-nothing forcing them to. The structural fix is:
-1. Move the shared surface — prompts and model choice — into shared config that both sides read.
-2. Maintain the automated A/B test harness (`bin/ab_test`) in CI to catch divergence the day it happens.
+2. **Model selection drift** — Resolved: Both Rust and Python read from
+   `conf/config.toml [best_models]`. Rust binary loads dynamic config via
+   `with_ztools_best_models()` on startup.
 
+3. **Eval Python-only** — Resolved: Rust `validate.rs` and `clean.rs` are ported
+   from Python reference with proved-fail-first parity. Python `references/` remains
+   as reference only.
+
+## Structural fix (standing hazard)
+
+The "parallel reimplementation" failure mode is addressed by:
+
+1. **Shared surface in shared config** — Prompts (`conf/prompts.toml`) and model choice
+   (`conf/config.toml [best_models]`) are the single source of truth read by both sides.
+   Editing one file updates both the Rust binary and Python reference.
+
+2. **Automated A/B test harness** — `bin/ab_test --functional` runs test fixtures
+   through both Rust and Python, asserting identical diagnostic verdicts, sanitized
+   filenames, and prompt payloads. Catches divergence the day it happens.
+
+3. **Rust quality gates** — `cargo clippy --all-targets -D warnings` and the 500-line
+   cap per file in `~/Projects/ztools/rust` prevent code rot in the primary
+   implementation.
