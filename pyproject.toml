@@ -3,8 +3,8 @@ requires = ["setuptools>=75.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "otools"
-version = "2.1.1"
+name = "ztools"
+version = "2.1.2"
 description = "Local LLM tools for Osaurus"
 requires-python = ">=3.11"
 dependencies = [
