@@ -54,6 +54,28 @@ def main():
         print("⚠  Pytest not found, skipping test check.")
         print("   Install: pip install pytest pytest-cov  or  .venv/bin/pytest")
 
+    # 3. Rust clippy and test suite
+    if (ROOT / "rust").exists():
+        print("Linting Rust with Clippy...")
+        try:
+            clippy_proc = subprocess.run(
+                ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"],
+                cwd=str(ROOT / "rust"),
+            )
+            if clippy_proc.returncode != 0:
+                print("✗ Cargo Clippy failed! Please fix all errors before pushing.")
+                return 1
+            print("Running Rust test suite...")
+            test_proc = subprocess.run(
+                ["cargo", "test"],
+                cwd=str(ROOT / "rust"),
+            )
+            if test_proc.returncode != 0:
+                print("✗ Rust tests failed! Please fix before pushing.")
+                return 1
+        except FileNotFoundError:
+            print("⚠  Cargo not found, skipping Rust checks.")
+
     print("✓ All checks passed! Proceeding with push.")
     return 0
 

@@ -150,6 +150,31 @@ for f in staged_py:
     if r.returncode != 0:
         errors.append(f"  Syntax error in {f}: {r.stderr.strip()}")
 
+# --- 6. Rust checks (clippy & test) ---
+staged_rust = [f for f in staged_files if f.startswith("rust/") or f.endswith(".rs") or "Cargo." in f]
+if staged_rust and (ROOT / "rust").exists():
+    try:
+        clippy_proc = subprocess.run(
+            ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"],
+            capture_output=True, text=True, cwd=str(ROOT / "rust"),
+        )
+        if clippy_proc.returncode != 0:
+            errors.append("  Cargo Clippy check FAILED:")
+            for line in clippy_proc.stderr.split("\n"):
+                if line.strip():
+                    errors.append(f"    {line.strip()}")
+        test_proc = subprocess.run(
+            ["cargo", "test"],
+            capture_output=True, text=True, cwd=str(ROOT / "rust"),
+        )
+        if test_proc.returncode != 0:
+            errors.append("  Cargo Test check FAILED:")
+            for line in test_proc.stderr.split("\n"):
+                if line.strip():
+                    errors.append(f"    {line.strip()}")
+    except FileNotFoundError:
+        pass
+
 if errors:
     print("Pre-commit checks FAILED:\n")
     print("\n".join(errors))

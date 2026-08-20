@@ -11,6 +11,7 @@ use std::path::PathBuf;
 
 use crate::config::ZtoolsConfig;
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn twitter_summarize(
     config: &ZtoolsConfig,
     json: Option<String>,
