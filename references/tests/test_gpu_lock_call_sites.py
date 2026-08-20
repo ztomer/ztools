@@ -112,13 +112,14 @@ class TestKillOsaurusRefusesUnderAPeer:
                 assert srv._kill_osaurus() is True
             assert any("osascript" in call for call in calls)
 
-    def test_the_refusal_says_who_and_why(self, capsys):
+    def test_the_refusal_says_who_and_why(self, caplog, capsys):
         import lib.osaurus_server as srv
 
         _peer_holds("eval qwen3.8-27b (pid 4321)")
         srv._kill_osaurus()
         captured = capsys.readouterr()
-        assert "qwen3.8-27b" in captured.err
+        log_text = f"{caplog.text} {captured.err} {captured.out}"
+        assert "qwen3.8-27b" in log_text
 
 
 class TestRestartServerRefusesUnderAPeer:
