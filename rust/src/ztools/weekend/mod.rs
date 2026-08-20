@@ -265,11 +265,23 @@ fn search_duckduckgo_html(query: &str, url: &str) -> Vec<String> {
         .build()
         .unwrap_or_default();
 
+    let user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+    // Try GET first (html.duckduckgo.com returns HTTP 200 with snippets on GET)
     let res = client
-        .post(url)
-        .form(&[("q", query)])
-        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .get(url)
+        .query(&[("q", query)])
+        .header("User-Agent", user_agent)
         .send();
+
+    let res = match res {
+        Ok(resp) if resp.status().is_success() => Ok(resp),
+        _ => client
+            .post(url)
+            .form(&[("q", query)])
+            .header("User-Agent", user_agent)
+            .send(),
+    };
 
     let mut snippets = Vec::new();
     if let Ok(resp) = res {

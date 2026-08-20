@@ -1,6 +1,6 @@
 [package]
 name = "ztools"
-version = "2.1.2"
+version = "2.1.3"
 edition = "2021"
 description = "Native Rust port of ztools: Twitter summarizer, weekend planner, image renamer, model eval."
 license = "MIT"
