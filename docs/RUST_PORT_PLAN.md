@@ -166,16 +166,21 @@ gate both pass.
 
 ### Phase 1 — Shared config & prompt surface (kill the drift class)
 
-Per `PORT_PARITY.md` "standing hazard", the structural fix is shared config, not
-parallel copies:
-1. Move prompt texts (`TWITTER_PROMPT`, weekend schemas, rename task restatement)
-   into `conf/` (e.g. `conf/prompts.toml`) read by both Rust and Python.
+Status: **partially done — twitter summarize prompt shared, in progress.**
+
+1. ~~Move prompt texts into `conf/` read by both Rust and Python~~ — the twitter
+   summarize instruction block is DONE: `conf/prompts.toml`
+   `[twitter.summarize]` is canonical; Python composes `TWITTER_PROMPT` from it
+   (`references/eval/tasks_prompts.py`, fixture timeline stays as eval data);
+   Rust embeds a fallback (`config.rs`) and layers the file at runtime
+   (`with_shared_prompts()`). **Open:** weekend schemas, rename task restatement.
 2. Extend `ZtoolsConfig` to load the full `conf/config.toml` `[best_models]`
    matrix (already scaffolded as `with_ztools_best_models`), plus weekend
-   exclusions and eval signal thresholds.
-3. Add a **single-source-version check**: a test that greps the Rust binary's
-   embedded prompt against `conf/prompts.toml` and fails on drift (structural
-   gate, not a "remember to" note).
+   exclusions and eval signal thresholds. — open.
+3. **single-source-version check** — DONE for the twitter prompt:
+   `test_twitter_prompt_matches_shared_conf` in `rust/src/config.rs` fails if the
+   embedded fallback drifts from `conf/prompts.toml` (proven to fail, then
+   reverted). Reuse the pattern for the weekend/rename prompts as they land.
 
 ### Phase 2 — Parity without new risk (bring the cheap, high-value Python logic over)
 

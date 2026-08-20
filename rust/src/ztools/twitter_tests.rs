@@ -37,7 +37,8 @@ fn test_build_prompt() {
         retweet_count: 1,
         reply_to: None,
     }];
-    let (prompt, n) = build_prompt(&tweets, 10000);
+    let instructions = crate::config::ZtoolsConfig::default().twitter_summarize_prompt;
+    let (prompt, n) = build_prompt(&tweets, 10000, &instructions);
     assert_eq!(n, 1);
     assert!(prompt.contains("Hello Rust!"));
     assert!(prompt.contains("5 favs, 1 RTs"));
@@ -45,7 +46,8 @@ fn test_build_prompt() {
 
 #[test]
 fn test_build_prompt_empty_and_budget() {
-    let (prompt_empty, n_empty) = build_prompt(&[], 10000);
+    let instructions = crate::config::ZtoolsConfig::default().twitter_summarize_prompt;
+    let (prompt_empty, n_empty) = build_prompt(&[], 10000, &instructions);
     assert_eq!(n_empty, 0);
     assert!(prompt_empty.contains("<timeline>"));
 
@@ -67,7 +69,7 @@ fn test_build_prompt_empty_and_budget() {
             reply_to: None,
         },
     ];
-    let (prompt_small, n_small) = build_prompt(&tweets, 100);
+    let (prompt_small, n_small) = build_prompt(&tweets, 100, &instructions);
     assert!(n_small <= 2);
     assert!(prompt_small.contains("user"));
 }

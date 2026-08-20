@@ -70,8 +70,9 @@ pub fn deduplicate_tweets(tweets: &[Tweet]) -> Vec<Tweet> {
     deduped
 }
 
-/// Build executive summary prompt for LLM.
-pub fn build_prompt(tweets: &[Tweet], max_chars: usize) -> (String, usize) {
+/// Build executive summary prompt for LLM. `instructions` is the shared
+/// instruction block (canonical text: `conf/prompts.toml` `[twitter.summarize]`).
+pub fn build_prompt(tweets: &[Tweet], max_chars: usize, instructions: &str) -> (String, usize) {
     let deduped = deduplicate_tweets(tweets);
     let mut lines = Vec::new();
     let mut used = 0;
@@ -98,26 +99,7 @@ pub fn build_prompt(tweets: &[Tweet], max_chars: usize) -> (String, usize) {
     let timeline = lines.join("\n");
 
     let prompt = format!(
-        "You are an objective news distillation system. Your task is to extract hard \
-        facts from the provided chronological Twitter/X timeline.\n\n\
-        <instructions>\n\
-        1. First, analyze the timeline in block.\n\
-        2. Start with an overall ## Executive Summary section capturing the main narrative.\n\
-        3. Organize into topic sections using ## headers and bullet points.\n\
-        4. Use connecting phrases ('following up on', 'subsequently announced') and narrative verbs \
-           ('released', 'responded', 'criticized') to show how events relate.\n\
-        5. CRITICAL: End EVERY bullet with the author handle and timestamp copied EXACTLY as \
-           they appear in that tweet's source line. A source line beginning \
-           `[@TechCrunch | 08:00]:` yields a bullet ending `(@TechCrunch | 08:00)`.\n\
-           Never invent or reformat a date, weekday or time that is not in the source line.\n\
-        </instructions>\n\n\
-        <formatting_rules>\n\
-        - Start with a `## Executive Summary` paragraph\n\
-        - Use topic headers starting with `##`\n\
-        - Use bullet points for facts\n\
-        - Use narrative verbs and connecting phrases showing event relationships\n\
-        - End every bullet with `(@handle | timestamp-exactly-as-written-in-the-source-line)`\n\
-        </formatting_rules>\n\n\
+        "{instructions}\n\n\
         <timeline>\n{}\n</timeline>",
         timeline
     );
@@ -231,7 +213,11 @@ pub fn run_summary(
         }
     }
 
-    let (prompt, processed) = build_prompt(&final_tweets, config.twitter_prompt_max_chars);
+    let (prompt, processed) = build_prompt(
+        &final_tweets,
+        config.twitter_prompt_max_chars,
+        &config.twitter_summarize_prompt,
+    );
     let summary_body = call_osaurus(base_url, model, &prompt, config)?;
 
     let now = Local::now();

@@ -83,7 +83,9 @@ pub fn run() -> Result<()> {
             toml::from_str::<ZtoolsConfig>(&content)
                 .map_err(|e| anyhow::anyhow!("cannot parse config {}: {e}", path.display()))?
         }
-        None => ZtoolsConfig::default().with_ztools_best_models(),
+        None => ZtoolsConfig::default()
+            .with_ztools_best_models()
+            .with_shared_prompts(),
     };
     match cli.cmd {
         Cmd::TwitterSummarize { json, model, md_out } => {

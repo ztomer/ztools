@@ -10,6 +10,7 @@ from pathlib import Path
 
 from lib.eval_data import WEEKEND_USR_FIXED, WEEKEND_USR_TRANSIENT
 from lib.paths import repo_root
+from lib.prompts_conf import load_prompt
 
 WEEKEND_USR_TRANSIENT_MIXED = (
     WEEKEND_USR_TRANSIENT
@@ -181,31 +182,11 @@ NOISE FILES (Ignore - test your filtering):
 """
 )
 
-TWITTER_PROMPT = """\
-You are an objective news distillation system. Your task is to extract hard
-facts from the provided chronological Twitter/X timeline.
-
-<instructions>
-1. First, analyze the timeline in block.
-2. Start with an overall ## Executive Summary section capturing the main narrative.
-3. Organize into topic sections using ## headers and bullet points.
-4. Use connecting phrases ('following up on', 'subsequently announced') and narrative verbs
-   ('released', 'responded', 'criticized') to show how events relate.
-5. CRITICAL: End EVERY bullet with the author handle and timestamp copied EXACTLY as
-   they appear in that tweet's source line. A source line beginning
-   `[@TechCrunch | 08:00]:` yields a bullet ending `(@TechCrunch | 08:00)`.
-   Never invent or reformat a date, weekday or time that is not in the source line.
-</instructions>
-
-<formatting_rules>
-- Start with a `## Executive Summary` paragraph
-- Use topic headers starting with `##`
-- Use bullet points for facts
-- Use narrative verbs and connecting phrases showing event relationships
-- End every bullet with `(@handle | timestamp-exactly-as-written-in-the-source-line)`
-</formatting_rules>
-
-<timeline>
+# The instruction block is the SHARED prompt text: its canonical home is
+# conf/prompts.toml, read by both the Rust binary (rust/src/ztools/twitter.rs)
+# and this harness. The timeline below is the eval FIXTURE (data, not a prompt)
+# and stays here — each side wraps its own timeline into the shared block.
+_TWITTER_TIMELINE = """\
 [@TechCrunch | 08:00]: OpenAI announces GPT-5 with advanced reasoning
 capabilities, available next month.
 [@TheVerge | 08:15]: Apple Vision Pro 2 enters mass production, expected fall release.
@@ -249,9 +230,14 @@ opening 2026.  # check-ok: year
 [@TechCrunch | 17:30]: Uber launches autonomous taxi service in Phoenix.
 [@Wired | 17:45]: Meta unveils holographic AR glasses prototype.
 [@Bloomberg | 18:00]: Canadian GDP grows 0.5% in Q1, exceeding forecasts.
-</timeline>
+"""
 
-Provide the summary (start your response):"""
+TWITTER_PROMPT = (
+    load_prompt("twitter", "summarize")
+    + "\n\n<timeline>\n"
+    + _TWITTER_TIMELINE
+    + "</timeline>\n\nProvide the summary (start your response):"
+)
 
 TWITTER_PROMPT_MIXED = (
     TWITTER_PROMPT

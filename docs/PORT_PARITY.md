@@ -27,16 +27,18 @@ dead since 16 Jul.
 
 ## Known divergences
 
-### 1. The summarizer prompt is duplicated, not shared
+### 1. The summarizer prompt is duplicated, not shared — twitter prompt now shared
 
-`rust/src/ztools/twitter.rs:107` carries its own copy of the instruction text
-("Use connecting phrases and narrative verbs to show how events relate"), mirroring
-`references/eval/tasks_prompts.py: TWITTER_PROMPT`. Nothing derives one from the other.
-Every prompt improvement therefore has to be made twice or it silently applies to half
-the runs.
+The twitter summarize **instruction block** now has one canonical home:
+`conf/prompts.toml` `[twitter.summarize]`. The Rust binary embeds a fallback copy
+(`rust/src/config.rs`) so the static binary works with no checkout; a drift-gate
+test (`test_twitter_prompt_matches_shared_conf`) fails if that fallback diverges
+from the file. The Python eval harness composes `TWITTER_PROMPT` from the same
+file (`references/eval/tasks_prompts.py`), keeping the eval fixture timeline as
+data. Editing the prompt once edits both sides; the gate enforces it.
 
-The Rust side reads exactly one thing from this repo — `~/Projects/ztools/conf/weekend.toml`
-(`rust/src/config.rs:73`). Prompts are not in shared config.
+**Still open:** the weekend schemas and the rename task restatement remain
+parallel copies (see Phase 1 in `RUST_PORT_PLAN.md`).
 
 ### 2. Model selection has already diverged, and the Rust default is not the measured best
 
