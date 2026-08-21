@@ -106,9 +106,9 @@ _Forward-looking: items 1–4 are the active roadmap. Items 5–10 are completed
 **Objective**: Convert the Python eval system (`references/eval/`) to Rust, making the Rust binary the complete implementation and preserving Python as the verification/parity layer.
 
 **Current State**:
-- Python eval: `references/eval/` (~1232 lines across 4 files: `run.py`, `samples.py`, `discrimination.py`, `tasks_core.py`)
-- Rust eval: None (eval system is Python-only)
-- Python serves as reference/verification for Rust/Python parity
+- Python eval: `references/eval/` (~1232 lines across 4 files: `run.py`, `samples.py`, `discrimination.py`, `tasks_core.py`) — still the only eval that RUNS end-to-end
+- Rust eval: partial. Compiled + tested: `samples.rs`, `discrimination.rs`, `prompts.rs` (parity unverified), `task_loader.rs`, validators. NOT compiled: `runner.rs` (draft, see Phase 2)
+- Production eval entry point today: `ztools model-eval` (the older smoke-suite path in `model_eval.rs`), not the ported runner
 
 **Conversion Plan** (phased, incremental):
 
@@ -117,28 +117,13 @@ _Forward-looking: items 1–4 are the active roadmap. Items 5–10 are completed
 - `with_ztools_best_models()` in Rust `config.rs`
 - Best model matrix derivation and date stamping complete
 
-### Phase 2: Core Eval Orchestration — → **Done**
+### Phase 2: Core Eval Orchestration — ✗ **NOT DONE — draft does not compile**
 
-The Rust eval runner (`runner.rs`) ports the core orchestration from `references/eval/run.py` (~485 lines), including:
-- `run_eval()` with retries, timeout management, prefill measurement, GPU heartbeat, stall detection, consecutive infra failure abort
-- `run_eval_quick()` quick mode (no retries)
-- `_call_model()` backend dispatch to osaurus or MLX with temperature control
-- `_validate_result()` validation using existing Rust validators (`validate.rs`, `validators/`)
-- Per-task timeout via `_effective_timeout()` with prompt-chars budget
-- Retry logic with reasoning retry budget expansion
-- Score thresholds: break on score >= 90, FAIL_CONTENT, or FAIL_REASONING
-- Consecutive infrastructure failure abort after MAX_CONSECUTIVE_INFRA_FAILURES
-- Signal recording (`_record_signal`) with parse failure tracking
-- Weekend and mixed task post-run summaries
-- Console output with status symbols (STEP/WARN/FAIL)
-- All 219 existing tests pass without regression
-Convert `references/eval/run.py` (~485 lines):
-- Task iteration and timeout handling
-- Model selection from `derive_best_models()`
-- Timeout management (per-task, per-model)
-- Retry logic with token budgets
-- Result collection and signaling
-- Functions: `run_eval`, `run_eval_quick`, `_call_ollama`, `_call_osaurus`, `_call_foundationaly`, `_call_llm`
+`rust/src/ztools/eval/runner.rs` (553 lines) is a DRAFT translation of `references/eval/run.py`. It is an orphan module: never declared in `eval/mod.rs`, therefore never compiled by any gate. Wiring it in produces **75 compile errors**: Python-isms that survived translation (`{rate:,.0f}` numeric grouping, `best_failure[:60]` slicing, `**kwargs` expansion), and imports to crates that do not exist in this workspace (`lib::gpu_lock`, `lib::osaurus_lib::call`, `eval::failures`, `eval::signals`, ...). The transport layer those imports name (osaurus HTTP client with stream_guard, MLX backend, prefill measurement, signal recording) is itself unported — Phase 2 is blocked on it, not on syntax cleanup.
+
+**Honest completion estimate: the original 2-3 weeks stands, and starts now.**
+
+What IS real and tested today: the `ztools model-eval` CLI path (`model_eval.rs`) runs the built-in smoke suite against a live or mock server — 13 integration tests cover it. That is the fallback production path until the full runner lands.
 
 ### Phase 3: Samples & Discrimination — → **Done**
 
@@ -162,15 +147,13 @@ Both modules ported to Rust:
 - `disagreements()` — reports when recorded classification conflicts with data: stale gate being thrown away, or ranking task diluting every mean without ordering anything
 - `ranking_mean()` — mean over tasks that can actually order models; falls back to full mean when ONLY gate tasks remain (e.g. `--task image_real`)
 - Tests: gate_tasks (verify GATE_TASKS entries), ranking_tasks (verify non-gates selected), classify with 3 models→unknown, 5 models→ranks, distinct_values (1 duplicate=1 distinct), disagreements_no_conflict, ranking_mean (90 excluding gate), ranking_mean_fallback (90 when only gates remain)
-Convert `references/eval/samples.py` and `references/eval/discrimination.py`:
-- Median-of-5 clean estimation (samples.py)
-- Gate/ranking split logic (discrimination.py)
+### Phase 4: Prompts & Task Definitions — ⚠ **Ported, parity UNVERIFIED**
 
-### Phase 4: Prompts & Task Definitions — → **Done**
-Convert task enums, rankings, gate tasks, and prompt texts:
-- `RANKING_TASKS`, `GATE_TASKS` from `tasks_core.py`
-- Prompt text loading from `tasks_prompts.py`
-- Task data loading from `tasks_data.py`
+`rust/src/ztools/eval/prompts.rs` (~280 lines) declares 20+ prompt constants transcribed from `references/eval/tasks_prompts.py`. Compiles clean. BUT: the constants were hand-transcribed, several are SIMPLIFIED APPROXIMATIONS rather than byte copies (e.g. `TWITTER_PROMPT*` variants collapsed to short stubs; weekend schema strings re-typed), and there is NO drift-gate test asserting byte-identity the way `test_twitter_prompt_matches_shared_conf` does for the summarizer prompt. A wrong prompt would silently measure models against a different task than the Python reference — the differential-blindness failure class.
+
+**Required before trusting any Rust-eval number**: a drift-gate test comparing every constant in `prompts.rs` against its `tasks_prompts.py` source (or better: load from `conf/` at runtime so there is one home, per the canonical-prompt-home pattern already proven in item 4).
+
+Task loading (`task_loader.rs`: smoke suite + taxes JSON directory) was already complete and tested before this conversion began.
 
 ### Phase 5: Polish & Integration Tests — ~2 weeks
 - Verify Rust eval produces identical outputs to Python
@@ -188,9 +171,9 @@ Convert task enums, rankings, gate tasks, and prompt texts:
 | Phase | Effort | Status |
 |-------|--------|--------|
 | 1 | 1 week | → Done |
-| 2 | 2-3 weeks | → Done |
+| 2 | 2-3 weeks | ✗ Not done (draft orphaned, never compiled) |
 | 3 | 2-3 weeks | → Done |
-| 4 | 2 weeks | → Done |
+| 4 | 2 weeks | ⚠ Ported, parity gate missing |
 | 5 | 2 weeks | → Planned |
 | **Total** | **~7-10 weeks** | |
 
