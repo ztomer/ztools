@@ -5,6 +5,7 @@
 
 pub mod clean;
 pub mod discrimination;
+pub mod prompts;
 pub mod gpu_lock;
 pub mod samples;
 pub mod task_loader;
@@ -14,6 +15,7 @@ pub mod watchdog;
 
 pub use clean::{clean_model_output, extract_content_from_code_blocks, extract_json};
 pub use discrimination::{classify, distinct_values, disagreements, is_gate, ranking_mean, ranking_tasks};
+pub use prompts::{RENAME_PROMPT, RENAME_PROMPT_MIXED, IMAGE_RENAME_PROMPT, IMAGE_RENAME_PROMPT_MIXED, FILE_SUMMARY_PROMPT, FILE_SUMMARY_PROMPT_MIXED, TWITTER_PROMPT, TWITTER_PROMPT_ACCURACY, TWITTER_PROMPT_CONTRADICTION, TWITTER_PROMPT_MISATTRIBUTION, TWITTER_PROMPT_MIXED, WEEKEND_USR_FIXED, WEEKEND_USR_TRANSIENT, WEEKEND_NOISE, WEEKEND_USR_FIXED_MIXED, WEEKEND_USR_TRANSIENT_MIXED, CONTRADICTION_PHRASE, KEY_FACTS, FILENAME_INJECTION_MARKERS, FILENAME_INJECTION_KEYWORDS, FILENAME_INJECTION_PROMPT, FALSEHOOD_PHRASES, MISATTRIBUTION_TIMELINE};
 pub use gpu_lock::{
     foreign_holder, lock_dir, GpuLockGuard, DEFAULT_LOCK_DIR, DEFAULT_MAX_IDLE_SECS,
 };

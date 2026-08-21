@@ -166,7 +166,7 @@ Convert `references/eval/samples.py` and `references/eval/discrimination.py`:
 - Median-of-5 clean estimation (samples.py)
 - Gate/ranking split logic (discrimination.py)
 
-### Phase 4: Prompts & Task Definitions — ~2 weeks
+### Phase 4: Prompts & Task Definitions — → **Done**
 Convert task enums, rankings, gate tasks, and prompt texts:
 - `RANKING_TASKS`, `GATE_TASKS` from `tasks_core.py`
 - Prompt text loading from `tasks_prompts.py`
@@ -190,8 +190,8 @@ Convert task enums, rankings, gate tasks, and prompt texts:
 | 1 | 1 week | → Done |
 | 2 | 2-3 weeks | → Done |
 | 3 | 2-3 weeks | → Done |
-| 4 | 2 weeks | Planned |
-| 5 | 2 weeks | Planned |
+| 4 | 2 weeks | → Done |
+| 5 | 2 weeks | → Planned |
 | **Total** | **~7-10 weeks** | |
 
 ### Risks & Mitigations
