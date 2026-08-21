@@ -90,6 +90,13 @@ enum Cmd {
         /// (e.g. eval_tasks/data). Without it, only built-in tasks run.
         #[arg(long)]
         tasks_dir: Option<PathBuf>,
+        /// With --suite full: run only the named task(s), comma-separated
+        /// (e.g. --task taxes_qa,taxes_slip_qa). Default: all tasks.
+        #[arg(long)]
+        task: Option<String>,
+        /// With --suite full: print outcomes as JSON instead of markdown.
+        #[arg(long)]
+        json_output: bool,
     },
 }
 
@@ -153,6 +160,15 @@ pub fn run() -> Result<()> {
             model,
             suite,
             tasks_dir,
-        } => crate::cli_ztools::model_eval(&config, model, &suite, tasks_dir.as_deref()),
+            task,
+            json_output,
+        } => crate::cli_ztools::model_eval(
+            &config,
+            model,
+            &suite,
+            tasks_dir.as_deref(),
+            task.as_deref(),
+            json_output,
+        ),
     }
 }

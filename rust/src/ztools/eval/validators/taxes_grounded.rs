@@ -250,9 +250,13 @@ pub fn validate_taxes_yoy_narrative(
         .filter_map(|d| cents(d.get("delta_cad")?))
         .collect();
     let trace_score = if !reported.is_empty() && !traceable.is_empty() {
+        // SIGNED match, like the Python original: drivers report negative
+        // deltas for a tax decrease, and the attribution effects carry the same
+        // sign. Abs-ing here made every honest answer untraceable (0/4 against
+        // Python's 4/4 on identical output -- found by the A/B parity run).
         let hits = reported
             .iter()
-            .filter(|r| traceable.contains(&((r.abs() * 100.0).round() as i64)))
+            .filter(|r| traceable.contains(&((**r * 100.0).round() as i64)))
             .count();
         let s = (30.0 * hits as f64 / reported.len() as f64).round() as i64;
         bits.push(format!("traceable={}/{} ({}/30)", hits, reported.len(), s));

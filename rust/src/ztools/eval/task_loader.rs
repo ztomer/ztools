@@ -187,6 +187,14 @@ struct TaxesSnapshot {
     system: Option<String>,
     user: String,
     rubric: Option<TaxesRubric>,
+    /// The three GROUNDED tasks (qa, slip_qa, yoy_narrative) carry a grounding
+    /// block instead of a rubric: their verdict is arithmetic and
+    /// set-membership against known facts/amounts, which is why they do not
+    /// saturate the way the rubric tasks do. A loader that reads only `rubric`
+    /// silently turns these into hollow one-keyword checks -- the exact drift
+    /// the A/B parity harness caught (Python 100 vs Rust 0 on identical output).
+    #[serde(default)]
+    grounding: Option<serde_json::Value>,
 }
 
 /// Load sanitized taxes tasks from a directory (e.g. `eval_tasks/data/taxes/`).
@@ -220,6 +228,15 @@ pub fn load_taxes_tasks_from_dir(dir: &Path) -> Result<Vec<EvalTask>> {
         let name = format!("taxes_{}", snapshot.task);
         let mut checks = Vec::new();
 
+        if snapshot.grounding.is_some() {
+            // Route through the ported graded validator; 90 mirrors the eval's
+            // ok-threshold so the check passes only when the model genuinely
+            // grounded its citations and figures.
+            checks.push(Check::TaxesGrounded {
+                task_name: snapshot.task.clone(),
+                min_score: 90,
+            });
+        }
         if let Some(rubric) = snapshot.rubric {
             if !rubric.expected_signals.is_empty() || !rubric.gt_forbidden.is_empty() {
                 checks.push(Check::TaxesGrounding {

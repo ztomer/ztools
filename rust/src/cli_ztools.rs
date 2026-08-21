@@ -249,10 +249,19 @@ pub(crate) fn model_eval(
     model: String,
     suite: &str,
     tasks_dir: Option<&std::path::Path>,
+    task_filter: Option<&str>,
+    json_output: bool,
 ) -> Result<()> {
     let url = &config.osaurus_url;
     if suite == "full" {
-        let tasks = crate::ztools::eval::load_all_eval_tasks(tasks_dir);
+        let mut tasks = crate::ztools::eval::load_all_eval_tasks(tasks_dir);
+        if let Some(filter) = task_filter {
+            let names: Vec<&str> = filter.split(',').map(str::trim).collect();
+            tasks.retain(|t| names.iter().any(|n| t.name.ends_with(n) || *n == t.name));
+            if tasks.is_empty() {
+                anyhow::bail!("--task filter {filter} matched no loaded tasks");
+            }
+        }
         if tasks.is_empty() {
             anyhow::bail!("no eval tasks found (pass --tasks-dir pointing at task snapshots)");
         }
@@ -270,17 +279,46 @@ pub(crate) fn model_eval(
         )
         .map_err(|e| anyhow::anyhow!("GPU lock unavailable: {e}"))?;
         for model_name in resolve_models(url, &model, config)? {
-            println!("Testing {model_name} (full suite, {} tasks)...", tasks.len());
+            // The banner is human progress, not data: under --json-output it
+            // must not precede the JSON on stdout.
+            if json_output {
+                eprintln!("Testing {model_name} (full suite, {} tasks)...", tasks.len());
+            } else {
+                println!("Testing {model_name} (full suite, {} tasks)...", tasks.len());
+            }
             let cfg = crate::ztools::eval::RunnerConfig {
                 host: host.clone(),
                 port,
                 ..Default::default()
             };
             let outcomes = crate::ztools::eval::run_eval(&model_name, &tasks, &cfg);
-            print!(
-                "{}",
-                crate::ztools::model_eval::render_task_outcomes(&outcomes)
-            );
+            if json_output {
+                use serde::Serialize;
+                #[derive(Serialize)]
+                struct OutcomeRow<'a> {
+                    task: &'a str,
+                    score: u8,
+                    status: &'a str,
+                    time_secs: f64,
+                    error: Option<&'a String>,
+                }
+                let rows: Vec<OutcomeRow> = outcomes
+                    .iter()
+                    .map(|o| OutcomeRow {
+                        task: &o.task,
+                        score: o.score,
+                        status: &o.status,
+                        time_secs: o.time_secs,
+                        error: o.error.as_ref(),
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&rows)?);
+            } else {
+                print!(
+                    "{}",
+                    crate::ztools::model_eval::render_task_outcomes(&outcomes)
+                );
+            }
         }
         return Ok(());
     }
