@@ -147,13 +147,22 @@ Both modules ported to Rust:
 - `disagreements()` — reports when recorded classification conflicts with data: stale gate being thrown away, or ranking task diluting every mean without ordering anything
 - `ranking_mean()` — mean over tasks that can actually order models; falls back to full mean when ONLY gate tasks remain (e.g. `--task image_real`)
 - Tests: gate_tasks (verify GATE_TASKS entries), ranking_tasks (verify non-gates selected), classify with 3 models→unknown, 5 models→ranks, distinct_values (1 duplicate=1 distinct), disagreements_no_conflict, ranking_mean (90 excluding gate), ranking_mean_fallback (90 when only gates remain)
-### Phase 4: Prompts & Task Definitions — ⚠ **Ported, parity UNVERIFIED**
+### Phase 4: Prompts & Task Definitions — → **Done** (parity gated)
 
-`rust/src/ztools/eval/prompts.rs` (~280 lines) declares 20+ prompt constants transcribed from `references/eval/tasks_prompts.py`. Compiles clean. BUT: the constants were hand-transcribed, several are SIMPLIFIED APPROXIMATIONS rather than byte copies (e.g. `TWITTER_PROMPT*` variants collapsed to short stubs; weekend schema strings re-typed), and there is NO drift-gate test asserting byte-identity the way `test_twitter_prompt_matches_shared_conf` does for the summarizer prompt. A wrong prompt would silently measure models against a different task than the Python reference — the differential-blindness failure class.
+`rust/src/ztools/eval/prompts/` is GENERATED from `references/eval/tasks_prompts.py`
+by `tools/gen_rust_prompts.py` — the Python module is the single source of truth, so
+parity holds by construction instead of by transcription.
 
-**Required before trusting any Rust-eval number**: a drift-gate test comparing every constant in `prompts.rs` against its `tasks_prompts.py` source (or better: load from `conf/` at runtime so there is one home, per the canonical-prompt-home pattern already proven in item 4).
-
-Task loading (`task_loader.rs`: smoke suite + taxes JSON directory) was already complete and tested before this conversion began.
+- `references/tests/test_rust_prompt_parity.py` — pytest gate (runs in the standard
+  pre-push suite) asserting every exported Python constant is byte-identical in the
+  generated Rust source. Proven to fail: a one-character corruption produced 5 red
+  tests before regeneration restored green.
+- The gate immediately caught 4 constants the hand-typed version had omitted entirely
+  (`FALSEHOOD_TWEET_1..3`, `FILE_SUMMARY_FILE_LIST`) and replaced approximations with
+  real values (e.g. `TWITTER_PROMPT`: hand-typed ~200 chars vs actual 4616).
+- Layout: `prompts/{rename,file_summary,twitter,weekend}.rs`, each under the 500-line
+  production cap (generator refuses to emit an over-cap file).
+- Task loading (`task_loader.rs`: smoke suite + taxes JSON directory) complete and tested.
 
 ### Phase 5: Polish & Integration Tests — ~2 weeks
 - Verify Rust eval produces identical outputs to Python
@@ -173,7 +182,7 @@ Task loading (`task_loader.rs`: smoke suite + taxes JSON directory) was already 
 | 1 | 1 week | → Done |
 | 2 | 2-3 weeks | ✗ Not done (draft orphaned, never compiled) |
 | 3 | 2-3 weeks | → Done |
-| 4 | 2 weeks | ⚠ Ported, parity gate missing |
+| 4 | 2 weeks | → Done (generated + parity gate) |
 | 5 | 2 weeks | → Planned |
 | **Total** | **~7-10 weeks** | |
 
