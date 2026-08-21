@@ -162,6 +162,56 @@ pub fn eval_all_models(
     Ok(all_results)
 }
 
+/// Split an osaurus base URL ("http://127.0.0.1:1337") into host and port.
+pub fn parse_osaurus_url(url: &str) -> (String, u16) {
+    let stripped = url
+        .strip_prefix("http://")
+        .or_else(|| url.strip_prefix("https://"))
+        .unwrap_or(url);
+    let trimmed = stripped.trim_end_matches('/');
+    match trimmed.rsplit_once(':') {
+        Some((host, port)) => match port.parse() {
+            Ok(p) => (host.to_string(), p),
+            Err(_) => (trimmed.to_string(), 1337),
+        },
+        None => (trimmed.to_string(), 1337),
+    }
+}
+
+/// Render full-suite [`TaskOutcome`]s as a markdown table, worst first: the
+/// failures are what a reader scans for, so they lead.
+pub fn render_task_outcomes(outcomes: &[crate::ztools::eval::TaskOutcome]) -> String {
+    use std::fmt::Write;
+    let mut report = String::from("# Full Suite Eval\n\n");
+    let _ = writeln!(report, "| task | score | status | time | error |");
+    let _ = writeln!(report, "|------|-------|--------|------|-------|");
+    let mut rows: Vec<_> = outcomes.iter().collect();
+    rows.sort_by_key(|o| o.score);
+    for o in &rows {
+        let _ = writeln!(
+            report,
+            "| {} | {} | {} | {:.1}s | {} |",
+            o.task,
+            o.score,
+            o.status,
+            o.time_secs,
+            o.error.as_deref().unwrap_or("-")
+        );
+    }
+    if !rows.is_empty() {
+        let mean: f64 =
+            rows.iter().map(|o| o.score as f64).sum::<f64>() / rows.len() as f64;
+        let ok = rows.iter().filter(|o| o.status == "ok").count();
+        let _ = writeln!(report);
+        let _ = writeln!(
+            report,
+            "{} tasks, {ok} ok, mean score {mean:.1}",
+            rows.len()
+        );
+    }
+    report
+}
+
 pub fn render_eval_report(results: &[ModelEvalResult]) -> String {
     let mut out = String::new();
     out.push_str("# Model Quality Evaluation Benchmark\n\n");
@@ -219,6 +269,51 @@ mod tests {
             cleaned,
             Some(&parsed)
         ));
+    }
+
+    #[test]
+    fn osaurus_url_parses_to_host_and_port() {
+        assert_eq!(
+            parse_osaurus_url("http://127.0.0.1:1337"),
+            ("127.0.0.1".to_string(), 1337)
+        );
+        assert_eq!(
+            parse_osaurus_url("http://localhost:9999/"),
+            ("localhost".to_string(), 9999)
+        );
+        // Portless and malformed URLs fall back to the default port rather
+        // than panicking.
+        assert_eq!(
+            parse_osaurus_url("http://myhost"),
+            ("myhost".to_string(), 1337)
+        );
+        assert_eq!(parse_osaurus_url("weird"), ("weird".to_string(), 1337));
+    }
+
+    #[test]
+    fn task_outcomes_render_worst_first_with_summary() {
+        use crate::ztools::eval::TaskOutcome;
+        let outcomes = vec![
+            TaskOutcome {
+                task: "good".to_string(),
+                score: 100,
+                status: "ok".to_string(),
+                ..Default::default()
+            },
+            TaskOutcome {
+                task: "bad".to_string(),
+                score: 25,
+                status: "fail".to_string(),
+                error: Some("HTTP 503".to_string()),
+                ..Default::default()
+            },
+        ];
+        let report = render_task_outcomes(&outcomes);
+        let bad_pos = report.find("| bad ").expect("bad row present");
+        let good_pos = report.find("| good ").expect("good row present");
+        assert!(bad_pos < good_pos, "worst score must lead:\n{report}");
+        assert!(report.contains("2 tasks, 1 ok, mean score 62.5"), "{report}");
+        assert!(report.contains("HTTP 503"), "{report}");
     }
 
     #[test]

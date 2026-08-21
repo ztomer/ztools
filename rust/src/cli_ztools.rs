@@ -244,8 +244,46 @@ pub(crate) fn image_renamer(config: &ZtoolsConfig, dir: PathBuf, apply: bool) ->
     Ok(())
 }
 
-pub(crate) fn model_eval(config: &ZtoolsConfig, model: String) -> Result<()> {
+pub(crate) fn model_eval(
+    config: &ZtoolsConfig,
+    model: String,
+    suite: &str,
+    tasks_dir: Option<&std::path::Path>,
+) -> Result<()> {
     let url = &config.osaurus_url;
+    if suite == "full" {
+        let tasks = crate::ztools::eval::load_all_eval_tasks(tasks_dir);
+        if tasks.is_empty() {
+            anyhow::bail!("no eval tasks found (pass --tasks-dir pointing at task snapshots)");
+        }
+        let (host, port) = crate::ztools::model_eval::parse_osaurus_url(url);
+        // The GPU and the single healthy server are held under a machine-wide
+        // lock: several sessions measure against this box, and a second
+        // concurrent measurement corrupts both. Same contract as the Python
+        // eval entry point.
+        let _gpu = crate::ztools::eval::GpuLockGuard::acquire(
+            "ztools model-eval --suite full",
+            std::time::Duration::from_secs(5),
+            std::time::Duration::from_secs(
+                crate::ztools::eval::DEFAULT_MAX_IDLE_SECS,
+            ),
+        )
+        .map_err(|e| anyhow::anyhow!("GPU lock unavailable: {e}"))?;
+        for model_name in resolve_models(url, &model, config)? {
+            println!("Testing {model_name} (full suite, {} tasks)...", tasks.len());
+            let cfg = crate::ztools::eval::RunnerConfig {
+                host: host.clone(),
+                port,
+                ..Default::default()
+            };
+            let outcomes = crate::ztools::eval::run_eval(&model_name, &tasks, &cfg);
+            print!(
+                "{}",
+                crate::ztools::model_eval::render_task_outcomes(&outcomes)
+            );
+        }
+        return Ok(());
+    }
     let results = if model == "all" {
         crate::ztools::model_eval::eval_all_models(url, config)?
     } else {
@@ -256,4 +294,17 @@ pub(crate) fn model_eval(config: &ZtoolsConfig, model: String) -> Result<()> {
         crate::ztools::model_eval::render_eval_report(&results)
     );
     Ok(())
+}
+
+/// "all" expands to every servable model on the server; any other value is
+/// taken literally.
+fn resolve_models(
+    url: &str,
+    model: &str,
+    config: &ZtoolsConfig,
+) -> Result<Vec<String>> {
+    if model != "all" {
+        return Ok(vec![model.to_string()]);
+    }
+    crate::ztools::model_eval::get_available_models(url, config)
 }

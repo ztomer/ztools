@@ -155,8 +155,11 @@ pub fn run_eval(model: &str, tasks: &[EvalTask], cfg: &RunnerConfig) -> Vec<Task
                 continue;
             }
             let score = score_output(task, &r.content, None);
-            if score > best.as_ref().map(|b| b.score).unwrap_or(0) || best.as_ref().is_some_and(|b| b.error.is_some()) {
-                if let Some(b) = best.as_mut() {
+            // A scored attempt always outranks the error/empty placeholder in
+            // `best`, even at 0 -- otherwise the placeholder's blank status
+            // leaks into the result. Ties take the later attempt.
+            if let Some(b) = best.as_mut() {
+                if b.error.is_some() || score >= b.score {
                     b.score = score;
                     b.status = status_for(score).to_string();
                 }

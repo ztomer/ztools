@@ -81,6 +81,15 @@ enum Cmd {
         /// Which model to evaluate (or 'all').
         #[arg(long, default_value = "all")]
         model: String,
+        /// "smoke" (default) runs the built-in smoke suite; "full" runs the
+        /// eval-loop runner over smoke + taxes tasks with retries and the
+        /// reasoning-overrun guard.
+        #[arg(long, default_value = "smoke")]
+        suite: String,
+        /// Optional directory of task JSON snapshots for --suite full
+        /// (e.g. eval_tasks/data). Without it, only built-in tasks run.
+        #[arg(long)]
+        tasks_dir: Option<PathBuf>,
     },
 }
 
@@ -140,6 +149,10 @@ pub fn run() -> Result<()> {
             md_out,
         } => crate::cli_ztools::weekend_plan(&config, location, ages, md_out),
         Cmd::ImageRenamer { dir, apply } => crate::cli_ztools::image_renamer(&config, dir, apply),
-        Cmd::ModelEval { model } => crate::cli_ztools::model_eval(&config, model),
+        Cmd::ModelEval {
+            model,
+            suite,
+            tasks_dir,
+        } => crate::cli_ztools::model_eval(&config, model, &suite, tasks_dir.as_deref()),
     }
 }

@@ -126,6 +126,18 @@ fn partial_output_scores_partial() {
 }
 
 #[test]
+fn zero_score_output_still_carries_a_status() {
+    // Output arrives but scores 0: the placeholder-vs-score update must still
+    // set the status. It used to leak an EMPTY status when the scored attempt
+    // tied the placeholder's 0.
+    let (port, _h) = serve(ok_body("unrelated prose"));
+    let t = EvalTask::new("t", "p", vec![Check::Contains("never".to_string())]);
+    let outcomes = run_eval("m", &[t], &cfg(port));
+    assert_eq!(outcomes[0].score, 0);
+    assert_eq!(outcomes[0].status, "fail", "{:?}", outcomes[0]);
+}
+
+#[test]
 fn transport_error_is_retried_then_recorded_as_fail() {
     // First request 503, second succeeds: max_retries=1 must recover.
     let (port, _h) = serve_then(err_response("HTTP/1.1 503 Service Unavailable"), ok_body("the answer"), 1);

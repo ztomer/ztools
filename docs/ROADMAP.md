@@ -117,13 +117,15 @@ _Forward-looking: items 1–4 are the active roadmap. Items 5–10 are completed
 - `with_ztools_best_models()` in Rust `config.rs`
 - Best model matrix derivation and date stamping complete
 
-### Phase 2: Core Eval Orchestration — ✗ **NOT DONE — draft does not compile**
+### Phase 2: Core Eval Orchestration — ⚠ **Substantially done; signal/prefill recording remains**
 
-`rust/src/ztools/eval/runner.rs` (553 lines) is a DRAFT translation of `references/eval/run.py`. It is an orphan module: never declared in `eval/mod.rs`, therefore never compiled by any gate. Wiring it in produces **75 compile errors**: Python-isms that survived translation (`{rate:,.0f}` numeric grouping, `best_failure[:60]` slicing, `**kwargs` expansion), and imports to crates that do not exist in this workspace (`lib::gpu_lock`, `lib::osaurus_lib::call`, `eval::failures`, `eval::signals`, ...). The transport layer those imports name (osaurus HTTP client with stream_guard, MLX backend, prefill measurement, signal recording) is itself unported — Phase 2 is blocked on it, not on syntax cleanup.
+Ported, compiled from first commit, mock-server tested:
+- `eval/transport.rs` -- blocking call + SSE reasoning-overrun guard (from `lib/osaurus_lib.py::call`, `lib/llm/streaming.py`); errors are data, wall-clock stream deadline enforced between chunks
+- `eval/runner.rs` -- per-model eval loop over `task_loader::EvalTask`s: stream-guard with blocking fallback (SSE-incapable servers), retry keeping best attempt, consecutive-infra abandonment so server death never reads as quality zeros
+- CLI wiring -- `ztools model-eval --suite full [--tasks-dir DIR]` runs the full suite under the machine-wide GPU lock and renders a worst-first markdown report
+- 14 mock-server integration tests across `transport_http.rs` / `eval_runner.rs`, abandon + status paths proven to fail before trusting green
 
-**Honest completion estimate: the original 2-3 weeks stands, and starts now.**
-
-What IS real and tested today: the `ztools model-eval` CLI path (`model_eval.rs`) runs the built-in smoke suite against a live or mock server — 13 integration tests cover it. That is the fallback production path until the full runner lands.
+**Remaining**: per-task timing/signal recording into `eval_signals.json` (`eval/signals.py`, `eval/prefill.py`) feeding the median-of-5 estimator; model-quirk application; missing-model substitution.
 
 ### Phase 3: Samples & Discrimination — → **Done**
 
@@ -180,7 +182,7 @@ parity holds by construction instead of by transcription.
 | Phase | Effort | Status |
 |-------|--------|--------|
 | 1 | 1 week | → Done |
-| 2 | 2-3 weeks | ✗ Not done (draft orphaned, never compiled) |
+| 2 | 2-3 weeks | ⚠ Runner+transport+CLI done; signal recording remains |
 | 3 | 2-3 weeks | → Done |
 | 4 | 2 weeks | → Done (generated + parity gate) |
 | 5 | 2 weeks | → Planned |
