@@ -27,6 +27,7 @@ use serde::Serialize;
 
 use crate::ztools::eval::prefill::{measure_prefill_rate, record_prefill_rate};
 use crate::ztools::eval::signals::{effective_timeout, load_signals, record_signal, save_signals};
+use crate::ztools::eval::model_resolve::is_generative_model;
 use crate::ztools::eval::task_loader::{check_graded_score, run_check, EvalTask};
 use crate::ztools::eval::transport::{self, RequestSpec};
 use crate::ztools::eval::watchdog::{is_stalled, model_stall_duration};
@@ -175,9 +176,12 @@ pub fn run_eval_with_signals(model: &str, tasks: &[EvalTask], cfg: &RunnerConfig
     // Measure this model's ingestion rate before timing anything else. It is
     // what every tool's context budget is sized from, and the alternative was a
     // hand-picked constant that turned out to be 35-90x too low. One extra
-    // request per model per run.
-    let rate = measure_prefill_rate(&mut signals, model, &cfg.host, cfg.port);
-    record_prefill_rate(&mut signals, model, rate);
+    // request per model per run -- skipped for embedding models, which have
+    // no ingestion rate to measure (judged by their config, not their name).
+    if is_generative_model(model) {
+        let rate = measure_prefill_rate(&mut signals, model, &cfg.host, cfg.port);
+        record_prefill_rate(&mut signals, model, rate);
+    }
 
     let outcomes = run_eval_inner(model, tasks, cfg, &mut signals);
     save_signals(&signals);

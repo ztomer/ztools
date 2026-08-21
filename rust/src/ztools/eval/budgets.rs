@@ -24,7 +24,7 @@ pub const DEFAULT_MAX_TOKENS: u32 = 32_000;
 /// Where `conf/` lives. `ZTOOLS_CONF_DIR` exists so tests can point the
 /// resolver at fixture files without touching the operator's real config --
 /// the same seam `model_resolve.rs` uses for `conf/models/`.
-fn conf_root() -> PathBuf {
+pub(crate) fn conf_root() -> PathBuf {
     if let Ok(dir) = std::env::var("ZTOOLS_CONF_DIR") {
         return PathBuf::from(dir);
     }

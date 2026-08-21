@@ -2738,7 +2738,7 @@
   },
   "ornith-1.0-9b-mxfp8": {
     "_capabilities": {
-      "cold_start_seconds": 2.21,
+      "cold_start_seconds": 0.19,
       "cold_start_seconds_samples": [
         {
           "clean": false,
@@ -2755,9 +2755,39 @@
           "clean": true,
           "ts": 1787125369.3,
           "v": 0.3248
+        },
+        {
+          "clean": true,
+          "ts": 1787347721.9,
+          "v": 0.1779
+        },
+        {
+          "clean": true,
+          "ts": 1787347771.0,
+          "v": 0.1729
+        },
+        {
+          "clean": true,
+          "ts": 1787347832.8,
+          "v": 0.1831
+        },
+        {
+          "clean": true,
+          "ts": 1787347883.7,
+          "v": 0.1984
+        },
+        {
+          "clean": true,
+          "ts": 1787347906.3,
+          "v": 0.2303
+        },
+        {
+          "clean": true,
+          "ts": 1787347987.6,
+          "v": 0.186
         }
       ],
-      "decode_tokens_per_sec": 37.5,
+      "decode_tokens_per_sec": 40.16,
       "decode_tokens_per_sec_samples": [
         {
           "clean": false,
@@ -2774,12 +2804,42 @@
           "clean": true,
           "ts": 1787125370.7,
           "v": 46.0284
+        },
+        {
+          "clean": true,
+          "ts": 1787347723.4,
+          "v": 43.2285
+        },
+        {
+          "clean": true,
+          "ts": 1787347772.6,
+          "v": 41.031
+        },
+        {
+          "clean": true,
+          "ts": 1787347834.4,
+          "v": 40.7812
+        },
+        {
+          "clean": true,
+          "ts": 1787347885.3,
+          "v": 40.157
+        },
+        {
+          "clean": true,
+          "ts": 1787347908.2,
+          "v": 37.2485
+        },
+        {
+          "clean": true,
+          "ts": 1787347989.4,
+          "v": 37.5095
         }
       ],
       "disk_bytes": 10146782760,
       "family": "qwen3_5",
       "generative": true,
-      "prefill_chars_per_sec": 1945.1,
+      "prefill_chars_per_sec": 1612.3,
       "prefill_chars_per_sec_samples": [
         {
           "clean": false,
@@ -2796,9 +2856,39 @@
           "clean": true,
           "ts": 1787125378.4,
           "v": 2602.0
+        },
+        {
+          "clean": true,
+          "ts": 1787347735.2,
+          "v": 1700.3
+        },
+        {
+          "clean": true,
+          "ts": 1787347784.0,
+          "v": 1747.9
+        },
+        {
+          "clean": true,
+          "ts": 1787347845.6,
+          "v": 1779.5
+        },
+        {
+          "clean": true,
+          "ts": 1787347897.8,
+          "v": 1612.3
+        },
+        {
+          "clean": true,
+          "ts": 1787347921.4,
+          "v": 1522.1
+        },
+        {
+          "clean": true,
+          "ts": 1787348002.4,
+          "v": 1534.9
         }
       ],
-      "prefill_samples": 4,
+      "prefill_samples": 10,
       "vision": true
     },
     "detailed_json": {
@@ -2911,20 +3001,44 @@
     "taxes_anomalies": {
       "p95_latency": 35.6,
       "parse_failures": 0,
-      "samples": 2,
+      "samples": 3,
+      "timeout": 900,
       "total_retries": 1
     },
     "taxes_audit_readiness": {
-      "p95_latency": 62.3,
+      "p95_latency": 61.6,
       "parse_failures": 0,
-      "samples": 2,
+      "samples": 3,
+      "timeout": 900,
       "total_retries": 1
     },
-    "taxes_synthesis": {
-      "p95_latency": 48.2,
+    "taxes_qa": {
+      "p95_latency": 37.3,
       "parse_failures": 0,
-      "samples": 2,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "taxes_slip_qa": {
+      "p95_latency": 7.2,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "taxes_synthesis": {
+      "p95_latency": 65.6,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
       "total_retries": 1
+    },
+    "taxes_yoy_narrative": {
+      "p95_latency": 33.9,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
     },
     "weekend_fixed": {
       "p95_latency": 71.6,
@@ -3584,7 +3698,7 @@
   },
   "qwen3.8-27b-8bit": {
     "_capabilities": {
-      "cold_start_seconds": 7.76,
+      "cold_start_seconds": 0.9,
       "cold_start_seconds_samples": [
         {
           "clean": true,
@@ -3595,9 +3709,39 @@
           "clean": true,
           "ts": 1787180974.5,
           "v": 0.5481
+        },
+        {
+          "clean": true,
+          "ts": 1787349222.6,
+          "v": 0.8809
+        },
+        {
+          "clean": true,
+          "ts": 1787349305.0,
+          "v": 0.395
+        },
+        {
+          "clean": true,
+          "ts": 1787349418.0,
+          "v": 0.8991
+        },
+        {
+          "clean": true,
+          "ts": 1787349624.2,
+          "v": 0.8839
+        },
+        {
+          "clean": true,
+          "ts": 1787349684.0,
+          "v": 0.9207
+        },
+        {
+          "clean": true,
+          "ts": 1787349833.7,
+          "v": 0.9253
         }
       ],
-      "decode_tokens_per_sec": 17.04,
+      "decode_tokens_per_sec": 13.33,
       "decode_tokens_per_sec_samples": [
         {
           "clean": true,
@@ -3608,12 +3752,42 @@
           "clean": true,
           "ts": 1787180978.2,
           "v": 16.9835
+        },
+        {
+          "clean": true,
+          "ts": 1787349226.5,
+          "v": 16.5291
+        },
+        {
+          "clean": true,
+          "ts": 1787349309.1,
+          "v": 15.8492
+        },
+        {
+          "clean": true,
+          "ts": 1787349422.8,
+          "v": 13.3139
+        },
+        {
+          "clean": true,
+          "ts": 1787349629.2,
+          "v": 12.8024
+        },
+        {
+          "clean": true,
+          "ts": 1787349688.8,
+          "v": 13.6994
+        },
+        {
+          "clean": true,
+          "ts": 1787349838.6,
+          "v": 13.3251
         }
       ],
       "disk_bytes": 29501218479,
       "family": "qwen3_5",
       "generative": true,
-      "prefill_chars_per_sec": 650.2,
+      "prefill_chars_per_sec": 430.8,
       "prefill_chars_per_sec_samples": [
         {
           "clean": true,
@@ -3624,9 +3798,39 @@
           "clean": true,
           "ts": 1787181010.5,
           "v": 619.6
+        },
+        {
+          "clean": true,
+          "ts": 1787349258.0,
+          "v": 635.7
+        },
+        {
+          "clean": true,
+          "ts": 1787349346.7,
+          "v": 532.0
+        },
+        {
+          "clean": true,
+          "ts": 1787349469.9,
+          "v": 425.8
+        },
+        {
+          "clean": true,
+          "ts": 1787349675.8,
+          "v": 429.2
+        },
+        {
+          "clean": true,
+          "ts": 1787349733.4,
+          "v": 448.8
+        },
+        {
+          "clean": true,
+          "ts": 1787349885.0,
+          "v": 430.8
         }
       ],
-      "prefill_samples": 2,
+      "prefill_samples": 8,
       "vision": true
     },
     "detailed_json": {
@@ -3756,44 +3960,44 @@
       "total_retries": 0
     },
     "taxes_anomalies": {
-      "p95_latency": 53.7,
+      "p95_latency": 53.3,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
     "taxes_audit_readiness": {
-      "p95_latency": 63.6,
+      "p95_latency": 69.2,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
     "taxes_qa": {
-      "p95_latency": 97.8,
+      "p95_latency": 153.0,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
     "taxes_slip_qa": {
-      "p95_latency": 4.9,
+      "p95_latency": 6.2,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
     "taxes_synthesis": {
-      "p95_latency": 76.0,
+      "p95_latency": 98.9,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
     "taxes_yoy_narrative": {
-      "p95_latency": 96.0,
+      "p95_latency": 112.8,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     },

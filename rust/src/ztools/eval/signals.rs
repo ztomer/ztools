@@ -27,8 +27,8 @@ use crate::ztools::eval::samples::{clean_estimate, migrate_sample_history, Sampl
 pub const MAX_EVAL_TIMEOUT: u64 = 7200;
 
 const TIMEOUT_SAFETY_FACTOR: f64 = 1.5;
-const MAX_CLEAN_SWAP_GB: f64 = 8.0;
-const MAX_CLEAN_COMPRESSOR_GB: f64 = 15.0;
+pub const MAX_CLEAN_SWAP_GB: f64 = 8.0;
+pub const MAX_CLEAN_COMPRESSOR_GB: f64 = 15.0;
 const BYTES_PER_GB: f64 = 1024.0 * 1024.0 * 1024.0;
 /// macOS page size on arm64/x86_64.
 const PAGE_BYTES: f64 = 16384.0;
@@ -169,12 +169,11 @@ pub fn derived_timeout(model: &str, prompt_chars: usize, max_tokens: u32) -> u64
 }
 
 /// Timeout actually applied to one request: the largest of the learned
-/// per-model/task value, the documented floor, and the derived estimate.
-///
-/// Note: the Python original also folds in a per-task CONFIGURED timeout from
-/// its TOML table; the Rust task set carries no such table yet, so that term is
-/// absent rather than guessed.
+/// per-model/task value, the per-task CONFIGURED timeout from
+/// `conf/config.toml [timeouts]` (fallback 600, `lib/llm/constants.py
+/// DEFAULT_TIMEOUT`), the documented floor, and the derived estimate.
 pub fn effective_timeout(model: &str, task_name: &str, prompt_chars: usize, max_tokens: u32) -> u64 {
+    const FALLBACK_CONFIGURED_TIMEOUT: u64 = 600;
     let signals = load_signals();
     let learned = signals
         .get(model)
@@ -182,8 +181,24 @@ pub fn effective_timeout(model: &str, task_name: &str, prompt_chars: usize, max_
         .and_then(|t| t.get("timeout"))
         .and_then(|v| v.as_u64())
         .unwrap_or(0);
+    let configured = std::fs::read_to_string(
+        crate::ztools::eval::budgets::conf_root().join("config.toml"),
+    )
+    .ok()
+    .and_then(|text| toml::from_str::<toml::Value>(&text).ok())
+        .and_then(|cfg| {
+            cfg.get("timeouts")
+                .and_then(|t| t.get(task_name))
+                .and_then(|v| v.as_integer())
+                .filter(|v| *v > 0)
+                .map(|v| v as u64)
+        })
+        .unwrap_or(FALLBACK_CONFIGURED_TIMEOUT);
     let derived = derived_timeout(model, prompt_chars, max_tokens);
-    *[learned, derived, default_eval_timeout()].iter().max().unwrap()
+    *[learned, configured, derived, default_eval_timeout()]
+        .iter()
+        .max()
+        .unwrap()
 }
 
 /// Record one completed task observation: p95 latency (EMA weighted toward

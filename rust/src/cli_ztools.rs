@@ -294,6 +294,16 @@ pub(crate) fn model_eval(
         )
         .map_err(|e| anyhow::anyhow!("GPU lock unavailable: {e}"))?;
         for model_name in resolve_models(url, &model, config)? {
+            // Refuse to measure what cannot fit or would thrash: a timing
+            // taken under memory pressure describes the pressure, and it
+            // hardens into config exactly like a real number. Same gate as
+            // the Python eval (eval/cli_runtime.py::oversize_refusal).
+            let model_gb = crate::ztools::eval::estimate_model_memory_gb(&model_name) as f64;
+            let refusal = crate::ztools::eval::oversize_refusal(model_gb, None, false, None);
+            if !refusal.is_empty() {
+                eprintln!("✗ Skipping {model_name}: {refusal}");
+                continue;
+            }
             // The banner is human progress, not data: under --json-output it
             // must not precede the JSON on stdout.
             if json_output {

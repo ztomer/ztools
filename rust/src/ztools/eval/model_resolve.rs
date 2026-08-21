@@ -186,7 +186,7 @@ fn hf_cache_dir() -> PathBuf {
 /// Served ids are lowercased while directories keep their original case, so
 /// match case-insensitively. MLXModels: `<Org>/<Model>/config.json`; HF cache:
 /// `models--<org>--<model>/snapshots/<sha>/config.json`.
-fn model_config_path(model: &str) -> Option<PathBuf> {
+pub fn model_config_path(model: &str) -> Option<PathBuf> {
     if model.is_empty() {
         return None;
     }
@@ -282,6 +282,50 @@ fn conf_models_root() -> PathBuf {
         }
     }
     PathBuf::from("conf/models")
+}
+
+/// Whether a served model can generate text, judged by its config.
+///
+/// Ported from `lib/model_caps.py::is_generative_model` so the prefill probe
+/// skips embedding models by WHAT THEY ARE instead of by name-matching a list
+/// that silently misses the next one. Unknown on disk: assume generative
+/// rather than silently skipping a model the user installed (foundation lands
+/// here and is generative). An unreadable config: same, keep probing.
+pub fn is_generative_model(model: &str) -> bool {
+    const NON_GENERATIVE_TYPES: &[&str] = &["model2vec", "sentence-transformer", "static"];
+    const NON_GENERATIVE_ARCHITECTURES: &[&str] = &["staticmodel", "sentencetransformer"];
+
+    let Some(config) = model_config_path(model) else {
+        return true;
+    };
+    let Ok(text) = std::fs::read_to_string(config) else {
+        return true;
+    };
+    let Ok(cfg) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return true;
+    };
+    if NON_GENERATIVE_TYPES.contains(
+        &cfg.get("model_type")
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_lowercase()
+            .as_str(),
+    ) {
+        return false;
+    }
+    let arches = cfg
+        .get("architectures")
+        .and_then(|a| a.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str())
+                .map(|s| s.to_lowercase())
+                .collect::<Vec<String>>()
+        })
+        .unwrap_or_default();
+    !arches
+        .iter()
+        .any(|a| NON_GENERATIVE_ARCHITECTURES.contains(&a.as_str()))
 }
 
 /// Does anything on this machine back up the roster's claim to serve `model`?
