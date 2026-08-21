@@ -1088,24 +1088,8 @@
   },
   "gemma-4-e2b-it-8bit": {
     "_capabilities": {
-      "cold_start_seconds": 8.7,
+      "cold_start_seconds": 0.06,
       "cold_start_seconds_samples": [
-        {
-          "clean": false,
-          "legacy": true,
-          "ts": 0.0,
-          "v": 15.76
-        },
-        {
-          "clean": true,
-          "ts": 1787068731.6,
-          "v": 9.3016
-        },
-        {
-          "clean": true,
-          "ts": 1787070184.4,
-          "v": 8.094
-        },
         {
           "clean": true,
           "ts": 1787090422.5,
@@ -1115,26 +1099,50 @@
           "clean": true,
           "ts": 1787107706.2,
           "v": 0.2483
+        },
+        {
+          "clean": true,
+          "ts": 1787338117.9,
+          "v": 7.8057
+        },
+        {
+          "clean": true,
+          "ts": 1787338124.6,
+          "v": 0.1231
+        },
+        {
+          "clean": true,
+          "ts": 1787339272.2,
+          "v": 0.0998
+        },
+        {
+          "clean": true,
+          "ts": 1787339277.5,
+          "v": 0.0576
+        },
+        {
+          "clean": true,
+          "ts": 1787339285.1,
+          "v": 0.0672
+        },
+        {
+          "clean": true,
+          "ts": 1787339290.6,
+          "v": 0.0677
+        },
+        {
+          "clean": true,
+          "ts": 1787339293.1,
+          "v": 0.0645
+        },
+        {
+          "clean": true,
+          "ts": 1787339304.5,
+          "v": 0.0573
         }
       ],
-      "decode_tokens_per_sec": 108.53,
+      "decode_tokens_per_sec": 109.54,
       "decode_tokens_per_sec_samples": [
-        {
-          "clean": false,
-          "legacy": true,
-          "ts": 0.0,
-          "v": 30.49
-        },
-        {
-          "clean": true,
-          "ts": 1787068732.3,
-          "v": 98.9576
-        },
-        {
-          "clean": true,
-          "ts": 1787070185.0,
-          "v": 110.1724
-        },
         {
           "clean": true,
           "ts": 1787090423.1,
@@ -1144,29 +1152,53 @@
           "clean": true,
           "ts": 1787107706.9,
           "v": 106.886
+        },
+        {
+          "clean": true,
+          "ts": 1787338118.5,
+          "v": 110.0598
+        },
+        {
+          "clean": true,
+          "ts": 1787338125.2,
+          "v": 112.7992
+        },
+        {
+          "clean": true,
+          "ts": 1787339272.8,
+          "v": 111.1505
+        },
+        {
+          "clean": true,
+          "ts": 1787339278.1,
+          "v": 110.6974
+        },
+        {
+          "clean": true,
+          "ts": 1787339285.7,
+          "v": 110.6847
+        },
+        {
+          "clean": true,
+          "ts": 1787339291.2,
+          "v": 104.2034
+        },
+        {
+          "clean": true,
+          "ts": 1787339293.7,
+          "v": 109.5364
+        },
+        {
+          "clean": true,
+          "ts": 1787339305.1,
+          "v": 107.3084
         }
       ],
       "disk_bytes": 5899567172,
       "family": "gemma4",
       "generative": true,
-      "prefill_chars_per_sec": 20315.95,
+      "prefill_chars_per_sec": 21347.6,
       "prefill_chars_per_sec_samples": [
-        {
-          "clean": false,
-          "legacy": true,
-          "ts": 0.0,
-          "v": 9876.4
-        },
-        {
-          "clean": true,
-          "ts": 1787068733.3,
-          "v": 20578.2
-        },
-        {
-          "clean": true,
-          "ts": 1787070186.0,
-          "v": 20053.7
-        },
         {
           "clean": true,
           "ts": 1787090423.9,
@@ -1176,9 +1208,49 @@
           "clean": true,
           "ts": 1787107707.9,
           "v": 18582.3
+        },
+        {
+          "clean": true,
+          "ts": 1787338119.3,
+          "v": 22981.6
+        },
+        {
+          "clean": true,
+          "ts": 1787338126.1,
+          "v": 22638.0
+        },
+        {
+          "clean": true,
+          "ts": 1787339273.7,
+          "v": 22759.2
+        },
+        {
+          "clean": true,
+          "ts": 1787339279.0,
+          "v": 22847.3
+        },
+        {
+          "clean": true,
+          "ts": 1787339286.7,
+          "v": 21830.3
+        },
+        {
+          "clean": true,
+          "ts": 1787339292.2,
+          "v": 19642.2
+        },
+        {
+          "clean": true,
+          "ts": 1787339294.6,
+          "v": 21347.6
+        },
+        {
+          "clean": true,
+          "ts": 1787339306.1,
+          "v": 19175.3
         }
       ],
-      "prefill_samples": 5,
+      "prefill_samples": 13,
       "vision": true
     },
     "detailed_json": {
@@ -1308,44 +1380,44 @@
       "total_retries": 1
     },
     "taxes_anomalies": {
-      "p95_latency": 31.1,
+      "p95_latency": 29.7,
       "parse_failures": 0,
-      "samples": 7,
+      "samples": 8,
       "timeout": 900,
       "total_retries": 1
     },
     "taxes_audit_readiness": {
-      "p95_latency": 50.6,
+      "p95_latency": 48.4,
       "parse_failures": 0,
-      "samples": 7,
+      "samples": 8,
       "timeout": 900,
       "total_retries": 1
     },
     "taxes_qa": {
-      "p95_latency": 44.0,
+      "p95_latency": 42.0,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
     "taxes_slip_qa": {
-      "p95_latency": 6.9,
+      "p95_latency": 6.0,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 4,
       "timeout": 900,
       "total_retries": 0
     },
     "taxes_synthesis": {
-      "p95_latency": 76.7,
+      "p95_latency": 73.3,
       "parse_failures": 0,
-      "samples": 7,
+      "samples": 8,
       "timeout": 900,
       "total_retries": 1
     },
     "taxes_yoy_narrative": {
-      "p95_latency": 65.7,
+      "p95_latency": 62.7,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     },

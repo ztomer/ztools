@@ -148,7 +148,17 @@ pub fn run() -> Result<()> {
             since,
             login,
         } => crate::cli_ztools::twitter_summarize(
-            &config, json, model, md_out, use_cache, fetch_only, debug, since, login,
+            &config,
+            crate::cli_ztools::TwitterSummarizeOpts {
+                json,
+                model,
+                md_out,
+                use_cache,
+                fetch_only,
+                debug,
+                since,
+                login,
+            },
         ),
         Cmd::WeekendPlan {
             location,

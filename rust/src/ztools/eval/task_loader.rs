@@ -61,6 +61,10 @@ pub enum Check {
         gt_forbidden: Vec<String>,
         min_hits: usize,
     },
+    /// The three RUBRIC tasks (anomalies, audit_readiness, synthesis): scored
+    /// 0-100 by the ported taxes_validator rubric, not by generic boolean
+    /// checks. Graded like [`Check::TaxesGrounded`].
+    TaxesRubric { task_name: String },
     SectionHeaders(Vec<String>),
 }
 
@@ -118,6 +122,18 @@ pub fn check_graded_score(
                 "yoy_narrative" => super::validators::validate_taxes_yoy_narrative(&val, None),
                 "qa" => super::validators::validate_taxes_qa(&val, None),
                 "slip_qa" => super::validators::validate_taxes_slip_qa(&val, None),
+                _ => return None,
+            };
+            Some(score)
+        }
+        Check::TaxesRubric { task_name } => {
+            let val = parsed
+                .cloned()
+                .unwrap_or_else(|| serde_json::Value::String(cleaned.to_string()));
+            let (score, _) = match task_name.as_str() {
+                "anomalies" => super::validators::validate_taxes_anomalies(&val),
+                "audit_readiness" => super::validators::validate_taxes_audit_readiness(&val),
+                "synthesis" => super::validators::validate_taxes_synthesis(&val),
                 _ => return None,
             };
             Some(score)
@@ -196,21 +212,19 @@ pub fn run_check(check: &Check, cleaned: &str, parsed: Option<&serde_json::Value
             hits >= *min_hits
         }
         Check::SectionHeaders(headers) => headers.iter().all(|h| cleaned.contains(h)),
+        Check::TaxesRubric { task_name } => {
+            let val = parsed
+                .cloned()
+                .unwrap_or_else(|| serde_json::Value::String(cleaned.to_string()));
+            let (score, _) = match task_name.as_str() {
+                "anomalies" => super::validators::validate_taxes_anomalies(&val),
+                "audit_readiness" => super::validators::validate_taxes_audit_readiness(&val),
+                "synthesis" => super::validators::validate_taxes_synthesis(&val),
+                _ => return false,
+            };
+            score >= 50
+        }
     }
-}
-
-#[derive(Debug, Deserialize)]
-struct TaxesRubric {
-    #[serde(default)]
-    expected_signals: Vec<String>,
-    #[serde(default)]
-    gt_forbidden: Vec<String>,
-    #[serde(default)]
-    schema: Option<String>,
-    #[serde(default)]
-    schema_key: Option<String>,
-    #[serde(default)]
-    expected_sections: Option<Vec<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -218,13 +232,15 @@ struct TaxesSnapshot {
     task: String,
     system: Option<String>,
     user: String,
-    rubric: Option<TaxesRubric>,
     /// The three GROUNDED tasks (qa, slip_qa, yoy_narrative) carry a grounding
     /// block instead of a rubric: their verdict is arithmetic and
     /// set-membership against known facts/amounts, which is why they do not
     /// saturate the way the rubric tasks do. A loader that reads only `rubric`
     /// silently turns these into hollow one-keyword checks -- the exact drift
     /// the A/B parity harness caught (Python 100 vs Rust 0 on identical output).
+    ///
+    /// The `rubric` block itself is consumed directly from the snapshot file
+    /// by `validators/taxes_rubric.rs`, which is where its scoring lives.
     #[serde(default)]
     grounding: Option<serde_json::Value>,
 }
@@ -269,26 +285,18 @@ pub fn load_taxes_tasks_from_dir(dir: &Path) -> Result<Vec<EvalTask>> {
                 min_score: 90,
             });
         }
-        if let Some(rubric) = snapshot.rubric {
-            if !rubric.expected_signals.is_empty() || !rubric.gt_forbidden.is_empty() {
-                checks.push(Check::TaxesGrounding {
-                    expected_signals: rubric.expected_signals,
-                    gt_forbidden: rubric.gt_forbidden,
-                    min_hits: 3,
-                });
-            }
-            if let Some(sections) = rubric.expected_sections {
-                if !sections.is_empty() {
-                    checks.push(Check::SectionHeaders(sections));
-                }
-            }
-            if let Some(key) = rubric.schema_key {
-                checks.push(Check::JsonKeyExists(key));
-            } else if let Some(schema) = rubric.schema {
-                if schema == "json" {
-                    checks.push(Check::Contains("{".to_string()));
-                }
-            }
+        if matches!(
+            snapshot.task.as_str(),
+            "anomalies" | "audit_readiness" | "synthesis"
+        ) {
+            // The RUBRIC tasks are scored by their own graded validator in
+            // Python (lib/validators/taxes_validator.py). Generic boolean
+            // substitutes here scored structurally differently -- the exact
+            // divergence the live A/B parity run caught (Rust 100 vs Python
+            // 74 on anomalies).
+            checks.push(Check::TaxesRubric {
+                task_name: snapshot.task.clone(),
+            });
         }
 
         // Always check that some output was produced

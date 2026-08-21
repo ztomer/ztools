@@ -11,18 +11,33 @@ use std::path::PathBuf;
 
 use crate::config::ZtoolsConfig;
 
-#[allow(clippy::too_many_arguments)]
+/// The `twitter-summarize` flag set, grouped so the function signature stays
+/// one stable struct instead of a growing argument list.
+pub(crate) struct TwitterSummarizeOpts {
+    pub json: Option<String>,
+    pub model: Option<String>,
+    pub md_out: Option<PathBuf>,
+    pub use_cache: bool,
+    pub fetch_only: bool,
+    pub debug: bool,
+    pub since: Option<String>,
+    pub login: bool,
+}
+
 pub(crate) fn twitter_summarize(
     config: &ZtoolsConfig,
-    json: Option<String>,
-    model: Option<String>,
-    md_out: Option<PathBuf>,
-    use_cache: bool,
-    fetch_only: bool,
-    debug: bool,
-    since: Option<String>,
-    login: bool,
+    opts: TwitterSummarizeOpts,
 ) -> Result<()> {
+    let TwitterSummarizeOpts {
+        json,
+        model,
+        md_out,
+        use_cache,
+        fetch_only,
+        debug,
+        since,
+        login,
+    } = opts;
     if login {
         println!("· Launching browser for x.com sign-in...");
         return crate::ztools::twitter::browser::login_live();
@@ -289,9 +304,14 @@ pub(crate) fn model_eval(
             let cfg = crate::ztools::eval::RunnerConfig {
                 host: host.clone(),
                 port,
+                record_signals: true,
                 ..Default::default()
             };
-            let outcomes = crate::ztools::eval::run_eval(&model_name, &tasks, &cfg);
+            // The learning path: prefill/cold-start/decode measurement, learned
+            // per-task timeouts, p95 signal recording, stall watchdog. Loaded
+            // from and saved back to conf/eval_signals.json inside.
+            let outcomes =
+                crate::ztools::eval::run_eval_with_signals(&model_name, &tasks, &cfg);
             if json_output {
                 use serde::Serialize;
                 #[derive(Serialize)]
@@ -301,19 +321,28 @@ pub(crate) fn model_eval(
                     status: &'a str,
                     time_secs: f64,
                     error: Option<&'a String>,
+                    #[serde(skip_serializing_if = "Option::is_none")]
+                    substituted_to: Option<&'a String>,
+                    #[serde(skip_serializing_if = "Option::is_none")]
+                    substitution_reason: Option<&'a String>,
                 }
                 let rows: Vec<OutcomeRow> = outcomes
                     .iter()
                     .map(|o| OutcomeRow {
                         task: &o.task,
                         score: o.score,
-                        status: &o.status,
+                        status: o.status.as_str(),
                         time_secs: o.time_secs,
                         error: o.error.as_ref(),
+                        substituted_to: o.substituted_to.as_ref(),
+                        substitution_reason: o.substitution_reason.as_ref(),
                     })
                     .collect();
                 println!("{}", serde_json::to_string_pretty(&rows)?);
             } else {
+                for note in outcomes.iter().filter_map(|o| o.substitution_reason.as_deref()) {
+                    eprintln!("⚠ {note}");
+                }
                 print!(
                     "{}",
                     crate::ztools::model_eval::render_task_outcomes(&outcomes)

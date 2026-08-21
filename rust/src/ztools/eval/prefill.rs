@@ -46,6 +46,8 @@ fn spec<'a>(
         temperature: 0.0,
         max_tokens,
         timeout_secs: default_eval_timeout(),
+        allow_substitution: true,
+        stream_guard: false,
     }
 }
 

@@ -61,6 +61,8 @@ fn spec(port: u16, max_tokens: u32, timeout_secs: u64) -> RequestSpec<'static> {
         temperature: 0.0,
         max_tokens,
         timeout_secs,
+        allow_substitution: false,
+        stream_guard: false,
     }
 }
 
@@ -100,7 +102,7 @@ fn blocking_call_reports_http_error_as_data() {
 fn blocking_call_survives_a_dead_server() {
     // Port 1 on localhost is refused; must come back as an error RESULT,
     // never a panic -- a failed request during a sweep must not end it.
-    let spec = RequestSpec { model: "m", messages: &msgs(), host: "127.0.0.1", port: 1, temperature: 0.0, max_tokens: 100, timeout_secs: 2 };
+    let spec = RequestSpec { model: "m", messages: &msgs(), host: "127.0.0.1", port: 1, temperature: 0.0, max_tokens: 100, timeout_secs: 2, allow_substitution: false, stream_guard: false };
     let r = call(&spec, false);
     assert!(r.error.is_some(), "{r:?}");
 }

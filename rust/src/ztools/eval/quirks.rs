@@ -36,7 +36,7 @@ const REPLACE_SRC_TASK_BASED: &str = "Execute the task based on";
 const REPLACE_TGT_TASK_BASED: &str = "Extract";
 
 /// Extract model family from full model name.
-fn get_model_family(model: &str) -> &'static str {
+pub fn get_model_family(model: &str) -> &'static str {
     let model_lower = model.to_lowercase();
     MODEL_FAMILIES
         .iter()

@@ -1,18 +1,22 @@
 //! Eval transport: OpenAI-compatible chat-completions client for the eval loop.
 //!
 //! Ported from `lib/osaurus_lib.py::call` and
-//! `lib/llm/streaming.py::stream_with_overrun_guard`. Two entry points:
+//! `lib/llm/streaming.py::stream_with_overrun_guard`. One entry point, [`call`],
+//! which owns the full Python request pipeline in the same order:
 //!
-//! - [`call`] — blocking request; cleans output and optionally parses JSON.
-//! - [`stream_with_overrun_guard`] — streamed request that ABORTS a reasoning
-//!   overrun as soon as it is certain: a model that has spent
-//!   [`REASONING_OVERRUN_FRACTION`] of its token budget thinking while producing
-//!   NO content cannot finish an answer, so the remaining spend is wasted.
-//!   Below that line, think as long as it likes.
+//! 1. model quirks are applied HERE (the caller passes unquirked messages), so
+//!    a substituted model gets its own quirks re-derived rather than inheriting
+//!    the dead model's prefixes;
+//! 2. a streamed attempt under the reasoning-overrun guard serves only the
+//!    happy path -- any error or an empty stream falls through to the blocking
+//!    request (an SSE-incapable server answers plain JSON);
+//! 3. on an HTTP 404 whose body says "model tag gone", the roster is fetched
+//!    and a substitute is retried ONCE, surfaced via `substituted_from` /
+//!    `substitution_reason`, never silently.
 //!
-//! Not ported (yet): model-quirk application, missing-model substitution, and
-//! the Foundation on-device fallback. A transport error here is reported in the
-//! result, never raised — a failed request during a sweep must not end the sweep.
+//! Not ported (yet): the Foundation on-device fallback. A transport error here
+//! is reported in the result, never raised -- a failed request during a sweep
+//! must not end the sweep.
 
 use std::io::{BufRead, BufReader};
 use std::time::{Duration, Instant};
@@ -20,6 +24,10 @@ use std::time::{Duration, Instant};
 use serde_json::{json, Value};
 
 use crate::ztools::eval::clean::{clean_model_output, extract_json};
+use crate::ztools::eval::model_resolve::{
+    default_fallback_chain, fetch_roster, is_missing_model_error, substitute_model,
+};
+use crate::ztools::eval::quirks::apply_model_quirks;
 use crate::ztools::eval::task_loader::ChatMessage;
 
 /// Fraction of the output budget a model may spend on reasoning before an empty
@@ -45,9 +53,17 @@ pub struct TransportResult {
     pub finish_reason: String,
     pub parsed: Option<Value>,
     pub error: Option<String>,
+    /// Raw body of a non-200 reply, for callers that must classify the failure
+    /// (missing-model vs at-capacity) without re-parsing the truncated message.
+    pub error_body: Option<String>,
+    pub status_code: Option<u16>,
     pub time_secs: f64,
     pub aborted: bool,
     pub abort_reason: String,
+    /// Set when the configured tag was dead and a stand-in answered instead.
+    pub substituted_from: Option<String>,
+    pub substituted_to: Option<String>,
+    pub substitution_reason: Option<String>,
 }
 
 fn base_url(host: &str, port: u16) -> String {
@@ -70,20 +86,116 @@ fn client(timeout_secs: u64) -> reqwest::blocking::Client {
 #[derive(Debug, Clone)]
 pub struct RequestSpec<'a> {
     pub model: &'a str,
+    /// UNQUIRKED messages: `call` applies quirks itself so a substituted model
+    /// re-derives them from scratch.
     pub messages: &'a [ChatMessage],
     pub host: &'a str,
     pub port: u16,
     pub temperature: f64,
     pub max_tokens: u32,
     pub timeout_secs: u64,
+    pub allow_substitution: bool,
+    /// Try the streamed request under the reasoning-overrun guard first,
+    /// falling back to the blocking POST when it errors or produces nothing.
+    /// The eval loop runs with this ON; the prefill probe OFF -- its three-call
+    /// protocol must not double its request count against an SSE-incapable
+    /// server (the Python original passes `stream_guard=False` for the same
+    /// reason).
+    pub stream_guard: bool,
 }
 
-/// Blocking chat completion. Returns a [`TransportResult`] whose `error` is
-/// `Some` on any transport or protocol failure.
+/// Blocking chat completion with the full pipeline (quirks -> stream guard ->
+/// blocking -> missing-model substitution). Returns a [`TransportResult`] whose
+/// `error` is `Some` on any transport or protocol failure.
 ///
 /// With `parse_json`, the request asks for `response_format: json_object` and
 /// the cleaned content is additionally run through [`extract_json`].
 pub fn call(spec: &RequestSpec, parse_json: bool) -> TransportResult {
+    // Quirks are derived per call site like the Python transport does: a
+    // substitute model would need them re-derived from scratch, so the ORIGINAL
+    // messages are kept for the retry.
+    let quirked_values = apply_model_quirks(
+        &spec
+            .messages
+            .iter()
+            .map(|m| serde_json::to_value(m).unwrap_or_default())
+            .collect::<Vec<Value>>(),
+        spec.model,
+    );
+    let quirked: Vec<ChatMessage> = quirked_values
+        .iter()
+        .filter_map(|v| serde_json::from_value(v.clone()).ok())
+        .collect();
+
+    // Only the happy path is served from the stream, as in the Python original:
+    // any transport error -- or a stream that produced nothing at all (a server
+    // without SSE support answers plain JSON, which the SSE parser skips) --
+    // falls through to the blocking call, which is what knows how to substitute
+    // a deleted model.
+    let result = if spec.stream_guard {
+        let quirked_spec = derived_spec(spec, &quirked);
+        let streamed = stream_with_overrun_guard(&quirked_spec);
+        let produced_nothing = streamed.content.is_empty()
+            && streamed.reasoning_content.is_empty()
+            && streamed.finish_reason.is_empty();
+        if streamed.error.is_none() && !produced_nothing {
+            return streamed;
+        }
+        blocking_request(&quirked_spec, parse_json)
+    } else {
+        let quirked_spec = derived_spec(spec, &quirked);
+        blocking_request(&quirked_spec, parse_json)
+    };
+
+    // Retry once against a servable model when the configured tag is gone.
+    // None-of-our-business whenever we lack evidence: a non-404, a 404 about
+    // something else, an unreachable roster, or a roster with no alternative --
+    // rewriting the caller's model on a guess trades a clear error for a
+    // silently wrong answer.
+    if spec.allow_substitution
+        && result.status_code == Some(404)
+        && is_missing_model_error(404, result.error_body.as_deref().unwrap_or(""))
+    {
+        let roster = fetch_roster(spec.host, spec.port);
+        let (substitute, reason) =
+            substitute_model(spec.model, &roster, &default_fallback_chain());
+        if let Some(reason) = reason {
+            eprintln!("⚠ {reason}");
+            let sub_spec = derived_spec_with_model(spec, &substitute, false);
+            let mut retried = call(&sub_spec, parse_json);
+            retried.substituted_from = Some(spec.model.to_string());
+            retried.substituted_to = Some(substitute);
+            retried.substitution_reason = Some(reason);
+            return retried;
+        }
+    }
+    result
+}
+
+/// Same endpoint knobs as `spec`, but carrying the already-quirked messages.
+fn derived_spec<'a>(spec: &RequestSpec<'a>, quirked: &'a [ChatMessage]) -> RequestSpec<'a> {
+    let mut copy = spec.clone();
+    copy.messages = quirked;
+    copy
+}
+
+/// Same as [`derived_spec`] but retargeted at another model (the substitution
+/// retry), with substitution disabled so a chain of dead tags cannot recurse.
+fn derived_spec_with_model<'a>(
+    spec: &RequestSpec<'a>,
+    model: &'a str,
+    allow_substitution: bool,
+) -> RequestSpec<'a> {
+    let mut copy = spec.clone();
+    copy.model = model;
+    copy.allow_substitution = allow_substitution;
+    // The retry re-derives quirks from the ORIGINAL messages inside call().
+    copy.messages = spec.messages;
+    copy
+}
+
+/// The plain blocking POST: wire format, cleaning, parsing, errors-as-data.
+fn blocking_request(spec: &RequestSpec, parse_json: bool) -> TransportResult {
     let mut result = TransportResult {
         model: spec.model.to_string(),
         ..Default::default()
@@ -126,8 +238,11 @@ pub fn call(spec: &RequestSpec, parse_json: bool) -> TransportResult {
     result.time_secs = (start.elapsed().as_secs_f64() * 10.0).round() / 10.0;
 
     if status != reqwest::StatusCode::OK {
+        result.status_code = Some(status.as_u16());
         // Truncated like the Python ERROR_TRUNCATE_LEN path: a huge error page
-        // must not flood a sweep log.
+        // must not flood a sweep log. The raw body is kept alongside so
+        // classifiers see what the truncation may have cut.
+        result.error_body = Some(body[..body.len().min(4096)].to_string());
         result.error = Some(format!(
             "HTTP {}: {}",
             status.as_u16(),
@@ -231,6 +346,7 @@ pub fn stream_with_overrun_guard(spec: &RequestSpec) -> TransportResult {
     };
 
     if response.status() != reqwest::StatusCode::OK {
+        result.status_code = Some(response.status().as_u16());
         result.error = Some(format!("HTTP {}", response.status().as_u16()));
         return result;
     }
