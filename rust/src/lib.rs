@@ -14,6 +14,7 @@ pub mod ztools;
 // intact; re-export them at the crate root so callers (and the integration
 // tests) get `ztools::weekend` instead of `ztools::ztools::weekend`.
 pub use ztools::embeddings;
+pub use ztools::eval;
 pub use ztools::image_renamer;
 pub use ztools::model_eval;
 pub use ztools::model_health;

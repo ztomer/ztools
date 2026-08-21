@@ -9,6 +9,7 @@ pub mod prompts;
 pub mod gpu_lock;
 pub mod samples;
 pub mod task_loader;
+pub mod transport;
 pub mod validate;
 pub mod validators;
 pub mod watchdog;
