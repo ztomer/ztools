@@ -126,6 +126,28 @@ fn partial_output_scores_partial() {
 }
 
 #[test]
+fn graded_validator_score_becomes_the_task_score() {
+    // The slip_qa empty-flags snapshot admits exactly one right answer, and
+    // its validator scores that answer 100. The task score must BE that
+    // number -- not a boolean collapse at min_score.
+    let t = EvalTask::new(
+        "taxes_slip_qa",
+        "p",
+        vec![Check::TaxesGrounded {
+            task_name: "slip_qa".to_string(),
+            min_score: 90,
+        }],
+    );
+    let perfect = r#"{"prose": "Everything is consistent with T4 slips.", "highlighted_flag_ids": []}"#;
+    assert_eq!(ztools::eval::runner::score_output(&t, perfect, None), 100);
+
+    // A wrong answer must still score low, not inherit the threshold.
+    let wrong = r#"{"prose": "invents $123.45", "highlighted_flag_ids": ["flag-1"]}"#;
+    let bad = ztools::eval::runner::score_output(&t, wrong, None);
+    assert!(bad < 50, "wrong answer scored {bad}");
+}
+
+#[test]
 fn zero_score_output_still_carries_a_status() {
     // Output arrives but scores 0: the placeholder-vs-score update must still
     // set the status. It used to leak an EMPTY status when the scored attempt

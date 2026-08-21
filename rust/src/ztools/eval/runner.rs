@@ -15,7 +15,7 @@
 //! Scoring is the established Rust pattern (as in `model_eval.rs`): each check
 //! is boolean via `run_check`, and the task score is the fraction passed.
 
-use crate::ztools::eval::task_loader::{run_check, EvalTask};
+use crate::ztools::eval::task_loader::{check_graded_score, run_check, EvalTask};
 use crate::ztools::eval::transport::{self, stream_with_overrun_guard, RequestSpec};
 
 /// Result of evaluating ONE task for ONE model. Errors are data.
@@ -74,10 +74,24 @@ fn status_for(score: u8) -> &'static str {
     }
 }
 
-/// Score one output against every check of a task: fraction passed, 0-100.
+/// Score one output against every check of a task, 0-100.
+///
+/// When EVERY check is inherently graded (the taxes grounded validators), the
+/// task score is the mean of their numeric verdicts -- an 80/100 answer must
+/// surface as 80/partial, not collapse to 0/fail behind a boolean threshold.
+/// Mixed or purely-boolean tasks keep the passed-fraction semantics.
 pub fn score_output(task: &EvalTask, cleaned: &str, parsed: Option<&serde_json::Value>) -> u8 {
     if task.checks.is_empty() {
         return 0;
+    }
+    let graded: Vec<i64> = task
+        .checks
+        .iter()
+        .filter_map(|c| check_graded_score(c, cleaned, parsed))
+        .collect();
+    if graded.len() == task.checks.len() {
+        let mean = graded.iter().sum::<i64>() / graded.len() as i64;
+        return mean.clamp(0, 100) as u8;
     }
     let passed = task
         .checks

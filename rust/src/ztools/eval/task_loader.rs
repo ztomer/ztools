@@ -94,6 +94,38 @@ impl EvalTask {
     }
 }
 
+/// The numeric score behind an inherently GRADED check, if it has one.
+///
+/// Boolean checks (Contains, ...) return None. Graded checks -- currently the
+/// taxes grounded validators -- return their real 0-100 verdict so the runner
+/// can report a PARTIAL as a partial instead of collapsing an 80 to a hard 0
+/// at an arbitrary pass threshold (the exact bucket mismatch the A/B sweep
+/// caught on gemma-4-e4b and ornith-9b).
+pub fn check_graded_score(
+    check: &Check,
+    cleaned: &str,
+    parsed: Option<&serde_json::Value>,
+) -> Option<i64> {
+    match check {
+        Check::TaxesGrounded {
+            task_name,
+            min_score: _,
+        } => {
+            let val = parsed
+                .cloned()
+                .unwrap_or_else(|| serde_json::Value::String(cleaned.to_string()));
+            let (score, _) = match task_name.as_str() {
+                "yoy_narrative" => super::validators::validate_taxes_yoy_narrative(&val, None),
+                "qa" => super::validators::validate_taxes_qa(&val, None),
+                "slip_qa" => super::validators::validate_taxes_slip_qa(&val, None),
+                _ => return None,
+            };
+            Some(score)
+        }
+        _ => None,
+    }
+}
+
 /// Execute a single verification check against cleaned output and optional parsed JSON.
 pub fn run_check(check: &Check, cleaned: &str, parsed: Option<&serde_json::Value>) -> bool {
     let lower = cleaned.to_lowercase();
