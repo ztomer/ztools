@@ -90,6 +90,28 @@ pub fn clean_estimate(history: &[Sample]) -> Option<f64> {
     Some(median(window))
 }
 
+/// Seed a sample history from a pre-existing scalar, ONCE, tagged unclean.
+///
+/// The scalars on disk predate clean-sample tracking and some were taken under
+/// load, so they must not be trusted as clean baselines -- but discarding them
+/// would throw away the only reading some models have. Tagged legacy they are
+/// used until real clean samples arrive, then outvoted.
+pub fn migrate_sample_history(history: &mut Vec<Sample>, scalar: Option<f64>) {
+    if !history.is_empty() {
+        return;
+    }
+    let Some(value) = scalar else {
+        return;
+    };
+    if value <= 0.0 {
+        return;
+    }
+    let mut seeded = Sample::new(value, false);
+    seeded.ts = 0.0;
+    seeded.legacy = Some(true);
+    history.push(seeded);
+}
+
 /// Append a sample, bound history size, and return the updated estimate.
 pub fn add_sample(history: &mut Vec<Sample>, value: f64, clean: bool) -> f64 {
     let s = Sample::new(value, clean);

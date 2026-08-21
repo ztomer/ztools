@@ -7,7 +7,9 @@ pub mod clean;
 pub mod discrimination;
 pub mod prompts;
 pub mod gpu_lock;
+pub mod prefill;
 pub mod runner;
+pub mod signals;
 pub mod samples;
 pub mod task_loader;
 pub mod transport;
@@ -39,4 +41,10 @@ pub use task_loader::{
 pub use validate::validate_file_summary;
 pub use validators::*;
 pub use runner::{run_eval, RunnerConfig, TaskOutcome};
+pub use prefill::{measure_prefill_rate, record_prefill_rate, MAX_PLAUSIBLE_PREFILL_RATE};
+pub use signals::{
+    default_eval_timeout, derived_timeout, effective_timeout, load_signals,
+    machine_is_uncontended, memory_pressure, record_capability_sample, record_signal,
+    save_signals, signals_path, SignalStore, MAX_EVAL_TIMEOUT,
+};
 pub use watchdog::{is_stalled, model_stall_duration, stalled_for, DEFAULT_MODEL_STALL_SECONDS};
