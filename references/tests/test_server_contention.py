@@ -45,7 +45,7 @@ class TestTheCounterCountsServersNotShellCommands:
 
     def test_a_shell_quoting_the_binary_path_is_not_a_server(self):
         with patch.object(signals.psutil, "process_iter",
-                          return_value=procs("osaurus", "zsh", "python3.11", "grep")):
+                          return_value=procs("osaurus", "zsh", "python3.14", "grep")):
             assert signals.count_osaurus_servers() == 1
 
     def test_no_server_is_zero(self):

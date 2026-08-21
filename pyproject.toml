@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "ztools"
 version = "2.1.5"
 description = "Local LLM tools for Osaurus"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
     "requests>=2.33.0",
     "rich>=14.0.0",
@@ -90,7 +90,7 @@ python = "3.14"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]

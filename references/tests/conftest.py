@@ -2,19 +2,38 @@
 Pytest configuration: shared fixtures for all tests.
 """
 
+import os
 import sys
 from pathlib import Path
 
 import pytest
-from lib.testing import MockLLM
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Local runs must match what the documented quality gate enforces, so a plain
+# `pytest` cannot silently differ from CI. Without these, any test whose mock
+# misses one LLM boundary falls through to REAL infrastructure: an MLX fallback
+# scans ~/MLXModels (present on this machine) and loads a multi-GB model, and
+# nine weekend_llm / osaurus_server / gpu_lock tests then hang for minutes or
+# fail on whatever answers port 1337. Opt back in per-session with
+# ZTOOLS_TEST_ALLOW_REAL_MLX=1 / ZTOOLS_TEST_ALLOW_REAL_LLM=1 -- the same
+# explicit-opt-out shape as the real_cookie_discovery marker.
+#
+# MUST stay ABOVE every project import below: `from lib.testing import ...`
+# transitively imports the whole `lib` package, and MLX_MODELS_DIR is read at
+# module-import time -- an env var set after that import is silently ignored.
+if "ZTOOLS_TEST_ALLOW_REAL_MLX" not in os.environ:
+    os.environ.setdefault(
+        "MLX_MODELS_DIR", "/tmp/nonexistent-mlx-models-dir-for-testing"
+    )
+if "ZTOOLS_TEST_ALLOW_REAL_LLM" not in os.environ:
+    os.environ.setdefault("OLLAMA_BASE_URL", "http://127.0.0.1:1")
 
 # Capture references to lib.mlx_lib functions at conftest load time.
-# This MUST happen before any mock patches them.
+# This MUST happen after the env block above and before any mock patches them.
 import lib.mlx_lib  # noqa: E402
 import lib.mlx_vlm  # noqa: E402
+from lib.testing import MockLLM  # noqa: E402
 
 _REAL_MLX_FUNCTIONS = {
     "call": lib.mlx_lib.call,

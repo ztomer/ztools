@@ -33,7 +33,7 @@ cannot drift.
   Run it exactly as written. It previously carried
   `--ignore=references/tests/test_img_helpers.py --ignore=references/tests/test_image_renamer.py`
   for a numpy C-extension crash under coverage tracing; that crash no longer reproduces
-  (numpy 2.x / coverage 7.15, python 3.11.15), and those two files carry ~95 statements of
+  (numpy 2.x / coverage 7.15, python 3.14), and those two files carry ~95 statements of
   `rename/helpers.py` and `rename/cli.py`. Excluding them dropped the total to **94.09%**
   against a 95 floor — the documented gate could not pass, at HEAD, for anyone.
   With them included it is **95.11%**. If the crash returns, raise it rather than
