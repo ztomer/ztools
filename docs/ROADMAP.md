@@ -125,7 +125,10 @@ Ported, compiled from first commit, mock-server tested:
 - CLI wiring -- `ztools model-eval --suite full [--tasks-dir DIR]` runs the full suite under the machine-wide GPU lock and renders a worst-first markdown report
 - 14 mock-server integration tests across `transport_http.rs` / `eval_runner.rs`, abandon + status paths proven to fail before trusting green
 
-**Remaining**: per-task timing/signal recording into `eval_signals.json` (`eval/signals.py`, `eval/prefill.py`) feeding the median-of-5 estimator; model-quirk application; missing-model substitution.
+- `eval/signals.rs` -- eval_signals.json store, p95-EMA latency recording with learned per-task timeouts (floor-bounded), derived timeouts requiring ALL THREE clean capability terms or returning the documented floor; `machine_is_uncontended()` gates samples on GPU-lock holder + sysctl swapusage + vm_stat compressor, and unreadable pressure marks a sample UNVERIFIED rather than clean
+- `eval/prefill.rs` -- the 3-call LOAD/DECODE/PREFILL protocol (one quantity per call), nonce-led filler defeating prefix cache, plausibility bound discarding mock/cache answers instead of enshrining them
+
+**Remaining**: model-quirk application; missing-model substitution; live A/B parity run vs the Python eval.
 
 ### Phase 3: Samples & Discrimination — → **Done**
 
