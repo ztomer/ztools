@@ -6,6 +6,7 @@
 pub mod clean;
 pub mod discrimination;
 pub mod prompts;
+pub mod quirks;
 pub mod gpu_lock;
 pub mod prefill;
 pub mod runner;
@@ -41,6 +42,7 @@ pub use task_loader::{
 pub use validate::validate_file_summary;
 pub use validators::*;
 pub use runner::{run_eval, RunnerConfig, TaskOutcome};
+pub use quirks::apply_model_quirks;
 pub use prefill::{measure_prefill_rate, record_prefill_rate, MAX_PLAUSIBLE_PREFILL_RATE};
 pub use signals::{
     default_eval_timeout, derived_timeout, effective_timeout, load_signals,

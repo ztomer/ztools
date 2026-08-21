@@ -15,6 +15,7 @@
 //! Scoring is the established Rust pattern (as in `model_eval.rs`): each check
 //! is boolean via `run_check`, and the task score is the fraction passed.
 
+use crate::ztools::eval::quirks::apply_model_quirks;
 use crate::ztools::eval::task_loader::{check_graded_score, run_check, EvalTask};
 use crate::ztools::eval::transport::{self, stream_with_overrun_guard, RequestSpec};
 
@@ -137,10 +138,22 @@ pub fn run_eval(model: &str, tasks: &[EvalTask], cfg: &RunnerConfig) -> Vec<Task
     for task in tasks {
         let mut best: Option<TaskOutcome> = None;
 
+        // Quirks are applied per call site like the Python transport does:
+        // a substituted model would need them re-derived from scratch.
+        let as_values: Vec<serde_json::Value> = task
+            .messages
+            .iter()
+            .map(|m| serde_json::to_value(m).unwrap_or_default())
+            .collect();
+        let quirked: Vec<crate::ztools::eval::task_loader::ChatMessage> =
+            apply_model_quirks(&as_values, model)
+                .iter()
+                .filter_map(|v| serde_json::from_value(v.clone()).ok())
+                .collect();
         for _attempt in 0..=cfg.max_retries {
             let spec = RequestSpec {
                 model,
-                messages: &task.messages,
+                messages: &quirked,
                 host: &cfg.host,
                 port: cfg.port,
                 temperature: cfg.temperature,
