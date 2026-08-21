@@ -101,6 +101,77 @@ _Forward-looking: items 1–4 are the active roadmap. Items 5–10 are completed
 
 ---
 
+## 5: Eval-to-Rust Conversion
+
+**Objective**: Convert the Python eval system (`references/eval/`) to Rust, making the Rust binary the complete implementation and preserving Python as the verification/parity layer.
+
+**Current State**:
+- Python eval: `references/eval/` (~1232 lines across 4 files: `run.py`, `samples.py`, `discrimination.py`, `tasks_core.py`)
+- Rust eval: None (eval system is Python-only)
+- Python serves as reference/verification for Rust/Python parity
+
+**Conversion Plan** (phased, incremental):
+
+### Phase 1: Config & Best Models — → **Done**
+- `derive_best_models()` implemented in `references/lib/config_getters.py`
+- `with_ztools_best_models()` in Rust `config.rs`
+- Best model matrix derivation and date stamping complete
+
+### Phase 2: Core Eval Orchestration — ~2 weeks
+Convert `references/eval/run.py` (~485 lines):
+- Task iteration and timeout handling
+- Model selection from `derive_best_models()`
+- Timeout management (per-task, per-model)
+- Retry logic with token budgets
+- Result collection and signaling
+- Functions: `run_eval`, `run_eval_quick`, `_call_ollama`, `_call_osaurus`, `_call_foundationaly`, `_call_llm`
+
+### Phase 3: Samples & Discrimination — ~2 weeks
+Convert `references/eval/samples.py` and `references/eval/discrimination.py`:
+- Median-of-5 clean estimation (samples.py)
+- Gate/ranking split logic (discrimination.py)
+
+### Phase 4: Prompts & Task Definitions — ~2 weeks
+Convert task enums, rankings, gate tasks, and prompt texts:
+- `RANKING_TASKS`, `GATE_TASKS` from `tasks_core.py`
+- Prompt text loading from `tasks_prompts.py`
+- Task data loading from `tasks_data.py`
+
+### Phase 5: Polish & Integration Tests — ~2 weeks
+- Verify Rust eval produces identical outputs to Python
+- Compare model scores, filenames, diagnostics
+- Automated CI comparison (Rust vs Python)
+- Polish and optimize
+
+**Success Criteria**:
+1. Rust eval produces identical outputs to Python for test tasks
+2. Same model scores, filenames, and diagnostics
+3. Automated CI comparison passes
+4. Rust becomes default eval runner
+
+**Milestones**:
+| Phase | Effort | Status |
+|-------|--------|--------|
+| 1 | 1 week | → Done |
+| 2 | 2-3 weeks | Planned |
+| 3 | 2-3 weeks | Planned |
+| 4 | 2 weeks | Planned |
+| 5 | 2 weeks | Planned |
+| **Total** | **~7-10 weeks** | |
+
+### Risks & Mitigations
+
+| Risk | Mitigation |
+|------|------------|
+| Divergent outputs | Keep Python eval running; compare after each phase |
+| Underestimating complexity | Phase approach; verify each phase before moving on |
+| LLM backend differences | Use same backend for both Rust and Python comparisons |
+| Timeout/retry logic differences | Replicate Python logic exactly in Rust first |
+
+**Git Integration**: After the Python eval is fully ported to Rust, the Python `references/` directory becomes the verification/reference layer only. The Rust binary `ztools` handles all production eval runs. The Python reference continues to power `bin/ab_test --functional` parity checks and `derive_best_models()` derivation.
+
+---
+
 ### Rust Port Status (2026-08-20)
 The Rust binary `ztools` is the primary implementation; Python `references/` (~23.8k LOC) is preserved for A/B parity verification only. Items 1–4 are the active roadmap under implementation; items 5–10 are completed and verified through prior A/B testing.
 
