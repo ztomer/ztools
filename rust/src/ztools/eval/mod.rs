@@ -4,6 +4,7 @@
 //! text the Python eval does.
 
 pub mod clean;
+pub mod discrimination;
 pub mod gpu_lock;
 pub mod samples;
 pub mod task_loader;
@@ -12,6 +13,7 @@ pub mod validators;
 pub mod watchdog;
 
 pub use clean::{clean_model_output, extract_content_from_code_blocks, extract_json};
+pub use discrimination::{classify, distinct_values, disagreements, is_gate, ranking_mean, ranking_tasks};
 pub use gpu_lock::{
     foreign_holder, lock_dir, GpuLockGuard, DEFAULT_LOCK_DIR, DEFAULT_MAX_IDLE_SECS,
 };

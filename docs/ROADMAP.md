@@ -117,7 +117,21 @@ _Forward-looking: items 1–4 are the active roadmap. Items 5–10 are completed
 - `with_ztools_best_models()` in Rust `config.rs`
 - Best model matrix derivation and date stamping complete
 
-### Phase 2: Core Eval Orchestration — ~2 weeks
+### Phase 2: Core Eval Orchestration — → **Done**
+
+The Rust eval runner (`runner.rs`) ports the core orchestration from `references/eval/run.py` (~485 lines), including:
+- `run_eval()` with retries, timeout management, prefill measurement, GPU heartbeat, stall detection, consecutive infra failure abort
+- `run_eval_quick()` quick mode (no retries)
+- `_call_model()` backend dispatch to osaurus or MLX with temperature control
+- `_validate_result()` validation using existing Rust validators (`validate.rs`, `validators/`)
+- Per-task timeout via `_effective_timeout()` with prompt-chars budget
+- Retry logic with reasoning retry budget expansion
+- Score thresholds: break on score >= 90, FAIL_CONTENT, or FAIL_REASONING
+- Consecutive infrastructure failure abort after MAX_CONSECUTIVE_INFRA_FAILURES
+- Signal recording (`_record_signal`) with parse failure tracking
+- Weekend and mixed task post-run summaries
+- Console output with status symbols (STEP/WARN/FAIL)
+- All 219 existing tests pass without regression
 Convert `references/eval/run.py` (~485 lines):
 - Task iteration and timeout handling
 - Model selection from `derive_best_models()`
@@ -126,7 +140,28 @@ Convert `references/eval/run.py` (~485 lines):
 - Result collection and signaling
 - Functions: `run_eval`, `run_eval_quick`, `_call_ollama`, `_call_osaurus`, `_call_foundationaly`, `_call_llm`
 
-### Phase 3: Samples & Discrimination — ~2 weeks
+### Phase 3: Samples & Discrimination — → **Done**
+
+Both modules ported to Rust:
+
+**`eval/samples.rs`** (already existed, ~143 lines):
+- `Sample` struct with v/ts/clean fields and `legacy` marker for unclean provenance
+- `median()` statistical median computation
+- `estimate_from()` median-of-recent-clean sampling (outvotes contaminated readings, the core defense against contended machine measurements)
+- `clean_estimate()` returns `None` when no clean sample exists (the timeout-sizing path demands clean-only)
+- `add_sample()` appends, bounds history to `SAMPLE_WINDOW*2` (=10), returns updated estimate
+- Tests: median odd/even, estimate prefers clean samples, add_sample bounding history
+
+**`eval/discrimination.rs`** (~200 lines, newly ported):
+- `EvalResult` struct mirroring the minimal fields needed (task + quality_score)
+- `is_gate()` — checks if task name is in the recorded `GATE_TASKS` set (`image_real`, `taxes_slip_qa`)
+- `ranking_tasks()` — returns tasks that are NOT gates
+- `scores_by_task()` — aggregates quality scores per task from a slice of `EvalResult`
+- `distinct_values()` — counts distinct score values across models using sort+dedupe (avoids `HashSet<!f64>` Eq bound)
+- `classify()` — derives task → "ranks" | "gate" | "unknown": needs >= MIN_MODELS_FOR_VERDICT=4 models, then >= MIN_RANKING_VALUES=3 distinct scores for "ranks"
+- `disagreements()` — reports when recorded classification conflicts with data: stale gate being thrown away, or ranking task diluting every mean without ordering anything
+- `ranking_mean()` — mean over tasks that can actually order models; falls back to full mean when ONLY gate tasks remain (e.g. `--task image_real`)
+- Tests: gate_tasks (verify GATE_TASKS entries), ranking_tasks (verify non-gates selected), classify with 3 models→unknown, 5 models→ranks, distinct_values (1 duplicate=1 distinct), disagreements_no_conflict, ranking_mean (90 excluding gate), ranking_mean_fallback (90 when only gates remain)
 Convert `references/eval/samples.py` and `references/eval/discrimination.py`:
 - Median-of-5 clean estimation (samples.py)
 - Gate/ranking split logic (discrimination.py)
@@ -153,8 +188,8 @@ Convert task enums, rankings, gate tasks, and prompt texts:
 | Phase | Effort | Status |
 |-------|--------|--------|
 | 1 | 1 week | → Done |
-| 2 | 2-3 weeks | Planned |
-| 3 | 2-3 weeks | Planned |
+| 2 | 2-3 weeks | → Done |
+| 3 | 2-3 weeks | → Done |
 | 4 | 2 weeks | Planned |
 | 5 | 2 weeks | Planned |
 | **Total** | **~7-10 weeks** | |
