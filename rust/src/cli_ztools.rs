@@ -331,6 +331,7 @@ pub(crate) fn model_eval(
                     status: &'a str,
                     time_secs: f64,
                     error: Option<&'a String>,
+                    failure_category: &'a str,
                     #[serde(skip_serializing_if = "Option::is_none")]
                     substituted_to: Option<&'a String>,
                     #[serde(skip_serializing_if = "Option::is_none")]
@@ -344,6 +345,7 @@ pub(crate) fn model_eval(
                         status: o.status.as_str(),
                         time_secs: o.time_secs,
                         error: o.error.as_ref(),
+                        failure_category: o.failure_category.as_str(),
                         substituted_to: o.substituted_to.as_ref(),
                         substitution_reason: o.substitution_reason.as_ref(),
                     })

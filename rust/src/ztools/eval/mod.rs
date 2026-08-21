@@ -6,6 +6,7 @@
 pub mod clean;
 pub mod budgets;
 pub mod discrimination;
+pub mod failures;
 pub mod model_resolve;
 pub mod oversize;
 pub mod prompts;
@@ -22,6 +23,7 @@ pub mod validators;
 pub mod watchdog;
 
 pub use budgets::max_tokens_for_task;
+pub use failures::{classify_failure, reasoning_retry_budget, Diagnosis, FAIL_CONTENT, FAIL_INFRA, FAIL_PARSE, FAIL_REASONING, FAIL_TIMEOUT};
 pub use oversize::{estimate_model_memory_gb, is_thrashing, model_disk_bytes, oversize_refusal, OVERSIZE_OVERRIDE_ENV};
 pub use clean::{clean_model_output, extract_content_from_code_blocks, extract_json};
 pub use discrimination::{classify, distinct_values, disagreements, is_gate, ranking_mean, ranking_tasks};

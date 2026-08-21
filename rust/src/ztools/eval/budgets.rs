@@ -8,14 +8,8 @@
 //! prompt thinks past it and returns `finish_reason=length` with nothing to
 //! score. A per-model entry that WIDENED the budget would silently override a
 //! task's own limit.
-//!
-//! Family resolution is name matching (`quirks::get_model_family`). The Python
-//! original prefers an architecture recorded in eval_signals when one exists;
-//! that refinement is not ported here yet (see ROADMAP divergences).
 
 use std::path::PathBuf;
-
-use crate::ztools::eval::quirks::get_model_family;
 
 /// The documented fallback for any task absent from the `[max_tokens]` table
 /// (`lib/llm/constants.py::DEFAULT_MAX_TOKENS`).
@@ -42,15 +36,87 @@ fn parse(path: PathBuf) -> Option<toml::Value> {
     toml::from_str(&content).ok()
 }
 
+fn family_toml_exists(candidate: &str) -> bool {
+    for suffix in ["", "_versions"] {
+        if conf_root().join("models").join(format!("{candidate}{suffix}.toml")).is_file() {
+            return true;
+        }
+    }
+    false
+}
+
+/// The conf/models/<family>.toml that serves an architecture, or None.
+///
+/// Architectures carry version and variant suffixes ("<fam>3_5_moe",
+/// "<fam>4_unified", "<fam>_h") while the config files are named for the bare
+/// family, so the two are reconciled by trimming one trailing segment at a
+/// time and taking the first name that has a file -- rather than by a
+/// hand-written architecture-to-family table, which would need editing every
+/// time a vendor ships a new suffix and would silently mis-serve until someone
+/// noticed.
+fn config_family_for(architecture: &str) -> Option<String> {
+    let mut candidate = architecture.to_lowercase();
+    while !candidate.is_empty() {
+        if family_toml_exists(&candidate) {
+            return Some(candidate);
+        }
+        // Strip one trailing segment: `[_-.]<segment>$`, else trailing digits.
+        let trimmed = match candidate.rfind(['_', '.', '-']) {
+            Some(idx) if idx > 0 => candidate[..idx].to_string(),
+            _ => candidate
+                .trim_end_matches(|c: char| c.is_ascii_digit())
+                .to_string(),
+        };
+        if trimmed == candidate {
+            return None;
+        }
+        candidate = trimmed;
+    }
+    None
+}
+
+/// The architecture `ev` probed and wrote to eval_signals.json, or None.
+///
+/// Read from DISK, never from the server: production paths run constantly and
+/// must not do network I/O.
+fn recorded_architecture(model: &str) -> Option<String> {
+    let signals = crate::ztools::eval::signals::load_signals();
+    signals
+        .get(model)?
+        .get("_capabilities")?
+        .get("family")?
+        .as_str()
+        .map(String::from)
+}
+
+/// Which conf/models/<family>.toml drives this model's config.
+///
+/// Prefers the architecture recorded in eval_signals (the NAME does not
+/// reliably encode it: vendors ship models under brand names sharing an
+/// architecture with a differently-named family). Falls back to name matching
+/// when nothing has been recorded, so this never depends on the eval having
+/// been run.
+pub(crate) fn config_family(model: &str) -> Option<String> {
+    let _ = recorded_architecture;
+    if let Some(architecture) = recorded_architecture(model) {
+        if let Some(mapped) = config_family_for(&architecture) {
+            return Some(mapped);
+        }
+    }
+    let family = crate::ztools::eval::quirks::get_model_family(model);
+    if family == "default" {
+        None
+    } else {
+        Some(family.to_string())
+    }
+}
+
 /// The family config for `model`: `<family>_versions.toml` when it exists,
 /// else `<family>.toml`. Mirrors `get_model_config`'s preference -- a versions
 /// file REPLACES the family file wholesale there, so top-level keys like
 /// `max_tokens` must be read from whichever file actually won.
 fn family_config(model: &str) -> Option<toml::Value> {
-    let family = get_model_family(model);
-    if family == "default" {
-        return None;
-    }
+    let family = config_family(model)?;
     let root = conf_root().join("models");
     let versions = root.join(format!("{family}_versions.toml"));
     if versions.is_file() {
@@ -112,21 +178,31 @@ mod tests {
             fs::write(path, content).unwrap();
         }
         fn guard(&self) -> ConfEnvGuard {
-            let prev = std::env::var_os("ZTOOLS_CONF_DIR");
+            let prev_conf = std::env::var_os("ZTOOLS_CONF_DIR");
             std::env::set_var("ZTOOLS_CONF_DIR", self.0.path());
-            ConfEnvGuard { prev }
+            // Isolate the signals store too: the recorded-architecture family
+            // resolution reads it, and the operator's real file must not
+            // decide a test's outcome.
+            let prev_signals = std::env::var_os("EVAL_SIGNALS_DIR");
+            std::env::set_var("EVAL_SIGNALS_DIR", self.0.path());
+            ConfEnvGuard { prev_conf, prev_signals }
         }
     }
 
     struct ConfEnvGuard {
-        prev: Option<std::ffi::OsString>,
+        prev_conf: Option<std::ffi::OsString>,
+        prev_signals: Option<std::ffi::OsString>,
     }
 
     impl Drop for ConfEnvGuard {
         fn drop(&mut self) {
-            match self.prev.take() {
+            match self.prev_conf.take() {
                 Some(v) => std::env::set_var("ZTOOLS_CONF_DIR", v),
                 None => std::env::remove_var("ZTOOLS_CONF_DIR"),
+            }
+            match self.prev_signals.take() {
+                Some(v) => std::env::set_var("EVAL_SIGNALS_DIR", v),
+                None => std::env::remove_var("EVAL_SIGNALS_DIR"),
             }
         }
     }
@@ -189,6 +265,32 @@ mod tests {
         );
         let _g = dir.guard();
         assert_eq!(max_tokens_for_task("filename", "qwen3.8-27b-8bit"), 1000);
+    }
+
+    #[test]
+    #[serial]
+    fn a_brand_name_model_resolves_its_family_from_the_recorded_architecture() {
+        // The NAME does not reliably encode the family: a "bonsai-*" model
+        // carries no family substring, so name matching sends it nowhere --
+        // but `ev` recorded its architecture, and trimming qwen3_5_moe ->
+        // qwen3_5 -> qwen lands on the file written for it.
+        let dir = ConfDir::new();
+        dir.write(
+            "models/qwen.toml",
+            "name = \"qwen\"\nmax_tokens = 8000\n",
+        );
+        dir.write(
+            "eval_signals.json",
+            r#"{"bonsai-27b": {"_capabilities": {"family": "qwen3_5_moe"}}}"#,
+        );
+        let _g = dir.guard();
+        // Name matching alone would find no family ("bonsai" matches nothing);
+        // the recorded architecture must.
+        assert_eq!(
+            max_tokens_for_task("json", "bonsai-27b"),
+            8000,
+            "architecture-based family resolution drives the cap"
+        );
     }
 
     #[test]

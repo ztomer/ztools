@@ -27,6 +27,7 @@ use serde::Serialize;
 
 use crate::ztools::eval::prefill::{measure_prefill_rate, record_prefill_rate};
 use crate::ztools::eval::signals::{effective_timeout, load_signals, record_signal, save_signals};
+use crate::ztools::eval::failures::{classify_failure, reasoning_retry_budget, FAIL_REASONING};
 use crate::ztools::eval::model_resolve::is_generative_model;
 use crate::ztools::eval::task_loader::{check_graded_score, run_check, EvalTask};
 use crate::ztools::eval::transport::{self, RequestSpec};
@@ -46,6 +47,11 @@ pub struct TaskOutcome {
     pub finish_reason: String,
     pub aborted: bool,
     pub abort_reason: String,
+    /// Why the best attempt failed: INFRA / TIMEOUT / PARSE / FORMAT /
+    /// CONTENT / REASONING ("" when the task passed). Drives retry escalation
+    /// and infra abandonment, matching eval/failures.py.
+    #[serde(default)]
+    pub failure_category: String,
     /// Set when the configured tag was dead and a stand-in answered instead.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub substituted_from: Option<String>,
@@ -224,16 +230,33 @@ fn run_eval_inner(
             cfg.timeout_secs
         };
         let mut attempts_used: u32 = 0;
+        let mut best_diagnosis = crate::ztools::eval::failures::Diagnosis {
+            category: "",
+            reason: String::new(),
+            evidence: String::new(),
+        };
 
-        for _attempt in 0..=cfg.max_retries {
+        for attempt in 0..=cfg.max_retries {
             attempts_used += 1;
+            // A retry that repeats the identical call cannot fix a reasoning
+            // overrun -- the model will think itself past the budget again.
+            // Retry with MORE room, bounded: reasoning scales with the TASK.
+            let attempt_tokens = if attempt > 0 && best_diagnosis.category == FAIL_REASONING {
+                let escalated = reasoning_retry_budget(max_tokens);
+                eprintln!(
+                    "  · previous attempt reasoned past {max_tokens}; retrying with {escalated}"
+                );
+                escalated
+            } else {
+                max_tokens
+            };
             let spec = RequestSpec {
                 model,
                 messages: &task.messages,
                 host: &cfg.host,
                 port: cfg.port,
                 temperature: cfg.temperature,
-                max_tokens,
+                max_tokens: attempt_tokens,
                 timeout_secs,
                 allow_substitution: cfg.allow_model_substitution,
                 stream_guard: true,
@@ -248,10 +271,16 @@ fn run_eval_inner(
             if is_best {
                 best = Some(candidate);
             }
-            if r.error.is_some() {
-                continue;
-            }
             let score = score_output(task, &r.content, None);
+            best_diagnosis = classify_failure(
+                r.error.as_deref(),
+                &r.content,
+                &r.reasoning_content,
+                &r.finish_reason,
+                None,
+                score,
+                false,
+            );
             // A scored attempt always outranks the error/empty placeholder in
             // `best`, even at 0 -- otherwise the placeholder's blank status
             // leaks into the result. Ties take the later attempt.
@@ -266,23 +295,24 @@ fn run_eval_inner(
             }
         }
 
-        let outcome = best.unwrap_or_else(|| TaskOutcome {
+        let mut outcome = best.unwrap_or_else(|| TaskOutcome {
             task: task.name.clone(),
             status: "fail".to_string(),
             ..Default::default()
         });
+        // What the BEST attempt died of -- "" when nothing failed. Drives
+        // parse-failure counting below and names the failure in reports.
+        outcome.failure_category = best_diagnosis.category.to_string();
 
         if cfg.record_signals {
-            // Parse-failure classification rides the Python failure-category
-            // machinery the Rust loop does not carry yet, so that counter is
-            // honestly zero here rather than guessed.
+            let is_parse_failure = outcome.failure_category == "PARSE";
             record_signal(
                 signals,
                 model,
                 &task.name,
                 outcome.time_secs,
                 attempts_used > 1,
-                false,
+                is_parse_failure,
             );
             last_completion = Instant::now();
         }
