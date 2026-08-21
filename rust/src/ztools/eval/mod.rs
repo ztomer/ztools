@@ -7,6 +7,7 @@ pub mod clean;
 pub mod discrimination;
 pub mod prompts;
 pub mod gpu_lock;
+pub mod runner;
 pub mod samples;
 pub mod task_loader;
 pub mod transport;
@@ -37,4 +38,5 @@ pub use task_loader::{
 };
 pub use validate::validate_file_summary;
 pub use validators::*;
+pub use runner::{run_eval, RunnerConfig, TaskOutcome};
 pub use watchdog::{is_stalled, model_stall_duration, stalled_for, DEFAULT_MODEL_STALL_SECONDS};
