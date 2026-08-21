@@ -11,9 +11,10 @@ Usage (pre-commit / pre-push):
 Exits with status 0 if no `#[allow]` attributes found; 1 otherwise.
 """
 
-from pathlib import Path
 import re
 import sys
+from pathlib import Path
+
 
 def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
