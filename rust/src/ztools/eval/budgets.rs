@@ -96,7 +96,7 @@ fn recorded_architecture(model: &str) -> Option<String> {
 /// architecture with a differently-named family). Falls back to name matching
 /// when nothing has been recorded, so this never depends on the eval having
 /// been run.
-pub(crate) fn config_family(model: &str) -> Option<String> {
+pub fn config_family(model: &str) -> Option<String> {
     let _ = recorded_architecture;
     if let Some(architecture) = recorded_architecture(model) {
         if let Some(mapped) = config_family_for(&architecture) {

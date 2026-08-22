@@ -19,7 +19,7 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = [".", "references"]
-include = ["lib*", "twitter*", "weekend*", "rename*", "eval*", "conf*", "tui*"]
+include = ["lib*", "twitter*", "weekend*", "rename*", "eval*", "conf*"]
 
 [tool.setuptools.package-data]
 conf = ["*.toml", "*.json", "models/*.toml", "models/*.json"]
@@ -46,12 +46,6 @@ vision = [
 ]
 foundation = [
     "apple-fm-sdk",
-]
-tui = [
-    "textual>=0.50.0",
-    # tui/app_actions.py imports PIL at module level; without it the installed
-    # `ztools` command dies on startup.
-    "pillow>=10.0.0",
 ]
 mlx = [
     "mlx-lm",
@@ -83,7 +77,6 @@ ev = "eval.cli:main"
 weekend = "weekend.cli:main"
 twitter = "twitter.cli:main"
 oeval = "eval.cli:main"
-ztools = "tui.app:main"
 
 [tool.rtk]
 python = "3.14"

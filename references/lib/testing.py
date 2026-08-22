@@ -205,7 +205,6 @@ class MockLLM:
         "eval.prefill",
         "eval.cli",
         "eval.cli_runtime",
-        "eval.explore_quirks",
         "eval.benchmark_quality",
         "weekend.cli",
         "twitter.cli",

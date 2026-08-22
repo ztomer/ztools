@@ -281,6 +281,24 @@ fn run_eval_inner(
                 score,
                 false,
             );
+            // Archive what the model actually said BEFORE anything decides
+            // what this score means. A scorer question asked after the fact is
+            // unanswerable without the output, and re-running costs hours on a
+            // one-model-at-a-time machine.
+            if cfg.record_signals {
+                crate::ztools::eval::outputs::save_output(
+                    &crate::ztools::eval::outputs::OutputRecord {
+                        model,
+                        task: &task.name,
+                        content: &r.content,
+                        reasoning: &r.reasoning_content,
+                        error: r.error.as_deref(),
+                        score,
+                        failure_reason: &best_diagnosis.reason,
+                    },
+                    None,
+                );
+            }
             // A scored attempt always outranks the error/empty placeholder in
             // `best`, even at 0 -- otherwise the placeholder's blank status
             // leaks into the result. Ties take the later attempt.

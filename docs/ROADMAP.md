@@ -58,3 +58,28 @@ system is fully ported and verified:
 ## Open items
 
 None. New work should start a fresh section rather than resurrect this list.
+
+---
+
+## Fresh section (2026-08-21, later): eval bookkeeping ported; packaging cleaned
+
+- **Raw-output archival** (`eval/outputs.rs`): every attempt's answer is archived with its
+  verdict BEFORE anything decides what the score means (`~/.config/ztools/outputs/<model>/<task>.txt`,
+  shared with the Python evaluator's archive). `EVAL_SAVE_OUTPUTS=0` disables,
+  `EVAL_OUTPUT_DIR` re-points for tests.
+- **Completeness derived, not threaded** (`eval/completeness.rs`): expected tasks diffed
+  against reported outcomes — no abandon path can forget a flag. Partial sweeps print the
+  derived reason and carry `complete: false` into history.
+- **History + exports** (`eval/report.rs`): per-model `eval_history.json` entries marked
+  not-countable when truncated and EXCLUDED from averages at load time (`Excluded` column
+  surfaces the discrepancy); test doubles (`mock*`/`test-*`/`fake*`) never enter the
+  leaderboard; CSV export matches the downstream sheet shape.
+- **`model-eval --capabilities`**: family (recorded architecture first), generative verdict,
+  disk footprint, viability — zero tasks run.
+- **Store anchoring fixed**: `eval_signals.json` now resolves against the checkout that
+  built the binary, never the process cwd — a sweep started elsewhere used to read AND
+  create a forked store. The stray `rust/conf/` fork was deleted on sight.
+- **Packaging cleanup**: dead `ztools = "tui.app:main"` script, `tui*` include and extras
+  removed from `pyproject.toml`; `explore_quirks.py` deleted (its only reference was
+  testing.py's module list). `vision_fixtures.py` KEPT — it is load-bearing for the
+  image_real gate task.

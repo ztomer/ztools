@@ -46,8 +46,28 @@ pub fn max_eval_timeout() -> u64 {
 }
 
 /// Where eval_signals.json lives. Env-overridable so tests can point it at tmp.
+///
+/// Anchored on the CHECKOUT that built the binary (`CARGO_MANIFEST_DIR/../conf`)
+/// rather than the process working directory: a sweep launched from anywhere
+/// else used to read -- and worse, CREATE -- a relative `conf/eval_signals.json`
+/// in whatever directory it started from, silently losing every recorded
+/// capability and forking the store. The home fallback covers an installed
+/// binary with no checkout nearby.
 pub fn signals_path() -> PathBuf {
-    let dir = std::env::var("EVAL_SIGNALS_DIR").unwrap_or_else(|_| "conf".to_string());
+    let dir = if let Ok(d) = std::env::var("EVAL_SIGNALS_DIR") {
+        d
+    } else {
+        let candidates = [
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .parent()
+                .map(|p| p.join("conf")),
+            dirs::home_dir().map(|h| h.join("Projects/ztools/conf")),
+        ];
+        match candidates.into_iter().flatten().find(|p| p.is_dir()) {
+            Some(p) => p.to_string_lossy().to_string(),
+            None => "conf".to_string(),
+        }
+    };
     PathBuf::from(dir).join("eval_signals.json")
 }
 
@@ -416,7 +436,16 @@ mod tests {
             dir._dir.path().join("signals").join("eval_signals.json")
         );
         std::env::remove_var("EVAL_SIGNALS_DIR");
-        assert_eq!(signals_path(), PathBuf::from("conf").join("eval_signals.json"));
+        // Without the env override the path is anchored on the CHECKOUT that
+        // built the binary (manifest/../conf), never the process working
+        // directory -- a relative conf/ once forked the store into whatever
+        // directory a sweep happened to start from.
+        let anchored = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("manifest has a parent")
+            .join("conf")
+            .join("eval_signals.json");
+        assert_eq!(signals_path(), anchored);
     }
 
     #[test]

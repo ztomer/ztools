@@ -97,6 +97,10 @@ enum Cmd {
         /// With --suite full: print outcomes as JSON instead of markdown.
         #[arg(long)]
         json_output: bool,
+        /// Probe what each installed model IS (family, generative, disk
+        /// footprint, viability) without running any task.
+        #[arg(long)]
+        capabilities: bool,
     },
 }
 
@@ -172,6 +176,7 @@ pub fn run() -> Result<()> {
             tasks_dir,
             task,
             json_output,
+            capabilities,
         } => crate::cli_ztools::model_eval(
             &config,
             model,
@@ -179,6 +184,7 @@ pub fn run() -> Result<()> {
             tasks_dir.as_deref(),
             task.as_deref(),
             json_output,
+            capabilities,
         ),
     }
 }

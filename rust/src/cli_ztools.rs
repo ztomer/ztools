@@ -259,6 +259,62 @@ pub(crate) fn image_renamer(config: &ZtoolsConfig, dir: PathBuf, apply: bool) ->
     Ok(())
 }
 
+/// `--capabilities`: probe what each servable model IS -- family (recorded
+/// architecture first, name match as fallback), generative verdict, on-disk
+/// weight footprint, and viability (packaging defects + learned decode rate)
+/// -- WITHOUT running a single task. Port of `ev --capabilities`.
+fn print_capabilities(url: &str, model_selector: &str) -> Result<()> {
+    let models = resolve_models(url, model_selector, &ZtoolsConfig::default())?;
+    if models.is_empty() {
+        println!("no models found");
+        return Ok(());
+    }
+    println!("Model                               Family        Disk GB   Gen?  Viability");
+    for m in &models {
+        let family = recorded_family_or_name(m);
+        let disk_gb = crate::ztools::eval::model_disk_bytes(m)
+            .map(|b| format!("{:.1}", b as f64 / 1024.0 / 1024.0 / 1024.0))
+            .unwrap_or_else(|| "-".to_string());
+        let gen = if crate::ztools::eval::is_generative_model(m) { "yes" } else { "NO" };
+        let decode = decode_rate(m);
+        let viability = match crate::ztools::model_health::assess_viability(m, decode, None) {
+            Ok(()) => "ok".to_string(),
+            Err(reason) => reason,
+        };
+        println!(
+            "{:<36} {:<12} {:>9} {:>6}  {}",
+            truncate_col(m, 36),
+            truncate_col(&family, 12),
+            disk_gb,
+            gen,
+            truncate_col(&viability, 60)
+        );
+    }
+    Ok(())
+}
+
+fn recorded_family_or_name(model: &str) -> String {
+    // Same resolution chain as budgets.rs: recorded architecture trimmed to a
+    // conf/models file, else the name's family token, else "default".
+    crate::ztools::eval::config_family(model)
+        .unwrap_or_else(|| "default".to_string())
+}
+
+fn decode_rate(model: &str) -> Option<f64> {
+    let signals = crate::ztools::eval::load_signals();
+    let caps = signals.get(model)?.get("_capabilities")?;
+    caps.get("decode_tokens_per_sec")?.as_f64()
+}
+
+fn truncate_col(s: &str, width: usize) -> String {
+    if s.chars().count() <= width {
+        s.to_string()
+    } else {
+        let cut: String = s.chars().take(width.saturating_sub(3)).collect();
+        format!("{cut}...")
+    }
+}
+
 pub(crate) fn model_eval(
     config: &ZtoolsConfig,
     model: String,
@@ -266,8 +322,12 @@ pub(crate) fn model_eval(
     tasks_dir: Option<&std::path::Path>,
     task_filter: Option<&str>,
     json_output: bool,
+    capabilities: bool,
 ) -> Result<()> {
     let url = &config.osaurus_url;
+    if capabilities {
+        return print_capabilities(url, &model);
+    }
     if suite == "full" {
         let mut tasks = crate::ztools::eval::load_all_eval_tasks(tasks_dir);
         if let Some(filter) = task_filter {
@@ -293,6 +353,8 @@ pub(crate) fn model_eval(
             ),
         )
         .map_err(|e| anyhow::anyhow!("GPU lock unavailable: {e}"))?;
+        let expected_tasks: Vec<String> = tasks.iter().map(|t| t.name.clone()).collect();
+        let mut runs: Vec<crate::ztools::eval::ModelRun> = Vec::new();
         for model_name in resolve_models(url, &model, config)? {
             // Refuse to measure what cannot fit or would thrash: a timing
             // taken under memory pressure describes the pressure, and it
@@ -318,10 +380,30 @@ pub(crate) fn model_eval(
                 ..Default::default()
             };
             // The learning path: prefill/cold-start/decode measurement, learned
-            // per-task timeouts, p95 signal recording, stall watchdog. Loaded
-            // from and saved back to conf/eval_signals.json inside.
+            // per-task timeouts, p95 signal recording, raw-output archival,
+            // stall watchdog. Loaded from and saved back to conf/eval_signals.json.
             let outcomes =
                 crate::ztools::eval::run_eval_with_signals(&model_name, &tasks, &cfg);
+
+            // Completeness is DERIVED by diffing expected vs reported -- no
+            // abandon path can forget to set a flag. A truncated run says so
+            // out loud here AND carries the verdict into its history entries,
+            // which load_historical_stats refuses to average (the bonsai 62%
+            // vs 79% class of misread).
+            let run_record = crate::ztools::eval::ModelRun::new(
+                &model_name,
+                &expected_tasks,
+                outcomes.clone(),
+            );
+            if let Some(c) = &run_record.completeness {
+                if !c.complete {
+                    eprintln!("⚠ {} (partial): {}", model_name, c.reason);
+                }
+            }
+            if let Err(e) = crate::ztools::eval::save_historical_results(&run_record, None) {
+                eprintln!("⚠ could not write eval history: {e}");
+            }
+            runs.push(run_record);
             if json_output {
                 use serde::Serialize;
                 #[derive(Serialize)]
@@ -359,6 +441,18 @@ pub(crate) fn model_eval(
                     "{}",
                     crate::ztools::model_eval::render_task_outcomes(&outcomes)
                 );
+            }
+        }
+        // Persistence + reporting, matching the Python evaluator's exports:
+        // per-(model, task) CSV sheet and the historical trends table.
+        if !runs.is_empty() {
+            let csv_path = crate::ztools::eval::default_eval_dir().join("eval_results.csv");
+            match crate::ztools::eval::export_csv(&runs, &csv_path) {
+                Ok(()) => println!("→ Exported to {}", csv_path.display()),
+                Err(e) => eprintln!("⚠ CSV export failed: {e}"),
+            }
+            for line in crate::ztools::eval::render_historical_trends(None) {
+                println!("{line}");
             }
         }
         return Ok(());

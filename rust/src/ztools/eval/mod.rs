@@ -4,11 +4,14 @@
 //! text the Python eval does.
 
 pub mod clean;
+pub mod completeness;
 pub mod budgets;
 pub mod discrimination;
 pub mod failures;
 pub mod model_resolve;
 pub mod oversize;
+pub mod outputs;
+pub mod report;
 pub mod prompts;
 pub mod quirks;
 pub mod gpu_lock;
@@ -22,7 +25,14 @@ pub mod validate;
 pub mod validators;
 pub mod watchdog;
 
+pub use budgets::config_family;
 pub use budgets::max_tokens_for_task;
+pub use completeness::{record_is_complete, Completeness};
+pub use outputs::{outputs_dir, outputs_enabled, save_output};
+pub use report::{
+    compute_task_winners, default_eval_dir, export_csv, is_test_model, load_historical_stats,
+    render_historical_trends, save_historical_results, ModelRun, ModelStats,
+};
 pub use failures::{classify_failure, reasoning_retry_budget, Diagnosis, FAIL_CONTENT, FAIL_INFRA, FAIL_PARSE, FAIL_REASONING, FAIL_TIMEOUT};
 pub use oversize::{estimate_model_memory_gb, is_thrashing, model_disk_bytes, oversize_refusal, OVERSIZE_OVERRIDE_ENV};
 pub use clean::{clean_model_output, extract_content_from_code_blocks, extract_json};
