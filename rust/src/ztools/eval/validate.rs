@@ -319,4 +319,99 @@ mod tests {
         // 4 detailed / 7 total >= 0.5 -> 85
         assert_eq!(score, 85);
     }
+
+    #[test]
+    fn scalar_json_input_uses_the_raw_string_scorer() {
+        // A bare JSON number parses but is neither array nor object.
+        let (score, msg) = validate_file_summary("42");
+        assert_eq!(score, 20, "clamped floor for a headerless short string");
+        assert!(msg.contains("no headers"));
+    }
+
+    #[test]
+    fn items_missing_path_or_desc_are_skipped_but_still_counted() {
+        let data = r#"[
+            {"path": "", "desc": "parses config files"},
+            {"path": "b.py", "desc": ""},
+            {"path": "c.py", "desc": "validates JSON output format"},
+            {"path": "d.py", "desc": "fetches data from external API"},
+            {"path": "e.py", "desc": "handles error processing logic"}
+        ]"#;
+        let (score, _) = validate_file_summary(data);
+        // num_files=5 (skipped items still count), detailed=3 -> 3*2 >= 5 -> 85
+        assert_eq!(score, 85);
+    }
+
+    #[test]
+    fn list_score_ladder_middle_rungs() {
+        // 7 files, only 2 detailed: misses the 85 gate, hits the >=2 rung -> 70.
+        let data_70 = r#"[
+            {"path": "a.py", "desc": "parses config files"},
+            {"path": "b.py", "desc": "validates JSON output format"},
+            {"path": "c.py", "desc": "some file"},
+            {"path": "d.py", "desc": "another file"},
+            {"path": "e.py", "desc": "more filler text here"},
+            {"path": "f.py", "desc": "yet another entry"},
+            {"path": "g.py", "desc": "and one more"}
+        ]"#;
+        let (score, _) = validate_file_summary(data_70);
+        assert_eq!(score, 70);
+
+        // 4 files, only 1 detailed: -> 50.
+        let data_50 = r#"[
+            {"path": "a.py", "desc": "parses config files"},
+            {"path": "b.py", "desc": "some file"},
+            {"path": "c.py", "desc": "another file"},
+            {"path": "d.py", "desc": "one more"}
+        ]"#;
+        let (score, _) = validate_file_summary(data_50);
+        assert_eq!(score, 50);
+    }
+
+    #[test]
+    fn dict_entries_that_cannot_be_summarized_are_skipped() {
+        // Empty key, non-string value and empty summary all skip; the rest counts.
+        let data =
+            r#"{"": "parses input data", "utils.py": 42, "notes.md": "", "main.py": "validates output"}"#;
+        let (score, msg) = validate_file_summary(data);
+        assert_eq!(score, 40);
+        assert_eq!(msg, "");
+    }
+
+    #[test]
+    fn dict_with_no_usable_summaries_scores_the_floor() {
+        let data = r#"{"utils.py": 42, "notes.md": ""}"#;
+        let (score, msg) = validate_file_summary(data);
+        assert_eq!(score, 25);
+        assert!(msg.contains("no content details"));
+    }
+
+    #[test]
+    fn dict_score_ladder_middle_rungs() {
+        // 5 entries, 2 detailed: -> 55.
+        let data_55 = r#"{
+            "a.py": "parses data",
+            "b.py": "validates output",
+            "c.py": "stuff",
+            "d.py": "things",
+            "e.py": "junk"
+        }"#;
+        let (score, _) = validate_file_summary(data_55);
+        assert_eq!(score, 55);
+
+        // 2 entries, 1 detailed: -> 70.
+        let data_70 = r#"{"main.py": "parses input data", "utils.py": "nothing much"}"#;
+        let (score, _) = validate_file_summary(data_70);
+        assert_eq!(score, 70);
+    }
+
+    #[test]
+    fn long_markdown_body_scores_headers_plus_length() {
+        let mut body = String::from("## Sections\n\n");
+        body.push_str(&"word ".repeat(60));
+        let (score, msg) = validate_file_summary(&body);
+        assert_eq!(score, 40, "20 headers + 20 length");
+        assert_eq!(msg, "");
+        assert!(body.chars().count() >= 200);
+    }
 }

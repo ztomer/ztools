@@ -116,6 +116,7 @@ mod tests {
         let engine = MockEngine {
             canned: Some("\n   \n  Invoice #10423  \nDate: 2026-08-01\n".to_string()),
         };
+        assert!(engine.is_available());
         let first = engine.extract_first_line(Path::new("dummy.png"));
         assert_eq!(first.as_deref(), Some("Invoice #10423"));
     }
@@ -127,5 +128,83 @@ mod tests {
         };
         let first = engine.extract_first_line(Path::new("dummy.png"));
         assert_eq!(first, None);
+    }
+
+    #[test]
+    fn test_is_available_absolute_path_checks_existence() {
+        let missing = TesseractEngine::new(Some(PathBuf::from(
+            "/nonexistent/ztools_missing_tesseract",
+        )));
+        assert!(!missing.is_available());
+
+        let present_file = tempfile::NamedTempFile::new().unwrap();
+        // An existing absolute binary_path satisfies the availability check.
+        let present =
+            TesseractEngine::new(Some(present_file.path().to_path_buf()));
+        assert!(present.is_available());
+    }
+
+    #[test]
+    fn test_is_available_relative_path_requires_runnable_binary() {
+        // A PATH lookup that cannot spawn must report unavailable, not panic.
+        let bogus = TesseractEngine::new(Some(PathBuf::from(
+            "ztools_definitely_not_a_real_binary_4f8a",
+        )));
+        assert!(!bogus.is_available());
+    }
+
+    #[test]
+    fn test_extract_text_returns_none_for_missing_image() {
+        let engine = TesseractEngine::new(Some(PathBuf::from("/bin/echo")));
+        assert!(
+            engine
+                .extract_text(Path::new("/nonexistent/ztools_img.png"))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_extract_text_none_when_command_fails() {
+        let img = tempfile::NamedTempFile::new().unwrap();
+        // /usr/bin/false exits nonzero: mirrors a tesseract failure on bad input.
+        let engine = TesseractEngine::new(Some(PathBuf::from("/usr/bin/false")));
+        assert!(engine.extract_text(img.path()).is_none());
+    }
+
+    #[test]
+    fn test_extract_text_returns_stdout_on_success() {
+        let img = tempfile::NamedTempFile::new().unwrap();
+        // /bin/echo exits 0 with the argv on stdout: exercises the decode+trim
+        // plumbing without an OCR engine.
+        let engine = TesseractEngine::new(Some(PathBuf::from("/bin/echo")));
+        let text = engine.extract_text(img.path()).unwrap();
+        assert_eq!(text, format!("{} stdout --oem 1 -l eng", img.path().display()));
+    }
+
+    #[test]
+    fn test_extract_text_none_when_stdout_empty() {
+        let img = tempfile::NamedTempFile::new().unwrap();
+        // Exit 0 but no output: OCR found nothing readable.
+        let engine = TesseractEngine::new(Some(PathBuf::from("/usr/bin/true")));
+        assert!(engine.extract_text(img.path()).is_none());
+    }
+
+    #[test]
+    fn test_global_helpers_none_without_image() {
+        assert!(
+            extract_first_line(Path::new("/nonexistent/ztools_img.png")).is_none()
+        );
+        assert!(
+            extract_full_text(Path::new("/nonexistent/ztools_img.png")).is_none()
+        );
+    }
+
+    #[test]
+    fn test_ocr_available_matches_default_engine_availability() {
+        if Path::new(DEFAULT_TESSERACT_PATH).exists() {
+            assert!(ocr_available());
+        }
+        // Either way the wrapper must agree with constructing the default engine.
+        assert_eq!(ocr_available(), TesseractEngine::default().is_available());
     }
 }

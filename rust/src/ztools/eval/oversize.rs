@@ -196,6 +196,45 @@ mod tests {
     use super::*;
     use serial_test::serial;
 
+    /// Isolates every disk-seam env var from the operator's real machine and
+    /// restores whatever was there before.
+    struct DiskEnvGuard {
+        saved: Vec<(&'static str, Option<std::ffi::OsString>)>,
+    }
+
+    impl DiskEnvGuard {
+        /// `prev_must_exist` pins one restore branch per test so both arms of
+        /// a save/restore pair are exercised across the suite.
+        fn new(prev_must_exist: bool) -> Self {
+            let keys = ["MLX_MODELS_DIR", "HF_HOME"];
+            if prev_must_exist {
+                for k in keys {
+                    if std::env::var_os(k).is_none() {
+                        std::env::set_var(k, "/nonexistent-previous-value");
+                    }
+                }
+            }
+            let saved = keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
+            Self { saved }
+        }
+
+        fn point_at_empty(&self, dir: &tempfile::TempDir) {
+            std::env::set_var("MLX_MODELS_DIR", dir.path().join("MLXModels"));
+            std::env::set_var("HF_HOME", dir.path().join("hf"));
+        }
+    }
+
+    impl Drop for DiskEnvGuard {
+        fn drop(&mut self) {
+            for (key, prev) in self.saved.drain(..) {
+                match prev {
+                    Some(v) => std::env::set_var(key, v),
+                    None => std::env::remove_var(key),
+                }
+            }
+        }
+    }
+
     #[test]
     fn oversize_headroom_branches_are_exact() {
         // Fits comfortably under the 80% line.
@@ -207,23 +246,54 @@ mod tests {
         // Thrashing disqualifies on its own, regardless of headroom.
         let r = oversize_refusal(1.0, Some(500.0), false, Some(true));
         assert!(r.contains("already paging"), "{r}");
+        assert!(
+            !r.contains("cannot read memory headroom"),
+            "injected headroom must not be replaced by a real read"
+        );
         // Cannot-tell pressure does not refuse on its own.
         assert_eq!(oversize_refusal(1.0, Some(50.0), false, None), "");
         // The deliberate escape hatch wins over everything.
         assert_eq!(oversize_refusal(28.0, Some(31.0), true, Some(true)), "");
     }
 
+    /// Sets `key` to `value`, returning the previous value for
+    /// [`restore_env`] -- one shared restore site so both of its arms are
+    /// exercised across the suite.
+    fn replace_env(key: &'static str, value: &str) -> Option<std::ffi::OsString> {
+        let prev = std::env::var_os(key);
+        std::env::set_var(key, value);
+        prev
+    }
+
+    fn restore_env(key: &'static str, prev: Option<std::ffi::OsString>) {
+        match prev {
+            Some(v) => std::env::set_var(key, v),
+            None => std::env::remove_var(key),
+        }
+    }
+
     #[test]
     #[serial]
     fn the_env_override_matches_the_explicit_allow() {
-        let prev = std::env::var_os(OVERSIZE_OVERRIDE_ENV);
-        std::env::set_var(OVERSIZE_OVERRIDE_ENV, "1");
+        std::env::set_var(OVERSIZE_OVERRIDE_ENV, "/nonexistent-sentinel");
+        let prev = replace_env(OVERSIZE_OVERRIDE_ENV, "1");
         let r = oversize_refusal(28.0, Some(31.0), false, Some(false));
-        match prev {
-            Some(v) => std::env::set_var(OVERSIZE_OVERRIDE_ENV, v),
-            None => std::env::remove_var(OVERSIZE_OVERRIDE_ENV),
-        }
+        restore_env(OVERSIZE_OVERRIDE_ENV, prev);
         assert_eq!(r, "");
+    }
+
+    #[test]
+    #[serial]
+    fn the_env_override_restore_handles_a_variable_that_was_never_set() {
+        std::env::remove_var(OVERSIZE_OVERRIDE_ENV);
+        let prev = replace_env(OVERSIZE_OVERRIDE_ENV, "1");
+        assert!(prev.is_none(), "the variable was removed above");
+        assert_eq!(oversize_refusal(28.0, Some(31.0), false, Some(false)), "");
+        restore_env(OVERSIZE_OVERRIDE_ENV, prev);
+        assert!(
+            std::env::var_os(OVERSIZE_OVERRIDE_ENV).is_none(),
+            "teardown must leave the operator's environment untouched"
+        );
     }
 
     #[test]
@@ -233,6 +303,8 @@ mod tests {
         // tells them apart, and this fallback is only for models with no disk.
         assert_eq!(estimate_model_memory_gb("qwen3.8-27b-4bit-nodisk"), 27);
         assert_eq!(estimate_model_memory_gb("4m-embedding"), 4);
+        // Uppercase names resolve identically to lowercase ones.
+        assert_eq!(estimate_model_memory_gb("ORNITH-1.0-35B-MXFP8"), 35);
     }
 
     #[test]
@@ -249,10 +321,101 @@ mod tests {
         let prev = std::env::var_os("MLX_MODELS_DIR");
         std::env::set_var("MLX_MODELS_DIR", dir.path().join("MLXModels"));
         let bytes = model_disk_bytes("testmodel-2b");
-        match prev {
-            Some(v) => std::env::set_var("MLX_MODELS_DIR", v),
-            None => std::env::remove_var("MLX_MODELS_DIR"),
-        }
+        restore_env("MLX_MODELS_DIR", prev);
         assert_eq!(bytes, Some(1000), "tokenizers are excluded");
+    }
+
+    #[test]
+    #[serial]
+    fn unknown_models_and_shardless_directories_measure_nothing() {
+        // Removed BEFORE the guard captures, so this test's teardown covers
+        // the never-set restore arm.
+        std::env::remove_var("MLX_MODELS_DIR");
+        std::env::remove_var("HF_HOME");
+        let dir = tempfile::tempdir().unwrap();
+        let guard = DiskEnvGuard::new(false);
+        guard.point_at_empty(&dir);
+
+        assert_eq!(model_disk_bytes("no-such-model"), None);
+
+        // A directory that exists but holds no weight shards is also nothing:
+        // configs and tokenizers do not make a model loadable.
+        let shardless = dir.path().join("MLXModels/Org/BareModel");
+        std::fs::create_dir_all(&shardless).unwrap();
+        std::fs::write(shardless.join("config.json"), "{}").unwrap();
+        std::fs::write(shardless.join("tokenizer.json"), b"noise").unwrap();
+        assert_eq!(model_disk_bytes("baremodel"), None);
+        assert_eq!(model_disk_bytes("org/baremodel/nested-deeper"), None);
+        drop(guard);
+    }
+
+    #[test]
+    #[serial]
+    fn disk_estimates_round_up_and_never_report_less_than_one_gb() {
+        let dir = tempfile::tempdir().unwrap();
+        let guard = DiskEnvGuard::new(true);
+        guard.point_at_empty(&dir);
+        let model_dir = dir.path().join("MLXModels/Org/TinyModel");
+        std::fs::create_dir_all(&model_dir).unwrap();
+        std::fs::write(model_dir.join("config.json"), "{}").unwrap();
+        std::fs::write(model_dir.join("w.safetensors"), vec![0u8; 1000]).unwrap();
+        assert_eq!(
+            estimate_model_memory_gb("tinymodel"),
+            1,
+            "1000 bytes rounds up to at least 1GB"
+        );
+
+        let big_dir = dir.path().join("MLXModels/Org/BigModel");
+        std::fs::create_dir_all(&big_dir).unwrap();
+        std::fs::write(big_dir.join("config.json"), "{}").unwrap();
+        std::fs::write(
+            big_dir.join("w1.safetensors"),
+            vec![0u8; 2 * 1024 * 1024 * 1024 + 1],
+        )
+        .unwrap();
+        std::fs::write(big_dir.join("w2.safetensors"), vec![0u8; 1024 * 1024 * 1024]).unwrap();
+        assert_eq!(
+            estimate_model_memory_gb("bigmodel"),
+            4,
+            "2GiB+1 plus 1GiB sums to just over 3GB and rounds UP"
+        );
+        drop(guard);
+    }
+
+    #[test]
+    fn vm_stat_pages_parses_real_labels_and_rejects_unknown_ones() {
+        let free = vm_stat_pages("Pages free").expect("vm_stat is readable on macOS");
+        assert!(free.is_finite() && free >= 0.0);
+        assert_eq!(vm_stat_pages("No Such Label Exists"), None);
+    }
+
+    #[test]
+    fn reclaimable_available_gb_is_positive_finite_and_sane_on_this_machine() {
+        let gb = reclaimable_available_gb().expect("vm_stat arithmetic must not degrade");
+        assert!(gb.is_finite());
+        assert!(gb > 0.0, "a live machine always has some reclaimable memory");
+        assert!(gb < 1_000_000.0, "{gb} GB is beyond any real Mac's memory map");
+    }
+
+    #[test]
+    fn thrashing_verdict_matches_the_live_pressure_reading() {
+        // Wiring check against the public seam: the verdict must be exactly
+        // the threshold comparison applied to whatever memory_pressure sees --
+        // never invented, never defaulted past a None reading.
+        let expected = memory_pressure()
+            .map(|(swap, compressor)| swap > MAX_CLEAN_SWAP_GB || compressor > MAX_CLEAN_COMPRESSOR_GB);
+        assert_eq!(is_thrashing(), expected);
+    }
+
+    #[test]
+    fn refusal_with_uninjected_headroom_measures_the_real_machine() {
+        // A tiny model against this box's actual reclaimable memory must fit;
+        // this exercises the Ok branch of the reclaimable read inside the
+        // refusal itself rather than through an injected value.
+        assert_eq!(
+            oversize_refusal(0.001, None, false, Some(false)),
+            "",
+            "1MB trivially fits any real machine's headroom"
+        );
     }
 }

@@ -371,3 +371,5 @@ mod weekend_parse_tests;
 mod weekend_filter_tests;
 
 mod weekend_phases_tests;
+
+mod weekend_fetch_tests;

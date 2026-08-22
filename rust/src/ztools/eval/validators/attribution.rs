@@ -183,4 +183,120 @@ mod tests {
         assert_eq!(score, 0);
         assert!(reason.contains("misattributed 2/2"), "got: {reason}");
     }
+
+    #[test]
+    fn source_lines_without_tags_are_not_indexed() {
+        let map = source_lines_by_author(
+            "a plain line with no tag\n[@alice | Jan 5]: hello world",
+        );
+        assert_eq!(map.len(), 1);
+        assert_eq!(
+            map.get(&("alice".to_string(), "Jan 5".to_string())),
+            Some(&"hello world".to_string())
+        );
+    }
+
+    #[test]
+    fn faithfulness_skips_unbulleted_untagged_and_empty_claims() {
+        let source =
+            "[@TechCrunch | Aug 10 14:30]: OpenAI releases new model weights";
+        let text = "plain prose line\n- no attribution tag here\n- (@TechCrunch | Aug 10 14:30)\n- OpenAI releases new model weights (@TechCrunch | Aug 10 14:30)";
+        let (faithful, total, reasons) = attribution_faithfulness(text, source);
+        // Empty-claim tagged bullets still count toward the total.
+        assert_eq!((faithful, total), (1, 2));
+        assert!(
+            reasons
+                .iter()
+                .any(|r| r.contains("@techcrunch bullet has no content")),
+            "got: {reasons:?}"
+        );
+    }
+
+    #[test]
+    fn unknown_authors_and_wrong_timestamps_report_distinct_reasons() {
+        let source =
+            "[@TechCrunch | Aug 10 14:30]: OpenAI releases new model weights";
+        let text = "- OpenAI released weights (@GhostWriter | Aug 10 14:30)\n- OpenAI released weights (@TechCrunch | Aug 11 09:00)";
+        let (_, total, reasons) = attribution_faithfulness(text, source);
+        assert_eq!(total, 2);
+        assert!(
+            reasons
+                .iter()
+                .any(|r| r.contains("@ghostwriter is not in the source")),
+            "got: {reasons:?}"
+        );
+        assert!(
+            reasons
+                .iter()
+                .any(|r| r.contains("@techcrunch did not post at Aug 11 09:00")),
+            "got: {reasons:?}"
+        );
+    }
+
+    #[test]
+    fn validate_attribution_guard_branches() {
+        let source = "[@alice | t]: some words here";
+
+        assert_eq!(
+            validate_attribution(&json!("   "), source),
+            (0, "empty response".to_string())
+        );
+        assert_eq!(
+            validate_attribution(&json!("some text"), ""),
+            (
+                0,
+                "no source to check attribution against".to_string()
+            )
+        );
+
+        let (score, reason) =
+            validate_attribution(&json!("- bullet one\n- bullet two"), source);
+        assert_eq!(score, NO_TAGS_SCORE);
+        assert!(
+            reason.contains("no attributed bullets"),
+            "untagged bullets must be reported: {reason}"
+        );
+
+        // Non-string payloads render through Display and find no bullets.
+        let (score, reason) = validate_attribution(&json!(["not a bullet"]), source);
+        assert_eq!(score, NO_TAGS_SCORE);
+        assert!(reason.contains("no attributed bullets"), "got: {reason}");
+    }
+
+    #[test]
+    fn half_faithful_reports_slips_not_misattribution() {
+        let source =
+            "[@TechCrunch | Aug 10 14:30]: OpenAI releases new model weights";
+        let text = "- OpenAI releases new model weights (@TechCrunch | Aug 10 14:30)\n- OpenAI released weights (@TechCrunch | Aug 11 09:00)";
+        let (score, reason) = validate_attribution(&json!(text), source);
+        assert_eq!(score, 50);
+        assert!(
+            reason.starts_with("attribution slips 1/2: "),
+            "got: {reason}"
+        );
+        assert!(
+            reason.contains("did not post at Aug 11 09:00"),
+            "got: {reason}"
+        );
+    }
+
+    #[test]
+    fn long_unique_failure_details_are_truncated_to_two_hundred_chars() {
+        let source = "[@alice | Jan 01]: note one";
+        let mut text = String::new();
+        for i in 0..6 {
+            text.push_str(&format!(
+                "- filler claim number {i} (@alice | TIMESTAMP-{i:06}-PADDINGTEXT)\n"
+            ));
+        }
+        let (score, reason) = validate_attribution(&json!(text), source);
+        assert_eq!(score, 0);
+        let expected_len = "misattributed 6/6: ".len() + 200;
+        assert_eq!(
+            reason.len(),
+            expected_len,
+            "detail must be cut at exactly 200 chars: len={}",
+            reason.len()
+        );
+    }
 }

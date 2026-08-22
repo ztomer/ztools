@@ -129,29 +129,38 @@ oeval --model qwen3.8-27b-8bit
 
 ## Testing & Quality Gates
 
-Run the full native Rust test suite (186 unit tests, 8 integration tests, 5 model eval tests, 2 HTTP mock tests):
+The production implementation is Rust; the Python `references/` tree is kept solely as the
+A/B parity layer. Both stacks are gated.
+
+### Rust (production)
 
 ```bash
 cd rust
-cargo test
+cargo test                          # 464 tests: 403 unit + 61 integration
 cargo clippy --all-targets -- -D warnings
+cargo llvm-cov --summary-only       # coverage, floor 94% lines
 ```
 
-Git pre-commit and pre-push hooks (`.githooks/`) enforce quality gates automatically:
-- **Pre-commit**: Runs Emoji gate, file size gate, Ruff linting, Python syntax check, and Rust Clippy + Tests on staged files.
-- **Pre-push**: Runs complete Python test suite with 95% coverage requirement and full Rust test suite.
+Key suites:
+- `tests/model_resolve_http.rs` — missing-model substitution over the wire (dead tag → roster → one retry, surfaced reason, quirk re-derivation)
+- `tests/reasoning_retry.rs` — a REASONING overrun retries with a raised budget against a mock that only answers once it is raised
+- `tests/transport_http.rs`, `tests/signals_prefill.rs` — wire format, stream guard, learned timeouts, capability recording
+- `tests/validator_parity.rs` — prints fixture verdicts from the RUST validators; `references/tests/test_rust_validator_parity.py` asserts they match the PYTHON validators byte-for-byte
 
-**Key test files:**
-- `references/tests/test_quality_entry.py` — Score reconstruction, baseline comparison
-- `references/tests/test_content_processing.py` — Thinking block removal
-- `references/tests/test_twit_cookies.py` — Cookie extraction error paths
-- `references/tests/test_twit_browser.py` — Backend selection, scroll stop conditions, logged-out detection
-- `references/tests/test_signal_handling.py` — Ctrl+C drain mode, cleanup ordering
-- `references/tests/test_img_llm.py` — LLM server restart, MLX fallback
-- `references/tests/test_mlx_lib.py` — Model discovery, execution
-- `references/tests/test_weekend_*.py` — Weekend planner output, config, LLM
-- `references/tests/test_twit_*.py` — Twitter summarizer output, browser, cookies
-- `references/tests/test_model_eval*.py` — Eval runner, reports
+**Coverage**: enforced on every push by `.githooks/pre-push` (`cargo llvm-cov --fail-under-lines 94`; current ~94.8%). The residual uncovered code is live-process spawning (`login_live`, `collect_tweets_live` — real Camoufox browser), environment-absent branches, and assertion panic-format arms. The floor may only move up; re-baselining requires a stated reason in the diff.
+
+### Python (parity reference)
+
+```bash
+OLLAMA_BASE_URL=http://127.0.0.1:1 MLX_MODELS_DIR=/tmp/nonexistent \
+  .venv/bin/pytest --cov --cov-fail-under=95 .
+```
+
+2,791 tests at 95%+ coverage. The suite structurally forbids launching real browsers or reading real cookie stores.
+
+### Git hooks (`.githooks/`)
+- **Pre-commit**: Emoji gate, file size gate, `#[allow]` ban, no-emoji scan, Ruff linting, Rust Clippy + tests.
+- **Pre-push**: full Python suite with the 95% coverage floor, full Rust suite, and the Rust llvm-cov 94% line floor.
 
 Eval results stored in `~/.config/ztools/`. To track:
 

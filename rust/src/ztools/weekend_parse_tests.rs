@@ -279,3 +279,110 @@ fn test_apply_scores_empty_ages() {
     crate::ztools::weekend::apply_scores(&mut events, "rain", "");
     assert!(events[0].score > 0.0);
 }
+
+/// A fully-populated event with a known price/location, so every scoring
+/// component below is hand-computable.
+fn scoring_event(target_ages: &str, description: &str) -> crate::ztools::weekend::WeekendEvent {
+    crate::ztools::weekend::WeekendEvent {
+        name: "Camp".into(),
+        location: "Vaughan".into(),
+        price: "$10".into(),
+        target_ages: target_ages.into(),
+        day: "Sat".into(),
+        dates: "Aug 8".into(),
+        description: description.into(),
+        is_transient: true,
+        score: 0.0,
+        start_date: "".into(),
+        end_date: "".into(),
+        weather: "".into(),
+        duration: "".into(),
+    }
+}
+
+#[test]
+fn an_age_overlap_of_exactly_one_year_earns_half_the_overlap_bonus() {
+    // Family window 6-12 vs event 12-14: the ranges touch at age 12 only.
+    let touching = crate::ztools::weekend::compute_score(
+        &scoring_event("12-14", "art camp"),
+        "",
+        "6-12",
+    );
+    // Base 5/5 fields = 3.0, overlap == 1 -> +1.5, price +0.5, location +0.5
+    // => 5.5 / 2 = 2.75.
+    assert!((touching - 2.75).abs() < 0.01, "expected ~2.75, got {touching}");
+
+    // The same event with a wide overlap must outscore it by exactly the
+    // difference between the two bonuses ((3.0 - 1.5) / 2 = 0.75).
+    let wide =
+        crate::ztools::weekend::compute_score(&scoring_event("6-10", "art camp"), "", "6-12");
+    assert!((wide - 3.5).abs() < 0.01, "expected ~3.5, got {wide}");
+}
+
+#[test]
+fn disjoint_age_ranges_earn_no_overlap_bonus_at_all() {
+    // Family window 6-12 vs event 20-30: max_min > min_max, so even the
+    // touching case's half bonus is withheld entirely.
+    let score =
+        crate::ztools::weekend::compute_score(&scoring_event("20-30", "evening gala"), "", "6-12");
+    // 3.0 base + 0 ages + 0.5 price + 0.5 location = 4.0 / 2 = 2.0.
+    assert!((score - 2.0).abs() < 0.01, "expected ~2.0, got {score}");
+}
+
+#[test]
+fn an_outdoor_event_gets_no_weather_bonus_on_a_cloudy_forecast_but_two_on_a_sunny_one() {
+    // Outdoor + cloudy forecast is deliberately scored as neither bonus nor
+    // penalty (the pass-through arm), while outdoor + sunny earns +2.0.
+    let cloudy = crate::ztools::weekend::compute_score(
+        &scoring_event("6-12", "outdoor fair"),
+        "cloudy rain",
+        "6-12",
+    );
+    // 3.0 base + 3.0 ages + 0 weather + 0.5 price + 0.5 location = 7.0 / 2.
+    assert!((cloudy - 3.5).abs() < 0.01, "expected ~3.5, got {cloudy}");
+
+    let sunny = crate::ztools::weekend::compute_score(
+        &scoring_event("6-12", "outdoor fair"),
+        "sunny",
+        "6-12",
+    );
+    assert!((sunny - 4.5).abs() < 0.01, "expected ~4.5, got {sunny}");
+}
+
+#[test]
+fn an_event_whose_vibe_matches_the_forecast_earns_the_full_weather_bonus() {
+    // Overcast description against a cloudy forecast matches on the first
+    // alternative of the combined arm and adds +2.0.
+    let matched = crate::ztools::weekend::compute_score(
+        &scoring_event("", "overcast morning"),
+        "cloudy",
+        "",
+    );
+    // No target ages so no overlap bonus; 4/5 fields = 2.4, price +0.5,
+    // location +0.5, weather +2.0 => 5.4 / 2 = 2.7.
+    assert!((matched - 2.7).abs() < 0.01, "expected ~2.7, got {matched}");
+
+    // A sunny description against a clear forecast lands on the same arm.
+    let sunny_match = crate::ztools::weekend::compute_score(
+        &scoring_event("", "sunny picnic"),
+        "clear skies",
+        "",
+    );
+    assert!(
+        (sunny_match - 2.7).abs() < 0.01,
+        "expected ~2.7, got {sunny_match}"
+    );
+}
+
+#[test]
+fn a_mismatched_forecast_still_pays_a_partial_weather_bonus_to_matching_events() {
+    // Sunny description but rainy forecast: no match on the combined arm, so
+    // the fallback pays only +1.0 for the event's own sunny character.
+    let partial = crate::ztools::weekend::compute_score(
+        &scoring_event("", "sunny picnic"),
+        "rain showers",
+        "",
+    );
+    // 2.4 populated + 0.5 price + 0.5 location + 1.0 partial bonus = 4.4 / 2.
+    assert!((partial - 2.2).abs() < 0.01, "expected ~2.2, got {partial}");
+}

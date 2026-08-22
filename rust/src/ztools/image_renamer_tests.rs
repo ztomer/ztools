@@ -256,3 +256,139 @@ fn mutant_clean_filename_edge_cases() {
     assert!(result.len() <= 20, "Result should be <= 20 chars");
     assert!(!result.ends_with('_'), "Result '{}' should not end with _", result);
 }
+
+#[test]
+fn test_dedupe_path_returns_original_when_free() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("photo.png");
+    assert_eq!(dedupe_path(&target), target);
+}
+
+#[test]
+fn test_dedupe_path_appends_counter_on_collision() {
+    let dir = tempfile::tempdir().unwrap();
+    let original = dir.path().join("IMG 9999.png");
+    std::fs::write(&original, b"x").unwrap();
+    // The collision itself is proposed as the rename target: must be avoided.
+    std::fs::write(dir.path().join("IMG_9999.png"), b"existing").unwrap();
+
+    let deduped = dedupe_path(&dir.path().join("IMG_9999.png"));
+
+    assert_eq!(deduped, dir.path().join("IMG_9999_1.png"));
+    assert!(!deduped.exists());
+}
+
+#[test]
+fn test_dedupe_path_counters_skip_existing_and_handle_no_extension() {
+    let dir = tempfile::tempdir().unwrap();
+    for name in ["notes.txt", "notes_1.txt", "notes_2.txt"] {
+        std::fs::write(dir.path().join(name), b"x").unwrap();
+    }
+    assert_eq!(
+        dedupe_path(&dir.path().join("notes.txt")),
+        dir.path().join("notes_3.txt")
+    );
+
+    for name in ["README", "README_1", "README_2"] {
+        std::fs::write(dir.path().join(name), b"x").unwrap();
+    }
+    assert_eq!(
+        dedupe_path(&dir.path().join("README")),
+        dir.path().join("README_3")
+    );
+}
+
+#[test]
+fn test_dedupe_path_falls_back_to_input_after_exhaustion() {
+    let dir = tempfile::tempdir().unwrap();
+    for i in 0..=100 {
+        let name = if i == 0 { "full.png".to_string() } else { format!("full_{i}.png") };
+        std::fs::write(dir.path().join(name), b"x").unwrap();
+    }
+    // Every _1..=_100 candidate taken: the input path is returned unchanged.
+    assert_eq!(dedupe_path(&dir.path().join("full.png")), dir.path().join("full.png"));
+}
+
+#[test]
+fn test_scan_and_rename_skips_directories() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join("subdir")).unwrap();
+    std::fs::write(dir.path().join("IMG 9999.png"), b"png-ish bytes").unwrap();
+
+    let config = crate::config::ZtoolsConfig {
+        image_renamer_model: String::new(),
+        image_renamer_vlm_model: String::new(),
+        ..Default::default()
+    };
+    let candidates = scan_and_rename(dir.path(), "*.png", false, 10, &config).unwrap();
+
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(candidates[0].original, dir.path().join("IMG 9999.png"));
+}
+
+/// Serve one canned OpenAI-style chat completion, as the other LLM-layer mocks do.
+fn spawn_single_shot_server(body: &'static str) -> String {
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    std::thread::spawn(move || {
+        let Ok((stream, _)) = listener.accept() else { return };
+        serve_one(stream, body);
+    });
+    fn serve_one(mut stream: TcpStream, body: &str) {
+        let mut buf = [0u8; 8192];
+        let _ = stream.read(&mut buf);
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let _ = stream.write_all(resp.as_bytes());
+    }
+    format!("http://{}", addr)
+}
+
+#[test]
+fn test_name_image_uses_vlm_branch_for_unmeaningful_stem() {
+    let base_url = spawn_single_shot_server(
+        r###"{"choices": [{"message": {"content": "Here is the filename: White Goose Grass"}}]}"###,
+    );
+    let config = crate::config::ZtoolsConfig {
+        osaurus_url: base_url,
+        image_renamer_model: String::new(),
+        image_renamer_vlm_model: "vlm-test-model".to_string(),
+        ..Default::default()
+    };
+
+    // The vision path reads these bytes before calling out; the default OCR
+    // engine also probes the file for the text path and must yield nothing
+    // readable from junk bytes.
+    let dir = tempfile::tempdir().unwrap();
+    let img_path = dir.path().join("IMG_9999.png");
+    std::fs::write(&img_path, b"\x89PNG\r\n\x1a\nnot really a png").unwrap();
+
+    let named = name_image(&img_path, "IMG_9999", 30, &config);
+
+    assert_eq!(named, "white_goose_grass");
+}
+
+#[test]
+fn test_name_image_falls_back_to_cleaned_stem_when_vlm_unreachable() {
+    // Port 1 is unreachable in tests (connection refused, fast): the VLM error
+    // must degrade to the plain clean of the stem.
+    let config = crate::config::ZtoolsConfig {
+        osaurus_url: "http://127.0.0.1:1".to_string(),
+        image_renamer_model: String::new(),
+        image_renamer_vlm_model: "vlm-test-model".to_string(),
+        llm_timeout_secs: 1,
+        ..Default::default()
+    };
+
+    // "IMG_9999" is a filename fragment (not prose), so this exercises the VLM
+    // branch specifically; port 1 refuses connections fast.
+    let named = name_image(Path::new("/nonexistent/ztools_img.png"), "IMG_9999", 40, &config);
+
+    assert_eq!(named, "img_9999");
+}

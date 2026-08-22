@@ -73,6 +73,22 @@ def main():
             if test_proc.returncode != 0:
                 print("✗ Rust tests failed! Please fix before pushing.")
                 return 1
+            # Rust coverage floor, mirroring the Python gate's shape: the
+            # number must be MEASURED on every push and may only move UP.
+            # Baseline 94% (2026-08-21): every line coverable without a live
+            # browser or OCR engine. The remaining ~5% is documented in the
+            # coverage report (login_live / collect_tweets_live process
+            # spawning, env-absent branches, panic-format arms).
+            print("Running Rust coverage gate (llvm-cov, floor 94% lines)...")
+            cov = subprocess.run(
+                ["cargo", "llvm-cov", "--summary-only", "--fail-under-lines", "94"],
+                cwd=str(ROOT / "rust"),
+            )
+            if cov.returncode != 0:
+                print("✗ Rust coverage below the 94% line floor. Raise coverage")
+                print("  or (consciously, with a stated reason) re-baseline the")
+                print("  floor here.")
+                return 1
         except FileNotFoundError:
             print("⚠  Cargo not found, skipping Rust checks.")
 

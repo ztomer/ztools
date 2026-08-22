@@ -49,7 +49,7 @@ ztools/
 │   └── weekend.toml        # Excluded venues and default activity seeds
 ├── docs/                   # Developer documentation and quality specs
 │   ├── PORT_PARITY.md      # Parity ledger and benchmark comparisons
-│   ├── ROADMAP.md   # Architectural roadmap and port milestones; items 1–4 active, items 5–10 completed with defect classes in git history
+│   ├── ROADMAP.md          # Forward-looking backlog (port complete; open items: none)
 │   └── MODEL_QUIRKS.md     # Observed model quirks and workarounds
 ├── references/             # Historical Python implementations used for A/B testing
 ├── rust/                   # Native Rust crate (ztools)
@@ -157,8 +157,13 @@ Sanitizes and generates descriptive snake_case filenames for screenshots, photos
 
 Automates regression testing and leaderboard scoring of local LLMs against 30 challenging task suites (tax analysis, synthesis, adversarial resistance, JSON formatting).
 
-- **GPU Concurrency Lock (`gpu_lock.rs`)**: Uses kernel-level file locking (`flock`) on `/tmp/osaurus_gpu.lock` to ensure only one process uses the GPU during benchmarks, automatically reclaiming dead locks.
-- **Model Health Probe (`model_health.rs`)**: Inspects model directory shards offline before loading, detecting broken MTP speculative drafting weights, missing `.safetensors` parts, and corrupt downloads.
+- **GPU Concurrency Lock (`gpu_lock.rs`)**: machine-wide mutual exclusion at `/tmp/mac-osaurus-gpu.lock`, acquired by atomic `mkdir` (macOS ships no `flock(1)`). Dead-owner locks are reclaimed via PID + process start time (a recycled PID cannot impersonate its predecessor); the wedge ceiling measures PROGRESS through heartbeats, so an honest multi-hour sweep never loses the lock while a hung one does. A waiter that cannot get the lock fails and names the holder.
+- **Transport pipeline (`transport.rs`)**: mirrors Python's request path exactly — model quirks applied inside the call (a substituted model re-derives them), streamed attempt under a reasoning-overrun guard, blocking fallback, and missing-model substitution (`model_resolve.rs`): on an HTTP 404 naming a dead tag, the roster is fetched (disk-corroborated), a stand-in is retried ONCE, and the substitution is surfaced in the result.
+- **Runner (`runner.rs`)**: per-task loop with failure classification (`failures.rs`: INFRA / TIMEOUT / PARSE / FORMAT / CONTENT / REASONING), retry-token escalation for reasoning overruns, infra abandonment, learned per-task timeouts and p95 signal recording behind `run_eval_with_signals`.
+- **Oversize refusal (`oversize.rs`)**: a model whose weights exceed 80% of reclaimable memory — or a machine already paging — is refused before measuring (`EVAL_ALLOW_OVERSIZE=1` overrides deliberately).
+- **Config-resolved budgets & timeouts (`budgets.rs`, `signals.rs`)**: `[max_tokens]` / `[timeouts]` tables from `conf/config.toml`; per-model caps from `conf/models/<family>.toml`, family resolved from the architecture recorded in eval_signals before falling back to name matching.
+- **Model Health Probe (`model_health.rs`)**: inspects model directory shards offline before loading, detecting broken MTP speculative drafting weights, missing `.safetensors` parts, and corrupt downloads.
+- **Task data**: canonical snapshots live in `eval_tasks/data/taxes/` and are shared byte-for-byte with the Python reference; validator agreement is enforced every push by the CI parity gate (`rust/tests/validator_parity.rs` + `references/tests/test_rust_validator_parity.py`).
 
 ---
 
@@ -168,9 +173,10 @@ Local verification is enforced before code reaches GitHub CI:
 
 - **`.githooks/pre-commit`**:
   - Emoji gate (permits only Kare icons: `→ ✓ ✗ ⚠ ↔ ↑ ↓`).
+  - `#[allow]` ban across Rust source (a suppression is a defect, not a configuration).
   - Python linting (`ruff`) and syntax check.
-  - Rust Clippy (`cargo clippy --all-targets -- -D warnings`).
-  - Rust unit and integration test suite (`cargo test`).
+  - Rust Clippy (`cargo clippy --all-targets -- -D warnings`) and test suite.
 - **`.githooks/pre-push`**:
-  - Full Python test suite with 95% coverage requirement.
-  - Full Rust test suite (186 unit tests, 8 integration tests, 5 model eval tests, 2 HTTP mock tests).
+  - Full Python parity suite with a 95% coverage floor (`pytest --cov-fail-under=95`).
+  - Full Rust test suite (403 unit + 61 integration tests).
+  - Rust coverage floor: `cargo llvm-cov --fail-under-lines 94` (~94.8% current; the residual is live-browser process spawning and env-absent branches, itemized in the coverage report).

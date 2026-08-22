@@ -4,6 +4,8 @@
 
 use anyhow::Result;
 
+use std::path::PathBuf;
+
 use super::cookies::Cookie;
 use super::Tweet;
 
@@ -32,11 +34,24 @@ pub trait BrowserCollector: Send + Sync {
 pub struct LiveBrowserCollector {
     pub since: Option<String>,
     pub debug: bool,
+    /// Injection seam so the passthrough logic is testable without spawning
+    /// Python; production always wires [`collect_tweets_live`].
+    runner: fn(Option<&str>, bool) -> Result<Vec<Tweet>>,
+}
+
+impl LiveBrowserCollector {
+    pub fn new(since: Option<String>, debug: bool) -> Self {
+        Self {
+            since,
+            debug,
+            runner: collect_tweets_live,
+        }
+    }
 }
 
 impl BrowserCollector for LiveBrowserCollector {
     fn collect_timeline(&self, _target_count: usize) -> Result<Vec<Tweet>> {
-        collect_tweets_live(self.since.as_deref(), self.debug)
+        (self.runner)(self.since.as_deref(), self.debug)
     }
 }
 
@@ -84,11 +99,8 @@ fn setup_python_env(cmd: &mut std::process::Command) {
     }
 }
 
-/// Collect timeline tweets via the live headless browser driver.
-pub fn collect_tweets_live(since: Option<&str>, debug: bool) -> Result<Vec<Tweet>> {
-    let mut cmd = std::process::Command::new("python3");
-    setup_python_env(&mut cmd);
-
+/// Build the inline Python statement that drives the fetch-only CLI.
+fn build_fetch_stmt(debug: bool, since: Option<&str>) -> String {
     let mut py_stmt = "import sys; sys.argv = ['twitter', '--fetch-only'".to_string();
     if debug {
         py_stmt.push_str(", '--debug'");
@@ -97,8 +109,34 @@ pub fn collect_tweets_live(since: Option<&str>, debug: bool) -> Result<Vec<Tweet
         py_stmt.push_str(&format!(", '--since', '{s}'"));
     }
     py_stmt.push_str("]; from twitter.cli import main; main()");
+    py_stmt
+}
 
-    cmd.args(["-c", &py_stmt]);
+/// Return the first cache file that parses to a non-empty tweet list.
+///
+/// Narrow seam over the post-collection cache scan so the fallback ordering
+/// (first hit wins; empty/malformed/missing entries are skipped) is testable
+/// against fixture files instead of a live browser session.
+fn tweets_from_cache_candidates(candidates: Vec<PathBuf>) -> Option<Vec<Tweet>> {
+    for candidate in candidates {
+        if candidate.exists() {
+            if let Ok(content) = std::fs::read_to_string(&candidate) {
+                if let Ok(tweets) = serde_json::from_str::<Vec<Tweet>>(&content) {
+                    if !tweets.is_empty() {
+                        return Some(tweets);
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Collect timeline tweets via the live headless browser driver.
+pub fn collect_tweets_live(since: Option<&str>, debug: bool) -> Result<Vec<Tweet>> {
+    let mut cmd = std::process::Command::new("python3");
+    setup_python_env(&mut cmd);
+    cmd.args(["-c", &build_fetch_stmt(debug, since)]);
     let status = cmd
         .status()
         .map_err(|e| anyhow::anyhow!("failed to execute browser scraper: {e}"))?;
@@ -116,19 +154,10 @@ pub fn collect_tweets_live(since: Option<&str>, debug: bool) -> Result<Vec<Tweet
         dirs::home_dir().map(|h| h.join(".cache/twitter/debug_tweets.json")),
     ];
 
-    for candidate in candidates.into_iter().flatten() {
-        if candidate.exists() {
-            if let Ok(content) = std::fs::read_to_string(&candidate) {
-                if let Ok(tweets) = serde_json::from_str::<Vec<Tweet>>(&content) {
-                    if !tweets.is_empty() {
-                        return Ok(tweets);
-                    }
-                }
-            }
-        }
+    match tweets_from_cache_candidates(candidates.into_iter().flatten().collect()) {
+        Some(tweets) => Ok(tweets),
+        None => anyhow::bail!("No tweets collected from browser session."),
     }
-
-    anyhow::bail!("No tweets collected from browser session.")
 }
 
 /// Mock browser collector for offline deterministic testing without launching GUI/headless browsers.
@@ -176,5 +205,124 @@ mod tests {
 
         let all = collector.collect_timeline(10).unwrap();
         assert_eq!(all.len(), 2);
+    }
+
+    #[test]
+    fn test_default_config_is_headless_without_cookies() {
+        let config = CamoufoxConfig::default();
+        assert!(config.headless);
+        assert!(config.cookies.is_empty());
+        assert_eq!(config.timeout_secs, 30);
+    }
+
+    #[test]
+    fn test_new_collector_keeps_construction_args() {
+        let collector = LiveBrowserCollector::new(Some("2026-08-01".to_string()), true);
+        assert_eq!(collector.since.as_deref(), Some("2026-08-01"));
+        assert!(collector.debug);
+    }
+
+    #[test]
+    fn test_build_fetch_stmt_flags_and_since_quoting() {
+        assert_eq!(
+            build_fetch_stmt(false, None),
+            "import sys; sys.argv = ['twitter', '--fetch-only']; from twitter.cli import main; main()"
+        );
+        // `since` is interpolated inside single quotes in the argv list.
+        assert_eq!(
+            build_fetch_stmt(false, Some("2026-08-01")),
+            "import sys; sys.argv = ['twitter', '--fetch-only', '--since', '2026-08-01']; from twitter.cli import main; main()"
+        );
+        assert_eq!(
+            build_fetch_stmt(true, None),
+            "import sys; sys.argv = ['twitter', '--fetch-only', '--debug']; from twitter.cli import main; main()"
+        );
+    }
+
+    #[test]
+    fn test_live_collector_passes_since_and_debug_to_runner() {
+        static CAPTURED: std::sync::Mutex<Vec<(Option<String>, bool)>> =
+            std::sync::Mutex::new(Vec::new());
+        fn capturing_runner(since: Option<&str>, debug: bool) -> Result<Vec<Tweet>> {
+            CAPTURED
+                .lock()
+                .unwrap()
+                .push((since.map(str::to_string), debug));
+            Ok(Vec::new())
+        }
+        let collector = LiveBrowserCollector {
+            since: Some("2026-08-15".to_string()),
+            debug: true,
+            runner: capturing_runner,
+        };
+
+        let tweets = collector.collect_timeline(5).unwrap();
+
+        assert!(tweets.is_empty());
+        assert_eq!(
+            *CAPTURED.lock().unwrap(),
+            vec![(Some("2026-08-15".to_string()), true)]
+        );
+    }
+
+    #[test]
+    fn test_cache_scan_first_non_empty_wins_and_bad_entries_are_skipped() {
+        let dir = tempfile::tempdir().unwrap();
+        let empty_cache = dir.path().join("empty.json");
+        let bad_cache = dir.path().join("bad.json");
+        let good_cache = dir.path().join("good.json");
+        std::fs::write(&empty_cache, "[]").unwrap();
+        std::fs::write(&bad_cache, "{not json").unwrap();
+        std::fs::write(
+            &good_cache,
+            r#"[{"screen_name":"user1","text":"hi","created_at":"Thu Aug 20 12:00:00 +0000 2026","favorite_count":1,"retweet_count":0}]"#,
+        )
+        .unwrap();
+
+        let tweets =
+            tweets_from_cache_candidates(vec![empty_cache.clone(), bad_cache, good_cache.clone()])
+                .expect("good cache must win");
+
+        assert_eq!(tweets.len(), 1);
+        assert_eq!(tweets[0].screen_name, "user1");
+
+        // Ordering matters: a non-empty earlier file preempts a later one.
+        let first = tweets_from_cache_candidates(vec![good_cache, empty_cache]).unwrap();
+        assert_eq!(first[0].screen_name, "user1");
+    }
+
+    #[test]
+    fn test_cache_scan_none_when_every_candidate_is_missing_or_bad() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("nope.json");
+        let bad = dir.path().join("bad.json");
+        std::fs::write(&bad, "[1, 2, 3]").unwrap(); // valid JSON, wrong shape
+
+        assert!(tweets_from_cache_candidates(vec![]).is_none());
+        assert!(tweets_from_cache_candidates(vec![missing, bad]).is_none());
+    }
+
+    #[test]
+    fn test_setup_python_env_puts_references_dirs_on_pythonpath() {
+        let mut cmd = std::process::Command::new("true");
+        setup_python_env(&mut cmd);
+
+        let pythonpath = cmd
+            .get_envs()
+            .find(|(k, _)| k.to_string_lossy() == "PYTHONPATH")
+            .and_then(|(_, v)| v)
+            .expect("cargo test always provides CARGO_MANIFEST_DIR with references/")
+            .to_string_lossy()
+            .to_string();
+        let manifest_refs = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("references");
+        if manifest_refs.exists() {
+            assert!(
+                pythonpath.starts_with(manifest_refs.display().to_string().as_str()),
+                "PYTHONPATH '{pythonpath}' must lead with {manifest_refs:?}"
+            );
+        }
     }
 }
