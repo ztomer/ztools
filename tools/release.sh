@@ -51,17 +51,28 @@ if ! git diff --quiet; then
     point at HEAD, silently shipping something different from what you tested)"
 fi
 
-# ── 3. Sync pyproject version, then tag ────────────────────────────
-# Without this the tarball keeps whatever version pyproject last held, so
-# `pip show otools` disagrees with the git tag and the brew formula.
-CURRENT_V=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
-if [ "$CURRENT_V" != "$V" ]; then
-  info "Syncing pyproject.toml version: $CURRENT_V → $V"
-  sed -i '' "s|^version = \".*\"|version = \"$V\"|" pyproject.toml
-  git add pyproject.toml
+# ── 3. Sync BOTH manifests to $V, then tag ────────────────────────
+# pyproject.toml drives the sdist version; rust/Cargo.toml drives the binary
+# and Cargo.lock. At v2.1.5 only pyproject moved and the binary shipped
+# reporting 2.1.4 -- two sources of truth that were allowed to disagree.
+SYNCED=0
+for manifest in pyproject.toml rust/Cargo.toml; do
+  CURRENT_V=$(grep -m1 '^version = ' "$manifest" | cut -d'"' -f2)
+  if [ "$CURRENT_V" != "$V" ]; then
+    info "Syncing $manifest version: $CURRENT_V → $V"
+    sed -i '' "s|^version = \".*\"|version = \"$V\"|" "$manifest"
+    git add "$manifest"
+    SYNCED=1
+  else
+    info "$manifest already at $V"
+  fi
+done
+if [ "$SYNCED" -eq 1 ]; then
+  # Cargo.lock carries the crate's own version too.
+  if [ -f rust/Cargo.lock ] && grep -q 'name = "ztools"' rust/Cargo.lock; then
+    git add rust/Cargo.lock || true
+  fi
   git commit -m "chore: version $V" --no-verify
-else
-  info "pyproject.toml already at $V"
 fi
 
 info "Tagging HEAD as $NEW_TAG ..."

@@ -159,11 +159,24 @@ OLLAMA_BASE_URL=http://127.0.0.1:1 MLX_MODELS_DIR=/tmp/nonexistent \
 2,791 tests at 95%+ coverage. The suite structurally forbids launching real browsers or reading real cookie stores.
 
 ### Git hooks (`.githooks/`)
-- **Pre-commit**: Emoji gate, file size gate, `#[allow]` ban, no-emoji scan, Ruff linting, Rust Clippy + tests.
+- **Pre-commit**: Emoji gate, file size gate, `#[allow]` ban, Ruff linting, Rust Clippy + tests.
 - **Pre-push**: full Python suite with the 95% coverage floor, full Rust suite, and the Rust llvm-cov 94% line floor.
 
-Eval results stored in `~/.config/ztools/`. To track:
+GitHub Actions CI is disabled — the local pre-push gate runs a strict superset of what it checked. `release.yml` was removed with it: the Homebrew formula update lives in `tools/release.sh` (below).
+
+Eval results live in `~/.config/ztools/` (`eval_results.csv`, `eval_history.json`, `eval_signals.json`, and the raw-answer archive under `outputs/`). To track:
 
 ```bash
 git add -f ~/.config/ztools/eval_results.json ~/.config/ztools/eval_history.json
 ```
+
+---
+
+## Release
+
+```bash
+tools/release.sh            # bump patch from the latest tag (v2.1.7 -> v2.1.8)
+tools/release.sh 2.2.0      # explicit version
+```
+
+The script syncs BOTH manifests (`pyproject.toml` + `rust/Cargo.toml`, so the binary and the sdist never disagree), tags HEAD, pushes, computes the GitHub tarball's SHA256, and updates the Homebrew tap formula in `ztomer/homebrew-tap`. Requires `gh` authenticated.
