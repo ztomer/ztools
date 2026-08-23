@@ -85,6 +85,27 @@
 #     trap 'gpu_lock_release' EXIT INT TERM
 #     gpu_lock_acquire "osaurus_one.sh --restart"
 
+# That requirement is ENFORCED, not just documented. tui/lib.sh was deleted by
+# 29ddbac along with the Python TUI while five scripts still sourced it, and the
+# failure was silent in the worst possible way: `die` at the acquire timeout
+# became "die: command not found", which under a `while` loop without `set -e`
+# is not an abort but a CONTINUE. gpu_lock_acquire could therefore never time
+# out on any machine -- it spun forever instead of refusing, and the ztools test
+# suite hung at 24% because of it.
+#
+# A precondition that only exists as a comment is a precondition that will be
+# broken. Checked here, at source time, where the message can still be read.
+# The requirement is now SELF-SATISFYING rather than merely documented. A guard
+# that only returns non-zero is not enough here: `return` from a sourced file
+# returns from the SOURCE, and the caller carries on regardless. Defining
+# fallbacks means `die` is always a real abort, whatever the caller sourced.
+for _gpu_lock_helper in info ok warn err; do
+    declare -F "$_gpu_lock_helper" >/dev/null 2>&1 || eval "
+        $_gpu_lock_helper() { printf '%s\n' \"\$*\" >&2; }"
+done
+declare -F die >/dev/null 2>&1 || die() { err "$*"; exit "${2:-1}"; }
+unset _gpu_lock_helper
+
 # The machine-wide default. ZTOOLS_GPU_LOCK_DIR exists so the gate is testable in
 # BOTH directions -- a test can prove exclusion and prove reclamation without
 # touching the real lock a concurrent session may be holding. Production never

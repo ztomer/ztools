@@ -104,6 +104,7 @@ markers = [
     "real_llm: opts out of the conftest gate that blocks connections to the real LLM server",
     "llm_gate_selftest: tests OF the LLM connection gate; deliberate attempts are expected",
     "sandboxed_server_script: drives tools/osaurus_one.sh against a stubbed PATH and tmp lock",
+    "real_restart_budget: opts out of the conftest gate that zeroes RESTART_READY_BUDGET",
 ]
 
 [tool.coverage.run]

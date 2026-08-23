@@ -610,3 +610,38 @@ def deterministic_machine_contention():
         patch("eval.memory.reclaimable_available_gb", return_value=64.0),
     ):
         yield
+
+
+@pytest.fixture(autouse=True)
+def bounded_restart_ready_budget(request):
+    """Structural gate: no test may sit through the real 180s readiness wait.
+
+    `wait_until_model_serves` polls until the model answers or
+    RESTART_READY_BUDGET (180s) runs out, sleeping RESTART_READY_GAP between
+    attempts. Tests patch `time.sleep` so the poll does not actually wait -- but
+    the DEADLINE is real wall-clock time from `time.monotonic()`, which nothing
+    patches. Removing the sleep does not shorten the loop; it turns a 180-second
+    wait into a 180-second BUSY-SPIN at ~95% CPU.
+
+    Measured 2026-08-23: test_it_restarts_normally_when_the_gpu_is_free took
+    189s of user CPU by itself. With several such tests the suite looked hung
+    rather than slow, and the pre-push gate could never finish -- which is why
+    ztools could not be pushed at all.
+
+    The budget is deliberately resolved at CALL time (see the comment in
+    wait_until_model_serves), precisely so it can be patched here. A test that
+    genuinely needs the real budget can ask for it with
+    @pytest.mark.real_restart_budget.
+    """
+    import eval.cli_runtime as rt
+
+    if request.node.get_closest_marker("real_restart_budget"):
+        yield
+        return
+
+    original = rt.RESTART_READY_BUDGET
+    rt.RESTART_READY_BUDGET = 0  # the poll loop body never runs
+    try:
+        yield
+    finally:
+        rt.RESTART_READY_BUDGET = original

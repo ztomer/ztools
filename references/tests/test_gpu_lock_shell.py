@@ -32,6 +32,10 @@ pytestmark = pytest.mark.sandboxed_server_script
 REPO = Path(__file__).resolve().parent.parent.parent
 
 
+#: Every gpu_lock shell snippet in this file settles well inside a second.
+SHELL_TIMEOUT = 30
+
+
 def sh(body, lock_dir, extra_env=None, cwd=None):
     """Run a bash snippet with tui/lib.sh and tools/gpu_lock.sh sourced."""
     env = {**os.environ, "ZTOOLS_GPU_LOCK_DIR": str(lock_dir), "NO_COLOR": "1"}
@@ -42,10 +46,21 @@ def sh(body, lock_dir, extra_env=None, cwd=None):
         f'source "{REPO}/tools/gpu_lock.sh"\n'
         f"{body}\n"
     )
-    return subprocess.run(
-        ["bash", "-c", script], capture_output=True, text=True,
-        env=env, cwd=str(cwd or REPO),
-    )
+    # BOUNDED. Without a timeout a snippet that fails to terminate hangs the
+    # whole suite with no indication of where: gpu_lock_acquire spun forever
+    # once `die` was undefined, and this helper waited for it at 0% CPU until
+    # someone killed pytest. A lock test that can block indefinitely is not a
+    # test of a lock.
+    try:
+        return subprocess.run(
+            ["bash", "-c", script], capture_output=True, text=True,
+            env=env, cwd=str(cwd or REPO), timeout=SHELL_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired as expired:
+        raise AssertionError(
+            f"shell snippet did not finish within {SHELL_TIMEOUT}s — it is "
+            f"looping, not merely slow.\n--- script ---\n{script}"
+        ) from expired
 
 
 def write_owner(lock_dir, pid, start, label):

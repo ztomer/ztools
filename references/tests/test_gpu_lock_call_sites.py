@@ -64,6 +64,32 @@ def _spy_run(calls):
     return run
 
 
+@pytest.fixture(autouse=True)
+def _clean_gpu_lock():
+    """Clear the MACHINE-WIDE gpu lock around every test in this file.
+
+    _peer_holds() writes a real owner file into gpu_lock.lock_dir() -- a shared
+    path under /tmp, not a tmp_path fixture -- and nothing removed it. It records
+    os.getppid() as the owner, a process that outlives the whole suite, so the
+    state leaked into every later test AND into whatever else on this machine
+    consults that lock, which is the entire point of a machine-wide lock.
+
+    Clearing BEFORE as well as after matters: a run killed mid-test leaves the
+    file behind, and every later run would start under a phantom holder.
+    """
+    owner = os.path.join(gpu_lock.lock_dir(), "owner")
+
+    def _clear():
+        try:
+            os.remove(owner)
+        except FileNotFoundError:
+            pass
+
+    _clear()
+    yield
+    _clear()
+
+
 def _peer_holds(label="peer eval"):
     """Make a LIVE process that is not us the recorded owner.
 
