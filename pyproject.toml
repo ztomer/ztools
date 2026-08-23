@@ -99,6 +99,16 @@ ignore = []
 minversion = "7.0"
 testpaths = ["references/tests"]
 addopts = "-ra"
+# Keep tmp_path dirs only for FAILING tests, and only the last run.
+#
+# pytest's defaults (policy "all", count 3) keep every test's tmp_path for the
+# last three runs. That is fine until a fixture writes something large: the
+# model-shard fixture in test_capabilities.py wrote a real 15GiB file, and 26
+# retained roots reached 246GB and filled the disk to 100%, which then began
+# failing unrelated builds. The fixture is sparse now, but the retention default
+# is what turned one wasteful fixture into a full disk, so bound it too.
+tmp_path_retention_count = 1
+tmp_path_retention_policy = "failed"
 markers = [
     "real_cookie_discovery: opts out of the conftest gate that stubs browser cookie discovery",
     "real_llm: opts out of the conftest gate that blocks connections to the real LLM server",

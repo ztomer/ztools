@@ -43,8 +43,30 @@ def write_model(root, org, name, config, shard_sizes=()):
     d.mkdir(parents=True)
     (d / "config.json").write_text(json.dumps(config))
     for i, size in enumerate(shard_sizes):
-        (d / f"model-{i:05d}.safetensors").write_bytes(b"\0" * size)
+        _write_sparse(d / f"model-{i:05d}.safetensors", size)
     return d
+
+
+def _write_sparse(path, size):
+    """Create a file that REPORTS `size` without occupying it.
+
+    These shards stand in for real model weights, and the realistic sizes are
+    enormous: test_memory_estimate_uses_disk_not_the_parameter_count_in_the_name
+    asks for a 15GiB shard because that is what the qwen3.8-27b-4bit build
+    actually occupies, and the number is the point of the test.
+
+    It used to do `write_bytes(b"\0" * size)`, which both materialised a 15GiB
+    bytes object in RAM and wrote 15GiB of real zeros to $TMPDIR -- every run.
+    pytest keeps several numbered tmp roots, so this accumulated: 26 of them,
+    246GB, which filled the disk to 100% and started failing unrelated builds.
+
+    A sparse file is not a shortcut here, it is exactly equivalent. The code
+    under test is model_caps.model_disk_bytes, which sums
+    `weights.stat().st_size` and never opens the file. st_size is identical
+    either way; only the allocated blocks differ.
+    """
+    with open(path, "wb") as fh:
+        fh.truncate(size)
 
 
 class TestVisionIsReadFromTheModel:
