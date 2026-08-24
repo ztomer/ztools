@@ -102,11 +102,16 @@ def _classify_failure(result: dict, task_cfg: dict, score: int, failure_reason: 
             "evidence": (
                 f"{len(reasoning)} chars of reasoning_content, empty content, "
                 f"finish_reason={finish}. Not a prompt-following failure: the model "
-                f"never stopped thinking, so raise max_tokens for this task. "
-                f"Reasoning scales with the TASK, not with the budget: nemotron "
-                f"needs ~19k chars of reasoning on an 8-line prompt and ~77k on a "
-                f"40-line one, and returns empty at every budget below what it "
-                f"needs. Shrinking the budget does NOT force an answer."
+                f"never stopped thinking, so the remedy is a budget change and not a "
+                f"prompt rewrite. WHICH change depends on the shape, and one attempt "
+                f"cannot tell the two apart. Reasoning that scales with the TASK: "
+                f"nemotron needs ~19k chars on an 8-line prompt and ~77k on a 40-line "
+                f"one and ANSWERS once the budget covers it, so raise max_tokens. "
+                f"Reasoning that expands to fill the BUDGET: ornith-9b spent 72k "
+                f"chars at 32000 and 144k at 64000 and was guard-aborted at both, so "
+                f"raising it only buys a longer failure. The run tells them apart by "
+                f"escalating once and reading the outcome. Shrinking the budget does "
+                f"NOT force an answer in either case."
             ),
         }
 
@@ -214,6 +219,28 @@ REASONING_RETRY_MULTIPLIER = float(os.environ.get("EVAL_REASONING_RETRY_MULT", "
 # Ceiling so an escalating retry cannot run away. 64000 is 2x the largest configured
 # budget and inside every installed server model's context window (131k-262k).
 REASONING_RETRY_MAX_TOKENS = int(os.environ.get("EVAL_REASONING_RETRY_TOKENS", "64000"))
+
+
+# The finish_reason the stream guard stamps when it cuts a run that has reasoned past
+# the point where the remaining budget could hold an answer. Set in
+# lib/llm/streaming.py (and mirrored in rust eval/transport.rs); named here because
+# this module is where the remedy for it is decided.
+GUARD_ABORT_FINISH_REASON = "aborted_reasoning_overrun"
+
+
+def reasoning_overrun_was_guard_aborted(result: dict) -> bool:
+    """True when the guard cut this attempt, rather than the model choosing to stop.
+
+    This is the discriminator between the two model shapes that share a first attempt.
+    A model that WANTS more room stops on its own once it has enough and the guard
+    never fires; a model whose reasoning expands to fill the budget is cut by the
+    guard at every budget it is offered. So a guard abort on an ESCALATED attempt
+    means escalation cannot work for this model -- it was handed more and spent more.
+
+    Deliberately NOT true of a plain finish_reason=length overrun: that one really can
+    be a budget shortage, and is the case the escalation exists to serve.
+    """
+    return (result or {}).get("finish_reason") == GUARD_ABORT_FINISH_REASON
 
 
 def reasoning_retry_budget(base_budget: int) -> int:

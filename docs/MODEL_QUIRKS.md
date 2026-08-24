@@ -736,6 +736,11 @@ Reasoning overrun, not slowness: it exceeded the 900s task timeout six times in
 mean is 25% over 55 runs, so the grinding buys nothing. Its 2026-08-19 run is
 PARTIAL at 11/30 and is not a score.
 
+UPDATE 2026-08-23: a fourth attempt ended the same way (14 of 30 in 6h09m before it
+was killed), and the cause is now understood -- see "The retry escalation is
+proof-of-shape" below. The model is EXCLUDED from the sweep in the default SKIP_RE of
+`tools/sweep_models.sh`; its weights are left installed, so it is unranked, not deleted.
+
 That escalation is also the standing argument for why `flush_between_models` must
 delegate to `osaurus_one.sh` rather than hand-roll `osascript quit` + `sleep 3`:
 the graceful stop demonstrably does not always work, and assuming it did is how a
@@ -1181,6 +1186,40 @@ missing key sees a successful response with nothing in it.
 Ornith has no `conf/models/*.toml`, so it currently runs on the built-in
 fallback prompts. Any fix belongs there, and needs to make the model STOP
 reasoning rather than give it more room.
+
+
+## The retry escalation is proof-of-shape, bought once per model (2026-08-23)
+
+Two model shapes produce an IDENTICAL first attempt -- empty `content`, a full
+`reasoning_content`, a REASONING diagnosis -- and need opposite remedies:
+
+| shape | behaviour | right remedy |
+|---|---|---|
+| scales with the TASK (nemotron-3.5-lightning) | needs ~19k chars on an 8-line prompt, ~77k on a 40-line one; ANSWERS once the budget covers it | raise max_tokens |
+| expands to fill the BUDGET (ornith-1.0-9b) | spends ~75% of whatever it is given and is cut by the stream guard every time | nothing; more room only buys a longer failure |
+
+Measured on ornith-9b, one escalation apart on the same task:
+
+    32,000-token budget    72,005 chars of reasoning   aborted_reasoning_overrun   0%
+    64,000-token budget   144,441 chars of reasoning   aborted_reasoning_overrun   0%
+
+Exactly 2.0x the reasoning for 2.0x the budget. `failures.py` had said since
+2026-08-11 that "raising the budget makes it strictly worse: the reasoning expands
+to fill whatever it is given" -- in a comment ten lines above an evidence string
+that told the reader "so raise max_tokens for this task", and a remedy that did.
+Diagnosis and remedy disagreed, which is the exact failure `reasoning_retry_budget`'s
+docstring claims to have already fixed once.
+
+A single attempt cannot tell the shapes apart, so the run now escalates ONCE per
+model, reads the outcome, and remembers it: a guard abort on the ESCALATED attempt
+proves more room cannot help, and every later task skips both the escalation and the
+retry (the base call already hit the guard at that budget). Cost before: a base
+attempt plus a double-budget retry on every affected task. `eval/run.py` +
+`eval/runner.rs`, tested in `test_reasoning_overrun.py` and `rust/tests/reasoning_retry.rs`.
+
+The discriminator is `finish_reason == "aborted_reasoning_overrun"` and NOT a plain
+`finish_reason=length`: a length overrun really can be a budget shortage, and that is
+the case the escalation exists to serve.
 
 
 ## Decoding policy for the eval: greedy, decided 2026-08-12

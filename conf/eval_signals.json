@@ -1092,11 +1092,6 @@
       "cold_start_seconds_samples": [
         {
           "clean": true,
-          "ts": 1787107706.2,
-          "v": 0.2483
-        },
-        {
-          "clean": true,
           "ts": 1787338117.9,
           "v": 7.8057
         },
@@ -1139,15 +1134,15 @@
           "clean": true,
           "ts": 0.0,
           "v": 7.9991
-        }
-      ],
-      "decode_tokens_per_sec": 107.31,
-      "decode_tokens_per_sec_samples": [
+        },
         {
           "clean": true,
-          "ts": 1787107706.9,
-          "v": 106.886
-        },
+          "ts": 1787537839.7,
+          "v": 309.4115
+        }
+      ],
+      "decode_tokens_per_sec": 104.2,
+      "decode_tokens_per_sec_samples": [
         {
           "clean": true,
           "ts": 1787338118.5,
@@ -1192,6 +1187,11 @@
           "clean": true,
           "ts": 0.0,
           "v": 103.2281
+        },
+        {
+          "clean": true,
+          "ts": 1787537840.5,
+          "v": 84.2572
         }
       ],
       "disk_bytes": 5899567172,
@@ -1199,11 +1199,6 @@
       "generative": true,
       "prefill_chars_per_sec": 21347.6,
       "prefill_chars_per_sec_samples": [
-        {
-          "clean": true,
-          "ts": 1787107707.9,
-          "v": 18582.3
-        },
         {
           "clean": true,
           "ts": 1787338119.3,
@@ -1248,9 +1243,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 22635.7
+        },
+        {
+          "clean": true,
+          "ts": 1787537841.4,
+          "v": 22559.4
         }
       ],
-      "prefill_samples": 14,
+      "prefill_samples": 15,
       "vision": true
     },
     "detailed_json": {
@@ -1275,9 +1275,9 @@
       "total_retries": 1
     },
     "filename": {
-      "p95_latency": 6.7,
+      "p95_latency": 6.4,
       "parse_failures": 0,
-      "samples": 9,
+      "samples": 10,
       "timeout": 900,
       "total_retries": 2
     },
@@ -2738,7 +2738,7 @@
   },
   "ornith-1.0-9b-mxfp8": {
     "_capabilities": {
-      "cold_start_seconds": 0.19,
+      "cold_start_seconds": 0.2,
       "cold_start_seconds_samples": [
         {
           "clean": false,
@@ -2785,6 +2785,11 @@
           "clean": true,
           "ts": 1787347987.6,
           "v": 0.186
+        },
+        {
+          "clean": true,
+          "ts": 1787513928.5,
+          "v": 12.718
         }
       ],
       "decode_tokens_per_sec": 40.16,
@@ -2834,6 +2839,11 @@
           "clean": true,
           "ts": 1787347989.4,
           "v": 37.5095
+        },
+        {
+          "clean": true,
+          "ts": 1787513929.9,
+          "v": 45.4229
         }
       ],
       "disk_bytes": 10146782760,
@@ -2886,9 +2896,14 @@
           "clean": true,
           "ts": 1787348002.4,
           "v": 1534.9
+        },
+        {
+          "clean": true,
+          "ts": 1787513938.2,
+          "v": 2427.1
         }
       ],
-      "prefill_samples": 10,
+      "prefill_samples": 11,
       "vision": true
     },
     "detailed_json": {
@@ -2898,23 +2913,23 @@
       "total_retries": 1
     },
     "file_summary": {
-      "p95_latency": 42.6,
+      "p95_latency": 40.9,
       "parse_failures": 0,
-      "samples": 9,
+      "samples": 10,
       "timeout": 900,
       "total_retries": 1
     },
     "file_summary_mixed": {
-      "p95_latency": 39.7,
+      "p95_latency": 39.5,
       "parse_failures": 0,
-      "samples": 8,
+      "samples": 9,
       "timeout": 900,
-      "total_retries": 7
+      "total_retries": 8
     },
     "filename": {
-      "p95_latency": 38.8,
+      "p95_latency": 38.3,
       "parse_failures": 0,
-      "samples": 10,
+      "samples": 11,
       "timeout": 900,
       "total_retries": 3
     },
@@ -2932,25 +2947,25 @@
       "total_retries": 1
     },
     "filename_mixed": {
-      "p95_latency": 69.4,
+      "p95_latency": 68.6,
       "parse_failures": 0,
-      "samples": 7,
+      "samples": 8,
       "timeout": 900,
       "total_retries": 2
     },
     "image_rename": {
-      "p95_latency": 801.9,
+      "p95_latency": 839.1,
       "parse_failures": 0,
-      "samples": 8,
-      "timeout": 1202,
-      "total_retries": 7
+      "samples": 9,
+      "timeout": 1258,
+      "total_retries": 8
     },
     "image_rename_mixed": {
-      "p95_latency": 776.6,
+      "p95_latency": 775.0,
       "parse_failures": 0,
-      "samples": 5,
-      "timeout": 1164,
-      "total_retries": 5
+      "samples": 6,
+      "timeout": 1162,
+      "total_retries": 6
     },
     "json": {
       "p95_latency": 420.6,
@@ -2959,17 +2974,17 @@
       "total_retries": 2
     },
     "rename_mixed": {
-      "p95_latency": 65.2,
+      "p95_latency": 64.7,
       "parse_failures": 0,
-      "samples": 7,
+      "samples": 8,
       "timeout": 900,
       "total_retries": 2
     },
     "summarize": {
-      "p95_latency": 1553.3,
+      "p95_latency": 2489.9,
       "parse_failures": 0,
-      "samples": 8,
-      "timeout": 2329,
+      "samples": 9,
+      "timeout": 3734,
       "total_retries": 1
     },
     "summarize_contradiction": {
@@ -2992,9 +3007,9 @@
       "total_retries": 1
     },
     "summarize_mixed": {
-      "p95_latency": 258.1,
+      "p95_latency": 252.5,
       "parse_failures": 0,
-      "samples": 7,
+      "samples": 8,
       "timeout": 900,
       "total_retries": 1
     },
@@ -3041,39 +3056,39 @@
       "total_retries": 0
     },
     "weekend_fixed": {
-      "p95_latency": 71.6,
+      "p95_latency": 69.9,
       "parse_failures": 0,
-      "samples": 10,
+      "samples": 11,
       "timeout": 900,
       "total_retries": 2
     },
     "weekend_fixed_mixed": {
-      "p95_latency": 2510.8,
+      "p95_latency": 2391.9,
       "parse_failures": 0,
-      "samples": 9,
-      "timeout": 3766,
+      "samples": 10,
+      "timeout": 3587,
       "total_retries": 3
     },
     "weekend_transient": {
-      "p95_latency": 1722.6,
+      "p95_latency": 1695.7,
       "parse_failures": 0,
-      "samples": 10,
-      "timeout": 2583,
-      "total_retries": 4
+      "samples": 11,
+      "timeout": 2543,
+      "total_retries": 5
     },
     "weekend_transient_mixed": {
-      "p95_latency": 614.9,
+      "p95_latency": 1392.1,
       "parse_failures": 0,
-      "samples": 9,
-      "timeout": 922,
-      "total_retries": 7
+      "samples": 10,
+      "timeout": 2088,
+      "total_retries": 8
     },
     "weekend_transient_schema": {
-      "p95_latency": 2403.9,
+      "p95_latency": 2593.9,
       "parse_failures": 0,
-      "samples": 4,
-      "timeout": 3605,
-      "total_retries": 3
+      "samples": 5,
+      "timeout": 3890,
+      "total_retries": 4
     }
   },
   "potion-base-4m": {

@@ -27,7 +27,10 @@ use serde::Serialize;
 
 use crate::ztools::eval::prefill::{measure_prefill_rate, record_prefill_rate};
 use crate::ztools::eval::signals::{effective_timeout, load_signals, record_signal, save_signals};
-use crate::ztools::eval::failures::{classify_failure, reasoning_retry_budget, FAIL_REASONING};
+use crate::ztools::eval::failures::{
+    classify_failure, reasoning_overrun_was_guard_aborted, reasoning_retry_budget,
+    FAIL_REASONING,
+};
 use crate::ztools::eval::model_resolve::is_generative_model;
 use crate::ztools::eval::task_loader::{check_graded_score, run_check, EvalTask};
 use crate::ztools::eval::transport::{self, RequestSpec};
@@ -204,6 +207,14 @@ fn run_eval_inner(
     let mut consecutive_infra: u32 = 0;
     let mut last_completion = Instant::now();
     let stall_limit = model_stall_duration();
+    // Whether THIS model has already proven it cannot use a bigger budget. Two
+    // model shapes produce an identical first attempt -- one wants more room and
+    // answers once it has it (nemotron), the other expands its reasoning to fill
+    // whatever it is handed and never answers (ornith-9b: 72,005 chars at 32,000
+    // tokens, 144,441 at 64,000, guard-aborted at both). One attempt cannot tell
+    // them apart, so the escalation is bought ONCE per model and the outcome
+    // remembered; the shape is a property of the model, not of the task.
+    let mut reasoning_escalation_futile = false;
 
     for task in tasks {
         // Progress, not duration: a healthy multi-hour sweep keeps completing
@@ -241,6 +252,22 @@ fn run_eval_inner(
             // A retry that repeats the identical call cannot fix a reasoning
             // overrun -- the model will think itself past the budget again.
             // Retry with MORE room, bounded: reasoning scales with the TASK.
+            if attempt > 0
+                && best_diagnosis.category == FAIL_REASONING
+                && reasoning_escalation_futile
+            {
+                // Proven on an earlier task: this model fills whatever budget it
+                // gets and the guard cuts it every time. Escalating again buys a
+                // longer failure, and repeating the base call cannot help either --
+                // attempt 1 already hit the guard at exactly that budget. Take the
+                // zero now instead of paying twice more for it.
+                eprintln!(
+                    "  · skipping the retry for {}: {model} already reasoned past an \
+                     escalated budget, so more room cannot help",
+                    task.name
+                );
+                break;
+            }
             let attempt_tokens = if attempt > 0 && best_diagnosis.category == FAIL_REASONING {
                 let escalated = reasoning_retry_budget(max_tokens);
                 eprintln!(
@@ -281,6 +308,15 @@ fn run_eval_inner(
                 score,
                 false,
             );
+            // An escalated attempt the guard cut as well is the evidence that this
+            // model expands to fill: strictly more room, strictly more of it spent
+            // thinking, still no answer. Recorded next to the attempt that proves
+            // it, so no later task re-buys the proof.
+            if attempt_tokens > max_tokens
+                && reasoning_overrun_was_guard_aborted(&r.finish_reason)
+            {
+                reasoning_escalation_futile = true;
+            }
             // Archive what the model actually said BEFORE anything decides
             // what this score means. A scorer question asked after the fact is
             // unanswerable without the output, and re-running costs hours on a

@@ -33,7 +33,7 @@ pub use report::{
     compute_task_winners, default_eval_dir, export_csv, is_test_model, load_historical_stats,
     render_historical_trends, save_historical_results, ModelRun, ModelStats,
 };
-pub use failures::{classify_failure, reasoning_retry_budget, Diagnosis, FAIL_CONTENT, FAIL_INFRA, FAIL_PARSE, FAIL_REASONING, FAIL_TIMEOUT};
+pub use failures::{classify_failure, reasoning_overrun_was_guard_aborted, reasoning_retry_budget, Diagnosis, FAIL_CONTENT, FAIL_INFRA, FAIL_PARSE, FAIL_REASONING, FAIL_TIMEOUT};
 pub use oversize::{estimate_model_memory_gb, is_thrashing, model_disk_bytes, oversize_refusal, OVERSIZE_OVERRIDE_ENV};
 pub use clean::{clean_model_output, extract_content_from_code_blocks, extract_json};
 pub use discrimination::{classify, distinct_values, disagreements, is_gate, ranking_mean, ranking_tasks};

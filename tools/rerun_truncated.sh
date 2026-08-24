@@ -40,9 +40,20 @@ else
   # LAST state per model, not every line. This script APPENDS its own result, so a
   # model fixed by an earlier invocation still has its old TRUNCATED line on disk --
   # `sort -u` would dutifully queue it again, forever.
+  #
+  # Queue only states that MORE TIME can actually fix. This used to be "anything not
+  # DONE", which quietly assumed every non-DONE row was a run cut short -- so an
+  # EXCLUDED model, recorded as permanently unrunnable, was re-queued as though it
+  # were merely slow. That assumption cost 10 GPU-hours on ornith-1.0-9b-mxfp8 on
+  # 2026-08-23: its row said TRUNCATED, this script dutifully offered it a bigger
+  # ceiling, and no ceiling was ever the problem. An unrecognised state is left ALONE
+  # for the same reason -- a state this script does not understand is not a state it
+  # should assume it can fix.
   MODELS=()
   while IFS=$'\t' read -r state model; do
-    [ "$state" = "DONE" ] || MODELS+=("$model")
+    case "$state" in
+      TRUNCATED|FAILED) MODELS+=("$model") ;;
+    esac
   done < <(awk -F'\t' 'NF>1 {last[$2]=$1} END {for (m in last) print last[m] "\t" m}' \
              "$ROOT/.sweep_status" 2>/dev/null || true)
 fi

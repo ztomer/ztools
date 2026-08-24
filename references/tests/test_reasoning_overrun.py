@@ -32,6 +32,8 @@ Five of eleven installed models are qwen3_5-family, so getting this wrong mislab
 almost half a sweep and burns a full-budget retry per task doing it.
 """
 
+from unittest.mock import patch
+
 import pytest
 from eval.failures import FAIL_FORMAT, FAIL_REASONING, _classify_failure
 
@@ -393,3 +395,80 @@ class TestTheStreamHasAWallClockDeadline:
         assert out["content"] == "hello"
         assert not out.get("error")
         assert out.get("finish_reason") == "stop"
+
+
+class TestEscalationStopsOnceProvenFutile:
+    """Two model shapes produce an identical first attempt and need opposite remedies.
+
+    nemotron-3.5-lightning wants MORE room and answers once it has it -- that is the
+    measurement the escalation above was built on and it still holds.
+
+    ornith-1.0-9b-mxfp8 is the other shape: its reasoning EXPANDS to fill whatever it
+    is handed, so the guard cuts it at every budget and it never answers. Measured
+    2026-08-23, same task, one escalation apart:
+
+        32,000-token budget    72,005 chars of reasoning   aborted by the guard
+        64,000-token budget   144,441 chars of reasoning   aborted by the guard
+
+    Exactly 2.0x the reasoning for 2.0x the budget, both scored 0. Doubling bought a
+    longer failure, which is what docs/MODEL_QUIRKS.md has said since 2026-08-11.
+
+    One attempt cannot tell the two shapes apart, so the run escalates ONCE, reads the
+    outcome, and stops paying once the escalated attempt is cut by the guard as well.
+    Before this the harness re-bought that proof on every task -- a base attempt plus a
+    double-budget retry, per task, for a model already proven unable to use it.
+    """
+
+    @staticmethod
+    def _guard_aborted(budget):
+        # Reasoning expands to fill whatever it is given: the guard cuts at 75% of the
+        # budget, so a bigger budget only buys proportionally more wasted reasoning.
+        spent_tokens = int((budget or 32000) * 0.75)
+        return {
+            "content": "",
+            "reasoning_content": "x" * (spent_tokens * 3),
+            "finish_reason": "aborted_reasoning_overrun",
+            "aborted": True,
+            "error": "",
+            "parsed": None,
+            "time": 1.0,
+        }
+
+    def _run(self, task_names):
+        import eval.run as er
+        from eval.tasks_core import TASKS
+
+        budgets = []
+
+        def fake_call(**kw):
+            budgets.append(kw.get("max_tokens"))
+            return self._guard_aborted(kw.get("max_tokens"))
+
+        tasks = {name: TASKS[name] for name in task_names}
+        with patch.object(er, "call", fake_call):
+            er.run_eval("fake-expands-to-fill", tasks=tasks, verbose=False)
+        return budgets
+
+    def test_the_first_overrun_still_buys_the_escalation(self):
+        # The nemotron case must keep working: one task, one escalated retry.
+        budgets = self._run(["weekend_transient"])
+        assert len([b for b in budgets if b]) == 1, (
+            f"the first overrun must still escalate once, got {budgets}"
+        )
+
+    def test_later_tasks_do_not_re_buy_a_proven_futile_escalation(self):
+        budgets = self._run(["weekend_transient", "image_rename", "summarize"])
+        escalated = [b for b in budgets if b]
+        assert len(escalated) == 1, (
+            "escalation is proof-of-shape, bought once per model -- "
+            f"got {len(escalated)} escalated calls: {budgets}"
+        )
+
+    def test_a_futile_retry_is_skipped_entirely_not_just_de_escalated(self):
+        # Once the shape is known, repeating the base call cannot help either: the
+        # first attempt already hit the guard at that exact budget.
+        budgets = self._run(["weekend_transient", "image_rename", "summarize"])
+        assert len(budgets) == 4, (
+            "expected 2 calls proving the shape then 1 per later task, "
+            f"got {len(budgets)}: {budgets}"
+        )

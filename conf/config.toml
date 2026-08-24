@@ -31,10 +31,23 @@ llm_url = "http://localhost:1337"
 #                                not uniquely best at a single task. Strictly dominated.
 #   qwen3.8-27b-4bit             DELETED. 84.3, beaten by the same family's MXFP8 build
 #                                (86.9) which is also faster over the suite.
-#   ornith-1.0-9b-mxfp8          INSTALLED but only 5/24 this run. Not ranked rather
-#                                than ranked on a subset: the tasks a truncated run
-#                                misses are the ones at the end, so its average would
-#                                be biased toward the easy half.
+#   ornith-1.0-9b-mxfp8          EXCLUDED FROM THE SWEEP 2026-08-23 (weights left
+#                                installed; it is only unranked, not deleted).
+#                                It cannot produce a score at any budget, so there is
+#                                nothing for more time to fix. Its reasoning expands
+#                                to fill whatever budget it is handed: 72,005 chars at
+#                                32,000 tokens, 144,441 at 64,000 -- exactly 2.0x the
+#                                reasoning for 2.0x the room, cut by the stream guard
+#                                both times, scored 0 both times. Three sweeps have
+#                                now ended short (13/24, 11/30, 14/30) and it wedges
+#                                the server on the way down. Historical mean 25% over
+#                                55 runs, so the grinding buys nothing.
+#                                This entry used to read "INSTALLED but only 5/24 this
+#                                run. Not ranked rather than ranked on a subset" --
+#                                true, but it framed a permanent defect as a partial
+#                                measurement, which is what invited a 10-hour re-run
+#                                on 2026-08-23. The exclusion is now structural, in
+#                                tools/sweep_models.sh's default SKIP_RE.
 #
 # RETRACTED 2026-08-17: there is no "27GB does not fit this host" threshold.
 #

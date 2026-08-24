@@ -66,9 +66,21 @@ ONLY_MODEL=""
 #              the sweep's model list honest rather than relying on a downstream skip.
 #   -mtp       speculative-decoding DRAFTER weights (Qwen3.8-27B-MTP-4bit), listed as
 #              a peer of the model they accelerate. Evaluating one measures nothing.
-# Anything else you want out (a model known too slow to finish) goes in --skip, so the
-# reason is stated at the call site instead of buried here where it would rot.
-SKIP_RE="${SWEEP_SKIP:-^potion-|-mtp}"
+#   ornith-1.0-9b-mxfp8
+#              Cannot produce a score, so it cannot be ranked -- the same category as
+#              the two above, reached by a different route. Its reasoning EXPANDS to
+#              fill whatever budget it is handed (72,005 chars at 32,000 tokens,
+#              144,441 at 64,000, cut by the stream guard at both) so it answers
+#              nothing on the hard tasks at any budget. Historical mean 25% over 55
+#              runs; it has never finished a sweep in three attempts (13/24, 11/30,
+#              5/24) and it wedges the server on the way down. Full reasoning in
+#              conf/config.toml's EXCLUDED block and docs/MODEL_QUIRKS.md.
+#
+# A one-off "not this time" still goes in --skip, where the reason is stated at the
+# call site. A PERMANENT exclusion belongs here instead: --skip is only applied by an
+# operator who remembers to pass it, and a bare `./tools/sweep_models.sh` re-running a
+# model already known unrunnable is how 10 GPU-hours went into ornith-9b on 2026-08-23.
+SKIP_RE="${SWEEP_SKIP:-^potion-|-mtp|^ornith-1\.0-9b-mxfp8$}"
 
 while [ $# -gt 0 ]; do
   case "$1" in

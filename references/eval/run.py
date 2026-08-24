@@ -25,6 +25,7 @@ from eval.failures import (
     FAIL_REASONING,
     FAIL_TIMEOUT,
     _classify_failure,
+    reasoning_overrun_was_guard_aborted,
     reasoning_retry_budget,
 )
 from eval.outputs import save_output
@@ -269,6 +270,8 @@ def run_eval(
 
     consecutive_infra = 0
     last_completion = time.monotonic()
+    # Set once this model proves it cannot use a bigger budget (see failures.py).
+    reasoning_escalation_futile = False
 
     for task_name, task_cfg in tasks.items():
         if "messages" not in task_cfg:
@@ -313,6 +316,14 @@ def run_eval(
             # with the task rather than fitting whatever ceiling we picked.
             retry_tokens = None
             if attempt > 0 and best_diagnosis.get("category") == FAIL_REASONING:
+                if reasoning_escalation_futile:
+                    # Proven earlier: more room buys a longer failure, and a repeat
+                    # of the base call already hit the guard at that same budget.
+                    eval_logger.warning(
+                        f"Skipping the retry for '{task_name}': {model} reasoned "
+                        f"past an escalated budget, so more room cannot help"
+                    )
+                    break
                 base_budget = get_max_tokens_for_task(task_name, model)
                 retry_tokens = reasoning_retry_budget(base_budget)
                 eval_logger.warning(
@@ -356,6 +367,10 @@ def run_eval(
                     f"category={category} failure={failure_reason} "
                     f"evidence={evidence}"
                 )
+
+            # More room, cut by the guard anyway: this model expands to fill.
+            if retry_tokens and reasoning_overrun_was_guard_aborted(result):
+                reasoning_escalation_futile = True
 
             if score > best_score:
                 best_score = score

@@ -32,6 +32,27 @@ pub const FAIL_NONE: &str = "";
 pub const REASONING_RETRY_MULTIPLIER: f64 = 2.0;
 pub const REASONING_RETRY_MAX_TOKENS: u32 = 64_000;
 
+/// The finish_reason the stream guard stamps when it cuts a run that has reasoned
+/// past the point where the remaining budget could hold an answer. Set in
+/// eval/transport.rs (and mirrored in Python lib/llm/streaming.py); named here
+/// because this module is where the remedy for it is decided.
+pub const GUARD_ABORT_FINISH_REASON: &str = "aborted_reasoning_overrun";
+
+/// True when the guard cut this attempt, rather than the model choosing to stop.
+///
+/// This is the discriminator between the two model shapes that share a first
+/// attempt. A model that WANTS more room stops on its own once it has enough and
+/// the guard never fires; a model whose reasoning expands to fill the budget is cut
+/// by the guard at every budget it is offered. So a guard abort on an ESCALATED
+/// attempt means escalation cannot work for this model -- it was handed more and
+/// spent more, without ever answering.
+///
+/// Deliberately NOT true of a plain `finish_reason=length` overrun: that one really
+/// can be a budget shortage, and is the case the escalation exists to serve.
+pub fn reasoning_overrun_was_guard_aborted(finish_reason: &str) -> bool {
+    finish_reason == GUARD_ABORT_FINISH_REASON
+}
+
 pub fn reasoning_retry_budget(base_budget: u32) -> u32 {
     ((base_budget as f64 * REASONING_RETRY_MULTIPLIER) as u32).min(REASONING_RETRY_MAX_TOKENS)
 }
@@ -127,7 +148,12 @@ pub fn classify_failure(
             evidence: format!(
                 "{} chars of reasoning_content, empty content, finish_reason={}. \
                  Not a prompt-following failure: the model never stopped thinking, \
-                 so raise max_tokens for this task.",
+                 so the remedy is a budget change and not a prompt rewrite. WHICH \
+                 change depends on the shape: a model whose reasoning scales with \
+                 the TASK answers once the budget covers it, so raise max_tokens; a \
+                 model whose reasoning expands to fill the BUDGET is guard-aborted \
+                 at every budget and raising it only buys a longer failure. The run \
+                 tells them apart by escalating once and reading the outcome.",
                 reasoning.len(),
                 finish_reason_or_unknown(finish_reason),
             ),

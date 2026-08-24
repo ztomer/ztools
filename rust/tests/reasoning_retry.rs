@@ -123,3 +123,93 @@ fn an_unresolved_overrun_is_classified_reasoning_not_format() {
     assert_eq!(o.score, 0);
     assert_eq!(o.failure_category, "REASONING", "{o:?}");
 }
+
+/// A model whose reasoning EXPANDS to fill whatever budget it is handed, so the
+/// stream guard cuts it at every budget and it never answers. Records the
+/// max_tokens of every request it sees.
+struct FillsWhateverItGets {
+    port: u16,
+    _handle: thread::JoinHandle<()>,
+    seen_max_tokens: Arc<std::sync::Mutex<Vec<u32>>>,
+}
+
+fn serve_expands_to_fill() -> FillsWhateverItGets {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let seen: Arc<std::sync::Mutex<Vec<u32>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let seen_clone = seen.clone();
+
+    let handle = thread::spawn(move || {
+        for stream in listener.incoming() {
+            let mut stream = match stream {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            let mut buf = vec![0u8; 65_536];
+            let n = stream.read(&mut buf).unwrap_or(0);
+            let request = String::from_utf8_lossy(&buf[..n]).to_string();
+            // Whatever budget it was handed, spend past the guard's line for it.
+            let budget: u32 = request
+                .split("\"max_tokens\":")
+                .nth(1)
+                .and_then(|rest| {
+                    rest.split(|c: char| !c.is_ascii_digit())
+                        .next()
+                        .and_then(|d| d.parse().ok())
+                })
+                .unwrap_or(2048);
+            take_lock(&seen_clone).push(budget);
+            let chars = (budget as usize) * 3 + 64; // past 0.75 * budget * CHARS_PER_TOKEN
+            let reasoning = "x".repeat(chars);
+            let mut body = String::new();
+            body.push_str(&format!(
+                "data: {{\"choices\":[{{\"delta\":{{\"reasoning_content\":\"{reasoning}\"}}}}]}}\n\n"
+            ));
+            body.push_str("data: [DONE]\n\n");
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = stream.write_all(response.as_bytes());
+            let _ = stream.flush();
+        }
+    });
+    thread::sleep(std::time::Duration::from_millis(50));
+    FillsWhateverItGets { port, _handle: handle, seen_max_tokens: seen }
+}
+
+/// The escalation is proof-of-shape, bought ONCE per model.
+///
+/// nemotron wants more room and answers when given it (the test above). ornith-9b
+/// expands to fill whatever it gets -- 72,005 chars at a 32,000-token budget,
+/// 144,441 at 64,000, guard-aborted at both, scored 0 at both. One attempt cannot
+/// tell the shapes apart, so the run escalates once and reads the outcome; a
+/// guard abort on the ESCALATED attempt proves more room cannot help, and no later
+/// task re-buys that proof.
+#[test]
+fn a_proven_futile_escalation_is_not_re_bought_on_every_task() {
+    let server = serve_expands_to_fill();
+    let cfg = RunnerConfig {
+        host: "127.0.0.1".into(),
+        port: server.port,
+        timeout_secs: 5,
+        max_retries: 1,
+        ..Default::default()
+    };
+    let tasks: Vec<EvalTask> = ["t1", "t2", "t3"]
+        .iter()
+        .map(|n| EvalTask::new(*n, "p", vec![Check::Contains("answer".to_string())]))
+        .collect();
+    let outcomes = run_eval("m", &tasks, &cfg);
+    assert_eq!(outcomes.len(), 3);
+
+    let seen = take_lock(&server.seen_max_tokens).clone();
+    let escalated: Vec<u32> = seen.iter().copied().filter(|b| *b > 2_048).collect();
+    assert_eq!(
+        escalated.len(),
+        1,
+        "escalation must be bought once per model, not once per task; saw {seen:?}"
+    );
+    // Two calls prove the shape on the first task, then one base call per task.
+    assert_eq!(seen.len(), 4, "expected 2 calls then 1 per later task; saw {seen:?}");
+}
