@@ -436,6 +436,7 @@ class TestEscalationStopsOnceProvenFutile:
 
     def _run(self, task_names):
         import eval.run as er
+        from eval import run_transport
         from eval.tasks_core import TASKS
 
         budgets = []
@@ -445,7 +446,7 @@ class TestEscalationStopsOnceProvenFutile:
             return self._guard_aborted(kw.get("max_tokens"))
 
         tasks = {name: TASKS[name] for name in task_names}
-        with patch.object(er, "call", fake_call):
+        with patch.object(run_transport, "call", fake_call):
             er.run_eval("fake-expands-to-fill", tasks=tasks, verbose=False)
         return budgets
 

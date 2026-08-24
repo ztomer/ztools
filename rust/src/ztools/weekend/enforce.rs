@@ -463,5 +463,5 @@ pub fn drop_unsourced_rows(
 }
 
 #[cfg(test)]
-#[path = "../weekend_enforce_tests.rs"]
+#[path = "../weekend_enforce_tests/mod.rs"]
 mod tests;

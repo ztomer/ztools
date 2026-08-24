@@ -8,7 +8,7 @@ Split into modules:
   eval_tasks.py     - task definitions and prompts
   eval_validate.py  - validation functions
   eval_failures.py  - failure diagnosis
-  eval_run.py       - main eval loop
+  eval_run.py       - main eval loop (eval/run.py, split across run_*.py)
   eval_report.py    - reporting and analysis
 """
 

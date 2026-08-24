@@ -290,12 +290,16 @@ class TestTheProbeUsesTheCallersTransport:
     `eval/prefill.py` imports `call` by value, so patching `eval.run.call` did
     not reach it. Eighteen mocked tests called the live server through that gap
     until the conftest connection gate started failing on it.
+
+    `eval.run_transport` now OWNS the transport name and the loop resolves it
+    there at call time, so this asserts what one mock seam has to cover.
     """
 
     def test_run_eval_probes_through_its_own_call(self, signals_file):
         from unittest.mock import patch
 
         from eval import run as eval_run
+        from eval import run_transport
 
         seen = []
 
@@ -304,12 +308,12 @@ class TestTheProbeUsesTheCallersTransport:
             return {"content": "[]", "parsed": [], "time": 0.1}
 
         tasks = {"t": {"messages": [{"role": "user", "content": "hi"}], "validator": lambda *a, **k: 100}}
-        with patch.object(eval_run, "call", fake_call):
+        with patch.object(run_transport, "call", fake_call):
             eval_run.run_eval("mock-model", tasks=tasks, verbose=False)
 
         assert 1 in seen, (
-            "the prefill probe did not go through eval.run.call -- it is reaching "
-            "the transport by some other name, which no mock covers"
+            "the prefill probe did not go through eval.run_transport.call -- it is "
+            "reaching the transport by some other name, which no mock covers"
         )
 
     def test_explicit_transport_is_preferred_over_the_module_import(self):
@@ -334,6 +338,7 @@ class TestTheEvalIsReproducible:
         from unittest.mock import patch
 
         from eval import run as eval_run
+        from eval import run_transport
 
         seen = {}
 
@@ -345,9 +350,9 @@ class TestTheEvalIsReproducible:
             return fake
 
         cfg = {"messages": [{"role": "user", "content": "hi"}], "parse_json": False}
-        with patch.object(eval_run, "call", record("osaurus")):
+        with patch.object(run_transport, "call", record("osaurus")):
             eval_run._call_model("m", cfg, "t", "localhost", 1337, "osaurus")
-        with patch.object(eval_run, "mlx_call", record("mlx")):
+        with patch.object(run_transport, "mlx_call", record("mlx")):
             eval_run._call_model("m", cfg, "t", "localhost", 1337, "mlx")
 
         assert seen == {"osaurus": 0.0, "mlx": 0.0}, (

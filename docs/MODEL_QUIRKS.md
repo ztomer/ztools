@@ -1124,7 +1124,8 @@ python3 -m eval.benchmark_quality
 
 - `eval/cli.py` - Eval runner CLI
 - `eval/tasks_core.py` - Task definitions
-- `eval/run.py` - Eval loop
+- `eval/run.py` - Eval loop (shim; `run_transport` / `run_validate` /
+  `run_attempt` / `run_loop` / `run_summary` hold the code)
 - `lib/quality_models.py` / `lib/quality_scorers.py` - Quality evaluation
 - `lib/validators/` - Validator implementations
 - `conf/models/*.toml` - Model prompts

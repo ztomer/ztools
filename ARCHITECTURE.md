@@ -173,6 +173,11 @@ Local verification is enforced before code reaches GitHub CI:
 
 - **`.githooks/pre-commit`**:
   - Emoji gate (permits only Kare icons: `→ ✓ ✗ ⚠ ↔ ↑ ↓`).
+  - File size gate — 500 lines, **Python and Rust alike, no exemption for tests**
+    (`tools/check_file_size.py`). Python-only until 2026-08-23, which is how
+    `json_validator.rs` reached 1126 lines under a green hook; a test-file exemption
+    existed briefly after that and was removed 2026-08-24 — an oversized test file is
+    split the same as production (sibling `test_*.py` files, or a Rust `#[path=...] mod`).
   - `#[allow]` ban across Rust source (a suppression is a defect, not a configuration).
   - Python linting (`ruff`) and syntax check.
   - Rust Clippy (`cargo clippy --all-targets -- -D warnings`) and test suite.
