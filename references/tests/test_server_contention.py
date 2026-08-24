@@ -88,7 +88,7 @@ class TestTheCheckIsWiredIntoTheTaskLoop:
     def test_run_eval_calls_it(self):
         import inspect
 
-        import eval.run as run
+        import eval.run_loop as run
 
         src = inspect.getsource(run)
         assert "contended_server_warning(" in src

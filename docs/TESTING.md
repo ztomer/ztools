@@ -311,7 +311,7 @@ assert mock_page.evaluate.call_count == 1  # loop broke after 1 scroll
 
 ### Subprocess / AppleScript Calls
 
-`flush_between_models` in `eval/run.py` calls `subprocess.run(["osascript", "-e", 'quit app "osaurus"'])` and `subprocess.run(["open", "-n", "-a", "osaurus"])`. Test by:
+`flush_between_models` in `eval/cli_runtime.py` calls `subprocess.run(["osascript", "-e", 'quit app "osaurus"'])` and `subprocess.run(["open", "-n", "-a", "osaurus"])`. Test by:
 
 ```python
 with patch("subprocess.run") as mock_subprocess, ...:

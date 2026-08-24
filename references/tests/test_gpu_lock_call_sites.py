@@ -292,16 +292,17 @@ class TestTheHeartbeatIsWiredIntoTheTaskLoop:
         An unbeaten lock expires under a healthy multi-hour run and gets handed
         to a peer that then restarts the server."""
         import eval.run as er
+        from eval import run_attempt, run_loop, run_transport
 
         tasks = {
             "t1": {"messages": [{"role": "user", "content": "a"}]},
             "t2": {"messages": [{"role": "user", "content": "b"}]},
         }
-        with patch.object(er.gpu_lock, "heartbeat") as beat, \
-             patch.object(er, "call", return_value={"content": "{}", "elapsed": 1.0}), \
-             patch.object(er, "measure_prefill_rate", return_value=None), \
-             patch.object(er, "save_output"), \
-             patch.object(er, "contended_server_warning", return_value=""):
+        with patch.object(run_loop.gpu_lock, "heartbeat") as beat, \
+             patch.object(run_transport, "call", return_value={"content": "{}", "elapsed": 1.0}), \
+             patch.object(run_loop, "measure_prefill_rate", return_value=None), \
+             patch.object(run_attempt, "save_output"), \
+             patch.object(run_loop, "contended_server_warning", return_value=""):
             er.run_eval("m1", tasks=tasks, verbose=False, timeout=1)
         assert beat.call_count >= len(tasks)
 

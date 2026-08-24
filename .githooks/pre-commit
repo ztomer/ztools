@@ -86,23 +86,22 @@ if EMOJI_CHECKER.exists():
             if line.strip():
                 errors.append(f"    {line}")
 
-# --- 2. File size gate (500-line limit) ---
-# Tests are exempt by design — see the File Size Limit rule in CLAUDE.md. The
-# exemption lives here so the gate and the documented rule cannot drift.
-#
-# No production file is over the limit, so the gate blocks existence outright.
-# The growth-only variant existed for three legacy files; they have been split.
-MAX_LINES = 500
-for f in staged_files:
-    filepath = ROOT / f
-    if not filepath.exists() or not f.endswith(".py"):
-        continue
-    if "/tests/" in f or f.startswith("tests/"):
-        continue
-    with open(filepath) as fh:
-        line_count = sum(1 for _ in fh)
-    if line_count > MAX_LINES:
-        errors.append(f"  File exceeds {MAX_LINES} lines: {f} ({line_count} lines)")
+# --- 2. File size gate (500-line limit, no exemptions) ---
+# Delegated to tools/check_file_size.py so ONE implementation covers every
+# language. It used to be inlined here and filtered `f.endswith(".py")`, so the
+# Rust port inherited none of the cap and the hook still printed green. It also
+# used to exempt test files; that carve-out is gone too — see the File Size
+# Limit rule in CLAUDE.md. references/tests/test_file_size_gate.py pins both,
+# so the gate and the documented rule cannot drift apart again.
+SIZE_CHECKER = _tool("tools/check_file_size.py")
+if SIZE_CHECKER.exists() and staged_files:
+    r = subprocess.run(
+        [sys.executable, str(SIZE_CHECKER), *staged_files],
+        capture_output=True, text=True, cwd=str(ROOT),
+    )
+    for line in r.stdout.strip().split("\n"):
+        if line.strip():
+            errors.append(line)
 
 # --- 3. Config-debt gate ---
 CHECKER = _tool("tools/check_config_debt.py")

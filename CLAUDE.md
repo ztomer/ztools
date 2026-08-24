@@ -7,17 +7,30 @@ Reference docs — read these when the task touches their subject, not by defaul
 ## Key Rules
 
 ### File Size Limit
-No production file may exceed 500 lines. Split into a package (`twitter/`, `weekend/`,
-`rename/`, `eval/`) or extract a module; `lib/config.py`, `lib/quality.py`,
-`lib/osaurus_lib.py`, `lib/validators/text_validator.py`, `lib/quality_scorers.py`,
-`eval/report.py` and `eval/cli.py` are shims re-exporting their split submodules.
-Check with `wc -l` before adding to a file that is already close.
+No file may exceed 500 lines — **no exemptions, for tests or for any directory.**
+Split into a package (`twitter/`, `weekend/`, `rename/`, `eval/`) or extract a module;
+`lib/config.py`, `lib/quality.py`, `lib/osaurus_lib.py`, `lib/validators/text_validator.py`,
+`lib/quality_scorers.py`, `eval/report.py`, `eval/cli.py` and `eval/run.py` are shims
+re-exporting their split submodules. Check with `wc -l` before adding to a file that is
+already close.
 
-Test modules under `references/tests/` are **exempt** — they are lists of independent
-cases padded with long fixtures, so splitting them buys no cohesion, and a gate that
-blocks every routine test edit gets bypassed instead of obeyed. The pre-commit hook
-enforces exactly this split (production gated, tests skipped) so the rule and the gate
-cannot drift.
+A shim re-exports NAMES, not patch targets: rebinding an attribute on the shim rebinds
+a copy nobody reads. Tests must patch the module that OWNS the function, which each
+submodule's docstring states. `eval/run.py`'s docstring is the worked example.
+
+The rule covers **Rust too**, and it is enforced by one implementation,
+`tools/check_file_size.py`, called by `.githooks/pre-commit` and pinned by
+`references/tests/test_file_size_gate.py`. Rust splits use the same shim pattern:
+`json_validator/` and `taxes_grounded/` are directories whose `mod.rs` re-exports.
+
+**There used to be a test exemption** (Python files under `references/tests/`; Rust
+`*_tests.rs`/`tests.rs` siblings and inline `#[cfg(test)] mod tests` blocks subtracted
+from the count). It is gone as of 2026-08-24. Split an oversized test file the same way
+as production: independent test classes/cases move into sibling `test_*.py` files
+(pytest discovers every file matching that glob — no shim needed), or Rust
+`#[cfg(test)]` modules move into their own `#[path = "..."] mod` file. `conftest.py`
+fixtures that don't fit split into a `fixtures/` package that conftest imports from
+(the shim rule still applies: import by module, patch the module that owns the fixture).
 
 ### Testing
 - Every test must have a non-tautological assertion

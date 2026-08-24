@@ -34,8 +34,9 @@ MODEL_STALL_SECONDS = int(os.environ.get("EVAL_MODEL_STALL_SECONDS", "2400"))
 def restart_after_stall(out=None) -> None:
     """Restart the server through the sanctioned path only.
 
-    Imported lazily: `eval.cli_runtime` imports from `eval.run`, which imports
-    this module, so a top-level import would be circular.
+    Imported lazily: `eval.cli_runtime` imports from `eval.run`, whose
+    `eval.run_loop` imports this module, so a top-level import would be
+    circular.
     """
     out = out or console
     try:

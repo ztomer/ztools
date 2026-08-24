@@ -133,13 +133,14 @@ def test_a_real_run_eval_leaves_the_output_on_disk(out_dir, monkeypatch):
     from unittest.mock import patch
 
     import eval.run as er
+    from eval import run_transport
     from eval.tasks_core import TASKS
     from lib.testing import MockLLM
 
     mock = MockLLM()
     mock.patch_all()
     try:
-        with patch.object(er, "call", mock.call):
+        with patch.object(run_transport, "call", mock.call):
             results = er.run_eval(
                 "mock-model", tasks={"json": TASKS["json"]}, verbose=False,
                 measure_prefill=False,

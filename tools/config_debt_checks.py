@@ -27,7 +27,16 @@ Violation = Tuple[int, str, str]
 
 
 def _is_test_file(path: Path) -> bool:
-    return path.parent.name == "tests" or path.name.startswith("test_")
+    """True for a file that IS test code, by name or by living under a tests/ tree.
+
+    Checks every ancestor, not just the immediate parent: `references/tests/
+    conftest_fixtures/legacy.py` is test-support code one level below
+    `references/tests/`, and a parent-only check exempted `conftest.py` while
+    missing the fixtures split out of it under a subdirectory -- flagging
+    verbatim moved fixture data (a hardcoded sample year, a mock model name) as
+    new config debt the moment it was split into its own file.
+    """
+    return "tests" in path.parts[:-1] or path.name.startswith("test_")
 
 
 def _is_conf_file(path: Path) -> bool:
