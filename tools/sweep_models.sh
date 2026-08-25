@@ -44,8 +44,8 @@ if [ -z "${SWEEP_REEXEC:-}" ]; then
 fi
 
 ROOT="${SWEEP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-# shellcheck disable=SC1091
-source "$ROOT/tui/lib.sh"
+GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
+source "$GOH/tui/lib.sh"
 
 STATUS="${SWEEP_STATUS:-$ROOT/.sweep_status}"
 # Per-RUN log directory, with a `latest` symlink.

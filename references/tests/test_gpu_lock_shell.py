@@ -37,12 +37,13 @@ SHELL_TIMEOUT = 30
 
 
 def sh(body, lock_dir, extra_env=None, cwd=None):
-    """Run a bash snippet with tui/lib.sh and tools/gpu_lock.sh sourced."""
+    """Run a bash snippet with the canonical tui/lib.sh and tools/gpu_lock.sh sourced."""
     env = {**os.environ, "ZTOOLS_GPU_LOCK_DIR": str(lock_dir), "NO_COLOR": "1"}
     env.pop("ZTOOLS_GPU_LOCK_OWNER", None)
     env.update(extra_env or {})
+    goh = os.environ.get("GOH_DIR", Path.home() / "Projects" / "gates_of_heck")
     script = (
-        f'source "{REPO}/tui/lib.sh"\n'
+        f'source "{goh}/tui/lib.sh"\n'
         f'source "{REPO}/tools/gpu_lock.sh"\n'
         f"{body}\n"
     )
@@ -252,9 +253,10 @@ class TestCrossLanguageParity:
         lock = tmp_path / "gpu.lock"
         # A live holder written by bash: keep the bash process alive while Python
         # reads it, or the liveness check would correctly call it dead.
+        goh = os.environ.get("GOH_DIR", str(Path.home() / "Projects" / "gates_of_heck"))
         proc = subprocess.Popen(
             ["bash", "-c",
-             f'source "{REPO}/tui/lib.sh"; source "{REPO}/tools/gpu_lock.sh"; '
+             f'source "{goh}/tui/lib.sh"; source "{REPO}/tools/gpu_lock.sh"; '
              'gpu_lock_acquire "osaurus_one.sh --restart" >/dev/null; '
              "read -r _"],
             stdin=subprocess.PIPE, text=True,

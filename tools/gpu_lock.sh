@@ -78,7 +78,7 @@
 # so a waiter that cannot get the lock FAILS AND SAYS WHO HOLDS IT rather than
 # waiting long enough to be tempted into stealing it.
 #
-# Requires the caller to have sourced tui/lib.sh (info/ok/warn/die).
+# Requires the caller to have sourced gates_of_heck's tui/lib.sh (info/ok/warn/die).
 #
 # Usage:
 #     source "$ROOT/tools/gpu_lock.sh"

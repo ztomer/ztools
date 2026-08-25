@@ -39,8 +39,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck disable=SC1091
-source "$ROOT/tui/lib.sh"
+GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
+source "$GOH/tui/lib.sh"
 # shellcheck disable=SC1091
 source "$ROOT/tools/gpu_lock.sh"
 

@@ -25,9 +25,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$ROOT"
-# shellcheck source=/dev/null
-[ -f tui/lib.sh ] && . tui/lib.sh || { info(){ echo "→ $*"; }; ok(){ echo "✓ $*"; }
-                                       warn(){ echo "⚠ $*"; }; die(){ echo "✗ $*" >&2; exit 1; }; }
+GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
+source "$GOH/tui/lib.sh"
 
 CEILING="${RERUN_TIMEOUT:-36000}"
 MIN_FREE_GB="${RERUN_MIN_FREE_GB:-6}"   # exhaustion floor only; pressure is gated separately
