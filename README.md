@@ -37,6 +37,20 @@ Installs native Rust binaries directly onto your `PATH`:
 | `weekend` | `weekend-plan` | Curates family weekend plans with weather & seasonal events |
 | `rename_images` | `image-renamer` | Renames screenshots/photos using OCR and Vision LLMs |
 | `oeval` | `model-eval` | Benchmarks local LLM performance & accuracy across 30 tasks |
+
+### Local install door (`./install.sh`)
+
+`brew install` is the released, network-verified path. To install the tree you
+have checked out right now instead — a local build, no network, no tap — run:
+
+```bash
+./install.sh
+```
+
+Builds the Rust release and installs it (with the same subcommand aliases)
+straight into the Homebrew bin, `$(brew --prefix)/bin` (`/opt/homebrew/bin`
+here). This overwrites the prefix entry until the next `brew upgrade`;
+`ZTOOLS_INSTALL_DIR=/elsewhere ./install.sh` targets a custom dir.
 | `ab_test` | — | Performance and parity benchmark comparing Rust vs Python references |
 | `ztools` | — | Unified native binary dispatcher for all subcommands |
 
