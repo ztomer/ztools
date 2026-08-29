@@ -24,3 +24,11 @@ timeout_ms = 1800000
 # using the checkers' own parsers. Runs no model and touches no network.
 command = "uv run --frozen python references/routines_status.py"
 timeout_ms = 30000
+
+[tab]
+# A dashboard tab in the routines menubar. Read-only and cheap: this command
+# cats the newest plan file back (the same discovery the status line uses), so
+# opening the tab never re-plans. See ~/Projects/routines/docs/STATUS_CONTRACT.md
+id = "ztools-weekend"
+title = "Weekend Plan"
+command = "uv run --frozen python references/show_newest_plan.py"

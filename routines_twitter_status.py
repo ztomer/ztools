@@ -23,17 +23,36 @@ def default_output_dir() -> Path:
     return Path.home() / "Documents" / "twitter_summaries"
 
 
+def output_dir() -> Path:
+    """The summary directory, honouring the $TWITTER_OUTPUT_DIR override.
+
+    The single source the status page AND the dashboard tab both resolve, so
+    a test seam (`TWITTER_OUTPUT_DIR`) redirects both at once and they can
+    never disagree about the directory.
+    """
+    env_path = os.environ.get("TWITTER_OUTPUT_DIR")
+    return Path(os.path.expanduser(env_path)) if env_path else default_output_dir()
+
+
 def newest_summary(directory: Path) -> Path | None:
+    """The most recent summary by mtime, whatever the naming generation.
+
+    The summary writer has used two names: `{since}_to_{until}.md` (the python
+    writer) and `{when}_HHMM_summary.md` (the current generation). The old
+    discovery globbed `tw_*.md`, which surprisingly matched neither — so the
+    status answered "no summary found" on a directory full of them. Discovery
+    sorts every `*.md` by mtime; taking the newest is resilient to the next
+    naming change instead of pinning today's.
+    """
     summaries = sorted(
-        directory.glob("tw_*.md"),
+        directory.glob("*.md"),
         key=lambda p: p.stat().st_mtime,
     )
     return summaries[-1] if summaries else None
 
 
 def build_status() -> dict:
-    env_path = os.environ.get("TWITTER_OUTPUT_DIR")
-    directory = Path(os.path.expanduser(env_path)) if env_path else default_output_dir()
+    directory = output_dir()
     if not directory.is_dir():
         return unknown(f"no summary directory at {directory}")
 
