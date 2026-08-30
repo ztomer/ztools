@@ -33,8 +33,13 @@ fi
 info "Installing binaries to $BIN_DIR ..."
 mkdir -p "$BIN_DIR"
 
-# Copy main binary
-cp "$RELEASE_BIN" "$BIN_DIR/ztools"
+# Copy main binary. `cp` onto an existing path writes THROUGH a symlink (the
+# Homebrew prefix entry points into a Cellar dir), so stage + `mv` in the same
+# directory — mv replaces the link itself, atomic on the same filesystem, and
+# independent of whether the Cellar is writable.
+TMPBIN="$BIN_DIR/.ztools.$$"
+cp "$RELEASE_BIN" "$TMPBIN"
+mv "$TMPBIN" "$BIN_DIR/ztools"
 chmod +x "$BIN_DIR/ztools"
 
 # Create symlinks for all subcommands
