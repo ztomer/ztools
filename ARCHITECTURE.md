@@ -13,14 +13,14 @@ The project began as Python utilities and has been completely ported to a unifie
                               └────────────────┬─────────────────┘
                                                │
              ┌──────────────────┬──────────────┴─────┬──────────────────┐
-             ▼                  ▼                    ▼                  ▼
+             ↓                  ↓                    ↓                  ↓
     ┌─────────────────┐ ┌───────────────┐ ┌──────────────────┐ ┌───────────────┐
     │     Twitter     │ │    Weekend    │ │  Image Renamer   │ │  Model Eval   │
     │   Summarizer    │ │    Planner    │ │ (OCR / Vision)   │ │  (Benchmark)  │
     └────────┬────────┘ └───────┬───────┘ └────────┬─────────┘ └───────┬───────┘
              │                  │                  │                   │
              └──────────────────┼──────────────────┴───────────────────┘
-                                ▼
+                                ↓
     ┌──────────────────────────────────────────────────────────────────┐
     │                   Shared Core Infrastructure                     │
     │  • Config & Model Hierarchy (rust/src/config.rs)                 │
@@ -29,7 +29,7 @@ The project began as Python utilities and has been completely ported to a unifie
     │  • Model Health & Shard Inspection (model_health.rs)             │
     │  • Osaurus HTTP Client (/v1/chat/completions, /v1/embeddings)    │
     └──────────────────────────────────┬───────────────────────────────┘
-                                       ▼
+                                       ↓
     ┌──────────────────────────────────────────────────────────────────┐
     │                      Osaurus Inference Server                    │
     │             http://localhost:1337 (Apple Silicon / MLX)          │
@@ -82,23 +82,23 @@ The Twitter summarizer scrapes your authenticated Following timeline, extracts k
  [User Session Discovery]
    (Zen / Firefox / Chrome SQLite Cookie Stores)
              │
-             ▼
+             ↓
  [Live Browser Collector (browser.rs)]
    (Headless Camoufox / Playwright -> GraphQL Interception)
              │
-             ▼
+             ↓
  [Deduplication & Character-Safe Truncation]
    (Unicode-safe char iterators, normalize signatures)
              │
-             ▼
+             ↓
  [Semantic Clustering (embeddings.rs)]
    (Cosine similarity over /v1/embeddings -> Topic Groups)
              │
-             ▼
+             ↓
  [Prompt Construction & GPU Inference]
    (conf/prompts.toml -> Osaurus /v1/chat/completions)
              │
-             ▼
+             ↓
  [Markdown Output]
    (~/Documents/twitter_summaries/YYYY-MM-DD_HHMM_summary.md)
 ```
@@ -119,21 +119,21 @@ The weekend planner generates family weekend itineraries tailored for kids, comb
  (Weather Forecast)            (Seasonal Events & Festivals)
          │                                    │
          └─────────────────┬──────────────────┘
-                           ▼
+                           ↓
                [4-Phase LLM Pipeline]
    Phase 1: Weather Condensation (phases.rs)
    Phase 2: Source Extraction & Filtering (phases.rs)
    Phase 3: Activity Drafting (phases.rs)
    Phase 4: Structured JSON Synthesis (phases.rs)
                            │
-                           ▼
+                           ↓
                [Enforcement & Validation (enforce.rs)]
    • Recency Gate (drops events outside window)
    • Exclusion Gate (filters venues from conf/weekend.toml)
    • Region Evidence Gate (positive GTA token matching)
    • Weather Consistency Gate (Indoor/Outdoor label checks)
                            │
-                           ▼
+                           ↓
                [Formatted Console & Markdown Table (format.rs)]
 ```
 
