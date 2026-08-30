@@ -31,6 +31,10 @@ timeout_ms = 30000
 # discovery the status line uses), so opening the tab never re-plans. Absolute
 # path because the menubar is a GUI process whose PATH has no /opt/homebrew.
 # See ~/Projects/routines/docs/STATUS_CONTRACT.md
+# `refresh` re-plans on demand (the same scrape + model pipeline `run` uses)
+# into the same store the read side reads, so a refreshed tab shows the plan
+# that was actually generated, not a stale one.
 id = "ztools-weekend"
 title = "Weekend Plan"
 command = "/opt/homebrew/bin/ztools weekend-plan --fetch-latest"
+refresh = "/opt/homebrew/bin/ztools weekend-plan --md-out /Users/ztomer/Documents/weekend_plans/weekend_plan_latest.md"
