@@ -26,9 +26,11 @@ command = "uv run --frozen python references/routines_status.py"
 timeout_ms = 30000
 
 [tab]
-# A dashboard tab in the routines menubar. Read-only and cheap: this command
-# cats the newest plan file back (the same discovery the status line uses), so
-# opening the tab never re-plans. See ~/Projects/routines/docs/STATUS_CONTRACT.md
+# A dashboard tab in the routines menubar. Read-only and cheap: the native
+# `weekend-plan --fetch-latest` reads the newest stored plan back (the same
+# discovery the status line uses), so opening the tab never re-plans. Absolute
+# path because the menubar is a GUI process whose PATH has no /opt/homebrew.
+# See ~/Projects/routines/docs/STATUS_CONTRACT.md
 id = "ztools-weekend"
 title = "Weekend Plan"
-command = "uv run --frozen python references/show_newest_plan.py"
+command = "/opt/homebrew/bin/ztools weekend-plan --fetch-latest"

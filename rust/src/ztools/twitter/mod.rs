@@ -232,9 +232,7 @@ pub fn run_summary(
 
     let now = Local::now();
     let filename = format!("{}_summary.md", now.format("%Y-%m-%d_%H%M"));
-    let default_dir = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("Documents/twitter_summaries");
+    let default_dir = crate::ztools::store::twitter_store_dir();
     let dir = output_dir.unwrap_or(&default_dir);
     fs::create_dir_all(dir)?;
     let out_path = dir.join(filename);

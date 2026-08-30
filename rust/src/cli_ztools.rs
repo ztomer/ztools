@@ -22,6 +22,8 @@ pub(crate) struct TwitterSummarizeOpts {
     pub debug: bool,
     pub since: Option<String>,
     pub login: bool,
+    pub fetch_latest: bool,
+    pub last_updated: bool,
 }
 
 pub(crate) fn twitter_summarize(
@@ -37,7 +39,12 @@ pub(crate) fn twitter_summarize(
         debug,
         since,
         login,
+        fetch_latest,
+        last_updated,
     } = opts;
+    if fetch_latest || last_updated {
+        return crate::ztools::store::twitter_latest(last_updated);
+    }
     if login {
         println!("· Launching browser for x.com sign-in...");
         return crate::ztools::twitter::browser::login_live();
@@ -120,7 +127,12 @@ pub(crate) fn weekend_plan(
     location: String,
     ages: String,
     md_out: Option<PathBuf>,
+    fetch_latest: bool,
+    last_updated: bool,
 ) -> Result<()> {
+    if fetch_latest || last_updated {
+        return crate::ztools::store::weekend_latest(last_updated);
+    }
     let now = Local::now().naive_local().date();
     use chrono::Datelike;
 

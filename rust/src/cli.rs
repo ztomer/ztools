@@ -54,6 +54,13 @@ enum Cmd {
         /// Open browser to log in to x.com.
         #[arg(long)]
         login: bool,
+        /// Print the stored summary from the newest run. Read-only: runs no
+        /// model and touches no network (what a dashboard tab must do).
+        #[arg(long)]
+        fetch_latest: bool,
+        /// Print when the newest stored summary was last updated. Read-only.
+        #[arg(long)]
+        last_updated: bool,
     },
     /// Run native Rust Weekend planner.
     WeekendPlan {
@@ -66,6 +73,13 @@ enum Cmd {
         /// Optional path to write markdown plan.
         #[arg(long)]
         md_out: Option<PathBuf>,
+        /// Print the stored plan from the newest run. Read-only: runs no model
+        /// and touches no network (what a dashboard tab must do).
+        #[arg(long)]
+        fetch_latest: bool,
+        /// Print when the newest stored plan was last updated. Read-only.
+        #[arg(long)]
+        last_updated: bool,
     },
     /// Run native Rust image renamer.
     ImageRenamer {
@@ -151,6 +165,8 @@ pub fn run() -> Result<()> {
             debug,
             since,
             login,
+            fetch_latest,
+            last_updated,
         } => crate::cli_ztools::twitter_summarize(
             &config,
             crate::cli_ztools::TwitterSummarizeOpts {
@@ -162,13 +178,24 @@ pub fn run() -> Result<()> {
                 debug,
                 since,
                 login,
+                fetch_latest,
+                last_updated,
             },
         ),
         Cmd::WeekendPlan {
             location,
             ages,
             md_out,
-        } => crate::cli_ztools::weekend_plan(&config, location, ages, md_out),
+            fetch_latest,
+            last_updated,
+        } => crate::cli_ztools::weekend_plan(
+            &config,
+            location,
+            ages,
+            md_out,
+            fetch_latest,
+            last_updated,
+        ),
         Cmd::ImageRenamer { dir, apply } => crate::cli_ztools::image_renamer(&config, dir, apply),
         Cmd::ModelEval {
             model,
