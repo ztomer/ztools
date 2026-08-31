@@ -1,4 +1,3 @@
-pub mod browser;
 pub mod constants;
 pub mod dates;
 pub mod enforce;
@@ -7,7 +6,6 @@ pub mod format;
 pub mod phases;
 pub mod prompts;
 pub mod supply;
-pub use browser::*;
 pub use constants::*;
 pub use dates::*;
 pub use enforce::*;
@@ -332,16 +330,57 @@ pub fn is_challenged(html: &str) -> bool {
     markers.iter().any(|m| lower.contains(m))
 }
 
+/// Fallback collector running multi-engine search via ddgs helper.
+pub fn collect_snippets_external(query: &str) -> Vec<String> {
+    let mut cmd = std::process::Command::new("python3");
+    let script = r#"import json, sys
+try:
+    from ddgs import DDGS
+    q = sys.argv[1]
+    res = list(DDGS().text(q, max_results=8))
+    out = []
+    for r in res:
+        title = (r.get("title") or "").strip()
+        body = (r.get("body") or "").strip()
+        if title and body:
+            out.append(f"{title}: {body}")
+        elif body:
+            out.append(body)
+        elif title:
+            out.append(title)
+    print(json.dumps(out))
+except Exception:
+    print(json.dumps([]))
+"#;
+    cmd.args(["-c", script, query]);
+    let output = match cmd.output() {
+        Ok(out) if out.status.success() => out.stdout,
+        _ => return Vec::new(),
+    };
+    if let Ok(text) = String::from_utf8(output) {
+        if let Ok(parsed) = serde_json::from_str::<Vec<String>>(&text) {
+            return parsed;
+        }
+    }
+    Vec::new()
+}
+
 fn search_duckduckgo_html(query: &str, url: &str) -> Vec<String> {
+    if url.contains("duckduckgo.com") {
+        let snippets = collect_snippets_external(query);
+        if !snippets.is_empty() {
+            return snippets;
+        }
+    }
+
     let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(3))
         .build()
         .unwrap_or_default();
 
     let user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-    // 1. Try GET first on primary URL
-    let mut snippets = Vec::new();
+    // 1. Try GET
     if let Ok(resp) = client
         .get(url)
         .query(&[("q", query)])
@@ -351,17 +390,16 @@ fn search_duckduckgo_html(query: &str, url: &str) -> Vec<String> {
         if resp.status().is_success() {
             if let Ok(html) = resp.text() {
                 if !is_challenged(&html) {
-                    snippets = parse_snippets_from_html(&html);
+                    let s = parse_snippets_from_html(&html);
+                    if !s.is_empty() {
+                        return s;
+                    }
                 }
             }
         }
     }
 
-    if !snippets.is_empty() {
-        return snippets;
-    }
-
-    // 2. If it is a test mock URL (non-duckduckgo), try POST on URL
+    // 2. Try POST on mock URL
     if !url.contains("duckduckgo.com") {
         if let Ok(resp) = client
             .post(url)
@@ -372,16 +410,14 @@ fn search_duckduckgo_html(query: &str, url: &str) -> Vec<String> {
             if resp.status().is_success() {
                 if let Ok(html) = resp.text() {
                     if !is_challenged(&html) {
-                        snippets = parse_snippets_from_html(&html);
+                        return parse_snippets_from_html(&html);
                     }
                 }
             }
         }
-        return snippets;
     }
 
-    // 3. For live web requests challenged by DDG, fall back to pure-Rust Camoufox
-    collect_snippets_camoufox(query)
+    Vec::new()
 }
 
 /// Query DuckDuckGo web search endpoint for live event/venue listings.

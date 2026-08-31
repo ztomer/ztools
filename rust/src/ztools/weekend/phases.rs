@@ -148,16 +148,27 @@ pub fn extract_sources(
     location: &str,
     config: &crate::config::ZtoolsConfig,
 ) -> String {
-    let lines: Vec<&str> = raw_text
+    let raw_lines: Vec<&str> = raw_text
         .lines()
         .filter(|l| {
             let t = l.trim_start();
             t.starts_with("- ") || t.starts_with("[THIS WEEKEND]")
         })
         .collect();
-    if lines.is_empty() {
+    if raw_lines.is_empty() {
         return raw_text.to_string();
     }
+
+    let (marked, general): (Vec<&str>, Vec<&str>) = raw_lines
+        .into_iter()
+        .partition(|l| l.trim_start().starts_with("[THIS WEEKEND]"));
+    let lines: Vec<&str> = if marked.is_empty() {
+        general.into_iter().take(12).collect()
+    } else {
+        let mut v = marked;
+        v.extend(general.into_iter().take(6));
+        v
+    };
 
     let mut results = Vec::new();
     let mut batch_size = DEFAULT_BATCH_SIZE;

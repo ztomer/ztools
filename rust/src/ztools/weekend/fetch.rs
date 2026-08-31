@@ -52,19 +52,20 @@ fn fetch_events_corpus(
 ) -> String {
     let queries = build_search_queries(d1);
 
-    let mut handles = Vec::new();
-    for q in queries {
-        let q_clone = q.clone();
-        let url = config.duckduckgo_url.clone();
-        handles.push(std::thread::spawn(move || {
-            search_duckduckgo_html(&q_clone, &url)
-        }));
-    }
-
     let mut all_results = Vec::new();
-    for h in handles {
-        if let Ok(res) = h.join() {
-            all_results.extend(res);
+    for chunk in queries.chunks(4) {
+        let mut handles = Vec::new();
+        for q in chunk {
+            let q_clone = q.clone();
+            let url = config.duckduckgo_url.clone();
+            handles.push(std::thread::spawn(move || {
+                search_duckduckgo_html(&q_clone, &url)
+            }));
+        }
+        for h in handles {
+            if let Ok(res) = h.join() {
+                all_results.extend(res);
+            }
         }
     }
 
