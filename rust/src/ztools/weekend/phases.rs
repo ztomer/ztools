@@ -14,8 +14,8 @@ use super::prompts::{
 };
 
 pub const WEATHER_PREVIEW_LIMIT: usize = 200;
-pub const DEFAULT_BATCH_SIZE: usize = 3;
-pub const MAX_BATCH_SIZE: usize = 5;
+pub const DEFAULT_BATCH_SIZE: usize = 8;
+pub const MAX_BATCH_SIZE: usize = 12;
 pub const BATCH_GROWTH_STREAK_LIMIT: usize = 3;
 
 /// The plan-level context every phase shares. Bundled so the phase signatures
@@ -162,13 +162,8 @@ pub fn extract_sources(
     let (marked, general): (Vec<&str>, Vec<&str>) = raw_lines
         .into_iter()
         .partition(|l| l.trim_start().starts_with("[THIS WEEKEND]"));
-    let lines: Vec<&str> = if marked.is_empty() {
-        general.into_iter().take(12).collect()
-    } else {
-        let mut v = marked;
-        v.extend(general.into_iter().take(6));
-        v
-    };
+    let mut lines = marked;
+    lines.extend(general.into_iter().take(24));
 
     let mut results = Vec::new();
     let mut batch_size = DEFAULT_BATCH_SIZE;
