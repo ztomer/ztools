@@ -243,17 +243,35 @@ pub fn run_summary(
          **Period:** {}\n\
          **Tweets:** {} fetched, {} processed\n\
          **Model:** {}\n\n\
-         ## Summary\n\n\
          {}\n",
         now.format("%Y-%m-%d %H:%M UTC"),
         total,
         processed,
         model,
-        summary_body.trim()
+        summary_section_for(&summary_body)
     );
 
     fs::write(&out_path, content)?;
     Ok(out_path)
+}
+
+/// The section under the summary header. The `## Summary` preamble exists only
+/// to give a heading to a body that has none: the model's output already opens
+/// with `## Executive Summary`, and prepending the preamble on top of it
+/// rendered a heading with nothing underneath — two titles, one blank pane, on
+/// every dashboard page (the Swift renderer skips such sections, but the
+/// writer should not mint them in the first place).
+fn summary_section_for(summary_body: &str) -> String {
+    let body = summary_body.trim();
+    if body.is_empty()
+        || body.starts_with("# ")
+        || body.starts_with("## ")
+        || body.starts_with("### ")
+    {
+        body.to_string()
+    } else {
+        format!("## Summary\n\n{body}")
+    }
 }
 
 /// Validate summary formatting quality (headers, bullet count, length).

@@ -107,6 +107,7 @@ The Twitter summarizer scrapes your authenticated Following timeline, extracts k
 - **Headless Camoufox Scraping**: Runs an anti-detect Firefox instance to scroll the timeline and intercept live GraphQL tweet batches.
 - **Semantic Clustering**: Clusters related tweets using local embeddings before prompt synthesis to ensure high topical coherence.
 - **Resilience**: Features character-safe UTF-8 signature trimming, 3-second embedding timeouts, non-blocking stdin handling, and `--use-cache` replay.
+- **Heading-guarded output** (`summary_section_for`): the `## …` preamble is only prepended when the model body is non-empty *and* carries no heading of its own. The model opens its own briefings with `## Executive Summary`; an unconditional preamble once produced an empty `## Summary` section above it on every stored page.
 
 ---
 

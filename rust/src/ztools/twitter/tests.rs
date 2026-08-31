@@ -75,6 +75,23 @@ fn test_build_prompt_empty_and_budget() {
 }
 
 #[test]
+fn summary_section_never_prepends_a_heading_a_body_already_has() {
+    let with_heading = summary_section_for("## Executive Summary\n\nSomething happened.");
+    assert!(
+        !with_heading.starts_with("## Summary"),
+        "the model's own heading must not end up under an empty `## Summary` preamble: {with_heading:?}"
+    );
+    assert_eq!(with_heading, "## Executive Summary\n\nSomething happened.");
+
+    assert_eq!(summary_section_for(""), "");
+    assert_eq!(summary_section_for("   \n  "), "");
+    assert_eq!(summary_section_for("# Single heading"), "# Single heading");
+
+    let bare = summary_section_for("Nothing but prose.");
+    assert_eq!(bare, "## Summary\n\nNothing but prose.");
+}
+
+#[test]
 fn test_check_summary_quality() {
     let (warn_empty, crit_empty) = check_summary_quality("");
     assert!(crit_empty);
@@ -159,6 +176,13 @@ fn test_call_osaurus_and_run_summary_success() {
     let content = std::fs::read_to_string(&path).unwrap();
     assert!(content.contains("Twitter Timeline Summary"));
     assert!(content.contains("mock-model"));
+    // The model's body opens with its own heading, so the writer must not
+    // stack an empty `## Summary` preamble on top of it.
+    assert!(
+        !content.contains("## Summary"),
+        "a body with its own heading must not get an empty `## Summary` preamble: {content}"
+    );
+    assert!(content.contains("## Section"), "{content}");
 
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
