@@ -82,6 +82,8 @@ pub fn render_weekend_plan_gorgeous(
             ]);
         }
         out.push_str(&format!("{}\n\n", table));
+    } else {
+        out.push_str("⚠ Transient Events: None found for this weekend (search/extraction yielded 0 candidates).\nFalling back to Year-Round Fixed Activities.\n\n");
     }
 
     out
@@ -157,7 +159,7 @@ pub fn format_weekend_plan(
         "### Transient / Limited-Time Events (Ranked by Fit Score (computed, not reviews))\n\n",
     );
     if transient_items.is_empty() {
-        out.push_str("*No transient events scheduled for this weekend.*\n\n");
+        out.push_str("> [!WARNING]\n> **Plan Degraded**: No live transient events found for this weekend (search/extraction yielded 0 events). Showing year-round fixed venues as fallback.\n\n*No transient events scheduled for this weekend.*\n\n");
     } else {
         out.push_str("| Score | Event & Location | Day & Time | Target Age(s) | Estimated Price (CAD) | Why It Fits |\n");
         out.push_str("| :--- | :--- | :--- | :--- | :--- | :--- |\n");

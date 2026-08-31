@@ -9,14 +9,10 @@ use super::{
 /// Search the aggregator for event snippets and return the cleaned, deduped,
 /// in-window-prioritised corpus. This is the ground truth the provenance gate
 /// judges extracted rows against.
-fn fetch_events_corpus(
-    d1: NaiveDate,
-    d2: NaiveDate,
-    config: &crate::config::ZtoolsConfig,
-) -> String {
-    let now = chrono::Local::now();
-    let month_name = now.format("%B").to_string();
-    let year = now.format("%Y").to_string();
+/// Build search queries for a target weekend starting on d1.
+pub fn build_search_queries(d1: NaiveDate) -> Vec<String> {
+    let month_name = d1.format("%B").to_string();
+    let year = d1.format("%Y").to_string();
 
     let municipalities = ["Vaughan", "Markham", "Richmond Hill", "Toronto"];
     let mut queries = Vec::new();
@@ -43,6 +39,18 @@ fn fetch_events_corpus(
     if let Some(seasonal) = _seasonal_keywords(&month_name) {
         queries.push(format!("{} {} {} {}", region, seasonal, month_name, year));
     }
+    queries
+}
+
+/// Search the aggregator for event snippets and return the cleaned, deduped,
+/// in-window-prioritised corpus. This is the ground truth the provenance gate
+/// judges extracted rows against.
+fn fetch_events_corpus(
+    d1: NaiveDate,
+    d2: NaiveDate,
+    config: &crate::config::ZtoolsConfig,
+) -> String {
+    let queries = build_search_queries(d1);
 
     let mut handles = Vec::new();
     for q in queries {

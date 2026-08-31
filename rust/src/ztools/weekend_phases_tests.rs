@@ -110,3 +110,37 @@ fn prompt_templates_render_fully() {
     assert!(!sys.contains("{{"), "double braces leaked: {sys}");
     assert!(sys.contains(CARRY_FIELDS) || true);
 }
+
+#[test]
+fn resolve_weekend_model_unreachable_endpoint_returns_preferred() {
+    let chosen = crate::ztools::weekend::resolve_weekend_model("http://127.0.0.1:1", "qwen3.8-27b-8bit");
+    assert_eq!(chosen, "qwen3.8-27b-8bit");
+}
+
+#[test]
+fn resolve_weekend_model_family_fallback() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    std::thread::spawn(move || {
+        if let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0u8; 1024];
+            let _ = stream.read(&mut buf);
+            let body = r#"{"data":[{"id":"qwen3.8-27b-jang_6d"},{"id":"gemma-4-e2b-it-8bit"}]}"#;
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(resp.as_bytes());
+            let _ = stream.flush();
+        }
+    });
+
+    let url = format!("http://{addr}");
+    // Preferred tag is missing from mock data, but family is "qwen"
+    let chosen = crate::ztools::weekend::resolve_weekend_model(&url, "qwen3.8-27b-8bit");
+    assert_eq!(chosen, "qwen3.8-27b-jang_6d");
+}

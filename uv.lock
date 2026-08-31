@@ -1547,7 +1547,7 @@ name = "pyobjc-framework-cocoa"
 version = "12.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "pyobjc-core" },
+    { name = "pyobjc-core", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/51/34/fbe38a204643aa4e1b91391cdce07a34da565a69171ebcad08de7438a556/pyobjc_framework_cocoa-12.2.1.tar.gz", hash = "sha256:b94b37fe5730e5ae1fb0052912cd174e6ec329b0bfba4a012ae5db1014b5864b", size = 3125751, upload-time = "2026-06-19T16:20:05.159Z" }
 wheels = [
@@ -2191,7 +2191,7 @@ wheels = [
 
 [[package]]
 name = "ztools"
-version = "2.1.5"
+version = "2.1.13"
 source = { editable = "." }
 dependencies = [
     { name = "psutil" },
@@ -2225,10 +2225,6 @@ foundation = [
 mlx = [
     { name = "mlx-lm" },
     { name = "mlx-vlm" },
-]
-tui = [
-    { name = "pillow" },
-    { name = "textual" },
 ]
 twitter = [
     { name = "camoufox" },
@@ -2268,7 +2264,6 @@ requires-dist = [
     { name = "mlx-vlm", marker = "extra == 'all'" },
     { name = "mlx-vlm", marker = "extra == 'mlx'" },
     { name = "pillow", marker = "extra == 'all'", specifier = ">=10.0.0" },
-    { name = "pillow", marker = "extra == 'tui'", specifier = ">=10.0.0" },
     { name = "pillow", marker = "extra == 'vision'", specifier = ">=10.0.0" },
     { name = "playwright", marker = "extra == 'all'", specifier = ">=1.40.0" },
     { name = "playwright", marker = "extra == 'browser'", specifier = ">=1.40.0" },
@@ -2280,7 +2275,6 @@ requires-dist = [
     { name = "rich", specifier = ">=14.0.0" },
     { name = "textual", specifier = ">=0.50.0" },
     { name = "textual", marker = "extra == 'all'", specifier = ">=0.50.0" },
-    { name = "textual", marker = "extra == 'tui'", specifier = ">=0.50.0" },
     { name = "tomli-w", specifier = ">=1.2.0" },
 ]
-provides-extras = ["web", "browser", "vision", "foundation", "tui", "mlx", "all", "weekend", "twitter", "oeval"]
+provides-extras = ["web", "browser", "vision", "foundation", "mlx", "all", "weekend", "twitter", "oeval"]

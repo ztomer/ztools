@@ -91,7 +91,7 @@ fn default_twitter_model() -> String {
     "gemma-4-e2b-it-8bit".to_string()
 }
 fn default_weekend_model() -> String {
-    "qwen3.8-27b-8bit".to_string()
+    "qwen3.8-27b-jang_6d".to_string()
 }
 fn default_image_renamer_model() -> String {
     "gemma-4-e2b-it-8bit".to_string()
@@ -245,7 +245,7 @@ mod tests {
     fn test_default_config_values() {
         let cfg = ZtoolsConfig::default();
         assert_eq!(cfg.twitter_model, "gemma-4-e2b-it-8bit");
-        assert_eq!(cfg.weekend_model, "qwen3.8-27b-8bit");
+        assert_eq!(cfg.weekend_model, "qwen3.8-27b-jang_6d");
         assert_eq!(cfg.image_renamer_model, "gemma-4-e2b-it-8bit");
         assert_eq!(cfg.image_renamer_vlm_model, "qwen3.8-27b-8bit");
         assert_eq!(cfg.think_model, "ornith-1.0-35b-jang_4m");

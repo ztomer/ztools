@@ -20,8 +20,8 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parent.parent
     rs_files = list(repo_root.rglob("*.rs"))
 
-    allowed_paths = {repo_root / "target", repo_root / ".git"}
-    # Exclude cargo cache and target dirs from search
+    allowed_paths = {repo_root / "target", repo_root / ".git", repo_root / "vendor"}
+    # Exclude cargo cache, target, and vendor dirs from search
     rs_files = [f for f in rs_files if not any(f.is_relative_to(p) for p in allowed_paths)]
 
     pattern = re.compile(r"#\[allow\([^\]]*\)\]")

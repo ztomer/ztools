@@ -30,9 +30,67 @@ pub struct PlanContext {
     pub exclusions: String,
 }
 
+/// Resolve the weekend model against the active Osaurus roster if needed.
+pub fn resolve_weekend_model(base_url: &str, preferred_model: &str) -> String {
+    let url = format!("{}/v1/models", base_url.trim_end_matches('/'));
+    let client = match reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return preferred_model.to_string(),
+    };
+
+    let resp = match client.get(&url).send() {
+        Ok(r) if r.status().is_success() => r.json::<serde_json::Value>().ok(),
+        _ => None,
+    };
+
+    let Some(json) = resp else {
+        return preferred_model.to_string();
+    };
+
+    let models: Vec<String> = json
+        .get("data")
+        .and_then(|d| d.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| m.get("id").and_then(|id| id.as_str()).map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if models.is_empty() || models.iter().any(|m| m == preferred_model) {
+        return preferred_model.to_string();
+    }
+
+    let pref_lower = preferred_model.to_lowercase();
+    let family = if pref_lower.contains("qwen") {
+        "qwen"
+    } else if pref_lower.contains("gemma") {
+        "gemma"
+    } else if pref_lower.contains("ornith") {
+        "ornith"
+    } else {
+        ""
+    };
+
+    if !family.is_empty() {
+        if let Some(matched) = models.iter().find(|m| m.to_lowercase().contains(family)) {
+            return matched.clone();
+        }
+    }
+
+    models
+        .first()
+        .cloned()
+        .unwrap_or_else(|| preferred_model.to_string())
+}
+
 /// One plain-text LLM call against the configured osaurus endpoint.
 pub fn call_llm_text(prompt: &str, config: &crate::config::ZtoolsConfig) -> Option<String> {
-    crate::ztools::twitter::call_osaurus(&config.osaurus_url, &config.weekend_model, prompt, config)
+    let model = resolve_weekend_model(&config.osaurus_url, &config.weekend_model);
+    crate::ztools::twitter::call_osaurus(&config.osaurus_url, &model, prompt, config)
         .ok()
         .filter(|s| !s.trim().is_empty())
 }
@@ -52,8 +110,9 @@ pub(crate) fn call_llm_json(
         messages.push(serde_json::json!({"role": "system", "content": sys}));
     }
     messages.push(serde_json::json!({"role": "user", "content": user}));
+    let model = resolve_weekend_model(&config.osaurus_url, &config.weekend_model);
     let payload = serde_json::json!({
-        "model": config.weekend_model,
+        "model": model,
         "messages": messages,
         "response_format": {"type": "json_object"},
         "temperature": 0.0
@@ -62,7 +121,12 @@ pub(crate) fn call_llm_json(
         "{}/v1/chat/completions",
         config.osaurus_url.trim_end_matches('/')
     );
-    client.post(&url).json(&payload).send().ok()?.json().ok()
+    let resp: serde_json::Value = client.post(&url).json(&payload).send().ok()?.json().ok()?;
+    if resp.get("choices").is_some() {
+        Some(resp)
+    } else {
+        None
+    }
 }
 
 /// Condense a forecast to 1-2 sentences; fall back to a preview on failure.

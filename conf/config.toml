@@ -133,8 +133,8 @@ model_fallback_chain = ["foundation", "qwen", "gemma", "ornith", "nemotron"]
 think = "ornith-1.0-35b-jang_4m"
   # 88.4 on the think group vs 80.8 for the runner-up -- the widest margin of any slot.
   # The only model to score file_summary at all (100; every other lands on 60 or below).
-json = "qwen3.8-27b-8bit"
-  # 100.0 on all seven wk tasks. Clean 8-bit build (27.5 GB, 17.0 tok/s decode, 650.2 chars/s prefill).
+json = "qwen3.8-27b-jang_6d"
+  # 100.0 on all seven wk tasks. Clean build (25.8 GB, 15.2 tok/s decode).
   # Scores 100% across weekend_transient, weekend_fixed, weekend_transient_mixed, weekend_fixed_mixed,
   # weekend_transient_schema, json, and detailed_json.
 summarize = "gemma-4-e2b-it-8bit"

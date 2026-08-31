@@ -76,10 +76,7 @@ pub fn is_owner_alive(dir: &Path) -> bool {
 
     // Verify start time to prevent recycled PID collision
     let current_start = start_time(pid);
-    if !owner.1.is_empty() && !current_start.is_empty() && owner.1.trim() != current_start.trim() {
-        return false;
-    }
-    true
+    owner.1.is_empty() || current_start.is_empty() || owner.1.trim() == current_start.trim()
 }
 
 /// Check whether the lock directory mtime has exceeded the max idle threshold.

@@ -107,22 +107,14 @@ pub fn print_newest(store_dir: PathBuf, show_time: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
 
-    fn dir_with(files: &[(&str, &str)]) -> PathBuf {
-        let d = std::env::temp_dir().join(format!(
-            "ztools_store_test_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&d).unwrap();
+    fn dir_with(files: &[(&str, &str)]) -> (tempfile::TempDir, PathBuf) {
+        let td = tempfile::tempdir().unwrap();
+        let d = td.path().to_path_buf();
         for (name, body) in files {
             std::fs::write(d.join(name), body).unwrap();
         }
-        d
+        (td, d)
     }
 
     fn set_mtime(path: &Path, age_secs: u64) {
@@ -140,20 +132,18 @@ mod tests {
 
     #[test]
     fn newest_md_picks_the_latest_by_mtime_not_name() {
-        let d = dir_with(&[("2026-08-01_0000_summary.md", "old"), ("zzz.md", "newest")]);
+        let (_td, d) = dir_with(&[("2026-08-01_0000_summary.md", "old"), ("zzz.md", "newest")]);
         set_mtime(&d.join("zzz.md"), 5);
         set_mtime(&d.join("2026-08-01_0000_summary.md"), 9000);
         let got = newest_md(&d).unwrap();
         assert_eq!(got.file_name().unwrap().to_str().unwrap(), "zzz.md");
-        std::fs::remove_dir_all(&d).ok();
     }
 
     #[test]
     fn newest_md_ignores_non_md_files() {
-        let d = dir_with(&[("notes.txt", "not md"), ("summary.md", "real")]);
+        let (_td, d) = dir_with(&[("notes.txt", "not md"), ("summary.md", "real")]);
         let got = newest_md(&d).unwrap();
         assert_eq!(got.file_name().unwrap().to_str().unwrap(), "summary.md");
-        std::fs::remove_dir_all(&d).ok();
     }
 
     #[test]
@@ -162,15 +152,14 @@ mod tests {
         let e = newest_md(&missing).unwrap_err().to_string();
         assert!(e.contains("not readable"), "got: {e}");
 
-        let d = dir_with(&[]);
+        let (_td, d) = dir_with(&[]);
         let e = newest_md(&d).unwrap_err().to_string();
         assert!(e.contains("no stored summaries"), "got: {e}");
-        std::fs::remove_dir_all(&d).ok();
     }
 
     #[test]
     fn last_updated_formats_a_known_time() {
-        let d = dir_with(&[("summary.md", "x")]);
+        let (_td, d) = dir_with(&[("summary.md", "x")]);
         let path = d.join("summary.md");
         let t = chrono::NaiveDate::from_ymd_opt(2026, 8, 29)
             .and_then(|day| day.and_hms_opt(17, 53, 0))
@@ -180,6 +169,5 @@ mod tests {
             .into();
         std::fs::File::options().write(true).open(&path).unwrap().set_modified(t).unwrap();
         assert_eq!(last_updated(&path).unwrap(), "2026-08-29 17:53");
-        std::fs::remove_dir_all(&d).ok();
     }
 }
