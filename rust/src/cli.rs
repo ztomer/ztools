@@ -29,6 +29,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Cmd {
     /// Run native Rust Twitter timeline summarizer.
+    #[command(version)]
     TwitterSummarize {
         /// Optional path to tweets JSON file or stdin `-`.
         #[arg(long)]
@@ -63,6 +64,7 @@ enum Cmd {
         last_updated: bool,
     },
     /// Run native Rust Weekend planner.
+    #[command(version)]
     WeekendPlan {
         /// Location string (e.g. "Vaughan/Toronto").
         #[arg(long, default_value = "Vaughan/Toronto")]
@@ -82,6 +84,7 @@ enum Cmd {
         last_updated: bool,
     },
     /// Run native Rust image renamer.
+    #[command(version)]
     ImageRenamer {
         /// Directory containing images to process.
         #[arg(default_value = ".")]
@@ -91,6 +94,7 @@ enum Cmd {
         apply: bool,
     },
     /// Run native Rust model quality benchmark.
+    #[command(version)]
     ModelEval {
         /// Which model to evaluate (or 'all').
         #[arg(long, default_value = "all")]

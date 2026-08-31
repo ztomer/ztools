@@ -350,3 +350,41 @@ fn weekend_plan_says_so_when_nothing_is_on() {
         "an empty weekend must be stated: {doc}"
     );
 }
+
+#[test]
+fn all_subcommands_and_aliases_support_version_flags() {
+    let subcommands = [
+        "twitter-summarize",
+        "weekend-plan",
+        "image-renamer",
+        "model-eval",
+    ];
+    let expected_version = env!("CARGO_PKG_VERSION");
+
+    for sub in subcommands {
+        let out_long = Command::new(bin())
+            .arg(sub)
+            .arg("--version")
+            .output()
+            .unwrap();
+        let stdout_long = stdout_of(&out_long);
+        assert!(
+            stdout_long.contains(expected_version),
+            "{sub} --version failed: {stdout_long}"
+        );
+
+        let out_short = Command::new(bin()).arg(sub).arg("-V").output().unwrap();
+        let stdout_short = stdout_of(&out_short);
+        assert!(
+            stdout_short.contains(expected_version),
+            "{sub} -V failed: {stdout_short}"
+        );
+    }
+
+    let top_out = Command::new(bin()).arg("--version").output().unwrap();
+    let top_stdout = stdout_of(&top_out);
+    assert!(
+        top_stdout.contains(expected_version),
+        "ztools --version failed: {top_stdout}"
+    );
+}
