@@ -303,14 +303,14 @@ fn scoring_event(target_ages: &str, description: &str) -> crate::ztools::weekend
 #[test]
 fn an_age_overlap_of_exactly_one_year_earns_half_the_overlap_bonus() {
     // Family window 6-12 vs event 12-14: the ranges touch at age 12 only.
-    let touching = crate::ztools::weekend::compute_score(
-        &scoring_event("12-14", "art camp"),
-        "",
-        "6-12",
-    );
+    let touching =
+        crate::ztools::weekend::compute_score(&scoring_event("12-14", "art camp"), "", "6-12");
     // Base 5/5 fields = 3.0, overlap == 1 -> +1.5, price +0.5, location +0.5
     // => 5.5 / 2 = 2.75.
-    assert!((touching - 2.75).abs() < 0.01, "expected ~2.75, got {touching}");
+    assert!(
+        (touching - 2.75).abs() < 0.01,
+        "expected ~2.75, got {touching}"
+    );
 
     // The same event with a wide overlap must outscore it by exactly the
     // difference between the two bonuses ((3.0 - 1.5) / 2 = 0.75).
@@ -353,11 +353,8 @@ fn an_outdoor_event_gets_no_weather_bonus_on_a_cloudy_forecast_but_two_on_a_sunn
 fn an_event_whose_vibe_matches_the_forecast_earns_the_full_weather_bonus() {
     // Overcast description against a cloudy forecast matches on the first
     // alternative of the combined arm and adds +2.0.
-    let matched = crate::ztools::weekend::compute_score(
-        &scoring_event("", "overcast morning"),
-        "cloudy",
-        "",
-    );
+    let matched =
+        crate::ztools::weekend::compute_score(&scoring_event("", "overcast morning"), "cloudy", "");
     // No target ages so no overlap bonus; 4/5 fields = 2.4, price +0.5,
     // location +0.5, weather +2.0 => 5.4 / 2 = 2.7.
     assert!((matched - 2.7).abs() < 0.01, "expected ~2.7, got {matched}");

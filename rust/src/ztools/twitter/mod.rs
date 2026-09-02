@@ -170,8 +170,9 @@ pub fn call_osaurus(
         .text()
         .context("Failed to read Osaurus server response text")?;
 
-    let resp: ChatResponse = serde_json::from_str(&raw)
-        .map_err(|e| anyhow::anyhow!("Failed to parse Osaurus server response JSON: {e}, raw: {raw}"))?;
+    let resp: ChatResponse = serde_json::from_str(&raw).map_err(|e| {
+        anyhow::anyhow!("Failed to parse Osaurus server response JSON: {e}, raw: {raw}")
+    })?;
 
     let text = resp
         .choices
@@ -227,7 +228,10 @@ pub fn run_summary(
         config.twitter_prompt_max_chars,
         &config.twitter_summarize_prompt,
     );
-    eprintln!("· Summarizing {} tweets with {} on {}...", processed, model, base_url);
+    eprintln!(
+        "· Summarizing {} tweets with {} on {}...",
+        processed, model, base_url
+    );
     let summary_body = call_osaurus(base_url, model, &prompt, config)?;
 
     let now = Local::now();

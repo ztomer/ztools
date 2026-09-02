@@ -40,12 +40,18 @@ fn empty_roster_and_installed_model_substitute_nothing() {
 
 #[test]
 fn same_family_prefers_the_largest_installed_model() {
-    let roster = vec![entry("gemma-4-e2b-it-4bit", "4B"), entry("gemma-4-12b-it-mxfp8", "12B")];
+    let roster = vec![
+        entry("gemma-4-e2b-it-4bit", "4B"),
+        entry("gemma-4-12b-it-mxfp8", "12B"),
+    ];
     let (model, reason) =
         substitute_model("gemma-4-99b-it-mxfp8", &roster, &default_fallback_chain());
     assert_eq!(model, "gemma-4-12b-it-mxfp8");
     let reason = reason.expect("substitution happened");
-    assert!(reason.contains("largest installed 'gemma' model"), "{reason}");
+    assert!(
+        reason.contains("largest installed 'gemma' model"),
+        "{reason}"
+    );
 }
 
 #[test]
@@ -103,10 +109,26 @@ fn parameter_billions_k_suffix_unknown_suffixes_and_parse_failures() {
         (parameter_billions(&entry("a", "640K")) - 0.00064).abs() < 1e-12,
         "640K is 0.00064B"
     );
-    assert_eq!(parameter_billions(&entry("a", "27X")), 0.0, "unknown suffix");
-    assert_eq!(parameter_billions(&entry("a", "junk!")), 0.0, "non-numeric body");
-    assert_eq!(parameter_billions(&entry("a", " 12B ")), 12.0, "surrounding whitespace");
-    assert_eq!(parameter_billions(&entry("a", "12.5B")), 12.5, "fractional sizes");
+    assert_eq!(
+        parameter_billions(&entry("a", "27X")),
+        0.0,
+        "unknown suffix"
+    );
+    assert_eq!(
+        parameter_billions(&entry("a", "junk!")),
+        0.0,
+        "non-numeric body"
+    );
+    assert_eq!(
+        parameter_billions(&entry("a", " 12B ")),
+        12.0,
+        "surrounding whitespace"
+    );
+    assert_eq!(
+        parameter_billions(&entry("a", "12.5B")),
+        12.5,
+        "fractional sizes"
+    );
 }
 
 #[test]
@@ -117,17 +139,13 @@ fn substitute_model_family_miss_falls_through_to_the_chain() {
     let (model, reason) = substitute_model("qwen-gone-27b", &roster, &["laguna"]);
     assert_eq!(model, "laguna-70b");
     let reason = reason.expect("substitution happened");
-    assert!(
-        reason.contains("no 'qwen' model is either"),
-        "{reason}"
-    );
+    assert!(reason.contains("no 'qwen' model is either"), "{reason}");
 }
 
 #[test]
 fn substitute_model_prefers_earlier_chain_entries_over_bigger_models() {
     let roster = vec![entry("gemma-2b", "2B"), entry("nemotron-90b", "90B")];
-    let (model, reason) =
-        substitute_model("ghost-model", &roster, &["gemma", "nemotron"]);
+    let (model, reason) = substitute_model("ghost-model", &roster, &["gemma", "nemotron"]);
     assert_eq!(model, "gemma-2b", "chain order beats roster size");
     assert!(reason.unwrap().contains("falling back to 'gemma-2b'"));
 }

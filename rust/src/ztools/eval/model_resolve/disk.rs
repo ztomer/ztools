@@ -5,15 +5,19 @@
 use std::path::{Path, PathBuf};
 
 pub(super) fn models_dir() -> PathBuf {
-    std::env::var("MLX_MODELS_DIR").map(PathBuf::from).unwrap_or_else(|_| {
-        dirs::home_dir().unwrap_or_default().join("MLXModels")
-    })
+    std::env::var("MLX_MODELS_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| dirs::home_dir().unwrap_or_default().join("MLXModels"))
 }
 
 pub(super) fn hf_cache_dir() -> PathBuf {
     let home = std::env::var("HF_HOME")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| dirs::home_dir().unwrap_or_default().join(".cache/huggingface"));
+        .unwrap_or_else(|_| {
+            dirs::home_dir()
+                .unwrap_or_default()
+                .join(".cache/huggingface")
+        });
     home.join("hub")
 }
 
@@ -100,7 +104,8 @@ pub(super) fn documented_context_window(model: &str) -> Option<u64> {
     let family = crate::ztools::eval::quirks::MODEL_FAMILIES
         .iter()
         .find(|f| lower.contains(*f))?;
-    let content = std::fs::read_to_string(conf_models_root().join(format!("{family}.toml"))).ok()?;
+    let content =
+        std::fs::read_to_string(conf_models_root().join(format!("{family}.toml"))).ok()?;
     let val: toml::Value = toml::from_str(&content).ok()?;
     val.get("context_window")
         .and_then(|w| w.as_integer())

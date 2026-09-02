@@ -38,7 +38,11 @@ fn parse(path: PathBuf) -> Option<toml::Value> {
 
 fn family_toml_exists(candidate: &str) -> bool {
     for suffix in ["", "_versions"] {
-        if conf_root().join("models").join(format!("{candidate}{suffix}.toml")).is_file() {
+        if conf_root()
+            .join("models")
+            .join(format!("{candidate}{suffix}.toml"))
+            .is_file()
+        {
             return true;
         }
     }
@@ -185,7 +189,10 @@ mod tests {
             // decide a test's outcome.
             let prev_signals = std::env::var_os("EVAL_SIGNALS_DIR");
             std::env::set_var("EVAL_SIGNALS_DIR", self.0.path());
-            ConfEnvGuard { prev_conf, prev_signals }
+            ConfEnvGuard {
+                prev_conf,
+                prev_signals,
+            }
         }
     }
 
@@ -212,7 +219,10 @@ mod tests {
     fn untabled_task_and_uncapped_model_get_the_documented_fallback() {
         let dir = ConfDir::new();
         let _g = dir.guard();
-        assert_eq!(max_tokens_for_task("taxes_slip_qa", "gemma-4-e2b-it-8bit"), DEFAULT_MAX_TOKENS);
+        assert_eq!(
+            max_tokens_for_task("taxes_slip_qa", "gemma-4-e2b-it-8bit"),
+            DEFAULT_MAX_TOKENS
+        );
     }
 
     #[test]
@@ -221,7 +231,10 @@ mod tests {
         let dir = ConfDir::new();
         dir.write("config.toml", "[max_tokens]\nsummarize = 8000\n");
         let _g = dir.guard();
-        assert_eq!(max_tokens_for_task("summarize", "gemma-4-e2b-it-8bit"), 8000);
+        assert_eq!(
+            max_tokens_for_task("summarize", "gemma-4-e2b-it-8bit"),
+            8000
+        );
     }
 
     #[test]
@@ -236,7 +249,10 @@ mod tests {
         );
         let _g = dir.guard();
         assert_eq!(max_tokens_for_task("think", "foundation"), 3000);
-        assert_eq!(max_tokens_for_task("think", "foundation-something-else"), 3000);
+        assert_eq!(
+            max_tokens_for_task("think", "foundation-something-else"),
+            3000
+        );
     }
 
     #[test]
@@ -259,10 +275,7 @@ mod tests {
         // limit must not silently override it.
         let dir = ConfDir::new();
         dir.write("config.toml", "[max_tokens]\nfilename = 1000\n");
-        dir.write(
-            "models/qwen.toml",
-            "name = \"qwen\"\nmax_tokens = 32000\n",
-        );
+        dir.write("models/qwen.toml", "name = \"qwen\"\nmax_tokens = 32000\n");
         let _g = dir.guard();
         assert_eq!(max_tokens_for_task("filename", "qwen3.8-27b-8bit"), 1000);
     }
@@ -275,10 +288,7 @@ mod tests {
         // but `ev` recorded its architecture, and trimming qwen3_5_moe ->
         // qwen3_5 -> qwen lands on the file written for it.
         let dir = ConfDir::new();
-        dir.write(
-            "models/qwen.toml",
-            "name = \"qwen\"\nmax_tokens = 8000\n",
-        );
+        dir.write("models/qwen.toml", "name = \"qwen\"\nmax_tokens = 8000\n");
         dir.write(
             "eval_signals.json",
             r#"{"bonsai-27b": {"_capabilities": {"family": "qwen3_5_moe"}}}"#,
@@ -299,6 +309,9 @@ mod tests {
         // A name containing no known family has no conf/models file to consult.
         let dir = ConfDir::new();
         let _g = dir.guard();
-        assert_eq!(max_tokens_for_task("json", "totally-unknown-model"), DEFAULT_MAX_TOKENS);
+        assert_eq!(
+            max_tokens_for_task("json", "totally-unknown-model"),
+            DEFAULT_MAX_TOKENS
+        );
     }
 }

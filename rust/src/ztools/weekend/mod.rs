@@ -15,6 +15,8 @@ pub use phases::*;
 pub use prompts::*;
 /// Native Rust Weekend Planner module.
 use serde::{Deserialize, Serialize};
+
+use crate::ztools::pyenv;
 pub use supply::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -330,9 +332,19 @@ pub fn is_challenged(html: &str) -> bool {
     markers.iter().any(|m| lower.contains(m))
 }
 
+/// The module the multi-engine search helper needs. Probed before an
+/// interpreter is chosen; see [`crate::ztools::pyenv`].
+pub const SEARCH_MODULES: &[&str] = &["ddgs"];
+
 /// Fallback collector running multi-engine search via ddgs helper.
-pub fn collect_snippets_external(query: &str) -> Vec<String> {
-    let mut cmd = std::process::Command::new("python3");
+///
+/// Returns the snippets, or a stated reason nothing could be collected. It used
+/// to return a bare `Vec` and swallow every failure into an empty one, so a
+/// helper that never ran and a search that genuinely found nothing were the
+/// same answer -- that is how a weekend plan came to say "no events found" when
+/// the truth was that the interpreter could not start.
+pub fn collect_snippets_external(query: &str) -> Result<Vec<String>, String> {
+    let mut cmd = pyenv::command(SEARCH_MODULES).map_err(|e| e.to_string())?;
     let script = r#"import json, sys
 try:
     from ddgs import DDGS
@@ -353,23 +365,53 @@ except Exception:
     print(json.dumps([]))
 "#;
     cmd.args(["-c", script, query]);
-    let output = match cmd.output() {
+    classify_helper_output(cmd.output())
+}
+
+/// Turn the helper's raw outcome into snippets or a stated reason.
+///
+/// Split from the spawn so every failure shape is provable without a Python
+/// interpreter: a non-zero exit, a silent non-zero exit, output that is not
+/// UTF-8, output that is not the JSON array promised, and a helper that never
+/// started at all. Each of those used to collapse into an empty `Vec`, which
+/// downstream is indistinguishable from a search that legitimately found
+/// nothing -- the bug this whole function exists to have stopped telling.
+pub(crate) fn classify_helper_output(
+    result: std::io::Result<std::process::Output>,
+) -> Result<Vec<String>, String> {
+    let output = match result {
         Ok(out) if out.status.success() => out.stdout,
-        _ => return Vec::new(),
-    };
-    if let Ok(text) = String::from_utf8(output) {
-        if let Ok(parsed) = serde_json::from_str::<Vec<String>>(&text) {
-            return parsed;
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let last = stderr
+                .lines()
+                .rev()
+                .find(|l| !l.trim().is_empty())
+                .unwrap_or("no output")
+                .trim()
+                .to_string();
+            return Err(format!(
+                "search helper exited {:?}: {last}",
+                out.status.code()
+            ));
         }
-    }
-    Vec::new()
+        Err(e) => return Err(format!("search helper could not start: {e}")),
+    };
+    let text =
+        String::from_utf8(output).map_err(|e| format!("search helper wrote non-UTF-8: {e}"))?;
+    serde_json::from_str::<Vec<String>>(&text)
+        .map_err(|e| format!("search helper wrote unparseable JSON: {e}"))
 }
 
 fn search_duckduckgo_html(query: &str, url: &str) -> Vec<String> {
     if url.contains("duckduckgo.com") {
-        let snippets = collect_snippets_external(query);
-        if !snippets.is_empty() {
-            return snippets;
+        // A helper that could not run is reported, not silently treated as a
+        // search that found nothing: the two look identical downstream and only
+        // one of them is the user's answer.
+        match collect_snippets_external(query) {
+            Ok(snippets) if !snippets.is_empty() => return snippets,
+            Ok(_) => {}
+            Err(why) => eprintln!("\u{26a0} multi-engine search unavailable: {why}"),
         }
     }
 
@@ -423,6 +465,10 @@ fn search_duckduckgo_html(query: &str, url: &str) -> Vec<String> {
 /// Query DuckDuckGo web search endpoint for live event/venue listings.
 /// Format the final weekend markdown plan document.
 /// Flag columns that have constant values across all rows (e.g. repetitive prices or ages).
+#[cfg(test)]
+#[path = "../weekend_search_helper_tests.rs"]
+mod search_helper_tests;
+
 #[cfg(test)]
 #[path = "../weekend_tests.rs"]
 mod tests;

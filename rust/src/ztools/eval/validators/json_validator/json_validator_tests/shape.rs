@@ -28,7 +28,10 @@ fn test_extract_list_from_dict_falls_back_to_largest_array() {
 
 #[test]
 fn test_extract_list_from_dict_handles_non_objects_and_arrays() {
-    assert_eq!(extract_list_from_dict(&json!([1, 2])), vec![json!(1), json!(2)]);
+    assert_eq!(
+        extract_list_from_dict(&json!([1, 2])),
+        vec![json!(1), json!(2)]
+    );
     assert!(extract_list_from_dict(&json!("plain")).is_empty());
     assert!(extract_list_from_dict(&json!(42)).is_empty());
     assert!(extract_list_from_dict(&json!(null)).is_empty());
@@ -69,7 +72,10 @@ fn test_norm_name_and_tokens() {
     let tokens = _name_tokens("The Big-Foot and 12 Zoo-goers!");
     assert_eq!(
         tokens,
-        ["big", "foot", "goers", "zoo"].into_iter().map(String::from).collect()
+        ["big", "foot", "goers", "zoo"]
+            .into_iter()
+            .map(String::from)
+            .collect()
     );
 }
 
@@ -133,11 +139,17 @@ fn test_check_source_extraction_skips_empty_text_and_counts_partials() {
 fn test_check_source_extraction_primary_name_fallbacks() {
     // term overlap is zero ("who" is a stopword) but the normalized primary is in the source
     let who = vec![json!({"name": "The Who"})];
-    assert_eq!(check_source_extraction(&who, "tickets for the who tribute night"), 1.0);
+    assert_eq!(
+        check_source_extraction(&who, "tickets for the who tribute night"),
+        1.0
+    );
     // falls back through event fields when name is absent; single shared term
     // is below the >=2 threshold so the normalized-name containment decides
     let titled = vec![json!({"event": "Winterfolk"})];
-    assert_eq!(check_source_extraction(&titled, "the winterfolk lineup"), 1.0);
+    assert_eq!(
+        check_source_extraction(&titled, "the winterfolk lineup"),
+        1.0
+    );
     let fenice = vec![json!({"title": "La Fenice"})];
     assert_eq!(
         check_source_extraction(&fenice, "an evening at la fenice opera house"),

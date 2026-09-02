@@ -133,7 +133,11 @@ mod tests {
     fn safe_names_strip_path_shaped_characters() {
         assert_eq!(safe("qwen3.8-27b-8bit"), "qwen3.8-27b-8bit");
         assert_eq!(safe("org/model"), "org_model");
-        assert_eq!(safe("../../etc/passwd"), "etc_passwd", "leading dots strip away like Python's .strip(\"._-\")");
+        assert_eq!(
+            safe("../../etc/passwd"),
+            "etc_passwd",
+            "leading dots strip away like Python's .strip(\"._-\")"
+        );
         assert_eq!(safe("..."), "unnamed");
         assert_eq!(safe("___"), "unnamed");
     }
@@ -180,7 +184,10 @@ mod tests {
         assert_eq!(path.parent().unwrap().file_name().unwrap(), "m_1");
         assert_eq!(path.file_name().unwrap(), "task_x.txt");
         let text = std::fs::read_to_string(path).unwrap();
-        assert!(text.starts_with("model: m/1\ntask: task x\nscore: 100\n"), "{text}");
+        assert!(
+            text.starts_with("model: m/1\ntask: task x\nscore: 100\n"),
+            "{text}"
+        );
         assert!(text.contains("\nchars: 10\n"));
         assert!(text.contains("reasoning_chars: 16\n"));
         assert!(text.contains("---\nthe answer"));

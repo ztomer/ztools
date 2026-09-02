@@ -64,7 +64,9 @@ pub enum Check {
     /// The three RUBRIC tasks (anomalies, audit_readiness, synthesis): scored
     /// 0-100 by the ported taxes_validator rubric, not by generic boolean
     /// checks. Graded like [`Check::TaxesGrounded`].
-    TaxesRubric { task_name: String },
+    TaxesRubric {
+        task_name: String,
+    },
     SectionHeaders(Vec<String>),
 }
 

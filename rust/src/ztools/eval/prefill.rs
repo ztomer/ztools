@@ -15,9 +15,7 @@
 
 use std::time::Instant;
 
-use crate::ztools::eval::signals::{
-    default_eval_timeout, record_capability_sample, SignalStore,
-};
+use crate::ztools::eval::signals::{default_eval_timeout, record_capability_sample, SignalStore};
 use crate::ztools::eval::task_loader::ChatMessage;
 use crate::ztools::eval::transport::{call, RequestSpec};
 
@@ -129,7 +127,10 @@ pub fn record_prefill_rate(signals: &mut SignalStore, model: &str, rate: Option<
         .entry("_capabilities")
         .or_insert_with(|| serde_json::Value::Object(Default::default()));
     if let Some(obj) = caps_obj.as_object_mut() {
-        let n = obj.get("prefill_samples").and_then(|v| v.as_u64()).unwrap_or(0);
+        let n = obj
+            .get("prefill_samples")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
         obj.insert("prefill_samples".to_string(), serde_json::json!(n + 1));
     }
 }

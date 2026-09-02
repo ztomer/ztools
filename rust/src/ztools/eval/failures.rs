@@ -179,7 +179,14 @@ pub fn classify_failure(
         };
     }
 
-    let reasoning_markers = ["Let me", "I'll", "Wait,", "Actually,", "Here's my", "Thinking"];
+    let reasoning_markers = [
+        "Let me",
+        "I'll",
+        "Wait,",
+        "Actually,",
+        "Here's my",
+        "Thinking",
+    ];
     let head: String = content.chars().take(200).collect();
     if reasoning_markers.iter().any(|m| head.contains(m)) && content.chars().count() > 200 {
         return Diagnosis {
@@ -220,7 +227,10 @@ mod tests {
 
     #[test]
     fn infra_timeout_and_reasoning_are_distinguished() {
-        assert_eq!(diag(Some("Connection failed - is server running?"), "", "", 0).category, FAIL_INFRA);
+        assert_eq!(
+            diag(Some("Connection failed - is server running?"), "", "", 0).category,
+            FAIL_INFRA
+        );
         assert_eq!(
             diag(Some("HTTP 503: Server is at inference capacity"), "", "", 0).category,
             FAIL_INFRA
@@ -250,7 +260,10 @@ mod tests {
 
     #[test]
     fn real_output_that_fails_validation_is_content() {
-        assert_eq!(diag(None, "a short but wrong answer", "", 0).category, FAIL_CONTENT);
+        assert_eq!(
+            diag(None, "a short but wrong answer", "", 0).category,
+            FAIL_CONTENT
+        );
     }
 
     #[test]

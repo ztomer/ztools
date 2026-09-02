@@ -16,7 +16,9 @@ pub mod defects;
 pub mod json_validator;
 pub mod taxes_grounded;
 pub mod taxes_rubric;
-pub use taxes_rubric::{validate_taxes_anomalies, validate_taxes_audit_readiness, validate_taxes_synthesis};
+pub use taxes_rubric::{
+    validate_taxes_anomalies, validate_taxes_audit_readiness, validate_taxes_synthesis,
+};
 pub mod text_match;
 
 pub use adversarial::*;

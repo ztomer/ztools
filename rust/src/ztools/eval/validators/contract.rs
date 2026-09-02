@@ -43,7 +43,10 @@ mod tests {
 
     #[test]
     fn test_requested_item_count_matches_all_verbs_and_ranges() {
-        assert_eq!(requested_item_count("please find 5 great activities"), Some(5));
+        assert_eq!(
+            requested_item_count("please find 5 great activities"),
+            Some(5)
+        );
         assert_eq!(requested_item_count("list 3 to 7 nearby events"), Some(3));
         assert_eq!(requested_item_count("RETURN 12 results now"), Some(12));
         assert_eq!(requested_item_count("output 4 ideas"), Some(4));

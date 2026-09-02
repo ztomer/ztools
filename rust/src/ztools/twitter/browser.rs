@@ -6,6 +6,8 @@ use anyhow::Result;
 
 use std::path::PathBuf;
 
+use crate::ztools::pyenv;
+
 use super::cookies::Cookie;
 use super::Tweet;
 
@@ -55,10 +57,13 @@ impl BrowserCollector for LiveBrowserCollector {
     }
 }
 
+/// The third-party modules the browser scraper cannot run without. Probed
+/// before any interpreter is used; see [`crate::ztools::pyenv`].
+pub const BROWSER_MODULES: &[&str] = &["requests", "playwright", "camoufox"];
+
 /// Run browser login to authenticate and store cookies.
 pub fn login_live() -> Result<()> {
-    let mut cmd = std::process::Command::new("python3");
-    setup_python_env(&mut cmd);
+    let mut cmd = pyenv::command(BROWSER_MODULES)?;
     cmd.args([
         "-c",
         "import sys; sys.argv = ['twitter', '--login']; from twitter.cli import main; main()",
@@ -68,35 +73,6 @@ pub fn login_live() -> Result<()> {
         anyhow::bail!("Browser login exited with code {:?}", status.code());
     }
     Ok(())
-}
-
-/// Helper to configure PYTHONPATH to reach shipped modules in references/ or environment.
-fn setup_python_env(cmd: &mut std::process::Command) {
-    let mut paths = Vec::new();
-    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-        let p = std::path::Path::new(&manifest_dir)
-            .parent()
-            .map(|p| p.join("references"));
-        if let Some(p) = p {
-            if p.exists() {
-                paths.push(p.display().to_string());
-            }
-        }
-    }
-    if let Some(home) = dirs::home_dir() {
-        let p = home.join("Projects/ztools/references");
-        if p.exists() {
-            paths.push(p.display().to_string());
-        }
-    }
-    if !paths.is_empty() {
-        let combined = paths.join(":");
-        if let Ok(existing) = std::env::var("PYTHONPATH") {
-            cmd.env("PYTHONPATH", format!("{combined}:{existing}"));
-        } else {
-            cmd.env("PYTHONPATH", combined);
-        }
-    }
 }
 
 /// Build the inline Python statement that drives the fetch-only CLI.
@@ -134,8 +110,7 @@ fn tweets_from_cache_candidates(candidates: Vec<PathBuf>) -> Option<Vec<Tweet>> 
 
 /// Collect timeline tweets via the live headless browser driver.
 pub fn collect_tweets_live(since: Option<&str>, debug: bool) -> Result<Vec<Tweet>> {
-    let mut cmd = std::process::Command::new("python3");
-    setup_python_env(&mut cmd);
+    let mut cmd = pyenv::command(BROWSER_MODULES)?;
     cmd.args(["-c", &build_fetch_stmt(debug, since)]);
     let status = cmd
         .status()
@@ -302,10 +277,13 @@ mod tests {
         assert!(tweets_from_cache_candidates(vec![missing, bad]).is_none());
     }
 
+    /// The `references/` search path moved into `pyenv` along with interpreter
+    /// resolution — an interpreter and the module path it is probed against are
+    /// one decision — so this asserts the same property through the new door.
     #[test]
-    fn test_setup_python_env_puts_references_dirs_on_pythonpath() {
+    fn test_python_env_puts_references_dirs_on_pythonpath() {
         let mut cmd = std::process::Command::new("true");
-        setup_python_env(&mut cmd);
+        pyenv::apply_pythonpath(&mut cmd);
 
         let pythonpath = cmd
             .get_envs()

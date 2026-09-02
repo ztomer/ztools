@@ -32,8 +32,7 @@ fn test_validate_mixed_signal_counts_tp_and_fp() {
     let signal = vec!["Alpha".to_string(), "Beta".to_string()];
     let noise = vec!["Gamma".to_string()];
     // tp=2, fp=1 -> recall 1.0, precision 2/3 -> round(83.33)=83
-    let (score, reason) =
-        validate_mixed_signal(&data, "", Some(&signal), Some(&noise));
+    let (score, reason) = validate_mixed_signal(&data, "", Some(&signal), Some(&noise));
     assert_eq!(score, 83);
     assert_eq!(reason, "included 1/1 noise items");
 }
@@ -84,8 +83,7 @@ fn test_validate_mixed_signal_precision_zero_when_nothing_matches() {
     let data = json!({"activities": [{"name": "Omega"}]});
     let signal = vec!["Alpha".to_string()];
     // tp=0 fp=0 with a non-empty signal set -> precision 0
-    let (score, reason) =
-        validate_mixed_signal(&data, "nothing relevant", Some(&signal), None);
+    let (score, reason) = validate_mixed_signal(&data, "nothing relevant", Some(&signal), None);
     assert_eq!(score, 0);
     assert_eq!(reason, "missed 1/1 signal items");
 }

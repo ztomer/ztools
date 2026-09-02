@@ -80,7 +80,11 @@ fn serve_stubborn(escalated_budget: u32) -> StubbornThinker {
         }
     });
     thread::sleep(std::time::Duration::from_millis(50));
-    StubbornThinker { port, _handle: handle, seen_max_tokens: seen }
+    StubbornThinker {
+        port,
+        _handle: handle,
+        seen_max_tokens: seen,
+    }
 }
 
 #[test]
@@ -100,8 +104,10 @@ fn a_reasoning_overrun_retries_with_a_raised_budget_and_then_passes() {
     let o = &outcomes[0];
     assert_eq!(o.error, None, "{o:?}");
     assert_eq!((o.score, o.status.as_str()), (100, "ok"), "{o:?}");
-    assert!(take_lock(&server.seen_max_tokens).contains(&4_096),
-        "the retry must have carried the escalated budget");
+    assert!(
+        take_lock(&server.seen_max_tokens).contains(&4_096),
+        "the retry must have carried the escalated budget"
+    );
 }
 
 #[test]
@@ -175,7 +181,11 @@ fn serve_expands_to_fill() -> FillsWhateverItGets {
         }
     });
     thread::sleep(std::time::Duration::from_millis(50));
-    FillsWhateverItGets { port, _handle: handle, seen_max_tokens: seen }
+    FillsWhateverItGets {
+        port,
+        _handle: handle,
+        seen_max_tokens: seen,
+    }
 }
 
 /// The escalation is proof-of-shape, bought ONCE per model.
@@ -211,5 +221,9 @@ fn a_proven_futile_escalation_is_not_re_bought_on_every_task() {
         "escalation must be bought once per model, not once per task; saw {seen:?}"
     );
     // Two calls prove the shape on the first task, then one base call per task.
-    assert_eq!(seen.len(), 4, "expected 2 calls then 1 per later task; saw {seen:?}");
+    assert_eq!(
+        seen.len(),
+        4,
+        "expected 2 calls then 1 per later task; saw {seen:?}"
+    );
 }

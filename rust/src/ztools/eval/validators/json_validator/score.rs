@@ -6,13 +6,13 @@
 use serde_json::Value;
 use std::collections::HashSet;
 
-use super::names::_names_match;
 use super::super::contract::{parse_signal_noise, requested_item_count};
 use super::super::defects::{
     constant_column_ratio, generic_location_ratio, near_duplicate_ratio, CONSTANT_COLUMN_LIMIT,
     CONSTANT_COLUMN_MAX_SCORE, GENERIC_LOCATION_LIMIT, GENERIC_LOCATION_MAX_SCORE,
     NEAR_DUPLICATE_LIMIT, NEAR_DUPLICATE_MAX_SCORE,
 };
+use super::names::_names_match;
 
 use super::items::{extract_list_from_dict, has_item_details, is_valid_list_item};
 use super::source::check_source_extraction;

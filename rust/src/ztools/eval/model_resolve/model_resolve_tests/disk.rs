@@ -130,7 +130,10 @@ fn missing_roots_are_skipped_not_errors() {
             dir.path().join("locked-root"),
             std::fs::Permissions::from_mode(0o755),
         );
-        assert_eq!(found, None, "an unreadable root yields nothing, not a panic");
+        assert_eq!(
+            found, None,
+            "an unreadable root yields nothing, not a panic"
+        );
     }
 }
 
@@ -167,10 +170,7 @@ fn conf_models_root_prefers_env_then_the_checkout_then_a_relative_path() {
     std::env::remove_var("ZTOOLS_CONF_DIR");
     // A checkout under HOME with a conf/models tree: the home branch.
     let fake_home = tempfile::tempdir().unwrap();
-    std::fs::create_dir_all(
-        fake_home.path().join("Projects/ztools/conf/models"),
-    )
-    .unwrap();
+    std::fs::create_dir_all(fake_home.path().join("Projects/ztools/conf/models")).unwrap();
     std::env::set_var("HOME", fake_home.path());
     assert_eq!(
         conf_models_root(),
@@ -210,13 +210,20 @@ fn documented_context_window_found_not_found_malformed_or_nonpositive() {
     assert_eq!(documented_context_window("ghost-model"), None);
 
     guard.write_family_toml("foundation", "context_window = 4096\n");
-    assert_eq!(documented_context_window("foundation-something"), Some(4096));
+    assert_eq!(
+        documented_context_window("foundation-something"),
+        Some(4096)
+    );
 
     // Known family but no file for it.
     assert_eq!(documented_context_window("qwen3.8-27b"), None);
 
     guard.write_family_toml("gemma", "{{{ not toml");
-    assert_eq!(documented_context_window("gemma-4-e2b"), None, "malformed toml");
+    assert_eq!(
+        documented_context_window("gemma-4-e2b"),
+        None,
+        "malformed toml"
+    );
 
     for content in ["context_window = 0\n", "context_window = -5\n"] {
         guard.write_family_toml("nemotron", content);
@@ -224,7 +231,11 @@ fn documented_context_window_found_not_found_malformed_or_nonpositive() {
     }
 
     guard.write_family_toml("laguna", "context_window = \"4096\"\n");
-    assert_eq!(documented_context_window("laguna-x"), None, "string is no window");
+    assert_eq!(
+        documented_context_window("laguna-x"),
+        None,
+        "string is no window"
+    );
 }
 
 #[test]
@@ -242,7 +253,10 @@ fn generative_verdict_comes_from_the_config_not_the_name() {
     assert!(is_generative_model("ghost-model"));
 
     put("Embedder", r#"{"model_type": "Model2Vec"}"#);
-    assert!(!is_generative_model("embedder"), "type check is case-insensitive");
+    assert!(
+        !is_generative_model("embedder"),
+        "type check is case-insensitive"
+    );
 
     put("StaticArch", r#"{"architectures": ["StaticModel"]}"#);
     assert!(!is_generative_model("staticarch"));
@@ -250,14 +264,20 @@ fn generative_verdict_comes_from_the_config_not_the_name() {
     put("SentTrans", r#"{"architectures": ["SentenceTransformer"]}"#);
     assert!(!is_generative_model("senttrans"));
 
-    put("RealModel", r#"{"model_type": "qwen3", "architectures": ["Qwen3ForCausalLM"]}"#);
+    put(
+        "RealModel",
+        r#"{"model_type": "qwen3", "architectures": ["Qwen3ForCausalLM"]}"#,
+    );
     assert!(is_generative_model("realmodel"));
 
     put("NoArch", r#"{"model_type": "whatever"}"#);
     assert!(is_generative_model("noarch"));
 
     put("BrokenJson", "{not json");
-    assert!(is_generative_model("brokenjson"), "unreadable-as-json keeps probing");
+    assert!(
+        is_generative_model("brokenjson"),
+        "unreadable-as-json keeps probing"
+    );
 
     // An unreadable FILE also keeps probing: same verdict as missing.
     let locked = guard._dir.path().join("mlx/Org/Locked/config.json");
@@ -280,7 +300,10 @@ fn generative_verdict_comes_from_the_config_not_the_name() {
 #[serial]
 fn corroboration_accepts_disk_configs_or_documented_windows_only() {
     let guard = DiskGuard::new();
-    assert!(!disk_corroborated("ghost-model"), "nothing on disk backs it");
+    assert!(
+        !disk_corroborated("ghost-model"),
+        "nothing on disk backs it"
+    );
 
     guard.write_family_toml("foundation", "context_window = 4096\n");
     assert!(

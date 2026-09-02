@@ -371,8 +371,7 @@ mod tests {
     #[test]
     fn dict_entries_that_cannot_be_summarized_are_skipped() {
         // Empty key, non-string value and empty summary all skip; the rest counts.
-        let data =
-            r#"{"": "parses input data", "utils.py": 42, "notes.md": "", "main.py": "validates output"}"#;
+        let data = r#"{"": "parses input data", "utils.py": 42, "notes.md": "", "main.py": "validates output"}"#;
         let (score, msg) = validate_file_summary(data);
         assert_eq!(score, 40);
         assert_eq!(msg, "");

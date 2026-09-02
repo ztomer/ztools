@@ -25,7 +25,9 @@ fn load_rubric(task_name: &str) -> Value {
                 .join(format!("taxes_{task_name}.sanitized.json"))
         })
         .unwrap_or_else(|| {
-            PathBuf::from(format!("eval_tasks/data/taxes/taxes_{task_name}.sanitized.json"))
+            PathBuf::from(format!(
+                "eval_tasks/data/taxes/taxes_{task_name}.sanitized.json"
+            ))
         });
 
     if let Ok(content) = std::fs::read_to_string(&candidate) {
@@ -65,7 +67,10 @@ fn no_leak_score(output: &str, gt_forbidden: &[String]) -> i64 {
     if output.is_empty() {
         return 30;
     }
-    if gt_forbidden.iter().any(|term| output.contains(term.as_str())) {
+    if gt_forbidden
+        .iter()
+        .any(|term| output.contains(term.as_str()))
+    {
         return 0;
     }
     30
@@ -88,7 +93,8 @@ fn substance_score(output: &str) -> i64 {
     }
     let bullets = Regex::new(r"(?m)^\s*(?:\d+[.)]\s+|[-•*]\s+)").expect("static regex");
     let bullet_count = bullets.find_iter(output).count();
-    let non_bullet = Regex::new(r"(?m)^[\s\d.\-•*]+").expect("static regex")
+    let non_bullet = Regex::new(r"(?m)^[\s\d.\-•*]+")
+        .expect("static regex")
         .replace_all(output, "")
         .split_whitespace()
         .collect::<Vec<&str>>()
@@ -174,7 +180,10 @@ pub fn validate_taxes_synthesis(output: &Value) -> (i64, String) {
         })
         .unwrap_or_default();
     if !expected_sections.is_empty() {
-        let hits = expected_sections.iter().filter(|s| raw.contains(s.as_str())).count();
+        let hits = expected_sections
+            .iter()
+            .filter(|s| raw.contains(s.as_str()))
+            .count();
         if hits < expected_sections.len() - 1 {
             score = (score - 10).max(0);
             reason.push_str(&format!(
@@ -245,10 +254,7 @@ mod tests {
         let (score_bad, reason_bad) = validate_taxes_audit_readiness(&bad);
         assert!(reason_bad.contains("schema=not-json"), "{reason_bad}");
         // Exactly the rubric total, halved with integer division like Python.
-        let (base, _) = validate_taxes_task(
-            &value_to_text(&bad),
-            "audit_readiness",
-        );
+        let (base, _) = validate_taxes_task(&value_to_text(&bad), "audit_readiness");
         assert_eq!(score_bad, base / 2);
     }
 }

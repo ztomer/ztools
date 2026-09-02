@@ -25,13 +25,12 @@ use std::time::Instant;
 
 use serde::Serialize;
 
-use crate::ztools::eval::prefill::{measure_prefill_rate, record_prefill_rate};
-use crate::ztools::eval::signals::{effective_timeout, load_signals, record_signal, save_signals};
 use crate::ztools::eval::failures::{
-    classify_failure, reasoning_overrun_was_guard_aborted, reasoning_retry_budget,
-    FAIL_REASONING,
+    classify_failure, reasoning_overrun_was_guard_aborted, reasoning_retry_budget, FAIL_REASONING,
 };
 use crate::ztools::eval::model_resolve::is_generative_model;
+use crate::ztools::eval::prefill::{measure_prefill_rate, record_prefill_rate};
+use crate::ztools::eval::signals::{effective_timeout, load_signals, record_signal, save_signals};
 use crate::ztools::eval::task_loader::{check_graded_score, run_check, EvalTask};
 use crate::ztools::eval::transport::{self, RequestSpec};
 use crate::ztools::eval::watchdog::{is_stalled, model_stall_duration};
@@ -179,7 +178,11 @@ pub fn run_eval(model: &str, tasks: &[EvalTask], cfg: &RunnerConfig) -> Vec<Task
 /// records p95/retry signals after each task, and stops when the watchdog sees
 /// no task completion within the stall ceiling. Signals are loaded from and
 /// saved back to `eval_signals.json` by this function.
-pub fn run_eval_with_signals(model: &str, tasks: &[EvalTask], cfg: &RunnerConfig) -> Vec<TaskOutcome> {
+pub fn run_eval_with_signals(
+    model: &str,
+    tasks: &[EvalTask],
+    cfg: &RunnerConfig,
+) -> Vec<TaskOutcome> {
     let mut signals = load_signals();
 
     // Measure this model's ingestion rate before timing anything else. It is
@@ -312,8 +315,7 @@ fn run_eval_inner(
             // model expands to fill: strictly more room, strictly more of it spent
             // thinking, still no answer. Recorded next to the attempt that proves
             // it, so no later task re-buys the proof.
-            if attempt_tokens > max_tokens
-                && reasoning_overrun_was_guard_aborted(&r.finish_reason)
+            if attempt_tokens > max_tokens && reasoning_overrun_was_guard_aborted(&r.finish_reason)
             {
                 reasoning_escalation_futile = true;
             }

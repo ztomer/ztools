@@ -111,7 +111,8 @@ fn serve(status_line: &'static str, body: &'static str) -> String {
 fn similar_tweets_merge_into_one_cluster_and_distant_ones_start_their_own() {
     // t0 and t1 point the same way (cosine ~0.999 >= 0.85 threshold); t2 is
     // orthogonal to t0 (cosine 0) so it must open a second cluster.
-    let body = r#"{"data":[{"embedding":[1.0,1.0]},{"embedding":[1.0,0.9]},{"embedding":[0.0,1.0]}]}"#;
+    let body =
+        r#"{"data":[{"embedding":[1.0,1.0]},{"embedding":[1.0,0.9]},{"embedding":[0.0,1.0]}]}"#;
     let url = serve("HTTP/1.1 200 OK", body);
     let tweets = vec![mock_tweet("t0"), mock_tweet("t1"), mock_tweet("t2")];
     let config = crate::config::ZtoolsConfig::default();
@@ -119,7 +120,12 @@ fn similar_tweets_merge_into_one_cluster_and_distant_ones_start_their_own() {
     let result = cluster_tweets(&tweets, &url, &config).unwrap();
 
     assert_eq!(result.len(), 2, "one merged cluster plus one singleton");
-    assert_eq!(result[0].len(), 2, "{:?}", result[0].iter().map(|t| &t.screen_name).collect::<Vec<_>>());
+    assert_eq!(
+        result[0].len(),
+        2,
+        "{:?}",
+        result[0].iter().map(|t| &t.screen_name).collect::<Vec<_>>()
+    );
     assert_eq!(result[0][0].screen_name, "t0");
     assert_eq!(result[0][1].screen_name, "t1");
     assert_eq!(result[1].len(), 1);
@@ -134,7 +140,11 @@ fn an_http_error_status_falls_back_to_singletons() {
 
     let result = cluster_tweets(&tweets, &url, &config).unwrap();
 
-    assert_eq!(result.len(), 3, "a failed embedding call must not merge anything");
+    assert_eq!(
+        result.len(),
+        3,
+        "a failed embedding call must not merge anything"
+    );
     assert!(result.iter().all(|c| c.len() == 1));
 }
 

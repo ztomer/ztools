@@ -26,7 +26,10 @@ impl DiskGuard {
     }
 
     pub(super) fn write_family_toml(&self, family: &str, content: &str) {
-        let path = self.conf_dir().join("models").join(format!("{family}.toml"));
+        let path = self
+            .conf_dir()
+            .join("models")
+            .join(format!("{family}.toml"));
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, content).unwrap();
     }

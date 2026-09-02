@@ -113,7 +113,8 @@ fn prompt_templates_render_fully() {
 
 #[test]
 fn resolve_weekend_model_unreachable_endpoint_returns_preferred() {
-    let chosen = crate::ztools::weekend::resolve_weekend_model("http://127.0.0.1:1", "qwen3.8-27b-8bit");
+    let chosen =
+        crate::ztools::weekend::resolve_weekend_model("http://127.0.0.1:1", "qwen3.8-27b-8bit");
     assert_eq!(chosen, "qwen3.8-27b-8bit");
 }
 

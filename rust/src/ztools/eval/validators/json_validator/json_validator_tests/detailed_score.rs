@@ -47,7 +47,10 @@ fn test_validate_detailed_json_zero_details_failure() {
     // structure 15 + count-ok 10 + no quality + unique 25
     let (score, reason) = validate_detailed_json(&data, "");
     assert_eq!(score, 50);
-    assert!(reason.contains("no items with details"), "reason was: {reason}");
+    assert!(
+        reason.contains("no items with details"),
+        "reason was: {reason}"
+    );
 }
 
 #[test]
@@ -93,15 +96,16 @@ fn test_validate_detailed_json_constant_column_cap() {
         ("Unique Three", "56 Gamma Rd"),
     ]
     .iter()
-    .map(|(name, _loc)| {
-        json!({"name": name, "price": "$5", "target_ages": "all"})
-    })
+    .map(|(name, _loc)| json!({"name": name, "price": "$5", "target_ages": "all"}))
     .collect();
     let data = json!({"fixed_activities": items});
     // raw 15+40+25=80, constant columns cap at 55
     let (score, reason) = validate_detailed_json(&data, "");
     assert_eq!(score, 55);
-    assert!(reason.contains("constant across every row"), "reason was: {reason}");
+    assert!(
+        reason.contains("constant across every row"),
+        "reason was: {reason}"
+    );
     assert!(reason.contains("price"), "reason was: {reason}");
 }
 
@@ -143,10 +147,7 @@ fn test_validate_detailed_json_non_object_items_get_empty_names() {
     // empty name, which counts toward the duplicate ratio
     let data = json!({"activities": ["Solo", 7]});
     let (score, reason) = validate_detailed_json(&data, "");
-    assert_eq!(
-        score,
-        15 - 10
-    );
+    assert_eq!(score, 15 - 10);
     assert_eq!(
         reason,
         "only 2 items (need 8+); no items with details; duplicates (50%)"

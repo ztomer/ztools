@@ -123,4 +123,23 @@ NOISE (Ignore these - test your filtering):
 - Irrelevant: Stock market tips for weekend trading
 "#;
 
-pub const KEY_FACTS: &[&str] = &["GPT-5", "Apple Vision Pro 2", "Gemini 2.5 Pro", "NVIDIA stock hits all-time high", "Microsoft acquires AI startup for $2B", "Samsung Galaxy S25 Ultra", "Meta announces Llama 4", "IBM unveils quantum computer with 1000+ qubit", "Shopify reports 40% revenue growth", "Bitcoin surges past $75K", "Databricks IPO values company at $60B", "Amazon launches drone delivery in Toronto", "Uber launches autonomous taxi service in Phoenix", "Canadian GDP grows 0.5%", "TD Bank reports strong Q2 earnings", "Adobe acquires Figma for $20B", "Intel Core Ultra chips debut", "Tesla Cybertruck production ramps up"];
+pub const KEY_FACTS: &[&str] = &[
+    "GPT-5",
+    "Apple Vision Pro 2",
+    "Gemini 2.5 Pro",
+    "NVIDIA stock hits all-time high",
+    "Microsoft acquires AI startup for $2B",
+    "Samsung Galaxy S25 Ultra",
+    "Meta announces Llama 4",
+    "IBM unveils quantum computer with 1000+ qubit",
+    "Shopify reports 40% revenue growth",
+    "Bitcoin surges past $75K",
+    "Databricks IPO values company at $60B",
+    "Amazon launches drone delivery in Toronto",
+    "Uber launches autonomous taxi service in Phoenix",
+    "Canadian GDP grows 0.5%",
+    "TD Bank reports strong Q2 earnings",
+    "Adobe acquires Figma for $20B",
+    "Intel Core Ultra chips debut",
+    "Tesla Cybertruck production ramps up",
+];

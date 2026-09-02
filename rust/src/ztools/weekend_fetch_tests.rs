@@ -224,14 +224,22 @@ fn test_build_search_queries_derives_month_from_target_friday() {
     let sep_friday = chrono::NaiveDate::from_ymd_opt(2026, 9, 4).unwrap();
     let queries = build_search_queries(sep_friday);
     assert!(!queries.is_empty());
-    assert!(queries.iter().any(|q| q.contains("September") && q.contains("2026")));
-    assert!(queries.iter().any(|q| q.contains("harvest festival farm pumpkin")));
+    assert!(queries
+        .iter()
+        .any(|q| q.contains("September") && q.contains("2026")));
+    assert!(queries
+        .iter()
+        .any(|q| q.contains("harvest festival farm pumpkin")));
     assert!(!queries.iter().any(|q| q.contains("August")));
 
     let jan_friday = chrono::NaiveDate::from_ymd_opt(2027, 1, 1).unwrap();
     let jan_queries = build_search_queries(jan_friday);
-    assert!(jan_queries.iter().any(|q| q.contains("January") && q.contains("2027")));
-    assert!(jan_queries.iter().any(|q| q.contains("winter festival holiday lights")));
+    assert!(jan_queries
+        .iter()
+        .any(|q| q.contains("January") && q.contains("2027")));
+    assert!(jan_queries
+        .iter()
+        .any(|q| q.contains("winter festival holiday lights")));
 }
 
 #[test]
@@ -242,10 +250,12 @@ fn test_is_challenged_detects_captcha_and_waf_markers() {
     let cloudflare_turnstile = r#"<html><body><iframe src="https://challenges.cloudflare.com/turnstile/v0/api.js"></iframe></body></html>"#;
     assert!(is_challenged(cloudflare_turnstile));
 
-    let human_verify = r#"<html><title>Please Verify You Are Human</title><body>Just a moment...</body></html>"#;
+    let human_verify =
+        r#"<html><title>Please Verify You Are Human</title><body>Just a moment...</body></html>"#;
     assert!(is_challenged(human_verify));
 
-    let normal_results = r#"<html><body><a class="result__snippet">Normal search snippet</a></body></html>"#;
+    let normal_results =
+        r#"<html><body><a class="result__snippet">Normal search snippet</a></body></html>"#;
     assert!(!is_challenged(normal_results));
 }
 
@@ -268,10 +278,18 @@ fn test_degradation_banner_rendered_when_transient_empty() {
     }];
     let empty_transient: Vec<WeekendEvent> = Vec::new();
 
-    let gorgeous = render_weekend_plan_gorgeous("Sep 04 to Sep 06", "Sunny", &fixed, &empty_transient);
+    let gorgeous =
+        render_weekend_plan_gorgeous("Sep 04 to Sep 06", "Sunny", &fixed, &empty_transient);
     assert!(gorgeous.contains("⚠ Transient Events: None found"));
 
-    let markdown = format_weekend_plan(&empty_transient, &fixed, "Vaughan", "6-12", "Sep 04 to Sep 06", "Sunny");
+    let markdown = format_weekend_plan(
+        &empty_transient,
+        &fixed,
+        "Vaughan",
+        "6-12",
+        "Sep 04 to Sep 06",
+        "Sunny",
+    );
     assert!(markdown.contains("> [!WARNING]"));
     assert!(markdown.contains("Plan Degraded"));
 }

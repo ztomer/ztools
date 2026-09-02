@@ -342,7 +342,11 @@ NOISE (Ignore these - test your filtering):
 
 pub const CONTRADICTION_PHRASE: &str = r#"quantum giraffes of Manitoba won the Stanley Cup"#;
 
-pub const FALSEHOOD_PHRASES: &[&str] = &["quantum giraffes of Manitoba won the Stanley Cup", "CEO Jensen Huang arrested for insider trading", "layoffs of 100,000 employees"];
+pub const FALSEHOOD_PHRASES: &[&str] = &[
+    "quantum giraffes of Manitoba won the Stanley Cup",
+    "CEO Jensen Huang arrested for insider trading",
+    "layoffs of 100,000 employees",
+];
 
 pub const MISATTRIBUTION_TIMELINE: &str = r#"[@Reuters | 07:10]: Analyst @mchen said the Vertex-Halcyon merger will close in Q3.
 [@mchen | 07:20]: I am travelling this week and will not be commenting on any deals.

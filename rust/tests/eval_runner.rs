@@ -73,9 +73,7 @@ fn body_len(escaped: &str) -> usize {
 }
 
 fn err_response(status_line: &str) -> String {
-    format!(
-        "{status_line}\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}"
-    )
+    format!("{status_line}\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}")
 }
 
 fn task(name: &str, content_marker: &str) -> EvalTask {
@@ -118,7 +116,10 @@ fn partial_output_scores_partial() {
     let t = EvalTask::new(
         "t",
         "p",
-        vec![Check::Contains("answer".to_string()), Check::Contains("nope".to_string())],
+        vec![
+            Check::Contains("answer".to_string()),
+            Check::Contains("nope".to_string()),
+        ],
     );
     let outcomes = run_eval("m", &[t], &cfg(port));
     assert_eq!(outcomes[0].score, 50, "{:?}", outcomes[0]);
@@ -138,7 +139,8 @@ fn graded_validator_score_becomes_the_task_score() {
             min_score: 90,
         }],
     );
-    let perfect = r#"{"prose": "Everything is consistent with T4 slips.", "highlighted_flag_ids": []}"#;
+    let perfect =
+        r#"{"prose": "Everything is consistent with T4 slips.", "highlighted_flag_ids": []}"#;
     assert_eq!(ztools::eval::runner::score_output(&t, perfect, None), 100);
 
     // A wrong answer must still score low, not inherit the threshold.
@@ -162,7 +164,11 @@ fn zero_score_output_still_carries_a_status() {
 #[test]
 fn transport_error_is_retried_then_recorded_as_fail() {
     // First request 503, second succeeds: max_retries=1 must recover.
-    let (port, _h) = serve_then(err_response("HTTP/1.1 503 Service Unavailable"), ok_body("the answer"), 1);
+    let (port, _h) = serve_then(
+        err_response("HTTP/1.1 503 Service Unavailable"),
+        ok_body("the answer"),
+        1,
+    );
     let outcomes = run_eval("m", &[task("t1", "answer")], &cfg(port));
     let o = &outcomes[0];
     assert!(o.error.is_none(), "retry should have recovered: {o:?}");
@@ -180,7 +186,11 @@ fn consecutive_infra_failures_abandon_the_model_early() {
     c.max_retries = 1;
     c.max_consecutive_infra = 2;
     let outcomes = run_eval("m", &tasks, &c);
-    assert_eq!(outcomes.len(), 2, "must abandon before task c: {outcomes:?}");
+    assert_eq!(
+        outcomes.len(),
+        2,
+        "must abandon before task c: {outcomes:?}"
+    );
     assert!(outcomes.iter().all(|o| o.error.is_some()), "{outcomes:?}");
 }
 

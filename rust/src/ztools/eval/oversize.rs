@@ -86,7 +86,9 @@ pub fn estimate_model_memory_gb(model: &str) -> u64 {
 }
 
 fn vm_stat_pages(label: &str) -> Option<f64> {
-    let out = std::process::Command::new("/usr/bin/vm_stat").output().ok()?;
+    let out = std::process::Command::new("/usr/bin/vm_stat")
+        .output()
+        .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
     text.lines()
         .find(|l| l.starts_with(label))?
@@ -122,8 +124,8 @@ pub fn reclaimable_available_gb() -> Result<f64, String> {
         .ok_or_else(|| "vm_stat: cannot read 'File-backed pages'".to_string())?;
 
     let available = (free + inactive + speculative) * PAGE_BYTES / BYTES_PER_GB;
-    let active_file_backed = (file_backed - inactive - speculative).max(0.0) * PAGE_BYTES
-        / BYTES_PER_GB;
+    let active_file_backed =
+        (file_backed - inactive - speculative).max(0.0) * PAGE_BYTES / BYTES_PER_GB;
     let purgeable_gb = purgeable * PAGE_BYTES / BYTES_PER_GB;
     Ok(available + active_file_backed + purgeable_gb)
 }
@@ -155,7 +157,9 @@ pub fn oversize_refusal(
     };
     if thrashing {
         let detail = match memory_pressure() {
-            Some((swap, compressor)) => format!(" (swap {swap:.1}GB, compressor {compressor:.1}GB)"),
+            Some((swap, compressor)) => {
+                format!(" (swap {swap:.1}GB, compressor {compressor:.1}GB)")
+            }
             None => String::new(),
         };
         return format!(
@@ -373,7 +377,11 @@ mod tests {
             vec![0u8; 2 * 1024 * 1024 * 1024 + 1],
         )
         .unwrap();
-        std::fs::write(big_dir.join("w2.safetensors"), vec![0u8; 1024 * 1024 * 1024]).unwrap();
+        std::fs::write(
+            big_dir.join("w2.safetensors"),
+            vec![0u8; 1024 * 1024 * 1024],
+        )
+        .unwrap();
         assert_eq!(
             estimate_model_memory_gb("bigmodel"),
             4,
@@ -393,8 +401,14 @@ mod tests {
     fn reclaimable_available_gb_is_positive_finite_and_sane_on_this_machine() {
         let gb = reclaimable_available_gb().expect("vm_stat arithmetic must not degrade");
         assert!(gb.is_finite());
-        assert!(gb > 0.0, "a live machine always has some reclaimable memory");
-        assert!(gb < 1_000_000.0, "{gb} GB is beyond any real Mac's memory map");
+        assert!(
+            gb > 0.0,
+            "a live machine always has some reclaimable memory"
+        );
+        assert!(
+            gb < 1_000_000.0,
+            "{gb} GB is beyond any real Mac's memory map"
+        );
     }
 
     #[test]
@@ -402,8 +416,9 @@ mod tests {
         // Wiring check against the public seam: the verdict must be exactly
         // the threshold comparison applied to whatever memory_pressure sees --
         // never invented, never defaulted past a None reading.
-        let expected = memory_pressure()
-            .map(|(swap, compressor)| swap > MAX_CLEAN_SWAP_GB || compressor > MAX_CLEAN_COMPRESSOR_GB);
+        let expected = memory_pressure().map(|(swap, compressor)| {
+            swap > MAX_CLEAN_SWAP_GB || compressor > MAX_CLEAN_COMPRESSOR_GB
+        });
         assert_eq!(is_thrashing(), expected);
     }
 

@@ -14,7 +14,14 @@
 
 use serde_json::{json, Value};
 
-pub const MODEL_FAMILIES: &[&str] = &["qwopus", "qwen", "gemma", "nemotron", "laguna", "foundation"];
+pub const MODEL_FAMILIES: &[&str] = &[
+    "qwopus",
+    "qwen",
+    "gemma",
+    "nemotron",
+    "laguna",
+    "foundation",
+];
 const QWEN_FAMILY: &str = "qwen";
 const GEMMA4_FAMILY: &str = "gemma4";
 
@@ -143,7 +150,10 @@ mod tests {
     #[test]
     fn user_role_word_swaps_apply_to_any_family() {
         let out = apply_model_quirks(
-            &msgs(&[("user", "Current Context: ... Execute the task based on the text.")]),
+            &msgs(&[(
+                "user",
+                "Current Context: ... Execute the task based on the text.",
+            )]),
             "gemma-4-e2b-it-8bit",
         );
         // Replace order matches Python: "Execute the task" fires before
@@ -172,7 +182,10 @@ mod tests {
         // Carried over from Python bug-for-bug: family resolution matches
         // "gemma", not "gemma4", so this branch never fires in production.
         // The test PINS that behaviour so a silent change is visible.
-        let out = apply_model_quirks(&msgs(&[("system", "JSON extraction task.")]), "gemma-4-e2b-it-8bit");
+        let out = apply_model_quirks(
+            &msgs(&[("system", "JSON extraction task.")]),
+            "gemma-4-e2b-it-8bit",
+        );
         assert_eq!(out[0]["content"], json!("JSON extraction task."));
     }
 }

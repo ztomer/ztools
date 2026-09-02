@@ -32,7 +32,10 @@ pub fn weekend_store_dir() -> PathBuf {
 pub fn newest_md(dir: &Path) -> Result<PathBuf> {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
-        Err(e) => bail!("stored output directory {} is not readable: {e}", dir.display()),
+        Err(e) => bail!(
+            "stored output directory {} is not readable: {e}",
+            dir.display()
+        ),
     };
     let mut newest: Option<(PathBuf, SystemTime)> = None;
     for entry in entries.flatten() {
@@ -48,9 +51,7 @@ pub fn newest_md(dir: &Path) -> Result<PathBuf> {
         // the result independent of readdir order.
         let replace = match &newest {
             Some((other, t)) => {
-                modified > *t
-                    || (modified == *t
-                        && other.file_name() < path.file_name())
+                modified > *t || (modified == *t && other.file_name() < path.file_name())
             }
             None => true,
         };
@@ -167,7 +168,12 @@ mod tests {
             .and_local_timezone(Local)
             .unwrap()
             .into();
-        std::fs::File::options().write(true).open(&path).unwrap().set_modified(t).unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(t)
+            .unwrap();
         assert_eq!(last_updated(&path).unwrap(), "2026-08-29 17:53");
     }
 }

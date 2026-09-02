@@ -40,9 +40,7 @@ pub fn cluster_tweets(
         return Ok(Vec::new());
     }
 
-    let client = Client::builder()
-        .timeout(Duration::from_secs(3))
-        .build()?;
+    let client = Client::builder().timeout(Duration::from_secs(3)).build()?;
 
     let url = format!("{}/v1/embeddings", base_url.trim_end_matches('/'));
 

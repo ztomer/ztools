@@ -10,9 +10,16 @@ fn swap_used_gb_reads_the_real_sysctl_output() {
         panic!("memory_pressure() returned None on a live macOS box");
     };
     assert!(swap >= 0.0 && swap.is_finite(), "swap: {swap}");
-    assert!(compressor >= 0.0 && compressor.is_finite(), "compressor: {compressor}");
+    assert!(
+        compressor >= 0.0 && compressor.is_finite(),
+        "compressor: {compressor}"
+    );
     // Cross-check the swap figure by parsing sysctl independently.
-    let out = Command::new("sysctl").arg("-n").arg("vm.swapusage").output().unwrap();
+    let out = Command::new("sysctl")
+        .arg("-n")
+        .arg("vm.swapusage")
+        .output()
+        .unwrap();
     let text = String::from_utf8_lossy(&out.stdout);
     let expected: f64 = text
         .split_whitespace()
@@ -31,13 +38,13 @@ fn swap_used_gb_reads_the_real_sysctl_output() {
             }
             first_total.parse::<f64>().ok()
         })
-        .expect("swapusage contains a used value") / 1024.0;
+        .expect("swapusage contains a used value")
+        / 1024.0;
     assert!(
         (swap - expected).abs() < 0.01,
         "parsed {swap} GB vs independent parse {expected} GB"
     );
 }
-
 
 use serial_test::serial;
 
@@ -49,10 +56,7 @@ struct EnvGuard {
 
 impl EnvGuard {
     fn capture(keys: &[&'static str]) -> Self {
-        let saved = keys
-            .iter()
-            .map(|k| (*k, std::env::var_os(k)))
-            .collect();
+        let saved = keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
         Self { saved }
     }
 }
@@ -97,8 +101,11 @@ impl Fixture {
     }
 
     fn write_signals_file(&self, content: &str) {
-        std::fs::write(self._dir.path().join("signals").join("eval_signals.json"), content)
-            .unwrap();
+        std::fs::write(
+            self._dir.path().join("signals").join("eval_signals.json"),
+            content,
+        )
+        .unwrap();
     }
 }
 
@@ -156,7 +163,10 @@ fn load_degrades_to_empty_and_save_roundtrips() {
     assert!(load_signals().is_empty(), "missing file is an empty store");
 
     dir.write_signals_file("{not json at all");
-    assert!(load_signals().is_empty(), "malformed file is an empty store");
+    assert!(
+        load_signals().is_empty(),
+        "malformed file is an empty store"
+    );
 
     let mut store = SignalStore::new();
     store.insert(
@@ -239,8 +249,7 @@ fn recording_a_sample_creates_capabilities_and_rederives_the_estimate() {
     let mut signals = SignalStore::new();
     record_capability_sample(&mut signals, "m", "rate", 42.5);
     let caps = &signals["m"]["_capabilities"];
-    let history: Vec<Sample> =
-        serde_json::from_value(caps["rate_samples"].clone()).unwrap();
+    let history: Vec<Sample> = serde_json::from_value(caps["rate_samples"].clone()).unwrap();
     assert_eq!(history.len(), 1);
     assert_eq!(history[0].v, 42.5);
     // The clean tag comes verbatim from the live contention verdict --
@@ -258,10 +267,8 @@ fn a_legacy_scalar_is_seeded_once_as_an_unclean_sample_then_outvoted() {
     let mut signals: SignalStore =
         serde_json::from_str(r#"{"m": {"_capabilities": {"rate": 100.0}}}"#).unwrap();
     record_capability_sample(&mut signals, "m", "rate", 42.0);
-    let history: Vec<Sample> = serde_json::from_value(
-        signals["m"]["_capabilities"]["rate_samples"].clone(),
-    )
-    .unwrap();
+    let history: Vec<Sample> =
+        serde_json::from_value(signals["m"]["_capabilities"]["rate_samples"].clone()).unwrap();
     assert_eq!(history.len(), 2);
     assert_eq!(history[0].v, 100.0);
     assert_eq!(history[0].legacy, Some(true), "scalar seed marked legacy");
@@ -282,7 +289,7 @@ fn capabilities_fixture() -> String {
         "cold_start_seconds": 2,
         "cold_start_seconds_samples": [{"v": 2.0, "clean": true}]
     }}}"#
-    .to_string()
+        .to_string()
 }
 
 #[test]
@@ -292,25 +299,39 @@ fn derived_timeout_is_zero_unless_all_three_terms_are_measured_clean() {
     let _g = &dir.guard;
     assert_eq!(derived_timeout("m", 1000, 100), 0, "no data at all");
 
-    dir.write_signals_file(r#"{"m": {"_capabilities": {
+    dir.write_signals_file(
+        r#"{"m": {"_capabilities": {
         "prefill_chars_per_sec_samples": [{"v": 500.0, "clean": true}],
         "decode_tokens_per_sec_samples": [{"v": 20.0, "clean": true}]
-    }}}"#);
+    }}}"#,
+    );
     assert_eq!(derived_timeout("m", 1000, 100), 0, "cold_start missing");
 
-    dir.write_signals_file(r#"{"m": {"_capabilities": {
+    dir.write_signals_file(
+        r#"{"m": {"_capabilities": {
         "prefill_chars_per_sec_samples": [{"v": 500.0, "clean": false}],
         "decode_tokens_per_sec_samples": [{"v": 20.0, "clean": true}],
         "cold_start_seconds_samples": [{"v": 2.0, "clean": true}]
-    }}}"#);
-    assert_eq!(derived_timeout("m", 1000, 100), 0, "unclean prefill disqualifies");
+    }}}"#,
+    );
+    assert_eq!(
+        derived_timeout("m", 1000, 100),
+        0,
+        "unclean prefill disqualifies"
+    );
 
-    dir.write_signals_file(r#"{"m": {"_capabilities": {
+    dir.write_signals_file(
+        r#"{"m": {"_capabilities": {
         "prefill_chars_per_sec_samples": [{"v": 0.0, "clean": true}],
         "decode_tokens_per_sec_samples": [{"v": 20.0, "clean": true}],
         "cold_start_seconds_samples": [{"v": 2.0, "clean": true}]
-    }}}"#);
-    assert_eq!(derived_timeout("m", 1000, 100), 0, "a zero estimate is no estimate");
+    }}}"#,
+    );
+    assert_eq!(
+        derived_timeout("m", 1000, 100),
+        0,
+        "a zero estimate is no estimate"
+    );
 }
 
 #[test]
@@ -344,7 +365,11 @@ fn effective_timeout_takes_the_largest_of_learned_configured_derived_and_default
         "documented fallback when neither learned nor configured exists"
     );
     dir.write_signals_file(r#"{"m": {"t1": {"timeout": 4000}}}"#);
-    assert_eq!(effective_timeout("m", "t1", 0, 0), 4000, "learned term wins");
+    assert_eq!(
+        effective_timeout("m", "t1", 0, 0),
+        4000,
+        "learned term wins"
+    );
 
     // The default floor can be raised above everything via env.
     std::env::set_var("EVAL_DEFAULT_TIMEOUT", "8001");
@@ -418,15 +443,16 @@ fn first_observation_seeds_p95_and_the_learned_timeout() {
     // p95 EMA upward: max(300, 100*0.95 + 300*0.05) = 300; timeout now
     // max(300, 450) = 450.
     assert_eq!(task["p95_latency"], 300.0);
-    assert_eq!(task["timeout"], 450, "the learned timeout grows past the floor");
+    assert_eq!(
+        task["timeout"], 450,
+        "the learned timeout grows past the floor"
+    );
 }
 
 #[test]
 fn p95_blends_downward_but_never_below_the_new_observation_floor() {
-    let mut signals: SignalStore = serde_json::from_str(
-        r#"{"m": {"t": {"samples": 5, "p95_latency": 10.0}}}"#,
-    )
-    .unwrap();
+    let mut signals: SignalStore =
+        serde_json::from_str(r#"{"m": {"t": {"samples": 5, "p95_latency": 10.0}}}"#).unwrap();
     record_signal(&mut signals, "m", "t", 5.0, false, false);
     // EMA: 10*0.95 + 5*0.05 = 9.75 beats the raw 5; json_p95 rounds to 0.1.
     assert_eq!(signals["m"]["t"]["p95_latency"], 9.8);
@@ -440,8 +466,14 @@ fn retries_alone_count_without_touching_p95_or_timeout() {
     let task = &signals["m"]["t"];
     assert_eq!(task["samples"], 1);
     assert_eq!(task["total_retries"], 1);
-    assert!(task.get("p95_latency").is_none(), "a zero-duration sample sets no p95");
-    assert!(task.get("timeout").is_none(), "no p95 means no learned timeout");
+    assert!(
+        task.get("p95_latency").is_none(),
+        "a zero-duration sample sets no p95"
+    );
+    assert!(
+        task.get("timeout").is_none(),
+        "no p95 means no learned timeout"
+    );
 }
 
 #[test]

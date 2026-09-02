@@ -150,7 +150,7 @@ A/B parity layer. Both stacks are gated.
 
 ```bash
 cd rust
-cargo test                          # 464 tests: 403 unit + 61 integration
+cargo test                          # 532 tests: 469 unit + 63 integration
 cargo clippy --all-targets -- -D warnings
 cargo llvm-cov --summary-only       # coverage, floor 94% lines
 ```
@@ -161,7 +161,7 @@ Key suites:
 - `tests/transport_http.rs`, `tests/signals_prefill.rs` — wire format, stream guard, learned timeouts, capability recording
 - `tests/validator_parity.rs` — prints fixture verdicts from the RUST validators; `references/tests/test_rust_validator_parity.py` asserts they match the PYTHON validators byte-for-byte
 
-**Coverage**: enforced on every push by `.githooks/pre-push` (`cargo llvm-cov --fail-under-lines 94`; current ~94.8%). The residual uncovered code is live-process spawning (`login_live`, `collect_tweets_live` — real Camoufox browser), environment-absent branches, and assertion panic-format arms. The floor may only move up; re-baselining requires a stated reason in the diff.
+**Coverage**: floor **94% lines**, current **94.37%**. The residual uncovered code is live-process spawning (`login_live`, `collect_tweets_live` — a real Camoufox browser), the model-eval run loop (it takes the machine-wide GPU lock and needs a live model server), environment-absent branches, and assertion panic-format arms. The floor may only move up; re-baselining requires a stated reason in the diff. It is 94 rather than the house 95 because reaching 95 by unit test would mean inventing seams for the number's sake — see `routines` ROADMAP O32.
 
 ### Python (parity reference)
 
@@ -172,11 +172,26 @@ OLLAMA_BASE_URL=http://127.0.0.1:1 MLX_MODELS_DIR=/tmp/nonexistent \
 
 2,791 tests at 95%+ coverage. The suite structurally forbids launching real browsers or reading real cookie stores.
 
-### Git hooks (`.githooks/`)
-- **Pre-commit**: Emoji gate, file size gate, `#[allow]` ban, Ruff linting, Rust Clippy + tests.
-- **Pre-push**: full Python suite with the 95% coverage floor, full Rust suite, and the Rust llvm-cov 94% line floor.
+### The gate is ONE list (`.gatesrc`)
 
-GitHub Actions CI is disabled — the local pre-push gate runs a strict superset of what it checked. `release.yml` was removed with it: the Homebrew formula update lives in `tools/release.sh` (below).
+`make ci` and `tools/gate.sh --full` — the pre-push hook — both delegate to the
+same runner over the step list declared once in `.gatesrc`, so the hook can
+never be weaker than CI. `tools/release.sh` runs it too, because it pushes with
+`--no-verify` and would otherwise tag something nothing had checked.
+
+The five steps: the house Rust gate (fmt, clippy `-D warnings`, no `#[allow]`)
+· emoji · 500-line cap · `cargo test` · coverage at the 94% floor.
+
+**This repo had no gate at all until 2026-09-02** — `tools/gate.sh` ran
+structural checks with every language layer commented out, and nothing else
+picked them up. The Rust half was therefore ungated and had drifted to **223
+`cargo fmt` violations** while every run reported all-green. Clippy, as it
+happens, was clean; that is precisely why an ungated repo is dangerous rather
+than obviously broken.
+
+- **Pre-commit** (`.githooks/`): emoji, file size, `#[allow]` ban, Ruff, Clippy.
+
+GitHub Actions CI is disabled — the local gate is the gate of record.
 
 Eval results live in `~/.config/ztools/` (`eval_results.csv`, `eval_history.json`, `eval_signals.json`, and the raw-answer archive under `outputs/`). To track:
 

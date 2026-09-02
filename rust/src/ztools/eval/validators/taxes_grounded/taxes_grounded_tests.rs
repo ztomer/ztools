@@ -80,14 +80,12 @@ fn test_traceable_sums_empty_input() {
 
 #[test]
 fn test_traceable_sums_large_input_only_individuals_and_total() {
-    let values: Vec<f64> = (0..=MAX_SUBSET_VALUES)
-        .map(|i| 100.0 + i as f64)
-        .collect();
+    let values: Vec<f64> = (0..=MAX_SUBSET_VALUES).map(|i| 100.0 + i as f64).collect();
     let sums = traceable_sums(&values);
     assert!(sums.contains(&10000)); // first element alone
     assert!(sums.contains(&11600)); // last element alone
     assert!(sums.contains(&183600)); // grand total 1836.00
-    // pair sums are NOT enumerated past MAX_SUBSET_VALUES (101+102 = 203.00)
+                                     // pair sums are NOT enumerated past MAX_SUBSET_VALUES (101+102 = 203.00)
     assert!(!sums.contains(&20300));
 }
 
@@ -116,7 +114,10 @@ fn test_yoy_narrative_fenced_json_partial_reconciliation() {
         note.contains("reconcile err=75.00 tol=5.00 (18/30)"),
         "note was: {note}"
     );
-    assert!(note.contains("prose_amounts=1/1 (20/20)"), "note was: {note}");
+    assert!(
+        note.contains("prose_amounts=1/1 (20/20)"),
+        "note was: {note}"
+    );
 }
 
 #[test]
@@ -166,7 +167,10 @@ fn test_yoy_narrative_empty_report_and_grounding() {
     assert!(note.contains("schema=0/20"), "note was: {note}");
     assert!(note.contains("traceable=0/0 (0/30)"), "note was: {note}");
     assert!(note.contains("reconcile=n/a (0/30)"), "note was: {note}");
-    assert!(note.contains("prose_amounts=0/0 (20/20)"), "note was: {note}");
+    assert!(
+        note.contains("prose_amounts=0/0 (20/20)"),
+        "note was: {note}"
+    );
 }
 
 #[test]

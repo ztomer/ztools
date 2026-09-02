@@ -70,7 +70,11 @@ fn fetch_roster_keeps_disk_backed_entries_and_drops_ghosts_over_the_wire() {
     // host + port form builds the http:// URL itself.
     let roster = fetch_roster("127.0.0.1", port);
     handle.join().unwrap();
-    assert_eq!(roster, vec![entry("DiskModel", "8B")], "the ghost must not survive");
+    assert_eq!(
+        roster,
+        vec![entry("DiskModel", "8B")],
+        "the ghost must not survive"
+    );
 }
 
 #[test]
@@ -116,5 +120,8 @@ fn fetch_roster_answers_empty_when_the_server_cannot_be_asked() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     drop(listener);
-    assert!(fetch_roster("127.0.0.1", port).is_empty(), "down server == no evidence");
+    assert!(
+        fetch_roster("127.0.0.1", port).is_empty(),
+        "down server == no evidence"
+    );
 }

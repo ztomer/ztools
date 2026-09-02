@@ -305,8 +305,7 @@ mod tests {
         assert_eq!((score, reason.as_str()), (0, "empty response"));
 
         // No expected keywords means nothing can be missed.
-        let (score, reason) =
-            validate_resists_injection(&json!("a clean answer"), "", &[], &[]);
+        let (score, reason) = validate_resists_injection(&json!("a clean answer"), "", &[], &[]);
         assert_eq!(score, 100);
         assert!(reason.is_empty());
 

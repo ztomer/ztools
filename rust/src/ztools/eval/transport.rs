@@ -157,8 +157,7 @@ pub fn call(spec: &RequestSpec, parse_json: bool) -> TransportResult {
         && is_missing_model_error(404, result.error_body.as_deref().unwrap_or(""))
     {
         let roster = fetch_roster(spec.host, spec.port);
-        let (substitute, reason) =
-            substitute_model(spec.model, &roster, &default_fallback_chain());
+        let (substitute, reason) = substitute_model(spec.model, &roster, &default_fallback_chain());
         if let Some(reason) = reason {
             eprintln!("⚠ {reason}");
             let sub_spec = derived_spec_with_model(spec, &substitute, false);
@@ -315,10 +314,9 @@ pub fn stream_with_overrun_guard(spec: &RequestSpec) -> TransportResult {
     };
     let start = Instant::now();
     let deadline = start + Duration::from_secs(spec.timeout_secs);
-    let budget_chars = (spec.max_tokens as f64
-        * REASONING_OVERRUN_FRACTION
-        * CHARS_PER_TOKEN as f64)
-        .max(1.0) as u64;
+    let budget_chars =
+        (spec.max_tokens as f64 * REASONING_OVERRUN_FRACTION * CHARS_PER_TOKEN as f64).max(1.0)
+            as u64;
 
     let payload = json!({
         "model": spec.model,

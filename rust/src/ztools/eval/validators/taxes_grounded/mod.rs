@@ -16,9 +16,7 @@ pub use amounts::{
     cents, known_set, prose_amounts, score_prose_amounts, traceable_sums, MAX_SCORE,
     MAX_SUBSET_VALUES,
 };
-pub use validate::{
-    validate_taxes_qa, validate_taxes_slip_qa, validate_taxes_yoy_narrative,
-};
+pub use validate::{validate_taxes_qa, validate_taxes_slip_qa, validate_taxes_yoy_narrative};
 
 #[cfg(test)]
 #[path = "taxes_grounded_tests.rs"]

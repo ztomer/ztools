@@ -133,9 +133,14 @@ mod tests {
         assert_eq!(c.missing, vec!["c".to_string()]);
         assert!(
             c.reason.contains("abandoned after 2 task(s)"),
-            "{}", c.reason
+            "{}",
+            c.reason
         );
-        assert!(c.reason.contains("last failure category INFRA"), "{}", c.reason);
+        assert!(
+            c.reason.contains("last failure category INFRA"),
+            "{}",
+            c.reason
+        );
     }
 
     #[test]
@@ -143,12 +148,19 @@ mod tests {
         let expected = vec!["a".to_string()];
         let c = Completeness::derive(&expected, &[]);
         assert!(!c.complete);
-        assert!(c.reason.contains("no task completed; all 1 missing"), "{}", c.reason);
+        assert!(
+            c.reason.contains("no task completed; all 1 missing"),
+            "{}",
+            c.reason
+        );
     }
 
     #[test]
     fn more_than_three_missing_tasks_are_elided() {
-        let expected: Vec<String> = ["a", "b", "c", "d", "e"].iter().map(|s| s.to_string()).collect();
+        let expected: Vec<String> = ["a", "b", "c", "d", "e"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         let outcomes = vec![outcome("a", "TIMEOUT")];
         let c = Completeness::derive(&expected, &outcomes);
         assert!(c.reason.contains("b, c, d, ..."), "{}", c.reason);

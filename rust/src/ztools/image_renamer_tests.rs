@@ -188,15 +188,24 @@ fn mutant_ocr_single_char_rejected() {
     for m in mutants {
         let generic = is_generic_name(m);
         let non_human = is_non_human_readable(m);
-        assert!(generic || non_human, "Single char should be generic or non-human-readable");
+        assert!(
+            generic || non_human,
+            "Single char should be generic or non-human-readable"
+        );
     }
 }
 
 #[test]
 fn mutant_ocr_empty_rejected() {
     let empty = "";
-    assert!(is_non_human_readable(empty), "Empty string should be non-human-readable");
-    assert!(!is_meaningful_text(empty, 2), "Empty string should not be meaningful text");
+    assert!(
+        is_non_human_readable(empty),
+        "Empty string should be non-human-readable"
+    );
+    assert!(
+        !is_meaningful_text(empty, 2),
+        "Empty string should not be meaningful text"
+    );
 }
 
 #[test]
@@ -209,17 +218,27 @@ fn mutant_words_to_filename_digits_only() {
 fn mutant_words_to_filename_mixed_alpha_digits() {
     let result = vlm::words_to_filename("Apple 123 Store", 50, 6).unwrap();
     let has_alpha = result.chars().any(|c| c.is_alphabetic());
-    assert!(has_alpha, "words_to_filename result '{}' should contain alphabetic chars", result);
+    assert!(
+        has_alpha,
+        "words_to_filename result '{}' should contain alphabetic chars",
+        result
+    );
 }
 
 #[test]
 fn mutant_truncation_boundary() {
     let result = vlm::truncate_on_word_boundary("apple_foldable_iphone_launch_delayed", 20);
     let underscore_pos = result.rfind('_');
-    assert!(underscore_pos.is_some(), "Truncated result should contain _");
+    assert!(
+        underscore_pos.is_some(),
+        "Truncated result should contain _"
+    );
     if let Some(pos) = underscore_pos {
         let before_underscore = &result[..=pos];
-        assert!(before_underscore.len() <= 20, "Before underscore segment should be <= 20 chars");
+        assert!(
+            before_underscore.len() <= 20,
+            "Before underscore segment should be <= 20 chars"
+        );
     }
 }
 
@@ -239,22 +258,45 @@ fn mutant_acceptable_name_short_rejected() {
 
 #[test]
 fn mutant_strip_injection_prefix() {
-    assert_eq!(strip_instruction_prefix("Here is the filename: tax_return_2026.pdf"), "tax_return_2026.pdf");
-    assert_eq!(strip_instruction_prefix("The file is: meeting_notes_v1.png"), "meeting_notes_v1.png");
-    assert_eq!(strip_instruction_prefix("suggested name: invoice"), "invoice");
-    assert_eq!(strip_instruction_prefix("renamed to: screenshot"), "screenshot");
-    assert_eq!(strip_instruction_prefix("  plain content  "), "plain content");
+    assert_eq!(
+        strip_instruction_prefix("Here is the filename: tax_return_2026.pdf"),
+        "tax_return_2026.pdf"
+    );
+    assert_eq!(
+        strip_instruction_prefix("The file is: meeting_notes_v1.png"),
+        "meeting_notes_v1.png"
+    );
+    assert_eq!(
+        strip_instruction_prefix("suggested name: invoice"),
+        "invoice"
+    );
+    assert_eq!(
+        strip_instruction_prefix("renamed to: screenshot"),
+        "screenshot"
+    );
+    assert_eq!(
+        strip_instruction_prefix("  plain content  "),
+        "plain content"
+    );
 }
 
 #[test]
 fn mutant_clean_filename_edge_cases() {
     assert_eq!(clean_filename("Hello World! 2026", 50), "hello_world_2026");
     assert_eq!(clean_filename("   ", 50), "unnamed");
-    assert_eq!(clean_filename("Special @#$% Symbols!", 30), "special_symbols");
-    let long = "This is an extremely long title that exceeds the maximum length constraint for filenames";
+    assert_eq!(
+        clean_filename("Special @#$% Symbols!", 30),
+        "special_symbols"
+    );
+    let long =
+        "This is an extremely long title that exceeds the maximum length constraint for filenames";
     let result = clean_filename(long, 20);
     assert!(result.len() <= 20, "Result should be <= 20 chars");
-    assert!(!result.ends_with('_'), "Result '{}' should not end with _", result);
+    assert!(
+        !result.ends_with('_'),
+        "Result '{}' should not end with _",
+        result
+    );
 }
 
 #[test]
@@ -302,11 +344,18 @@ fn test_dedupe_path_counters_skip_existing_and_handle_no_extension() {
 fn test_dedupe_path_falls_back_to_input_after_exhaustion() {
     let dir = tempfile::tempdir().unwrap();
     for i in 0..=100 {
-        let name = if i == 0 { "full.png".to_string() } else { format!("full_{i}.png") };
+        let name = if i == 0 {
+            "full.png".to_string()
+        } else {
+            format!("full_{i}.png")
+        };
         std::fs::write(dir.path().join(name), b"x").unwrap();
     }
     // Every _1..=_100 candidate taken: the input path is returned unchanged.
-    assert_eq!(dedupe_path(&dir.path().join("full.png")), dir.path().join("full.png"));
+    assert_eq!(
+        dedupe_path(&dir.path().join("full.png")),
+        dir.path().join("full.png")
+    );
 }
 
 #[test]
@@ -334,7 +383,9 @@ fn spawn_single_shot_server(body: &'static str) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
     std::thread::spawn(move || {
-        let Ok((stream, _)) = listener.accept() else { return };
+        let Ok((stream, _)) = listener.accept() else {
+            return;
+        };
         serve_one(stream, body);
     });
     fn serve_one(mut stream: TcpStream, body: &str) {
@@ -388,7 +439,12 @@ fn test_name_image_falls_back_to_cleaned_stem_when_vlm_unreachable() {
 
     // "IMG_9999" is a filename fragment (not prose), so this exercises the VLM
     // branch specifically; port 1 refuses connections fast.
-    let named = name_image(Path::new("/nonexistent/ztools_img.png"), "IMG_9999", 40, &config);
+    let named = name_image(
+        Path::new("/nonexistent/ztools_img.png"),
+        "IMG_9999",
+        40,
+        &config,
+    );
 
     assert_eq!(named, "img_9999");
 }

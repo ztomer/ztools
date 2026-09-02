@@ -186,9 +186,7 @@ mod tests {
 
     #[test]
     fn source_lines_without_tags_are_not_indexed() {
-        let map = source_lines_by_author(
-            "a plain line with no tag\n[@alice | Jan 5]: hello world",
-        );
+        let map = source_lines_by_author("a plain line with no tag\n[@alice | Jan 5]: hello world");
         assert_eq!(map.len(), 1);
         assert_eq!(
             map.get(&("alice".to_string(), "Jan 5".to_string())),
@@ -198,8 +196,7 @@ mod tests {
 
     #[test]
     fn faithfulness_skips_unbulleted_untagged_and_empty_claims() {
-        let source =
-            "[@TechCrunch | Aug 10 14:30]: OpenAI releases new model weights";
+        let source = "[@TechCrunch | Aug 10 14:30]: OpenAI releases new model weights";
         let text = "plain prose line\n- no attribution tag here\n- (@TechCrunch | Aug 10 14:30)\n- OpenAI releases new model weights (@TechCrunch | Aug 10 14:30)";
         let (faithful, total, reasons) = attribution_faithfulness(text, source);
         // Empty-claim tagged bullets still count toward the total.
@@ -214,8 +211,7 @@ mod tests {
 
     #[test]
     fn unknown_authors_and_wrong_timestamps_report_distinct_reasons() {
-        let source =
-            "[@TechCrunch | Aug 10 14:30]: OpenAI releases new model weights";
+        let source = "[@TechCrunch | Aug 10 14:30]: OpenAI releases new model weights";
         let text = "- OpenAI released weights (@GhostWriter | Aug 10 14:30)\n- OpenAI released weights (@TechCrunch | Aug 11 09:00)";
         let (_, total, reasons) = attribution_faithfulness(text, source);
         assert_eq!(total, 2);
@@ -243,14 +239,10 @@ mod tests {
         );
         assert_eq!(
             validate_attribution(&json!("some text"), ""),
-            (
-                0,
-                "no source to check attribution against".to_string()
-            )
+            (0, "no source to check attribution against".to_string())
         );
 
-        let (score, reason) =
-            validate_attribution(&json!("- bullet one\n- bullet two"), source);
+        let (score, reason) = validate_attribution(&json!("- bullet one\n- bullet two"), source);
         assert_eq!(score, NO_TAGS_SCORE);
         assert!(
             reason.contains("no attributed bullets"),
@@ -265,8 +257,7 @@ mod tests {
 
     #[test]
     fn half_faithful_reports_slips_not_misattribution() {
-        let source =
-            "[@TechCrunch | Aug 10 14:30]: OpenAI releases new model weights";
+        let source = "[@TechCrunch | Aug 10 14:30]: OpenAI releases new model weights";
         let text = "- OpenAI releases new model weights (@TechCrunch | Aug 10 14:30)\n- OpenAI released weights (@TechCrunch | Aug 11 09:00)";
         let (score, reason) = validate_attribution(&json!(text), source);
         assert_eq!(score, 50);

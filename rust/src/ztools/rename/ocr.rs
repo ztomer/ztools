@@ -132,15 +132,13 @@ mod tests {
 
     #[test]
     fn test_is_available_absolute_path_checks_existence() {
-        let missing = TesseractEngine::new(Some(PathBuf::from(
-            "/nonexistent/ztools_missing_tesseract",
-        )));
+        let missing =
+            TesseractEngine::new(Some(PathBuf::from("/nonexistent/ztools_missing_tesseract")));
         assert!(!missing.is_available());
 
         let present_file = tempfile::NamedTempFile::new().unwrap();
         // An existing absolute binary_path satisfies the availability check.
-        let present =
-            TesseractEngine::new(Some(present_file.path().to_path_buf()));
+        let present = TesseractEngine::new(Some(present_file.path().to_path_buf()));
         assert!(present.is_available());
     }
 
@@ -156,11 +154,9 @@ mod tests {
     #[test]
     fn test_extract_text_returns_none_for_missing_image() {
         let engine = TesseractEngine::new(Some(PathBuf::from("/bin/echo")));
-        assert!(
-            engine
-                .extract_text(Path::new("/nonexistent/ztools_img.png"))
-                .is_none()
-        );
+        assert!(engine
+            .extract_text(Path::new("/nonexistent/ztools_img.png"))
+            .is_none());
     }
 
     #[test]
@@ -178,7 +174,10 @@ mod tests {
         // plumbing without an OCR engine.
         let engine = TesseractEngine::new(Some(PathBuf::from("/bin/echo")));
         let text = engine.extract_text(img.path()).unwrap();
-        assert_eq!(text, format!("{} stdout --oem 1 -l eng", img.path().display()));
+        assert_eq!(
+            text,
+            format!("{} stdout --oem 1 -l eng", img.path().display())
+        );
     }
 
     #[test]
@@ -191,12 +190,8 @@ mod tests {
 
     #[test]
     fn test_global_helpers_none_without_image() {
-        assert!(
-            extract_first_line(Path::new("/nonexistent/ztools_img.png")).is_none()
-        );
-        assert!(
-            extract_full_text(Path::new("/nonexistent/ztools_img.png")).is_none()
-        );
+        assert!(extract_first_line(Path::new("/nonexistent/ztools_img.png")).is_none());
+        assert!(extract_full_text(Path::new("/nonexistent/ztools_img.png")).is_none());
     }
 
     #[test]

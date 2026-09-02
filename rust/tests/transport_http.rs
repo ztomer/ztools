@@ -79,7 +79,10 @@ fn blocking_call_extracts_content_and_parses_json() {
     assert_eq!(r.error, None, "{r:?}");
     assert!(r.content.contains("Rib Fest"), "{r:?}");
     assert_eq!(r.finish_reason, "stop");
-    assert!(r.parsed.is_some(), "parse_json should populate parsed: {r:?}");
+    assert!(
+        r.parsed.is_some(),
+        "parse_json should populate parsed: {r:?}"
+    );
     assert!(r.time_secs >= 0.0);
 }
 
@@ -102,7 +105,17 @@ fn blocking_call_reports_http_error_as_data() {
 fn blocking_call_survives_a_dead_server() {
     // Port 1 on localhost is refused; must come back as an error RESULT,
     // never a panic -- a failed request during a sweep must not end it.
-    let spec = RequestSpec { model: "m", messages: &msgs(), host: "127.0.0.1", port: 1, temperature: 0.0, max_tokens: 100, timeout_secs: 2, allow_substitution: false, stream_guard: false };
+    let spec = RequestSpec {
+        model: "m",
+        messages: &msgs(),
+        host: "127.0.0.1",
+        port: 1,
+        temperature: 0.0,
+        max_tokens: 100,
+        timeout_secs: 2,
+        allow_substitution: false,
+        stream_guard: false,
+    };
     let r = call(&spec, false);
     assert!(r.error.is_some(), "{r:?}");
 }
@@ -145,7 +158,10 @@ fn overrun_guard_aborts_reasoning_past_budget_with_no_content() {
     assert!(r.aborted, "{r:?}");
     assert_eq!(r.finish_reason, "aborted_reasoning_overrun");
     assert!(r.abort_reason.contains("cannot hold an answer"), "{r:?}");
-    assert!(r.error.is_none(), "an overrun is an eval result, not an error: {r:?}");
+    assert!(
+        r.error.is_none(),
+        "an overrun is an eval result, not an error: {r:?}"
+    );
 }
 
 #[test]
@@ -188,5 +204,8 @@ fn stream_deadline_enforced_in_wall_clock() {
         "{r:?}"
     );
     assert_eq!(r.finish_reason, "stream_deadline_exceeded");
-    assert!(started.elapsed().as_secs() < 4, "must not wait out the stall");
+    assert!(
+        started.elapsed().as_secs() < 4,
+        "must not wait out the stall"
+    );
 }

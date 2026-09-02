@@ -34,7 +34,10 @@ const BYTES_PER_GB: f64 = 1024.0 * 1024.0 * 1024.0;
 const PAGE_BYTES: f64 = 16384.0;
 
 fn env_u64(key: &str, default: u64) -> u64 {
-    std::env::var(key).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+    std::env::var(key)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
 }
 
 pub fn default_eval_timeout() -> u64 {
@@ -108,7 +111,11 @@ fn swap_used_gb() -> Option<f64> {
     // zeroed derived_timeout, and silently disabled the median-of-clean
     // estimator's recovery path. Found by coverage work: the happy path was
     // unreachable.
-    let out = Command::new("sysctl").arg("-n").arg("vm.swapusage").output().ok()?;
+    let out = Command::new("sysctl")
+        .arg("-n")
+        .arg("vm.swapusage")
+        .output()
+        .ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
     let mut tokens = text.split_whitespace();
     while let Some(token) = tokens.next() {
@@ -120,7 +127,11 @@ fn swap_used_gb() -> Option<f64> {
                 continue;
             }
             let value: f64 = field.trim_end_matches(['M', 'G']).parse().ok()?;
-            let multiplier = if field.ends_with('G') { 1.0 } else { 1.0 / 1024.0 };
+            let multiplier = if field.ends_with('G') {
+                1.0
+            } else {
+                1.0 / 1024.0
+            };
             return Some(value * multiplier);
         }
     }
@@ -130,7 +141,9 @@ fn swap_used_gb() -> Option<f64> {
 fn compressor_gb() -> Option<f64> {
     let out = Command::new("/usr/bin/vm_stat").output().ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
-    let line = text.lines().find(|l| l.starts_with("Pages occupied by compressor"))?;
+    let line = text
+        .lines()
+        .find(|l| l.starts_with("Pages occupied by compressor"))?;
     let raw = line.split(':').nth(1)?;
     let pages: f64 = raw.trim().trim_end_matches('.').parse().ok()?;
     Some(pages * PAGE_BYTES / BYTES_PER_GB)
@@ -170,14 +183,17 @@ pub fn record_capability_sample(signals: &mut SignalStore, model: &str, key: &st
         .get(format!("{key}_samples").as_str())
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
-    migrate_sample_history(
-        &mut history,
-        caps_obj.get(key).and_then(|v| v.as_f64()),
-    );
+    migrate_sample_history(&mut history, caps_obj.get(key).and_then(|v| v.as_f64()));
     let clean = machine_is_uncontended();
     let estimate = crate::ztools::eval::samples::add_sample(&mut history, value, clean);
-    caps_obj.insert(format!("{key}_samples"), serde_json::to_value(&history).unwrap_or(Value::Null));
-    caps_obj.insert(key.to_string(), serde_json::json!((estimate * 100.0).round() / 100.0));
+    caps_obj.insert(
+        format!("{key}_samples"),
+        serde_json::to_value(&history).unwrap_or(Value::Null),
+    );
+    caps_obj.insert(
+        key.to_string(),
+        serde_json::json!((estimate * 100.0).round() / 100.0),
+    );
 }
 
 fn caps_clean_estimate(signals: &SignalStore, model: &str, key: &str) -> Option<f64> {
@@ -211,7 +227,12 @@ pub fn derived_timeout(model: &str, prompt_chars: usize, max_tokens: u32) -> u64
 /// per-model/task value, the per-task CONFIGURED timeout from
 /// `conf/config.toml [timeouts]` (fallback 600, `lib/llm/constants.py
 /// DEFAULT_TIMEOUT`), the documented floor, and the derived estimate.
-pub fn effective_timeout(model: &str, task_name: &str, prompt_chars: usize, max_tokens: u32) -> u64 {
+pub fn effective_timeout(
+    model: &str,
+    task_name: &str,
+    prompt_chars: usize,
+    max_tokens: u32,
+) -> u64 {
     const FALLBACK_CONFIGURED_TIMEOUT: u64 = 600;
     let signals = load_signals();
     let learned = signals
@@ -220,19 +241,18 @@ pub fn effective_timeout(model: &str, task_name: &str, prompt_chars: usize, max_
         .and_then(|t| t.get("timeout"))
         .and_then(|v| v.as_u64())
         .unwrap_or(0);
-    let configured = std::fs::read_to_string(
-        crate::ztools::eval::budgets::conf_root().join("config.toml"),
-    )
-    .ok()
-    .and_then(|text| toml::from_str::<toml::Value>(&text).ok())
-        .and_then(|cfg| {
-            cfg.get("timeouts")
-                .and_then(|t| t.get(task_name))
-                .and_then(|v| v.as_integer())
-                .filter(|v| *v > 0)
-                .map(|v| v as u64)
-        })
-        .unwrap_or(FALLBACK_CONFIGURED_TIMEOUT);
+    let configured =
+        std::fs::read_to_string(crate::ztools::eval::budgets::conf_root().join("config.toml"))
+            .ok()
+            .and_then(|text| toml::from_str::<toml::Value>(&text).ok())
+            .and_then(|cfg| {
+                cfg.get("timeouts")
+                    .and_then(|t| t.get(task_name))
+                    .and_then(|v| v.as_integer())
+                    .filter(|v| *v > 0)
+                    .map(|v| v as u64)
+            })
+            .unwrap_or(FALLBACK_CONFIGURED_TIMEOUT);
     let derived = derived_timeout(model, prompt_chars, max_tokens);
     *[learned, configured, derived, default_eval_timeout()]
         .iter()
@@ -256,14 +276,19 @@ pub fn record_signal(
     let model_entry = signals
         .entry(model.to_string())
         .or_insert_with(|| Value::Object(Default::default()));
-    let obj = model_entry.as_object_mut().expect("model entry is an object");
+    let obj = model_entry
+        .as_object_mut()
+        .expect("model entry is an object");
     let per_task = obj
         .entry(task_name.to_string())
         .or_insert_with(|| Value::Object(Default::default()));
     let task = per_task.as_object_mut().expect("task entry is an object");
 
     let samples = task.get("samples").and_then(|v| v.as_u64()).unwrap_or(0);
-    let old_p95 = task.get("p95_latency").and_then(|v| v.as_f64()).unwrap_or(0.0);
+    let old_p95 = task
+        .get("p95_latency")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0);
 
     let mut p95 = old_p95;
     if time_taken > 0.0 {
@@ -276,12 +301,18 @@ pub fn record_signal(
     }
 
     task.insert("samples".to_string(), serde_json::json!(samples + 1));
-    let retries = task.get("total_retries").and_then(|v| v.as_u64()).unwrap_or(0);
+    let retries = task
+        .get("total_retries")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
     task.insert(
         "total_retries".to_string(),
         serde_json::json!(retries + u64::from(had_retries)),
     );
-    let parse_failures = task.get("parse_failures").and_then(|v| v.as_u64()).unwrap_or(0);
+    let parse_failures = task
+        .get("parse_failures")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0);
     task.insert(
         "parse_failures".to_string(),
         serde_json::json!(parse_failures + u64::from(is_parse_failure)),

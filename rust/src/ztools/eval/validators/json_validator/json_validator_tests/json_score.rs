@@ -8,7 +8,10 @@ use super::support::{detailed_items, SRC_FULL, SRC_LOW, SRC_MED, SRC_NONE};
 
 #[test]
 fn test_validate_json_scalar_input_has_no_items() {
-    assert_eq!(validate_json(&json!(42), ""), (0, "no items found".to_string()));
+    assert_eq!(
+        validate_json(&json!(42), ""),
+        (0, "no items found".to_string())
+    );
 }
 
 #[test]
@@ -54,9 +57,15 @@ fn test_validate_json_source_ratio_bands() {
     // ratio 1.0 -> +25; total caps at exactly MAX_SCORE
     assert_eq!(validate_json(&data, SRC_FULL), (100, "".to_string()));
     // 5/8 match = 0.625 -> +12
-    assert_eq!(validate_json(&data, SRC_MED), (20 + 25 + 30 + 12, "".to_string()));
+    assert_eq!(
+        validate_json(&data, SRC_MED),
+        (20 + 25 + 30 + 12, "".to_string())
+    );
     // 2/8 match = 0.25 -> +6
-    assert_eq!(validate_json(&data, SRC_LOW), (20 + 25 + 30 + 6, "".to_string()));
+    assert_eq!(
+        validate_json(&data, SRC_LOW),
+        (20 + 25 + 30 + 6, "".to_string())
+    );
     // ratio 0 -> hallucinated
     let (score, reason) = validate_json(&data, SRC_NONE);
     assert_eq!(score, 75);

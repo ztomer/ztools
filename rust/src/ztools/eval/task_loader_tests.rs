@@ -192,10 +192,7 @@ fn snapshot_shape_decides_messages_and_check_routing() {
     assert_eq!(qa.messages[0].role, "system");
     assert_eq!(qa.messages[0].content, "You are a tax assistant.");
 
-    let anomalies = tasks
-        .iter()
-        .find(|t| t.name == "taxes_anomalies")
-        .unwrap();
+    let anomalies = tasks.iter().find(|t| t.name == "taxes_anomalies").unwrap();
     assert_eq!(
         anomalies.checks,
         vec![Check::TaxesRubric {
@@ -327,11 +324,7 @@ fn graded_score_dispatches_every_graded_variant() {
 #[test]
 fn run_check_validator_wrappers_pass_and_fail_on_threshold() {
     let with_items = serde_json::json!({"items": [{"name": "Alpha"}, {"name": "Beta"}]});
-    assert!(run_check(
-        &Check::JsonValidator(1),
-        "",
-        Some(&with_items)
-    ));
+    assert!(run_check(&Check::JsonValidator(1), "", Some(&with_items)));
     assert!(!run_check(
         &Check::JsonValidator(101),
         "",
@@ -342,16 +335,8 @@ fn run_check_validator_wrappers_pass_and_fail_on_threshold() {
         "no extractable items scores 0"
     );
 
-    assert!(run_check(
-        &Check::DetailedJson(1),
-        "",
-        Some(&with_items)
-    ));
-    assert!(!run_check(
-        &Check::DetailedJson(101),
-        "",
-        Some(&with_items)
-    ));
+    assert!(run_check(&Check::DetailedJson(1), "", Some(&with_items)));
+    assert!(!run_check(&Check::DetailedJson(101), "", Some(&with_items)));
     assert!(!run_check(
         &Check::DetailedJson(1),
         "",

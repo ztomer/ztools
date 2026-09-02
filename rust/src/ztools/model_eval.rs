@@ -199,8 +199,7 @@ pub fn render_task_outcomes(outcomes: &[crate::ztools::eval::TaskOutcome]) -> St
         );
     }
     if !rows.is_empty() {
-        let mean: f64 =
-            rows.iter().map(|o| o.score as f64).sum::<f64>() / rows.len() as f64;
+        let mean: f64 = rows.iter().map(|o| o.score as f64).sum::<f64>() / rows.len() as f64;
         let ok = rows.iter().filter(|o| o.status == "ok").count();
         let _ = writeln!(report);
         let _ = writeln!(
@@ -312,7 +311,10 @@ mod tests {
         let bad_pos = report.find("| bad ").expect("bad row present");
         let good_pos = report.find("| good ").expect("good row present");
         assert!(bad_pos < good_pos, "worst score must lead:\n{report}");
-        assert!(report.contains("2 tasks, 1 ok, mean score 62.5"), "{report}");
+        assert!(
+            report.contains("2 tasks, 1 ok, mean score 62.5"),
+            "{report}"
+        );
         assert!(report.contains("HTTP 503"), "{report}");
     }
 

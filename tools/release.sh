@@ -51,6 +51,19 @@ if ! git diff --quiet; then
     point at HEAD, silently shipping something different from what you tested)"
 fi
 
+# ── 2b. Run the gate ───────────────────────────────────────────────
+# This script pushes with --no-verify, which SKIPS the pre-push hook -- so
+# without this step nothing checked a release at all. The comment above about
+# "silently shipping something different from what you tested" described
+# exactly what happened next: the tag went out ungated.
+#
+# `make ci` is the gate of record and reads its step list from .gatesrc, the
+# same list `tools/gate.sh --full` runs, so this cannot drift from the hook it
+# stands in for.
+info "Running the full gate (make ci) before tagging …"
+make ci >/dev/null || err "gate failed — nothing tagged, nothing pushed"
+ok "Gate green"
+
 # ── 3. Sync BOTH manifests to $V, then tag ────────────────────────
 # pyproject.toml drives the sdist version; rust/Cargo.toml drives the binary
 # and Cargo.lock. At v2.1.5 only pyproject moved and the binary shipped

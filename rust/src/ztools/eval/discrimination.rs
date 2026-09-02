@@ -62,7 +62,8 @@ fn count_distinct(values: &[f64]) -> usize {
 ///
 /// Returns a dict mapping task name -> list of scores.
 pub fn scores_by_task(all_results: &[EvalResult]) -> ::std::collections::HashMap<String, Vec<f64>> {
-    let mut by_task: ::std::collections::HashMap<String, Vec<f64>> = ::std::collections::HashMap::new();
+    let mut by_task: ::std::collections::HashMap<String, Vec<f64>> =
+        ::std::collections::HashMap::new();
     for record in all_results {
         let task = &record.task;
         let score = record.quality_score as f64;
@@ -85,7 +86,8 @@ pub fn distinct_values(all_results: &[EvalResult], task: &str) -> usize {
 /// a narrow spread is a property of the sample size and calling it a gate would be
 /// inventing a finding.
 pub fn classify(all_results: &[EvalResult]) -> ::std::collections::HashMap<String, &'static str> {
-    let mut verdicts: ::std::collections::HashMap<String, &'static str> = ::std::collections::HashMap::new();
+    let mut verdicts: ::std::collections::HashMap<String, &'static str> =
+        ::std::collections::HashMap::new();
     let task_scores = scores_by_task(all_results);
 
     for (task, scores) in &task_scores {
@@ -244,12 +246,10 @@ mod tests {
 
     #[test]
     fn test_classify_with_few_models() {
-        let results = vec![
-            EvalResult {
-                task: "json".to_string(),
-                quality_score: 100,
-            },
-        ];
+        let results = vec![EvalResult {
+            task: "json".to_string(),
+            quality_score: 100,
+        }];
         let verdicts = classify(&results);
         assert_eq!(verdicts.get("json"), Some(&"unknown"));
     }

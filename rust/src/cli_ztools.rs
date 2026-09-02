@@ -26,10 +26,68 @@ pub(crate) struct TwitterSummarizeOpts {
     pub last_updated: bool,
 }
 
-pub(crate) fn twitter_summarize(
-    config: &ZtoolsConfig,
-    opts: TwitterSummarizeOpts,
-) -> Result<()> {
+/// Whether a task name is selected by a `--task` filter.
+///
+/// The filter is a comma-separated list; each entry matches the FULL name or
+/// its trailing segment, so `--task taxes` picks up `weekend.taxes` without
+/// the caller having to know the namespace. Entries are trimmed, because
+/// `--task a, b` is what a human types.
+///
+/// Extracted from the run path so the matching rule is provable on its own.
+/// A filter that quietly matches nothing is the failure worth catching here:
+/// the caller turns that into a refusal rather than running the full suite as
+/// though no filter had been given.
+fn task_matches_filter(task_name: &str, filter: &str) -> bool {
+    filter
+        .split(',')
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .any(|n| task_name == n || task_name.ends_with(n))
+}
+
+/// Parse a tweet array, or nothing.
+///
+/// Deliberately lossy in one direction only: unparseable input yields an empty
+/// list so the caller falls through to its other sources, and never a partial
+/// one. Half a timeline read as the whole timeline is a summary that is
+/// confidently wrong about what was said.
+fn tweets_from_json(text: &str) -> Vec<crate::ztools::twitter::Tweet> {
+    serde_json::from_str::<Vec<crate::ztools::twitter::Tweet>>(text).unwrap_or_default()
+}
+
+/// Tweets from one file, or nothing when it is absent or unreadable.
+fn tweets_from_file(path: &std::path::Path) -> Vec<crate::ztools::twitter::Tweet> {
+    match std::fs::read_to_string(path) {
+        Ok(content) => tweets_from_json(&content),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// The first cache file that yields a NON-EMPTY tweet list, and where it came
+/// from.
+///
+/// The non-empty condition is the point: an empty cache file is not an answer,
+/// and stopping at one would report "0 cached tweets" while a populated
+/// candidate sat unread behind it. Returning the path too is what lets the
+/// caller say which file it used instead of leaving the operator to guess
+/// between two hard-coded locations.
+///
+/// The candidate list is a parameter rather than being built from `$HOME`
+/// inside, so every branch here is provable without writing into the
+/// developer's own home directory.
+fn tweets_from_cache(
+    candidates: &[PathBuf],
+) -> Option<(PathBuf, Vec<crate::ztools::twitter::Tweet>)> {
+    for candidate in candidates {
+        let parsed = tweets_from_file(candidate);
+        if !parsed.is_empty() {
+            return Some((candidate.clone(), parsed));
+        }
+    }
+    None
+}
+
+pub(crate) fn twitter_summarize(config: &ZtoolsConfig, opts: TwitterSummarizeOpts) -> Result<()> {
     let TwitterSummarizeOpts {
         json,
         model,
@@ -57,45 +115,35 @@ pub(crate) fn twitter_summarize(
         if path_or_dash == "-" {
             let mut buffer = String::new();
             if std::io::Read::read_to_string(&mut std::io::stdin(), &mut buffer).is_ok() {
-                if let Ok(parsed) =
-                    serde_json::from_str::<Vec<crate::ztools::twitter::Tweet>>(&buffer)
-                {
-                    tweets = parsed;
-                }
+                tweets = tweets_from_json(&buffer);
             }
-        } else if std::path::Path::new(&path_or_dash).exists() {
-            if let Ok(content) = std::fs::read_to_string(&path_or_dash) {
-                if let Ok(parsed) =
-                    serde_json::from_str::<Vec<crate::ztools::twitter::Tweet>>(&content)
-                {
-                    tweets = parsed;
-                }
-            }
+        } else {
+            tweets = tweets_from_file(std::path::Path::new(&path_or_dash));
         }
         explicit_source = true;
     }
 
     if !explicit_source {
         if use_cache {
-            let candidates = [
+            let candidates: Vec<PathBuf> = [
                 dirs::home_dir().map(|h| h.join(".twitter_summary_debug_cache.json")),
                 dirs::home_dir().map(|h| h.join(".cache/twitter/debug_tweets.json")),
-            ];
-            for candidate in candidates.into_iter().flatten() {
-                if candidate.exists() {
-                    if let Ok(content) = std::fs::read_to_string(&candidate) {
-                        if let Ok(parsed) = serde_json::from_str::<Vec<crate::ztools::twitter::Tweet>>(&content) {
-                            if !parsed.is_empty() {
-                                tweets = parsed;
-                                println!("· Using {} cached tweets from {}", tweets.len(), candidate.display());
-                                break;
-                            }
-                        }
-                    }
-                }
+            ]
+            .into_iter()
+            .flatten()
+            .collect();
+            if let Some((from, cached)) = tweets_from_cache(&candidates) {
+                println!(
+                    "· Using {} cached tweets from {}",
+                    cached.len(),
+                    from.display()
+                );
+                tweets = cached;
             }
             if tweets.is_empty() {
-                anyhow::bail!("No cached tweets found. Run without --use-cache first to scrape live tweets.");
+                anyhow::bail!(
+                    "No cached tweets found. Run without --use-cache first to scrape live tweets."
+                );
             }
         } else {
             tweets = crate::ztools::twitter::browser::collect_tweets_live(since.as_deref(), debug)?;
@@ -104,7 +152,10 @@ pub(crate) fn twitter_summarize(
                 return Ok(());
             }
             if fetch_only {
-                println!("✓ {} tweets fetched and cached. (--fetch-only provided, exiting)", tweets.len());
+                println!(
+                    "✓ {} tweets fetched and cached. (--fetch-only provided, exiting)",
+                    tweets.len()
+                );
                 return Ok(());
             }
         }
@@ -271,61 +322,12 @@ pub(crate) fn image_renamer(config: &ZtoolsConfig, dir: PathBuf, apply: bool) ->
     Ok(())
 }
 
-/// `--capabilities`: probe what each servable model IS -- family (recorded
-/// architecture first, name match as fallback), generative verdict, on-disk
-/// weight footprint, and viability (packaging defects + learned decode rate)
-/// -- WITHOUT running a single task. Port of `ev --capabilities`.
-fn print_capabilities(url: &str, model_selector: &str) -> Result<()> {
-    let models = resolve_models(url, model_selector, &ZtoolsConfig::default())?;
-    if models.is_empty() {
-        println!("no models found");
-        return Ok(());
-    }
-    println!("Model                               Family        Disk GB   Gen?  Viability");
-    for m in &models {
-        let family = recorded_family_or_name(m);
-        let disk_gb = crate::ztools::eval::model_disk_bytes(m)
-            .map(|b| format!("{:.1}", b as f64 / 1024.0 / 1024.0 / 1024.0))
-            .unwrap_or_else(|| "-".to_string());
-        let gen = if crate::ztools::eval::is_generative_model(m) { "yes" } else { "NO" };
-        let decode = decode_rate(m);
-        let viability = match crate::ztools::model_health::assess_viability(m, decode, None) {
-            Ok(()) => "ok".to_string(),
-            Err(reason) => reason,
-        };
-        println!(
-            "{:<36} {:<12} {:>9} {:>6}  {}",
-            truncate_col(m, 36),
-            truncate_col(&family, 12),
-            disk_gb,
-            gen,
-            truncate_col(&viability, 60)
-        );
-    }
-    Ok(())
-}
-
-fn recorded_family_or_name(model: &str) -> String {
-    // Same resolution chain as budgets.rs: recorded architecture trimmed to a
-    // conf/models file, else the name's family token, else "default".
-    crate::ztools::eval::config_family(model)
-        .unwrap_or_else(|| "default".to_string())
-}
-
-fn decode_rate(model: &str) -> Option<f64> {
-    let signals = crate::ztools::eval::load_signals();
-    let caps = signals.get(model)?.get("_capabilities")?;
-    caps.get("decode_tokens_per_sec")?.as_f64()
-}
-
-fn truncate_col(s: &str, width: usize) -> String {
-    if s.chars().count() <= width {
-        s.to_string()
-    } else {
-        let cut: String = s.chars().take(width.saturating_sub(3)).collect();
-        format!("{cut}...")
-    }
-}
+// The `--capabilities` probe lives in its own file for the house 500-line cap,
+// along a seam that was already there: it reports what a model IS without
+// running a single task, while everything below runs them.
+#[path = "cli_ztools_capabilities.rs"]
+mod capabilities;
+use capabilities::print_capabilities;
 
 pub(crate) fn model_eval(
     config: &ZtoolsConfig,
@@ -343,8 +345,7 @@ pub(crate) fn model_eval(
     if suite == "full" {
         let mut tasks = crate::ztools::eval::load_all_eval_tasks(tasks_dir);
         if let Some(filter) = task_filter {
-            let names: Vec<&str> = filter.split(',').map(str::trim).collect();
-            tasks.retain(|t| names.iter().any(|n| t.name.ends_with(n) || *n == t.name));
+            tasks.retain(|t| task_matches_filter(&t.name, filter));
             if tasks.is_empty() {
                 anyhow::bail!("--task filter {filter} matched no loaded tasks");
             }
@@ -360,9 +361,7 @@ pub(crate) fn model_eval(
         let _gpu = crate::ztools::eval::GpuLockGuard::acquire(
             "ztools model-eval --suite full",
             std::time::Duration::from_secs(5),
-            std::time::Duration::from_secs(
-                crate::ztools::eval::DEFAULT_MAX_IDLE_SECS,
-            ),
+            std::time::Duration::from_secs(crate::ztools::eval::DEFAULT_MAX_IDLE_SECS),
         )
         .map_err(|e| anyhow::anyhow!("GPU lock unavailable: {e}"))?;
         let expected_tasks: Vec<String> = tasks.iter().map(|t| t.name.clone()).collect();
@@ -381,9 +380,15 @@ pub(crate) fn model_eval(
             // The banner is human progress, not data: under --json-output it
             // must not precede the JSON on stdout.
             if json_output {
-                eprintln!("Testing {model_name} (full suite, {} tasks)...", tasks.len());
+                eprintln!(
+                    "Testing {model_name} (full suite, {} tasks)...",
+                    tasks.len()
+                );
             } else {
-                println!("Testing {model_name} (full suite, {} tasks)...", tasks.len());
+                println!(
+                    "Testing {model_name} (full suite, {} tasks)...",
+                    tasks.len()
+                );
             }
             let cfg = crate::ztools::eval::RunnerConfig {
                 host: host.clone(),
@@ -394,19 +399,15 @@ pub(crate) fn model_eval(
             // The learning path: prefill/cold-start/decode measurement, learned
             // per-task timeouts, p95 signal recording, raw-output archival,
             // stall watchdog. Loaded from and saved back to conf/eval_signals.json.
-            let outcomes =
-                crate::ztools::eval::run_eval_with_signals(&model_name, &tasks, &cfg);
+            let outcomes = crate::ztools::eval::run_eval_with_signals(&model_name, &tasks, &cfg);
 
             // Completeness is DERIVED by diffing expected vs reported -- no
             // abandon path can forget to set a flag. A truncated run says so
             // out loud here AND carries the verdict into its history entries,
             // which load_historical_stats refuses to average (the bonsai 62%
             // vs 79% class of misread).
-            let run_record = crate::ztools::eval::ModelRun::new(
-                &model_name,
-                &expected_tasks,
-                outcomes.clone(),
-            );
+            let run_record =
+                crate::ztools::eval::ModelRun::new(&model_name, &expected_tasks, outcomes.clone());
             if let Some(c) = &run_record.completeness {
                 if !c.complete {
                     eprintln!("⚠ {} (partial): {}", model_name, c.reason);
@@ -446,7 +447,10 @@ pub(crate) fn model_eval(
                     .collect();
                 println!("{}", serde_json::to_string_pretty(&rows)?);
             } else {
-                for note in outcomes.iter().filter_map(|o| o.substitution_reason.as_deref()) {
+                for note in outcomes
+                    .iter()
+                    .filter_map(|o| o.substitution_reason.as_deref())
+                {
                     eprintln!("⚠ {note}");
                 }
                 print!(
@@ -483,13 +487,13 @@ pub(crate) fn model_eval(
 
 /// "all" expands to every servable model on the server; any other value is
 /// taken literally.
-fn resolve_models(
-    url: &str,
-    model: &str,
-    config: &ZtoolsConfig,
-) -> Result<Vec<String>> {
+fn resolve_models(url: &str, model: &str, config: &ZtoolsConfig) -> Result<Vec<String>> {
     if model != "all" {
         return Ok(vec![model.to_string()]);
     }
     crate::ztools::model_eval::get_available_models(url, config)
 }
+
+#[cfg(test)]
+#[path = "cli_ztools_tests.rs"]
+mod tests;

@@ -12,8 +12,8 @@ use std::time::Duration;
 use serial_test::serial;
 use tempfile::TempDir;
 use ztools::eval::gpu_lock::{
-    foreign_holder, is_expired, is_owner_alive, lock_dir, read_owner, start_time,
-    GpuLockGuard, DEFAULT_LOCK_DIR, OWNER_ENV,
+    foreign_holder, is_expired, is_owner_alive, lock_dir, read_owner, start_time, GpuLockGuard,
+    DEFAULT_LOCK_DIR, OWNER_ENV,
 };
 
 /// A pid no process can have: above any sane pid_max, below i32::MAX so the
@@ -61,11 +61,7 @@ fn live_child() -> Child {
 /// Write a complete owner file the way `acquire_at` would.
 fn write_owner(dir: &std::path::Path, pid: u32, start: &str, label: &str) {
     std::fs::create_dir_all(dir).unwrap();
-    std::fs::write(
-        dir.join("owner"),
-        format!("{pid}\n{start}\n{label}\n"),
-    )
-    .unwrap();
+    std::fs::write(dir.join("owner"), format!("{pid}\n{start}\n{label}\n")).unwrap();
 }
 
 // --- lock_dir env seam -------------------------------------------------------
@@ -138,12 +134,7 @@ fn is_owner_alive_rejects_missing_garbage_dead_and_recycled_pids() {
 
     // Recycled PID: live pid, but recorded start time is not this process's.
     let me = std::process::id();
-    write_owner(
-        tmp.path(),
-        me,
-        "Thu Jan  1 00:00:00 1970",
-        "recycled",
-    );
+    write_owner(tmp.path(), me, "Thu Jan  1 00:00:00 1970", "recycled");
     assert!(
         !is_owner_alive(tmp.path()),
         "a live pid with a foreign start time must count as dead"
@@ -353,7 +344,10 @@ fn acquire_reclaims_an_expired_lock_even_with_a_live_holder() {
     // Let the directory mtime age past the tiny idle budget.
     thread_sleep(Duration::from_millis(60));
     let stale = std::time::SystemTime::now() - Duration::from_millis(200);
-    std::fs::File::open(&lock).unwrap().set_modified(stale).unwrap();
+    std::fs::File::open(&lock)
+        .unwrap()
+        .set_modified(stale)
+        .unwrap();
 
     let guard = GpuLockGuard::acquire_at(
         &lock,
@@ -364,7 +358,10 @@ fn acquire_reclaims_an_expired_lock_even_with_a_live_holder() {
     .unwrap();
     assert!(guard.acquired, "a wedged lock must be reclaimable");
     let owner = read_owner(&lock).unwrap();
-    assert_eq!(owner.2.trim(), "fresh (pid {me})".replace("{me}", &me.to_string()));
+    assert_eq!(
+        owner.2.trim(),
+        "fresh (pid {me})".replace("{me}", &me.to_string())
+    );
 }
 
 #[test]
@@ -424,8 +421,12 @@ fn acquire_default_path_follows_the_dir_env_seam() {
     let _d = EnvGuard::set(ztools::eval::gpu_lock::DIR_ENV, lock.to_str().unwrap());
     let _o = EnvGuard::unset(OWNER_ENV);
 
-    let guard = GpuLockGuard::acquire("seam run", Duration::from_secs(2), Duration::from_secs(3600))
-        .unwrap();
+    let guard = GpuLockGuard::acquire(
+        "seam run",
+        Duration::from_secs(2),
+        Duration::from_secs(3600),
+    )
+    .unwrap();
     assert!(guard.acquired);
     assert!(lock.exists());
     assert!(read_owner(&lock).is_some());

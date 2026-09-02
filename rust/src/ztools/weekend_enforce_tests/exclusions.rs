@@ -1,8 +1,6 @@
 //! Excluded-place matching and weather-label correction.
 
-use crate::ztools::weekend::{
-    correct_weather_labels, drop_excluded_places, matches_exclusion,
-};
+use crate::ztools::weekend::{correct_weather_labels, drop_excluded_places, matches_exclusion};
 
 use super::support::event;
 

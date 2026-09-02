@@ -7,7 +7,8 @@ pub(super) const API_TAGS: &str = "/api/tags";
 
 /// Substrings of the server's 404 body identifying a stale model tag
 /// specifically, as opposed to a 404 from a wrong URL path.
-pub const MISSING_MODEL_MARKERS: &[&str] = &["is not installed", "not registered with any provider"];
+pub const MISSING_MODEL_MARKERS: &[&str] =
+    &["is not installed", "not registered with any provider"];
 
 /// True when a 404 means "that model tag is gone", not "wrong endpoint".
 pub fn is_missing_model_error(status_code: u16, body: &str) -> bool {
@@ -37,7 +38,10 @@ impl RosterEntry {
             .and_then(|p| p.as_str())
             .unwrap_or("")
             .to_string();
-        Some(RosterEntry { model, parameter_size })
+        Some(RosterEntry {
+            model,
+            parameter_size,
+        })
     }
 }
 

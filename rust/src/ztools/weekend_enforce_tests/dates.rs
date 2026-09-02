@@ -1,10 +1,10 @@
 //! Date parsing, window overlap, day reconciliation, and provenance coverage.
 
-use crate::ztools::weekend::{
-    drop_events_outside_window, drop_unsourced_rows, find_dates_in,
-    parse_any_date, reconcile_day_with_dates, row_is_sourced, window_overlap, WeekendEvent,
-};
 use super::support::{d, event};
+use crate::ztools::weekend::{
+    drop_events_outside_window, drop_unsourced_rows, find_dates_in, parse_any_date,
+    reconcile_day_with_dates, row_is_sourced, window_overlap, WeekendEvent,
+};
 
 fn dated(name: &str, start_date: &str, end_date: &str) -> WeekendEvent {
     let mut ev = event(name, "Vaughan");

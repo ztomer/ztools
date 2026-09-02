@@ -96,7 +96,10 @@ fn p95_ema_rises_with_a_later_slow_reading_and_never_shrinks_it() {
     // And one subsequent fast reading barely moves it.
     ztools::eval::record_signal(&mut store, "m", "t", 11.0, false, false);
     let p95 = store["m"]["t"]["p95_latency"].as_f64().unwrap();
-    assert!(p95 > 950.0, "one fast sample must not erase the spike: {p95}");
+    assert!(
+        p95 > 950.0,
+        "one fast sample must not erase the spike: {p95}"
+    );
 }
 
 #[test]
@@ -147,7 +150,10 @@ fn store_roundtrips_through_disk() {
     ztools::eval::record_signal(&mut s, "model-x", "task-y", 42.0, true, false);
     ztools::eval::save_signals(&s);
     let reloaded = ztools::eval::load_signals();
-    assert_eq!(reloaded["model-x"]["task-y"]["total_retries"], serde_json::json!(1));
+    assert_eq!(
+        reloaded["model-x"]["task-y"]["total_retries"],
+        serde_json::json!(1)
+    );
     assert!(g.path().join("eval_signals.json").exists());
     // Sorted, pretty JSON so diffs on the tracked file stay readable.
     let text = std::fs::read_to_string(g.path().join("eval_signals.json")).unwrap();
@@ -157,7 +163,11 @@ fn store_roundtrips_through_disk() {
 // --- prefill probe ----------------------------------------------------------
 
 /// Server that captures request bodies and answers each with a tiny completion.
-fn serve_recording() -> (u16, thread::JoinHandle<()>, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+fn serve_recording() -> (
+    u16,
+    thread::JoinHandle<()>,
+    std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+) {
     let recorded: std::sync::Arc<std::sync::Mutex<Vec<String>>> =
         std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
 
@@ -172,10 +182,8 @@ fn serve_recording() -> (u16, thread::JoinHandle<()>, std::sync::Arc<std::sync::
             };
             let mut buf = vec![0u8; 65_536];
             let n = stream.read(&mut buf).unwrap_or(0);
-            take_lock(&value)
-                .push(String::from_utf8_lossy(&buf[..n]).to_string());
-            let body =
-                r#"{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}"#;
+            take_lock(&value).push(String::from_utf8_lossy(&buf[..n]).to_string());
+            let body = r#"{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}"#;
             let resp = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}",
                 body.len()
@@ -210,17 +218,27 @@ fn prefill_probe_sends_nonce_led_filler_and_records_capabilities() {
             // LOAD and PREFILL both carry max_tokens=1.
             assert!(body.contains("\"max_tokens\":1"), "call {i}: {body}");
         } else {
-            assert!(body.contains(format!("\"max_tokens\":{}", 64).as_str()), "{body}");
+            assert!(
+                body.contains(format!("\"max_tokens\":{}", 64).as_str()),
+                "{body}"
+            );
         }
     }
     // The timed probe leads with a unique nonce, defeating any prefix cache.
     let probe_body = &bodies[2];
-    assert!(probe_body.contains("[run "), "nonce first: {}", probe_body.chars().take(200).collect::<String>());
+    assert!(
+        probe_body.contains("[run "),
+        "nonce first: {}",
+        probe_body.chars().take(200).collect::<String>()
+    );
 
     // Cold start and decode were recorded from the warmup calls even though the
     // prefill number itself was discarded.
     let caps = &store["probe-model"]["_capabilities"];
     assert!(caps.get("cold_start_seconds").is_some(), "{caps}");
     assert!(caps.get("decode_tokens_per_sec").is_some(), "{caps}");
-    assert!(caps.get("prefill_chars_per_sec").is_none(), "discarded rate must not be stored");
+    assert!(
+        caps.get("prefill_chars_per_sec").is_none(),
+        "discarded rate must not be stored"
+    );
 }

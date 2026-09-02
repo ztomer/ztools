@@ -5,6 +5,7 @@ pub mod eval;
 pub mod image_renamer;
 pub mod model_eval;
 pub mod model_health;
+pub mod pyenv;
 pub mod rename;
 pub mod store;
 pub mod twitter;

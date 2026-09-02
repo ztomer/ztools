@@ -161,8 +161,7 @@ pub fn load_historical_stats(eval_dir: Option<&Path>) -> BTreeMap<String, ModelS
         }
         // Absent `complete` field deserializes to true (serde default), so
         // legacy entries are trusted exactly like Python's `.get(..., True)`.
-        let countable: Vec<&HistoryEntry> =
-            entries.iter().filter(|e| e.complete).collect();
+        let countable: Vec<&HistoryEntry> = entries.iter().filter(|e| e.complete).collect();
         let excluded = entries.len() - countable.len();
         let mut scores: Vec<i64> = countable.iter().map(|e| e.score).collect();
         if scores.is_empty() {
@@ -235,7 +234,10 @@ fn status_word(score: u8) -> &'static str {
 /// Export one row per (model, task): the shape downstream sheets expect.
 pub fn export_csv(runs: &[ModelRun], output_file: &Path) -> std::io::Result<()> {
     let mut file = std::io::BufWriter::new(std::fs::File::create(output_file)?);
-    writeln!(file, "Model,Task,Score,Status,Time(s),Failure,Failure_Category")?;
+    writeln!(
+        file,
+        "Model,Task,Score,Status,Time(s),Failure,Failure_Category"
+    )?;
     for run in runs {
         for o in &run.outcomes {
             writeln!(
@@ -333,12 +335,21 @@ mod tests {
     #[test]
     fn test_models_never_enter_the_leaderboard() {
         let dir = tempfile::tempdir().unwrap();
-        save_historical_results(&run("mock-model", vec![outcome("t", 100)], true),
-                                Some(dir.path())).unwrap();
-        save_historical_results(&run("fake-70b", vec![outcome("t", 100)], true),
-                                Some(dir.path())).unwrap();
-        save_historical_results(&run("real-model", vec![outcome("t", 80)], true),
-                                Some(dir.path())).unwrap();
+        save_historical_results(
+            &run("mock-model", vec![outcome("t", 100)], true),
+            Some(dir.path()),
+        )
+        .unwrap();
+        save_historical_results(
+            &run("fake-70b", vec![outcome("t", 100)], true),
+            Some(dir.path()),
+        )
+        .unwrap();
+        save_historical_results(
+            &run("real-model", vec![outcome("t", 80)], true),
+            Some(dir.path()),
+        )
+        .unwrap();
         let stats = load_historical_stats(Some(dir.path()));
         assert!(!stats.contains_key("mock-model"), "{stats:?}");
         assert!(!stats.contains_key("fake-70b"), "{stats:?}");
@@ -354,22 +365,32 @@ mod tests {
             Some(dir.path()),
         )
         .unwrap();
-        let raw: BTreeMap<String, Vec<HistoryEntry>> =
-            serde_json::from_str(&std::fs::read_to_string(dir.path().join("eval_history.json")).unwrap())
-                .unwrap();
-        assert!(!raw["ornith-test"][0].complete, "verdict travels with the entry");
+        let raw: BTreeMap<String, Vec<HistoryEntry>> = serde_json::from_str(
+            &std::fs::read_to_string(dir.path().join("eval_history.json")).unwrap(),
+        )
+        .unwrap();
+        assert!(
+            !raw["ornith-test"][0].complete,
+            "verdict travels with the entry"
+        );
 
         // ...but no aggregate ever averages them, and the discrepancy between
         // runs and entry count is surfaced rather than hidden.
         let stats = load_historical_stats(Some(dir.path()));
-        assert!(!stats.contains_key("ornith-test"), "nothing countable -> no stats: {stats:?}");
+        assert!(
+            !stats.contains_key("ornith-test"),
+            "nothing countable -> no stats: {stats:?}"
+        );
 
         save_historical_results(
             &run("ornith-test", vec![outcome("easy", 60)], true),
             Some(dir.path()),
         )
         .unwrap();
-        let stats = load_historical_stats(Some(dir.path())).get("ornith-test").unwrap().clone();
+        let stats = load_historical_stats(Some(dir.path()))
+            .get("ornith-test")
+            .unwrap()
+            .clone();
         assert_eq!((stats.runs, stats.excluded), (1, 1));
         assert_eq!(stats.mean, 60.0, "the unclean 100 must not be averaged");
     }
@@ -433,7 +454,10 @@ mod tests {
         );
         let row = lines.next().unwrap();
         // Quoted because the error contains a comma.
-        assert_eq!(row, "model-a,t1,95,PASS,1.5,\"HTTP 503, at capacity\",INFRA");
+        assert_eq!(
+            row,
+            "model-a,t1,95,PASS,1.5,\"HTTP 503, at capacity\",INFRA"
+        );
     }
 
     #[test]
@@ -452,6 +476,9 @@ mod tests {
         let lines = render_historical_trends(Some(dir.path()));
         assert!(lines[0].starts_with("Historical Trends"));
         assert!(lines[2].contains("fast-model"), "{lines:?}");
-        assert!(lines[3].contains("slow-model"), "sorted worst-first: {lines:?}");
+        assert!(
+            lines[3].contains("slow-model"),
+            "sorted worst-first: {lines:?}"
+        );
     }
 }

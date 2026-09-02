@@ -4,6 +4,6 @@
 
 mod support;
 
-mod roster;
 mod disk;
 mod fetch;
+mod roster;

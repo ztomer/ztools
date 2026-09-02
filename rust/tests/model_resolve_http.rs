@@ -21,8 +21,7 @@ fn take_lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-const MISSING_BODY: &str =
-    r#"{"error":{"message":"Model 'gone-model' is not installed or registered with any provider."}}"#;
+const MISSING_BODY: &str = r#"{"error":{"message":"Model 'gone-model' is not installed or registered with any provider."}}"#;
 
 fn ok_body(content: &str) -> String {
     let escaped = content.replace('"', "\\\"");
@@ -106,7 +105,11 @@ fn serve(
         }
     });
     thread::sleep(std::time::Duration::from_millis(50));
-    MockServer { port, _handle: handle, posts }
+    MockServer {
+        port,
+        _handle: handle,
+        posts,
+    }
 }
 
 impl MockServer {
@@ -118,31 +121,26 @@ impl MockServer {
 fn roster_json(models: &[(&str, &str)]) -> String {
     let entries: Vec<String> = models
         .iter()
-        .map(|(m, size)| {
-            format!(
-                r#"{{"model":"{m}","details":{{"parameter_size":"{size}"}}}}"#
-            )
-        })
+        .map(|(m, size)| format!(r#"{{"model":"{m}","details":{{"parameter_size":"{size}"}}}}"#))
         .collect();
     format!(r#"{{"models":[{}]}}"#, entries.join(","))
 }
 
 fn task(name: &str) -> EvalTask {
-    EvalTask::new(
-        name,
-        "p",
-        vec![Check::Contains("answer".to_string())],
-    )
+    EvalTask::new(name, "p", vec![Check::Contains("answer".to_string())])
 }
 
 // A system prompt that carries NO qwen trigger yet: only a correctly
 // re-derived qwen-family quirk adds "Output JSON now." in front.
 fn task_with_system_prompt(name: &str) -> EvalTask {
     let mut t = EvalTask::new(name, "p", vec![Check::Contains("answer".to_string())]);
-    t.messages.insert(0, ztools::eval::task_loader::ChatMessage {
-        role: "system".to_string(),
-        content: "Extract events from the timeline.".to_string(),
-    });
+    t.messages.insert(
+        0,
+        ztools::eval::task_loader::ChatMessage {
+            role: "system".to_string(),
+            content: "Extract events from the timeline.".to_string(),
+        },
+    );
     t
 }
 
@@ -170,7 +168,11 @@ fn missing_model_404_retries_against_the_substitute_and_says_so() {
     assert_eq!(o.error, None, "substitute should have answered: {o:?}");
     assert_eq!((o.score, o.status.as_str()), (100, "ok"), "{o:?}");
     assert_eq!(o.substituted_from.as_deref(), Some("gone-model"), "{o:?}");
-    assert_eq!(o.substituted_to.as_deref(), Some("qwen3.8-27b-8bit"), "{o:?}");
+    assert_eq!(
+        o.substituted_to.as_deref(),
+        Some("qwen3.8-27b-8bit"),
+        "{o:?}"
+    );
     let reason = o.substitution_reason.as_deref().expect("reason surfaced");
     assert!(reason.contains("Re-derive best_models"), "{reason}");
 }
@@ -197,7 +199,11 @@ fn quirks_are_re_derived_for_the_substitute_not_inherited() {
     // The substitute's requests MUST carry its own trigger exactly once --
     // inheriting nothing and double-applying are both failures.
     let bodies = server.bodies();
-    assert_eq!(bodies.len(), 4, "dead stream+blocking, then substitute stream+blocking");
+    assert_eq!(
+        bodies.len(),
+        4,
+        "dead stream+blocking, then substitute stream+blocking"
+    );
     for dead in &bodies[..2] {
         assert!(
             !dead.contains("Output JSON now."),
@@ -234,7 +240,10 @@ fn substitution_can_be_switched_off_by_the_caller() {
     };
     let outcomes = run_eval("gone-model", &[task("t1")], &cfg);
     let o = &outcomes[0];
-    assert!(o.error.as_deref().unwrap_or("").starts_with("HTTP 404"), "{o:?}");
+    assert!(
+        o.error.as_deref().unwrap_or("").starts_with("HTTP 404"),
+        "{o:?}"
+    );
     assert!(o.substituted_from.is_none(), "{o:?}");
 }
 
@@ -257,7 +266,10 @@ fn an_unmarked_404_is_not_evidence_of_a_missing_model() {
     };
     let outcomes = run_eval("gone-model", &[task("t1")], &cfg);
     let o = &outcomes[0];
-    assert!(o.error.as_deref().unwrap_or("").starts_with("HTTP 404"), "{o:?}");
+    assert!(
+        o.error.as_deref().unwrap_or("").starts_with("HTTP 404"),
+        "{o:?}"
+    );
     assert!(o.substitution_reason.is_none(), "{o:?}");
 }
 
@@ -305,8 +317,7 @@ fn the_learning_path_records_signals_and_answers_through_a_substitute() {
     // ORIGINAL model name -- the sweep was FOR gone-model; its timings belong
     // to that name even though a stand-in answered (matching Python, which
     // records under the configured key).
-    let text =
-        std::fs::read_to_string(dir.path().join("eval_signals.json")).unwrap();
+    let text = std::fs::read_to_string(dir.path().join("eval_signals.json")).unwrap();
     let store: serde_json::Value = serde_json::from_str(&text).unwrap();
     assert!(
         store.get("gone-model").is_some(),
