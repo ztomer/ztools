@@ -1,0 +1,92 @@
+name = "nemotron"
+timeout = 300
+
+[field_mapping]
+category = "target_ages"
+context_highlight = "price"
+type = "weather"
+event_date = "day"
+end_date = "end_date"
+
+[prompts]
+json = "Output JSON now. Use EXACT schema."
+
+weekend_fixed = """
+Output JSON now. Use EXACT schema: {"fixed_activities": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}]}
+
+Extract and format the family-friendly venues from this list as JSON. Return ALL venues.
+- location: Copy street address or city name. NEVER output generic 'Indoor venue' or 'Outdoor venue'.
+- weather: "indoor", "outdoor" or "both". Venues with 'park', 'nature', 'garden', 'trail', or 'walk' in their name MUST be labeled 'outdoor'.
+
+{}
+
+Use the values from the source data as-is. Output ONLY JSON. No extra text.
+"""
+
+weekend_transient = """
+Output JSON now. Schema: {"transient_events": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "start_date": "str", "end_date": "str", "duration": "str", "weather": "str", "day": "str"}]}
+
+Find 5-10 events for {date_range} in {location}. Kids ages {age_range}.
+
+Copy every value from the source text. NEVER invent one.
+If the source does not state a value, output "" for that field -- an empty field is CORRECT. Do not guess a typical price, duration or age range.
+- location: Copy street address or city name. NEVER output generic 'Indoor venue' or 'Outdoor venue'.
+- day: Friday, Saturday, or Sunday (only if the source says which)
+- start_date / end_date: ISO YYYY-MM-DD from the source only, else ""
+- weather: "indoor", "outdoor" or "both". Venues with 'park', 'nature', 'garden', 'trail', or 'walk' in their name MUST be labeled 'outdoor'.
+
+Output ONLY JSON. No extra text.
+"""
+
+summarize = """
+Create a structured summary of this timeline.
+Start with a brief ## Executive Summary paragraph capturing the overarching narrative.
+Then organize events into topic sections with ## headers, using bullet points.
+Use connecting phrases ('following up on', 'subsequently announced', 'in response to') and narrative verbs ('released', 'responded', 'criticized') to show how events relate.
+CRITICAL: End EVERY bullet with the author handle and timestamp copied EXACTLY as they appear in that tweet's source line. A source line beginning `[@TechCrunch | Aug 10 14:30]:` yields a bullet ending `(@TechCrunch | Aug 10 14:30)`. Never invent or reformat a date, weekday or time that is not in the source line.
+
+<timeline>
+{}
+</timeline>
+"""
+
+filename = """
+Output ONLY the filename string (no JSON, no code blocks).
+Use lowercase, underscores for spaces, no special characters.
+Keep it under 50 characters.
+
+TEXT: {}
+"""
+
+file_summary = """
+Output JSON array. One entry per file. Each must have "path" and "desc" fields.
+Example: [{"path": "eval_lib.py", "desc": "model evaluation functions"}, {"path": "validators.py", "desc": "validation logic"}]
+CRITICAL: Rely ONLY on provided content context. DO NOT infer functionality from file names, words, or puns (e.g. 'osaurus' is an LLM client server wrapper, not dinosaur data).
+
+{}
+"""
+
+[key_mappings]
+event = "name"
+title = "name"
+activity = "name"
+venue = "location"
+address = "location"
+place = "location"
+age_group = "target_ages"
+ages = "target_ages"
+age_range = "target_ages"
+cost = "price"
+pricing = "price"
+fee = "price"
+type = "weather"
+category = "weather"
+
+[[quirks]]
+type = "prefix"
+pattern = "Output JSON now."
+reason = "Ensures clean JSON output without markdown"
+
+[top_keys]
+fixed = ["fixed_activities", "year_round_fixed_activities", "venues", "places", "activities", "items"]
+transient = ["transient_events", "events", "activities", "recommendations"]

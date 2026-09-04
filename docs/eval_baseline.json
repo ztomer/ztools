@@ -1,0 +1,47 @@
+{
+  "model-a::filename::Login error screenshot": {
+    "composite": 70.0,
+    "dimensions": {
+      "Relevance": 25,
+      "Format": 100,
+      "Conciseness": 100
+    },
+    "elapsed": 4.0531158447265625e-06
+  },
+  "model-a::filename::Event with clear subject": {
+    "composite": 70.0,
+    "dimensions": {
+      "Relevance": 25,
+      "Format": 100,
+      "Conciseness": 100
+    },
+    "elapsed": 2.86102294921875e-06
+  },
+  "model-a::filename::Quote with multiple keywords": {
+    "composite": 70.0,
+    "dimensions": {
+      "Relevance": 25,
+      "Format": 100,
+      "Conciseness": 100
+    },
+    "elapsed": 9.5367431640625e-07
+  },
+  "model-a::filename::Work meeting notes": {
+    "composite": 70.0,
+    "dimensions": {
+      "Relevance": 25,
+      "Format": 100,
+      "Conciseness": 100
+    },
+    "elapsed": 7.152557373046875e-07
+  },
+  "model-a::filename::Generic screenshot (less info)": {
+    "composite": 70.0,
+    "dimensions": {
+      "Relevance": 25,
+      "Format": 100,
+      "Conciseness": 100
+    },
+    "elapsed": 0.0
+  }
+}

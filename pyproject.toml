@@ -1,0 +1,133 @@
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ztools"
+version = "2.2.0"
+description = "Local LLM tools for Osaurus"
+requires-python = ">=3.14"
+dependencies = [
+    "requests>=2.33.0",
+    "rich>=14.0.0",
+    "tomli-w>=1.2.0",
+    "textual>=0.50.0",
+    # The eval memory guard reads virtual_memory().percent; without psutil it
+    # silently reported 0% and never fired.
+    "psutil>=5.9.0",
+]
+
+[tool.setuptools.packages.find]
+where = [".", "references"]
+include = ["lib*", "twitter*", "weekend*", "rename*", "eval*", "conf*"]
+
+[tool.setuptools.package-data]
+conf = ["*.toml", "*.json", "models/*.toml", "models/*.json"]
+# The taxes rubrics are read at scoring time; without them an installed run
+# scores those tasks against an empty rubric instead of failing.
+eval_tasks = ["data/*/*.json"]
+
+[project.optional-dependencies]
+web = [
+    "ddgs>=9.0.0",
+    "beautifulsoup4>=4.12.0",
+]
+browser = [
+    # camoufox is the preferred backend (anti-detect Firefox); playwright is the
+    # fallback. cryptography decrypts Chromium-family cookie stores — Firefox-family
+    # cookies (Zen, Firefox) are unencrypted and need nothing extra.
+    "camoufox>=0.5.4",
+    "playwright>=1.40.0",
+    "cryptography>=41.0.0",
+]
+vision = [
+    "pillow>=10.0.0",
+    "pytesseract>=0.3.10",
+]
+foundation = [
+    "apple-fm-sdk",
+]
+mlx = [
+    "mlx-lm",
+    "mlx-vlm",
+]
+all = [
+    "ddgs>=9.0.0",
+    "beautifulsoup4>=4.12.0",
+    "camoufox>=0.5.4",
+    "cryptography>=41.0.0",
+    "playwright>=1.40.0",
+    "pillow>=10.0.0",
+    "pytesseract>=0.3.10",
+    "mlx-lm",
+    "mlx-vlm",
+    "textual>=0.50.0",
+]
+
+# Per-tool extrasets map a tool to the optional dependencies it needs.
+weekend = ["ddgs>=9.0.0", "beautifulsoup4>=4.12.0"]
+twitter = ["camoufox>=0.5.4", "playwright>=1.40.0", "cryptography>=41.0.0"]
+oeval = []
+
+[project.scripts]
+tw = "twitter.cli:main"
+wk = "weekend.cli:main"
+rn = "rename.cli:main"
+ev = "eval.cli:main"
+weekend = "weekend.cli:main"
+twitter = "twitter.cli:main"
+oeval = "eval.cli:main"
+
+[tool.rtk]
+python = "3.14"
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = []
+
+[tool.ruff.lint.per-file-ignores]
+# Test modules contain long string fixtures (JSON/HTML/date literals in deeply
+# nested dicts). E501 there is purely cosmetic and reformatting risks altering
+# fixture semantics, so line-too-long is relaxed for tests only.
+"references/tests/**" = ["E501"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["references/tests"]
+addopts = "-ra"
+# Keep tmp_path dirs only for FAILING tests, and only the last run.
+#
+# pytest's defaults (policy "all", count 3) keep every test's tmp_path for the
+# last three runs. That is fine until a fixture writes something large: the
+# model-shard fixture in test_capabilities.py wrote a real 15GiB file, and 26
+# retained roots reached 246GB and filled the disk to 100%, which then began
+# failing unrelated builds. The fixture is sparse now, but the retention default
+# is what turned one wasteful fixture into a full disk, so bound it too.
+tmp_path_retention_count = 1
+tmp_path_retention_policy = "failed"
+markers = [
+    "real_cookie_discovery: opts out of the conftest gate that stubs browser cookie discovery",
+    "real_llm: opts out of the conftest gate that blocks connections to the real LLM server",
+    "llm_gate_selftest: tests OF the LLM connection gate; deliberate attempts are expected",
+    "sandboxed_server_script: drives tools/osaurus_one.sh against a stubbed PATH and tmp lock",
+    "real_restart_budget: opts out of the conftest gate that zeroes RESTART_READY_BUDGET",
+]
+
+[tool.coverage.run]
+source = ["lib", "weekend", "twitter", "rename", "eval"]
+omit = ["*/tests/*", "*/__main__.py", "*/__init__.py", "*/eval/explore_quirks.py"]
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "def main\\(",
+]

@@ -1,0 +1,82 @@
+"""Config - shim re-exporting from split modules."""
+
+# NOTE: `_config` and `_model_configs_cache` are deliberately NOT re-exported here.
+# Re-exporting mutable module state hands out an import-time alias to the dict
+# OBJECT, which stops tracking the moment anything rebinds the source -- silently,
+# with the two readers disagreeing rather than failing. See `config_getters._cfg`.
+# Read the config through `get_config()` or the typed getters.
+from .config_core import (
+    _FALLBACK_MAX_TOKENS,
+    _FALLBACK_MODEL,
+    _FALLBACK_TIMEOUT,
+    ConfigurationError,
+    Task,
+    TaskKeys,
+    _auto_load,
+    _config_loaded,
+    get_config,
+    init_config,
+    is_config_loaded,
+    reset_config,
+)
+from .config_getters import (
+    clear_model_config_cache,
+    get_best_model,
+    get_best_models,
+    get_filename_models,
+    get_filename_prompt,
+    get_max_tokens,
+    get_max_tokens_for_task,
+    get_model_config,
+    get_model_fallback_chain,
+    get_model_family,
+    get_model_field_mapping,
+    get_model_prompt,
+    get_model_prompts_all,
+    get_model_quirks,
+    get_model_top_keys,
+    get_timeout,
+    get_timeouts,
+)
+from .config_tasks import (
+    _load_eval_inputs,
+    _safe_format_prompt,
+    build_tasks_from_model,
+    get_eval_input,
+)
+
+__all__ = [
+    "Task",
+    "TaskKeys",
+    "ConfigurationError",
+    "_FALLBACK_TIMEOUT",
+    "_FALLBACK_MAX_TOKENS",
+    "_FALLBACK_MODEL",
+    "_config_loaded",
+    "_auto_load",
+    "init_config",
+    "reset_config",
+    "get_config",
+    "is_config_loaded",
+    "get_timeouts",
+    "get_max_tokens",
+    "get_best_models",
+    "get_best_model",
+    "get_timeout",
+    "get_max_tokens_for_task",
+    "get_model_family",
+    "clear_model_config_cache",
+    "get_model_config",
+    "get_model_field_mapping",
+    "get_model_top_keys",
+    "get_model_quirks",
+    "get_model_prompt",
+    "get_model_prompts_all",
+    "get_filename_models",
+    "get_filename_prompt",
+    "get_model_fallback_chain",
+    "_load_eval_inputs",
+    "get_eval_input",
+    "_safe_format_prompt",
+    "build_tasks_from_model",
+]

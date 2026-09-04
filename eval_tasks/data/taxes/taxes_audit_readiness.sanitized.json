@@ -1,0 +1,35 @@
+{
+  "task": "audit_readiness",
+  "year": 2025,
+  "filer": "primary",
+  "captured_at": "2026-08-18T15:38:01",
+  "source_repo": "github.com/<user>/Taxes",
+  "source_module": "scripts/snapshot_eval_prompts.py::audit_readiness",
+  "system": "RESIDENCY FACTS (non-negotiable — derived from profile +\nload_locations(); do NOT infer residency from any other\nsignal in the data, especially not from donation-receipt\nor charity addresses):\n- Tax residency jurisdictions: ['CA']\n- Provincial residency in 2025:\n  - CA/MB from 2025-01-01 to 2025-09-30\n  - CA/ON from 2025-10-01 to 2025-12-31\n\nYou are a senior Canadian tax accountant specializing in cross-border filing for individuals with employment income, foreign property, and RSU compensation.\n\nOUTPUT FORMAT — CRITICAL:\n- Output ONLY the final analysis. ABSOLUTELY NO internal reasoning, thinking, planning, or meta-commentary.\n- NEVER use <think>, <thinking>, <reasoning>, or similar tags.\n- NEVER start with \"Let me...\", \"I'll...\", \"I need to...\", \"Looking at...\", \"Based on...\", \"Actually...\", \"Wait...\", \"However...\" or ANY preamble/self-talk.\n- NEVER include phrases like \"I should...\", \"I notice...\", \"The instructions say...\", \"Re-reading...\", \"I think...\", or document your analysis process.\n- Do NOT use markdown tables. Use bullet points only.\n- Do NOT repeat information already provided in the context data.\n- Start IMMEDIATELY with the first section heading (e.g., \"**Missing documents**\" or \"**1. Missing Documents**\").\n- If your output includes ANY reasoning or self-talk, the ENTIRE response is invalid.\n\nDATA ACCURACY (CRITICAL):\n- ONLY report a document as missing if the context data explicitly says \"MISSING\"\n- If the context shows a document as \"DONE\", it IS present — do NOT report it as missing\n- Do NOT invent or assume document statuses. Use ONLY the status from the context data.\n- If a deadline says \"COMPLETED — docs received\", do NOT report it as overdue or action needed.\n\nRESPONSE GUIDELINES:\n- Lead with what's MISSING and what ACTION is needed\n- Provide dollar estimates where possible (rough is fine — state assumptions)\n- Include a tax owed/refund estimate when sufficient data is available\n- Keep responses under 150 words per category, under 250 words for synthesis\n- Skip sections with nothing to report\n- Be specific: \"$X,XXX WFH deduction\" not \"you may be eligible for deductions\"\n\nIMPORTANT RULES — follow these exactly (see tax_rules.yaml for year-specific details):\n- WFH flat-rate method ($X/day) EXPIRED after 2022. Only the detailed method (T2200) is available for 2023+.\n- T2200S (simplified form) is DISCONTINUED. Only T2200 is accepted.\n- RESP contributions are NOT tax-deductible and NOT reported on T1. Do not recommend RESP actions in tax filings. CESG (20% match, max $XXX/yr per child) is the benefit. EAPs taxable to student on withdrawal.\n- T1135 late-filing penalty: $X/day, max $X,XXX. Gross negligence: up to $XX,XXX. Do NOT cite $XXX base penalty.\n- WFH 'workspace percentage' means the ratio of dedicated workspace area to total home area, NOT occupancy time.\n- RRSP contribution deadline for tax year N is 60 days after Dec 31 of year N (typically March 1 or 2 of year N+1).\n- Childcare expenses: claimed by the lower-income spouse. Limits: $X,XXX/child under 7, $X,XXX/child 7-16.",
+  "user": "Filed-position facts:\n\n```json\n{\n  \"year\": 2025,\n  \"filer\": \"primary\",\n  \"facts\": [\n    {\n      \"id\": \"t1.total_income\",\n      \"label\": \"Total income (line 15000)\",\n      \"value\": 316901.51,\n      \"source\": \"compute_t1_return\"\n    },\n    {\n      \"id\": \"t1.rental_net\",\n      \"label\": \"Net rental income (line 12600)\",\n      \"value\": 20249.39,\n      \"source\": \"compute_t1_return\"\n    },\n    {\n      \"id\": \"t1.foreign_interest\",\n      \"label\": \"Interest income (line 12100, foreign-heavy)\",\n      \"value\": 15269.6,\n      \"source\": \"compute_t1_return\"\n    },\n    {\n      \"id\": \"t1.rrsp_deduction\",\n      \"label\": \"RRSP deduction (line 20800)\",\n      \"value\": 33952.0,\n      \"source\": \"compute_t1_return\"\n    },\n    {\n      \"id\": \"t1.wfh_deduction\",\n      \"label\": \"WFH / other employment expenses (line 22900)\",\n      \"value\": 4578.37,\n      \"source\": \"compute_t1_return\"\n    },\n    {\n      \"id\": \"t1.fed.ftc\",\n      \"label\": \"Federal foreign tax credit (line 40500)\",\n      \"value\": 14129.75,\n      \"source\": \"compute_t1_return\"\n    },\n    {\n      \"id\": \"t1.fed.donation_credit\",\n      \"label\": \"Federal donation credit\",\n      \"value\": 2326.25,\n      \"source\": \"compute_t1_return\"\n    },\n    {\n      \"id\": \"t1.fed.final\",\n      \"label\": \"Federal tax (after credits)\",\n      \"value\": 46718.45,\n      \"source\": \"compute_t1_return\"\n    },\n    {\n      \"id\": \"t1.prov.final\",\n      \"label\": \"Provincial tax (after credits)\",\n      \"value\": 38941.189999999995,\n      \"source\": \"compute_t1_return\"\n    },\n    {\n      \"id\": \"t1.balance\",\n      \"label\": \"Refund (negative) / balance owing\",\n      \"value\": 1497.56,\n      \"source\": \"compute_t1_return\"\n    },\n    {\n      \"id\": \"filer.tax_residency\",\n      \"label\": \"Tax residency jurisdictions\",\n      \"value\": [\n        \"CA\"\n      ],\n      \"source\": \"profile.identity\"\n    }\n  ]\n}\n```\n\nAs the auditor, list the 3–5 highest-risk items in the order you'd investigate them. For each, specify the documents you would request and a one-line mitigation the filer can take.\n\n**Respond with valid JSON only**, matching this schema:\n\n```json\n{\n  \"risk_items\": [\n    {\n      \"title\": \"<short risk name>\",\n      \"severity\": \"high|medium|low\",\n      \"rationale\": \"<1 paragraph — why CRA cares, cite fact_ids>\",\n      \"documents\": [\"<doc 1>\", \"<doc 2>\", \"...\"],\n      \"mitigation\": \"<one-line action the filer can take>\"\n    }\n  ]\n}\n```\n\nReturn JSON only. No markdown fence, no preamble.",
+  "rubric": {
+    "expected_signals": [
+      "t1135",
+      "form 106",
+      "box 38",
+      "spousal split",
+      "quarterly tax",
+      "rental tax",
+      "ftc without",
+      "expected artifact",
+      "completeness gate",
+      "no prior"
+    ],
+    "gt_forbidden": [
+      "Filed (GT)",
+      "AggregatorVsGT",
+      "actual_balance",
+      "gt_diff",
+      "estimator drift"
+    ],
+    "schema": "json",
+    "schema_key": "risk_items"
+  },
+  "sanitized": true,
+  "sanitized_at": "2026-08-18T15:38:01"
+}

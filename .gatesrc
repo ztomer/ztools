@@ -1,0 +1,33 @@
+# gates_of_heck configuration. All keys optional; delete what you don't use.
+GOH_MAX_LINES=500                 # file-length cap; unset disables the check
+# GOH_EXCLUDE='vendor/|\.generated\.'   # shared vendor/generated exemption
+# GOH_LINE_EXCLUDE='third_party/'       # length-only alias
+# GOH_PY_COV_MIN=95
+# GOH_SWIFT_MODE=xcode            # or spm
+# GOH_SWIFT_SCHEME=MyAppTests
+# GOH_SWIFT_COV_MIN=95
+# GOH_MAX_SCRATCH_GB=25           # disk-hygiene ceiling (full runs only)
+
+# The gate of record. `tools/gate.sh --full` (the pre-push hook) and `make ci`
+# both delegate to gates/local_ci.sh, which reads this -- ONE list, so the hook
+# can never be weaker than CI.
+#
+# This repo had no list at all until 2026-09-02. Structural checks ran and
+# nothing else did, so the Rust half was ungated: `cargo fmt` had drifted to
+# 223 violations nobody could have noticed, and the CLI dispatch layer had
+# never been executed by a test. Clippy, as it happens, was clean -- which is
+# exactly why an ungated repo is dangerous rather than obviously broken.
+#
+# COVERAGE FLOOR: 94, not the house 95, and stated rather than quietly set.
+# Measured 94.43%. The remaining gap is `cli_ztools.rs`'s model-eval run loop
+# and the live twitter scrape -- code that takes the machine-wide GPU lock and
+# drives a headless browser against a live model server. Reaching 95 by unit
+# test would mean inventing seams for the number's sake rather than because the
+# logic deserves isolation, so the honest move is a floor that BITES today and
+# rises when a live-server integration harness exists. It is a ratchet: raise
+# it, never lower it.
+#
+# Steps are COLON-separated by the runner, so no step string may contain a
+# colon -- hence $GOH_DIR resolved here.
+export GOH_DIR="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
+GOH_CI_STEPS='"$GOH_DIR/gates/rust_gate.sh" . rust:python3 "$GOH_DIR/checks/check_no_emoji.py":python3 "$GOH_DIR/checks/check_file_length.py" --max 500:cargo test --manifest-path rust/Cargo.toml --all-features:"$GOH_DIR/gates/coverage_gate.sh" --lang rust --floor 94 rust'

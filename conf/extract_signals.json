@@ -1,0 +1,55 @@
+{
+  "custom-model": {
+    "events": {
+      "batch_size": 1,
+      "timeouts": 3
+    },
+    "venues": {
+      "batch_size": 1,
+      "timeouts": 3
+    }
+  },
+  "foundation": {
+    "events": {
+      "batch_size": 5,
+      "timeouts": 2
+    },
+    "venues": {
+      "batch_size": 5
+    }
+  },
+  "mock-model": {
+    "events": {
+      "batch_size": 1,
+      "timeouts": 33
+    },
+    "venues": {
+      "batch_size": 1,
+      "timeouts": 33
+    }
+  },
+  "qwen3.6-27b-mxfp8-mtp": {
+    "events": {
+      "batch_size": 5
+    },
+    "venues": {
+      "batch_size": 5
+    }
+  },
+  "qwen3.6-35b-a3b-mxfp8-mtp": {
+    "events": {
+      "batch_size": 5
+    },
+    "venues": {
+      "batch_size": 5
+    }
+  },
+  "qwopus3.6-27b-v2-mlx-4bit": {
+    "events": {
+      "batch_size": 5
+    },
+    "venues": {
+      "batch_size": 5
+    }
+  }
+}

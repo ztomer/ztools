@@ -1,0 +1,362 @@
+{
+  "task": "yoy_narrative",
+  "year": 2025,
+  "filer": "primary",
+  "captured_at": "2026-08-18T15:38:03",
+  "source_repo": "github.com/<user>/Taxes",
+  "source_module": "scripts/snapshot_eval_prompts.py::yoy_narrative",
+  "system": "RESIDENCY FACTS (non-negotiable — derived from profile +\nload_locations(); do NOT infer residency from any other\nsignal in the data, especially not from donation-receipt\nor charity addresses):\n- Tax residency jurisdictions: ['CA']\n- Provincial residency in 2025:\n  - CA/MB from 2025-01-01 to 2025-09-30\n  - CA/ON from 2025-10-01 to 2025-12-31\n\nYou are a senior Canadian tax accountant specializing in cross-border filing for individuals with employment income, foreign property, and RSU compensation.\n\nOUTPUT FORMAT — CRITICAL:\n- Output ONLY the final analysis. ABSOLUTELY NO internal reasoning, thinking, planning, or meta-commentary.\n- NEVER use <think>, <thinking>, <reasoning>, or similar tags.\n- NEVER start with \"Let me...\", \"I'll...\", \"I need to...\", \"Looking at...\", \"Based on...\", \"Actually...\", \"Wait...\", \"However...\" or ANY preamble/self-talk.\n- NEVER include phrases like \"I should...\", \"I notice...\", \"The instructions say...\", \"Re-reading...\", \"I think...\", or document your analysis process.\n- Do NOT use markdown tables. Use bullet points only.\n- Do NOT repeat information already provided in the context data.\n- Start IMMEDIATELY with the first section heading (e.g., \"**Missing documents**\" or \"**1. Missing Documents**\").\n- If your output includes ANY reasoning or self-talk, the ENTIRE response is invalid.\n\nDATA ACCURACY (CRITICAL):\n- ONLY report a document as missing if the context data explicitly says \"MISSING\"\n- If the context shows a document as \"DONE\", it IS present — do NOT report it as missing\n- Do NOT invent or assume document statuses. Use ONLY the status from the context data.\n- If a deadline says \"COMPLETED — docs received\", do NOT report it as overdue or action needed.\n\nRESPONSE GUIDELINES:\n- Lead with what's MISSING and what ACTION is needed\n- Provide dollar estimates where possible (rough is fine — state assumptions)\n- Include a tax owed/refund estimate when sufficient data is available\n- Keep responses under 150 words per category, under 250 words for synthesis\n- Skip sections with nothing to report\n- Be specific: \"$2,400 WFH deduction\" not \"you may be eligible for deductions\"\n\nIMPORTANT RULES — follow these exactly (see tax_rules.yaml for year-specific details):\n- WFH flat-rate method ($2/day) EXPIRED after 2022. Only the detailed method (T2200) is available for 2023+.\n- T2200S (simplified form) is DISCONTINUED. Only T2200 is accepted.\n- RESP contributions are NOT tax-deductible and NOT reported on T1. Do not recommend RESP actions in tax filings. CESG (20% match, max $500/yr per child) is the benefit. EAPs taxable to student on withdrawal.\n- T1135 late-filing penalty: $25/day, max $2,500. Gross negligence: up to $12,000. Do NOT cite $100 base penalty.\n- WFH 'workspace percentage' means the ratio of dedicated workspace area to total home area, NOT occupancy time.\n- RRSP contribution deadline for tax year N is 60 days after Dec 31 of year N (typically March 1 or 2 of year N+1).\n- Childcare expenses: claimed by the lower-income spouse. Limits: $8,000/child under 7, $5,000/child 7-16.",
+  "user": "The primary filer's total tax fell by $78,411.21 CAD from 2024 to 2025.\n\nHere is the structured diff of every T1 line that changed by ≥ $10:\n\n```json\n{\n  \"year\": 2025,\n  \"prior_year\": 2024,\n  \"filer\": \"primary\",\n  \"total_tax_prior\": 205459.78,\n  \"total_tax_current\": 127048.58,\n  \"total_tax_delta\": -78411.21,\n  \"lines\": [\n    {\n      \"key\": \"income.employment\",\n      \"label\": \"Employment income (T1 line 10100)\",\n      \"prior\": 474087.3,\n      \"current\": 416975.62,\n      \"delta\": -57111.67\n    },\n    {\n      \"key\": \"income.interest\",\n      \"label\": \"Interest income (T1 line 12100)\",\n      \"prior\": 37396.28,\n      \"current\": 22647.55,\n      \"delta\": -14748.73\n    },\n    {\n      \"key\": \"income.rental_net\",\n      \"label\": \"Net rental income (T1 line 12600)\",\n      \"prior\": 0.0,\n      \"current\": 30033.47,\n      \"delta\": 30033.47\n    },\n    {\n      \"key\": \"income.capital_gains\",\n      \"label\": \"Capital gains (T1 line 12700)\",\n      \"prior\": 0.0,\n      \"current\": 365.01,\n      \"delta\": 365.01\n    },\n    {\n      \"key\": \"income.total\",\n      \"label\": \"Total income\",\n      \"prior\": 511483.58,\n      \"current\": 470021.65,\n      \"delta\": -41461.93\n    },\n    {\n      \"key\": \"deductions.rrsp\",\n      \"label\": \"RRSP deduction (T1 line 20800)\",\n      \"prior\": 0.0,\n      \"current\": 50356.89,\n      \"delta\": 50356.89\n    },\n    {\n      \"key\": \"deductions.rpp\",\n      \"label\": \"RPP deduction (T1 line 20700)\",\n      \"prior\": 68.23,\n      \"current\": 0.0,\n      \"delta\": -68.23\n    },\n    {\n      \"key\": \"deductions.cpp_enhanced\",\n      \"label\": \"Enhanced CPP (T1 line 22215)\",\n      \"prior\": 1242.9,\n      \"current\": 1592.93,\n      \"delta\": 350.03\n    },\n    {\n      \"key\": \"deductions.wfh\",\n      \"label\": \"WFH expenses (T1 line 22900)\",\n      \"prior\": 0.0,\n      \"current\": 6790.54,\n      \"delta\": 6790.54\n    },\n    {\n      \"key\": \"deductions.other_deductions\",\n      \"label\": \"Other deductions (T1 line 23200)\",\n      \"prior\": 0.0,\n      \"current\": 276.21,\n      \"delta\": 276.21\n    },\n    {\n      \"key\": \"deductions.total\",\n      \"label\": \"Total deductions\",\n      \"prior\": 1311.13,\n      \"current\": 59016.58,\n      \"delta\": 57705.45\n    },\n    {\n      \"key\": \"net_income\",\n      \"label\": \"Net income\",\n      \"prior\": 510172.45,\n      \"current\": 411005.07,\n      \"delta\": -99167.38\n    },\n    {\n      \"key\": \"taxable_income\",\n      \"label\": \"Taxable income\",\n      \"prior\": 510172.45,\n      \"current\": 410640.06,\n      \"delta\": -99532.39\n    },\n    {\n      \"key\": \"fed.gross\",\n      \"label\": \"Federal tax (gross)\",\n      \"prior\": 132339.05,\n      \"current\": 98095.41,\n      \"delta\": -34243.64\n    },\n    {\n      \"key\": \"fed.credits\",\n      \"label\": \"Federal non-refundable credits\",\n      \"prior\": 4417.41,\n      \"current\": 4396.39,\n      \"delta\": -21.02\n    },\n    {\n      \"key\": \"fed.donation_credit\",\n      \"label\": \"Federal donation credit\",\n      \"prior\": 0.0,\n      \"current\": 3450.25,\n      \"delta\": 3450.25\n    },\n    {\n      \"key\": \"fed.ftc\",\n      \"label\": \"Federal foreign tax credit (T2209)\",\n      \"prior\": 2280.64,\n      \"current\": 20956.95,\n      \"delta\": 18676.31\n    },\n    {\n      \"key\": \"fed.final\",\n      \"label\": \"Federal tax (after credits)\",\n      \"prior\": 125640.99,\n      \"current\": 69291.82,\n      \"delta\": -56349.17\n    },\n    {\n      \"key\": \"prov.gross\",\n      \"label\": \"Provincial tax (gross)\",\n      \"prior\": 81067.05,\n      \"current\": 60210.33,\n      \"delta\": -20856.71\n    },\n    {\n      \"key\": \"prov.credits\",\n      \"label\": \"Provincial non-refundable credits\",\n      \"prior\": 1248.26,\n      \"current\": 1286.84,\n      \"delta\": 38.58\n    },\n    {\n      \"key\": \"prov.donation_credit\",\n      \"label\": \"Provincial donation credit\",\n      \"prior\": 0.0,\n      \"current\": 1166.74,\n      \"delta\": 1166.74\n    },\n    {\n      \"key\": \"prov.final\",\n      \"label\": \"Provincial tax (after credits)\",\n      \"prior\": 79818.79,\n      \"current\": 57756.75,\n      \"delta\": -22062.03\n    },\n    {\n      \"key\": \"total_tax\",\n      \"label\": \"Total tax\",\n      \"prior\": 205459.78,\n      \"current\": 127048.58,\n      \"delta\": -78411.21\n    },\n    {\n      \"key\": \"source_deducted\",\n      \"label\": \"Tax withheld at source\",\n      \"prior\": 126368.45,\n      \"current\": 124827.43,\n      \"delta\": -1541.02\n    },\n    {\n      \"key\": \"balance\",\n      \"label\": \"Balance (owing if positive, refund if negative)\",\n      \"prior\": 79091.33,\n      \"current\": 2221.15,\n      \"delta\": -76870.18\n    }\n  ]\n}\n```\n\nThe tax effect of each change has ALREADY BEEN COMPUTED, by re-running the return with that one line held at its 2024 value. `tax_effect_cad` is how much total tax actually moved because of that line; `input_delta_cad` is how much the line itself moved. They are different quantities and only `tax_effect_cad` sums to the tax delta.\n\n```json\n{\n  \"year\": 2025,\n  \"prior_year\": 2024,\n  \"filer\": \"primary\",\n  \"total_tax_delta_cad\": -78411.21,\n  \"rules_effect_cad\": -10319.43,\n  \"residual_cad\": 0.0,\n  \"drivers\": [\n    {\n      \"line\": \"10100\",\n      \"label\": \"Employment income\",\n      \"input_delta_cad\": -57111.67,\n      \"tax_effect_cad\": -30570.19\n    },\n    {\n      \"line\": \"20800\",\n      \"label\": \"RRSP deduction\",\n      \"input_delta_cad\": 50356.89,\n      \"tax_effect_cad\": -26954.33\n    },\n    {\n      \"line\": \"12600\",\n      \"label\": \"Net rental income\",\n      \"input_delta_cad\": 30033.47,\n      \"tax_effect_cad\": 16075.92\n    },\n    {\n      \"line\": \"t2209\",\n      \"label\": \"Foreign tax paid (FTC)\",\n      \"input_delta_cad\": 18676.31,\n      \"tax_effect_cad\": -10199.58\n    },\n    {\n      \"line\": \"12100\",\n      \"label\": \"Interest income\",\n      \"input_delta_cad\": -14748.73,\n      \"tax_effect_cad\": -7894.5\n    },\n    {\n      \"line\": \"34900\",\n      \"label\": \"Donations\",\n      \"input_delta_cad\": 10617.07,\n      \"tax_effect_cad\": -4615.79\n    },\n    {\n      \"line\": \"22900\",\n      \"label\": \"Home-office (WFH) expenses\",\n      \"input_delta_cad\": 6790.54,\n      \"tax_effect_cad\": -3634.75\n    },\n    {\n      \"line\": \"12700\",\n      \"label\": \"Capital gains\",\n      \"input_delta_cad\": 365.01,\n      \"tax_effect_cad\": 195.39\n    },\n    {\n      \"line\": \"25300\",\n      \"label\": \"Net capital losses applied\",\n      \"input_delta_cad\": 365.01,\n      \"tax_effect_cad\": -195.36\n    },\n    {\n      \"line\": \"22215\",\n      \"label\": \"Enhanced CPP deduction\",\n      \"input_delta_cad\": 350.03,\n      \"tax_effect_cad\": -187.33\n    },\n    {\n      \"line\": \"23200\",\n      \"label\": \"Other deductions\",\n      \"input_delta_cad\": 276.21,\n      \"tax_effect_cad\": -147.81\n    },\n    {\n      \"line\": \"20700\",\n      \"label\": \"RPP contributions\",\n      \"input_delta_cad\": -68.23,\n      \"tax_effect_cad\": 36.55\n    }\n  ]\n}\n```\n\nYou are acting as the filer's tax advisor. Identify the **three single-line changes that explain the largest share of the total-tax delta**, and for each one name the **most likely root cause** — e.g. 'employment income rose because RSU vest count doubled', 'FTC fell because Israeli withholding dropped after the employer changed payroll provider', 'RRSP deduction rose because the filer made a catch-up contribution against unused prior-year room'. Do not just restate that the line changed.\n\nWrite a 200–400 word advisor-style explanation, then return the 3–6 biggest drivers as structured attribution.\n\n**Respond with valid JSON only**, matching exactly this schema:\n\n```json\n{\n  \"prose\": \"<200-400 word advisor explanation; emphasize causes>\",\n  \"drivers\": [\n    {\"label\": \"<short driver name>\", \"delta_cad\": <number>, \"note\": \"<one sentence — name the ROOT CAUSE not just the delta>\"}\n  ]\n}\n```\n\nRules:\n- Every `delta_cad` you report MUST be a `tax_effect_cad` value from the attribution block above (or a sum of them). Do NOT use `input_delta_cad` or a line `delta` — those are income and deduction amounts, not tax, and they do not sum to the tax change. Do not invent figures.\n- Include `rules_effect_cad` as a driver labelled for bracket and indexation changes whenever it is non-trivial; it is a real cause and belongs to no single line.\n- Drivers must sum to the total_tax_delta. With the computed tax effects above this is exact, not approximate.\n- Only mention dollar amounts in the prose that came from the diff.\n- Each driver's `note` must explain WHY the line moved (cause), not just restate that it moved (effect).\n- Return JSON only. No markdown fence, no preamble.",
+  "scale_factor": 1.4831789638691535,
+  "grounding": {
+    "kind": "arithmetic_reconciliation",
+    "rule": "drivers[].delta_cad must each equal a tax_effect_cad value from attribution.drivers (or rules_effect_cad), or a sum of them; sum(drivers[].delta_cad) must equal diff.total_tax_delta within tolerance_abs_cad or (total_tax_delta * tolerance_pct), whichever is larger; every dollar figure quoted in prose must appear in known_amounts.",
+    "diff": {
+      "year": 2025,
+      "prior_year": 2024,
+      "filer": "primary",
+      "total_tax_prior": 205459.78,
+      "total_tax_current": 127048.58,
+      "total_tax_delta": -78411.21,
+      "lines": [
+        {
+          "key": "income.employment",
+          "label": "Employment income (T1 line 10100)",
+          "prior": 474087.3,
+          "current": 416975.62,
+          "delta": -57111.67
+        },
+        {
+          "key": "income.interest",
+          "label": "Interest income (T1 line 12100)",
+          "prior": 37396.28,
+          "current": 22647.55,
+          "delta": -14748.73
+        },
+        {
+          "key": "income.rental_net",
+          "label": "Net rental income (T1 line 12600)",
+          "prior": 0.0,
+          "current": 30033.47,
+          "delta": 30033.47
+        },
+        {
+          "key": "income.capital_gains",
+          "label": "Capital gains (T1 line 12700)",
+          "prior": 0.0,
+          "current": 365.01,
+          "delta": 365.01
+        },
+        {
+          "key": "income.total",
+          "label": "Total income",
+          "prior": 511483.58,
+          "current": 470021.65,
+          "delta": -41461.93
+        },
+        {
+          "key": "deductions.rrsp",
+          "label": "RRSP deduction (T1 line 20800)",
+          "prior": 0.0,
+          "current": 50356.89,
+          "delta": 50356.89
+        },
+        {
+          "key": "deductions.rpp",
+          "label": "RPP deduction (T1 line 20700)",
+          "prior": 68.23,
+          "current": 0.0,
+          "delta": -68.23
+        },
+        {
+          "key": "deductions.cpp_enhanced",
+          "label": "Enhanced CPP (T1 line 22215)",
+          "prior": 1242.9,
+          "current": 1592.93,
+          "delta": 350.03
+        },
+        {
+          "key": "deductions.wfh",
+          "label": "WFH expenses (T1 line 22900)",
+          "prior": 0.0,
+          "current": 6790.54,
+          "delta": 6790.54
+        },
+        {
+          "key": "deductions.other_deductions",
+          "label": "Other deductions (T1 line 23200)",
+          "prior": 0.0,
+          "current": 276.21,
+          "delta": 276.21
+        },
+        {
+          "key": "deductions.total",
+          "label": "Total deductions",
+          "prior": 1311.13,
+          "current": 59016.58,
+          "delta": 57705.45
+        },
+        {
+          "key": "net_income",
+          "label": "Net income",
+          "prior": 510172.45,
+          "current": 411005.07,
+          "delta": -99167.38
+        },
+        {
+          "key": "taxable_income",
+          "label": "Taxable income",
+          "prior": 510172.45,
+          "current": 410640.06,
+          "delta": -99532.39
+        },
+        {
+          "key": "fed.gross",
+          "label": "Federal tax (gross)",
+          "prior": 132339.05,
+          "current": 98095.41,
+          "delta": -34243.64
+        },
+        {
+          "key": "fed.credits",
+          "label": "Federal non-refundable credits",
+          "prior": 4417.41,
+          "current": 4396.39,
+          "delta": -21.02
+        },
+        {
+          "key": "fed.donation_credit",
+          "label": "Federal donation credit",
+          "prior": 0.0,
+          "current": 3450.25,
+          "delta": 3450.25
+        },
+        {
+          "key": "fed.ftc",
+          "label": "Federal foreign tax credit (T2209)",
+          "prior": 2280.64,
+          "current": 20956.95,
+          "delta": 18676.31
+        },
+        {
+          "key": "fed.final",
+          "label": "Federal tax (after credits)",
+          "prior": 125640.99,
+          "current": 69291.82,
+          "delta": -56349.17
+        },
+        {
+          "key": "prov.gross",
+          "label": "Provincial tax (gross)",
+          "prior": 81067.05,
+          "current": 60210.33,
+          "delta": -20856.71
+        },
+        {
+          "key": "prov.credits",
+          "label": "Provincial non-refundable credits",
+          "prior": 1248.26,
+          "current": 1286.84,
+          "delta": 38.58
+        },
+        {
+          "key": "prov.donation_credit",
+          "label": "Provincial donation credit",
+          "prior": 0.0,
+          "current": 1166.74,
+          "delta": 1166.74
+        },
+        {
+          "key": "prov.final",
+          "label": "Provincial tax (after credits)",
+          "prior": 79818.79,
+          "current": 57756.75,
+          "delta": -22062.03
+        },
+        {
+          "key": "total_tax",
+          "label": "Total tax",
+          "prior": 205459.78,
+          "current": 127048.58,
+          "delta": -78411.21
+        },
+        {
+          "key": "source_deducted",
+          "label": "Tax withheld at source",
+          "prior": 126368.45,
+          "current": 124827.43,
+          "delta": -1541.02
+        },
+        {
+          "key": "balance",
+          "label": "Balance (owing if positive, refund if negative)",
+          "prior": 79091.33,
+          "current": 2221.15,
+          "delta": -76870.18
+        }
+      ]
+    },
+    "attribution": {
+      "year": 2025,
+      "prior_year": 2024,
+      "filer": "primary",
+      "total_tax_delta_cad": -78411.21,
+      "rules_effect_cad": -10319.43,
+      "residual_cad": 0.0,
+      "drivers": [
+        {
+          "line": "10100",
+          "label": "Employment income",
+          "input_delta_cad": -57111.67,
+          "tax_effect_cad": -30570.19
+        },
+        {
+          "line": "20800",
+          "label": "RRSP deduction",
+          "input_delta_cad": 50356.89,
+          "tax_effect_cad": -26954.33
+        },
+        {
+          "line": "12600",
+          "label": "Net rental income",
+          "input_delta_cad": 30033.47,
+          "tax_effect_cad": 16075.92
+        },
+        {
+          "line": "t2209",
+          "label": "Foreign tax paid (FTC)",
+          "input_delta_cad": 18676.31,
+          "tax_effect_cad": -10199.58
+        },
+        {
+          "line": "12100",
+          "label": "Interest income",
+          "input_delta_cad": -14748.73,
+          "tax_effect_cad": -7894.5
+        },
+        {
+          "line": "34900",
+          "label": "Donations",
+          "input_delta_cad": 10617.07,
+          "tax_effect_cad": -4615.79
+        },
+        {
+          "line": "22900",
+          "label": "Home-office (WFH) expenses",
+          "input_delta_cad": 6790.54,
+          "tax_effect_cad": -3634.75
+        },
+        {
+          "line": "12700",
+          "label": "Capital gains",
+          "input_delta_cad": 365.01,
+          "tax_effect_cad": 195.39
+        },
+        {
+          "line": "25300",
+          "label": "Net capital losses applied",
+          "input_delta_cad": 365.01,
+          "tax_effect_cad": -195.36
+        },
+        {
+          "line": "22215",
+          "label": "Enhanced CPP deduction",
+          "input_delta_cad": 350.03,
+          "tax_effect_cad": -187.33
+        },
+        {
+          "line": "23200",
+          "label": "Other deductions",
+          "input_delta_cad": 276.21,
+          "tax_effect_cad": -147.81
+        },
+        {
+          "line": "20700",
+          "label": "RPP contributions",
+          "input_delta_cad": -68.23,
+          "tax_effect_cad": 36.55
+        }
+      ]
+    },
+    "total_tax_delta": -78411.21,
+    "tolerance_abs_cad": 74.16,
+    "tolerance_pct": 0.02,
+    "known_amounts": [
+      0.0,
+      21.02,
+      36.55,
+      38.58,
+      68.23,
+      147.81,
+      187.33,
+      195.36,
+      195.39,
+      276.21,
+      350.03,
+      365.01,
+      1166.74,
+      1242.9,
+      1248.26,
+      1286.84,
+      1311.13,
+      1541.02,
+      1592.93,
+      2221.15,
+      2280.64,
+      3450.25,
+      3634.75,
+      4396.39,
+      4417.41,
+      4615.79,
+      6790.54,
+      7894.5,
+      10199.58,
+      10319.43,
+      10617.07,
+      14748.73,
+      16075.92,
+      18676.31,
+      20856.71,
+      20956.95,
+      22062.03,
+      22647.55,
+      26954.33,
+      30033.47,
+      30570.19,
+      34243.64,
+      37396.28,
+      41461.93,
+      50356.89,
+      56349.17,
+      57111.67,
+      57705.45,
+      57756.75,
+      59016.58,
+      60210.33,
+      69291.82,
+      76870.18,
+      78411.21,
+      79091.33,
+      79818.79,
+      81067.05,
+      98095.41,
+      99167.38,
+      99532.39,
+      124827.43,
+      125640.99,
+      126368.45,
+      127048.58,
+      132339.05,
+      205459.78,
+      410640.06,
+      411005.07,
+      416975.62,
+      470021.65,
+      474087.3,
+      510172.45,
+      511483.58
+    ]
+  },
+  "sanitized": true,
+  "sanitized_at": "2026-08-18T15:38:03"
+}

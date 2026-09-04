@@ -1,0 +1,43 @@
+# Weekend Planner Configuration
+
+# NOTE: top-level keys MUST precede the first [table] / [[array-of-tables]].
+# `exclude_places` used to sit at the bottom of this file, which TOML parsed as a
+# key of the LAST [[children]] entry -- so weekend/config.py:54 read [] and the
+# whole exclusion list was silently ignored. See docs/REPORT_WEAKNESS_CLASSES.md C8.
+exclude_places = [
+  "Canada's Wonderland",
+  "Ontario Science Centre",
+  "Toronto Zoo",
+  "The Art of the Brick",
+  "Reptilia",
+  "ROM",
+  "Ripley's",
+  "Little Canada",
+  "LEGOLAND",
+  "CN Tower",
+  "Museum of Illusions",
+  "Royal Ontario Museum (ROM)",
+  "Toronto Islands",
+  "Sky Zone Toronto",
+  "LEGOLAND Discovery Centre Toronto",
+  "LEGOLAND Discovery Centre Toronto (Vaughan Mills)",
+]
+
+[location]
+city = "Vaughan"
+region = "Toronto"
+timezone = "America/Toronto"
+latitude = 43.8361
+longitude = -79.5083
+
+[[children]]
+birthday = "2012-10-05"
+gender = "girl"
+
+[[children]]
+birthday = "2015-10-02"
+gender = "boy"
+
+[[children]]
+birthday = "2020-06-01"
+gender = "boy"

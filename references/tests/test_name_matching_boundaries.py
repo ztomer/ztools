@@ -1,0 +1,283 @@
+"""The fuzzy name matcher that decides whether output was grounded in its source.
+
+`_names_match` feeds `check_source_extraction`, which produces `source_ratio`, which
+drives the hallucination cap in `validate_detailed_json`. It is the function that
+decides whether a model invented its answer -- one of the highest-stakes judgements
+the scorer makes.
+
+Mutation testing found 12 surviving mutations in `_names_match` alone and 15 more
+across `_name_tokens`, `check_source_extraction` and `get_source_matching_details`.
+Among them: `return False` becoming `return True` on both early exits, `max` becoming
+`min` in the fallback, and every `>=` becoming `>`. A matcher whose every decision
+path can be inverted without a test noticing is a matcher nothing is holding in place.
+
+Each test below targets one decision path at the point where it flips.
+"""
+
+from lib.validators.json_validator import (
+    STOPWORDS,
+    _name_tokens,
+    _names_match,
+    check_source_extraction,
+    get_source_matching_details,
+    has_item_details,
+)
+
+
+class TestEmptyNamesNeverMatch:
+    """`if not na or not nb: return False` -- both the `or` and the `False` survived.
+
+    Matching on an empty name would mark any item as grounded, which turns the
+    hallucination check off for exactly the output most likely to be hallucinated.
+    """
+
+    def test_an_empty_name_does_not_match(self):
+        assert _names_match("", "Royal Ontario Museum") is False
+        assert _names_match("Royal Ontario Museum", "") is False
+
+    def test_both_empty_do_not_match(self):
+        assert _names_match("", "") is False
+
+    def test_a_name_of_only_punctuation_does_not_match(self):
+        """It normalises to empty, so it must take the same path."""
+        assert _names_match("!!!", "Royal Ontario Museum") is False
+
+    def test_a_name_with_no_usable_tokens_does_not_match(self):
+        """`if not ta or not tb: return False` -- the second early exit. All-stopword
+        names survive normalisation but produce no tokens."""
+        assert _name_tokens("the and for") == set()
+        assert _names_match("the and for", "Royal Ontario Museum") is False
+
+
+class TestContainmentMatches:
+    def test_a_name_contained_in_the_other_matches(self):
+        assert _names_match("Hockey Hall", "Hockey Hall of Fame") is True
+
+    def test_containment_is_symmetric(self):
+        assert _names_match("Hockey Hall of Fame", "Hockey Hall") is True
+
+
+class TestSharedTokenThreshold:
+    """`if len(ta & tb) >= 2` -- `>=` becoming `>` survived, so exactly two shared
+    tokens is the only input that tests this line."""
+
+    def test_exactly_two_shared_tokens_match(self):
+        # royal + ontario shared; museum vs gallery differ; neither contains the other
+        assert _names_match("Royal Ontario Museum", "Ontario Royal Gallery") is True
+
+    def test_one_shared_short_token_does_not_match(self):
+        """casa is shared but only 4 chars, so the >=5 fallback cannot rescue it."""
+        assert _names_match("Casa Loma", "Casa Verde") is False
+
+
+class TestTheLongestTokenFallback:
+    """`max(ta, key=len)` -- `max` becoming `min` survived, as did the `>= 5`."""
+
+    def test_a_long_distinctive_token_rescues_a_single_overlap(self):
+        assert _names_match("Rogers Centre", "Rogers Arena") is True
+
+    def test_the_fallback_uses_the_LONGEST_token_not_the_shortest(self):
+        """The case that separates max from min.
+
+        Shared token count is 1, so the fallback decides. 'aquarium' (8) is contained
+        in the other name and matches; the shortest tokens are 'zoo' (3) and 'park'
+        (4), both under the 5-char floor. Under `min` the fallback would consider only
+        those and return False.
+        """
+        assert _names_match("zoo aquarium", "park aquarium") is True
+
+    def test_a_short_shared_token_is_not_distinctive_enough(self):
+        """'zoo' is 3 chars: shared, but below the fallback's 5-char floor."""
+        assert _names_match("ABC Zoo", "XYZ Zoo") is False
+
+
+class TestTokenExtraction:
+    """`len(t) >= 3 and t not in STOPWORDS` -- the `>=`, the `and` and the `not` all
+    survived, so all three are pinned here."""
+
+    def test_three_character_tokens_are_kept(self):
+        assert "abc" in _name_tokens("abc")
+
+    def test_two_character_tokens_are_dropped(self):
+        assert _name_tokens("ab") == set()
+
+    def test_stopwords_are_dropped_even_when_long_enough(self):
+        stopword = next(w for w in STOPWORDS if len(w) >= 3)
+        assert stopword not in _name_tokens(f"{stopword} museum")
+
+    def test_a_non_stopword_of_the_same_length_is_kept(self):
+        """Distinguishes the stopword filter from the length filter."""
+        assert "zoo" in _name_tokens("zoo")
+
+
+class TestSourceExtractionRatio:
+    """`if not items or not source_text` -- `or` becoming `and` survived on both
+    check_source_extraction and get_source_matching_details."""
+
+    def test_no_items_is_not_full_grounding(self):
+        assert check_source_extraction([], "some source text") == 0.0
+
+    def test_no_source_is_not_full_grounding(self):
+        assert check_source_extraction([{"name": "Royal Ontario Museum"}], "") == 0.0
+
+    def test_items_present_in_the_source_are_matched(self):
+        items = [{"name": "Royal Ontario Museum"}, {"name": "Casa Loma"}]
+        src = "Visit the Royal Ontario Museum and then Casa Loma for the afternoon"
+        assert check_source_extraction(items, src) == 1.0
+
+    def test_items_absent_from_the_source_are_not_matched(self):
+        items = [{"name": "Invented Venue Alpha"}, {"name": "Fabricated Place Beta"}]
+        assert check_source_extraction(items, "an entirely unrelated paragraph") == 0.0
+
+    def test_the_details_view_agrees_with_the_ratio(self):
+        """Two functions computing the same thing must not disagree -- that is how a
+        report says 'matched 2/2' beside a score that assumed nothing matched."""
+        items = [{"name": "Royal Ontario Museum"}, {"name": "Invented Venue Alpha"}]
+        src = "Visit the Royal Ontario Museum today"
+        ratio = check_source_extraction(items, src)
+        details = get_source_matching_details(items, src)
+
+        assert details["ratio"] == ratio
+        assert len(details["matched"]) == 1
+        assert len(details["unmatched"]) == 1
+
+    def test_an_unnamed_item_is_reported_rather_than_dropped(self):
+        """`item_name or "unnamed"` -- the `or` survived. An item with no name is
+        still an item that failed to match, and silently dropping it would inflate
+        the ratio."""
+        details = get_source_matching_details([{"location": "somewhere"}], "text")
+        assert details["unmatched"] == ["unnamed"]
+
+
+class TestSourceExtractionInternalBoundaries:
+    """The term filters and the verbatim fallback inside check_source_extraction.
+
+    These survived the first round of tests because those exercised the function's
+    OUTCOME (matched / not matched) without landing on the thresholds that decide it.
+    Testing a function's result is not the same as testing its boundaries.
+    """
+
+    SOURCE = "Visit the Royal Ontario Museum and Casa Loma this weekend"
+
+    def test_a_source_of_only_short_and_stopword_terms_grounds_nothing(self):
+        """`if not source_terms: return 0.0`. Terms are filtered by `len >= 3 and not
+        a stopword`; a source that survives neither filter must ground nothing rather
+        than everything."""
+        assert check_source_extraction([{"name": "Royal Ontario Museum"}], "a to be an it of") == 0.0
+
+    def test_two_shared_terms_ground_an_item(self):
+        assert check_source_extraction([{"name": "Royal Ontario Museum"}], self.SOURCE) == 1.0
+
+    def test_a_verbatim_name_grounds_an_item_with_only_one_shared_term(self):
+        """The fallback exists for short names that cannot reach two shared terms."""
+        assert check_source_extraction([{"name": "Casa Loma"}], self.SOURCE) == 1.0
+
+    def test_the_verbatim_fallback_at_exactly_four_characters(self):
+        """`if len(search) >= 4` -- `>=` becoming `>` survived, so exactly 4 is the
+        only input that tests it."""
+        assert check_source_extraction([{"name": "Casa"}], "we went to casa today") == 1.0
+
+    def test_a_three_character_name_is_below_the_verbatim_floor(self):
+        """Present verbatim, but too short to be evidence of anything."""
+        assert check_source_extraction([{"name": "Zoo"}], "we went to zoo today") == 0.0
+
+    def test_a_bare_string_item_is_handled_like_a_named_one(self):
+        assert check_source_extraction(["Royal Ontario Museum"], self.SOURCE) == 1.0
+
+    def test_an_item_whose_values_are_all_falsy_grounds_nothing(self):
+        """`if not item_text: continue` -- an item with nothing in it cannot be
+        grounded, and must not be counted as a match."""
+        assert check_source_extraction([{"name": ""}], self.SOURCE) == 0.0
+
+
+class TestHasItemDetailsBoundary:
+    """`return len(item) >= 2` on both branches -- `>=` becoming `>` survived both."""
+
+    def test_one_field_is_not_details(self):
+        assert has_item_details({"name": "Royal Ontario Museum"}) is False
+
+    def test_exactly_two_fields_is_details(self):
+        assert has_item_details({"name": "Royal Ontario Museum", "location": "Toronto"}) is True
+
+    def test_an_item_with_no_name_field_needs_two_keys(self):
+        """L153: the no-name branch. Reached only by an item with none of the name
+        fields, which the name-bearing tests above never take."""
+        assert has_item_details({"foo": "a", "bar": "b"}) is True
+        assert has_item_details({"foo": "a"}) is False
+
+    def test_a_named_item_without_detail_fields_needs_two_keys(self):
+        """L157: the branch after the detail-field scan finds nothing.
+
+        The earlier two-field test never reached this line -- `location` IS a detail
+        field, so it returned True at the scan and exited. Reaching this boundary
+        needs a second key that is NOT a detail field.
+        """
+        assert has_item_details({"name": "x", "unrelated": "y"}) is True
+        assert has_item_details({"name": "x"}) is False
+
+    def test_a_non_dict_is_never_details(self):
+        assert has_item_details(["name", "location"]) is False
+
+
+class TestBranchesReachableByOnlyOnePath:
+    """Survivors that lived because two branches could produce the same outcome.
+
+    `test_exactly_two_shared_tokens_match` above uses "Royal Ontario Museum" vs
+    "Ontario Royal Gallery" and asserts True. It passes with `len(ta & tb) >= 2`
+    AND with `> 2`, because when the shared-token rule fails the longest-token
+    fallback rescues it: "ontario" is 7 characters and appears in the other name.
+    The test asserts the OUTCOME, and the outcome has two roads to it.
+
+    Killing these needs a fixture where the branch under test is the ONLY road.
+    """
+
+    #: Two shared tokens, and every token too short (or absent) for the >=5 fallback:
+    #: longest of {fox, blue, cafe} is 4 characters, and "diner" does not appear in
+    #: the other name. So the >=2 rule alone decides.
+    ONLY_SHARED_TOKENS = ("Blue Fox Cafe", "Fox Blue Diner")
+
+    def test_exactly_two_shared_tokens_is_the_only_route_here(self):
+        """Calibration: prove the fallback cannot also produce this match."""
+        from lib.validators.json_validator import _name_tokens
+
+        a, b = self.ONLY_SHARED_TOKENS
+        ta, tb = _name_tokens(a), _name_tokens(b)
+        assert len(ta & tb) == 2
+        assert a.lower() not in b.lower() and b.lower() not in a.lower()
+        assert max(len(t) for t in ta) < 5, "a >=5 token would let the fallback match"
+        assert not any(len(t) >= 5 and t in a.lower() for t in tb)
+
+    def test_two_shared_tokens_match_without_help_from_the_fallback(self):
+        """`>= 2` becoming `> 2` is invisible to a fixture the fallback can rescue."""
+        assert _names_match(*self.ONLY_SHARED_TOKENS) is True
+
+    def test_one_shared_token_with_no_long_token_does_not_match(self):
+        """The other side of the same boundary."""
+        assert _names_match("Blue Fox Cafe", "Fox Elm Diner") is False
+
+    #: The fallback is `(len(longest_a) >= 5 and longest_a in nb) or (len(longest_b)
+    #: >= 5 and longest_b in na)`. An `or` means a fixture that satisfies the SECOND
+    #: clause cannot test the first: "Rogers Diner" vs "Bank Diner" matches through
+    #: longest_b ("diner" in "rogers diner"), so mutating the first `>= 5` changes
+    #: nothing and the mutant lives.
+    #:
+    #: Here only clause ONE can fire: "cocoa" is exactly 5 and appears inside
+    #: "cocoabean", while longest_b ("cocoabean", 9) does not appear in "cocoa fox".
+    ONLY_CLAUSE_ONE = ("Cocoa Fox", "Cocoabean Elm")
+
+    def test_the_fixture_isolates_the_first_fallback_clause(self):
+        """Calibration, because an `or` hides which side did the work."""
+        from lib.validators.json_validator import _name_tokens
+
+        a, b = self.ONLY_CLAUSE_ONE
+        ta, tb = _name_tokens(a), _name_tokens(b)
+        assert not (ta & tb), "shared tokens would match before the fallback"
+        assert max(ta, key=len) in b.lower(), "clause one must be able to fire"
+        assert max(tb, key=len) not in a.lower(), "clause two must NOT also fire"
+
+    def test_exactly_five_characters_passes_the_fallback_floor(self):
+        """`>= 5` becoming `> 5` is only visible at exactly 5, through clause one."""
+        assert _names_match(*self.ONLY_CLAUSE_ONE) is True
+
+    def test_a_four_character_token_is_below_the_fallback_floor(self):
+        assert _names_match("Rogers Cafe", "Bank Cafe") is False

@@ -1,0 +1,17 @@
+# Image Renamer Configuration
+tesseract_cmd = "/opt/homebrew/bin/tesseract"
+mlx_models_dir = "~/MLXModels/mlx-community"
+llm_url = "http://localhost:1337"
+
+# NOTE: `rn` does NOT keep its own vision or filename preference lists.
+#
+# There used to be `vlm_preferred` and `text_preferred` here. Nothing read them --
+# the vision path takes `best_models.vlm` (cli.py) and the filename path takes
+# `get_filename_models()` (llm.py), both DERIVED from the eval sweep and audited
+# against the live roster. A hand-typed list shadowing a derived one is the
+# parallel-pipeline drift this repo keeps paying for, and these two had already
+# rotted once: both entries named models uninstalled for months.
+#
+# `relevance_check_models` is the one model key this file may legitimately carry.
+# Leave it UNSET unless you are deliberately overriding: unset it falls back to the
+# same sweep-derived filename chain, which cannot rot silently.

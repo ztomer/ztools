@@ -1,0 +1,242 @@
+"""What this machine can actually give a model, and whether it is already thrashing.
+
+THE READING THAT STARTED THIS. A 64GB Mac, fifty minutes idle, was reported as
+having "21.9GB available" and a 28.8GB model was said not to fit. Both were wrong.
+21.9GB was `Pages free` from vm_stat, which is not available memory on macOS:
+
+    free 26.7 + inactive 16.9 + speculative 2.0 = 45.6 GB   <- the real figure
+    Pages free alone                            = 26.7 GB
+
+macOS holds reclaimable memory in `inactive` and `speculative`, and a box with
+7.2GB genuinely in use reads as nearly full if you look only at `free`.
+
+THE DEEPER PROBLEM, which is why this module exists rather than a one-line fix.
+`eval/samples.py` had already worked this out and written it down:
+
+    After a sweep the page cache legitimately holds tens of GB of model weights
+    and "available" drops to ~12GB on a perfectly healthy box, so a headroom
+    threshold refuses to record on exactly the machine you most want readings
+    from.
+
+which is why sample cleanliness gates on PRESSURE -- swap and compressor -- and
+not on headroom at all. The oversize refusal added later gated on headroom, the
+quantity that docstring warns against, and so could refuse a model that would run
+fine simply because the page cache still held the previous model's weights.
+
+So both gates now ask the same two questions, in the same order, from one place:
+
+    1. Is the machine ALREADY thrashing?  (swap, compressor -- unambiguous)
+    2. Does the model fit in what is RECLAIMABLE?  (not merely in what is free)
+
+Question 1 is the load-bearing one. A clean file-backed page holding model weights
+evicts instantly and costs nothing; swap traffic and a full compressor are the
+states where a timing describes the machine instead of the model.
+"""
+
+import sys
+from typing import Optional, Tuple
+
+
+class NotSupportedHere(RuntimeError):
+    """Raised when asked to read memory on a platform this repo does not target.
+
+    House rule #3: an unsupported platform is a HARD FAILURE, never a fallback
+    that continues anyway. The eval path is macOS-only end to end -- osaurus,
+    Metal, the GPU lock -- so a Linux "degrade gracefully" branch here would be
+    dead code whose only effect is to turn a missing tool into a plausible
+    number. Every quantity in this module comes from vm_stat.
+    """
+
+
+def _require_macos() -> None:
+    if sys.platform != "darwin":
+        raise NotSupportedHere(
+            f"memory readings require macOS vm_stat; this is {sys.platform}. "
+            "The eval path (osaurus, Metal, the GPU lock) is macOS-only."
+        )
+
+#: Above these the machine is swapping or compressing hard, and any timing taken
+#: on it describes the contention rather than the model. Calibrated against the
+#: two observed states: during the 31GB leak swap was 12.88GB and the compressor
+#: held 29.3GB; healthy after a full sweep they were 1.43GB and 5.1GB.
+MAX_CLEAN_SWAP_GB = 8.0
+MAX_CLEAN_COMPRESSOR_GB = 15.0
+
+#: Seconds between the two vm_stat samples that decide whether the machine is
+#: ACTIVELY compressing. Short enough not to slow a caller noticeably, long
+#: enough that an idle box reliably reports zero.
+RATE_WINDOW_SECONDS = 1.0
+
+#: Compressed pages per second above which the compressor is doing real work.
+#: Measured idle on this box: Compressions moved by EXACTLY 0 over 10 seconds,
+#: so any sustained nonzero rate is signal. The floor is a noise margin, not a
+#: calibrated threshold -- it has never been measured against a genuinely
+#: thrashing machine, and should be when the chance arises.
+MIN_ACTIVE_COMPRESSION_RATE = 100.0
+
+_BYTES_PER_GB = 1024**3
+#: vm_stat reports counts of pages; Apple silicon uses 16KB pages. Read from the
+#: header rather than assumed, because a wrong page size scales every figure here.
+_DEFAULT_PAGE_SIZE = 16384
+
+
+def _vm_stat_raw() -> dict:
+    """vm_stat's counters as raw page/event counts, keyed by their own labels.
+
+    Separate from `_vm_stat` because not every counter is a page count:
+    Compressions, Decompressions, Swapins and Swapouts are EVENT counts, and
+    scaling them by the page size would silently turn a rate into nonsense.
+    """
+    import re
+    import subprocess
+
+    _require_macos()
+    out = subprocess.run(["vm_stat"], capture_output=True, text=True, timeout=10).stdout
+    stats = {}
+    for line in out.splitlines():
+        match = re.match(r'^"?([A-Za-z][^:"]*)"?:\s+(\d+)', line)
+        if match:
+            stats[match.group(1).strip()] = int(match.group(2))
+    return stats
+
+
+def _vm_stat() -> dict:
+    """vm_stat's PAGE counters in GB, keyed by their own labels."""
+    import re
+    import subprocess
+
+    _require_macos()
+    out = subprocess.run(["vm_stat"], capture_output=True, text=True, timeout=10).stdout
+    page = _DEFAULT_PAGE_SIZE
+    header = re.search(r"page size of (\d+)", out)
+    if header:
+        page = int(header.group(1))
+    stats = {}
+    for line in out.splitlines():
+        match = re.match(r'^"?([A-Za-z][^:"]*)"?:\s+(\d+)', line)
+        if match:
+            stats[match.group(1).strip()] = int(match.group(2)) * page / _BYTES_PER_GB
+    return stats
+
+
+def pressure() -> Optional[Tuple[float, float]]:
+    """(swap_gb, compressor_gb), or None when they cannot be read.
+
+    None means "cannot tell" and every caller must treat it as such rather than
+    as "fine". Inventing a healthy reading here is how a contended machine's
+    numbers got recorded as clean in the first place.
+    """
+    try:
+        import psutil
+
+        swap_gb = psutil.swap_memory().used / _BYTES_PER_GB
+        compressor_gb = _vm_stat().get("Pages occupied by compressor", 0.0)
+        return swap_gb, compressor_gb
+    except Exception:
+        return None
+
+
+def compression_rate() -> Optional[float]:
+    """Pages compressed per second, sampled over RATE_WINDOW_SECONDS.
+
+    THE POINT OF THIS FUNCTION. A compressor LEVEL is residue, not pressure. It
+    records how much the machine compressed at some point in the past, it drains
+    on its own schedule, and it says nothing about now. Measured on this box:
+    after one thrashing model the compressor stood at 29.4GB with the VM
+    subsystem completely idle -- Compressions +0, Swapins +0, Swapouts +0,
+    Pageouts +0 over ten seconds -- and it fell to 3.0GB by itself about ten
+    minutes later, with no intervention.
+
+    A rate cannot be residue. If the counter is moving, the machine is paying
+    for memory right now; if it is not, the machine is not, however large the
+    level happens to be.
+    """
+    import time
+
+    try:
+        before = _vm_stat_raw().get("Compressions")
+        if before is None:
+            return None
+        time.sleep(RATE_WINDOW_SECONDS)
+        after = _vm_stat_raw().get("Compressions")
+        if after is None:
+            return None
+    except Exception:
+        return None
+    return max(0.0, (after - before) / RATE_WINDOW_SECONDS)
+
+
+def is_thrashing() -> Optional[bool]:
+    """Is the machine paging hard enough that timings describe IT, not the model?
+
+    Tri-state on purpose: None is "cannot tell", and is not the same as False.
+
+    THIS GATES ON LEVELS, AND THE RATE VERSION WAS MEASURED AND REJECTED.
+
+    A compressor level is residue: it records work already finished and drains on
+    its own (29.4GB -> 3.0GB in about ten minutes, unaided). That is a real flaw,
+    and it makes this check over-cautious -- it will call a recently-busy machine
+    contended when the box is fine.
+
+    The obvious fix was to require an active COMPRESSION RATE, and it was worse.
+    Measured against a run known to be thrashing (compressor climbing 2.5 ->
+    28.4GB), sampled once a second:
+
+        comp_rate          median 0/s, max 625,472/s, ZERO in 76 of 83 samples
+        level_delta_gb_s   median 0/s,               ZERO in 78 of 80 samples
+
+    Both counters are BURSTY. A one-second sample of a genuinely thrashing
+    machine reads zero about 95% of the time, so a rate-gated guard would have
+    cleared a contaminated run nineteen times in twenty.
+
+    That is the wrong direction to fail in. An over-cautious guard costs a
+    retried measurement; an under-cautious one writes a contaminated number into
+    eval_signals.json, where it feeds the median, sizes the derived timeout, and
+    hardens into config and docs. That mechanism is how MODEL_QUIRKS.md came to
+    record 14.7 tok/s for a model that does 0.11.
+
+    So this deliberately keeps the false-positive behaviour until a signal is
+    found that is reliable under load. The candidate, from the same measurement,
+    is PAGE-IN RATE -- the only signal that never read zero (0 of 80), at a
+    median of 87.7 pages/s warm against roughly 101,800 pages/s during the
+    thrashing run, a separation of three orders of magnitude. It is not adopted
+    yet because a legitimate model LOAD also pages in heavily, and telling a cold
+    start apart from thrashing needs its own measurement.
+    """
+    reading = pressure()
+    if reading is None:
+        return None
+    swap_gb, compressor_gb = reading
+    return swap_gb > MAX_CLEAN_SWAP_GB or compressor_gb > MAX_CLEAN_COMPRESSOR_GB
+
+
+def reclaimable_available_gb() -> float:
+    """Memory a model can have, counting what the kernel would evict to give it.
+
+    psutil's `available` on macOS is free + inactive + speculative, which already
+    covers most of the page cache. What it MISSES is file-backed pages that are
+    currently `active` -- clean pages holding a previously-loaded model's weights,
+    evictable at no cost, and precisely what is resident right after a sweep.
+
+    The active-file-backed estimate subtracts inactive+speculative from the
+    file-backed total, which assumes every inactive and speculative page is
+    file-backed. That over-subtracts, so the estimate is CONSERVATIVE: it can
+    understate what is reclaimable, never overstate it. Understating means the
+    gate occasionally refuses something that would have fit, which is the safe
+    direction for a gate whose failure mode is producing a wrong number.
+
+    Raises rather than degrading. An earlier version caught everything and
+    returned psutil's figure alone, which turned "vm_stat is broken" into a
+    number that looks fine and is simply wrong -- the failure this whole module
+    exists to stop.
+    """
+    import psutil
+
+    available = psutil.virtual_memory().available / _BYTES_PER_GB
+    stats = _vm_stat()
+    file_backed = stats.get("File-backed pages", 0.0)
+    inactive = stats.get("Pages inactive", 0.0)
+    speculative = stats.get("Pages speculative", 0.0)
+    purgeable = stats.get("Pages purgeable", 0.0)
+    active_file_backed = max(0.0, file_backed - inactive - speculative)
+    return available + active_file_backed + purgeable

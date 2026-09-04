@@ -1,0 +1,14 @@
+# routines manifest — Twitter summarizer
+# See ~/Projects/routines/docs/STATUS_CONTRACT.md
+
+name = "ztools-twitter"
+description = "twitter summarizer: scrape feeds, summarize topics with local model"
+
+[run]
+command = "uv run --frozen tw"
+schedule = "daily at 08:00"
+timeout_ms = 1800000
+
+[status]
+command = "uv run --frozen python routines_twitter_status.py"
+timeout_ms = 30000

@@ -1,0 +1,40 @@
+# routines manifest — how this project joins a scheduled routine.
+# See ~/Projects/routines/docs/STATUS_CONTRACT.md
+
+name = "ztools-weekend"
+description = "weekend planner: scrape, filter to the home region, draft with a local model"
+
+[run]
+# Thursday evening, so the plan is ready before the weekend it covers. This
+# cadence is only expressible because timing is per item now — under the old
+# Daily|Weekly slot selector this would have fired at the one house-wide
+# weekly instant along with everything else.
+#
+# A failure here most often means Osaurus is not serving: a wedged server
+# answers /v1/models instantly while serving nothing (see PENDING 5.3).
+command = "uv run --frozen wk"
+schedule = "weekly on mon at 08:00"
+# A full run scrapes the web and drives a 35B model; the 120s default would
+# kill it and report a false failure.
+timeout_ms = 1800000
+
+[status]
+# Read-only: reads back the newest plan from the configured output directory
+# ($WEEKEND_OUTPUT_DIR) and counts its rows
+# using the checkers' own parsers. Runs no model and touches no network.
+command = "uv run --frozen python references/routines_status.py"
+timeout_ms = 30000
+
+[tab]
+# A dashboard tab in the routines menubar. Read-only and cheap: the native
+# `weekend-plan --fetch-latest` reads the newest stored plan back (the same
+# discovery the status line uses), so opening the tab never re-plans. Absolute
+# path because the menubar is a GUI process whose PATH has no /opt/homebrew.
+# See ~/Projects/routines/docs/STATUS_CONTRACT.md
+# `refresh` re-plans on demand (the same scrape + model pipeline `run` uses)
+# into the same store the read side reads, so a refreshed tab shows the plan
+# that was actually generated, not a stale one.
+id = "ztools-weekend"
+title = "Weekend Plan"
+command = "/opt/homebrew/bin/ztools weekend-plan --fetch-latest"
+refresh = "/opt/homebrew/bin/ztools weekend-plan --md-out /Users/ztomer/Documents/weekend_plans/weekend_plan_latest.md"

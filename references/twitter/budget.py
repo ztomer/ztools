@@ -1,0 +1,139 @@
+"""Prompt-budget and timeout model for the twitter summarizer.
+
+Split out of summarize.py for the repo's 500-line limit. Two questions live
+here: how much timeline fits a given model's context window, and how long the
+call should be allowed to take.
+"""
+
+import os
+
+CHARS_PER_TOKEN = int(os.environ.get("TWITTER_CHARS_PER_TOKEN", "3"))
+# Observed summaries run ~900-1100 tokens; reserving 4096 took half of an 8192
+# window away from the timeline for output that never needed it.
+OUTPUT_RESERVE_TOKENS = int(os.environ.get("TWITTER_OUTPUT_RESERVE", "1536"))
+
+# Dynamic timeout model (seconds):
+#   timeout = cold_start_load + input_chars/prefill_rate + output_tokens/decode_rate
+# COLD_START_BASE is the fixed model-load cost (large for 35B models on first hit).
+# TWITTER_PREFILL_CHARS_PER_SEC is how fast the server ingests the prompt.
+# TWITTER_DECODE_TOKENS_PER_SEC is generation throughput; combined with the output
+# reserve it bounds the time spent producing the summary.
+COLD_START_BASE = int(os.environ.get("TWITTER_COLD_START_BASE", "120"))
+# A ceiling that stops a wedged server hanging forever, NOT a budget to fit
+# inside. wk runs once a day and tw every six hours, so a long run costs
+# nothing; a prompt truncated to beat the clock costs output quality.
+MAX_TIMEOUT = int(os.environ.get("TWITTER_MAX_TIMEOUT", "5400"))
+MIN_TIMEOUT = int(os.environ.get("TWITTER_MIN_TIMEOUT", "60"))
+# Fallback for a model `ev` has never measured, used ONLY to size a timeout.
+# Deliberately pessimistic: guessing slow makes the tool wait longer than it
+# needs to, guessing fast makes it kill a request that was working. Those are
+# not symmetric, and only one of them loses output.
+PREFILL_CHARS_PER_SEC = int(os.environ.get("TWITTER_PREFILL_CHARS_PER_SEC", "200"))
+DECODE_TOKENS_PER_SEC = int(os.environ.get("TWITTER_DECODE_TOKENS_PER_SEC", "8"))
+
+# Default context window size for Osaurus models (tokens)
+OSAURUS_CONTEXT_WINDOW = int(os.environ.get("TWITTER_CONTEXT_WINDOW", "8192"))
+
+# On-device Apple Foundation Models have a much smaller context window than the
+# server models. Sizing the prompt to OSAURUS_CONTEXT_WINDOW and re-sending it to
+# `foundation` overflows its window and returns HTTP 500. Size per-model instead.
+FOUNDATION_CONTEXT_WINDOW = int(os.environ.get("TWITTER_FOUNDATION_CONTEXT_WINDOW", "4096"))
+
+
+def _context_window_for_model(model: str) -> int:
+    """Return the token context window to size the prompt against for a model.
+
+    A flat 8192 for every server model cut a 24h timeline (200-800 tweets) down
+    to ~60-90 before the model ever saw it, on models serving far more. The
+    per-model `context_window` key in conf/models/*.toml is authoritative;
+    OSAURUS_CONTEXT_WINDOW remains the floor for models that declare nothing.
+    """
+    if model and "foundation" in model.lower():
+        return FOUNDATION_CONTEXT_WINDOW
+    try:
+        from lib.config import get_model_config
+        from lib.model_caps import usable_context_window
+
+        # Ask the model, do not assume: the installed models report 131072 or
+        # 262144 in their own config.json, so both the old flat 8192 and the
+        # hand-written per-family guesses threw most of the window away. A
+        # `context_window` entry in conf/models/*.toml still wins as an override.
+        override = (get_model_config(model) or {}).get("context_window")
+        return usable_context_window(model, OSAURUS_CONTEXT_WINDOW, override)
+    except Exception:
+        return OSAURUS_CONTEXT_WINDOW
+
+
+def _ctx_chars_for_model(model: str) -> int:
+    """Prompt character budget for a model, derived from its context window.
+
+    The output reserve is capped at half the window so a small window (e.g.
+    Foundation's) still leaves room for the input prompt instead of collapsing
+    the budget to zero.
+    """
+    window = _context_window_for_model(model)
+    reserve = min(OUTPUT_RESERVE_TOKENS, window // 2)
+    return (window - reserve) * CHARS_PER_TOKEN
+
+
+def _output_tokens_for_model(model: str) -> int:
+    """Estimated output tokens to budget generation time against."""
+    window = _context_window_for_model(model)
+    return min(OUTPUT_RESERVE_TOKENS, window // 2)
+
+
+# Quality thresholds
+
+
+
+def _prefill_rate_for_model(model: str = None) -> float:
+    """Ingestion rate to budget TIME against: this model's, or a slow fallback.
+
+    Only ever widens or narrows a timeout -- it never decides how much context
+    to send. A model measured slow gets longer to finish, not a smaller prompt.
+    """
+    try:
+        from lib.model_caps import measured_prefill_rate
+
+        return measured_prefill_rate(model or "") or PREFILL_CHARS_PER_SEC
+    except Exception:
+        return PREFILL_CHARS_PER_SEC
+
+
+def _measured_or(model: str, key: str, fallback: float) -> float:
+    """A per-model measurement if `ev` has one, else the pessimistic constant.
+
+    All three terms of the timeout are measured per model by `ev` and, until now,
+    only prefill was read back -- decode and cold start used flat constants while the
+    real values sat in conf/eval_signals.json. That made the estimate wrong in both
+    directions at once: nemotron decodes ~20x slower than the 8 tok/s constant, and
+    foundation loads ~75x faster than the 120s one.
+
+    The fallback stays deliberately pessimistic. Guessing slow makes the tool wait
+    longer than it needs to; guessing fast makes it kill a request that was working.
+    Those are not symmetric, and only one of them loses output.
+    """
+    try:
+        from lib.model_caps import recorded_capability
+
+        measured = recorded_capability(model or "", key)
+        return float(measured) if measured and float(measured) > 0 else fallback
+    except Exception:
+        return fallback
+
+
+def _estimate_timeout(prompt: str, model: str = None) -> int:
+    """Dynamic request timeout scaled to input size + expected output.
+
+    timeout = cold-start load + prefill(input) + decode(output), clamped to
+    [MIN_TIMEOUT, MAX_TIMEOUT]. Larger timelines and slower models get more time
+    instead of a flat cap that a big prompt on a 35B model blows through.
+
+    Every term is now the MEASURED per-model value where one exists.
+    """
+    prefill = len(prompt) / max(1, _prefill_rate_for_model(model))
+    decode_rate = _measured_or(model, "decode_tokens_per_sec", DECODE_TOKENS_PER_SEC)
+    cold_start = _measured_or(model, "cold_start_seconds", COLD_START_BASE)
+    decode = _output_tokens_for_model(model) / max(1, decode_rate)
+    estimate = cold_start + prefill + decode
+    return int(max(MIN_TIMEOUT, min(MAX_TIMEOUT, estimate)))

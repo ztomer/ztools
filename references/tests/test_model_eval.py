@@ -1,0 +1,283 @@
+"""Tests for model_eval: memory, tasks, main flow."""
+
+from io import StringIO
+from unittest.mock import MagicMock, patch
+
+from rich.console import Console
+
+
+def _console_buffer():
+    """A console that writes to a buffer, handed to the callee as `out=`.
+
+    The CLI helpers take their console as a parameter, so no test rebinds a
+    module global.
+    """
+    buf = StringIO()
+    return buf, Console(file=buf, force_terminal=True, force_interactive=True, width=120)
+
+
+class TestGetMemoryPercent:
+    def test_with_psutil(self, mock_llm):
+        import eval.cli as model_eval
+
+        fake_mem = MagicMock()
+        fake_mem.virtual_memory.return_value = MagicMock(percent=50.0)
+        with patch.dict("sys.modules", {"psutil": fake_mem}):
+            result = model_eval.get_memory_percent()
+        assert result == 50.0
+
+    def test_without_psutil(self, mock_llm):
+        # Force ImportError
+        import builtins
+
+        import eval.cli as model_eval
+
+        real_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "psutil":
+                raise ImportError("no psutil")
+            return real_import(name, *args, **kwargs)
+
+        with patch.object(builtins, "__import__", side_effect=mock_import):
+            result = model_eval.get_memory_percent()
+        assert result == 0.0
+
+
+class TestCheckMemorySafe:
+    def test_safe_memory(self, mock_llm):
+        import eval.cli as model_eval
+
+        buf, out = _console_buffer()
+        with patch("eval.cli_runtime.get_memory_percent", return_value=50.0):
+            assert model_eval.check_memory_safe(out=out) is True
+
+    def test_unsafe_memory(self, mock_llm):
+        import eval.cli as model_eval
+
+        buf, out = _console_buffer()
+        with patch("eval.cli_runtime.get_memory_percent", return_value=95.0):
+            assert model_eval.check_memory_safe(out=out) is False
+        assert "Memory" in buf.getvalue()
+
+
+class TestIsServerResponsive:
+    def test_responsive(self, mock_llm):
+        import eval.cli as model_eval
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        with patch("requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_resp
+            assert model_eval.is_server_responsive() is True
+
+    def test_not_responsive(self, mock_llm):
+        import eval.cli as model_eval
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 500
+        with patch("requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.return_value = mock_resp
+            assert model_eval.is_server_responsive() is False
+
+    def test_exception(self, mock_llm):
+        import eval.cli as model_eval
+
+        with patch("requests.Session") as mock_session:
+            s = mock_session.return_value.__enter__.return_value
+            s.get.side_effect = Exception("conn error")
+            assert model_eval.is_server_responsive() is False
+
+
+class TestPrintMemoryUsage:
+    def test_normal_memory(self, mock_llm):
+        import eval.cli as model_eval
+
+        with patch("eval.cli_runtime.get_memory_percent", return_value=50.0):
+            result = model_eval.print_memory_usage()
+        assert result == 50.0
+
+    def test_high_memory_logs_warning(self, mock_llm):
+        import eval.cli as model_eval
+
+        buf, out = _console_buffer()
+        with patch("eval.cli_runtime.get_memory_percent", return_value=95.0):
+            result = model_eval.print_memory_usage(out=out)
+        assert "Memory" in buf.getvalue()
+        assert result == 95.0
+
+
+class TestEstimateModelMemory:
+    def test_7b_model(self, mock_llm):
+        import eval.cli as model_eval
+
+        assert model_eval.estimate_model_memory("qwen2.5-7b") == 7
+
+    def test_27b_model(self, mock_llm):
+        import eval.cli as model_eval
+
+        assert model_eval.estimate_model_memory("some-27b-model") == 27
+
+    def test_no_size_in_name(self, mock_llm):
+        import eval.cli as model_eval
+
+        assert model_eval.estimate_model_memory("unknown-model") == 4
+
+    def test_case_insensitive(self, mock_llm):
+        import eval.cli as model_eval
+
+        assert model_eval.estimate_model_memory("Qwen2-72B") == 72
+
+
+class TestLoadTasksFromConfig:
+    def test_no_prompts(self, mock_llm):
+        import eval.cli as model_eval
+
+        with patch("eval.cli_runtime.get_model_prompts_all", return_value=None):
+            assert model_eval.load_tasks_from_config("m1") is None
+
+    def test_empty_prompts(self, mock_llm):
+        import eval.cli as model_eval
+
+        with patch("eval.cli_runtime.get_model_prompts_all", return_value={}):
+            # Empty dict is falsy, so `if not prompts: return None`
+            assert model_eval.load_tasks_from_config("m1") is None
+
+    def test_full_prompts(self, mock_llm):
+        import eval.cli as model_eval
+
+        prompts = {
+            "weekend_fixed": "WF",
+            "weekend_transient": "WT",
+            "summarize": "S",
+            "filename": "F",
+            "file_summary": "FS",
+        }
+        with patch("eval.cli_runtime.get_model_prompts_all", return_value=prompts):
+            result = model_eval.load_tasks_from_config("m1")
+        assert result["detailed_json"] == "WF"
+        assert result["json"] == "WT"
+        assert result["summarize"] == "S"
+        assert result["filename"] == "F"
+        assert result["file_summary"] == "FS"
+
+    def test_partial_prompts(self, mock_llm):
+        import eval.cli as model_eval
+
+        prompts = {"filename": "F", "summarize": "S"}
+        with patch("eval.cli_runtime.get_model_prompts_all", return_value=prompts):
+            result = model_eval.load_tasks_from_config("m1")
+        assert "filename" in result
+        assert "summarize" in result
+        assert "json" not in result
+
+
+class TestUpdateConfig:
+    def test_no_config_file(self, mock_llm, tmp_path, monkeypatch):
+        import eval.cli as model_eval
+
+        buf, out = _console_buffer()
+        # An existing conf dir with no config.toml in it.
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        model_eval.update_config({"task1": "model-x"}, out=out)
+        assert "Config file not found" in buf.getvalue()
+
+    def test_updates_config(self, mock_llm, tmp_path, monkeypatch):
+        import eval.cli as model_eval
+
+        config_file = tmp_path / "config.toml"
+        config_file.write_text('existing_key = "value"\n')
+        buf, out = _console_buffer()
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        model_eval.update_config({"task1": "model-x", "task2": "model-y"}, out=out)
+        content = config_file.read_text()
+        assert "best_models" in content
+        assert "model-x" in content and "model-y" in content
+        assert "existing_key" in content
+
+    def test_existing_best_models(self, mock_llm, tmp_path, monkeypatch):
+        import eval.cli as model_eval
+
+        config_file = tmp_path / "config.toml"
+        config_file.write_text('[best_models]\ntask1 = "old_model"\n')
+        buf, out = _console_buffer()
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        model_eval.update_config({"task1": "new_model"}, out=out)
+        content = config_file.read_text()
+        assert "new_model" in content
+        assert "old_model" not in content
+
+    def test_empty_model_value(self, mock_llm, tmp_path, monkeypatch):
+        """If model value is falsy, don't add to best_models."""
+        import eval.cli as model_eval
+
+        config_file = tmp_path / "config.toml"
+        config_file.write_text('original = "value"\n')
+        buf, out = _console_buffer()
+        monkeypatch.setenv("ZTOOLS_CONF", str(tmp_path))
+        model_eval.update_config({"task1": None}, out=out)
+        content = config_file.read_text()
+        assert "task1" not in content
+        assert "original" in content
+
+
+class TestPrintResults:
+    def test_basic(self, mock_llm, tmp_path, monkeypatch):
+        """Test _print_results saves to file and prints."""
+        import eval.cli as model_eval
+
+        _EVAL_DIR = tmp_path
+        buf, out = _console_buffer()
+        all_results = [
+            {
+                "model": "m1",
+                "results": [
+                    {"task": "t1", "quality_score": 80, "result": {"content": "x" * 100}},
+                ],
+            },
+        ]
+        best_scores = {"t1": 80}
+        best_models = {"t1": "m1"}
+        model_eval._print_results(
+                all_results, best_scores, best_models, eval_dir=_EVAL_DIR
+            )
+        # Saved file
+        assert (tmp_path / "eval_results.json").exists()
+
+
+class TestMemoryGuardDegradesHonestly:
+    """A missing psutil must say so, not report a healthy 0%.
+
+    psutil is a hard dependency now; before that the ImportError path returned
+    a bare 0.0, so `mem_pct > MEMORY_WARNING_THRESHOLD` was never true and the
+    guard silently did nothing on any machine without it.
+    """
+
+    def test_real_reading_is_used_when_psutil_is_present(self):
+        from eval import cli_runtime
+
+        pct = cli_runtime.get_memory_percent()
+        assert 0 < pct <= 100, pct
+
+    def test_missing_psutil_warns_once_and_returns_zero(self, monkeypatch, capsys):
+        import builtins
+
+        from eval import cli_runtime
+
+        real_import = builtins.__import__
+
+        def no_psutil(name, *args, **kwargs):
+            if name == "psutil":
+                raise ImportError("no psutil")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(cli_runtime, "_warned_no_psutil", False)
+        monkeypatch.setattr(builtins, "__import__", no_psutil)
+        assert cli_runtime.get_memory_percent() == 0.0
+        assert cli_runtime.get_memory_percent() == 0.0  # warn once, not per call
+        monkeypatch.undo()
+
+        err = capsys.readouterr().err
+        assert err.count("memory guard is disabled") == 1

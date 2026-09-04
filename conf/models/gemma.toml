@@ -1,0 +1,93 @@
+name = "gemma"
+timeout = 120
+
+[field_mapping]
+activity = "name"
+event_name = "name"
+venue = "location"
+
+[prompts]
+json = "Output JSON now. Use EXACT schema."
+
+weekend_transient = """
+Output JSON now. Use EXACT schema: {"transient_events": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "start_date": "str", "end_date": "str", "duration": "str", "weather": "str", "day": "str"}]}
+
+Extract 5-10 events for {date_range} in {location}. Kids ages {age_range}.
+- location: Copy street address or city name. NEVER output generic 'Indoor venue' or 'Outdoor venue'.
+- weather: "outdoor", "indoor", or "both". Venues with 'park', 'nature', 'garden', 'trail', or 'walk' in their name MUST be labeled 'outdoor'.
+
+Output ONLY JSON array. No explanations.
+"""
+
+weekend_fixed = """
+Output JSON now. Use EXACT schema: {"fixed_activities": [{"name": "str", "location": "str", "target_ages": "str", "price": "str", "weather": "str"}]}
+
+Extract and format the family-friendly venues from this list as JSON. Return ALL venues.
+- location: Copy street address or city name. NEVER output generic 'Indoor venue' or 'Outdoor venue'.
+- weather: "indoor", "outdoor" or "both". Venues with 'park', 'nature', 'garden', 'trail', or 'walk' in their name MUST be labeled 'outdoor'.
+
+{}
+
+Use the values from the source data as-is. Output ONLY JSON array. No explanations.
+"""
+
+summarize = """
+Create a structured summary of this timeline.
+Start with a brief ## Executive Summary paragraph capturing the overarching narrative.
+Then organize events into topic sections with ## headers, using bullet points.
+Use connecting phrases ('following up on', 'subsequently announced', 'in response to') and narrative verbs ('released', 'responded', 'criticized') to show how events relate.
+CRITICAL: End EVERY bullet with the author handle and timestamp copied EXACTLY as they appear in that tweet's source line. A source line beginning `[@TechCrunch | Aug 10 14:30]:` yields a bullet ending `(@TechCrunch | Aug 10 14:30)`. Never invent or reformat a date, weekday or time that is not in the source line.
+
+<timeline>
+{}
+</timeline>
+"""
+
+filename = """
+Output JSON now. Schema: {{"filename": "str"}}
+You are a file naming assistant. Output ONLY JSON.
+Use lowercase, underscores for spaces, no special characters.
+Keep it under 50 characters.
+Output ONLY JSON. No extra text.
+
+TEXT: {}
+"""
+
+file_summary = """
+Output JSON array. One entry per file. Each must have "path" and "desc" fields.
+Example: [{"path": "eval_lib.py", "desc": "model evaluation functions"}, {"path": "validators.py", "desc": "validation logic"}]
+CRITICAL: Rely ONLY on provided content context. DO NOT infer functionality from file names, words, or puns (e.g. 'osaurus' is an LLM client server wrapper, not dinosaur data).
+
+{}
+"""
+
+[key_mappings]
+event = "name"
+title = "name"
+activity = "name"
+venue = "location"
+address = "location"
+place = "location"
+age_group = "target_ages"
+ages = "target_ages"
+age_range = "target_ages"
+cost = "price"
+pricing = "price"
+fee = "price"
+type = "weather"
+category = "weather"
+
+[top_keys]
+fixed = ["fixed_activities", "year_round_fixed_activities", "weekend_data", "target_weekend", "venues", "places", "activities", "items"]
+transient = ["transient_events", "events", "weekend_data", "target_weekend", "activities", "recommendations"]
+
+[[quirks]]
+type = "prefix"
+pattern = "Output JSON now."
+reason = "Prevents thinking blocks in JSON output"
+
+[[quirks]]
+type = "transform"
+name = "gemma_weekend_forecast"
+description = "Transform gemma's weekend_forecast structure to events list"
+when = "gemma returns weekend_forecast object with nested day objects"

@@ -1,0 +1,474 @@
+pub mod constants;
+pub mod dates;
+pub mod enforce;
+pub mod fetch;
+pub mod format;
+pub mod phases;
+pub mod prompts;
+pub mod supply;
+pub use constants::*;
+pub use dates::*;
+pub use enforce::*;
+pub use fetch::*;
+pub use format::*;
+pub use phases::*;
+pub use prompts::*;
+/// Native Rust Weekend Planner module.
+use serde::{Deserialize, Serialize};
+
+use crate::ztools::pyenv;
+pub use supply::*;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WeekendEvent {
+    pub name: String,
+    pub location: String,
+    pub price: String,
+    pub target_ages: String,
+    pub day: String,
+    pub dates: String,
+    pub description: String,
+    pub is_transient: bool,
+    #[serde(default)]
+    pub score: f32,
+    /// Raw fields the enforcement suite needs beyond the rendered columns.
+    /// `dates` holds the display form; these carry the parseable source values.
+    #[serde(default)]
+    pub start_date: String,
+    #[serde(default)]
+    pub end_date: String,
+    #[serde(default)]
+    pub weather: String,
+    #[serde(default)]
+    pub duration: String,
+}
+
+pub use super::weekend_cache::{
+    clean_venue_or_event_title, is_directory_or_list_page, load_cached_activities, load_exclusions,
+};
+
+/// Fetch Open-Meteo weather forecast for Vaughan / GTA (lat 43.8361, lon -79.4982).
+/// Clean weather string display for CLI header panel matching Python _format_weather_display.
+pub fn apply_scores(events: &mut [WeekendEvent], weather_str: &str, age_range: &str) {
+    for ev in events.iter_mut() {
+        ev.score = compute_score(ev, weather_str, age_range);
+    }
+    // Sort descending by score
+    events.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+}
+
+pub(crate) fn compute_score(ev: &WeekendEvent, weather_str: &str, age_range: &str) -> f32 {
+    let mut score = 0.0;
+
+    // Populated fields
+    let fields = [
+        &ev.name,
+        &ev.location,
+        &ev.price,
+        &ev.target_ages,
+        &ev.description,
+    ];
+    let populated = fields.iter().filter(|f| !f.is_empty()).count() as f32;
+    score += (populated / 5.0) * 3.0;
+
+    // Ages overlap
+    if !age_range.is_empty() && !ev.target_ages.is_empty() {
+        let parse_nums = |s: &str| -> Vec<i32> {
+            let mut v = Vec::new();
+            let mut cur = String::new();
+            for c in s.chars() {
+                if c.is_ascii_digit() {
+                    cur.push(c);
+                } else if !cur.is_empty() {
+                    if let Ok(n) = cur.parse() {
+                        v.push(n);
+                    }
+                    cur.clear();
+                }
+            }
+            if !cur.is_empty() {
+                if let Ok(n) = cur.parse() {
+                    v.push(n);
+                }
+            }
+            v.sort();
+            v.dedup();
+            v
+        };
+        let age_nums = parse_nums(age_range);
+        let target_nums = parse_nums(&ev.target_ages);
+
+        if !age_nums.is_empty() && !target_nums.is_empty() {
+            let max_min = std::cmp::max(age_nums[0], target_nums[0]);
+            let min_max = std::cmp::min(*age_nums.last().unwrap(), *target_nums.last().unwrap());
+            if min_max >= max_min {
+                let overlap = min_max - max_min + 1;
+                if overlap >= 2 {
+                    score += 3.0;
+                } else if overlap == 1 {
+                    score += 1.5;
+                }
+            }
+        }
+    }
+
+    // Weather
+    let desc_lower = ev.description.to_lowercase();
+    let is_outdoor = desc_lower.contains("outdoor");
+    let is_indoor = desc_lower.contains("indoor");
+    let is_sunny =
+        desc_lower.contains("sunny") || desc_lower.contains("clear") || desc_lower.contains("warm");
+
+    let w_lower = weather_str.to_lowercase();
+    let forecast_sunny =
+        w_lower.contains("sunny") || w_lower.contains("clear") || w_lower.contains("warm");
+    let forecast_cloudy =
+        w_lower.contains("cloudy") || w_lower.contains("rain") || w_lower.contains("precipitation");
+    let is_cloudy = desc_lower.contains("cloudy")
+        || desc_lower.contains("rain")
+        || desc_lower.contains("overcast");
+
+    if is_indoor {
+        score += 1.0;
+    } else if is_outdoor && forecast_sunny {
+        score += 2.0;
+    } else if is_outdoor && forecast_cloudy {
+        // pass
+    } else if (is_cloudy && forecast_cloudy) || (is_sunny && forecast_sunny) {
+        score += 2.0;
+    } else if is_sunny || is_cloudy {
+        score += 1.0;
+    }
+
+    // Other bonuses
+    let p_lower = ev.price.to_lowercase();
+    if !p_lower.is_empty() && p_lower != "free" && p_lower != "n/a" && p_lower != "tbd" {
+        score += 0.5;
+    }
+    if ev.location.len() > 5 {
+        score += 0.5;
+    }
+
+    let final_score = score / 2.0;
+    if final_score > 5.0 {
+        5.0
+    } else {
+        final_score
+    }
+}
+
+#[derive(serde::Deserialize, Default)]
+struct LlmResponse {
+    transient_events: Vec<WeekendEventLlm>,
+}
+
+#[derive(serde::Deserialize, Default)]
+struct WeekendEventLlm {
+    #[serde(default)]
+    name: String,
+    #[serde(default)]
+    location: String,
+    #[serde(default)]
+    target_ages: String,
+    #[serde(default)]
+    price: String,
+    #[serde(default)]
+    start_date: String,
+    #[serde(default)]
+    end_date: String,
+    #[serde(default)]
+    day: String,
+    #[serde(default)]
+    weather: String,
+    #[serde(default)]
+    duration: String,
+    #[serde(default)]
+    description: String,
+}
+
+/// Parse an LLM chat-completions response into weekend events.
+pub fn parse_llm_events(resp: &serde_json::Value) -> Option<Vec<WeekendEvent>> {
+    let text = resp["choices"][0]["message"]["content"].as_str()?;
+    let clean_text = text
+        .trim()
+        .trim_start_matches("```json")
+        .trim_start_matches("```")
+        .trim_end_matches("```")
+        .trim();
+
+    let parsed: LlmResponse = serde_json::from_str(clean_text).ok()?;
+    Some(
+        parsed
+            .transient_events
+            .into_iter()
+            .map(|e| WeekendEvent {
+                description: if e.description.is_empty() {
+                    e.name.clone()
+                } else {
+                    e.description
+                },
+                name: e.name,
+                location: e.location,
+                price: if e.price.is_empty() {
+                    "unknown".to_string()
+                } else {
+                    e.price
+                },
+                target_ages: if e.target_ages.is_empty() {
+                    "unknown".to_string()
+                } else {
+                    e.target_ages
+                },
+                day: if e.day.is_empty() {
+                    "This Weekend".to_string()
+                } else {
+                    e.day
+                },
+                dates: e.start_date.clone(),
+                start_date: e.start_date.clone(),
+                end_date: e.end_date,
+                weather: e.weather,
+                duration: e.duration,
+                is_transient: true,
+                score: 0.0,
+            })
+            .collect(),
+    )
+}
+
+fn call_osaurus_json(
+    prompt: &str,
+    config: &crate::config::ZtoolsConfig,
+) -> Option<Vec<WeekendEvent>> {
+    let resp = phases::call_llm_json(None, prompt, config)?;
+    parse_llm_events(&resp)
+}
+
+pub(crate) fn _seasonal_keywords(month_name: &str) -> Option<&'static str> {
+    let m = month_name.to_lowercase();
+    if m == "june" || m == "july" || m == "august" {
+        Some("summer festival fair")
+    } else if m == "september" || m == "october" || m == "november" {
+        Some("harvest festival farm pumpkin")
+    } else if m == "december" || m == "january" || m == "february" {
+        Some("winter festival holiday lights")
+    } else {
+        Some("spring festival maple syrup")
+    }
+}
+
+fn parse_snippets_from_html(html: &str) -> Vec<String> {
+    let mut snippets = Vec::new();
+    let mut search_idx = 0;
+
+    while search_idx < html.len() {
+        let find_standard = html[search_idx..].find("class=\"result__snippet\"");
+        let find_lite = html[search_idx..].find("class=\"result-snippet\"");
+
+        let (start, pattern_len) = match (find_standard, find_lite) {
+            (Some(s1), Some(s2)) => {
+                if s1 <= s2 {
+                    (s1, 23)
+                } else {
+                    (s2, 22)
+                }
+            }
+            (Some(s1), None) => (s1, 23),
+            (None, Some(s2)) => (s2, 22),
+            (None, None) => break,
+        };
+
+        let absolute_start = search_idx + start;
+        if let Some(tag_end) = html[absolute_start..].find('>') {
+            let text_start = absolute_start + tag_end + 1;
+            let end_a = html[text_start..].find("</a>");
+            let end_td = html[text_start..].find("</td>");
+            let text_end_opt = match (end_a, end_td) {
+                (Some(a), Some(td)) => Some(a.min(td)),
+                (Some(a), None) => Some(a),
+                (None, Some(td)) => Some(td),
+                (None, None) => None,
+            };
+
+            if let Some(text_end) = text_end_opt {
+                let snippet = &html[text_start..text_start + text_end];
+                let clean_snippet = snippet
+                    .replace("<b>", "")
+                    .replace("</b>", "")
+                    .replace("&#x27;", "'")
+                    .replace("&amp;", "&")
+                    .replace("&quot;", "\"")
+                    .trim()
+                    .to_string();
+                if !clean_snippet.is_empty() {
+                    snippets.push(clean_snippet);
+                }
+                search_idx = text_start + text_end;
+                continue;
+            }
+        }
+        search_idx = absolute_start + pattern_len;
+    }
+    snippets
+}
+
+/// True if HTML content matches known CAPTCHA/WAF bot challenge markers.
+pub fn is_challenged(html: &str) -> bool {
+    let lower = html.to_lowercase();
+    let markers = [
+        "anomaly-modal",
+        "anomaly.js",
+        "challenge-form",
+        "verify you are human",
+        "just a moment",
+        "attention required",
+        "managed challenge",
+        "challenges.cloudflare.com",
+    ];
+    markers.iter().any(|m| lower.contains(m))
+}
+
+/// The module the multi-engine search helper needs. Probed before an
+/// interpreter is chosen; see [`crate::ztools::pyenv`].
+pub const SEARCH_MODULES: &[&str] = &["ddgs"];
+
+/// Fallback collector running multi-engine search via ddgs helper.
+///
+/// Returns the snippets, or a stated reason nothing could be collected. It used
+/// to return a bare `Vec` and swallow every failure into an empty one, so a
+/// helper that never ran and a search that genuinely found nothing were the
+/// same answer -- that is how a weekend plan came to say "no events found" when
+/// the truth was that the interpreter could not start.
+pub fn collect_snippets_external(query: &str) -> Result<Vec<String>, String> {
+    let mut cmd = pyenv::command(SEARCH_MODULES).map_err(|e| e.to_string())?;
+    let script = r#"import json, sys
+try:
+    from ddgs import DDGS
+    q = sys.argv[1]
+    res = list(DDGS().text(q, max_results=8))
+    out = []
+    for r in res:
+        title = (r.get("title") or "").strip()
+        body = (r.get("body") or "").strip()
+        if title and body:
+            out.append(f"{title}: {body}")
+        elif body:
+            out.append(body)
+        elif title:
+            out.append(title)
+    print(json.dumps(out))
+except Exception:
+    print(json.dumps([]))
+"#;
+    cmd.args(["-c", script, query]);
+    classify_helper_output(cmd.output())
+}
+
+/// Turn the helper's raw outcome into snippets or a stated reason.
+///
+/// Split from the spawn so every failure shape is provable without a Python
+/// interpreter: a non-zero exit, a silent non-zero exit, output that is not
+/// UTF-8, output that is not the JSON array promised, and a helper that never
+/// started at all. Each of those used to collapse into an empty `Vec`, which
+/// downstream is indistinguishable from a search that legitimately found
+/// nothing -- the bug this whole function exists to have stopped telling.
+pub(crate) fn classify_helper_output(
+    result: std::io::Result<std::process::Output>,
+) -> Result<Vec<String>, String> {
+    let output = match result {
+        Ok(out) if out.status.success() => out.stdout,
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            let last = stderr
+                .lines()
+                .rev()
+                .find(|l| !l.trim().is_empty())
+                .unwrap_or("no output")
+                .trim()
+                .to_string();
+            return Err(format!(
+                "search helper exited {:?}: {last}",
+                out.status.code()
+            ));
+        }
+        Err(e) => return Err(format!("search helper could not start: {e}")),
+    };
+    let text =
+        String::from_utf8(output).map_err(|e| format!("search helper wrote non-UTF-8: {e}"))?;
+    serde_json::from_str::<Vec<String>>(&text)
+        .map_err(|e| format!("search helper wrote unparseable JSON: {e}"))
+}
+
+fn search_duckduckgo_html(query: &str, url: &str) -> Vec<String> {
+    if url.contains("duckduckgo.com") {
+        // A helper that could not run is reported, not silently treated as a
+        // search that found nothing: the two look identical downstream and only
+        // one of them is the user's answer.
+        match collect_snippets_external(query) {
+            Ok(snippets) if !snippets.is_empty() => return snippets,
+            Ok(_) => {}
+            Err(why) => eprintln!("\u{26a0} multi-engine search unavailable: {why}"),
+        }
+    }
+
+    let client = reqwest::blocking::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .build()
+        .unwrap_or_default();
+
+    let user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+    // 1. Try GET
+    if let Ok(resp) = client
+        .get(url)
+        .query(&[("q", query)])
+        .header("User-Agent", user_agent)
+        .send()
+    {
+        if resp.status().is_success() {
+            if let Ok(html) = resp.text() {
+                if !is_challenged(&html) {
+                    let s = parse_snippets_from_html(&html);
+                    if !s.is_empty() {
+                        return s;
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Try POST on mock URL
+    if !url.contains("duckduckgo.com") {
+        if let Ok(resp) = client
+            .post(url)
+            .form(&[("q", query)])
+            .header("User-Agent", user_agent)
+            .send()
+        {
+            if resp.status().is_success() {
+                if let Ok(html) = resp.text() {
+                    if !is_challenged(&html) {
+                        return parse_snippets_from_html(&html);
+                    }
+                }
+            }
+        }
+    }
+
+    Vec::new()
+}
+
+/// Query DuckDuckGo web search endpoint for live event/venue listings.
+/// Format the final weekend markdown plan document.
+/// Flag columns that have constant values across all rows (e.g. repetitive prices or ages).
+#[cfg(test)]
+#[path = "../weekend_search_helper_tests.rs"]
+mod search_helper_tests;
+
+#[cfg(test)]
+#[path = "../weekend_tests.rs"]
+mod tests;

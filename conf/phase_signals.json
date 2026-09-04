@@ -1,0 +1,54 @@
+{
+  "foundation": {
+    "condense_weather": {
+      "p95_latency": 2.1,
+      "samples": 8,
+      "timeout": 900
+    },
+    "draft_activities/fixed": {
+      "p95_latency": 11.1,
+      "samples": 7,
+      "timeout": 900
+    },
+    "draft_activities/transient": {
+      "p95_latency": 31.4,
+      "samples": 8,
+      "timeout": 900
+    },
+    "extract_sources/events": {
+      "p95_latency": 55.0,
+      "samples": 87,
+      "timeout": 900
+    },
+    "extract_sources/venues": {
+      "p95_latency": 1.8,
+      "samples": 64,
+      "timeout": 900
+    },
+    "refine_draft": {
+      "p95_latency": 5.2,
+      "samples": 15,
+      "timeout": 900
+    },
+    "structure_to_json/fixed": {
+      "p95_latency": 6.6,
+      "samples": 7,
+      "timeout": 900
+    },
+    "structure_to_json/transient": {
+      "p95_latency": 47.1,
+      "samples": 7,
+      "timeout": 900
+    }
+  },
+  "qwen3.6-35b-a3b-mxfp8-mtp": {
+    "structure_to_json/transient": {
+      "timeout": 900
+    }
+  },
+  "qwopus3.6-27b-v2-mlx-4bit": {
+    "draft_activities/transient": {
+      "timeout": 2700
+    }
+  }
+}
