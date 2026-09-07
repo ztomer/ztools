@@ -6,6 +6,46 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## v2.3.0 — pedantic, audited, and one real bug _(2026-09-07)_
+
+Part of an estate-wide Rust quality campaign. The crate went from no lint policy
+at all to zero findings under `clippy::pedantic` + `nursery` at `-D warnings`,
+and the sweep turned up a defect that had nothing to do with style.
+
+### Fixed
+- **`gpu_lock::is_owner_alive` could report a dead lock owner as alive forever.**
+  It probed the owning process with `kill(pid as i32, 0)`. `std::process::id()`
+  returns `u32` and `kill(2)` takes `i32`, and an `as` cast of a value above
+  `i32::MAX` goes NEGATIVE — where a negative pid is not an invalid argument but
+  a request to signal an entire process GROUP, which succeeds whenever anything
+  in that group is running. The lock would never be reclaimed. The conversion is
+  now checked once in `src/units.rs`, saturating to `i32::MAX` — a pid that
+  simply does not exist, which fails safely.
+- **An assertion that could not fail was deleted**, not weakened:
+  `assert!(sys.contains(CARRY_FIELDS) || true)` in the weekend-phases tests.
+
+### Added
+- **`cargo audit` is a gate**, wired into `.gatesrc` rather than run by memory,
+  and the yanked crate it found on its first run is gone.
+- **`src/units.rs`** — the narrowing conversions this crate does everywhere,
+  done once and tested, instead of an `as` cast per call site each making its own
+  silent decision about the boundary.
+- **`src/ztools/eval/scoring_math.rs`** — `ratio()` and `rounded()`, with the
+  zero-denominator behaviour stated rather than implied.
+
+### Changed
+- **Every fallible or panicking public function now says so.** `# Errors` and
+  `# Panics` sections throughout, which is `pedantic`'s point rather than its
+  ceremony: the ones that were hard to write were the ones whose failure modes
+  were not understood.
+- **Fourteen `if let/else` become combinators**, and four say in an `#[expect]`
+  why they should not.
+- **`float_cmp`: exact equality kept, with the reason.** A tolerance would be
+  worse here — these compare values that are either the same float or a
+  different one by construction.
+- **Five identifiers renamed whose leading underscore was a lie** — they were
+  read.
+
 ## v2.2.0 — A Probed Interpreter, and a Gate _(2026-09-02)_
 
 ### Fixed
