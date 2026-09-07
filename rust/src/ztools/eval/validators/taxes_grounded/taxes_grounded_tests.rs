@@ -88,8 +88,8 @@ fn test_traceable_sums_large_input_only_individuals_and_total() {
     let sums = traceable_sums(&values);
     assert!(sums.contains(&10000)); // first element alone
     assert!(sums.contains(&11600)); // last element alone
-    assert!(sums.contains(&183600)); // grand total 1836.00
-                                     // pair sums are NOT enumerated past MAX_SUBSET_VALUES (101+102 = 203.00)
+    assert!(sums.contains(&183_600)); // grand total 1836.00
+                                      // pair sums are NOT enumerated past MAX_SUBSET_VALUES (101+102 = 203.00)
     assert!(!sums.contains(&20300));
 }
 

@@ -5,7 +5,7 @@
 use serde_json::Value;
 use std::collections::HashSet;
 
-use super::names::_norm_name;
+use super::names::norm_name;
 use super::weights::STOPWORDS;
 
 #[must_use]
@@ -72,7 +72,7 @@ pub fn check_source_extraction(items: &[Value], source_text: &str) -> f64 {
         let search = if primary.is_empty() {
             item_text
         } else {
-            _norm_name(&primary)
+            norm_name(&primary)
         };
         if search.len() >= 4 && source_lower.contains(&search) {
             matches += 1;

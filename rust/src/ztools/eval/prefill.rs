@@ -131,7 +131,7 @@ pub fn record_prefill_rate(signals: &mut SignalStore, model: &str, rate: Option<
         .expect("model entry exists from record_capability_sample");
     let caps_obj = caps
         .entry("_capabilities")
-        .or_insert_with(|| serde_json::Value::Object(Default::default()));
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::default()));
     if let Some(obj) = caps_obj.as_object_mut() {
         let n = obj
             .get("prefill_samples")

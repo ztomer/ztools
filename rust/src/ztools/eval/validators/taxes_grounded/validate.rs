@@ -29,19 +29,16 @@ pub fn validate_taxes_yoy_narrative(
         vec![note]
     };
 
-    let map = match parsed {
-        Some(Value::Object(m)) => m,
-        _ => {
-            return (
-                0,
-                format!(
-                    "schema=0/20 ({})",
-                    bits.first()
-                        .cloned()
-                        .unwrap_or_else(|| "not-an-object".to_string())
-                ),
-            )
-        }
+    let Some(Value::Object(map)) = parsed else {
+        return (
+            0,
+            format!(
+                "schema=0/20 ({})",
+                bits.first()
+                    .cloned()
+                    .unwrap_or_else(|| "not-an-object".to_string())
+            ),
+        );
     };
 
     let prose = map.get("prose").and_then(|v| v.as_str()).unwrap_or("");
@@ -162,19 +159,16 @@ pub fn validate_taxes_qa(output: &Value, explicit_grounding: Option<&Value>) -> 
         vec![note]
     };
 
-    let map = match parsed {
-        Some(Value::Object(m)) => m,
-        _ => {
-            return (
-                0,
-                format!(
-                    "schema=0/20 ({})",
-                    bits.first()
-                        .cloned()
-                        .unwrap_or_else(|| "not-an-object".to_string())
-                ),
-            )
-        }
+    let Some(Value::Object(map)) = parsed else {
+        return (
+            0,
+            format!(
+                "schema=0/20 ({})",
+                bits.first()
+                    .cloned()
+                    .unwrap_or_else(|| "not-an-object".to_string())
+            ),
+        );
     };
 
     let prose = map.get("prose").and_then(|v| v.as_str()).unwrap_or("");
@@ -250,19 +244,16 @@ pub fn validate_taxes_slip_qa(output: &Value, explicit_grounding: Option<&Value>
         vec![note]
     };
 
-    let map = match parsed {
-        Some(Value::Object(m)) => m,
-        _ => {
-            return (
-                0,
-                format!(
-                    "schema=0/30 ({})",
-                    bits.first()
-                        .cloned()
-                        .unwrap_or_else(|| "not-an-object".to_string())
-                ),
-            )
-        }
+    let Some(Value::Object(map)) = parsed else {
+        return (
+            0,
+            format!(
+                "schema=0/30 ({})",
+                bits.first()
+                    .cloned()
+                    .unwrap_or_else(|| "not-an-object".to_string())
+            ),
+        );
     };
 
     let prose = map.get("prose").and_then(|v| v.as_str()).unwrap_or("");

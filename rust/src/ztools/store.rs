@@ -45,9 +45,8 @@ pub fn newest_md(dir: &Path) -> Result<PathBuf> {
         if path.extension().and_then(|e| e.to_str()) != Some("md") {
             continue;
         }
-        let modified = match std::fs::metadata(&path).and_then(|m| m.modified()) {
-            Ok(t) => t,
-            Err(_) => continue,
+        let Ok(modified) = std::fs::metadata(&path).and_then(|m| m.modified()) else {
+            continue;
         };
         // Strictly-newer wins; on a tie a deterministic lexical fallback keeps
         // the result independent of readdir order.

@@ -16,15 +16,14 @@ pub const TWITTER_DATE_FORMAT: &str = "%a %b %d %H:%M:%S %z %Y";
 pub fn parse_tweets_from_response(data: &serde_json::Value) -> Vec<Tweet> {
     let mut tweets = Vec::new();
 
-    let instructions = match data
+    let Some(instructions) = data
         .get("data")
         .and_then(|d| d.get("home"))
         .and_then(|h| h.get("home_timeline_urt"))
         .and_then(|u| u.get("instructions"))
         .and_then(|i| i.as_array())
-    {
-        Some(i) => i,
-        None => return tweets,
+    else {
+        return tweets;
     };
 
     for instruction in instructions {
@@ -34,15 +33,13 @@ pub fn parse_tweets_from_response(data: &serde_json::Value) -> Vec<Tweet> {
             continue;
         }
 
-        let entries = match instruction.get("entries").and_then(|e| e.as_array()) {
-            Some(e) => e,
-            None => continue,
+        let Some(entries) = instruction.get("entries").and_then(|e| e.as_array()) else {
+            continue;
         };
 
         for entry in entries {
-            let item_content = match entry.get("content").and_then(|c| c.get("itemContent")) {
-                Some(ic) => ic,
-                None => continue,
+            let Some(item_content) = entry.get("content").and_then(|c| c.get("itemContent")) else {
+                continue;
             };
 
             if item_content.get("itemType").and_then(|t| t.as_str())
@@ -51,12 +48,11 @@ pub fn parse_tweets_from_response(data: &serde_json::Value) -> Vec<Tweet> {
                 continue;
             }
 
-            let mut tweet_result = match item_content
+            let Some(mut tweet_result) = item_content
                 .get("tweet_results")
                 .and_then(|tr| tr.get("result"))
-            {
-                Some(r) => r,
-                None => continue,
+            else {
+                continue;
             };
 
             if tweet_result.get("__typename").and_then(|t| t.as_str())
@@ -67,9 +63,8 @@ pub fn parse_tweets_from_response(data: &serde_json::Value) -> Vec<Tweet> {
                 }
             }
 
-            let legacy = match tweet_result.get("legacy") {
-                Some(l) => l,
-                None => continue,
+            let Some(legacy) = tweet_result.get("legacy") else {
+                continue;
             };
 
             let full_text = match legacy.get("full_text").and_then(|t| t.as_str()) {

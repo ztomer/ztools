@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use super::weights::STOPWORDS;
 
 #[must_use]
-pub fn _norm_name(name: &str) -> String {
+pub fn norm_name(name: &str) -> String {
     let cleaned = name
         .chars()
         .filter(|c| c.is_alphanumeric() || *c == ' ')
@@ -20,7 +20,7 @@ pub fn _norm_name(name: &str) -> String {
 }
 
 #[must_use]
-pub fn _name_tokens(name: &str) -> HashSet<String> {
+pub fn name_tokens(name: &str) -> HashSet<String> {
     let norm = name
         .chars()
         .map(|c| {
@@ -38,17 +38,17 @@ pub fn _name_tokens(name: &str) -> HashSet<String> {
 }
 
 #[must_use]
-pub fn _names_match(a: &str, b: &str) -> bool {
-    let na = _norm_name(a);
-    let nb = _norm_name(b);
+pub fn names_match(a: &str, b: &str) -> bool {
+    let na = norm_name(a);
+    let nb = norm_name(b);
     if na.is_empty() || nb.is_empty() {
         return false;
     }
     if na.contains(&nb) || nb.contains(&na) {
         return true;
     }
-    let ta = _name_tokens(a);
-    let tb = _name_tokens(b);
+    let ta = name_tokens(a);
+    let tb = name_tokens(b);
     if ta.is_empty() || tb.is_empty() {
         return false;
     }

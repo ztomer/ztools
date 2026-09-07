@@ -26,8 +26,8 @@ pub use attribution::*;
 pub use contract::*;
 pub use defects::*;
 pub use json_validator::{
-    _name_tokens, _names_match, _norm_name, check_source_extraction, extract_list_from_dict,
-    has_item_details, is_valid_list_item, validate_detailed_json, validate_json,
+    check_source_extraction, extract_list_from_dict, has_item_details, is_valid_list_item,
+    name_tokens, names_match, norm_name, validate_detailed_json, validate_json,
     validate_mixed_signal,
 };
 pub use taxes_grounded::{

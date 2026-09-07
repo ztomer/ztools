@@ -13,7 +13,7 @@ use super::super::defects::{
     CONSTANT_COLUMN_MAX_SCORE, GENERIC_LOCATION_LIMIT, GENERIC_LOCATION_MAX_SCORE,
     NEAR_DUPLICATE_LIMIT, NEAR_DUPLICATE_MAX_SCORE,
 };
-use super::names::_names_match;
+use super::names::names_match;
 
 use super::items::{extract_list_from_dict, has_item_details, is_valid_list_item};
 use super::source::check_source_extraction;
@@ -269,9 +269,9 @@ pub fn validate_mixed_signal(
         if name.is_empty() {
             continue;
         }
-        if signal_set.iter().any(|s| _names_match(&name, s)) {
+        if signal_set.iter().any(|s| names_match(&name, s)) {
             tp += 1;
-        } else if noise_set.iter().any(|n| _names_match(&name, n)) {
+        } else if noise_set.iter().any(|n| names_match(&name, n)) {
             fp += 1;
         }
     }

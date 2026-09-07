@@ -177,12 +177,12 @@ pub fn record_capability_sample(signals: &mut SignalStore, model: &str, key: &st
     }
     let caps = signals
         .entry(model.to_string())
-        .or_insert_with(|| Value::Object(Default::default()))
+        .or_insert_with(|| Value::Object(serde_json::Map::default()))
         .as_object_mut()
         .expect("model entry is an object");
     let caps_entry = caps
         .entry("_capabilities".to_string())
-        .or_insert_with(|| Value::Object(Default::default()));
+        .or_insert_with(|| Value::Object(serde_json::Map::default()));
     let caps_obj = caps_entry.as_object_mut().expect("caps is an object");
 
     let mut history: Vec<Sample> = caps_obj
@@ -302,13 +302,13 @@ pub fn record_signal(
     }
     let model_entry = signals
         .entry(model.to_string())
-        .or_insert_with(|| Value::Object(Default::default()));
+        .or_insert_with(|| Value::Object(serde_json::Map::default()));
     let obj = model_entry
         .as_object_mut()
         .expect("model entry is an object");
     let per_task = obj
         .entry(task_name.to_string())
-        .or_insert_with(|| Value::Object(Default::default()));
+        .or_insert_with(|| Value::Object(serde_json::Map::default()));
     let task = per_task.as_object_mut().expect("task entry is an object");
 
     let samples = task

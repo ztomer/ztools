@@ -34,12 +34,11 @@ pub struct PlanContext {
 #[must_use]
 pub fn resolve_weekend_model(base_url: &str, preferred_model: &str) -> String {
     let url = format!("{}/v1/models", base_url.trim_end_matches('/'));
-    let client = match reqwest::blocking::Client::builder()
+    let Ok(client) = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(2))
         .build()
-    {
-        Ok(c) => c,
-        Err(_) => return preferred_model.to_string(),
+    else {
+        return preferred_model.to_string();
     };
 
     let resp = match client.get(&url).send() {

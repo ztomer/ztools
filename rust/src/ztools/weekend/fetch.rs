@@ -2,8 +2,8 @@ use chrono::NaiveDate;
 
 use super::WeekendEvent;
 use super::{
-    _seasonal_keywords, condense_weather, draft_activities, extract_sources, in_window_count,
-    prioritise_in_window, refine_draft, search_duckduckgo_html, structure_to_json, PlanContext,
+    condense_weather, draft_activities, extract_sources, in_window_count, prioritise_in_window,
+    refine_draft, search_duckduckgo_html, seasonal_keywords, structure_to_json, PlanContext,
 };
 
 /// Search the aggregator for event snippets and return the cleaned, deduped,
@@ -33,7 +33,7 @@ pub fn build_search_queries(d1: NaiveDate) -> Vec<String> {
     queries.push(format!(
         "{region} museum family programs {month_name} {year}"
     ));
-    if let Some(seasonal) = _seasonal_keywords(&month_name) {
+    if let Some(seasonal) = seasonal_keywords(&month_name) {
         queries.push(format!("{region} {seasonal} {month_name} {year}"));
     }
     queries
@@ -205,12 +205,11 @@ pub fn parse_weather_json(json: &serde_json::Value) -> Option<String> {
 
 #[must_use]
 pub fn fetch_weather(friday_date: &str, sunday_date: &str) -> String {
-    let client = match reqwest::blocking::Client::builder()
+    let Ok(client) = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .build()
-    {
-        Ok(c) => c,
-        Err(_) => return fallback_forecast(),
+    else {
+        return fallback_forecast();
     };
 
     let url = open_meteo_url(friday_date, sunday_date);

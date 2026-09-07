@@ -1,9 +1,8 @@
 // Prove the sign fix against the exact output that broke parity.
 #[test]
 fn yoy_signed_traceable_matches_python_on_the_parity_break_output() {
-    let raw = match std::fs::read_to_string("/tmp/yoy_out.txt") {
-        Ok(r) => r,
-        Err(_) => return, // fixture absent (CI): unit tests cover enumeration
+    let Ok(raw) = std::fs::read_to_string("/tmp/yoy_out.txt") else {
+        return;
     };
     let val = serde_json::Value::String(raw);
     let (score, note) = ztools::eval::validators::validate_taxes_yoy_narrative(&val, None);

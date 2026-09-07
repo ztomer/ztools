@@ -64,9 +64,8 @@ pub fn read_owner(dir: &Path) -> Option<(String, String, String)> {
 /// Check whether the process recorded as holding the lock is still alive and running.
 #[must_use]
 pub fn is_owner_alive(dir: &Path) -> bool {
-    let owner = match read_owner(dir) {
-        Some(o) => o,
-        None => return false,
+    let Some(owner) = read_owner(dir) else {
+        return false;
     };
     let pid: u32 = match owner.0.parse() {
         Ok(p) => p,
@@ -86,13 +85,11 @@ pub fn is_owner_alive(dir: &Path) -> bool {
 /// Check whether the lock directory mtime has exceeded the max idle threshold.
 #[must_use]
 pub fn is_expired(dir: &Path, max_idle: Duration) -> bool {
-    let meta = match fs::metadata(dir) {
-        Ok(m) => m,
-        Err(_) => return false,
+    let Ok(meta) = fs::metadata(dir) else {
+        return false;
     };
-    let mtime = match meta.modified() {
-        Ok(t) => t,
-        Err(_) => return false,
+    let Ok(mtime) = meta.modified() else {
+        return false;
     };
     if let Ok(elapsed) = SystemTime::now().duration_since(mtime) {
         elapsed >= max_idle

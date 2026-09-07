@@ -13,7 +13,7 @@ use serial_test::serial;
 #[serial]
 fn drop_uncorroborated_filters_ghosts_but_never_empties_a_roster() {
     let guard = DiskGuard::new();
-    let model_dir = guard._dir.path().join("mlx/Org/DiskModel");
+    let model_dir = guard.dir.path().join("mlx/Org/DiskModel");
     std::fs::create_dir_all(&model_dir).unwrap();
     std::fs::write(model_dir.join("config.json"), "{}").unwrap();
 
@@ -57,7 +57,7 @@ fn serve_roster(body: &'static str, status_line: &'static str) -> (u16, thread::
 #[serial]
 fn fetch_roster_keeps_disk_backed_entries_and_drops_ghosts_over_the_wire() {
     let guard = DiskGuard::new();
-    let model_dir = guard._dir.path().join("mlx/Org/DiskModel");
+    let model_dir = guard.dir.path().join("mlx/Org/DiskModel");
     std::fs::create_dir_all(&model_dir).unwrap();
     std::fs::write(model_dir.join("config.json"), "{}").unwrap();
 

@@ -63,10 +63,7 @@ fn serve(
 
     let handle = thread::spawn(move || {
         for stream in listener.incoming() {
-            let mut stream = match stream {
-                Ok(s) => s,
-                Err(_) => continue,
-            };
+            let Ok(mut stream) = stream else { continue };
             let mut buf = vec![0u8; 65_536];
             let n = stream.read(&mut buf).unwrap_or(0);
             let request = String::from_utf8_lossy(&buf[..n]).to_string();

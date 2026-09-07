@@ -357,9 +357,8 @@ pub fn reconcile_day_with_dates(
     let mut notes = Vec::new();
     for ev in &mut events {
         let year = start.year();
-        let mut first = match super::dates::parse_any_date(&ev.start_date, year) {
-            Some(d) => d,
-            None => continue,
+        let Some(mut first) = super::dates::parse_any_date(&ev.start_date, year) else {
+            continue;
         };
         let mut last = super::dates::parse_any_date(&ev.end_date, year).unwrap_or(first);
         if last < first {
@@ -388,7 +387,7 @@ pub fn reconcile_day_with_dates(
         } else {
             String::new()
         };
-        ev.day = corrected.clone();
+        ev.day.clone_from(&corrected);
         if !stated.is_empty() {
             notes.push(format!(
                 "'{}': day {stated:?} is not within {}..{} — {}",

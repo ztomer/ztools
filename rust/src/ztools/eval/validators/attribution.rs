@@ -69,17 +69,14 @@ pub fn attribution_faithfulness(text: &str, source_text: &str) -> (usize, usize,
         if !trimmed_start.starts_with('-') && !trimmed_start.starts_with('*') {
             continue;
         }
-        let tag = match BULLET_TAG_RE.captures(line) {
-            Some(c) => c,
-            None => continue,
+        let Some(tag) = BULLET_TAG_RE.captures(line) else {
+            continue;
         };
         total += 1;
         let handle = tag.get(1).unwrap().as_str().to_lowercase();
         let stamp = tag.get(2).unwrap().as_str().trim().to_string();
 
-        let said = if let Some(s) = by_author.get(&(handle.clone(), stamp.clone())) {
-            s
-        } else {
+        let Some(said) = by_author.get(&(handle.clone(), stamp.clone())) else {
             if by_author.keys().any(|(h, _)| *h == handle) {
                 reasons.push(format!("@{handle} did not post at {stamp}"));
             } else {

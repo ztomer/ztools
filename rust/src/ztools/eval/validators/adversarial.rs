@@ -8,7 +8,7 @@ use serde_json::Value;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-use super::json_validator::_names_match;
+use super::json_validator::names_match;
 
 static WORDS_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[a-z0-9]+").unwrap());
 
@@ -73,7 +73,7 @@ pub fn validate_no_fabrication(data: &Value, source_text: &str, lures: &[String]
 
     let grounded_count = names
         .iter()
-        .filter(|n| source_lines.iter().any(|s| _names_match(n, s)))
+        .filter(|n| source_lines.iter().any(|s| names_match(n, s)))
         .count();
 
     let taken: Vec<String> = lures
@@ -82,7 +82,7 @@ pub fn validate_no_fabrication(data: &Value, source_text: &str, lures: &[String]
             let lure_lower = lure.to_lowercase();
             names
                 .iter()
-                .any(|n| n.to_lowercase().contains(&lure_lower) || _names_match(n, lure))
+                .any(|n| n.to_lowercase().contains(&lure_lower) || names_match(n, lure))
         })
         .cloned()
         .collect();

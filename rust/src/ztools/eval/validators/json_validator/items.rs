@@ -38,7 +38,7 @@ pub fn extract_list_from_dict(data: &Value) -> Vec<Value> {
         for val in map.values() {
             if let Value::Array(arr) = val {
                 if arr.len() > best.len() {
-                    best = arr.clone();
+                    best.clone_from(arr);
                 }
             }
         }
@@ -69,9 +69,8 @@ pub fn is_valid_list_item(item: &Value) -> bool {
 
 #[must_use]
 pub fn has_item_details(item: &Value) -> bool {
-    let map = match item.as_object() {
-        Some(m) => m,
-        None => return false,
+    let Some(map) = item.as_object() else {
+        return false;
     };
     let name_fields = ["name", "event", "title", "activity", "place", "path"];
     let has_name = name_fields.iter().any(|f| {

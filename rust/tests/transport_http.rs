@@ -34,10 +34,7 @@ fn serve(response: String) -> (u16, thread::JoinHandle<()>) {
     let port = listener.local_addr().unwrap().port();
     let handle = thread::spawn(move || {
         for stream in listener.incoming() {
-            let mut stream = match stream {
-                Ok(s) => s,
-                Err(_) => continue,
-            };
+            let Ok(mut stream) = stream else { continue };
             let mut buf = [0u8; 8192];
             let _ = stream.read(&mut buf);
             let _ = stream.write_all(response.as_bytes());

@@ -38,16 +38,14 @@ pub fn fetch_roster(host: &str, port: u16) -> Vec<RosterEntry> {
     } else {
         format!("http://{host}:{port}{API_TAGS}")
     };
-    let client = match reqwest::blocking::Client::builder()
+    let Ok(client) = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(ROSTER_TIMEOUT_SECS))
         .build()
-    {
-        Ok(c) => c,
-        Err(_) => return Vec::new(),
+    else {
+        return Vec::new();
     };
-    let resp = match client.get(&url).send() {
-        Ok(r) => r,
-        Err(_) => return Vec::new(),
+    let Ok(resp) = client.get(&url).send() else {
+        return Vec::new();
     };
     if resp.status().as_u16() != 200 {
         return Vec::new();

@@ -67,7 +67,7 @@ fn empty_model_names_have_no_config_path() {
 #[serial]
 fn mlx_layout_matches_case_insensitively_on_the_directory_name() {
     let guard = DiskGuard::new();
-    let model_dir = guard._dir.path().join("mlx/TestOrg/LiveModel");
+    let model_dir = guard.dir.path().join("mlx/TestOrg/LiveModel");
     std::fs::create_dir_all(&model_dir).unwrap();
     std::fs::write(model_dir.join("config.json"), "{}").unwrap();
 
@@ -189,7 +189,7 @@ fn conf_models_root_prefers_env_then_the_checkout_then_a_relative_path() {
 #[serial]
 fn hf_cache_layout_is_recognised_by_its_models_directory_component() {
     let guard = DiskGuard::new();
-    let hub = guard._dir.path().join("hf/hub");
+    let hub = guard.dir.path().join("hf/hub");
     let model_dir = hub.join("models--TestOrg--TestModel");
     std::fs::create_dir_all(&model_dir).unwrap();
     std::fs::write(model_dir.join("config.json"), "{}").unwrap();
@@ -243,7 +243,7 @@ fn documented_context_window_found_not_found_malformed_or_nonpositive() {
 fn generative_verdict_comes_from_the_config_not_the_name() {
     let guard = DiskGuard::new();
     let put = |name: &str, content: &str| {
-        let d = guard._dir.path().join("mlx/Org").join(name);
+        let d = guard.dir.path().join("mlx/Org").join(name);
         std::fs::create_dir_all(&d).unwrap();
         std::fs::write(d.join("config.json"), content).unwrap();
     };
@@ -280,7 +280,7 @@ fn generative_verdict_comes_from_the_config_not_the_name() {
     );
 
     // An unreadable FILE also keeps probing: same verdict as missing.
-    let locked = guard._dir.path().join("mlx/Org/Locked/config.json");
+    let locked = guard.dir.path().join("mlx/Org/Locked/config.json");
     std::fs::create_dir_all(locked.parent().unwrap()).unwrap();
     std::fs::write(&locked, "{}").unwrap();
     #[cfg(unix)]
@@ -311,7 +311,7 @@ fn corroboration_accepts_disk_configs_or_documented_windows_only() {
         "a documented window corroborates without any disk config"
     );
 
-    let model_dir = guard._dir.path().join("mlx/Org/DiskModel");
+    let model_dir = guard.dir.path().join("mlx/Org/DiskModel");
     std::fs::create_dir_all(&model_dir).unwrap();
     std::fs::write(model_dir.join("config.json"), "{}").unwrap();
     assert!(disk_corroborated("diskmodel"));

@@ -22,10 +22,7 @@ fn mock_llm_server() -> (u16, thread::JoinHandle<()>) {
     let port = listener.local_addr().unwrap().port();
     let handle = thread::spawn(move || {
         for stream in listener.incoming() {
-            let mut stream = match stream {
-                Ok(s) => s,
-                Err(_) => continue,
-            };
+            let Ok(mut stream) = stream else { continue };
             let mut buf = [0u8; 8192];
             let n = stream.read(&mut buf).unwrap_or(0);
             let req = String::from_utf8_lossy(&buf[..n]);
@@ -136,10 +133,7 @@ fn mock_llm_server_with_thinking() -> (u16, thread::JoinHandle<()>) {
     let port = listener.local_addr().unwrap().port();
     let handle = thread::spawn(move || {
         for stream in listener.incoming() {
-            let mut stream = match stream {
-                Ok(s) => s,
-                Err(_) => continue,
-            };
+            let Ok(mut stream) = stream else { continue };
             let mut buf = [0u8; 8192];
             let _ = stream.read(&mut buf);
             let req = String::from_utf8_lossy(&buf);

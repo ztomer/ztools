@@ -5,7 +5,7 @@
 /// whatever was set before.
 pub(super) struct DiskGuard {
     saved: Vec<(&'static str, Option<std::ffi::OsString>)>,
-    pub(super) _dir: tempfile::TempDir,
+    pub(super) dir: tempfile::TempDir,
 }
 
 impl DiskGuard {
@@ -18,11 +18,11 @@ impl DiskGuard {
         std::env::set_var("MLX_MODELS_DIR", dir.path().join("mlx"));
         std::env::set_var("HF_HOME", dir.path().join("hf"));
         std::env::set_var("ZTOOLS_CONF_DIR", dir.path().join("conf"));
-        Self { saved, _dir: dir }
+        Self { saved, dir }
     }
 
     pub(super) fn conf_dir(&self) -> std::path::PathBuf {
-        self._dir.path().join("conf")
+        self.dir.path().join("conf")
     }
 
     pub(super) fn write_family_toml(&self, family: &str, content: &str) {

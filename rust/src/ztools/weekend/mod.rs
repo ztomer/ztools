@@ -253,7 +253,7 @@ fn call_osaurus_json(
     parse_llm_events(&resp)
 }
 
-pub(crate) fn _seasonal_keywords(month_name: &str) -> Option<&'static str> {
+pub(crate) fn seasonal_keywords(month_name: &str) -> Option<&'static str> {
     let m = month_name.to_lowercase();
     if m == "june" || m == "july" || m == "august" {
         Some("summer festival fair")

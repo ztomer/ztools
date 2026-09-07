@@ -6,6 +6,7 @@
 //! (nonce-first filler, `max_tokens=1` on the timed call) is verified against
 //! what actually went over the wire.
 
+use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;
@@ -21,12 +22,12 @@ fn signals_dir_guard() -> SignalsDirGuard {
 
 impl SignalsDirGuard {
     fn path(&self) -> &std::path::Path {
-        self._dir.path()
+        self.dir.path()
     }
 }
 
 struct SignalsDirGuard {
-    _dir: tempfile::TempDir,
+    dir: tempfile::TempDir,
     prev: Option<std::ffi::OsString>,
 }
 
@@ -35,7 +36,7 @@ impl SignalsDirGuard {
         let dir = tempfile::tempdir().unwrap();
         let prev = std::env::var_os("EVAL_SIGNALS_DIR");
         std::env::set_var("EVAL_SIGNALS_DIR", dir.path());
-        Self { _dir: dir, prev }
+        Self { dir, prev }
     }
 }
 
@@ -74,7 +75,7 @@ fn take_lock<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
 #[test]
 #[serial]
 fn record_signal_learns_p95_and_timeout() {
-    let mut s: ztools::eval::SignalStore = Default::default();
+    let mut s: ztools::eval::SignalStore = BTreeMap::default();
     // A fast task: p95*1.5 = 150 loses to the documented 900s floor.
     ztools::eval::record_signal(&mut s, "m", "fast", 100.0, false, false);
     assert_eq!(s["m"]["fast"]["p95_latency"], serde_json::json!(100.0));
@@ -87,7 +88,7 @@ fn record_signal_learns_p95_and_timeout() {
 #[test]
 #[serial]
 fn p95_ema_rises_with_a_later_slow_reading_and_never_shrinks_it() {
-    let mut store: ztools::eval::SignalStore = Default::default();
+    let mut store: ztools::eval::SignalStore = BTreeMap::default();
     ztools::eval::record_signal(&mut store, "m", "t", 10.0, false, false);
     ztools::eval::record_signal(&mut store, "m", "t", 1000.0, false, false);
     // EMA: max(1000, 10*0.95 + 1000*0.05) = 1000 -- a spike is not smoothed away.
@@ -116,7 +117,7 @@ fn effective_timeout_never_falls_below_the_documented_floor() {
 #[test]
 #[serial]
 fn derived_timeout_requires_all_three_clean_terms() {
-    let mut store: ztools::eval::SignalStore = Default::default();
+    let mut store: ztools::eval::SignalStore = BTreeMap::default();
     // Only prefill present -> no derivation at all, not a partial guess.
     ztools::eval::record_capability_sample(&mut store, "m", "prefill_chars_per_sec", 5000.0);
     assert_eq!(ztools::eval::derived_timeout("m", 10_000, 16_000), 0);
@@ -176,10 +177,7 @@ fn serve_recording() -> (
     let value = recorded.clone();
     let handle = thread::spawn(move || {
         for stream in listener.incoming() {
-            let mut stream = match stream {
-                Ok(s) => s,
-                Err(_) => continue,
-            };
+            let Ok(mut stream) = stream else { continue };
             let mut buf = vec![0u8; 65_536];
             let n = stream.read(&mut buf).unwrap_or(0);
             take_lock(&value).push(String::from_utf8_lossy(&buf[..n]).to_string());

@@ -68,8 +68,8 @@ fn test_has_item_details_matrix() {
 
 #[test]
 fn test_norm_name_and_tokens() {
-    assert_eq!(_norm_name(" High-Park  Zoo! "), "highpark zoo");
-    let tokens = _name_tokens("The Big-Foot and 12 Zoo-goers!");
+    assert_eq!(norm_name(" High-Park  Zoo! "), "highpark zoo");
+    let tokens = name_tokens("The Big-Foot and 12 Zoo-goers!");
     assert_eq!(
         tokens,
         ["big", "foot", "goers", "zoo"]
@@ -82,25 +82,25 @@ fn test_norm_name_and_tokens() {
 #[test]
 fn test_names_match_containment_and_token_overlap() {
     // containment arm
-    assert!(_names_match("Central Park", "park"));
+    assert!(names_match("Central Park", "park"));
     // >=2 shared tokens arm
-    assert!(_names_match("Maple Grove Park", "Maple Grove Arena"));
+    assert!(names_match("Maple Grove Park", "Maple Grove Arena"));
     // empty normalized names never match
-    assert!(!_names_match("!!!", "Central Park"));
-    assert!(!_names_match("Central Park", "***"));
+    assert!(!names_match("!!!", "Central Park"));
+    assert!(!names_match("Central Park", "***"));
     // one side has no usable tokens after stopword/length filtering
-    assert!(!_names_match("The Who", "Clap Your Hands Say Yeah"));
+    assert!(!names_match("The Who", "Clap Your Hands Say Yeah"));
     // no containment and no long-token anchor
-    assert!(!_names_match("Art Cafe", "Cafe Bar"));
-    assert!(!_names_match("Waterfront Market", "Marketplace Lofts"));
+    assert!(!names_match("Art Cafe", "Cafe Bar"));
+    assert!(!names_match("Waterfront Market", "Marketplace Lofts"));
 }
 
 #[test]
 fn test_names_match_longest_token_arms() {
     // longest token of A found inside B
-    assert!(_names_match("Modern Gallery Annex", "Gallery Bistro"));
+    assert!(names_match("Modern Gallery Annex", "Gallery Bistro"));
     // longest token of B found inside A (symmetric arm)
-    assert!(_names_match("Gallery Bistro", "Modern Gallery Annex"));
+    assert!(names_match("Gallery Bistro", "Modern Gallery Annex"));
 }
 
 #[test]

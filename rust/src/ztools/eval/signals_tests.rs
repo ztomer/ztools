@@ -76,7 +76,7 @@ impl Drop for EnvGuard {
 /// real `eval_signals.json` nor a peer session's GPU lock can decide a
 /// test's outcome.
 struct Fixture {
-    _dir: tempfile::TempDir,
+    dir: tempfile::TempDir,
     guard: EnvGuard,
 }
 
@@ -97,12 +97,12 @@ impl Fixture {
         let conf = dir.path().join("conf");
         std::fs::create_dir_all(&conf).unwrap();
         std::env::set_var("ZTOOLS_CONF_DIR", &conf);
-        Self { _dir: dir, guard }
+        Self { dir, guard }
     }
 
     fn write_signals_file(&self, content: &str) {
         std::fs::write(
-            self._dir.path().join("signals").join("eval_signals.json"),
+            self.dir.path().join("signals").join("eval_signals.json"),
             content,
         )
         .unwrap();
@@ -137,7 +137,7 @@ fn signals_path_honors_the_env_dir_and_the_documented_default() {
     let _g = &dir.guard;
     assert_eq!(
         signals_path(),
-        dir._dir.path().join("signals").join("eval_signals.json")
+        dir.dir.path().join("signals").join("eval_signals.json")
     );
     std::env::remove_var("EVAL_SIGNALS_DIR");
     // Without the env override the path is anchored on the CHECKOUT that
@@ -219,9 +219,9 @@ fn a_live_foreign_lock_holder_makes_the_machine_contended() {
     // process: a real foreign holder by the lock's own liveness rules.
     let holder_pid = std::os::unix::process::parent_id();
     let start = crate::ztools::eval::gpu_lock::start_time(holder_pid);
-    std::fs::create_dir_all(dir._dir.path().join("lock")).unwrap();
+    std::fs::create_dir_all(dir.dir.path().join("lock")).unwrap();
     std::fs::write(
-        dir._dir.path().join("lock").join("owner"),
+        dir.dir.path().join("lock").join("owner"),
         format!("{holder_pid}\n{start}\na concurrent eval run\n"),
     )
     .unwrap();
