@@ -159,6 +159,10 @@ pub struct ModelStats {
 }
 
 #[must_use]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a mean, median and standard deviation over past run scores. Each score is 0..=100 and the count is the number of retained runs, so every value is exact in f64 and the arithmetic is the statistic itself"
+)]
 pub fn load_historical_stats(eval_dir: Option<&Path>) -> BTreeMap<String, ModelStats> {
     let mut stats = BTreeMap::new();
     for (model, entries) in load_history(eval_dir) {

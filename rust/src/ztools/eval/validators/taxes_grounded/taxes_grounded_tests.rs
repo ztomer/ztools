@@ -79,6 +79,10 @@ fn test_traceable_sums_empty_input() {
 }
 
 #[test]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "test fixture arithmetic: a loop index turned into a synthetic amount. The bound is the test's own constant"
+)]
 fn test_traceable_sums_large_input_only_individuals_and_total() {
     let values: Vec<f64> = (0..=MAX_SUBSET_VALUES).map(|i| 100.0 + i as f64).collect();
     let sums = traceable_sums(&values);

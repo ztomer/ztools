@@ -9,6 +9,7 @@ pub mod cli_ztools;
 pub mod cli_ztools_twitter;
 pub mod config;
 pub mod manifest;
+pub mod units;
 pub mod ztools;
 
 // The ported modules live under `ztools/` to keep their `#[path]` test wiring

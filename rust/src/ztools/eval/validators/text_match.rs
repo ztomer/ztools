@@ -2,6 +2,7 @@
 //!
 //! Port of `lib/validators/text_match.py`. Pure text transformation and overlap calculation.
 
+use crate::ztools::eval::scoring_math::ratio;
 use regex::Regex;
 use std::collections::HashSet;
 use std::sync::LazyLock;
@@ -53,7 +54,7 @@ pub fn phrase_overlap(phrase: &str, out_lower: &str) -> f64 {
     }
     let present: HashSet<String> = tokenize(out_lower).into_iter().collect();
     let hits = tokens.iter().filter(|t| present.contains(*t)).count();
-    hits as f64 / tokens.len() as f64
+    ratio(hits, tokens.len())
 }
 
 #[cfg(test)]

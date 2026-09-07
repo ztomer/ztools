@@ -16,6 +16,10 @@ use crate::config::ZtoolsConfig;
 /// architecture first, name match as fallback), generative verdict, on-disk
 /// weight footprint, and viability (packaging defects + learned decode rate)
 /// -- WITHOUT running a single task. Port of `ev --capabilities`.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "bytes rendered as gigabytes to one decimal place -- a display conversion, where the precision shown is far coarser than the loss"
+)]
 pub(super) fn print_capabilities(url: &str, model_selector: &str) -> Result<()> {
     let models = resolve_models(url, model_selector, &ZtoolsConfig::default())?;
     if models.is_empty() {

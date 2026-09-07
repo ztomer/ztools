@@ -122,6 +122,12 @@ const fn status_for(score: u8) -> &'static str {
 /// surface as 80/partial, not collapse to 0/fail behind a boolean threshold.
 /// Mixed or purely-boolean tasks keep the passed-fraction semantics.
 #[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "a mean of per-check scores, each 0..=100, then clamped to that same range before it narrows to u8. The integer form is deliberate -- averaging in f64 and rounding would move pinned scores"
+)]
 pub fn score_output(task: &EvalTask, cleaned: &str, parsed: Option<&serde_json::Value>) -> u8 {
     if task.checks.is_empty() {
         return 0;

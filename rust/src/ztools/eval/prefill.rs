@@ -62,6 +62,10 @@ fn spec<'a>(
 ///
 /// Returns None when the probe cannot run, so "not measured" stays distinct
 /// from a measurement.
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a characters-per-second rate. `PREFILL_PROBE_CHARS` is a compile-time constant of a few thousand"
+)]
 pub fn measure_prefill_rate(
     signals: &mut SignalStore,
     model: &str,

@@ -132,6 +132,11 @@ fn family_config(model: &str) -> Option<toml::Value> {
 
 /// The narrowing cap for one model: the family config's top-level
 /// `max_tokens`, overridden by its `[models."<id>"]` section when present.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a token cap read from configuration. Negative and zero are filtered out on the same line, and a context window is thousands, not billions"
+)]
 fn model_cap(model: &str) -> Option<u32> {
     let cfg = family_config(model)?;
     let mut cap = cfg.get("max_tokens").and_then(toml::Value::as_integer);
@@ -150,6 +155,11 @@ fn model_cap(model: &str) -> Option<u32> {
 /// failing: the eval must still run, and 32000 is what the Python eval sends
 /// for untabled tasks with no per-model cap.
 #[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a per-task token budget from configuration, bounded by the model's context window"
+)]
 pub fn max_tokens_for_task(task: &str, model: &str) -> u32 {
     let budget = parse(conf_root().join("config.toml"))
         .and_then(|cfg| {

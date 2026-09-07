@@ -19,6 +19,7 @@ pub mod quirks;
 pub mod report;
 pub mod runner;
 pub mod samples;
+pub mod scoring_math;
 pub mod signals;
 pub mod task_loader;
 pub mod transport;

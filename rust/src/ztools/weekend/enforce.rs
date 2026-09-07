@@ -424,6 +424,10 @@ fn significant_words(text: &str) -> Vec<String> {
 /// The corpus is passed already-normalised. A row with no name is kept: an
 /// unnamed row is class C7's problem, not provenance's.
 #[must_use]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a coverage fraction in f32 over the words of one row. f32 is exact to 2^24; these are word counts in a single table cell"
+)]
 pub fn row_is_sourced(name: &str, corpus_normalized: &str) -> bool {
     let words = significant_words(name);
     if words.is_empty() {

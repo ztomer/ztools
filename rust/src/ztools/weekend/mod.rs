@@ -61,6 +61,10 @@ pub fn apply_scores(events: &mut [WeekendEvent], weather_str: &str, age_range: &
     });
 }
 
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a populated-field fraction in f32 over one row's fields. f32 is exact to 2^24, and a row has a handful of fields"
+)]
 pub(crate) fn compute_score(ev: &WeekendEvent, weather_str: &str, age_range: &str) -> f32 {
     let mut score = 0.0;
 

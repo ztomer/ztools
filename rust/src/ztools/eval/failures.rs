@@ -56,6 +56,11 @@ pub fn reasoning_overrun_was_guard_aborted(finish_reason: &str) -> bool {
 }
 
 #[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a retry token budget: a configured budget times a constant multiplier, then `.min()`-ed against the ceiling on the same expression"
+)]
 pub fn reasoning_retry_budget(base_budget: u32) -> u32 {
     ((f64::from(base_budget) * REASONING_RETRY_MULTIPLIER) as u32).min(REASONING_RETRY_MAX_TOKENS)
 }

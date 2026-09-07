@@ -3,6 +3,7 @@
 //! Split out of `json_validator.rs` for the 500-line production cap. These are the
 //! entry points; everything they call lives in the sibling modules.
 
+use crate::ztools::eval::scoring_math::{ratio, rounded};
 use serde_json::Value;
 use std::collections::HashSet;
 
@@ -26,6 +27,10 @@ use super::weights::{
 };
 
 #[must_use]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a validity fraction over the items in one JSON answer. Both sides are counts of elements the model emitted"
+)]
 pub fn validate_json(data: &Value, source_text: &str) -> (i64, String) {
     let items = extract_list_from_dict(data);
     if items.is_empty() {
@@ -81,6 +86,11 @@ pub fn validate_json(data: &Value, source_text: &str) -> (i64, String) {
 }
 
 #[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "counts of items in one answer converted for fractions, and those fractions scaled into whole-number score deltas. Each fraction is 0.0..=1.0 by construction, so the scaled values are within a hundred of zero before they narrow"
+)]
 pub fn validate_detailed_json(data: &Value, source_text: &str) -> (i64, String) {
     let items = extract_list_from_dict(data);
     if items.is_empty() {
@@ -132,7 +142,7 @@ pub fn validate_detailed_json(data: &Value, source_text: &str) -> (i64, String) 
         .collect();
     let unique_names: HashSet<String> = names.iter().filter(|n| !n.is_empty()).cloned().collect();
     if unique_names.len() < names.len() {
-        let duplicate_ratio = (names.len() - unique_names.len()) as f64 / names.len() as f64;
+        let duplicate_ratio = ratio(names.len() - unique_names.len(), names.len());
         if duplicate_ratio > 0.1 {
             score -= (duplicate_ratio * 20.0) as i64;
             failures.push(format!(
@@ -218,6 +228,10 @@ pub fn validate_detailed_json(data: &Value, source_text: &str) -> (i64, String) 
 }
 
 #[must_use]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a precision figure over true and false positives counted within one answer, clamped to 1.0 afterwards"
+)]
 pub fn validate_mixed_signal(
     data: &Value,
     source_text: &str,
@@ -276,7 +290,7 @@ pub fn validate_mixed_signal(
     };
 
     let recall = if expected_signal > 0 {
-        (tp as f64 / expected_signal as f64).min(1.0)
+        (ratio(tp, expected_signal)).min(1.0)
     } else {
         1.0
     };
@@ -288,7 +302,7 @@ pub fn validate_mixed_signal(
         0.0
     };
 
-    let score = (100.0 * 0.5f64.mul_add(precision, 0.5 * recall)).round() as i64;
+    let score = rounded(100.0 * 0.5f64.mul_add(precision, 0.5 * recall));
     let mut failures = Vec::new();
     if fp > 0 {
         failures.push(format!("included {fp}/{total_noise} noise items"));

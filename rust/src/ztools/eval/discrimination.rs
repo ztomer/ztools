@@ -157,6 +157,10 @@ pub fn disagreements(all_results: &[EvalResult]) -> Vec<String> {
 /// what `--task image_real` produces. Returning 0 there would report a model
 /// that scored 100 on the one task it was asked for as having failed.
 #[must_use]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "counts and i64 scores averaged in f64. Both are bounded by the number of tasks in one eval run -- tens -- so the conversions are exact"
+)]
 pub fn ranking_mean(all_results: &[EvalResult]) -> f64 {
     let scored_tasks: Vec<&EvalResult> = all_results.iter().filter(|r| !is_gate(&r.task)).collect();
 

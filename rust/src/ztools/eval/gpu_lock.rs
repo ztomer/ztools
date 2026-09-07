@@ -73,7 +73,7 @@ pub fn is_owner_alive(dir: &Path) -> bool {
         Err(_) => return false,
     };
 
-    let ret = unsafe { kill(pid as i32, 0) };
+    let ret = unsafe { kill(crate::units::pid(pid), 0) };
     if ret != 0 {
         return false;
     }

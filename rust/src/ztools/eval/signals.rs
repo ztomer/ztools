@@ -221,6 +221,12 @@ fn caps_clean_estimate(signals: &SignalStore, model: &str, key: &str) -> Option<
 /// plausible constant is how a guess ends up wearing a measurement's authority.
 /// Returns 0 when unmeasurable, and the caller keeps its documented floor.
 #[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    reason = "a timeout in seconds, derived from prompt length and a token budget. The inputs are thousands of characters and tokens, and the result is `.min()`-ed against the configured ceiling"
+)]
 pub fn derived_timeout(model: &str, prompt_chars: usize, max_tokens: u32) -> u64 {
     let signals = load_signals();
     let (Some(prefill), Some(decode), Some(cold_start)) = (
@@ -239,6 +245,10 @@ pub fn derived_timeout(model: &str, prompt_chars: usize, max_tokens: u32) -> u64
 /// `conf/config.toml [timeouts]` (fallback 600, `lib/llm/constants.py
 /// DEFAULT_TIMEOUT`), the documented floor, and the derived estimate.
 #[must_use]
+#[expect(
+    clippy::cast_sign_loss,
+    reason = "a timeout read from configuration, in seconds. A negative timeout is not a value this accepts"
+)]
 pub fn effective_timeout(
     model: &str,
     task_name: &str,
@@ -274,6 +284,11 @@ pub fn effective_timeout(
 
 /// Record one completed task observation: p95 latency (EMA weighted toward
 /// recent), retry/parse counters, and the learned timeout derived from them.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a p95 latency scaled by a safety factor, then `.max()`-ed against the default. Latencies are seconds of model inference"
+)]
 pub fn record_signal(
     signals: &mut SignalStore,
     model: &str,

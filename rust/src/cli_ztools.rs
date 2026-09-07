@@ -189,6 +189,10 @@ pub(crate) fn image_renamer(config: &ZtoolsConfig, dir: PathBuf, apply: bool) ->
 mod capabilities;
 use capabilities::print_capabilities;
 
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "an estimated model size in whole gigabytes, rendered for display"
+)]
 pub(crate) fn model_eval(
     config: &ZtoolsConfig,
     model: String,

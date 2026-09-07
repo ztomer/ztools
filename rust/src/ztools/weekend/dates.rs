@@ -20,6 +20,10 @@ const MONTHS: [&str; 12] = [
 ];
 
 /// 1-12 for a month name or its three-letter stem, mirroring `lib/dates.py`.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a month index from a fixed twelve-element table, plus one"
+)]
 fn month_number(run: &str) -> Option<u32> {
     let stem = run.get(..3)?;
     MONTHS
@@ -46,6 +50,11 @@ fn push_date(found: &mut Vec<NaiveDate>, year: i32, month: u32, day: u32) {
 /// prioritiser cannot drift apart (they already did once: the enforcer read
 /// three-letter stems while the prioritiser matched only full month names).
 #[must_use]
+#[expect(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    reason = "digits of a fixed-width date, parsed one character at a time. `to_digit(10)` yields 0..=9, so the assembled fields cannot leave the range a date has"
+)]
 pub fn find_dates_in(value: &str, year: i32) -> Vec<NaiveDate> {
     let mut found = Vec::new();
     if value.is_empty() {

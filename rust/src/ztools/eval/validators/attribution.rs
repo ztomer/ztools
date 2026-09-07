@@ -2,6 +2,7 @@
 //!
 //! Port of `lib/validators/attribution.py`.
 
+use crate::ztools::eval::scoring_math::{ratio, rounded};
 use regex::Regex;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -96,7 +97,7 @@ pub fn attribution_faithfulness(text: &str, source_text: &str) -> (usize, usize,
         }
 
         let said_words = content_words(said);
-        let overlap = claim.intersection(&said_words).count() as f64 / claim.len() as f64;
+        let overlap = ratio(claim.intersection(&said_words).count(), claim.len());
         if overlap >= CLAIM_OVERLAP_THRESHOLD {
             faithful += 1;
         } else {
@@ -130,7 +131,7 @@ pub fn validate_attribution(data: &Value, source_text: &str) -> (i64, String) {
         );
     }
 
-    let score = (100.0 * faithful as f64 / total as f64).round() as i64;
+    let score = rounded(100.0 * ratio(faithful, total));
     if faithful == total {
         return (score, String::new());
     }
@@ -148,7 +149,7 @@ pub fn validate_attribution(data: &Value, source_text: &str) -> (i64, String) {
     } else {
         &detail_full
     };
-    let severity = if (faithful as f64 / total as f64) < ATTRIBUTION_POOR_RATIO {
+    let severity = if (ratio(faithful, total)) < ATTRIBUTION_POOR_RATIO {
         "misattributed"
     } else {
         "attribution slips"

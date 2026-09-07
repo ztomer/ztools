@@ -1,3 +1,4 @@
+use crate::ztools::eval::scoring_math::ratio;
 use anyhow::Result;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
@@ -102,7 +103,7 @@ pub fn eval_model(
         let total = case.checks.len();
 
         let resp = client.post(&url).json(&payload).send();
-        let elapsed = start.elapsed().as_millis() as u64;
+        let elapsed = crate::units::millis(start.elapsed());
 
         let mut output_text = String::new();
         if let Ok(r) = resp {
@@ -132,7 +133,7 @@ pub fn eval_model(
             );
         }
 
-        let score = (passed as f64 / total as f64) * 100.0;
+        let score = (ratio(passed, total)) * 100.0;
         let status = if passed == total { "passed" } else { "failed" };
 
         results.push(ModelEvalResult {
@@ -184,6 +185,10 @@ pub fn parse_osaurus_url(url: &str) -> (String, u16) {
 /// Render full-suite [`TaskOutcome`]s as a markdown table, worst first: the
 /// failures are what a reader scans for, so they lead.
 #[must_use]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a mean over per-task scores, each 0..=100, divided by the number of tasks in the run"
+)]
 pub fn render_task_outcomes(outcomes: &[crate::ztools::eval::TaskOutcome]) -> String {
     use std::fmt::Write;
     let mut report = String::from("# Full Suite Eval\n\n");

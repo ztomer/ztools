@@ -315,6 +315,12 @@ fn sse_choice(line: &str) -> Option<Value> {
 /// timeouts: a model emitting one slow token at a time never trips a per-read
 /// gap timeout, and that exact case hung a real sweep for 97 minutes.
 #[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    reason = "a character budget from a token budget times two constants, `.max()`-ed above one. Token budgets are thousands"
+)]
 pub fn stream_with_overrun_guard(spec: &RequestSpec) -> TransportResult {
     let mut result = TransportResult {
         model: spec.model.to_string(),

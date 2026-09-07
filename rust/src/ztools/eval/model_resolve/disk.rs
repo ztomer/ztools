@@ -100,6 +100,10 @@ pub(super) fn walk_configs(root: &Path) -> std::io::Result<Vec<PathBuf>> {
 /// Apple's on-device `foundation` has no config.json anywhere, so the number
 /// has to be written down. Only the presence of a documented window matters
 /// here, never its value.
+#[expect(
+    clippy::cast_sign_loss,
+    reason = "a context window read from a model card -- thousands of tokens, and never negative in any published one"
+)]
 pub(super) fn documented_context_window(model: &str) -> Option<u64> {
     let lower = model.to_lowercase();
     let family = crate::ztools::eval::quirks::MODEL_FAMILIES

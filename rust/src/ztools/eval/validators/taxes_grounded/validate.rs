@@ -3,6 +3,7 @@
 //! Split out of `taxes_grounded.rs` for the 500-line production cap. These are the
 //! entry points; the arithmetic lives in `amounts`, the fixtures in `grounding`.
 
+use crate::ztools::eval::scoring_math::{ratio, rounded};
 use serde_json::Value;
 use std::collections::HashSet;
 
@@ -11,6 +12,10 @@ use super::amounts::{
 };
 use super::grounding::{load_grounding, parse_output};
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a partial-credit score. `round()` makes it whole and `.max(0.0)` puts it above zero before it narrows; the expression's own factor caps it at 30"
+)]
 pub fn validate_taxes_yoy_narrative(
     output: &Value,
     explicit_grounding: Option<&Value>,
@@ -93,9 +98,9 @@ pub fn validate_taxes_yoy_narrative(
         // Python's 4/4 on identical output -- found by the A/B parity run).
         let hits = reported
             .iter()
-            .filter(|r| traceable.contains(&((**r * 100.0).round() as i64)))
+            .filter(|r| traceable.contains(&(rounded(**r * 100.0))))
             .count();
-        let s = (30.0 * hits as f64 / reported.len() as f64).round() as i64;
+        let s = rounded(30.0 * ratio(hits, reported.len()));
         bits.push(format!("traceable={}/{} ({}/30)", hits, reported.len(), s));
         s
     } else {
@@ -209,7 +214,7 @@ pub fn validate_taxes_qa(output: &Value, explicit_grounding: Option<&Value>) -> 
 
     let cite_score = if !cited.is_empty() {
         let hits = cited.iter().filter(|c| known_ids.contains(*c)).count();
-        let s = (40.0 * hits as f64 / cited.len() as f64).round() as i64;
+        let s = rounded(40.0 * ratio(hits, cited.len()));
         bits.push(format!("citations={}/{} ({}/40)", hits, cited.len(), s));
         s
     } else if !known_ids.is_empty() {
@@ -303,7 +308,7 @@ pub fn validate_taxes_slip_qa(output: &Value, explicit_grounding: Option<&Value>
             .iter()
             .filter(|i| known_flags.contains(*i))
             .count();
-        let s = (35.0 * hits as f64 / reported_ids.len() as f64).round() as i64;
+        let s = rounded(35.0 * ratio(hits, reported_ids.len()));
         bits.push(format!("flags={}/{} ({}/35)", hits, reported_ids.len(), s));
         s
     };

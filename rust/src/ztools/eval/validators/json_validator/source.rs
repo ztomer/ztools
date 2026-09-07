@@ -9,6 +9,10 @@ use super::names::_norm_name;
 use super::weights::STOPWORDS;
 
 #[must_use]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "a match fraction over the items in one answer"
+)]
 pub fn check_source_extraction(items: &[Value], source_text: &str) -> f64 {
     if items.is_empty() || source_text.is_empty() {
         return 0.0;
