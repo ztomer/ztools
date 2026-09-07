@@ -89,6 +89,11 @@ pub fn clean_filename(text: &str, max_length: usize) -> String {
 /// Strip a conversational prefix like "here is the filename:" or "renamed to:"
 /// from model output. Port of `_strip_instruction_prefix` (regex, IGNORECASE).
 #[must_use]
+/// # Panics
+///
+/// If the static instruction-prefix regex fails to compile, which is a
+/// compile-time-constant pattern and therefore a build-time bug rather than
+/// anything an input can cause.
 pub fn strip_instruction_prefix(content: &str) -> String {
     let re = Regex::new(
         r"(?i)^\s*(?:(?:here(?: is|'s)?(?: a| the)?|the|suggested|renamed? to)?\s*(?:filename|file|name|output|result|response)?(?:\s+is)?\s*:\s*)",

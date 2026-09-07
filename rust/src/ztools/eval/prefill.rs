@@ -119,6 +119,11 @@ pub fn measure_prefill_rate(
 
 /// Store a measured prefill rate as a per-model capability. Kept at the model
 /// level, not per task: it is a property of the model and the host.
+///
+/// # Panics
+///
+/// If the model has no entry in the signal store. `record_capability_sample`
+/// creates it, and every caller records a capability sample first.
 pub fn record_prefill_rate(signals: &mut SignalStore, model: &str, rate: Option<f64>) {
     let Some(rate) = rate else { return };
     if rate <= 0.0 {

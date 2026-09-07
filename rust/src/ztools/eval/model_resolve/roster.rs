@@ -90,6 +90,13 @@ fn pick_best<'a>(entries: impl Iterator<Item = &'a RosterEntry>) -> Option<Strin
 /// we have no grounds to override the caller. It is a human-readable sentence
 /// otherwise, and every caller must surface it rather than swallow it.
 #[must_use]
+/// # Panics
+///
+/// Never in practice. Three `expect`s guard shortlists that were built by
+/// filtering the roster and are checked non-empty on the branch that
+/// reaches each one, so the invariant is local and visible. They are
+/// `expect` rather than `unwrap` so a future edit that breaks the filter
+/// says which shortlist it emptied.
 pub fn substitute_model(
     configured: &str,
     roster: &[RosterEntry],

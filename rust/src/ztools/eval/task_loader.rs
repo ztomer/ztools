@@ -249,6 +249,13 @@ struct TaxesSnapshot {
 }
 
 /// Load sanitized taxes tasks from a directory (e.g. `eval_tasks/data/taxes/`).
+///
+/// # Errors
+///
+/// When the directory cannot be read, and when any snapshot in it cannot be
+/// read or is not valid JSON. A malformed snapshot fails the load rather
+/// than being skipped: a task set silently missing a task scores a model
+/// against a different benchmark than the one it is being compared with.
 pub fn load_taxes_tasks_from_dir(dir: &Path) -> Result<Vec<EvalTask>> {
     if !dir.is_dir() {
         return Ok(Vec::new());

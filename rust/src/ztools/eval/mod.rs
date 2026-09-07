@@ -17,6 +17,8 @@ pub mod prefill;
 pub mod prompts;
 pub mod quirks;
 pub mod report;
+pub mod report_csv;
+pub use report_csv::export_csv;
 pub mod runner;
 pub mod samples;
 pub mod scoring_math;
@@ -44,7 +46,7 @@ pub use oversize::{
     OVERSIZE_OVERRIDE_ENV,
 };
 pub use report::{
-    compute_task_winners, default_eval_dir, export_csv, is_test_model, load_historical_stats,
+    compute_task_winners, default_eval_dir, is_test_model, load_historical_stats,
     render_historical_trends, save_historical_results, ModelRun, ModelStats,
 };
 // Generated from references/eval/tasks_prompts.py by tools/gen_rust_prompts.py;

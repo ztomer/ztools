@@ -171,6 +171,12 @@ pub fn machine_is_uncontended() -> bool {
 
 /// Add one observation of `key` under the model's capabilities, re-derive the
 /// estimate. Median of recent CLEAN samples outvotes a contaminated reading.
+///
+/// # Panics
+///
+/// If an existing signal entry is not a JSON object -- i.e. the signals file
+/// was written by something other than this code, or hand-edited. Failing
+/// loudly is deliberate: silently replacing it would discard a run's history.
 pub fn record_capability_sample(signals: &mut SignalStore, model: &str, key: &str, value: f64) {
     if value <= 0.0 || !value.is_finite() {
         return;
@@ -249,6 +255,10 @@ pub fn derived_timeout(model: &str, prompt_chars: usize, max_tokens: u32) -> u64
     clippy::cast_sign_loss,
     reason = "a timeout read from configuration, in seconds. A negative timeout is not a value this accepts"
 )]
+/// # Panics
+///
+/// If the configured timeouts cannot be ordered -- which requires a NaN in
+/// the signal store, and so the same hand-edited or foreign file as above.
 pub fn effective_timeout(
     model: &str,
     task_name: &str,
@@ -289,6 +299,10 @@ pub fn effective_timeout(
     clippy::cast_sign_loss,
     reason = "a p95 latency scaled by a safety factor, then `.max()`-ed against the default. Latencies are seconds of model inference"
 )]
+/// # Panics
+///
+/// If an existing signal or per-task entry is not a JSON object; see
+/// [`record_capability_sample`].
 pub fn record_signal(
     signals: &mut SignalStore,
     model: &str,

@@ -63,6 +63,12 @@ pub const TASK_RESTATEMENT: &str =
 ///
 /// The text is untrusted (it came off a screenshot nobody vetted), so it is
 /// framed as data with the task restated AFTER it.
+///
+/// # Errors
+///
+/// When the model cannot be reached, and when it answers with nothing
+/// nameable -- an empty suggestion is refused rather than turned into a
+/// blank filename.
 pub fn query_llm_filename(
     base_url: &str,
     model: &str,
@@ -101,6 +107,10 @@ pub fn query_llm_filename(
 /// Mirrors `query_vlm_for_filename`: base64 data URI in `OpenAI` content parts,
 /// then the same instruction-prefix strip. The caller is responsible for
 /// cleaning and generic-name rejection, exactly as the Python CLI does.
+///
+/// # Errors
+///
+/// When the vision model cannot be reached, or returns no content.
 pub fn query_vlm_for_filename(
     image_path: &Path,
     base_url: &str,

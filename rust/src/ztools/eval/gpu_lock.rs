@@ -130,11 +130,24 @@ pub struct GpuLockGuard {
 
 impl GpuLockGuard {
     /// Acquire the GPU lock at default path.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::acquire_at`]: the lock is still held by a live session after
+    /// `timeout`, or the lock directory cannot be created.
     pub fn acquire(label: &str, timeout: Duration, max_idle: Duration) -> Result<Self> {
         Self::acquire_at(&lock_dir(), label, timeout, max_idle)
     }
 
     /// Acquire the GPU lock at a specific path with timeout and automatic stale/wedged owner reclamation.
+    ///
+    /// # Errors
+    ///
+    /// When the GPU is still held by a live session after `timeout` -- the
+    /// message names the holder, because the right response is to wait rather
+    /// than to break the lock while another eval is measuring -- and when the
+    /// lock directory cannot be created for any other reason. A STALE or
+    /// wedged owner is not an error: it is reclaimed and the lock is taken.
     pub fn acquire_at(
         dir: &Path,
         label: &str,

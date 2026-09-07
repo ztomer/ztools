@@ -349,6 +349,10 @@ pub fn drop_events_outside_window(
 /// `drop_events_outside_window`. Where there are no dates, `day` is left
 /// alone: it cannot be verified, and inventing one would be class C4 again.
 #[must_use]
+/// # Panics
+///
+/// If the date cursor cannot advance -- only reachable at the very end of
+/// the representable calendar, which no weekend plan reaches.
 pub fn reconcile_day_with_dates(
     mut events: Vec<WeekendEvent>,
     start: NaiveDate,

@@ -31,6 +31,12 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 }
 
 /// Use Ollama API to semantically cluster tweets that discuss the same event.
+///
+/// # Errors
+///
+/// When the HTTP client cannot be built, and when the embeddings endpoint
+/// cannot be reached or answers something that is not the expected shape.
+/// An empty input is `Ok(vec![])`, not an error.
 pub fn cluster_tweets(
     tweets: &[Tweet],
     base_url: &str,

@@ -123,6 +123,11 @@ enum Cmd {
 }
 
 /// Parse the CLI, resolve config, and dispatch to the tool handlers.
+///
+/// # Errors
+///
+/// When an explicitly named config cannot be read or parsed, and from
+/// whichever subcommand was dispatched -- each states its own reason.
 pub fn run() -> Result<()> {
     let mut args: Vec<std::ffi::OsString> = std::env::args_os().collect();
     if let Some(first) = args.first() {

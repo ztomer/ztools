@@ -41,6 +41,10 @@ pub fn content_words(text: &str) -> HashSet<String> {
         .collect()
 }
 
+/// # Panics
+///
+/// Never: the two capture groups are unconditional in the static regex, so
+/// a match always has both.
 pub fn source_lines_by_author(source_text: &str) -> HashMap<(String, String), String> {
     let mut lines = HashMap::new();
     for raw in source_text.lines() {
@@ -57,6 +61,10 @@ pub fn source_lines_by_author(source_text: &str) -> HashMap<(String, String), St
     lines
 }
 
+/// # Panics
+///
+/// Never: every capture group read here is unconditional in its static
+/// regex, so a match always has it.
 pub fn attribution_faithfulness(text: &str, source_text: &str) -> (usize, usize, Vec<String>) {
     let by_author = source_lines_by_author(source_text);
     let mut faithful = 0;

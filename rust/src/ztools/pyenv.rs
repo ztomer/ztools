@@ -106,6 +106,13 @@ fn probe_imports(program: &str, required: &[&str]) -> Result<(), String> {
 /// The production entry points call this with [`candidates`] and
 /// [`probe_imports`]; tests call it with their own so a machine's real installs
 /// never decide a test's outcome.
+///
+/// # Errors
+///
+/// When no candidate interpreter satisfies `required`. The error carries
+/// every candidate that was tried AND why each was rejected, because
+/// "python not found" on a machine with four Pythons installed is not
+/// something anyone can act on.
 pub fn resolve_with<P>(
     required: &[&str],
     candidates: &[String],
@@ -139,6 +146,12 @@ fn cache() -> &'static Mutex<HashMap<String, Result<String, PyEnvError>>> {
 }
 
 /// The interpreter to run for a pipeline needing `required`, or a stated error.
+///
+/// # Errors
+///
+/// As [`resolve_with`]: no interpreter satisfies `required`. The result is
+/// cached per requirement set, so a failure is recomputed on each call
+/// rather than being remembered.
 pub fn resolve(required: &[&str]) -> Result<String, PyEnvError> {
     let key = required.join(",");
     if let Some(hit) = cache().lock().unwrap().get(&key) {
@@ -201,6 +214,11 @@ pub fn apply_pythonpath(cmd: &mut std::process::Command) {
 /// A `Command` for `required`, already pointed at a probed interpreter and
 /// carrying the `references/` search path. The one way these subsystems should
 /// start Python.
+///
+/// # Errors
+///
+/// As [`resolve`]: no interpreter satisfies `required`. Building the
+/// `Command` itself cannot fail -- nothing is spawned here.
 pub fn command(required: &[&str]) -> Result<std::process::Command, PyEnvError> {
     let program = resolve(required)?;
     let mut cmd = std::process::Command::new(program);

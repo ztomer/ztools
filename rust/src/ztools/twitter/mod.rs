@@ -142,6 +142,13 @@ struct ChatResponse {
 }
 
 /// Call local Osaurus LLM server at localhost:1337.
+///
+/// # Errors
+///
+/// When the request cannot be sent, the response cannot be read, or the
+/// body is not the JSON shape expected. The raw body is included in the
+/// parse error, because the usual cause is a server answering something
+/// other than the API -- a proxy page, or an error in plain text.
 pub fn call_osaurus(
     base_url: &str,
     model: &str,
@@ -185,6 +192,11 @@ pub fn call_osaurus(
 }
 
 /// Run full Twitter summary flow and save markdown artifact.
+///
+/// # Errors
+///
+/// From the model call, and from writing the summary to the output
+/// directory.
 pub fn run_summary(
     tweets: &[Tweet],
     output_dir: Option<&Path>,

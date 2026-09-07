@@ -31,6 +31,12 @@ pub fn weekend_store_dir() -> PathBuf {
 /// Newest `*.md` in `dir` by modification time. Errors with a stated reason
 /// when the directory is missing or holds no markdown at all, so a caller can
 /// say *why* (rather than hand back an empty tab).
+///
+/// # Errors
+///
+/// When the store directory cannot be listed, and when it holds no summary
+/// at all. "Nothing stored yet" is an error rather than an empty result
+/// because every caller's next act is to print the file.
 pub fn newest_md(dir: &Path) -> Result<PathBuf> {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
@@ -67,6 +73,11 @@ pub fn newest_md(dir: &Path) -> Result<PathBuf> {
 }
 
 /// Format a file's modification time as `%Y-%m-%d %H:%M` (local).
+///
+/// # Errors
+///
+/// When the file's metadata cannot be read, or the platform does not report
+/// a modification time for it.
 pub fn last_updated(path: &Path) -> Result<String> {
     let modified = std::fs::metadata(path)?.modified()?;
     let dt: chrono::DateTime<Local> =
@@ -77,6 +88,10 @@ pub fn last_updated(path: &Path) -> Result<String> {
 /// Read-side entry point for `twitter-summarize --fetch-latest` /
 /// `--last-updated`. `TWITTER_OUTPUT_DIR` overrides the store dir, the same
 /// override the status reader honours.
+///
+/// # Errors
+///
+/// As [`print_newest`]: no stored summary, or an unreadable one.
 pub fn twitter_latest(show_time: bool) -> Result<()> {
     let dir =
         std::env::var("TWITTER_OUTPUT_DIR").map_or_else(|_| twitter_store_dir(), PathBuf::from);
@@ -85,6 +100,10 @@ pub fn twitter_latest(show_time: bool) -> Result<()> {
 
 /// Read-side entry point for `weekend-plan --fetch-latest` / `--last-updated`;
 /// `WEEKEND_OUTPUT_DIR` overrides the store dir.
+///
+/// # Errors
+///
+/// As [`print_newest`]: no stored summary, or an unreadable one.
 pub fn weekend_latest(show_time: bool) -> Result<()> {
     let dir =
         std::env::var("WEEKEND_OUTPUT_DIR").map_or_else(|_| weekend_store_dir(), PathBuf::from);
@@ -94,6 +113,11 @@ pub fn weekend_latest(show_time: bool) -> Result<()> {
 /// Resolve the newest stored summary (or its update time) and print it.
 /// `store_dir` is the resolved store directory; `show_time` selects the
 /// timestamp over the content.
+///
+/// # Errors
+///
+/// When the store holds no summary, when its modification time cannot be
+/// read (with `show_time`), or when the file itself cannot be read.
 pub fn print_newest(store_dir: PathBuf, show_time: bool) -> Result<()> {
     let path = newest_md(&store_dir)?;
     if show_time {

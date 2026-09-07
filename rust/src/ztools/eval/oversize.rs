@@ -119,6 +119,13 @@ fn vm_stat_pages(label: &str) -> Option<f64> {
 ///
 /// Returns Err rather than degrading when `vm_stat` cannot be read: "`vm_stat` is
 /// broken" must not become a number that looks fine and is simply wrong.
+///
+/// # Errors
+///
+/// When `vm_stat` cannot be run, or its output is missing any of the five
+/// page counters this sums. The message names the missing line, because a
+/// changed `vm_stat` format is the likely cause and guessing at it would
+/// report a plausible-looking wrong number instead.
 pub fn reclaimable_available_gb() -> Result<f64, String> {
     let free = vm_stat_pages("Pages free")
         .ok_or_else(|| "vm_stat: cannot read 'Pages free'".to_string())?;

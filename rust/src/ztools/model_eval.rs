@@ -27,6 +27,11 @@ pub fn get_test_cases() -> Vec<EvalTask> {
     get_built_in_smoke_tasks()
 }
 
+/// # Errors
+///
+/// When the HTTP client cannot be built, and when the `/v1/models` endpoint
+/// cannot be reached or does not answer JSON. A well-formed answer listing
+/// no usable models is `Ok(vec![])`.
 pub fn get_available_models(
     base_url: &str,
     config: &crate::config::ZtoolsConfig,
@@ -50,6 +55,12 @@ pub fn get_available_models(
     Ok(models)
 }
 
+/// # Errors
+///
+/// From the eval transport: the model cannot be reached, or a request fails
+/// outright. A model that is merely BROKEN is not an error -- it is skipped
+/// with its defects recorded in the returned results, because one bad model
+/// must not end a sweep over all of them.
 pub fn eval_model(
     base_url: &str,
     model_name: &str,
@@ -150,6 +161,11 @@ pub fn eval_model(
     Ok(results)
 }
 
+/// # Errors
+///
+/// Only when the model LIST cannot be fetched. An individual model that
+/// fails to evaluate is dropped from the results and the sweep continues:
+/// a multi-hour run must not be lost to one unreachable model.
 pub fn eval_all_models(
     base_url: &str,
     config: &crate::config::ZtoolsConfig,

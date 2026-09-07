@@ -113,6 +113,11 @@ fn name_image(
 }
 
 /// Scan a directory for image files and propose clean renames.
+///
+/// # Errors
+///
+/// When the directory cannot be listed, or an entry in it cannot be read.
+/// A path that is not a directory is `Ok(vec![])`, not an error.
 pub fn scan_and_rename(
     dir: &Path,
     _pattern: &str,

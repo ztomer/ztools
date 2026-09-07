@@ -30,6 +30,12 @@ impl Default for CamoufoxConfig {
 }
 
 pub trait BrowserCollector: Send + Sync {
+    /// # Errors
+    ///
+    /// When the timeline cannot be collected: the browser session failed to
+    /// start, was not logged in, or produced no tweets at all. An implementation
+    /// returning FEWER than `target_count` tweets is not an error -- the
+    /// timeline simply ended.
     fn collect_timeline(&self, target_count: usize) -> Result<Vec<Tweet>>;
 }
 
@@ -64,6 +70,11 @@ impl BrowserCollector for LiveBrowserCollector {
 pub const BROWSER_MODULES: &[&str] = &["requests", "playwright", "camoufox"];
 
 /// Run browser login to authenticate and store cookies.
+///
+/// # Errors
+///
+/// When the browser login helper cannot be started, or exits non-zero --
+/// which includes the user closing the window without completing sign-in.
 pub fn login_live() -> Result<()> {
     let mut cmd = pyenv::command(BROWSER_MODULES)?;
     cmd.args([
@@ -111,6 +122,13 @@ fn tweets_from_cache_candidates(candidates: Vec<PathBuf>) -> Option<Vec<Tweet>> 
 }
 
 /// Collect timeline tweets via the live headless browser driver.
+///
+/// # Errors
+///
+/// When the scraper cannot be executed, exits non-zero, or collects no
+/// tweets. An empty timeline is an error here rather than an empty list:
+/// every caller is about to summarise what it gets back, and summarising
+/// nothing produces a confident summary of no data.
 pub fn collect_tweets_live(since: Option<&str>, debug: bool) -> Result<Vec<Tweet>> {
     let mut cmd = pyenv::command(BROWSER_MODULES)?;
     cmd.args(["-c", &build_fetch_stmt(debug, since)]);

@@ -17,7 +17,6 @@
 //!   consumers forget to read).
 
 use std::collections::BTreeMap;
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -93,6 +92,12 @@ fn history_path(eval_dir: Option<&Path>) -> PathBuf {
 ///
 /// Test doubles are skipped entirely; entries from an incomplete run carry
 /// `complete: false` so [`load_historical_stats`] can refuse to average them.
+///
+/// # Errors
+///
+/// When the history directory cannot be created, or the history file cannot
+/// be written. A run by a test model returns the existing history untouched
+/// and cannot fail.
 pub fn save_historical_results(
     run: &ModelRun,
     eval_dir: Option<&Path>,
@@ -232,46 +237,13 @@ pub fn compute_task_winners(runs: &[ModelRun]) -> BTreeMap<String, (&String, u8)
     winners
 }
 
-const fn status_word(score: u8) -> &'static str {
+pub(super) const fn status_word(score: u8) -> &'static str {
     if score >= 90 {
         "PASS"
     } else if score >= 50 {
         "WARN"
     } else {
         "FAIL"
-    }
-}
-
-/// Export one row per (model, task): the shape downstream sheets expect.
-pub fn export_csv(runs: &[ModelRun], output_file: &Path) -> std::io::Result<()> {
-    let mut file = std::io::BufWriter::new(std::fs::File::create(output_file)?);
-    writeln!(
-        file,
-        "Model,Task,Score,Status,Time(s),Failure,Failure_Category"
-    )?;
-    for run in runs {
-        for o in &run.outcomes {
-            writeln!(
-                file,
-                "{},{},{},{},{},{},{}",
-                csv_escape(&run.model),
-                csv_escape(&o.task),
-                o.score,
-                status_word(o.score),
-                o.time_secs,
-                csv_escape(o.error.as_deref().unwrap_or("")),
-                o.failure_category
-            )?;
-        }
-    }
-    Ok(())
-}
-
-fn csv_escape(field: &str) -> String {
-    if field.contains(',') || field.contains('"') || field.contains('\n') {
-        format!("\"{}\"", field.replace('"', "\"\""))
-    } else {
-        field.to_string()
     }
 }
 
@@ -319,13 +291,13 @@ fn truncate_name(name: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+pub(in crate::ztools::eval) mod tests {
     #![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
 
     use super::*;
     use serde_json::json;
 
-    fn outcome(task: &str, score: u8) -> TaskOutcome {
+    pub(in crate::ztools::eval) fn outcome(task: &str, score: u8) -> TaskOutcome {
         TaskOutcome {
             task: task.to_string(),
             score,
@@ -334,7 +306,11 @@ mod tests {
         }
     }
 
-    fn run(model: &str, outcomes: Vec<TaskOutcome>, complete: bool) -> ModelRun {
+    pub(in crate::ztools::eval) fn run(
+        model: &str,
+        outcomes: Vec<TaskOutcome>,
+        complete: bool,
+    ) -> ModelRun {
         let mut r = ModelRun::new(model, &[], outcomes);
         if let Some(c) = r.completeness.as_mut() {
             c.complete = complete;
@@ -448,30 +424,6 @@ mod tests {
         let winners = compute_task_winners(&runs);
         assert_eq!(winners["t1"].0, "b");
         assert_eq!(winners["t2"].0, "a", "tie keeps the first winner seen");
-    }
-
-    #[test]
-    fn csv_export_matches_the_downstream_sheet_shape() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut o = outcome("t1", 95);
-        o.time_secs = 1.5;
-        o.error = Some("HTTP 503, at capacity".to_string());
-        o.failure_category = "INFRA".to_string();
-        let runs = vec![run("model-a", vec![o], true)];
-        let out = dir.path().join("results.csv");
-        export_csv(&runs, &out).unwrap();
-        let text = std::fs::read_to_string(out).unwrap();
-        let mut lines = text.lines();
-        assert_eq!(
-            lines.next(),
-            Some("Model,Task,Score,Status,Time(s),Failure,Failure_Category")
-        );
-        let row = lines.next().unwrap();
-        // Quoted because the error contains a comma.
-        assert_eq!(
-            row,
-            "model-a,t1,95,PASS,1.5,\"HTTP 503, at capacity\",INFRA"
-        );
     }
 
     #[test]

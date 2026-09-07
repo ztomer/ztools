@@ -174,6 +174,12 @@ pub fn probe_model_defects(model_name: &str, base_dir: Option<&Path>) -> Vec<Str
 }
 
 /// Assess model viability (defect check + decode thrashing check).
+///
+/// # Errors
+///
+/// When the model has known defects, or is too large for the machine to
+/// run. Both are stated as prose naming what was found, because the caller
+/// prints it to an operator deciding what to do next.
 pub fn assess_viability(
     model_name: &str,
     decode_tok_per_sec: Option<f64>,

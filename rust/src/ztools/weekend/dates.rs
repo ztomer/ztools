@@ -55,6 +55,11 @@ fn push_date(found: &mut Vec<NaiveDate>, year: i32, month: u32, day: u32) {
     clippy::cast_sign_loss,
     reason = "digits of a fixed-width date, parsed one character at a time. `to_digit(10)` yields 0..=9, so the assembled fields cannot leave the range a date has"
 )]
+/// # Panics
+///
+/// Never: the digits are read through `to_digit(10)` only after the
+/// surrounding characters have been checked to be a date shape, and the
+/// day is parsed from a slice that matched a digit pattern.
 pub fn find_dates_in(value: &str, year: i32) -> Vec<NaiveDate> {
     let mut found = Vec::new();
     if value.is_empty() {
