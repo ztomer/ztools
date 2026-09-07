@@ -30,4 +30,4 @@ GOH_MAX_LINES=500                 # file-length cap; unset disables the check
 # Steps are COLON-separated by the runner, so no step string may contain a
 # colon -- hence $GOH_DIR resolved here.
 export GOH_DIR="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
-GOH_CI_STEPS='"$GOH_DIR/gates/rust_gate.sh" . rust:python3 "$GOH_DIR/checks/check_no_emoji.py":python3 "$GOH_DIR/checks/check_file_length.py" --max 500:cargo test --manifest-path rust/Cargo.toml --all-features:"$GOH_DIR/gates/coverage_gate.sh" --lang rust --floor 94 rust'
+GOH_CI_STEPS='"$GOH_DIR/gates/rust_gate.sh" . rust:cargo audit --file rust/Cargo.lock:python3 "$GOH_DIR/checks/check_no_emoji.py":python3 "$GOH_DIR/checks/check_file_length.py" --max 500:cargo test --manifest-path rust/Cargo.toml --all-features:"$GOH_DIR/gates/coverage_gate.sh" --lang rust --floor 94 rust'

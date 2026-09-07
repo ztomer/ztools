@@ -1,0 +1,19 @@
+# cargo-audit configuration.
+#
+# THE IGNORE LIST IS A RATCHET, NOT A RUG. It is EMPTY, and that is the goal
+# state. Wiring this gate (2026-09-07) immediately found one advisory —
+# chacha20 0.10.1 was YANKED from crates.io — which was FIXED by updating to
+# 0.10.2 rather than excused. Anything appearing here later must carry the
+# reason it may stand, and must be DELETED once its advisory stops firing: a
+# stale exemption is a hole held open for the next real finding.
+#
+# The `deny` stanza is load-bearing. `cargo audit` exits 0 on
+# "unmaintained"/"unsound" advisories — they are informational — so without it
+# the gate would pass over exactly the class it is here to police. Calibrate any
+# change by making it fail on purpose.
+[output]
+quiet = false
+deny = ["warnings", "unmaintained", "unsound", "yanked"]
+
+[advisories]
+ignore = []
