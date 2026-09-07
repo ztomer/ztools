@@ -25,9 +25,10 @@ pub(super) fn print_capabilities(url: &str, model_selector: &str) -> Result<()> 
     println!("Model                               Family        Disk GB   Gen?  Viability");
     for m in &models {
         let family = recorded_family_or_name(m);
-        let disk_gb = crate::ztools::eval::model_disk_bytes(m)
-            .map(|b| format!("{:.1}", b as f64 / 1024.0 / 1024.0 / 1024.0))
-            .unwrap_or_else(|| "-".to_string());
+        let disk_gb = crate::ztools::eval::model_disk_bytes(m).map_or_else(
+            || "-".to_string(),
+            |b| format!("{:.1}", b as f64 / 1024.0 / 1024.0 / 1024.0),
+        );
         let gen = if crate::ztools::eval::is_generative_model(m) {
             "yes"
         } else {

@@ -41,6 +41,7 @@ pub fn identifying_tokens(phrase: &str) -> Vec<String> {
 }
 
 /// Fraction of `phrase`'s identifying tokens present in `out_lower`.
+#[must_use]
 pub fn phrase_overlap(phrase: &str, out_lower: &str) -> f64 {
     let tokens = identifying_tokens(phrase);
     if tokens.is_empty() {

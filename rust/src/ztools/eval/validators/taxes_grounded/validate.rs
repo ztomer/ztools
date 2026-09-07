@@ -1,6 +1,6 @@
-//! The three public taxes validators: YoY narrative, QA, and slip QA.
+//! The three public taxes validators: `YoY` narrative, QA, and slip QA.
 //!
-//! Split out of taxes_grounded.rs for the 500-line production cap. These are the
+//! Split out of `taxes_grounded.rs` for the 500-line production cap. These are the
 //! entry points; the arithmetic lives in `amounts`, the fixtures in `grounding`.
 
 use serde_json::Value;
@@ -18,10 +18,10 @@ pub fn validate_taxes_yoy_narrative(
     let loaded = load_grounding("yoy_narrative");
     let grounding = explicit_grounding.unwrap_or(&loaded);
     let (parsed, note) = parse_output(output);
-    let mut bits = if !note.is_empty() {
-        vec![note]
-    } else {
+    let mut bits = if note.is_empty() {
         Vec::new()
+    } else {
+        vec![note]
     };
 
     let map = match parsed {
@@ -64,7 +64,7 @@ pub fn validate_taxes_yoy_narrative(
     if !well_formed.is_empty() {
         schema += 10;
     }
-    bits.push(format!("schema={}/20", schema));
+    bits.push(format!("schema={schema}/20"));
 
     let attribution = grounding.get("attribution").and_then(|v| v.as_object());
     let mut effects = Vec::new();
@@ -110,7 +110,7 @@ pub fn validate_taxes_yoy_narrative(
         .unwrap_or(0.0);
     let tol_pct = grounding
         .get("tolerance_pct")
-        .and_then(|v| v.as_f64())
+        .and_then(serde_json::Value::as_f64)
         .unwrap_or(0.0);
 
     let recon_score = if let (false, Some(target)) = (reported.is_empty(), total_delta) {
@@ -124,8 +124,7 @@ pub fn validate_taxes_yoy_narrative(
             (30.0 * (1.0 - (error - tolerance) / span)).round().max(0.0) as i64
         };
         bits.push(format!(
-            "reconcile err={:.2} tol={:.2} ({}/30)",
-            error, tolerance, s
+            "reconcile err={error:.2} tol={tolerance:.2} ({s}/30)"
         ));
         s
     } else {
@@ -137,7 +136,7 @@ pub fn validate_taxes_yoy_narrative(
         grounding
             .get("known_amounts")
             .and_then(|v| v.as_array())
-            .map(|a| a.as_slice())
+            .map(std::vec::Vec::as_slice)
             .unwrap_or(&[]),
     );
     let (prose_score, prose_note) = score_prose_amounts(prose, &known, 20);
@@ -147,14 +146,15 @@ pub fn validate_taxes_yoy_narrative(
     (total.min(MAX_SCORE), bits.join("  "))
 }
 
+#[must_use]
 pub fn validate_taxes_qa(output: &Value, explicit_grounding: Option<&Value>) -> (i64, String) {
     let loaded = load_grounding("qa");
     let grounding = explicit_grounding.unwrap_or(&loaded);
     let (parsed, note) = parse_output(output);
-    let mut bits = if !note.is_empty() {
-        vec![note]
-    } else {
+    let mut bits = if note.is_empty() {
         Vec::new()
+    } else {
+        vec![note]
     };
 
     let map = match parsed {
@@ -182,7 +182,7 @@ pub fn validate_taxes_qa(output: &Value, explicit_grounding: Option<&Value>) -> 
     if citations.is_some() {
         schema += 10;
     }
-    bits.push(format!("schema={}/20", schema));
+    bits.push(format!("schema={schema}/20"));
 
     let known_ids: HashSet<String> = grounding
         .get("known_fact_ids")
@@ -201,7 +201,7 @@ pub fn validate_taxes_qa(output: &Value, explicit_grounding: Option<&Value>) -> 
                     c.as_object()?
                         .get("fact_id")?
                         .as_str()
-                        .map(|s| s.to_string())
+                        .map(std::string::ToString::to_string)
                 })
                 .collect()
         })
@@ -224,7 +224,7 @@ pub fn validate_taxes_qa(output: &Value, explicit_grounding: Option<&Value>) -> 
         grounding
             .get("known_amounts")
             .and_then(|v| v.as_array())
-            .map(|a| a.as_slice())
+            .map(std::vec::Vec::as_slice)
             .unwrap_or(&[]),
     );
     let (prose_score, prose_note) = score_prose_amounts(prose, &known, 40);
@@ -234,14 +234,15 @@ pub fn validate_taxes_qa(output: &Value, explicit_grounding: Option<&Value>) -> 
     (total.min(MAX_SCORE), bits.join("  "))
 }
 
+#[must_use]
 pub fn validate_taxes_slip_qa(output: &Value, explicit_grounding: Option<&Value>) -> (i64, String) {
     let loaded = load_grounding("slip_qa");
     let grounding = explicit_grounding.unwrap_or(&loaded);
     let (parsed, note) = parse_output(output);
-    let mut bits = if !note.is_empty() {
-        vec![note]
-    } else {
+    let mut bits = if note.is_empty() {
         Vec::new()
+    } else {
+        vec![note]
     };
 
     let map = match parsed {
@@ -269,7 +270,7 @@ pub fn validate_taxes_slip_qa(output: &Value, explicit_grounding: Option<&Value>
     if ids.is_some() {
         schema += 15;
     }
-    bits.push(format!("schema={}/30", schema));
+    bits.push(format!("schema={schema}/30"));
 
     let known_flags: HashSet<String> = grounding
         .get("known_flag_ids")
@@ -289,15 +290,7 @@ pub fn validate_taxes_slip_qa(output: &Value, explicit_grounding: Option<&Value>
         })
         .unwrap_or_default();
 
-    let flag_score = if !reported_ids.is_empty() {
-        let hits = reported_ids
-            .iter()
-            .filter(|i| known_flags.contains(*i))
-            .count();
-        let s = (35.0 * hits as f64 / reported_ids.len() as f64).round() as i64;
-        bits.push(format!("flags={}/{} ({}/35)", hits, reported_ids.len(), s));
-        s
-    } else {
+    let flag_score = if reported_ids.is_empty() {
         let s = if known_flags.is_empty() { 35 } else { 0 };
         bits.push(format!(
             "flags=0 claimed, {} known ({}/35)",
@@ -305,13 +298,21 @@ pub fn validate_taxes_slip_qa(output: &Value, explicit_grounding: Option<&Value>
             s
         ));
         s
+    } else {
+        let hits = reported_ids
+            .iter()
+            .filter(|i| known_flags.contains(*i))
+            .count();
+        let s = (35.0 * hits as f64 / reported_ids.len() as f64).round() as i64;
+        bits.push(format!("flags={}/{} ({}/35)", hits, reported_ids.len(), s));
+        s
     };
 
     let known = known_set(
         grounding
             .get("known_amounts")
             .and_then(|v| v.as_array())
-            .map(|a| a.as_slice())
+            .map(std::vec::Vec::as_slice)
             .unwrap_or(&[]),
     );
     let amounts = prose_amounts(prose);

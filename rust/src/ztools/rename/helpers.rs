@@ -29,6 +29,7 @@ const GENERIC_EXTENSIONS: &[&str] = &[
 
 /// Whether a proposed name is generic filler that identifies nothing. Matches
 /// `_GENERIC_NAMES` in `helpers.py`: the bases, plus every `base_ext` pair.
+#[must_use]
 pub fn is_generic_name(name: &str) -> bool {
     let n = name.trim().to_lowercase();
     if GENERIC_BASES.contains(&n.as_str()) {
@@ -44,12 +45,13 @@ pub fn is_generic_name(name: &str) -> bool {
     false
 }
 
-/// Fold arbitrary text into a concise snake_case filename.
+/// Fold arbitrary text into a concise `snake_case` filename.
 ///
 /// Exactly the Python steps: drop every char that is not a word char,
 /// whitespace or hyphen; collapse hyphen/whitespace runs to a single `_`;
 /// strip leading/trailing `_`; lowercase; truncate at `max_length` without
 /// leaving a trailing `_`. Empty result is `unnamed`.
+#[must_use]
 pub fn clean_filename(text: &str, max_length: usize) -> String {
     let mut kept = String::new();
     for ch in text.chars() {
@@ -86,6 +88,7 @@ pub fn clean_filename(text: &str, max_length: usize) -> String {
 
 /// Strip a conversational prefix like "here is the filename:" or "renamed to:"
 /// from model output. Port of `_strip_instruction_prefix` (regex, IGNORECASE).
+#[must_use]
 pub fn strip_instruction_prefix(content: &str) -> String {
     let re = Regex::new(
         r"(?i)^\s*(?:(?:here(?: is|'s)?(?: a| the)?|the|suggested|renamed? to)?\s*(?:filename|file|name|output|result|response)?(?:\s+is)?\s*:\s*)",
@@ -107,9 +110,7 @@ pub fn is_meaningful_text(text: &str, min_word_count: usize) -> bool {
     if words.len() == 1 && text.len() > 8 {
         // A single long alphanumeric token whose first two chars are upper case
         // is a hash or an ID, not a description.
-        if text.chars().all(|c| c.is_alphanumeric())
-            && text.chars().take(2).all(|c| c.is_uppercase())
-        {
+        if text.chars().all(char::is_alphanumeric) && text.chars().take(2).all(char::is_uppercase) {
             return false;
         }
     }
@@ -125,7 +126,7 @@ pub fn is_meaningful_text(text: &str, min_word_count: usize) -> bool {
 
     let word_like = words
         .iter()
-        .filter(|w| w.len() > 2 && w.chars().any(|c| c.is_alphabetic()))
+        .filter(|w| w.len() > 2 && w.chars().any(char::is_alphabetic))
         .count();
     word_like >= min_word_count
 }

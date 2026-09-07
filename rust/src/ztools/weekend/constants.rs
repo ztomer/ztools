@@ -5,8 +5,10 @@ use std::collections::HashMap;
 
 use super::WeekendEvent;
 /// Fields whose value the prompt asks the model to always supply, paired with
-/// the aliases the parsed item may carry them under. These are the columns a
-/// model fills mechanically when it has nothing real to say.
+/// the aliases the parsed item may carry them under.
+///
+/// These are the columns a model fills mechanically when it has nothing real to
+/// say.
 pub const CONSTANT_COLUMN_FIELDS: &[(&str, &[&str])] = &[
     ("Target Age(s)", &["target_ages", "age_group"]),
     ("Estimated Price", &["price", "cost"]),
@@ -14,8 +16,10 @@ pub const CONSTANT_COLUMN_FIELDS: &[(&str, &[&str])] = &[
 ];
 
 /// The values that actually shipped, filled from the instructions rather than
-/// from any event. Kept as data so a fourth instance is one line, not a new
-/// check -- and so the historical evidence for this class stays readable.
+/// from any event.
+///
+/// Kept as data so a fourth instance is one line, not a new check -- and so the
+/// historical evidence for this class stays readable.
 pub const PROMPT_CONSTANTS: &[(&str, &[&str])] = &[
     ("Estimated Price", &["$18-35", "18-35"]),
     ("Duration", &["2-3 hours"]),
@@ -52,6 +56,7 @@ fn column_value(ev: &WeekendEvent, aliases: &[&str]) -> String {
 ///
 /// Returns notes and **changes nothing**. A mechanically-filled column is a
 /// signal that the extraction is wrong, not a reason to delete the rows.
+#[must_use]
 pub fn flag_constant_columns(
     events: &[WeekendEvent],
     suspects: &HashMap<String, Vec<String>>,
@@ -72,7 +77,10 @@ pub fn flag_constant_columns(
         if values[1..].iter().any(|v| !v.eq_ignore_ascii_case(first)) {
             continue;
         }
-        let suspects_for_label = suspects.get(*label).map(|v| v.as_slice()).unwrap_or(&[]);
+        let suspects_for_label = suspects
+            .get(*label)
+            .map(std::vec::Vec::as_slice)
+            .unwrap_or(&[]);
         let is_suspect = suspects_for_label
             .iter()
             .filter(|s| !s.trim().is_empty())

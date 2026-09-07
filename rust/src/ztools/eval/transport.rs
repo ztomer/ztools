@@ -31,13 +31,17 @@ use crate::ztools::eval::quirks::apply_model_quirks;
 use crate::ztools::eval::task_loader::ChatMessage;
 
 /// Fraction of the output budget a model may spend on reasoning before an empty
-/// `content` is treated as terminal. Below this line a run can still recover;
-/// above it the remaining budget cannot hold an answer.
+/// `content` is treated as terminal.
+///
+/// Below this line a run can still recover; above it the remaining budget
+/// cannot hold an answer.
 pub const REASONING_OVERRUN_FRACTION: f64 = 0.75;
 
 /// Rough chars-per-token, only used to turn streamed characters into a token
-/// estimate for the fraction above. An estimate is adequate because the
-/// threshold is a fraction of a budget, not a boundary anything is scored against.
+/// estimate for the fraction above.
+///
+/// An estimate is adequate because the threshold is a fraction of a budget, not
+/// a boundary anything is scored against.
 pub const CHARS_PER_TOKEN: u64 = 3;
 
 /// The result shape every caller of the Python `call` receives, carried over:
@@ -105,11 +109,14 @@ pub struct RequestSpec<'a> {
 }
 
 /// Blocking chat completion with the full pipeline (quirks -> stream guard ->
-/// blocking -> missing-model substitution). Returns a [`TransportResult`] whose
-/// `error` is `Some` on any transport or protocol failure.
+/// blocking -> missing-model substitution).
+///
+/// Returns a [`TransportResult`] whose `error` is `Some` on any transport or
+/// protocol failure.
 ///
 /// With `parse_json`, the request asks for `response_format: json_object` and
 /// the cleaned content is additionally run through [`extract_json`].
+#[must_use]
 pub fn call(spec: &RequestSpec, parse_json: bool) -> TransportResult {
     // Quirks are derived per call site like the Python transport does: a
     // substitute model would need them re-derived from scratch, so the ORIGINAL
@@ -307,6 +314,7 @@ fn sse_choice(line: &str) -> Option<Value> {
 /// The wall-clock deadline is enforced HERE rather than trusted to socket
 /// timeouts: a model emitting one slow token at a time never trips a per-read
 /// gap timeout, and that exact case hung a real sweep for 97 minutes.
+#[must_use]
 pub fn stream_with_overrun_guard(spec: &RequestSpec) -> TransportResult {
     let mut result = TransportResult {
         model: spec.model.to_string(),
@@ -315,7 +323,7 @@ pub fn stream_with_overrun_guard(spec: &RequestSpec) -> TransportResult {
     let start = Instant::now();
     let deadline = start + Duration::from_secs(spec.timeout_secs);
     let budget_chars =
-        (spec.max_tokens as f64 * REASONING_OVERRUN_FRACTION * CHARS_PER_TOKEN as f64).max(1.0)
+        (f64::from(spec.max_tokens) * REASONING_OVERRUN_FRACTION * CHARS_PER_TOKEN as f64).max(1.0)
             as u64;
 
     let payload = json!({

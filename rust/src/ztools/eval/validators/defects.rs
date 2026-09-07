@@ -22,6 +22,7 @@ static DUP_NOISE_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b(?:the|a|an|of|at|in|on|and|museum|centre|center|park)\b").unwrap()
 });
 
+#[must_use]
 pub fn generic_location_ratio(items: &[Value]) -> f64 {
     let rows: Vec<&serde_json::Map<String, Value>> =
         items.iter().filter_map(|i| i.as_object()).collect();
@@ -42,6 +43,7 @@ pub fn generic_location_ratio(items: &[Value]) -> f64 {
     generic as f64 / rows.len() as f64
 }
 
+#[must_use]
 pub fn constant_column_ratio(items: &[Value]) -> (f64, Vec<String>) {
     let rows: Vec<&serde_json::Map<String, Value>> =
         items.iter().filter_map(|i| i.as_object()).collect();
@@ -97,7 +99,10 @@ fn words_list(name: &str) -> Vec<String> {
             }
         })
         .collect::<String>();
-    clean.split_whitespace().map(|s| s.to_string()).collect()
+    clean
+        .split_whitespace()
+        .map(std::string::ToString::to_string)
+        .collect()
 }
 
 fn distinct_name_tokens(name: &str) -> HashSet<String> {
@@ -107,7 +112,7 @@ fn distinct_name_tokens(name: &str) -> HashSet<String> {
     stripped
         .split_whitespace()
         .filter(|w| w.len() > 2 || w.chars().all(|c| c.is_ascii_digit()))
-        .map(|w| w.to_string())
+        .map(std::string::ToString::to_string)
         .collect()
 }
 
@@ -124,6 +129,7 @@ fn acronym_of(name: &str) -> String {
     }
 }
 
+#[must_use]
 pub fn near_duplicate_ratio(items: &[Value]) -> f64 {
     let names: Vec<String> = items
         .iter()
@@ -176,5 +182,5 @@ pub fn near_duplicate_ratio(items: &[Value]) -> f64 {
             kept.push((tokens, acronym));
         }
     }
-    dupes as f64 / names.len() as f64
+    f64::from(dupes) / names.len() as f64
 }

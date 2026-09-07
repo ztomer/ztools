@@ -20,6 +20,7 @@ extern "C" {
     fn kill(pid: i32, sig: i32) -> i32;
 }
 
+#[must_use]
 pub fn lock_dir() -> PathBuf {
     if let Ok(val) = std::env::var(DIR_ENV) {
         if !val.is_empty() {
@@ -30,6 +31,7 @@ pub fn lock_dir() -> PathBuf {
 }
 
 /// Retrieve process start time with whitespace normalized (matching Python/Bash cross-language contract).
+#[must_use]
 pub fn start_time(pid: u32) -> String {
     let output = Command::new("ps")
         .args(["-o", "lstart=", "-p", &pid.to_string()])
@@ -43,7 +45,8 @@ pub fn start_time(pid: u32) -> String {
     }
 }
 
-/// Read (pid, start_time, label) from the lock's `owner` file.
+/// Read (pid, `start_time`, label) from the lock's `owner` file.
+#[must_use]
 pub fn read_owner(dir: &Path) -> Option<(String, String, String)> {
     let owner_path = dir.join("owner");
     let content = fs::read_to_string(owner_path).ok()?;
@@ -59,6 +62,7 @@ pub fn read_owner(dir: &Path) -> Option<(String, String, String)> {
 }
 
 /// Check whether the process recorded as holding the lock is still alive and running.
+#[must_use]
 pub fn is_owner_alive(dir: &Path) -> bool {
     let owner = match read_owner(dir) {
         Some(o) => o,
@@ -80,6 +84,7 @@ pub fn is_owner_alive(dir: &Path) -> bool {
 }
 
 /// Check whether the lock directory mtime has exceeded the max idle threshold.
+#[must_use]
 pub fn is_expired(dir: &Path, max_idle: Duration) -> bool {
     let meta = match fs::metadata(dir) {
         Ok(m) => m,
@@ -100,6 +105,7 @@ fn force_remove(dir: &Path) {
     let _ = fs::remove_dir_all(dir);
 }
 
+#[must_use]
 pub fn foreign_holder() -> Option<String> {
     let dir = lock_dir();
     if !is_owner_alive(&dir) {
@@ -155,7 +161,7 @@ impl GpuLockGuard {
 
         loop {
             match fs::create_dir(dir) {
-                Ok(_) => {
+                Ok(()) => {
                     let st = start_time(pid);
                     let owner_content = format!("{pid}\n{st}\n{label} (pid {pid})\n");
                     let _ = fs::write(dir.join("owner"), owner_content);
@@ -175,10 +181,9 @@ impl GpuLockGuard {
                         continue;
                     }
                     if start.elapsed() >= timeout {
-                        let holder_label = read_owner(dir)
-                            .map(|o| o.2)
-                            .unwrap_or_else(|| "an unknown run".to_string());
-                        bail!("GPU still held by {} after {:?} — that session is measuring; do not restart osaurus under it", holder_label, timeout);
+                        let holder_label =
+                            read_owner(dir).map_or_else(|| "an unknown run".to_string(), |o| o.2);
+                        bail!("GPU still held by {holder_label} after {timeout:?} — that session is measuring; do not restart osaurus under it");
                     }
                     std::thread::sleep(Duration::from_millis(50));
                 }

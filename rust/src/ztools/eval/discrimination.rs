@@ -5,7 +5,7 @@
 /// `task` (task name) and `quality_score` (score 0-100).
 #[derive(Debug, Clone)]
 pub struct EvalResult {
-    /// Task name (e.g., "json", "filename", "twitter_summarize")
+    /// Task name (e.g., "json", "filename", "`twitter_summarize`")
     pub task: String,
     /// Quality score 0-100 for this model on this task
     pub quality_score: i32,
@@ -30,17 +30,19 @@ const MIN_MODELS_FOR_VERDICT: usize = 4;
 static GATE_TASKS: &[&str] = &["image_real", "taxes_slip_qa"];
 
 /// Whether `task` is recorded as unable to rank (a gate).
+#[must_use]
 pub fn is_gate(task: &str) -> bool {
     GATE_TASKS.contains(&task)
 }
 
 /// The subset of `tasks` that can order models.
 /// Returns tasks that are NOT gates.
+#[must_use]
 pub fn ranking_tasks(tasks: &[String]) -> Vec<String> {
     tasks.iter().filter(|t| !is_gate(t)).cloned().collect()
 }
 
-/// Count distinct float values by sorting and dedupieing (avoids HashSet<!f64>).
+/// Count distinct float values by sorting and dedupieing (avoids `HashSet`<!f64>).
 fn count_distinct(values: &[f64]) -> usize {
     if values.is_empty() {
         return 0;
@@ -57,34 +59,38 @@ fn count_distinct(values: &[f64]) -> usize {
 }
 
 /// Every model's score for each task, from a set of per-model records.
+///
 /// Only COMPLETE runs contribute. A truncated run's absent tasks would otherwise
 /// read as a narrower spread and could reclassify a ranking task as a gate.
 ///
 /// Returns a dict mapping task name -> list of scores.
+#[must_use]
 pub fn scores_by_task(all_results: &[EvalResult]) -> ::std::collections::HashMap<String, Vec<f64>> {
     let mut by_task: ::std::collections::HashMap<String, Vec<f64>> =
         ::std::collections::HashMap::new();
     for record in all_results {
         let task = &record.task;
-        let score = record.quality_score as f64;
+        let score = f64::from(record.quality_score);
         by_task.entry(task.clone()).or_default().push(score);
     }
     by_task
 }
 
 /// How many different scores `task` produced across models.
+#[must_use]
 pub fn distinct_values(all_results: &[EvalResult], task: &str) -> usize {
     let task_scores = scores_by_task(all_results);
     let scores = task_scores.get(task);
-    scores.map(|s| count_distinct(s)).unwrap_or(0)
+    scores.map_or(0, |s| count_distinct(s))
 }
 
 /// Derive, from data alone, which tasks rank and which gate.
 ///
 /// Returns task -> "ranks" | "gate" | "unknown".
-/// "unknown" is not a hedge: with fewer than MIN_MODELS_FOR_VERDICT models reporting,
+/// "unknown" is not a hedge: with fewer than `MIN_MODELS_FOR_VERDICT` models reporting,
 /// a narrow spread is a property of the sample size and calling it a gate would be
 /// inventing a finding.
+#[must_use]
 pub fn classify(all_results: &[EvalResult]) -> ::std::collections::HashMap<String, &'static str> {
     let mut verdicts: ::std::collections::HashMap<String, &'static str> =
         ::std::collections::HashMap::new();
@@ -117,6 +123,7 @@ pub fn classify(all_results: &[EvalResult]) -> ::std::collections::HashMap<Strin
 /// Reported rather than acted on. Reclassifying a task automatically from one
 /// run's data is how a single contended sweep silently rewrites what the suite
 /// measures.
+#[must_use]
 pub fn disagreements(all_results: &[EvalResult]) -> Vec<String> {
     let verdicts = classify(all_results);
     let mut found = Vec::new();
@@ -149,20 +156,24 @@ pub fn disagreements(all_results: &[EvalResult]) -> Vec<String> {
 /// Falls back to the full mean when a run contains ONLY gate tasks -- which is
 /// what `--task image_real` produces. Returning 0 there would report a model
 /// that scored 100 on the one task it was asked for as having failed.
+#[must_use]
 pub fn ranking_mean(all_results: &[EvalResult]) -> f64 {
     let scored_tasks: Vec<&EvalResult> = all_results.iter().filter(|r| !is_gate(&r.task)).collect();
 
-    if !scored_tasks.is_empty() {
-        let sum: f64 = scored_tasks.iter().map(|r| r.quality_score as f64).sum();
-        sum / scored_tasks.len() as f64
-    } else {
+    if scored_tasks.is_empty() {
         // Fallback: mean over all tasks
-        let all_scores: f64 = all_results.iter().map(|r| r.quality_score as f64).sum();
+        let all_scores: f64 = all_results.iter().map(|r| f64::from(r.quality_score)).sum();
         let count = all_results.len() as f64;
         if count == 0.0 {
             return 0.0;
         }
         all_scores / count
+    } else {
+        let sum: f64 = scored_tasks
+            .iter()
+            .map(|r| f64::from(r.quality_score))
+            .sum();
+        sum / scored_tasks.len() as f64
     }
 }
 

@@ -1,7 +1,8 @@
 //! Eval machinery: output cleaning (`clean.rs`) and task validators
-//! (`validate.rs`). Ported from `lib/content_processing.py` and
-//! `eval/validate.py` so the Rust eval path judges the same cleaned, parsed
-//! text the Python eval does.
+//! (`validate.rs`).
+//!
+//! Ported from `lib/content_processing.py` and `eval/validate.py` so the Rust
+//! eval path judges the same cleaned, parsed text the Python eval does.
 
 pub mod budgets;
 pub mod clean;

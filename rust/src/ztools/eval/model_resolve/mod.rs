@@ -11,7 +11,7 @@
 //!
 //! Substitution is a probe-and-degrade for exactly that case. Nothing here
 //! rewrites any config; a substitution is a stopgap that says so out loud on
-//! every use -- the fix is to re-derive best_models from an eval sweep.
+//! every use -- the fix is to re-derive `best_models` from an eval sweep.
 //!
 //! Shim: split into `roster` (entries, scoring, fallback chain), `disk`
 //! (filesystem probing) and `fetch` (live roster + corroboration) to stay under

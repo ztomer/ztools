@@ -7,9 +7,11 @@ use super::{
 };
 
 /// Search the aggregator for event snippets and return the cleaned, deduped,
-/// in-window-prioritised corpus. This is the ground truth the provenance gate
-/// judges extracted rows against.
+/// in-window-prioritised corpus.
+///
+/// This is the ground truth the provenance gate judges extracted rows against.
 /// Build search queries for a target weekend starting on d1.
+#[must_use]
 pub fn build_search_queries(d1: NaiveDate) -> Vec<String> {
     let month_name = d1.format("%B").to_string();
     let year = d1.format("%Y").to_string();
@@ -18,26 +20,21 @@ pub fn build_search_queries(d1: NaiveDate) -> Vec<String> {
     let mut queries = Vec::new();
 
     for city in municipalities {
-        queries.push(format!("kids activities {} {} {}", city, month_name, year));
+        queries.push(format!("kids activities {city} {month_name} {year}"));
         queries.push(format!(
-            "{} community centre kids programs {}",
-            city, month_name
+            "{city} community centre kids programs {month_name}"
         ));
-        queries.push(format!("{} family events {} {}", city, month_name, year));
+        queries.push(format!("{city} family events {month_name} {year}"));
     }
 
     let region = "GTA";
-    queries.push(format!("{} family events {} {}", region, month_name, year));
+    queries.push(format!("{region} family events {month_name} {year}"));
+    queries.push(format!("{region} Zoo special events {month_name} {year}"));
     queries.push(format!(
-        "{} Zoo special events {} {}",
-        region, month_name, year
-    ));
-    queries.push(format!(
-        "{} museum family programs {} {}",
-        region, month_name, year
+        "{region} museum family programs {month_name} {year}"
     ));
     if let Some(seasonal) = _seasonal_keywords(&month_name) {
-        queries.push(format!("{} {} {} {}", region, seasonal, month_name, year));
+        queries.push(format!("{region} {seasonal} {month_name} {year}"));
     }
     queries
 }
@@ -79,7 +76,7 @@ fn fetch_events_corpus(
         seen.insert(norm);
 
         if crate::ztools::weekend_cache::has_region_evidence(&snippet) {
-            cleaned.push(format!("- Event: {}", snippet));
+            cleaned.push(format!("- Event: {snippet}"));
         }
     }
     let raw_text = cleaned.join("\n");
@@ -111,12 +108,12 @@ fn monolithic_transient(
         d2.format("%Y-%m-%d").to_string(),
     );
     let prompt = format!(
-        "You are an expert family activity planner. Extract up to 10 time-limited events happening STRICTLY this weekend (between {} and {}) in {} from the text below.\n\
+        "You are an expert family activity planner. Extract up to 10 time-limited events happening STRICTLY this weekend (between {d1_str} and {d2_str}) in {location} from the text below.\n\
         Output JSON now. Use EXACT schema:\n\
         {{\"transient_events\": [{{\"name\": \"str\", \"location\": \"str\", \"target_ages\": \"str\", \"price\": \"str\", \"start_date\": \"str\", \"end_date\": \"str\", \"duration\": \"str\", \"weather\": \"str\", \"day\": \"str\", \"description\": \"str\"}}]}}\n\n\
         Rules for every field:\n\
         - Suggest up to 10 specific weekend activities. Do NOT stop after just 1 or 2 events. Find as many as you can.\n\
-        - Only extract events that occur within or overlap with the dates {} to {}. Discard events from past or future weekends.\n\
+        - Only extract events that occur within or overlap with the dates {d1_str} to {d2_str}. Discard events from past or future weekends.\n\
         - Copy values from the source text. NEVER invent one.\n\
         - If the source does not state a value, output an empty string \"\".\n\
         - start_date / end_date: ISO YYYY-MM-DD\n\
@@ -124,18 +121,19 @@ fn monolithic_transient(
         - Lines prefixed [THIS WEEKEND] definitely happen in the plan window; prefer them.\n\
         \n\
         Search results:\n\
-        {}\n\
+        {corpus}\n\
         \n\
-        Output ONLY JSON.",
-        d1_str, d2_str, location, d1_str, d2_str, corpus
+        Output ONLY JSON."
     );
     super::call_osaurus_json(&prompt, config).unwrap_or_default()
 }
 
 /// Run the full transient pipeline for a weekend: fetch -> prioritise ->
 /// extract -> draft -> refine -> structure, with a monolithic fallback when a
-/// phase yields nothing. Returns the structured events plus the corpus they
-/// were judged against.
+/// phase yields nothing.
+///
+/// Returns the structured events plus the corpus they were judged against.
+#[must_use]
 pub fn fetch_duckduckgo_events(
     location: &str,
     d1: NaiveDate,
@@ -164,8 +162,7 @@ pub fn fetch_duckduckgo_events(
 /// Default Open-Meteo URL builder for Vaughan / GTA.
 fn open_meteo_url(friday_date: &str, sunday_date: &str) -> String {
     format!(
-        "https://api.open-meteo.com/v1/forecast?latitude=43.8361&longitude=-79.4982&daily=temperature_2m_max,precipitation_sum&timezone=America/New_York&start_date={}&end_date={}",
-        friday_date, sunday_date
+        "https://api.open-meteo.com/v1/forecast?latitude=43.8361&longitude=-79.4982&daily=temperature_2m_max,precipitation_sum&timezone=America/New_York&start_date={friday_date}&end_date={sunday_date}"
     )
 }
 
@@ -175,6 +172,7 @@ fn fallback_forecast() -> String {
 }
 
 /// Parse the Open-Meteo JSON response into a forecast string.
+#[must_use]
 pub fn parse_weather_json(json: &serde_json::Value) -> Option<String> {
     let daily = json.get("daily")?;
     let times = daily.get("time").and_then(|t| t.as_array())?;
@@ -183,17 +181,20 @@ pub fn parse_weather_json(json: &serde_json::Value) -> Option<String> {
     let mut lines = Vec::new();
     for (i, t_val) in times.iter().enumerate() {
         let t_str = t_val.as_str().unwrap_or("");
-        let temp = temps.get(i).and_then(|v| v.as_f64()).unwrap_or(22.0);
-        let precip = precips.get(i).and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let temp = temps
+            .get(i)
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(22.0);
+        let precip = precips
+            .get(i)
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0);
         let cond = if precip > 0.5 {
             "Precipitation"
         } else {
             "Clear"
         };
-        lines.push(format!(
-            "{}: {:.1}°C, {} ({:.1}mm)",
-            t_str, temp, cond, precip
-        ));
+        lines.push(format!("{t_str}: {temp:.1}°C, {cond} ({precip:.1}mm)"));
     }
     if lines.is_empty() {
         None
@@ -202,6 +203,7 @@ pub fn parse_weather_json(json: &serde_json::Value) -> Option<String> {
     }
 }
 
+#[must_use]
 pub fn fetch_weather(friday_date: &str, sunday_date: &str) -> String {
     let client = match reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(5))

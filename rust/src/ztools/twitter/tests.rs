@@ -129,7 +129,7 @@ fn test_call_osaurus_and_run_summary_success() {
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
 
     thread::spawn(move || {
         for mut stream in listener.incoming().flatten() {
@@ -138,7 +138,7 @@ fn test_call_osaurus_and_run_summary_success() {
 
             let request_str = String::from_utf8_lossy(&buf);
             let body = if request_str.contains("/v1/embeddings") {
-                r###"{"data": [{"embedding": [0.1, 0.2]}]}"###
+                r#"{"data": [{"embedding": [0.1, 0.2]}]}"#
             } else {
                 r###"{"choices": [{"message": {"content": "## Section\n- Item 1\n- Item 2"}}]}"###
             };
@@ -195,7 +195,7 @@ fn test_run_summary_cache_reading() {
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
 
     thread::spawn(move || {
         for mut stream in listener.incoming().flatten() {
@@ -205,7 +205,7 @@ fn test_run_summary_cache_reading() {
             // Extremely simple check: if it's embeddings, return mock embedding, else chat.
             let request_str = String::from_utf8_lossy(&buf);
             let body = if request_str.contains("/v1/embeddings") {
-                r###"{"data": [{"embedding": [0.1, 0.2]}]}"###
+                r#"{"data": [{"embedding": [0.1, 0.2]}]}"#
             } else {
                 r###"{"choices": [{"message": {"content": "## Section\n- Cached tweet summary"}}]}"###
             };

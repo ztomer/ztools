@@ -14,6 +14,7 @@ pub fn requested_item_count(source_text: &str) -> Option<usize> {
     caps.get(1).and_then(|m| m.as_str().parse().ok())
 }
 
+#[must_use]
 pub fn parse_signal_noise(source_text: &str) -> (Vec<String>, Vec<String>) {
     if !source_text.contains("NOISE") {
         return (Vec::new(), Vec::new());

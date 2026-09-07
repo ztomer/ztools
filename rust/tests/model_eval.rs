@@ -1,8 +1,8 @@
-//! Integration test for model_eval.rs.
+//! Integration test for `model_eval.rs`.
 //!
 //! Spins up a mock LLM server (Ollama-compatible) on a localhost port and
-//! exercises get_available_models, eval_model, eval_all_models, and
-//! render_eval_report against it. This covers the HTTP-dependent code that
+//! exercises `get_available_models`, `eval_model`, `eval_all_models`, and
+//! `render_eval_report` against it. This covers the HTTP-dependent code that
 //! unit tests can't reach.
 
 use std::io::{Read, Write};
@@ -144,7 +144,7 @@ fn mock_llm_server_with_thinking() -> (u16, thread::JoinHandle<()>) {
             let _ = stream.read(&mut buf);
             let req = String::from_utf8_lossy(&buf);
             let content = if req.contains("red sports car") {
-                r#"<think>inner</think> red_car.jpg"#
+                r"<think>inner</think> red_car.jpg"
             } else {
                 r#"{"transient_events":[{"name":"Summer Rib Fest"},{"name":"Magic Show"}]}"#
             };

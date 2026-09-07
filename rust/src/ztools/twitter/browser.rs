@@ -3,6 +3,7 @@
 //! Port of `twitter/browser.py` and `twitter/browser_launch.py`.
 
 use anyhow::Result;
+use std::fmt::Write as _;
 
 use std::path::PathBuf;
 
@@ -42,6 +43,7 @@ pub struct LiveBrowserCollector {
 }
 
 impl LiveBrowserCollector {
+    #[must_use]
     pub fn new(since: Option<String>, debug: bool) -> Self {
         Self {
             since,
@@ -82,7 +84,7 @@ fn build_fetch_stmt(debug: bool, since: Option<&str>) -> String {
         py_stmt.push_str(", '--debug'");
     }
     if let Some(s) = since {
-        py_stmt.push_str(&format!(", '--since', '{s}'"));
+        let _ = write!(py_stmt, ", '--since', '{s}'");
     }
     py_stmt.push_str("]; from twitter.cli import main; main()");
     py_stmt

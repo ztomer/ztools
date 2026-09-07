@@ -1,4 +1,4 @@
-//! Parsing of x.com's HomeTimeline GraphQL payloads into plain Tweet structs.
+//! Parsing of x.com's `HomeTimeline` GraphQL payloads into plain Tweet structs.
 //!
 //! Port of `twitter/browser_parse.py`. Pure data transformation: no browser, no network.
 use super::Tweet;
@@ -12,6 +12,7 @@ pub const UNKNOWN_USER: &str = "unknown";
 pub const TWITTER_DATE_FORMAT: &str = "%a %b %d %H:%M:%S %z %Y";
 
 /// Parse tweets from x.com GraphQL JSON payload.
+#[must_use]
 pub fn parse_tweets_from_response(data: &serde_json::Value) -> Vec<Tweet> {
     let mut tweets = Vec::new();
 
@@ -97,16 +98,16 @@ pub fn parse_tweets_from_response(data: &serde_json::Value) -> Vec<Tweet> {
 
             let favorite_count = legacy
                 .get("favorite_count")
-                .and_then(|f| f.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .unwrap_or(0);
             let retweet_count = legacy
                 .get("retweet_count")
-                .and_then(|r| r.as_u64())
+                .and_then(serde_json::Value::as_u64)
                 .unwrap_or(0);
             let in_reply_to = legacy
                 .get("in_reply_to_screen_name")
                 .and_then(|s| s.as_str())
-                .map(|s| s.to_string());
+                .map(std::string::ToString::to_string);
 
             tweets.push(Tweet {
                 screen_name: screen_name.to_string(),

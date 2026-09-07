@@ -105,11 +105,11 @@ enum Cmd {
         #[arg(long, default_value = "smoke")]
         suite: String,
         /// Optional directory of task JSON snapshots for --suite full
-        /// (e.g. eval_tasks/data). Without it, only built-in tasks run.
+        /// (e.g. `eval_tasks/data`). Without it, only built-in tasks run.
         #[arg(long)]
         tasks_dir: Option<PathBuf>,
         /// With --suite full: run only the named task(s), comma-separated
-        /// (e.g. --task taxes_qa,taxes_slip_qa). Default: all tasks.
+        /// (e.g. --task `taxes_qa,taxes_slip_qa`). Default: all tasks.
         #[arg(long)]
         task: Option<String>,
         /// With --suite full: print outcomes as JSON instead of markdown.
@@ -171,9 +171,9 @@ pub fn run() -> Result<()> {
             login,
             fetch_latest,
             last_updated,
-        } => crate::cli_ztools::twitter_summarize(
+        } => crate::cli_ztools_twitter::twitter_summarize(
             &config,
-            crate::cli_ztools::TwitterSummarizeOpts {
+            crate::cli_ztools_twitter::TwitterSummarizeOpts {
                 json,
                 model,
                 md_out,

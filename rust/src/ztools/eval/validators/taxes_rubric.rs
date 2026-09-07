@@ -2,10 +2,11 @@
 //!
 //! Ported from `lib/validators/taxes_validator.py`, which itself mirrors
 //! `_score_output` from the source Taxes repo. Score is 0-100 from three
-//! weighted components: grounding (0-40), no_leak (0-30), substance (0-30).
+//! weighted components: grounding (0-40), `no_leak` (0-30), substance (0-30).
 //! The snapshot's `rubric` block carries `expected_signals` and
 //! `gt_forbidden`, so these validators are pure JSON consumers.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use regex::Regex;
@@ -18,17 +19,17 @@ use serde_json::Value;
 /// that reason; here an absent rubric yields an all-empty one.
 fn load_rubric(task_name: &str) -> Value {
     let manifest = env!("CARGO_MANIFEST_DIR");
-    let candidate = Path::new(manifest)
-        .parent()
-        .map(|p| {
-            p.join("eval_tasks/data/taxes")
-                .join(format!("taxes_{task_name}.sanitized.json"))
-        })
-        .unwrap_or_else(|| {
+    let candidate = Path::new(manifest).parent().map_or_else(
+        || {
             PathBuf::from(format!(
                 "eval_tasks/data/taxes/taxes_{task_name}.sanitized.json"
             ))
-        });
+        },
+        |p| {
+            p.join("eval_tasks/data/taxes")
+                .join(format!("taxes_{task_name}.sanitized.json"))
+        },
+    );
 
     if let Ok(content) = std::fs::read_to_string(&candidate) {
         if let Ok(val) = serde_json::from_str::<Value>(&content) {
@@ -105,7 +106,8 @@ fn substance_score(output: &str) -> i64 {
     score.max(0)
 }
 
-/// The common rubric: grounding (40) + no_leak (30) + substance (30).
+/// The common rubric: grounding (40) + `no_leak` (30) + substance (30).
+#[must_use]
 pub fn validate_taxes_task(output: &str, task_name: &str) -> (i64, String) {
     let rubric = load_rubric(task_name);
     let expected: Vec<String> = rubric
@@ -140,17 +142,23 @@ pub fn validate_taxes_task(output: &str, task_name: &str) -> (i64, String) {
     )
 }
 
+#[must_use]
 pub fn validate_taxes_anomalies(output: &Value) -> (i64, String) {
     validate_taxes_task(&value_to_text(output), "anomalies")
 }
 
 /// Same rubric + schema check: must be valid JSON with a `risk_items` list.
 /// A schema failure HALVES the total.
+#[must_use]
 pub fn validate_taxes_audit_readiness(output: &Value) -> (i64, String) {
     let raw = value_to_text(output);
     let (mut score, mut reason) = validate_taxes_task(&raw, "audit_readiness");
     match serde_json::from_str::<Value>(&raw) {
-        Ok(obj) if obj.get("risk_items").map(|r| r.is_array()).unwrap_or(false) => {
+        Ok(obj)
+            if obj
+                .get("risk_items")
+                .is_some_and(serde_json::Value::is_array) =>
+        {
             reason.push_str("  schema=ok");
         }
         Ok(_) => {
@@ -167,6 +175,7 @@ pub fn validate_taxes_audit_readiness(output: &Value) -> (i64, String) {
 
 /// Same rubric + markdown-section check: all but one of the expected
 /// `**N. Section**` headings must be present, else -10 floored at 0.
+#[must_use]
 pub fn validate_taxes_synthesis(output: &Value) -> (i64, String) {
     let raw = value_to_text(output);
     let (mut score, mut reason) = validate_taxes_task(&raw, "synthesis");
@@ -186,12 +195,13 @@ pub fn validate_taxes_synthesis(output: &Value) -> (i64, String) {
             .count();
         if hits < expected_sections.len() - 1 {
             score = (score - 10).max(0);
-            reason.push_str(&format!(
+            let _ = write!(
+                reason,
                 "  sections={hits}/{} (\u{2212}10)",
                 expected_sections.len()
-            ));
+            );
         } else {
-            reason.push_str(&format!("  sections={hits}/{}", expected_sections.len()));
+            let _ = write!(reason, "  sections={hits}/{}", expected_sections.len());
         }
     }
     (score, reason)
@@ -215,7 +225,7 @@ mod tests {
         assert_eq!(grounding_score("", &[]), (40, 0));
         let sigs: Vec<String> = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot"]
             .iter()
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .collect();
         assert_eq!(
             grounding_score("alpha bravo charlie delta echo foxtrot", &sigs),

@@ -26,6 +26,7 @@ use crate::ztools::eval::completeness::{record_is_complete, Completeness};
 use crate::ztools::eval::runner::TaskOutcome;
 
 /// Where eval artefacts live when the caller does not say otherwise.
+#[must_use]
 pub fn default_eval_dir() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -33,6 +34,7 @@ pub fn default_eval_dir() -> PathBuf {
 }
 
 /// Whether a model name is a test double rather than a real served model.
+#[must_use]
 pub fn is_test_model(model: &str) -> bool {
     let lower = model.trim().to_lowercase();
     lower.starts_with("mock") || lower.starts_with("test-") || lower.starts_with("fake")
@@ -48,6 +50,7 @@ pub struct ModelRun {
 }
 
 impl ModelRun {
+    #[must_use]
     pub fn new(model: &str, expected: &[String], outcomes: Vec<TaskOutcome>) -> Self {
         Self {
             model: model.to_string(),
@@ -57,9 +60,11 @@ impl ModelRun {
     }
 }
 
-/// One historical observation. `complete` is ABSENT on records written before
-/// truncation tracking existed, and absence means COMPLETE -- defaulting old
-/// entries to incomplete would retroactively disqualify real measurements.
+/// One historical observation.
+///
+/// `complete` is ABSENT on records written before truncation tracking existed,
+/// and absence means COMPLETE -- defaulting old entries to incomplete would
+/// retroactively disqualify real measurements.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryEntry {
     pub date: String,
@@ -72,7 +77,7 @@ pub struct HistoryEntry {
     pub complete: bool,
 }
 
-fn default_true() -> bool {
+const fn default_true() -> bool {
     true
 }
 
@@ -153,6 +158,7 @@ pub struct ModelStats {
     pub excluded: usize,
 }
 
+#[must_use]
 pub fn load_historical_stats(eval_dir: Option<&Path>) -> BTreeMap<String, ModelStats> {
     let mut stats = BTreeMap::new();
     for (model, entries) in load_history(eval_dir) {
@@ -206,6 +212,7 @@ pub fn load_historical_stats(eval_dir: Option<&Path>) -> BTreeMap<String, ModelS
 
 /// Which model won each task across this batch of runs. Ties keep the first
 /// winner seen, matching Python's strict `>` comparison.
+#[must_use]
 pub fn compute_task_winners(runs: &[ModelRun]) -> BTreeMap<String, (&String, u8)> {
     let mut winners: BTreeMap<String, (&String, u8)> = BTreeMap::new();
     for run in runs {
@@ -221,7 +228,7 @@ pub fn compute_task_winners(runs: &[ModelRun]) -> BTreeMap<String, (&String, u8)
     winners
 }
 
-fn status_word(score: u8) -> &'static str {
+const fn status_word(score: u8) -> &'static str {
     if score >= 90 {
         "PASS"
     } else if score >= 50 {
@@ -267,6 +274,7 @@ fn csv_escape(field: &str) -> String {
 /// Render the historical trends table (mean/median/stdev/runs/excluded per
 /// model, best first, matching the Python report's ordering). Empty when no
 /// history exists yet.
+#[must_use]
 pub fn render_historical_trends(eval_dir: Option<&Path>) -> Vec<String> {
     let stats = load_historical_stats(eval_dir);
     if stats.is_empty() {

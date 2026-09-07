@@ -46,7 +46,7 @@ fn the_shipped_target_age_constant_is_flagged() {
 #[test]
 fn the_shipped_duration_and_price_constants_are_flagged() {
     let mut rows = rows_with(4, "duration", "2-3 hours");
-    for ev in rows.iter_mut() {
+    for ev in &mut rows {
         ev.price = "$18-35".into();
     }
     let notes = flag_constant_columns(&rows, &suspects("6-13"));
@@ -81,7 +81,7 @@ fn empty_cells_are_not_a_constant_column() {
     let mut pathological = suspects("6-13");
     pathological.insert(
         "Target Age(s)".to_string(),
-        vec!["6-13".to_string(), "".to_string()],
+        vec!["6-13".to_string(), String::new()],
     );
     assert!(flag_constant_columns(&rows_with(4, "target_ages", ""), &pathological).is_empty());
 }
@@ -100,7 +100,7 @@ fn one_row_is_never_a_constant_column() {
 #[test]
 fn matching_is_case_and_space_insensitive() {
     let mut rows = rows_with(3, "target_ages", " 6-13 ");
-    for ev in rows.iter_mut() {
+    for ev in &mut rows {
         ev.duration = "2-3 Hours".into();
     }
     let joined = flag_constant_columns(&rows, &suspects("6-13")).join(" ");

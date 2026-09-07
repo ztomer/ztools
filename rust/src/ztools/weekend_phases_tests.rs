@@ -38,7 +38,7 @@ fn unreachable_llm_yields_nothing() {
     assert!(draft_activities("sunny", "sources", &ctx(), &config()).is_none());
 }
 
-/// condense_weather degrades to a preview slice, never an empty string.
+/// `condense_weather` degrades to a preview slice, never an empty string.
 #[test]
 fn condense_weather_falls_back_to_a_preview() {
     let long = format!("forecast: {}", "x".repeat(300));
@@ -47,14 +47,14 @@ fn condense_weather_falls_back_to_a_preview() {
     assert_eq!(out.len(), 200);
 }
 
-/// refine_draft degrades to the unrefined draft, never an empty string.
+/// `refine_draft` degrades to the unrefined draft, never an empty string.
 #[test]
 fn refine_draft_falls_back_to_the_draft() {
     let draft = "Alpha | Toronto | Aug 8 | free | 6-12 | a thing\nBeta | Vaughan | Aug 9 | $10 | 6-12 | another";
     assert_eq!(refine_draft(draft, &config()), draft);
 }
 
-/// extract_sources with no input returns the input unchanged.
+/// `extract_sources` with no input returns the input unchanged.
 #[test]
 fn extract_sources_passes_through_empty_and_unparseable_corpora() {
     assert_eq!(extract_sources("", "Vaughan", &config()), "");
@@ -63,7 +63,7 @@ fn extract_sources_passes_through_empty_and_unparseable_corpora() {
     assert_eq!(extract_sources(prose, "Vaughan", &config()), prose);
 }
 
-/// extract_sources with a dead LLM passes every line through raw, in order,
+/// `extract_sources` with a dead LLM passes every line through raw, in order,
 /// rather than dropping them or stalling: an empty extract is worse than a raw
 /// one, and the draft can still work from the raw corpus.
 #[test]

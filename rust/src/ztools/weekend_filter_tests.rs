@@ -24,10 +24,10 @@ fn event(name: &str, location: &str, description: &str) -> WeekendEvent {
         description: description.into(),
         is_transient: true,
         score: 4.0,
-        start_date: "".into(),
-        end_date: "".into(),
-        weather: "".into(),
-        duration: "".into(),
+        start_date: String::new(),
+        end_date: String::new(),
+        weather: String::new(),
+        duration: String::new(),
     }
 }
 

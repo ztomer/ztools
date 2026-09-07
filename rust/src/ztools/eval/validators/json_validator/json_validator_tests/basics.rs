@@ -1,4 +1,4 @@
-//! Sanity tests: empty/valid input for validate_json and validate_detailed_json.
+//! Sanity tests: empty/valid input for `validate_json` and `validate_detailed_json`.
 
 use serde_json::json;
 

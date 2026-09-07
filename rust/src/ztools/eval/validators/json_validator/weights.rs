@@ -1,6 +1,6 @@
 //! Scoring weights, thresholds and the shared field/stopword tables.
 //!
-//! Split out of json_validator.rs for the 500-line production cap. Data only --
+//! Split out of `json_validator.rs` for the 500-line production cap. Data only --
 //! no logic -- so the numbers that define the scoring contract sit in one place
 //! rather than beside the code that happens to apply them first.
 

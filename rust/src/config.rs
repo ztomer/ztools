@@ -48,7 +48,7 @@ pub struct ZtoolsConfig {
     /// `--vlm-model` too), and such images fall back to a clean of the stem.
     #[serde(default = "default_image_renamer_vlm_model")]
     pub image_renamer_vlm_model: String,
-    /// Structured reasoning / fallback model (from [best_models].think).
+    /// Structured reasoning / fallback model (from [`best_models`].think).
     #[serde(default = "default_think_model")]
     pub think_model: String,
     #[serde(default = "default_llm_timeout_secs")]
@@ -102,25 +102,25 @@ fn default_image_renamer_vlm_model() -> String {
 fn default_think_model() -> String {
     "ornith-1.0-35b-jang_4m".to_string()
 }
-fn default_llm_timeout_secs() -> u64 {
+const fn default_llm_timeout_secs() -> u64 {
     120
 }
-fn default_llm_extended_timeout_secs() -> u64 {
+const fn default_llm_extended_timeout_secs() -> u64 {
     300
 }
-fn default_llm_quick_timeout_secs() -> u64 {
+const fn default_llm_quick_timeout_secs() -> u64 {
     10
 }
-fn default_twitter_prompt_max_chars() -> usize {
+const fn default_twitter_prompt_max_chars() -> usize {
     24000
 }
-fn default_max_image_filename_len() -> usize {
+const fn default_max_image_filename_len() -> usize {
     50
 }
 
 /// Embedded fallback of `conf/prompts.toml` `[twitter.summarize].instructions`.
 /// Kept byte-identical to that file by `test_twitter_prompt_matches_shared_conf`.
-const TWITTER_SUMMARIZE_PROMPT: &str = r#"You are an objective news distillation system. Your task is to extract hard
+const TWITTER_SUMMARIZE_PROMPT: &str = r"You are an objective news distillation system. Your task is to extract hard
 facts from the provided chronological Twitter/X timeline.
 
 <instructions>
@@ -141,7 +141,7 @@ facts from the provided chronological Twitter/X timeline.
 - Use bullet points for facts
 - Use narrative verbs and connecting phrases showing event relationships
 - End every bullet with `(@handle | timestamp-exactly-as-written-in-the-source-line)`
-</formatting_rules>"#;
+</formatting_rules>";
 
 pub(crate) fn default_twitter_summarize_prompt() -> String {
     TWITTER_SUMMARIZE_PROMPT.to_string()
@@ -172,6 +172,7 @@ impl Default for ZtoolsConfig {
 
 impl ZtoolsConfig {
     /// Attempt to load dynamic `[best_models]` from ztools config if present.
+    #[must_use]
     pub fn with_ztools_best_models(mut self) -> Self {
         let candidates = [
             dirs::home_dir().map(|h| h.join(".config/ztools/config.toml")),
@@ -211,6 +212,7 @@ impl ZtoolsConfig {
     /// file, so a run behaves identically whether the file is present or not —
     /// the static binary still works standalone, and a checkout still edits
     /// prompts in exactly one place.
+    #[must_use]
     pub fn with_shared_prompts(self) -> Self {
         let candidates: Vec<std::path::PathBuf> = [
             dirs::home_dir().map(|h| h.join(".config/ztools/prompts.toml")),
@@ -232,8 +234,9 @@ impl ZtoolsConfig {
     /// it does not carry the key: a file that exists is the operator's answer,
     /// and falling through to the next one would silently prefer a stale copy
     /// over an intentionally minimal one.
+    #[must_use]
     pub fn with_shared_prompts_from(mut self, candidates: &[std::path::PathBuf]) -> Self {
-        for cand in candidates.iter() {
+        for cand in candidates {
             if cand.is_file() {
                 if let Ok(content) = std::fs::read_to_string(cand) {
                     if let Ok(val) = toml::from_str::<toml::Value>(&content) {

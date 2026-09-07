@@ -1,6 +1,6 @@
 //! Money primitives: parsing amounts out of prose and scoring them as grounded.
 //!
-//! Split out of taxes_grounded.rs for the 500-line production cap. Pure value
+//! Split out of `taxes_grounded.rs` for the 500-line production cap. Pure value
 //! transformers over numbers -- no I/O, no task knowledge.
 
 use regex::Regex;
@@ -23,6 +23,7 @@ static MONEY_RE: LazyLock<Regex> = LazyLock::new(|| {
     .unwrap()
 });
 
+#[must_use]
 pub fn cents(value: &Value) -> Option<f64> {
     match value {
         Value::Number(n) => n.as_f64().map(|f| (f * 100.0).round() / 100.0),
@@ -54,6 +55,7 @@ pub fn prose_amounts(prose: &str) -> Vec<f64> {
     found
 }
 
+#[must_use]
 pub fn known_set(known_amounts: &[Value]) -> HashSet<i64> {
     let mut out = HashSet::new();
     for val in known_amounts {
@@ -64,10 +66,11 @@ pub fn known_set(known_amounts: &[Value]) -> HashSet<i64> {
     out
 }
 
+#[must_use]
 pub fn score_prose_amounts(prose: &str, known: &HashSet<i64>, weight: i64) -> (i64, String) {
     let amounts = prose_amounts(prose);
     if amounts.is_empty() {
-        return (weight, format!("prose_amounts=0/0 ({}/{})", weight, weight));
+        return (weight, format!("prose_amounts=0/0 ({weight}/{weight})"));
     }
     let grounded = amounts
         .iter()
@@ -86,6 +89,7 @@ pub fn score_prose_amounts(prose: &str, known: &HashSet<i64>, weight: i64) -> (i
     )
 }
 
+#[must_use]
 pub fn traceable_sums(values: &[f64]) -> HashSet<i64> {
     let mut sums = HashSet::new();
     if values.is_empty() {

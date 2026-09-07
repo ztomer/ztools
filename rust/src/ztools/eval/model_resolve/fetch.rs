@@ -1,6 +1,6 @@
 //! Fetching the live roster from the server and dropping ghost entries.
 //!
-//! Split out of model_resolve.rs for the 500-line cap.
+//! Split out of `model_resolve.rs` for the 500-line cap.
 
 use std::time::Duration;
 
@@ -31,6 +31,7 @@ pub(super) fn drop_uncorroborated(entries: Vec<RosterEntry>) -> Vec<RosterEntry>
 /// `[]` is deliberately indistinguishable from "server down": both mean we have
 /// no evidence about what is installed, and callers must treat no-evidence as
 /// "change nothing" rather than as "nothing is installed".
+#[must_use]
 pub fn fetch_roster(host: &str, port: u16) -> Vec<RosterEntry> {
     let url = if host.contains("://") {
         format!("{}{API_TAGS}", host.trim_end_matches('/'))

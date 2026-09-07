@@ -5,6 +5,7 @@
 //! failure mode -- a raw `{date_range}` reaching the model) stays VISIBLE in
 //! the prompt instead of vanishing behind a format exception.
 
+#[must_use]
 pub fn render(template: &str, fields: &[(&str, &str)]) -> String {
     let mut out = template.to_string();
     for (key, value) in fields {
@@ -22,10 +23,12 @@ Given this weather forecast, summarize what to expect for the weekend in
 Output only the summary, nothing else.";
 
 /// The phase chain used to NARROW at every step: extract asked for dates, draft
-/// asked only for "name, location, description", and refine only for
-/// "name + description". So the dates were discarded two phases before the schema
-/// that wanted them, and every date column rendered blank. Each phase now carries
-/// the same fields through verbatim -- see class C2c.
+/// asked only for "name, location, description", and refine only for "name +
+/// description".
+///
+/// So the dates were discarded two phases before the schema that wanted them,
+/// and every date column rendered blank. Each phase now carries the same fields
+/// through verbatim -- see class C2c.
 pub const CARRY_FIELDS: &str = "Carry these fields through EXACTLY as they appear in the input,
 never rewritten or dropped: DATES, PRICE, AGES, LOCATION. If the input does not
 state one, write \"unknown\" for it -- never guess.
@@ -115,12 +118,13 @@ Carry DATES, PRICE, AGES and LOCATION through unchanged from the input. Merging
 two entries keeps the more specific value, never \"unknown\" over a real one.";
 
 /// Class C4 (MANDATED-PLACEHOLDER) + C2b (DATE-DROPPED-AT-THE-LLM-BOUNDARY).
+///
 /// This prompt used to ORDER the model to emit "$20-30 per child or free" and
 /// "2-3 hours" on every row and close with "Never leave any field empty" -- which
 /// is what turned "unknown" into a fabricated constant the report then rendered as
 /// fact. It also had no date field at all, so an event's real dates were
 /// structurally impossible to carry. Both are fixed here: unknown is now an
-/// explicit empty string, and start_date/end_date are first-class.
+/// explicit empty string, and `start_date/end_date` are first-class.
 pub const PHASE_STRUCTURE_TRANSIENT_SYSTEM: &str = "\
 Output JSON now. Use EXACT schema:
 {\"transient_events\": [{\"name\": \"str\", \"location\": \"str\",

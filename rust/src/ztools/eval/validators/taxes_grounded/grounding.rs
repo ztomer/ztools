@@ -1,6 +1,6 @@
 //! Loading a task's grounding snapshot and unwrapping a model's raw output.
 //!
-//! Split out of taxes_grounded.rs for the 500-line production cap. The only
+//! Split out of `taxes_grounded.rs` for the 500-line production cap. The only
 //! part of this validator that touches the filesystem.
 
 use serde_json::Value;
@@ -8,18 +8,17 @@ use std::path::{Path, PathBuf};
 
 pub(super) fn load_grounding(task_name: &str) -> Value {
     let manifest = env!("CARGO_MANIFEST_DIR");
-    let candidate = Path::new(manifest)
-        .parent()
-        .map(|p| {
-            p.join("eval_tasks/data/taxes")
-                .join(format!("taxes_{}.sanitized.json", task_name))
-        })
-        .unwrap_or_else(|| {
+    let candidate = Path::new(manifest).parent().map_or_else(
+        || {
             PathBuf::from(format!(
-                "eval_tasks/data/taxes/taxes_{}.sanitized.json",
-                task_name
+                "eval_tasks/data/taxes/taxes_{task_name}.sanitized.json"
             ))
-        });
+        },
+        |p| {
+            p.join("eval_tasks/data/taxes")
+                .join(format!("taxes_{task_name}.sanitized.json"))
+        },
+    );
 
     if let Ok(content) = std::fs::read_to_string(&candidate) {
         if let Ok(val) = serde_json::from_str::<Value>(&content) {

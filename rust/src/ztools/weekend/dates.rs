@@ -45,6 +45,7 @@ fn push_date(found: &mut Vec<NaiveDate>, year: i32, month: u32, day: u32) {
 /// Ported from `lib/dates.py` so the enforcer and any future in-window
 /// prioritiser cannot drift apart (they already did once: the enforcer read
 /// three-letter stems while the prioritiser matched only full month names).
+#[must_use]
 pub fn find_dates_in(value: &str, year: i32) -> Vec<NaiveDate> {
     let mut found = Vec::new();
     if value.is_empty() {
@@ -130,6 +131,7 @@ pub fn find_dates_in(value: &str, year: i32) -> Vec<NaiveDate> {
 
 /// First explicit date in `value`, or None. Shared with the checker so the
 /// enforcer and the candidate prioritiser cannot drift apart.
+#[must_use]
 pub fn parse_any_date(value: &str, year: i32) -> Option<NaiveDate> {
     find_dates_in(value, year).into_iter().next()
 }

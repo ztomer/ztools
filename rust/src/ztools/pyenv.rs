@@ -53,6 +53,7 @@ impl std::error::Error for PyEnvError {}
 /// that needs no code change. Absolute paths come before the `PATH` lookup
 /// precisely because the `PATH` we inherit is the thing that cannot be trusted;
 /// bare `python3` stays last so a login shell that has everything still works.
+#[must_use]
 pub fn candidates() -> Vec<String> {
     let mut out = Vec::new();
     if let Ok(explicit) = std::env::var("ZTOOLS_PYTHON") {
@@ -100,9 +101,11 @@ fn probe_imports(program: &str, required: &[&str]) -> Result<(), String> {
     }
 }
 
-/// Resolve against an explicit candidate list and probe. The production entry
-/// points call this with [`candidates`] and [`probe_imports`]; tests call it
-/// with their own so a machine's real installs never decide a test's outcome.
+/// Resolve against an explicit candidate list and probe.
+///
+/// The production entry points call this with [`candidates`] and
+/// [`probe_imports`]; tests call it with their own so a machine's real installs
+/// never decide a test's outcome.
 pub fn resolve_with<P>(
     required: &[&str],
     candidates: &[String],
@@ -119,7 +122,10 @@ where
         }
     }
     Err(PyEnvError {
-        required: required.iter().map(|s| s.to_string()).collect(),
+        required: required
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect(),
         rejected,
     })
 }
@@ -149,6 +155,7 @@ pub fn resolve(required: &[&str]) -> Result<String, PyEnvError> {
 /// because an interpreter and the `PYTHONPATH` it needs are one decision — the
 /// probe above has to see the same module search path the real run will, or it
 /// would verify an interpreter that then fails on the shipped modules.
+#[must_use]
 pub fn reference_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {

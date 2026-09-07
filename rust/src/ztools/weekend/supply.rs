@@ -28,6 +28,7 @@ pub const IN_WINDOW_MARK: &str = "[THIS WEEKEND]";
 /// Uses the same scanner the report checkers use, so a candidate this floats
 /// cannot be one the checker would later call out-of-window on the same
 /// evidence.
+#[must_use]
 pub fn mentions_window(text: &str, start: NaiveDate, end: NaiveDate) -> bool {
     find_dates_in(text, start.year())
         .iter()
@@ -42,6 +43,7 @@ pub fn mentions_window(text: &str, start: NaiveDate, end: NaiveDate) -> bool {
 /// Returns the corpus unchanged when nothing matches: a corpus with no dated
 /// candidates is a real situation (evergreen venue listings), and inventing a
 /// marker for it would tell the model something untrue.
+#[must_use]
 pub fn prioritise_in_window(corpus: &str, start: NaiveDate, end: NaiveDate) -> String {
     let mut marked = Vec::new();
     let mut rest = Vec::new();
@@ -64,6 +66,7 @@ pub fn prioritise_in_window(corpus: &str, start: NaiveDate, end: NaiveDate) -> S
 /// Reported to the operator, because it is the number that explains a thin
 /// plan: 20 candidates of which 0 are in-window is a SUPPLY problem, and it
 /// looks identical to a model problem unless someone counts.
+#[must_use]
 pub fn in_window_count(corpus: &str, start: NaiveDate, end: NaiveDate) -> usize {
     corpus
         .lines()

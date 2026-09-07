@@ -1,11 +1,12 @@
 //! Item shape: finding the list in a response and judging one entry.
 //!
-//! Split out of json_validator.rs for the 500-line production cap.
+//! Split out of `json_validator.rs` for the 500-line production cap.
 
 use serde_json::Value;
 
 use super::weights::DETAIL_FIELDS;
 
+#[must_use]
 pub fn extract_list_from_dict(data: &Value) -> Vec<Value> {
     if let Value::Object(map) = data {
         let preferred_keys = [
@@ -49,6 +50,7 @@ pub fn extract_list_from_dict(data: &Value) -> Vec<Value> {
     Vec::new()
 }
 
+#[must_use]
 pub fn is_valid_list_item(item: &Value) -> bool {
     if let Value::String(s) = item {
         return !s.trim().is_empty();
@@ -59,13 +61,13 @@ pub fn is_valid_list_item(item: &Value) -> bool {
         ];
         return valid_fields.iter().any(|f| {
             map.get(*f)
-                .map(|v| !v.to_string().trim_matches('"').trim().is_empty())
-                .unwrap_or(false)
+                .is_some_and(|v| !v.to_string().trim_matches('"').trim().is_empty())
         });
     }
     false
 }
 
+#[must_use]
 pub fn has_item_details(item: &Value) -> bool {
     let map = match item.as_object() {
         Some(m) => m,
@@ -74,8 +76,7 @@ pub fn has_item_details(item: &Value) -> bool {
     let name_fields = ["name", "event", "title", "activity", "place", "path"];
     let has_name = name_fields.iter().any(|f| {
         map.get(*f)
-            .map(|v| !v.to_string().trim_matches('"').trim().is_empty())
-            .unwrap_or(false)
+            .is_some_and(|v| !v.to_string().trim_matches('"').trim().is_empty())
     });
     if !has_name {
         return map.len() >= 2;

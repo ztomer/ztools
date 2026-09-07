@@ -30,7 +30,7 @@ const TIMEOUT_SAFETY_FACTOR: f64 = 1.5;
 pub const MAX_CLEAN_SWAP_GB: f64 = 8.0;
 pub const MAX_CLEAN_COMPRESSOR_GB: f64 = 15.0;
 const BYTES_PER_GB: f64 = 1024.0 * 1024.0 * 1024.0;
-/// macOS page size on arm64/x86_64.
+/// macOS page size on `arm64/x86_64`.
 const PAGE_BYTES: f64 = 16384.0;
 
 fn env_u64(key: &str, default: u64) -> u64 {
@@ -40,15 +40,17 @@ fn env_u64(key: &str, default: u64) -> u64 {
         .unwrap_or(default)
 }
 
+#[must_use]
 pub fn default_eval_timeout() -> u64 {
     env_u64("EVAL_DEFAULT_TIMEOUT", 900)
 }
 
+#[must_use]
 pub fn max_eval_timeout() -> u64 {
     env_u64("EVAL_MAX_TIMEOUT", 7200)
 }
 
-/// Where eval_signals.json lives. Env-overridable so tests can point it at tmp.
+/// Where `eval_signals.json` lives. Env-overridable so tests can point it at tmp.
 ///
 /// Anchored on the CHECKOUT that built the binary (`CARGO_MANIFEST_DIR/../conf`)
 /// rather than the process working directory: a sweep launched from anywhere
@@ -56,6 +58,7 @@ pub fn max_eval_timeout() -> u64 {
 /// in whatever directory it started from, silently losing every recorded
 /// capability and forking the store. The home fallback covers an installed
 /// binary with no checkout nearby.
+#[must_use]
 pub fn signals_path() -> PathBuf {
     let dir = if let Ok(d) = std::env::var("EVAL_SIGNALS_DIR") {
         d
@@ -76,6 +79,7 @@ pub fn signals_path() -> PathBuf {
 
 pub type SignalStore = BTreeMap<String, Value>;
 
+#[must_use]
 pub fn load_signals() -> SignalStore {
     let path = signals_path();
     match std::fs::read_to_string(&path) {
@@ -93,8 +97,9 @@ pub fn save_signals(signals: &SignalStore) {
     }
 }
 
-/// (swap_used_gb, compressor_gb), or None when they cannot be read -- which
+/// (`swap_used_gb`, `compressor_gb`), or None when they cannot be read -- which
 /// every caller must treat as "cannot tell", never as "fine".
+#[must_use]
 pub fn memory_pressure() -> Option<(f64, f64)> {
     let swap_gb = swap_used_gb()?;
     let compressor_gb = compressor_gb()?;
@@ -151,6 +156,7 @@ fn compressor_gb() -> Option<f64> {
 
 /// Is the machine quiet enough for a timing to mean anything? False also when
 /// it cannot tell -- an unverifiable sample must not masquerade as clean.
+#[must_use]
 pub fn machine_is_uncontended() -> bool {
     if foreign_holder().is_some() {
         return false;
@@ -183,7 +189,10 @@ pub fn record_capability_sample(signals: &mut SignalStore, model: &str, key: &st
         .get(format!("{key}_samples").as_str())
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
-    migrate_sample_history(&mut history, caps_obj.get(key).and_then(|v| v.as_f64()));
+    migrate_sample_history(
+        &mut history,
+        caps_obj.get(key).and_then(serde_json::Value::as_f64),
+    );
     let clean = machine_is_uncontended();
     let estimate = crate::ztools::eval::samples::add_sample(&mut history, value, clean);
     caps_obj.insert(
@@ -206,10 +215,12 @@ fn caps_clean_estimate(signals: &SignalStore, model: &str, key: &str) -> Option<
 }
 
 /// How long this model plausibly needs: cold start + ingest + generate, from
-/// CLEAN capability samples only. Every term measured, or no answer at all --
-/// filling a missing term with a plausible constant is how a guess ends up
-/// wearing a measurement's authority. Returns 0 when unmeasurable, and the
-/// caller keeps its documented floor.
+/// CLEAN capability samples only.
+///
+/// Every term measured, or no answer at all -- filling a missing term with a
+/// plausible constant is how a guess ends up wearing a measurement's authority.
+/// Returns 0 when unmeasurable, and the caller keeps its documented floor.
+#[must_use]
 pub fn derived_timeout(model: &str, prompt_chars: usize, max_tokens: u32) -> u64 {
     let signals = load_signals();
     let (Some(prefill), Some(decode), Some(cold_start)) = (
@@ -219,7 +230,7 @@ pub fn derived_timeout(model: &str, prompt_chars: usize, max_tokens: u32) -> u64
     ) else {
         return 0;
     };
-    let seconds = cold_start + prompt_chars as f64 / prefill + max_tokens as f64 / decode;
+    let seconds = cold_start + prompt_chars as f64 / prefill + f64::from(max_tokens) / decode;
     ((seconds * TIMEOUT_SAFETY_FACTOR) as u64).min(max_eval_timeout())
 }
 
@@ -227,6 +238,7 @@ pub fn derived_timeout(model: &str, prompt_chars: usize, max_tokens: u32) -> u64
 /// per-model/task value, the per-task CONFIGURED timeout from
 /// `conf/config.toml [timeouts]` (fallback 600, `lib/llm/constants.py
 /// DEFAULT_TIMEOUT`), the documented floor, and the derived estimate.
+#[must_use]
 pub fn effective_timeout(
     model: &str,
     task_name: &str,
@@ -239,7 +251,7 @@ pub fn effective_timeout(
         .get(model)
         .and_then(|m| m.get(task_name))
         .and_then(|t| t.get("timeout"))
-        .and_then(|v| v.as_u64())
+        .and_then(serde_json::Value::as_u64)
         .unwrap_or(0);
     let configured =
         std::fs::read_to_string(crate::ztools::eval::budgets::conf_root().join("config.toml"))
@@ -248,7 +260,7 @@ pub fn effective_timeout(
             .and_then(|cfg| {
                 cfg.get("timeouts")
                     .and_then(|t| t.get(task_name))
-                    .and_then(|v| v.as_integer())
+                    .and_then(toml::Value::as_integer)
                     .filter(|v| *v > 0)
                     .map(|v| v as u64)
             })
@@ -284,16 +296,19 @@ pub fn record_signal(
         .or_insert_with(|| Value::Object(Default::default()));
     let task = per_task.as_object_mut().expect("task entry is an object");
 
-    let samples = task.get("samples").and_then(|v| v.as_u64()).unwrap_or(0);
+    let samples = task
+        .get("samples")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
     let old_p95 = task
         .get("p95_latency")
-        .and_then(|v| v.as_f64())
+        .and_then(serde_json::Value::as_f64)
         .unwrap_or(0.0);
 
     let mut p95 = old_p95;
     if time_taken > 0.0 {
         p95 = if old_p95 > 0.0 {
-            (time_taken).max(old_p95 * 0.95 + time_taken * 0.05)
+            (time_taken).max(time_taken.mul_add(0.05, old_p95 * 0.95))
         } else {
             time_taken
         };
@@ -303,7 +318,7 @@ pub fn record_signal(
     task.insert("samples".to_string(), serde_json::json!(samples + 1));
     let retries = task
         .get("total_retries")
-        .and_then(|v| v.as_u64())
+        .and_then(serde_json::Value::as_u64)
         .unwrap_or(0);
     task.insert(
         "total_retries".to_string(),
@@ -311,7 +326,7 @@ pub fn record_signal(
     );
     let parse_failures = task
         .get("parse_failures")
-        .and_then(|v| v.as_u64())
+        .and_then(serde_json::Value::as_u64)
         .unwrap_or(0);
     task.insert(
         "parse_failures".to_string(),
@@ -320,7 +335,7 @@ pub fn record_signal(
 
     if p95 > 0.0 {
         let new_timeout = default_eval_timeout().max((p95 * 1.5) as u64);
-        if task.get("timeout").and_then(|v| v.as_u64()) != Some(new_timeout) {
+        if task.get("timeout").and_then(serde_json::Value::as_u64) != Some(new_timeout) {
             task.insert("timeout".to_string(), serde_json::json!(new_timeout));
         }
     }

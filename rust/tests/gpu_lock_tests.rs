@@ -16,12 +16,12 @@ use ztools::eval::gpu_lock::{
     DEFAULT_LOCK_DIR, OWNER_ENV,
 };
 
-/// A pid no process can have: above any sane pid_max, below i32::MAX so the
+/// A pid no process can have: above any sane `pid_max`, below `i32::MAX` so the
 /// `kill(pid as i32, 0)` cast stays positive.
 const IMPOSSIBLE_PID: u32 = 2_000_000_000;
 
 /// Restore an env var (or its absence) when the test ends -- a leaked
-/// ZTOOLS_GPU_LOCK_OWNER would make later inherits/failures in THIS binary,
+/// `ZTOOLS_GPU_LOCK_OWNER` would make later inherits/failures in THIS binary,
 /// and env vars cross into nothing else, but serial tests share the process.
 struct EnvGuard {
     name: &'static str,

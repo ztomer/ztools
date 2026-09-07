@@ -10,7 +10,7 @@ use super::support::{detailed_items, SRC_FULL, SRC_LOW, SRC_MED, SRC_NONE};
 fn test_validate_detailed_json_clean_full_score() {
     let data = json!({"fixed_activities": detailed_items()});
     // structure 15 + count-good 15 + quality 40 + unique bonus 25, no source given
-    assert_eq!(validate_detailed_json(&data, ""), (95, "".to_string()));
+    assert_eq!(validate_detailed_json(&data, ""), (95, String::new()));
 }
 
 #[test]
@@ -22,7 +22,7 @@ fn test_validate_detailed_json_detail_bands() {
     let data = json!({"fixed_activities": items});
     assert_eq!(
         validate_detailed_json(&data, ""),
-        (15 + 10 + 32 + 25, "".to_string())
+        (15 + 10 + 32 + 25, String::new())
     );
 
     // some-but-not-most band (3/6 < 0.8): no quality points + explicit failure
@@ -75,12 +75,12 @@ fn test_validate_detailed_json_all_four_source_caps() {
     // ratio 0.625: raw 110 capped at 85
     assert_eq!(
         validate_detailed_json(&data, SRC_MED),
-        (MAX_SCORE_MED_SOURCE, "".to_string())
+        (MAX_SCORE_MED_SOURCE, String::new())
     );
     // ratio 0.25: raw 102 capped at 70
     assert_eq!(
         validate_detailed_json(&data, SRC_LOW),
-        (MAX_SCORE_LOW_SOURCE, "".to_string())
+        (MAX_SCORE_LOW_SOURCE, String::new())
     );
     // ratio 0.0: raw 95 capped at 50
     let (score, reason) = validate_detailed_json(&data, SRC_NONE);
@@ -122,7 +122,7 @@ fn test_validate_detailed_json_item_count_caps_do_not_lower_good_scores() {
     let some: Vec<Value> = all.iter().take(6).cloned().collect();
     assert_eq!(
         validate_detailed_json(&json!({"fixed_activities": some}), ""),
-        (90, "".to_string())
+        (90, String::new())
     );
 }
 

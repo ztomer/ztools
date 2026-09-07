@@ -5,6 +5,18 @@ edition = "2021"
 description = "Native Rust port of ztools: Twitter summarizer, weekend planner, image renamer, model eval."
 license = "MIT"
 
+[lints.clippy]
+# Adopted 2026-09-07. This crate had no clippy policy at all, so `pedantic` and
+# `nursery` had never run against it -- 865 findings nothing reported. Fixed
+# rather than baselined; the gate runs at `-D warnings`, so this is a ratchet.
+#
+# NOT included, deliberately: `unwrap_used` / `expect_used` / `panic`. Those are
+# `restriction` rather than `pedantic`, and turning them on here is a
+# correctness campaign with its own review, not a lint sweep.
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+
 [dependencies]
 anyhow = "1"
 base64 = "0.22"

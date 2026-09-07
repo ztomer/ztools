@@ -5,7 +5,7 @@
 use regex::Regex;
 
 /// A description that is essentially the file's own name re-spaced ("config
-/// loader" for config_loader.py) is filename inference, not file reading, which
+/// loader" for `config_loader.py`) is filename inference, not file reading, which
 /// is precisely what this task exists to detect.
 const GENERIC_DESC_RE: &str = r"^(a|an|the)?\s*(python|shell|bash|config(uration)?|test|helper|utility|source)?\s*(script|file|module|class|program|code)\.?$";
 
@@ -71,6 +71,7 @@ fn has_text_headers(text: &str) -> bool {
 /// Input is the model's raw output text; it is parsed the way the Python
 /// caller hands it over: an already-JSON list/dict goes through the structured
 /// branches, anything else through the header-heuristic branch.
+#[must_use]
 pub fn validate_file_summary(raw: &str) -> (u8, String) {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -160,7 +161,7 @@ fn validate_parsed(map: serde_json::Map<String, serde_json::Value>) -> (u8, Stri
     let num_files = map.len();
     let mut detailed_count = 0usize;
 
-    for (filepath, summary) in map.iter() {
+    for (filepath, summary) in &map {
         if filepath.is_empty() {
             continue;
         }

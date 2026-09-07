@@ -9,7 +9,7 @@
 use super::*;
 
 fn paths(items: &[&str]) -> Vec<String> {
-    items.iter().map(|s| s.to_string()).collect()
+    items.iter().map(std::string::ToString::to_string).collect()
 }
 
 #[test]

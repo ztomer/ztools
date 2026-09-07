@@ -25,6 +25,7 @@ const VLM_QUERY_TIMEOUT_SECS: u64 = 60;
 /// The word-extraction post-processing the text path applies to a raw model
 /// reply (Python `query_llm_for_filename`): strip the conversational prefix,
 /// keep `[a-z0-9]+` words, join with `_`, truncate on a word boundary.
+#[must_use]
 pub fn words_to_filename(content: &str, max_len: usize, max_words: usize) -> Option<String> {
     // Python lowercases BEFORE extracting words: "[a-z0-9]+" over lowercased text.
     let content = strip_instruction_prefix(&content.to_lowercase());
@@ -41,6 +42,7 @@ pub fn words_to_filename(content: &str, max_len: usize, max_words: usize) -> Opt
 }
 
 /// Cut at the last `_` before `limit` so names never end mid-word.
+#[must_use]
 pub fn truncate_on_word_boundary(name: &str, limit: usize) -> String {
     if name.len() <= limit {
         return name.to_string();
@@ -96,7 +98,7 @@ pub fn query_llm_filename(
 
 /// Ask a vision model to describe the image and return a filename candidate.
 ///
-/// Mirrors `query_vlm_for_filename`: base64 data URI in OpenAI content parts,
+/// Mirrors `query_vlm_for_filename`: base64 data URI in `OpenAI` content parts,
 /// then the same instruction-prefix strip. The caller is responsible for
 /// cleaning and generic-name rejection, exactly as the Python CLI does.
 pub fn query_vlm_for_filename(
@@ -150,6 +152,7 @@ pub fn query_vlm_for_filename(
 ///
 /// Returns `None` when the result is generic filler or too short to be a name
 /// (Python: "Generic VLM result" / "Too short").
+#[must_use]
 pub fn acceptable_name(raw: &str, max_len: usize) -> Option<String> {
     let cleaned = clean_filename(raw, max_len);
     if is_generic_name(&cleaned) || cleaned.len() < 4 {

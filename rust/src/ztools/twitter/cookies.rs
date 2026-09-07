@@ -36,6 +36,7 @@ impl Cookie {
 }
 
 /// Find potential Firefox profile cookie databases.
+#[must_use]
 pub fn find_firefox_profile_dbs() -> Vec<PathBuf> {
     dirs::home_dir()
         .map(|home| find_profile_dbs_under(&home))
@@ -46,6 +47,7 @@ pub fn find_firefox_profile_dbs() -> Vec<PathBuf> {
 ///
 /// Narrow seam over [`find_firefox_profile_dbs`] so the discovery logic is
 /// testable against a fixture directory instead of the real user home.
+#[must_use]
 pub fn find_profile_dbs_under(home: &Path) -> Vec<PathBuf> {
     let mut dbs = Vec::new();
     let profiles_dir = home
@@ -56,7 +58,7 @@ pub fn find_profile_dbs_under(home: &Path) -> Vec<PathBuf> {
 
     if profiles_dir.is_dir() {
         if let Ok(entries) = std::fs::read_dir(profiles_dir) {
-            for entry in entries.filter_map(|e| e.ok()) {
+            for entry in entries.filter_map(std::result::Result::ok) {
                 let cookie_path = entry.path().join("cookies.sqlite");
                 if cookie_path.is_file() {
                     dbs.push(cookie_path);
@@ -68,6 +70,7 @@ pub fn find_profile_dbs_under(home: &Path) -> Vec<PathBuf> {
 }
 
 /// Check if a cookie collection contains a valid logged-in session token.
+#[must_use]
 pub fn has_session_cookie(cookies: &[Cookie]) -> bool {
     cookies
         .iter()

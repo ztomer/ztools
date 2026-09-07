@@ -8,7 +8,7 @@
 //! which produced a confident wrong number. The guards below each encode one:
 //! warm the model FIRST (an unwarmed probe times 27GB of weights loading as
 //! throughput), lead the timed prompt with a NONCE (identical filler rides the
-//! server's prefix cache and measured 130x too fast), use max_tokens=1 for the
+//! server's prefix cache and measured 130x too fast), use `max_tokens=1` for the
 //! timed call only (whole-call timing blames prefill for decode), and discard
 //! any rate above [`MAX_PLAUSIBLE_PREFILL_RATE`] (a mock or cache hit returning
 //! in microseconds is not a measurement).
@@ -21,7 +21,9 @@ use crate::ztools::eval::transport::{call, RequestSpec};
 
 pub const PREFILL_PROBE_CHARS: usize = 20_000;
 /// Sits above every genuine reading measured on the host (fastest real model
-/// was 23,063 chars/sec) and below the slowest known prefix-cache hit (65,000+).
+/// was 23,063 chars/sec) and below the slowest known prefix-cache hit
+/// (65,000+).
+///
 /// It only ever DISCARDS a measurement -- it never invents one.
 pub const MAX_PLAUSIBLE_PREFILL_RATE: f64 = 40_000.0;
 const WARMUP_TOKENS: u32 = 64;
@@ -49,14 +51,14 @@ fn spec<'a>(
     }
 }
 
-/// Characters per second this model ingests, measured with max_tokens=1.
+/// Characters per second this model ingests, measured with `max_tokens=1`.
 ///
 /// THREE calls, one quantity each -- sharing a call between two measurements is
 /// how every previous version got a wrong number:
-/// 1. LOAD (max_tokens=1): pays cold start; timed as cold_start_seconds.
-/// 2. DECODE (max_tokens=WARMUP_TOKENS): weights resident, tiny prompt, so
-///    elapsed time is generation -> decode_tokens_per_sec.
-/// 3. PREFILL (nonce-led filler, max_tokens=1): isolated ingestion rate.
+/// 1. LOAD (`max_tokens=1)`: pays cold start; timed as `cold_start_seconds`.
+/// 2. DECODE (`max_tokens=WARMUP_TOKENS)`: weights resident, tiny prompt, so
+///    elapsed time is generation -> `decode_tokens_per_sec`.
+/// 3. PREFILL (nonce-led filler, `max_tokens=1)`: isolated ingestion rate.
 ///
 /// Returns None when the probe cannot run, so "not measured" stays distinct
 /// from a measurement.
@@ -85,7 +87,7 @@ pub fn measure_prefill_rate(
             signals,
             model,
             "decode_tokens_per_sec",
-            WARMUP_TOKENS as f64 / decode_elapsed,
+            f64::from(WARMUP_TOKENS) / decode_elapsed,
         );
     }
 
@@ -129,7 +131,7 @@ pub fn record_prefill_rate(signals: &mut SignalStore, model: &str, rate: Option<
     if let Some(obj) = caps_obj.as_object_mut() {
         let n = obj
             .get("prefill_samples")
-            .and_then(|v| v.as_u64())
+            .and_then(serde_json::Value::as_u64)
             .unwrap_or(0);
         obj.insert("prefill_samples".to_string(), serde_json::json!(n + 1));
     }
@@ -141,8 +143,7 @@ fn uuid_hex() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_nanos());
     let pid = std::process::id();
     format!("{nanos:032x}{pid:08x}")
 }

@@ -31,6 +31,7 @@ pub struct Tweet {
 }
 
 /// Deduplicate tweets by normalized text content and RT signatures.
+#[must_use]
 pub fn deduplicate_tweets(tweets: &[Tweet]) -> Vec<Tweet> {
     let mut seen_sigs = HashSet::new();
     let mut deduped = Vec::new();
@@ -76,6 +77,7 @@ pub fn deduplicate_tweets(tweets: &[Tweet]) -> Vec<Tweet> {
 
 /// Build executive summary prompt for LLM. `instructions` is the shared
 /// instruction block (canonical text: `conf/prompts.toml` `[twitter.summarize]`).
+#[must_use]
 pub fn build_prompt(tweets: &[Tweet], max_chars: usize, instructions: &str) -> (String, usize) {
     let deduped = deduplicate_tweets(tweets);
     let mut lines = Vec::new();
@@ -90,7 +92,7 @@ pub fn build_prompt(tweets: &[Tweet], max_chars: usize, instructions: &str) -> (
             ));
         }
         if let Some(ref r) = t.reply_to {
-            prefix_parts.push(format!("-> @{}", r));
+            prefix_parts.push(format!("-> @{r}"));
         }
         let line = format!("[{}]: {}", prefix_parts.join(" | "), t.text.trim());
         if used + line.len() + 1 > max_chars {
@@ -104,8 +106,7 @@ pub fn build_prompt(tweets: &[Tweet], max_chars: usize, instructions: &str) -> (
 
     let prompt = format!(
         "{instructions}\n\n\
-        <timeline>\n{}\n</timeline>",
-        timeline
+        <timeline>\n{timeline}\n</timeline>"
     );
 
     (prompt, lines.len())
@@ -228,10 +229,7 @@ pub fn run_summary(
         config.twitter_prompt_max_chars,
         &config.twitter_summarize_prompt,
     );
-    eprintln!(
-        "· Summarizing {} tweets with {} on {}...",
-        processed, model, base_url
-    );
+    eprintln!("· Summarizing {processed} tweets with {model} on {base_url}...");
     let summary_body = call_osaurus(base_url, model, &prompt, config)?;
 
     let now = Local::now();
@@ -279,6 +277,7 @@ fn summary_section_for(summary_body: &str) -> String {
 }
 
 /// Validate summary formatting quality (headers, bullet count, length).
+#[must_use]
 pub fn check_summary_quality(summary: &str) -> (Vec<String>, bool) {
     if summary.trim().is_empty() {
         return (vec!["Summary is empty".to_string()], true);
@@ -302,10 +301,10 @@ pub fn check_summary_quality(summary: &str) -> (Vec<String>, bool) {
         warnings.push("No ## headers".to_string());
     }
     if bullet_count < 3 {
-        warnings.push(format!("Only {} bullet points", bullet_count));
+        warnings.push(format!("Only {bullet_count} bullet points"));
     }
     if char_count < 100 {
-        warnings.push(format!("Very short ({} chars)", char_count));
+        warnings.push(format!("Very short ({char_count} chars)"));
     }
 
     let critical = header_count == 0 && bullet_count == 0;

@@ -11,9 +11,11 @@
 //! by default on the production path (`record_signals`); prompts are fixtures,
 //! so nothing saved here is user data.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 /// Enough to diagnose a scorer; short of a model that emits a novel of reasoning.
+#[must_use]
 pub fn max_saved_chars() -> usize {
     std::env::var("EVAL_MAX_SAVED_OUTPUT")
         .ok()
@@ -22,6 +24,7 @@ pub fn max_saved_chars() -> usize {
 }
 
 /// On unless explicitly disabled, because the failure mode is silent loss.
+#[must_use]
 pub fn outputs_enabled() -> bool {
     match std::env::var("EVAL_SAVE_OUTPUTS") {
         Ok(v) => !matches!(v.as_str(), "0" | "false" | "no"),
@@ -30,6 +33,7 @@ pub fn outputs_enabled() -> bool {
 }
 
 /// Where saved outputs live. Overridable so tests never touch the real one.
+#[must_use]
 pub fn outputs_dir(eval_dir: Option<&Path>) -> PathBuf {
     if let Ok(override_dir) = std::env::var("EVAL_OUTPUT_DIR") {
         return PathBuf::from(override_dir);
@@ -42,6 +46,7 @@ pub fn outputs_dir(eval_dir: Option<&Path>) -> PathBuf {
 }
 
 /// Model identifiers carry dots and slashes; keep them out of the path.
+#[must_use]
 pub fn safe(name: &str) -> String {
     let cleaned: String = name
         .chars()
@@ -79,6 +84,12 @@ pub struct OutputRecord<'a> {
 /// Returns the path written, or None when saving is off or there was nothing
 /// to save. Never fails the run: losing an output is bad, but ending a
 /// ten-hour eval over a full disk would be worse.
+///
+/// Deliberately NOT `#[must_use]`, though `clippy::must_use_candidate` asks for
+/// it. The return is informational and the contract above says a lost output
+/// must not stop the run, so a caller that saves and moves on is doing the
+/// right thing; requiring it to acknowledge the path would be a lint telling
+/// the design it is wrong.
 pub fn save_output(record: &OutputRecord, eval_dir: Option<&Path>) -> Option<PathBuf> {
     if !outputs_enabled() {
         return None;
@@ -105,7 +116,7 @@ pub fn save_output(record: &OutputRecord, eval_dir: Option<&Path>) -> Option<Pat
     // Kept separate: for thinking models the visible answer is often short and
     // the reasoning is where a format failure is explained.
     if !reasoning.is_empty() {
-        header.push_str(&format!("reasoning_chars: {}\n", reasoning.chars().count()));
+        let _ = writeln!(header, "reasoning_chars: {}", reasoning.chars().count());
     }
     let mut text = format!("{header}---\n{}", &content[..content.len().min(max)]);
     if !reasoning.is_empty() {

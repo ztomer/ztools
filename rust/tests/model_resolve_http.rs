@@ -18,7 +18,7 @@ use ztools::eval::task_loader::{Check, EvalTask};
 /// A poisoned mutex must not kill a server thread: that turns one failed
 /// request into every subsequent connection hanging out its full timeout.
 fn take_lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 const MISSING_BODY: &str = r#"{"error":{"message":"Model 'gone-model' is not installed or registered with any provider."}}"#;
@@ -59,7 +59,7 @@ fn serve(
     let count = Arc::new(AtomicUsize::new(0));
     let posts: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
     let posts_clone = posts.clone();
-    let post_count = count.clone();
+    let post_count = count;
 
     let handle = thread::spawn(move || {
         for stream in listener.incoming() {

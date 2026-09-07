@@ -51,8 +51,8 @@ fn family_toml_exists(candidate: &str) -> bool {
 
 /// The conf/models/<family>.toml that serves an architecture, or None.
 ///
-/// Architectures carry version and variant suffixes ("<fam>3_5_moe",
-/// "<fam>4_unified", "<fam>_h") while the config files are named for the bare
+/// Architectures carry version and variant suffixes ("<fam>`3_5_moe`",
+/// "<fam>`4_unified`", "<fam>_h") while the config files are named for the bare
 /// family, so the two are reconciled by trimming one trailing segment at a
 /// time and taking the first name that has a file -- rather than by a
 /// hand-written architecture-to-family table, which would need editing every
@@ -79,7 +79,7 @@ fn config_family_for(architecture: &str) -> Option<String> {
     None
 }
 
-/// The architecture `ev` probed and wrote to eval_signals.json, or None.
+/// The architecture `ev` probed and wrote to `eval_signals.json`, or None.
 ///
 /// Read from DISK, never from the server: production paths run constantly and
 /// must not do network I/O.
@@ -95,11 +95,12 @@ fn recorded_architecture(model: &str) -> Option<String> {
 
 /// Which conf/models/<family>.toml drives this model's config.
 ///
-/// Prefers the architecture recorded in eval_signals (the NAME does not
+/// Prefers the architecture recorded in `eval_signals` (the NAME does not
 /// reliably encode it: vendors ship models under brand names sharing an
 /// architecture with a differently-named family). Falls back to name matching
 /// when nothing has been recorded, so this never depends on the eval having
 /// been run.
+#[must_use]
 pub fn config_family(model: &str) -> Option<String> {
     let _ = recorded_architecture;
     if let Some(architecture) = recorded_architecture(model) {
@@ -133,9 +134,9 @@ fn family_config(model: &str) -> Option<toml::Value> {
 /// `max_tokens`, overridden by its `[models."<id>"]` section when present.
 fn model_cap(model: &str) -> Option<u32> {
     let cfg = family_config(model)?;
-    let mut cap = cfg.get("max_tokens").and_then(|v| v.as_integer());
+    let mut cap = cfg.get("max_tokens").and_then(toml::Value::as_integer);
     if let Some(section) = cfg.get("models").and_then(|m| m.get(model)) {
-        if let Some(per_model) = section.get("max_tokens").and_then(|v| v.as_integer()) {
+        if let Some(per_model) = section.get("max_tokens").and_then(toml::Value::as_integer) {
             cap = Some(per_model);
         }
     }
@@ -148,16 +149,16 @@ fn model_cap(model: &str) -> Option<u32> {
 /// An unreadable or missing config degrades to the fallback budget rather than
 /// failing: the eval must still run, and 32000 is what the Python eval sends
 /// for untabled tasks with no per-model cap.
+#[must_use]
 pub fn max_tokens_for_task(task: &str, model: &str) -> u32 {
     let budget = parse(conf_root().join("config.toml"))
         .and_then(|cfg| {
             cfg.get("max_tokens")
                 .and_then(|t| t.get(task))
-                .and_then(|v| v.as_integer())
+                .and_then(toml::Value::as_integer)
         })
         .filter(|b| *b > 0)
-        .map(|b| b as u32)
-        .unwrap_or(DEFAULT_MAX_TOKENS);
+        .map_or(DEFAULT_MAX_TOKENS, |b| b as u32);
     match model_cap(model) {
         Some(cap) => budget.min(cap),
         None => budget,

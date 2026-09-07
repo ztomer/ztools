@@ -40,6 +40,7 @@ const PAGE_BYTES: f64 = 16384.0;
 /// On-disk bytes is what predicts fitting: qwen3.8-27b-4bit and -mxfp8 are both
 /// "27b" by name and occupy 15GB and 27GB respectively. Counts weight shards
 /// only; tokenizers and configs are noise at this scale.
+#[must_use]
 pub fn model_disk_bytes(model: &str) -> Option<u64> {
     let config = model_config_path(model)?;
     let directory = config.parent()?;
@@ -64,6 +65,7 @@ pub fn model_disk_bytes(model: &str) -> Option<u64> {
 /// Rounded UP: a model needs at least its weights plus room for activations
 /// and a KV cache, so the honest direction for a memory estimate is generous.
 /// Falls back to the name only for models with nothing on disk to measure.
+#[must_use]
 pub fn estimate_model_memory_gb(model: &str) -> u64 {
     if let Some(disk) = model_disk_bytes(model) {
         return ((disk as f64) / BYTES_PER_GB).ceil().max(1.0) as u64;
@@ -74,7 +76,7 @@ pub fn estimate_model_memory_gb(model: &str) -> u64 {
         lower[..b]
             .chars()
             .rev()
-            .take_while(|c| c.is_ascii_digit())
+            .take_while(char::is_ascii_digit)
             .collect::<String>()
     });
     if let Some(digits) = start {
@@ -109,7 +111,7 @@ fn vm_stat_pages(label: &str) -> Option<f64> {
 /// subtracts and therefore UNDERSTATES reclaimable memory: the safe direction
 /// for a gate whose failure mode is producing a wrong number.
 ///
-/// Returns Err rather than degrading when vm_stat cannot be read: "vm_stat is
+/// Returns Err rather than degrading when `vm_stat` cannot be read: "`vm_stat` is
 /// broken" must not become a number that looks fine and is simply wrong.
 pub fn reclaimable_available_gb() -> Result<f64, String> {
     let free = vm_stat_pages("Pages free")
@@ -132,6 +134,7 @@ pub fn reclaimable_available_gb() -> Result<f64, String> {
 
 /// Is the machine already paying for memory it does not have? None means
 /// "cannot tell", which is not evidence of thrashing either way.
+#[must_use]
 pub fn is_thrashing() -> Option<bool> {
     let (swap_gb, compressor_gb) = memory_pressure()?;
     Some(swap_gb > MAX_CLEAN_SWAP_GB || compressor_gb > MAX_CLEAN_COMPRESSOR_GB)
@@ -141,6 +144,7 @@ pub fn is_thrashing() -> Option<bool> {
 ///
 /// Both `available_gb` and `thrashing` are injectable so every branch is
 /// testable without a 28.8GB model or a deliberately wrecked machine.
+#[must_use]
 pub fn oversize_refusal(
     model_gb: f64,
     available_gb: Option<f64>,

@@ -7,6 +7,7 @@
 use std::path::PathBuf;
 
 /// Expand a leading `~` so paths can be written portably in config.
+#[must_use]
 pub fn expand_tilde(p: &str) -> PathBuf {
     match p.strip_prefix("~/") {
         Some(rest) => match dirs::home_dir() {

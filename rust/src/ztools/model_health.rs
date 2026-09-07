@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 
 pub const THRASHING_DECODE_TOKENS_PER_SEC: f64 = 1.0;
 
-/// Locate the directory for a given model name under MLXModels or HF cache.
+/// Locate the directory for a given model name under `MLXModels` or HF cache.
+#[must_use]
 pub fn find_model_dir(model_name: &str, base_dir: Option<&Path>) -> Option<PathBuf> {
     let root = if let Some(d) = base_dir {
         d.to_path_buf()
@@ -60,6 +61,7 @@ pub fn find_model_dir(model_name: &str, base_dir: Option<&Path>) -> Option<PathB
 }
 
 /// Inspect a model directory for packaging defects without loading weights.
+#[must_use]
 pub fn probe_model_dir_defects(dir: &Path) -> Vec<String> {
     let mut defects = Vec::new();
 
@@ -80,7 +82,7 @@ pub fn probe_model_dir_defects(dir: &Path) -> Vec<String> {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
                 let runtime_avail = json
                     .get("runtime_available")
-                    .and_then(|v| v.as_bool())
+                    .and_then(serde_json::Value::as_bool)
                     .unwrap_or(true);
                 let mtp_mode = json.get("mtp_mode").and_then(|v| v.as_str()).unwrap_or("");
 
@@ -146,7 +148,7 @@ pub fn probe_model_dir_defects(dir: &Path) -> Vec<String> {
             for entry in entries.flatten() {
                 let fname = entry.file_name().to_string_lossy().to_string();
                 if fname.ends_with(".incomplete") {
-                    incomplete.push(format!(".cache/{}", fname));
+                    incomplete.push(format!(".cache/{fname}"));
                 }
             }
         }
@@ -162,6 +164,7 @@ pub fn probe_model_dir_defects(dir: &Path) -> Vec<String> {
 }
 
 /// Probe model defects given a model name and optional base directory.
+#[must_use]
 pub fn probe_model_defects(model_name: &str, base_dir: Option<&Path>) -> Vec<String> {
     if let Some(dir) = find_model_dir(model_name, base_dir) {
         probe_model_dir_defects(&dir)
@@ -184,8 +187,7 @@ pub fn assess_viability(
     if let Some(rate) = decode_tok_per_sec {
         if rate < THRASHING_DECODE_TOKENS_PER_SEC {
             return Err(format!(
-                "unviable: decode rate {:.2} tok/s is below thrashing threshold ({:.1} tok/s)",
-                rate, THRASHING_DECODE_TOKENS_PER_SEC
+                "unviable: decode rate {rate:.2} tok/s is below thrashing threshold ({THRASHING_DECODE_TOKENS_PER_SEC:.1} tok/s)"
             ));
         }
     }

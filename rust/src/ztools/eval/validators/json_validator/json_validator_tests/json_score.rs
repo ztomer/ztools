@@ -23,7 +23,7 @@ fn test_validate_json_count_bands() {
         json!({"activities": items})
     };
     // 6 items: structure 20 + ok-count 15 + validity 30
-    assert_eq!(validate_json(&mk(6), ""), (65, "".to_string()));
+    assert_eq!(validate_json(&mk(6), ""), (65, String::new()));
     // 3 items: too-few failure, structure 20 + validity 30
     let (score, reason) = validate_json(&mk(3), "");
     assert_eq!(score, 50);
@@ -55,16 +55,16 @@ fn test_validate_json_validity_bands() {
 fn test_validate_json_source_ratio_bands() {
     let data = json!({"activities": detailed_items()});
     // ratio 1.0 -> +25; total caps at exactly MAX_SCORE
-    assert_eq!(validate_json(&data, SRC_FULL), (100, "".to_string()));
+    assert_eq!(validate_json(&data, SRC_FULL), (100, String::new()));
     // 5/8 match = 0.625 -> +12
     assert_eq!(
         validate_json(&data, SRC_MED),
-        (20 + 25 + 30 + 12, "".to_string())
+        (20 + 25 + 30 + 12, String::new())
     );
     // 2/8 match = 0.25 -> +6
     assert_eq!(
         validate_json(&data, SRC_LOW),
-        (20 + 25 + 30 + 6, "".to_string())
+        (20 + 25 + 30 + 6, String::new())
     );
     // ratio 0 -> hallucinated
     let (score, reason) = validate_json(&data, SRC_NONE);

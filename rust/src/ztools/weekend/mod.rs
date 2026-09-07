@@ -48,7 +48,7 @@ pub use super::weekend_cache::{
 };
 
 /// Fetch Open-Meteo weather forecast for Vaughan / GTA (lat 43.8361, lon -79.4982).
-/// Clean weather string display for CLI header panel matching Python _format_weather_display.
+/// Clean weather string display for CLI header panel matching Python _`format_weather_display`.
 pub fn apply_scores(events: &mut [WeekendEvent], weather_str: &str, age_range: &str) {
     for ev in events.iter_mut() {
         ev.score = compute_score(ev, weather_str, age_range);
@@ -73,7 +73,7 @@ pub(crate) fn compute_score(ev: &WeekendEvent, weather_str: &str, age_range: &st
         &ev.description,
     ];
     let populated = fields.iter().filter(|f| !f.is_empty()).count() as f32;
-    score += (populated / 5.0) * 3.0;
+    score = (populated / 5.0).mul_add(3.0, score);
 
     // Ages overlap
     if !age_range.is_empty() && !ev.target_ages.is_empty() {
@@ -95,7 +95,7 @@ pub(crate) fn compute_score(ev: &WeekendEvent, weather_str: &str, age_range: &st
                     v.push(n);
                 }
             }
-            v.sort();
+            v.sort_unstable();
             v.dedup();
             v
         };
@@ -191,6 +191,7 @@ struct WeekendEventLlm {
 }
 
 /// Parse an LLM chat-completions response into weekend events.
+#[must_use]
 pub fn parse_llm_events(resp: &serde_json::Value) -> Option<Vec<WeekendEvent>> {
     let text = resp["choices"][0]["message"]["content"].as_str()?;
     let clean_text = text
@@ -317,6 +318,7 @@ fn parse_snippets_from_html(html: &str) -> Vec<String> {
 }
 
 /// True if HTML content matches known CAPTCHA/WAF bot challenge markers.
+#[must_use]
 pub fn is_challenged(html: &str) -> bool {
     let lower = html.to_lowercase();
     let markers = [

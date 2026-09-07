@@ -14,9 +14,9 @@ pub trait OcrEngine: Send + Sync {
     fn extract_first_line(&self, image_path: &Path) -> Option<String> {
         self.extract_text(image_path).and_then(|text| {
             text.lines()
-                .map(|l| l.trim())
+                .map(str::trim)
                 .find(|l| !l.is_empty())
-                .map(|s| s.to_string())
+                .map(std::string::ToString::to_string)
         })
     }
 }
@@ -27,6 +27,7 @@ pub struct TesseractEngine {
 }
 
 impl TesseractEngine {
+    #[must_use]
     pub fn new(path: Option<PathBuf>) -> Self {
         let binary_path = path.unwrap_or_else(|| {
             if Path::new(DEFAULT_TESSERACT_PATH).exists() {
@@ -53,8 +54,7 @@ impl OcrEngine for TesseractEngine {
         Command::new(&self.binary_path)
             .arg("--version")
             .output()
-            .map(|out| out.status.success())
-            .unwrap_or(false)
+            .is_ok_and(|out| out.status.success())
     }
 
     fn extract_text(&self, image_path: &Path) -> Option<String> {
@@ -80,16 +80,19 @@ impl OcrEngine for TesseractEngine {
 }
 
 /// Global convenience function checking if default OCR engine is available.
+#[must_use]
 pub fn ocr_available() -> bool {
     TesseractEngine::default().is_available()
 }
 
 /// Extract first readable line using the default OCR engine.
+#[must_use]
 pub fn extract_first_line(image_path: &Path) -> Option<String> {
     TesseractEngine::default().extract_first_line(image_path)
 }
 
 /// Extract full text using the default OCR engine.
+#[must_use]
 pub fn extract_full_text(image_path: &Path) -> Option<String> {
     TesseractEngine::default().extract_text(image_path)
 }

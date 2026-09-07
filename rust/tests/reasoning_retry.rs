@@ -2,11 +2,12 @@
 //! escalation) over the wire, against a mock that only answers once the
 //! budget has actually been raised.
 //!
-//! Mirrors the Python loop's behaviour on eval/failures.py FAIL_REASONING:
-//! a model that streams reasoning_content with empty content is NOT a format
+//! Mirrors the Python loop's behaviour on eval/failures.py `FAIL_REASONING`:
+//! a model that streams `reasoning_content` with empty content is NOT a format
 //! failure -- it never stopped thinking, so the retry gets MORE room (bounded),
 //! and grinding at the original budget must not be read as quality.
 
+use std::fmt::Write as _;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::sync::Arc;
@@ -16,16 +17,17 @@ use ztools::eval::runner::{run_eval, RunnerConfig};
 use ztools::eval::task_loader::{Check, EvalTask};
 
 fn take_lock<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
-/// SSE stream: plenty of reasoning_content, NO content, clean finish.
+/// SSE stream: plenty of `reasoning_content`, NO content, clean finish.
 fn reasoning_only_sse() -> String {
     let reasoning = "x".repeat(500); // below the overrun abort line for 2048 tokens
     let mut body = String::new();
-    body.push_str(&format!(
+    let _ = write!(
+        body,
         "data: {{\"choices\":[{{\"delta\":{{\"reasoning_content\":\"{reasoning}\"}}}}]}}\n\n"
-    ));
+    );
     body.push_str("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\n");
     body.push_str("data: [DONE]\n\n");
     format!(
@@ -46,7 +48,7 @@ fn ok_body(content: &str) -> String {
 }
 
 /// Answers every request with an endless-thinking stream EXCEPT requests whose
-/// max_tokens reached the escalated budget -- those get a real answer.
+/// `max_tokens` reached the escalated budget -- those get a real answer.
 struct StubbornThinker {
     port: u16,
     _handle: thread::JoinHandle<()>,
@@ -132,7 +134,7 @@ fn an_unresolved_overrun_is_classified_reasoning_not_format() {
 
 /// A model whose reasoning EXPANDS to fill whatever budget it is handed, so the
 /// stream guard cuts it at every budget and it never answers. Records the
-/// max_tokens of every request it sees.
+/// `max_tokens` of every request it sees.
 struct FillsWhateverItGets {
     port: u16,
     _handle: thread::JoinHandle<()>,
@@ -168,9 +170,9 @@ fn serve_expands_to_fill() -> FillsWhateverItGets {
             let chars = (budget as usize) * 3 + 64; // past 0.75 * budget * CHARS_PER_TOKEN
             let reasoning = "x".repeat(chars);
             let mut body = String::new();
-            body.push_str(&format!(
+            let _ = write!(body,
                 "data: {{\"choices\":[{{\"delta\":{{\"reasoning_content\":\"{reasoning}\"}}}}]}}\n\n"
-            ));
+            );
             body.push_str("data: [DONE]\n\n");
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}",

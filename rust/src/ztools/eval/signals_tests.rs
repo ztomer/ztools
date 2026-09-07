@@ -72,8 +72,8 @@ impl Drop for EnvGuard {
     }
 }
 
-/// Point EVAL_SIGNALS_DIR at an empty tempdir so neither the operator's
-/// real eval_signals.json nor a peer session's GPU lock can decide a
+/// Point `EVAL_SIGNALS_DIR` at an empty tempdir so neither the operator's
+/// real `eval_signals.json` nor a peer session's GPU lock can decide a
 /// test's outcome.
 struct Fixture {
     _dir: tempfile::TempDir,

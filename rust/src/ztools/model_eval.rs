@@ -1,6 +1,7 @@
 use anyhow::Result;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
+use std::fmt::Write as _;
 use std::time::{Duration, Instant};
 
 pub use crate::ztools::eval::{
@@ -20,6 +21,7 @@ pub struct ModelEvalResult {
     pub status: String,
 }
 
+#[must_use]
 pub fn get_test_cases() -> Vec<EvalTask> {
     get_built_in_smoke_tasks()
 }
@@ -135,7 +137,7 @@ pub fn eval_model(
 
         results.push(ModelEvalResult {
             model: model_name.to_string(),
-            test_name: case.name.to_string(),
+            test_name: case.name.clone(),
             score,
             passed,
             total,
@@ -162,7 +164,8 @@ pub fn eval_all_models(
     Ok(all_results)
 }
 
-/// Split an osaurus base URL ("http://127.0.0.1:1337") into host and port.
+/// Split an osaurus base URL ("<http://127.0.0.1:1337>") into host and port.
+#[must_use]
 pub fn parse_osaurus_url(url: &str) -> (String, u16) {
     let stripped = url
         .strip_prefix("http://")
@@ -180,6 +183,7 @@ pub fn parse_osaurus_url(url: &str) -> (String, u16) {
 
 /// Render full-suite [`TaskOutcome`]s as a markdown table, worst first: the
 /// failures are what a reader scans for, so they lead.
+#[must_use]
 pub fn render_task_outcomes(outcomes: &[crate::ztools::eval::TaskOutcome]) -> String {
     use std::fmt::Write;
     let mut report = String::from("# Full Suite Eval\n\n");
@@ -199,7 +203,7 @@ pub fn render_task_outcomes(outcomes: &[crate::ztools::eval::TaskOutcome]) -> St
         );
     }
     if !rows.is_empty() {
-        let mean: f64 = rows.iter().map(|o| o.score as f64).sum::<f64>() / rows.len() as f64;
+        let mean: f64 = rows.iter().map(|o| f64::from(o.score)).sum::<f64>() / rows.len() as f64;
         let ok = rows.iter().filter(|o| o.status == "ok").count();
         let _ = writeln!(report);
         let _ = writeln!(
@@ -211,6 +215,7 @@ pub fn render_task_outcomes(outcomes: &[crate::ztools::eval::TaskOutcome]) -> St
     report
 }
 
+#[must_use]
 pub fn render_eval_report(results: &[ModelEvalResult]) -> String {
     let mut out = String::new();
     out.push_str("# Model Quality Evaluation Benchmark\n\n");
@@ -218,10 +223,11 @@ pub fn render_eval_report(results: &[ModelEvalResult]) -> String {
     out.push_str("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
 
     for r in results {
-        out.push_str(&format!(
-            "| **{}** | {} | {:.1}% | {}/{} | {}ms | {} |\n",
+        let _ = writeln!(
+            out,
+            "| **{}** | {} | {:.1}% | {}/{} | {}ms | {} |",
             r.model, r.test_name, r.score, r.passed, r.total, r.latency_ms, r.status
-        ));
+        );
     }
 
     out

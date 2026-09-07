@@ -32,7 +32,7 @@ impl ChatMessage {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Check {
     Contains(String),
     ContainsLower(String),
@@ -61,8 +61,8 @@ pub enum Check {
         gt_forbidden: Vec<String>,
         min_hits: usize,
     },
-    /// The three RUBRIC tasks (anomalies, audit_readiness, synthesis): scored
-    /// 0-100 by the ported taxes_validator rubric, not by generic boolean
+    /// The three RUBRIC tasks (anomalies, `audit_readiness`, synthesis): scored
+    /// 0-100 by the ported `taxes_validator` rubric, not by generic boolean
     /// checks. Graded like [`Check::TaxesGrounded`].
     TaxesRubric {
         task_name: String,
@@ -70,7 +70,7 @@ pub enum Check {
     SectionHeaders(Vec<String>),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct EvalTask {
     pub name: String,
     pub messages: Vec<ChatMessage>,
@@ -107,6 +107,7 @@ impl EvalTask {
 /// can report a PARTIAL as a partial instead of collapsing an 80 to a hard 0
 /// at an arbitrary pass threshold (the exact bucket mismatch the A/B sweep
 /// caught on gemma-4-e4b and ornith-9b).
+#[must_use]
 pub fn check_graded_score(
     check: &Check,
     cleaned: &str,
@@ -145,6 +146,7 @@ pub fn check_graded_score(
 }
 
 /// Execute a single verification check against cleaned output and optional parsed JSON.
+#[must_use]
 pub fn run_check(check: &Check, cleaned: &str, parsed: Option<&serde_json::Value>) -> bool {
     let lower = cleaned.to_lowercase();
     match check {
@@ -156,17 +158,16 @@ pub fn run_check(check: &Check, cleaned: &str, parsed: Option<&serde_json::Value
         Check::JsonArrayLen(key, expected) => parsed
             .and_then(|v| v.get(key))
             .and_then(|v| v.as_array())
-            .map(|arr| arr.len() == *expected)
-            .unwrap_or(false),
+            .is_some_and(|arr| arr.len() == *expected),
         Check::JsonKeyExists(key) => parsed.and_then(|v| v.get(key)).is_some(),
         Check::FileSummary(threshold) => validate_file_summary(cleaned).0 >= *threshold,
         Check::JsonValidator(threshold) => {
             let val = parsed.cloned().unwrap_or(serde_json::Value::Null);
-            super::validators::validate_json(&val, "").0 >= *threshold as i64
+            super::validators::validate_json(&val, "").0 >= i64::from(*threshold)
         }
         Check::DetailedJson(threshold) => {
             let val = parsed.cloned().unwrap_or(serde_json::Value::Null);
-            super::validators::validate_detailed_json(&val, "").0 >= *threshold as i64
+            super::validators::validate_detailed_json(&val, "").0 >= i64::from(*threshold)
         }
         Check::ResistsInjection { markers, keywords } => {
             let val = serde_json::Value::String(cleaned.to_string());
@@ -178,7 +179,7 @@ pub fn run_check(check: &Check, cleaned: &str, parsed: Option<&serde_json::Value
         }
         Check::Attribution(threshold) => {
             let val = serde_json::Value::String(cleaned.to_string());
-            super::validators::validate_attribution(&val, "").0 >= *threshold as i64
+            super::validators::validate_attribution(&val, "").0 >= i64::from(*threshold)
         }
         Check::TaxesGrounded {
             task_name,
@@ -193,7 +194,7 @@ pub fn run_check(check: &Check, cleaned: &str, parsed: Option<&serde_json::Value
                 "slip_qa" => super::validators::validate_taxes_slip_qa(&val, None),
                 _ => (0, String::new()),
             };
-            score >= *min_score as i64
+            score >= i64::from(*min_score)
         }
         Check::TaxesGrounding {
             expected_signals,
@@ -234,7 +235,7 @@ struct TaxesSnapshot {
     task: String,
     system: Option<String>,
     user: String,
-    /// The three GROUNDED tasks (qa, slip_qa, yoy_narrative) carry a grounding
+    /// The three GROUNDED tasks (qa, `slip_qa`, `yoy_narrative`) carry a grounding
     /// block instead of a rubric: their verdict is arithmetic and
     /// set-membership against known facts/amounts, which is why they do not
     /// saturate the way the rubric tasks do. A loader that reads only `rubric`
@@ -258,13 +259,12 @@ pub fn load_taxes_tasks_from_dir(dir: &Path) -> Result<Vec<EvalTask>> {
         .with_context(|| format!("failed to read directory: {}", dir.display()))?;
 
     let mut paths: Vec<_> = entries
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .map(|e| e.path())
         .filter(|p| {
             p.file_name()
                 .and_then(|n| n.to_str())
-                .map(|n| n.starts_with("taxes_") && n.ends_with(".json"))
-                .unwrap_or(false)
+                .is_some_and(|n| n.starts_with("taxes_") && n.ends_with(".json"))
         })
         .collect();
     paths.sort();
@@ -317,6 +317,7 @@ pub fn load_taxes_tasks_from_dir(dir: &Path) -> Result<Vec<EvalTask>> {
 }
 
 /// Built-in smoke tasks (offline fixtures).
+#[must_use]
 pub fn get_built_in_smoke_tasks() -> Vec<EvalTask> {
     vec![
         EvalTask::new(
@@ -371,6 +372,7 @@ pub fn get_built_in_smoke_tasks() -> Vec<EvalTask> {
 }
 
 /// Load all eval tasks: smoke tasks plus tasks from data snapshots if found.
+#[must_use]
 pub fn load_all_eval_tasks(eval_tasks_data_dir: Option<&Path>) -> Vec<EvalTask> {
     let mut tasks = get_built_in_smoke_tasks();
     if let Some(dir) = eval_tasks_data_dir {

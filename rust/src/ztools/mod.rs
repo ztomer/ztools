@@ -34,7 +34,7 @@ pub fn print_formatted_markdown(content: &str) {
             }
         }
     }
-    print!("{}", content);
+    print!("{content}");
 }
 
 #[cfg(test)]

@@ -43,6 +43,7 @@ const REPLACE_SRC_TASK_BASED: &str = "Execute the task based on";
 const REPLACE_TGT_TASK_BASED: &str = "Extract";
 
 /// Extract model family from full model name.
+#[must_use]
 pub fn get_model_family(model: &str) -> &'static str {
     let model_lower = model.to_lowercase();
     MODEL_FAMILIES
@@ -57,6 +58,7 @@ pub fn get_model_family(model: &str) -> &'static str {
 /// Multimodal messages carry a LIST of content parts rather than prose; every
 /// rewrite below is a string operation, so non-string content passes through
 /// untouched.
+#[must_use]
 pub fn apply_model_quirks(messages: &[Value], model: &str) -> Vec<Value> {
     let family = get_model_family(model);
 

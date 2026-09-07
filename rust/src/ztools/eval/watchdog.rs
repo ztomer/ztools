@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 pub const DEFAULT_MODEL_STALL_SECONDS: u64 = 2400; // 40 minutes
 
+#[must_use]
 pub fn model_stall_duration() -> Duration {
     if let Ok(val) = std::env::var("EVAL_MODEL_STALL_SECONDS") {
         if let Ok(secs) = val.parse::<u64>() {
@@ -17,11 +18,13 @@ pub fn model_stall_duration() -> Duration {
 }
 
 /// Duration elapsed since the last task completion.
+#[must_use]
 pub fn stalled_for(last_completion: Instant) -> Duration {
     last_completion.elapsed()
 }
 
 /// Check whether the duration since last completion exceeds the watchdog limit.
+#[must_use]
 pub fn is_stalled(last_completion: Instant, limit: Duration) -> bool {
     stalled_for(last_completion) > limit
 }

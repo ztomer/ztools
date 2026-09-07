@@ -1,7 +1,7 @@
 //! Read-side access to stored summaries and plans.
 //!
 //! The summarizer and planner WRITE dated `.md` files into a store directory
-//! (the twitter side in its own default_dir, the weekend side via `--md-out`);
+//! (the twitter side in its own `default_dir`, the weekend side via `--md-out`);
 //! their `--fetch-latest` / `--last-updated` read the newest one back. Read-only
 //! by construction: nothing here touches a model or the network, so a dashboard
 //! tab can open on it without ever re-running the pipeline.
@@ -13,6 +13,7 @@ use std::time::SystemTime;
 use chrono::Local;
 
 /// Default directory the twitter summarizer stores its dated summaries in.
+#[must_use]
 pub fn twitter_store_dir() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -20,6 +21,7 @@ pub fn twitter_store_dir() -> PathBuf {
 }
 
 /// Default directory weekend plans are stored in (the weekly `--md-out`).
+#[must_use]
 pub fn weekend_store_dir() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -77,18 +79,16 @@ pub fn last_updated(path: &Path) -> Result<String> {
 /// `--last-updated`. `TWITTER_OUTPUT_DIR` overrides the store dir, the same
 /// override the status reader honours.
 pub fn twitter_latest(show_time: bool) -> Result<()> {
-    let dir = std::env::var("TWITTER_OUTPUT_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| twitter_store_dir());
+    let dir =
+        std::env::var("TWITTER_OUTPUT_DIR").map_or_else(|_| twitter_store_dir(), PathBuf::from);
     print_newest(dir, show_time)
 }
 
 /// Read-side entry point for `weekend-plan --fetch-latest` / `--last-updated`;
 /// `WEEKEND_OUTPUT_DIR` overrides the store dir.
 pub fn weekend_latest(show_time: bool) -> Result<()> {
-    let dir = std::env::var("WEEKEND_OUTPUT_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| weekend_store_dir());
+    let dir =
+        std::env::var("WEEKEND_OUTPUT_DIR").map_or_else(|_| weekend_store_dir(), PathBuf::from);
     print_newest(dir, show_time)
 }
 

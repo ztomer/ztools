@@ -1,9 +1,9 @@
 //! Tests for `eval/signals.rs` and `eval/prefill.rs`.
 //!
-//! Signal-store tests point EVAL_SIGNALS_DIR at a tmp dir so the tracked
-//! conf/eval_signals.json is never dirtied. The prefill test uses a mock
+//! Signal-store tests point `EVAL_SIGNALS_DIR` at a tmp dir so the tracked
+//! `conf/eval_signals.json` is never dirtied. The prefill test uses a mock
 //! server that RECORDS the requests it received, so the probe's wire contract
-//! (nonce-first filler, max_tokens=1 on the timed call) is verified against
+//! (nonce-first filler, `max_tokens=1` on the timed call) is verified against
 //! what actually went over the wire.
 
 use std::io::{Read, Write};
@@ -12,7 +12,7 @@ use std::thread;
 
 use serial_test::serial;
 
-/// Point EVAL_SIGNALS_DIR at a fresh tmp dir for the duration of one test,
+/// Point `EVAL_SIGNALS_DIR` at a fresh tmp dir for the duration of one test,
 /// restoring the previous environment afterwards -- a leaked env var pointing
 /// at a deleted dir silently empties every later test's store.
 fn signals_dir_guard() -> SignalsDirGuard {
@@ -48,7 +48,7 @@ impl Drop for SignalsDirGuard {
     }
 }
 
-/// The probe sizes its requests from EVAL_DEFAULT_TIMEOUT (default 900s); a
+/// The probe sizes its requests from `EVAL_DEFAULT_TIMEOUT` (default 900s); a
 /// mock that fails to answer must fail FAST, not hang a CI run for 15 minutes.
 struct BoundedProbeTimeout;
 
@@ -66,7 +66,7 @@ impl Drop for BoundedProbeTimeout {
 /// A poisoned mutex must not kill a server thread: that turns one failed
 /// request into every subsequent connection hanging out its full timeout.
 fn take_lock<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 // --- signal store -----------------------------------------------------------
@@ -214,14 +214,14 @@ fn prefill_probe_sends_nonce_led_filler_and_records_capabilities() {
     let bodies = take_lock(&recorded);
     assert_eq!(bodies.len(), 3, "{}", bodies.len());
     for (i, body) in bodies.iter().enumerate() {
-        if i != 1 {
-            // LOAD and PREFILL both carry max_tokens=1.
-            assert!(body.contains("\"max_tokens\":1"), "call {i}: {body}");
-        } else {
+        if i == 1 {
             assert!(
                 body.contains(format!("\"max_tokens\":{}", 64).as_str()),
                 "{body}"
             );
+        } else {
+            // LOAD and PREFILL both carry max_tokens=1.
+            assert!(body.contains("\"max_tokens\":1"), "call {i}: {body}");
         }
     }
     // The timed probe leads with a unique nonce, defeating any prefix cache.

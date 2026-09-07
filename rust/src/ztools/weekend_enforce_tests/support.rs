@@ -1,4 +1,4 @@
-//! Shared helpers for weekend_enforce's test modules.
+//! Shared helpers for `weekend_enforce`'s test modules.
 
 use crate::ztools::weekend::WeekendEvent;
 use chrono::NaiveDate;
@@ -18,9 +18,9 @@ pub(super) fn event(name: &str, location: &str) -> WeekendEvent {
         description: "desc".into(),
         is_transient: true,
         score: 4.0,
-        start_date: "".into(),
-        end_date: "".into(),
-        weather: "".into(),
-        duration: "".into(),
+        start_date: String::new(),
+        end_date: String::new(),
+        weather: String::new(),
+        duration: String::new(),
     }
 }

@@ -40,10 +40,11 @@ pub const SEASONAL_EVENT_MARKERS: &[&str] = &[
     "maple",
 ];
 
-/// Venue words that settle indoor/outdoor without consulting a forecast. Kept
-/// deliberately small: only terms where an "outdoor" label is unambiguously
-/// wrong. These are STEMS, matched as substrings, so plurals are covered:
-/// "librar" catches both "library" and "libraries".
+/// Venue words that settle indoor/outdoor without consulting a forecast.
+///
+/// Kept deliberately small: only terms where an "outdoor" label is
+/// unambiguously wrong. These are STEMS, matched as substrings, so plurals are
+/// covered: "librar" catches both "library" and "libraries".
 pub const INDOOR_MARKERS: &[&str] = &[
     "indoor",
     "trampoline park",
@@ -74,6 +75,7 @@ pub const OUTDOOR_MARKERS: &[&str] = &[
 /// ASCII. "Ripley's" in conf/weekend.toml did NOT match a scraped
 /// "Ripley's Aquarium of Canada" because of U+2019 vs U+0027 -- found by a real
 /// `wk` run, after the exclusion filter had already been declared working.
+#[must_use]
 pub fn normalize_for_match(text: &str) -> String {
     let folded: String = text
         .chars()
@@ -161,10 +163,10 @@ fn required_tokens(entry: &str) -> HashSet<String> {
         }
     }
     let tokens = significant_tokens(&without_parens);
-    if !tokens.is_empty() {
-        tokens
-    } else {
+    if tokens.is_empty() {
         significant_tokens(entry)
+    } else {
+        tokens
     }
 }
 
@@ -182,6 +184,7 @@ fn required_tokens(entry: &str) -> HashSet<String> {
 /// "Toronto Islands" -- but it survives word order, interpolated words and
 /// punctuation, which containment does not. Contiguous containment is kept as
 /// an additional accept so that nothing which matched before stops matching.
+#[must_use]
 pub fn matches_exclusion(entry: &str, haystack: &str) -> bool {
     let entry_n = normalize_for_match(entry);
     let hay_n = normalize_for_match(haystack);
@@ -203,6 +206,7 @@ pub fn matches_exclusion(entry: &str, haystack: &str) -> bool {
 /// Generic visits to excluded places (e.g. 'Toronto Zoo') are dropped. But
 /// specific, time-limited seasonal events/exhibits (e.g. 'Terra Lumina at
 /// Toronto Zoo') are allowed as exceptions.
+#[must_use]
 pub fn is_seasonal_event_exception(name: &str, hit_exclusion: &str) -> bool {
     let name_norm = normalize_for_match(name);
     let hit_norm = normalize_for_match(hit_exclusion);
@@ -215,6 +219,7 @@ pub fn is_seasonal_event_exception(name: &str, hit_exclusion: &str) -> bool {
 }
 
 /// C8. Remove rows matching the user's `exclude_places` unless it is a seasonal event.
+#[must_use]
 pub fn drop_excluded_places(
     events: Vec<WeekendEvent>,
     excluded: &[String],
@@ -249,9 +254,10 @@ pub fn drop_excluded_places(
 /// Local LLMs occasionally invert weather labels (e.g. High Park or Nature Walk
 /// labeled as 'indoor', or Trampoline Park labeled as 'outdoor'). Only
 /// clear-cut cases are corrected; ambiguous venues are left alone.
+#[must_use]
 pub fn correct_weather_labels(mut events: Vec<WeekendEvent>) -> (Vec<WeekendEvent>, Vec<String>) {
     let mut notes = Vec::new();
-    for ev in events.iter_mut() {
+    for ev in &mut events {
         let weather = ev.weather.to_lowercase();
         let text = normalize_for_match(&format!("{} {}", ev.name, ev.location));
         if weather == "outdoor" {
@@ -281,6 +287,7 @@ pub fn correct_weather_labels(mut events: Vec<WeekendEvent>) -> (Vec<WeekendEven
 /// date. A long-running exhibition (e.g. late June to mid August) is IN the
 /// plan if it spans the weekend, even though neither of its endpoints falls
 /// inside it. There is one decision, in one place.
+#[must_use]
 pub fn window_overlap(ev: &WeekendEvent, start: NaiveDate, end: NaiveDate) -> Option<bool> {
     let year = start.year();
     let first = super::dates::parse_any_date(&ev.start_date, year);
@@ -302,6 +309,7 @@ pub fn window_overlap(ev: &WeekendEvent, start: NaiveDate, end: NaiveDate) -> Op
 /// Only rows that actually carry a parseable date are judged. A row with no
 /// date is NOT dropped here -- undated rows are class C7's problem, and
 /// silently discarding them would hide that rather than fix it.
+#[must_use]
 pub fn drop_events_outside_window(
     events: Vec<WeekendEvent>,
     start: NaiveDate,
@@ -315,7 +323,9 @@ pub fn drop_events_outside_window(
             kept.push(ev);
             continue;
         };
-        if !overlaps {
+        if overlaps {
+            kept.push(ev);
+        } else {
             let year = start.year();
             let starts = super::dates::parse_any_date(&ev.start_date, year);
             let ends = super::dates::parse_any_date(&ev.end_date, year);
@@ -327,8 +337,6 @@ pub fn drop_events_outside_window(
                     ev.name, first, last, start, end
                 ));
             }
-        } else {
-            kept.push(ev);
         }
     }
     (kept, notes)
@@ -340,13 +348,14 @@ pub fn drop_events_outside_window(
 /// Where they do not overlap at all the row is left for
 /// `drop_events_outside_window`. Where there are no dates, `day` is left
 /// alone: it cannot be verified, and inventing one would be class C4 again.
+#[must_use]
 pub fn reconcile_day_with_dates(
     mut events: Vec<WeekendEvent>,
     start: NaiveDate,
     end: NaiveDate,
 ) -> (Vec<WeekendEvent>, Vec<String>) {
     let mut notes = Vec::new();
-    for ev in events.iter_mut() {
+    for ev in &mut events {
         let year = start.year();
         let mut first = match super::dates::parse_any_date(&ev.start_date, year) {
             Some(d) => d,
@@ -414,6 +423,7 @@ fn significant_words(text: &str) -> Vec<String> {
 ///
 /// The corpus is passed already-normalised. A row with no name is kept: an
 /// unnamed row is class C7's problem, not provenance's.
+#[must_use]
 pub fn row_is_sourced(name: &str, corpus_normalized: &str) -> bool {
     let words = significant_words(name);
     if words.is_empty() {
@@ -435,6 +445,7 @@ pub fn row_is_sourced(name: &str, corpus_normalized: &str) -> bool {
 ///
 /// Applied ONLY when a corpus is available; with no corpus there is nothing to
 /// judge against and dropping would be worse than keeping.
+#[must_use]
 pub fn drop_unsourced_rows(
     events: Vec<WeekendEvent>,
     corpus: &str,

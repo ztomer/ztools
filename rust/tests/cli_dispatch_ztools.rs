@@ -79,13 +79,12 @@ fn stub_server(body: &'static str) -> u16 {
     port
 }
 
-const LLM_TEXT: &str = r####"{"choices":[{"message":{"content":"## Highlights\n- one thing happened\n- another thing happened\n- a third thing happened"}}]}"####;
+const LLM_TEXT: &str = r###"{"choices":[{"message":{"content":"## Highlights\n- one thing happened\n- another thing happened\n- a third thing happened"}}]}"###;
 
-const LLM_EVENTS: &str = r####"{"choices":[{"message":{"content":"{\"transient_events\":[{\"name\":\"Rib Fest\",\"location\":\"Vaughan Park\",\"target_ages\":\"6-12\",\"price\":\"Free\",\"day\":\"Saturday\",\"description\":\"An outdoor festival for kids\"},{\"name\":\"Bare Listing\",\"location\":\"Vaughan\",\"target_ages\":\"all\",\"price\":\"Free\",\"day\":\"Sunday\",\"description\":\"\"}]}"}}]}"####;
+const LLM_EVENTS: &str = r#"{"choices":[{"message":{"content":"{\"transient_events\":[{\"name\":\"Rib Fest\",\"location\":\"Vaughan Park\",\"target_ages\":\"6-12\",\"price\":\"Free\",\"day\":\"Saturday\",\"description\":\"An outdoor festival for kids\"},{\"name\":\"Bare Listing\",\"location\":\"Vaughan\",\"target_ages\":\"all\",\"price\":\"Free\",\"day\":\"Sunday\",\"description\":\"\"}]}"}}]}"#;
 
 /// The planner's other real outcome: the model found nothing for this weekend.
-const LLM_NO_EVENTS: &str =
-    r####"{"choices":[{"message":{"content":"{\"transient_events\":[]}"}}]}"####;
+const LLM_NO_EVENTS: &str = r#"{"choices":[{"message":{"content":"{\"transient_events\":[]}"}}]}"#;
 
 #[test]
 fn twitter_summarize_writes_a_summary_and_an_md_copy() {

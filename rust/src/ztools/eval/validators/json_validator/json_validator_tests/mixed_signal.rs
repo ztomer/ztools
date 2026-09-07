@@ -12,7 +12,7 @@ fn test_validate_mixed_signal_requested_count_above_total_uses_total() {
     // asking for 9 when only 1 signal item exists: target stays at 1
     assert_eq!(
         validate_mixed_signal(&data, "find 9 things", Some(&signal), Some(&empty)),
-        (100, "".to_string())
+        (100, String::new())
     );
 }
 
@@ -45,7 +45,7 @@ fn test_validate_mixed_signal_requested_count_caps_recall_target() {
     let data = json!({"activities": [{"name": "A"}, {"name": "B"}]});
     assert_eq!(
         validate_mixed_signal(&data, "find 2 things", Some(&signal), Some(&empty)),
-        (100, "".to_string())
+        (100, String::new())
     );
     // only 1 of the requested 2 present
     let data = json!({"activities": [{"name": "A"}]});
@@ -62,7 +62,7 @@ fn test_validate_mixed_signal_zero_sets_score_full() {
     // tp=fp=0 with no requested signal at all: perfect score by convention
     assert_eq!(
         validate_mixed_signal(&data, "", Some(&empty), Some(&empty)),
-        (100, "".to_string())
+        (100, String::new())
     );
 }
 
@@ -108,6 +108,6 @@ fn test_validate_mixed_signal_name_extraction_variants() {
     // name are skipped entirely; non-name matches neither set
     assert_eq!(
         validate_mixed_signal(&data, "", Some(&signal), Some(&empty)),
-        (100, "".to_string())
+        (100, String::new())
     );
 }

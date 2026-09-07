@@ -7,7 +7,7 @@
 //!   abandoning a model whose SERVER is failing -- those zeros are not quality
 //!   results. This split is why qwen3.6-35b's 34 "HTTP 503" responses are an
 //!   outage and not 34 formatting failures.
-//! - REASONING (reasoning_content present, content empty) triggers a retry
+//! - REASONING (`reasoning_content` present, content empty) triggers a retry
 //!   with MORE room: the model never stopped thinking, and reasoning scales
 //!   with the TASK, not the budget. Checked BEFORE any JSON/FORMAT branch --
 //!   on a JSON task an endless thinker reads as "no JSON brackets", which used
@@ -32,10 +32,11 @@ pub const FAIL_NONE: &str = "";
 pub const REASONING_RETRY_MULTIPLIER: f64 = 2.0;
 pub const REASONING_RETRY_MAX_TOKENS: u32 = 64_000;
 
-/// The finish_reason the stream guard stamps when it cuts a run that has reasoned
-/// past the point where the remaining budget could hold an answer. Set in
-/// eval/transport.rs (and mirrored in Python lib/llm/streaming.py); named here
-/// because this module is where the remedy for it is decided.
+/// The `finish_reason` the stream guard stamps when it cuts a run that has
+/// reasoned past the point where the remaining budget could hold an answer.
+///
+/// Set in eval/transport.rs (and mirrored in Python lib/llm/streaming.py);
+/// named here because this module is where the remedy for it is decided.
 pub const GUARD_ABORT_FINISH_REASON: &str = "aborted_reasoning_overrun";
 
 /// True when the guard cut this attempt, rather than the model choosing to stop.
@@ -49,15 +50,17 @@ pub const GUARD_ABORT_FINISH_REASON: &str = "aborted_reasoning_overrun";
 ///
 /// Deliberately NOT true of a plain `finish_reason=length` overrun: that one really
 /// can be a budget shortage, and is the case the escalation exists to serve.
+#[must_use]
 pub fn reasoning_overrun_was_guard_aborted(finish_reason: &str) -> bool {
     finish_reason == GUARD_ABORT_FINISH_REASON
 }
 
+#[must_use]
 pub fn reasoning_retry_budget(base_budget: u32) -> u32 {
-    ((base_budget as f64 * REASONING_RETRY_MULTIPLIER) as u32).min(REASONING_RETRY_MAX_TOKENS)
+    ((f64::from(base_budget) * REASONING_RETRY_MULTIPLIER) as u32).min(REASONING_RETRY_MAX_TOKENS)
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnosis {
     pub category: &'static str,
     pub reason: String,
@@ -65,7 +68,7 @@ pub struct Diagnosis {
 }
 
 impl Diagnosis {
-    fn none() -> Self {
+    const fn none() -> Self {
         Self {
             category: FAIL_NONE,
             reason: String::new(),
@@ -74,7 +77,7 @@ impl Diagnosis {
     }
 }
 
-/// HTTP 5xx | server_overloaded | inference capacity | service unavailable,
+/// HTTP 5xx | `server_overloaded` | inference capacity | service unavailable,
 /// case-insensitive like the Python regex.
 fn is_server_error(error: &str) -> bool {
     let lower = error.to_lowercase();
@@ -119,6 +122,7 @@ fn transport_failure(error: &str) -> Option<Diagnosis> {
 /// Classify why this attempt failed. Branch order mirrors the Python original
 /// exactly, because the branches are ordered by "which mislabel hides the
 /// truth best".
+#[must_use]
 pub fn classify_failure(
     error: Option<&str>,
     content: &str,
@@ -209,7 +213,7 @@ pub fn classify_failure(
     }
 }
 
-fn finish_reason_or_unknown(finish_reason: &str) -> &str {
+const fn finish_reason_or_unknown(finish_reason: &str) -> &str {
     if finish_reason.is_empty() {
         "unknown"
     } else {

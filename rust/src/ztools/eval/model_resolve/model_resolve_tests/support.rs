@@ -1,7 +1,7 @@
-//! Shared test scaffolding for model_resolve's disk- and fetch-domain tests.
+//! Shared test scaffolding for `model_resolve`'s disk- and fetch-domain tests.
 
 /// Isolates every disk/config seam from the operator's real machine
-/// (~/MLXModels and the checkout's conf/ both exist here) and restores
+/// (~/`MLXModels` and the checkout's conf/ both exist here) and restores
 /// whatever was set before.
 pub(super) struct DiskGuard {
     saved: Vec<(&'static str, Option<std::ffi::OsString>)>,

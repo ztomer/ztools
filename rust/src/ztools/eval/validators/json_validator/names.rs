@@ -1,11 +1,12 @@
 //! Name normalisation and fuzzy matching between an item and a source mention.
 //!
-//! Split out of json_validator.rs for the 500-line production cap.
+//! Split out of `json_validator.rs` for the 500-line production cap.
 
 use std::collections::HashSet;
 
 use super::weights::STOPWORDS;
 
+#[must_use]
 pub fn _norm_name(name: &str) -> String {
     let cleaned = name
         .chars()
@@ -18,6 +19,7 @@ pub fn _norm_name(name: &str) -> String {
         .join(" ")
 }
 
+#[must_use]
 pub fn _name_tokens(name: &str) -> HashSet<String> {
     let norm = name
         .chars()
@@ -31,10 +33,11 @@ pub fn _name_tokens(name: &str) -> HashSet<String> {
         .collect::<String>();
     norm.split_whitespace()
         .filter(|t| t.len() >= 3 && !STOPWORDS.contains(t))
-        .map(|t| t.to_string())
+        .map(std::string::ToString::to_string)
         .collect()
 }
 
+#[must_use]
 pub fn _names_match(a: &str, b: &str) -> bool {
     let na = _norm_name(a);
     let nb = _norm_name(b);

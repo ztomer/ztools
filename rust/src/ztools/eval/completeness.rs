@@ -22,7 +22,7 @@ use crate::ztools::eval::runner::TaskOutcome;
 /// The verdict that travels with a run: `complete` is what every consumer
 /// gates on; the counts are what makes an incomplete run legible instead of
 /// merely rejected.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Completeness {
     pub expected: usize,
     pub completed: usize,
@@ -59,6 +59,7 @@ fn reason(missing: &[String], outcomes: &[TaskOutcome]) -> String {
 }
 
 /// Compare what was asked for against what reported back.
+#[must_use]
 pub fn assess(expected: &[String], outcomes: &[TaskOutcome]) -> Completeness {
     let reported: std::collections::HashSet<&str> =
         outcomes.iter().map(|o| o.task.as_str()).collect();
@@ -79,7 +80,8 @@ pub fn assess(expected: &[String], outcomes: &[TaskOutcome]) -> Completeness {
 
 impl Completeness {
     /// Convenience mirroring Python's `assess(tasks, results)` two-step.
-    pub fn derive(expected: &[String], outcomes: &[TaskOutcome]) -> Completeness {
+    #[must_use]
+    pub fn derive(expected: &[String], outcomes: &[TaskOutcome]) -> Self {
         let mut c = assess(expected, outcomes);
         if !c.complete {
             c.reason = reason(&c.missing.clone(), outcomes);
@@ -93,7 +95,8 @@ impl Completeness {
 /// Absent metadata reads as COMPLETE on purpose: every historical record
 /// written before this existed defaults to trusted, so adopting the gate does
 /// not retroactively disqualify every real measurement the repo has taken.
-pub fn record_is_complete(completeness: Option<&Completeness>) -> bool {
+#[must_use]
+pub const fn record_is_complete(completeness: Option<&Completeness>) -> bool {
     match completeness {
         None => true,
         Some(c) => c.complete,
@@ -159,7 +162,7 @@ mod tests {
     fn more_than_three_missing_tasks_are_elided() {
         let expected: Vec<String> = ["a", "b", "c", "d", "e"]
             .iter()
-            .map(|s| s.to_string())
+            .map(std::string::ToString::to_string)
             .collect();
         let outcomes = vec![outcome("a", "TIMEOUT")];
         let c = Completeness::derive(&expected, &outcomes);

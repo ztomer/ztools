@@ -4,6 +4,7 @@
 //! blocking call and the SSE stream, the reasoning-overrun abort, and the
 //! wall-clock stream deadline.
 
+use std::fmt::Write as _;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;
@@ -14,7 +15,7 @@ use ztools::eval::transport::{call, stream_with_overrun_guard, RequestSpec};
 fn sse_body(deltas: &[&str]) -> String {
     let mut body = String::new();
     for d in deltas {
-        body.push_str(&format!("data: {d}\n\n"));
+        let _ = write!(body, "data: {d}\n\n");
     }
     body.push_str("data: [DONE]\n\n");
     body

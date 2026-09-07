@@ -2,7 +2,7 @@
 //!
 //! Both external dependencies are replaced by loopback mock servers, so these
 //! prove the corpus-building and monolithic-fallback paths without ever
-//! touching DuckDuckGo or a real model endpoint. The snippet parser is pure
+//! touching `DuckDuckGo` or a real model endpoint. The snippet parser is pure
 //! string work and is fed synthetic HTML directly.
 
 use super::*;
@@ -251,7 +251,7 @@ fn test_is_challenged_detects_captcha_and_waf_markers() {
     assert!(is_challenged(cloudflare_turnstile));
 
     let human_verify =
-        r#"<html><title>Please Verify You Are Human</title><body>Just a moment...</body></html>"#;
+        r"<html><title>Please Verify You Are Human</title><body>Just a moment...</body></html>";
     assert!(is_challenged(human_verify));
 
     let normal_results =
@@ -271,10 +271,10 @@ fn test_degradation_banner_rendered_when_transient_empty() {
         description: "Outdoor park".into(),
         is_transient: false,
         score: 4.0,
-        start_date: "".into(),
-        end_date: "".into(),
+        start_date: String::new(),
+        end_date: String::new(),
         weather: "outdoor".into(),
-        duration: "".into(),
+        duration: String::new(),
     }];
     let empty_transient: Vec<WeekendEvent> = Vec::new();
 

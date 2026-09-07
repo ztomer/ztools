@@ -1,6 +1,8 @@
 //! Model-output cleaning: thinking-block removal, stats-token stripping and
-//! markdown-fence handling. Ported from `lib/content_processing.py` so the Rust
-//! eval path parses the same cleaned text the Python eval does.
+//! markdown-fence handling.
+//!
+//! Ported from `lib/content_processing.py` so the Rust eval path parses the
+//! same cleaned text the Python eval does.
 
 use regex::Regex;
 
@@ -48,6 +50,7 @@ fn compile(re: &str) -> Regex {
 
 /// Remove ` thinking... response`, Gemma channel-thought loops and other
 /// model thinking artifacts. Port of `remove_thinking_blocks`.
+#[must_use]
 pub fn remove_thinking_blocks(content: &str) -> String {
     if content.is_empty() {
         return String::new();
@@ -95,6 +98,7 @@ pub fn remove_thinking_blocks(content: &str) -> String {
 
 /// Remove verbose inline chain-of-thought that precedes a JSON/plain answer.
 /// Port of `remove_inline_thinking`.
+#[must_use]
 pub fn remove_inline_thinking(content: &str) -> String {
     if content.is_empty() {
         return content.to_string();
@@ -120,6 +124,7 @@ pub fn remove_inline_thinking(content: &str) -> String {
 }
 
 /// Strip `stats:...` tokens and control characters. Port of `remove_stats_tokens`.
+#[must_use]
 pub fn remove_stats_tokens(content: &str) -> String {
     if content.is_empty() {
         return String::new();
@@ -133,6 +138,7 @@ pub fn remove_stats_tokens(content: &str) -> String {
 }
 
 /// Remove markdown code-block fence markers. Port of `remove_markdown_blocks`.
+#[must_use]
 pub fn remove_markdown_blocks(content: &str) -> String {
     if content.is_empty() {
         return String::new();
@@ -144,6 +150,7 @@ pub fn remove_markdown_blocks(content: &str) -> String {
 }
 
 /// Extract content from markdown code blocks if present (last block wins).
+#[must_use]
 pub fn extract_content_from_code_blocks(content: &str) -> Option<String> {
     if content.is_empty() {
         return None;
@@ -157,6 +164,7 @@ pub fn extract_content_from_code_blocks(content: &str) -> Option<String> {
 
 /// Extract the largest JSON value from cleaned model output: prefer a markdown
 /// code block, else the outermost `[...]`/`{...}` span.
+#[must_use]
 pub fn extract_json(content: &str) -> Option<serde_json::Value> {
     if let Some(block) = extract_content_from_code_blocks(content) {
         if let Ok(v) = serde_json::from_str(&block) {
@@ -190,6 +198,7 @@ pub fn extract_json(content: &str) -> Option<serde_json::Value> {
 
 /// Comprehensive cleanup in the Python order: thinking blocks, inline
 /// reasoning, stats tokens, markdown fences.
+#[must_use]
 pub fn clean_model_output(content: &str) -> String {
     if content.is_empty() {
         return String::new();

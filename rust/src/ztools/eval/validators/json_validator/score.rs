@@ -1,6 +1,6 @@
 //! The three public validators: plain JSON, detailed JSON, and signal/noise.
 //!
-//! Split out of json_validator.rs for the 500-line production cap. These are the
+//! Split out of `json_validator.rs` for the 500-line production cap. These are the
 //! entry points; everything they call lives in the sibling modules.
 
 use serde_json::Value;
@@ -16,8 +16,16 @@ use super::names::_names_match;
 
 use super::items::{extract_list_from_dict, has_item_details, is_valid_list_item};
 use super::source::check_source_extraction;
-use super::weights::*;
+use super::weights::{
+    DETAILED_COUNT_GOOD, DETAILED_COUNT_OK, DETAILED_QUALITY_WEIGHT, DETAILED_SOURCE_WEIGHT,
+    DETAILED_STRUCTURE_WEIGHT, DETAIL_REQUIRED_FIELDS, JSON_COUNT_GOOD, JSON_COUNT_OK,
+    JSON_QUALITY_WEIGHT, JSON_SOURCE_WEIGHT, JSON_STRUCTURE_WEIGHT, JSON_VALIDITY_THRESHOLD,
+    JSON_VALIDITY_WEIGHT, MAX_SCORE, MAX_SCORE_HIGH_SOURCE, MAX_SCORE_LOW_SOURCE,
+    MAX_SCORE_MED_SOURCE, MAX_SCORE_NO_SOURCE, MIN_ITEMS_GOOD, MIN_ITEMS_OK, SOURCE_THRESHOLD_HIGH,
+    SOURCE_THRESHOLD_LOW, SOURCE_THRESHOLD_MED,
+};
 
+#[must_use]
 pub fn validate_json(data: &Value, source_text: &str) -> (i64, String) {
     let items = extract_list_from_dict(data);
     if items.is_empty() {
@@ -72,6 +80,7 @@ pub fn validate_json(data: &Value, source_text: &str) -> (i64, String) {
     (score.min(MAX_SCORE), failures.join("; "))
 }
 
+#[must_use]
 pub fn validate_detailed_json(data: &Value, source_text: &str) -> (i64, String) {
     let items = extract_list_from_dict(data);
     if items.is_empty() {
@@ -208,6 +217,7 @@ pub fn validate_detailed_json(data: &Value, source_text: &str) -> (i64, String) 
     (score.min(MAX_SCORE), truncated_failures)
 }
 
+#[must_use]
 pub fn validate_mixed_signal(
     data: &Value,
     source_text: &str,
@@ -278,10 +288,10 @@ pub fn validate_mixed_signal(
         0.0
     };
 
-    let score = (100.0 * (0.5 * recall + 0.5 * precision)).round() as i64;
+    let score = (100.0 * 0.5f64.mul_add(precision, 0.5 * recall)).round() as i64;
     let mut failures = Vec::new();
     if fp > 0 {
-        failures.push(format!("included {}/{} noise items", fp, total_noise));
+        failures.push(format!("included {fp}/{total_noise} noise items"));
     }
     if tp < expected_signal {
         failures.push(format!(

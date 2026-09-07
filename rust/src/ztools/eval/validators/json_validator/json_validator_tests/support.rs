@@ -1,4 +1,4 @@
-//! Shared fixtures for json_validator's test modules.
+//! Shared fixtures for `json_validator`'s test modules.
 
 use serde_json::{json, Value};
 

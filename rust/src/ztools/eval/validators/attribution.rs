@@ -36,7 +36,7 @@ pub fn content_words(text: &str) -> HashSet<String> {
         .find_iter(&text.to_lowercase())
         .map(|m| m.as_str())
         .filter(|w| !STOPWORDS.contains(w) && w.len() > 2)
-        .map(|w| w.to_string())
+        .map(std::string::ToString::to_string)
         .collect()
 }
 
@@ -76,23 +76,22 @@ pub fn attribution_faithfulness(text: &str, source_text: &str) -> (usize, usize,
         let handle = tag.get(1).unwrap().as_str().to_lowercase();
         let stamp = tag.get(2).unwrap().as_str().trim().to_string();
 
-        let said = match by_author.get(&(handle.clone(), stamp.clone())) {
-            Some(s) => s,
-            None => {
-                if by_author.keys().any(|(h, _)| *h == handle) {
-                    reasons.push(format!("@{} did not post at {}", handle, stamp));
-                } else {
-                    reasons.push(format!("@{} is not in the source", handle));
-                }
-                continue;
+        let said = if let Some(s) = by_author.get(&(handle.clone(), stamp.clone())) {
+            s
+        } else {
+            if by_author.keys().any(|(h, _)| *h == handle) {
+                reasons.push(format!("@{handle} did not post at {stamp}"));
+            } else {
+                reasons.push(format!("@{handle} is not in the source"));
             }
+            continue;
         };
 
         let tag_match = tag.get(0).unwrap();
         let claim_text = &line[..tag_match.start()];
         let claim = content_words(claim_text);
         if claim.is_empty() {
-            reasons.push(format!("@{} bullet has no content", handle));
+            reasons.push(format!("@{handle} bullet has no content"));
             continue;
         }
 
@@ -102,8 +101,7 @@ pub fn attribution_faithfulness(text: &str, source_text: &str) -> (usize, usize,
             faithful += 1;
         } else {
             reasons.push(format!(
-                "@{}'s bullet does not match what they posted",
-                handle
+                "@{handle}'s bullet does not match what they posted"
             ));
         }
     }
@@ -111,6 +109,7 @@ pub fn attribution_faithfulness(text: &str, source_text: &str) -> (usize, usize,
     (faithful, total, reasons)
 }
 
+#[must_use]
 pub fn validate_attribution(data: &Value, source_text: &str) -> (i64, String) {
     let text = match data {
         Value::String(s) => s.clone(),
@@ -165,6 +164,7 @@ pub fn validate_attribution(data: &Value, source_text: &str) -> (i64, String) {
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::fmt::Write as _;
 
     #[test]
     fn test_validate_attribution_faithful_bullets() {
@@ -276,9 +276,10 @@ mod tests {
         let source = "[@alice | Jan 01]: note one";
         let mut text = String::new();
         for i in 0..6 {
-            text.push_str(&format!(
-                "- filler claim number {i} (@alice | TIMESTAMP-{i:06}-PADDINGTEXT)\n"
-            ));
+            let _ = writeln!(
+                text,
+                "- filler claim number {i} (@alice | TIMESTAMP-{i:06}-PADDINGTEXT)"
+            );
         }
         let (score, reason) = validate_attribution(&json!(text), source);
         assert_eq!(score, 0);

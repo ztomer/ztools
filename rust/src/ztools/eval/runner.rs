@@ -105,7 +105,7 @@ impl Default for RunnerConfig {
     }
 }
 
-fn status_for(score: u8) -> &'static str {
+const fn status_for(score: u8) -> &'static str {
     if score >= 90 {
         "ok"
     } else if score >= 50 {
@@ -121,6 +121,7 @@ fn status_for(score: u8) -> &'static str {
 /// task score is the mean of their numeric verdicts -- an 80/100 answer must
 /// surface as 80/partial, not collapse to 0/fail behind a boolean threshold.
 /// Mixed or purely-boolean tasks keep the passed-fraction semantics.
+#[must_use]
 pub fn score_output(task: &EvalTask, cleaned: &str, parsed: Option<&serde_json::Value>) -> u8 {
     if task.checks.is_empty() {
         return 0;
@@ -145,7 +146,7 @@ pub fn score_output(task: &EvalTask, cleaned: &str, parsed: Option<&serde_json::
 /// Is this outcome a SERVER problem rather than a model-quality result?
 /// Transport errors and timeouts are infra; a reasoning overrun is recorded as
 /// what it is -- this model could not finish this task here.
-fn is_infra_failure(outcome: &TaskOutcome) -> bool {
+const fn is_infra_failure(outcome: &TaskOutcome) -> bool {
     outcome.error.is_some()
 }
 
@@ -164,10 +165,12 @@ fn outcome_from(task: &EvalTask, r: &transport::TransportResult) -> TaskOutcome 
     }
 }
 
-/// Evaluate `model` against `tasks` in order. Never panics on transport
-/// problems; every failure lands in the returned outcomes as data. Learning
-/// (signals, prefill, learned timeouts, watchdog) stays OFF -- see
-/// [`run_eval_with_signals`] for the production path.
+/// Evaluate `model` against `tasks` in order.
+///
+/// Never panics on transport problems; every failure lands in the returned
+/// outcomes as data. Learning (signals, prefill, learned timeouts, watchdog)
+/// stays OFF -- see [`run_eval_with_signals`] for the production path.
+#[must_use]
 pub fn run_eval(model: &str, tasks: &[EvalTask], cfg: &RunnerConfig) -> Vec<TaskOutcome> {
     run_eval_inner(model, tasks, cfg, &mut SignalStore::new())
 }
@@ -176,8 +179,11 @@ pub fn run_eval(model: &str, tasks: &[EvalTask], cfg: &RunnerConfig) -> Vec<Task
 /// this model's prefill/cold-start/decode capabilities up front, sizes each
 /// request from the learned per-task timeout instead of the static floor,
 /// records p95/retry signals after each task, and stops when the watchdog sees
-/// no task completion within the stall ceiling. Signals are loaded from and
-/// saved back to `eval_signals.json` by this function.
+/// no task completion within the stall ceiling.
+///
+/// Signals are loaded from and saved back to `eval_signals.json` by this
+/// function.
+#[must_use]
 pub fn run_eval_with_signals(
     model: &str,
     tasks: &[EvalTask],

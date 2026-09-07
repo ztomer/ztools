@@ -36,10 +36,10 @@ fn test_filter_exclusions() {
             description: "Zoo event".into(),
             is_transient: true,
             score: 0.0,
-            start_date: "".into(),
-            end_date: "".into(),
-            weather: "".into(),
-            duration: "".into(),
+            start_date: String::new(),
+            end_date: String::new(),
+            weather: String::new(),
+            duration: String::new(),
         },
         WeekendEvent {
             name: "Local Library Story Time".into(),
@@ -51,10 +51,10 @@ fn test_filter_exclusions() {
             description: "Library story time".into(),
             is_transient: true,
             score: 0.0,
-            start_date: "".into(),
-            end_date: "".into(),
-            weather: "".into(),
-            duration: "".into(),
+            start_date: String::new(),
+            end_date: String::new(),
+            weather: String::new(),
+            duration: String::new(),
         },
     ];
     let exclusions = vec!["Toronto Zoo".into()];
@@ -76,10 +76,10 @@ fn test_flag_constant_columns() {
             description: "Test description 1".into(),
             is_transient: true,
             score: 0.0,
-            start_date: "".into(),
-            end_date: "".into(),
-            weather: "".into(),
-            duration: "".into(),
+            start_date: String::new(),
+            end_date: String::new(),
+            weather: String::new(),
+            duration: String::new(),
         },
         WeekendEvent {
             name: "Event 2".into(),
@@ -91,10 +91,10 @@ fn test_flag_constant_columns() {
             description: "Test description 2".into(),
             is_transient: true,
             score: 0.0,
-            start_date: "".into(),
-            end_date: "".into(),
-            weather: "".into(),
-            duration: "".into(),
+            start_date: String::new(),
+            end_date: String::new(),
+            weather: String::new(),
+            duration: String::new(),
         },
     ];
 
@@ -226,10 +226,10 @@ fn test_format_weekend_plan_empty_and_populated() {
         description: "Annual harvest fair".into(),
         is_transient: true,
         score: 0.0,
-        start_date: "".into(),
-        end_date: "".into(),
-        weather: "".into(),
-        duration: "".into(),
+        start_date: String::new(),
+        end_date: String::new(),
+        weather: String::new(),
+        duration: String::new(),
     }];
     let plan2 = format_weekend_plan(
         &transient,
@@ -264,10 +264,10 @@ fn test_apply_scores_sorts_by_score() {
             description: "fun".into(),
             is_transient: true,
             score: 0.0,
-            start_date: "".into(),
-            end_date: "".into(),
-            weather: "".into(),
-            duration: "".into(),
+            start_date: String::new(),
+            end_date: String::new(),
+            weather: String::new(),
+            duration: String::new(),
         },
         crate::ztools::weekend::WeekendEvent {
             name: "B".into(),
@@ -279,10 +279,10 @@ fn test_apply_scores_sorts_by_score() {
             description: "outdoor festival".into(),
             is_transient: true,
             score: 0.0,
-            start_date: "".into(),
-            end_date: "".into(),
-            weather: "".into(),
-            duration: "".into(),
+            start_date: String::new(),
+            end_date: String::new(),
+            weather: String::new(),
+            duration: String::new(),
         },
     ];
     // Event B has more populated fields (outdoor description) and matching ages.
@@ -297,17 +297,17 @@ fn test_apply_scores_empty_ages() {
     let mut events = vec![crate::ztools::weekend::WeekendEvent {
         name: "X".into(),
         location: "Y".into(),
-        price: "".into(),
-        target_ages: "".into(),
-        day: "".into(),
-        dates: "".into(),
-        description: "".into(),
+        price: String::new(),
+        target_ages: String::new(),
+        day: String::new(),
+        dates: String::new(),
+        description: String::new(),
         is_transient: true,
         score: 0.0,
-        start_date: "".into(),
-        end_date: "".into(),
-        weather: "".into(),
-        duration: "".into(),
+        start_date: String::new(),
+        end_date: String::new(),
+        weather: String::new(),
+        duration: String::new(),
     }];
     // Empty age range: no age bonus, but populated fields still score.
     crate::ztools::weekend::apply_scores(&mut events, "rain", "");
@@ -317,7 +317,7 @@ fn test_apply_scores_empty_ages() {
 #[test]
 /// The fan-out runs and yields nothing when neither the search nor the model
 /// can be reached. Both endpoints point at a closed port so the outcome does
-/// not depend on DuckDuckGo being up -- this test used to hit the live site
+/// not depend on `DuckDuckGo` being up -- this test used to hit the live site
 /// thirteen times, and whether it answered moved the coverage number.
 fn test_fetch_duckduckgo_events() {
     let config = crate::config::ZtoolsConfig {
@@ -356,13 +356,13 @@ fn sample_event(name: &str, location: &str, score: f32) -> crate::ztools::weeken
         target_ages: "6-12".into(),
         day: "Friday".into(),
         dates: "Aug 7".into(),
-        description: format!("{} in {}", name, location),
+        description: format!("{name} in {location}"),
         is_transient: true,
         score,
-        start_date: "".into(),
-        end_date: "".into(),
-        weather: "".into(),
-        duration: "".into(),
+        start_date: String::new(),
+        end_date: String::new(),
+        weather: String::new(),
+        duration: String::new(),
     }
 }
 

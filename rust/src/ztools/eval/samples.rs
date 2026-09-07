@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 pub const SAMPLE_WINDOW: usize = 5;
 
-fn default_clean() -> bool {
+const fn default_clean() -> bool {
     true
 }
 
@@ -24,6 +24,7 @@ pub struct Sample {
 }
 
 impl Sample {
+    #[must_use]
     pub fn new(v: f64, clean: bool) -> Self {
         Self {
             v: (v * 10000.0).round() / 10000.0,
@@ -35,6 +36,7 @@ impl Sample {
 }
 
 /// Compute statistical median of a slice of floats.
+#[must_use]
 pub fn median(values: &[f64]) -> f64 {
     if values.is_empty() {
         return 0.0;
@@ -45,11 +47,12 @@ pub fn median(values: &[f64]) -> f64 {
     if n % 2 == 1 {
         sorted[n / 2]
     } else {
-        (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0
+        f64::midpoint(sorted[n / 2 - 1], sorted[n / 2])
     }
 }
 
 /// Derive estimate: median of recent clean samples, falling back to all recent samples.
+#[must_use]
 pub fn estimate_from(history: &[Sample]) -> f64 {
     if history.is_empty() {
         return 0.0;
@@ -75,6 +78,7 @@ pub fn estimate_from(history: &[Sample]) -> f64 {
 }
 
 /// Clean estimate: median of clean samples ONLY, returning None when no clean sample exists.
+#[must_use]
 pub fn clean_estimate(history: &[Sample]) -> Option<f64> {
     let clean_values: Vec<f64> = history.iter().filter(|s| s.clean).map(|s| s.v).collect();
 
@@ -155,7 +159,7 @@ mod tests {
     fn test_add_sample_bounding() {
         let mut history = Vec::new();
         for i in 1..=15 {
-            add_sample(&mut history, i as f64, true);
+            add_sample(&mut history, f64::from(i), true);
         }
         // Retains at most SAMPLE_WINDOW * 2 = 10 items
         assert_eq!(history.len(), 10);

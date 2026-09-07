@@ -6,6 +6,7 @@
 
 pub mod cli;
 pub mod cli_ztools;
+pub mod cli_ztools_twitter;
 pub mod config;
 pub mod manifest;
 pub mod ztools;

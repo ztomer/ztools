@@ -22,7 +22,7 @@ fn drop_uncorroborated_filters_ghosts_but_never_empties_a_roster() {
         entry("diskmodel", "8B"),
         entry("ghost-b", "70B"),
     ];
-    let kept = drop_uncorroborated(roster.clone());
+    let kept = drop_uncorroborated(roster);
     assert_eq!(kept, vec![entry("diskmodel", "8B")], "ghosts are dropped");
 
     // Nothing survives: the ORIGINAL list comes back -- a fully-ghost
@@ -31,7 +31,7 @@ fn drop_uncorroborated_filters_ghosts_but_never_empties_a_roster() {
     assert_eq!(drop_uncorroborated(all_ghost.clone()), all_ghost);
 }
 
-/// One-shot localhost HTTP mock for fetch_roster.
+/// One-shot localhost HTTP mock for `fetch_roster`.
 fn serve_roster(body: &'static str, status_line: &'static str) -> (u16, thread::JoinHandle<()>) {
     use std::io::{Read, Write};
     use std::net::TcpListener;

@@ -1,6 +1,6 @@
 //! Grounding: what fraction of the returned items actually came from the source.
 //!
-//! Split out of json_validator.rs for the 500-line production cap.
+//! Split out of `json_validator.rs` for the 500-line production cap.
 
 use serde_json::Value;
 use std::collections::HashSet;
@@ -8,6 +8,7 @@ use std::collections::HashSet;
 use super::names::_norm_name;
 use super::weights::STOPWORDS;
 
+#[must_use]
 pub fn check_source_extraction(items: &[Value], source_text: &str) -> f64 {
     if items.is_empty() || source_text.is_empty() {
         return 0.0;
@@ -64,14 +65,14 @@ pub fn check_source_extraction(items: &[Value], source_text: &str) -> f64 {
                 .unwrap_or_default(),
             _ => String::new(),
         };
-        let search = if !primary.is_empty() {
-            _norm_name(&primary)
-        } else {
+        let search = if primary.is_empty() {
             item_text
+        } else {
+            _norm_name(&primary)
         };
         if search.len() >= 4 && source_lower.contains(&search) {
             matches += 1;
         }
     }
-    matches as f64 / items.len() as f64
+    f64::from(matches) / items.len() as f64
 }

@@ -31,6 +31,7 @@ pub struct PlanContext {
 }
 
 /// Resolve the weekend model against the active Osaurus roster if needed.
+#[must_use]
 pub fn resolve_weekend_model(base_url: &str, preferred_model: &str) -> String {
     let url = format!("{}/v1/models", base_url.trim_end_matches('/'));
     let client = match reqwest::blocking::Client::builder()
@@ -88,6 +89,7 @@ pub fn resolve_weekend_model(base_url: &str, preferred_model: &str) -> String {
 }
 
 /// One plain-text LLM call against the configured osaurus endpoint.
+#[must_use]
 pub fn call_llm_text(prompt: &str, config: &crate::config::ZtoolsConfig) -> Option<String> {
     let model = resolve_weekend_model(&config.osaurus_url, &config.weekend_model);
     crate::ztools::twitter::call_osaurus(&config.osaurus_url, &model, prompt, config)
@@ -130,6 +132,7 @@ pub(crate) fn call_llm_json(
 }
 
 /// Condense a forecast to 1-2 sentences; fall back to a preview on failure.
+#[must_use]
 pub fn condense_weather(weather_str: &str, config: &crate::config::ZtoolsConfig) -> String {
     let prompt = render(PHASE_WEATHER_CONDENSE, &[("weather_str", weather_str)]);
     call_llm_text(&prompt, config)
@@ -143,6 +146,7 @@ pub fn condense_weather(weather_str: &str, config: &crate::config::ZtoolsConfig)
 /// raw rather than dropping it. The Python original persists batch sizes to a
 /// signals file; this port keeps them in-memory per run, which is what the
 /// shapes actually depend on.
+#[must_use]
 pub fn extract_sources(
     raw_text: &str,
     location: &str,
@@ -204,6 +208,7 @@ pub fn extract_sources(
 }
 
 /// Phase 2: draft candidate activities from the cleaned sources.
+#[must_use]
 pub fn draft_activities(
     weather_condensed: &str,
     cleaned_sources: &str,
@@ -227,12 +232,14 @@ pub fn draft_activities(
 }
 
 /// Phase 3: merge near-duplicates, keep the best, sort by appeal.
+#[must_use]
 pub fn refine_draft(draft_text: &str, config: &crate::config::ZtoolsConfig) -> String {
     let prompt = render(PHASE_REFINE, &[("draft_text", draft_text)]);
     call_llm_text(&prompt, config).unwrap_or_else(|| draft_text.to_string())
 }
 
 /// Phase 4: structure the refined draft into the transient-event JSON schema.
+#[must_use]
 pub fn structure_to_json(
     text: &str,
     weather_condensed: &str,

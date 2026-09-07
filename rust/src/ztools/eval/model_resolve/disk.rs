@@ -1,31 +1,34 @@
 //! Filesystem probing: model config location, generative-ness, disk corroboration.
 //!
-//! Split out of model_resolve.rs for the 500-line cap.
+//! Split out of `model_resolve.rs` for the 500-line cap.
 
 use std::path::{Path, PathBuf};
 
 pub(super) fn models_dir() -> PathBuf {
-    std::env::var("MLX_MODELS_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| dirs::home_dir().unwrap_or_default().join("MLXModels"))
+    std::env::var("MLX_MODELS_DIR").map_or_else(
+        |_| dirs::home_dir().unwrap_or_default().join("MLXModels"),
+        PathBuf::from,
+    )
 }
 
 pub(super) fn hf_cache_dir() -> PathBuf {
-    let home = std::env::var("HF_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
+    let home = std::env::var("HF_HOME").map_or_else(
+        |_| {
             dirs::home_dir()
                 .unwrap_or_default()
                 .join(".cache/huggingface")
-        });
+        },
+        PathBuf::from,
+    );
     home.join("hub")
 }
 
 /// The on-disk config.json for a served model id, if it can be found.
 ///
 /// Served ids are lowercased while directories keep their original case, so
-/// match case-insensitively. MLXModels: `<Org>/<Model>/config.json`; HF cache:
+/// match case-insensitively. `MLXModels`: `<Org>/<Model>/config.json`; HF cache:
 /// `models--<org>--<model>/snapshots/<sha>/config.json`.
+#[must_use]
 pub fn model_config_path(model: &str) -> Option<PathBuf> {
     if model.is_empty() {
         return None;
@@ -40,8 +43,7 @@ pub fn model_config_path(model: &str) -> Option<PathBuf> {
                 let parent_is_target = config
                     .parent()
                     .and_then(|p| p.file_name())
-                    .map(|n| n.to_string_lossy().to_lowercase() == target)
-                    .unwrap_or(false);
+                    .is_some_and(|n| n.to_string_lossy().to_lowercase() == target);
                 if parent_is_target {
                     return Some(config);
                 }
@@ -51,8 +53,7 @@ pub fn model_config_path(model: &str) -> Option<PathBuf> {
                         && part_str
                             .rsplit("--")
                             .next()
-                            .map(|last| last.eq_ignore_ascii_case(&target))
-                            .unwrap_or(false)
+                            .is_some_and(|last| last.eq_ignore_ascii_case(&target))
                     {
                         return Some(config);
                     }
@@ -108,7 +109,7 @@ pub(super) fn documented_context_window(model: &str) -> Option<u64> {
         std::fs::read_to_string(conf_models_root().join(format!("{family}.toml"))).ok()?;
     let val: toml::Value = toml::from_str(&content).ok()?;
     val.get("context_window")
-        .and_then(|w| w.as_integer())
+        .and_then(toml::Value::as_integer)
         .filter(|w| *w > 0)
         .map(|w| w as u64)
 }
@@ -135,6 +136,7 @@ pub(super) fn conf_models_root() -> PathBuf {
 /// that silently misses the next one. Unknown on disk: assume generative
 /// rather than silently skipping a model the user installed (foundation lands
 /// here and is generative). An unreadable config: same, keep probing.
+#[must_use]
 pub fn is_generative_model(model: &str) -> bool {
     const NON_GENERATIVE_TYPES: &[&str] = &["model2vec", "sentence-transformer", "static"];
     const NON_GENERATIVE_ARCHITECTURES: &[&str] = &["staticmodel", "sentencetransformer"];
@@ -163,7 +165,7 @@ pub fn is_generative_model(model: &str) -> bool {
         .map(|a| {
             a.iter()
                 .filter_map(|v| v.as_str())
-                .map(|s| s.to_lowercase())
+                .map(str::to_lowercase)
                 .collect::<Vec<String>>()
         })
         .unwrap_or_default();
@@ -180,6 +182,7 @@ pub fn is_generative_model(model: &str) -> bool {
 /// probe is NOT evidence of absence -- keep the entry, because wrongly dropping
 /// a servable model is worse than keeping a stale one that still degrades
 /// loudly at call time.
+#[must_use]
 pub fn disk_corroborated(model: &str) -> bool {
     std::panic::catch_unwind(|| {
         model_config_path(model).is_some() || documented_context_window(model).is_some()

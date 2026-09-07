@@ -114,13 +114,13 @@ fn test_query_llm_filename_mock_server() {
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
 
     thread::spawn(move || {
         if let Ok((mut stream, _)) = listener.accept() {
             let mut buf = [0u8; 1024];
             let _ = stream.read(&mut buf);
-            let body = r###"{"choices": [{"message": {"content": "Apple Store Receipt 2026"}}]}"###;
+            let body = r#"{"choices": [{"message": {"content": "Apple Store Receipt 2026"}}]}"#;
             let resp = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
                 body.len(),
@@ -149,7 +149,7 @@ fn test_query_vlm_for_filename_mock_server_sends_data_uri() {
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
-    let base_url = format!("http://{}", addr);
+    let base_url = format!("http://{addr}");
 
     let (tx, rx) = std::sync::mpsc::channel();
     thread::spawn(move || {
@@ -158,7 +158,7 @@ fn test_query_vlm_for_filename_mock_server_sends_data_uri() {
             let _ = stream.read(&mut buf);
             let received = String::from_utf8_lossy(&buf).to_string();
             let _ = tx.send(received);
-            let body = r###"{"choices": [{"message": {"content": "Here is the filename: white_goose_grass"}}]}"###;
+            let body = r#"{"choices": [{"message": {"content": "Here is the filename: white_goose_grass"}}]}"#;
             let resp = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
                 body.len(),
@@ -217,11 +217,10 @@ fn mutant_words_to_filename_digits_only() {
 #[test]
 fn mutant_words_to_filename_mixed_alpha_digits() {
     let result = vlm::words_to_filename("Apple 123 Store", 50, 6).unwrap();
-    let has_alpha = result.chars().any(|c| c.is_alphabetic());
+    let has_alpha = result.chars().any(char::is_alphabetic);
     assert!(
         has_alpha,
-        "words_to_filename result '{}' should contain alphabetic chars",
-        result
+        "words_to_filename result '{result}' should contain alphabetic chars"
     );
 }
 
@@ -294,8 +293,7 @@ fn mutant_clean_filename_edge_cases() {
     assert!(result.len() <= 20, "Result should be <= 20 chars");
     assert!(
         !result.ends_with('_'),
-        "Result '{}' should not end with _",
-        result
+        "Result '{result}' should not end with _"
     );
 }
 
@@ -398,13 +396,13 @@ fn spawn_single_shot_server(body: &'static str) -> String {
         );
         let _ = stream.write_all(resp.as_bytes());
     }
-    format!("http://{}", addr)
+    format!("http://{addr}")
 }
 
 #[test]
 fn test_name_image_uses_vlm_branch_for_unmeaningful_stem() {
     let base_url = spawn_single_shot_server(
-        r###"{"choices": [{"message": {"content": "Here is the filename: White Goose Grass"}}]}"###,
+        r#"{"choices": [{"message": {"content": "Here is the filename: White Goose Grass"}}]}"#,
     );
     let config = crate::config::ZtoolsConfig {
         osaurus_url: base_url,

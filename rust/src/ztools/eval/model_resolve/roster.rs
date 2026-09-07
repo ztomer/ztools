@@ -1,6 +1,6 @@
 //! Roster entries, substitution scoring, and the missing-model fallback chain.
 //!
-//! Split out of model_resolve.rs for the 500-line cap.
+//! Split out of `model_resolve.rs` for the 500-line cap.
 
 pub(super) const ROSTER_TIMEOUT_SECS: u64 = 10;
 pub(super) const API_TAGS: &str = "/api/tags";
@@ -11,6 +11,7 @@ pub const MISSING_MODEL_MARKERS: &[&str] =
     &["is not installed", "not registered with any provider"];
 
 /// True when a 404 means "that model tag is gone", not "wrong endpoint".
+#[must_use]
 pub fn is_missing_model_error(status_code: u16, body: &str) -> bool {
     if status_code != 404 {
         return false;
@@ -20,14 +21,15 @@ pub fn is_missing_model_error(status_code: u16, body: &str) -> bool {
 }
 
 /// One `/api/tags` entry, narrowed to what selection reads.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RosterEntry {
     pub model: String,
     pub parameter_size: String,
 }
 
 impl RosterEntry {
-    pub fn from_json(v: &serde_json::Value) -> Option<RosterEntry> {
+    #[must_use]
+    pub fn from_json(v: &serde_json::Value) -> Option<Self> {
         let model = v.get("model")?.as_str()?.to_string();
         if model.is_empty() {
             return None;
@@ -38,7 +40,7 @@ impl RosterEntry {
             .and_then(|p| p.as_str())
             .unwrap_or("")
             .to_string();
-        Some(RosterEntry {
+        Some(Self {
             model,
             parameter_size,
         })
@@ -46,6 +48,7 @@ impl RosterEntry {
 }
 
 /// Parse `details.parameter_size` ("27B", "4M", "") into billions, 0.0 if absent.
+#[must_use]
 pub fn parameter_billions(entry: &RosterEntry) -> f64 {
     let raw = entry.parameter_size.trim().to_uppercase();
     if raw.is_empty() {
@@ -60,8 +63,7 @@ pub fn parameter_billions(entry: &RosterEntry) -> f64 {
     match scale {
         Some(scale) => raw[..raw.len() - 1]
             .parse::<f64>()
-            .map(|n| n * scale)
-            .unwrap_or(0.0),
+            .map_or(0.0, |n| n * scale),
         None => 0.0,
     }
 }
@@ -87,6 +89,7 @@ fn pick_best<'a>(entries: impl Iterator<Item = &'a RosterEntry>) -> Option<Strin
 /// either because `configured` is installed, or because the roster is empty and
 /// we have no grounds to override the caller. It is a human-readable sentence
 /// otherwise, and every caller must surface it rather than swallow it.
+#[must_use]
 pub fn substitute_model(
     configured: &str,
     roster: &[RosterEntry],
@@ -149,6 +152,7 @@ pub fn substitute_model(
 
 /// The known families, on-device first (`conf/config.toml [model_fallback_chain]`
 /// overrides this in Python; the Rust eval carries no such table yet).
+#[must_use]
 pub fn default_fallback_chain() -> Vec<&'static str> {
     let families = crate::ztools::eval::quirks::MODEL_FAMILIES;
     // DEFAULT_MODEL is "foundation" (lib/llm/constants.py).

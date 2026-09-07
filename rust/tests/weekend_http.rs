@@ -1,7 +1,7 @@
 //! Integration tests for the weekend module's HTTP-dependent functions.
 //!
 //! Spins up a mock HTTP server that responds to Open-Meteo and Ollama-style
-//! endpoints, then exercises the real fetch_weather and call_osaurus_json
+//! endpoints, then exercises the real `fetch_weather` and `call_osaurus_json`
 //! wrappers against it. This covers the HTTP request/response cycle that the
 //! pure-parsing unit tests can't reach.
 

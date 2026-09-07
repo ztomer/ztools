@@ -1,7 +1,9 @@
 use super::WeekendEvent;
+use std::fmt::Write as _;
 
 /// Build the gorgeous weekend plan output into a string. Pure so it is
 /// testable; `print_weekend_plan_gorgeous` writes it to stdout.
+#[must_use]
 pub fn render_weekend_plan_gorgeous(
     dates_str: &str,
     weather_str: &str,
@@ -11,10 +13,7 @@ pub fn render_weekend_plan_gorgeous(
     use comfy_table::{Cell, Color, Table};
 
     let mut out = String::new();
-    out.push_str(&format!(
-        "\nWeekend Plan: {}\n\n{}\n\n",
-        dates_str, weather_str
-    ));
+    let _ = write!(out, "\nWeekend Plan: {dates_str}\n\n{weather_str}\n\n");
 
     // Render Fixed Activities
     if !fixed_activities.is_empty() {
@@ -44,11 +43,13 @@ pub fn render_weekend_plan_gorgeous(
                 Cell::new("Outdoor/Indoor"),
             ]);
         }
-        out.push_str(&format!("{}\n\n", table));
+        let _ = write!(out, "{table}\n\n");
     }
 
     // Render Transient Events
-    if !transient_events.is_empty() {
+    if transient_events.is_empty() {
+        out.push_str("⚠ Transient Events: None found for this weekend (search/extraction yielded 0 candidates).\nFalling back to Year-Round Fixed Activities.\n\n");
+    } else {
         out.push_str("Transient / Limited-Time Events\n");
         let mut table = Table::new();
         table.set_header(vec![
@@ -81,9 +82,7 @@ pub fn render_weekend_plan_gorgeous(
                 Cell::new("Outdoor/Indoor"),
             ]);
         }
-        out.push_str(&format!("{}\n\n", table));
-    } else {
-        out.push_str("⚠ Transient Events: None found for this weekend (search/extraction yielded 0 candidates).\nFalling back to Year-Round Fixed Activities.\n\n");
+        let _ = write!(out, "{table}\n\n");
     }
 
     out
@@ -111,6 +110,7 @@ pub fn print_weekend_plan_gorgeous(
 /// already has `--md-out`. Taking them as arguments also makes this testable
 /// without a network, which is what let the coverage number drift with the
 /// weather API's availability.
+#[must_use]
 pub fn format_weekend_plan(
     transient: &[WeekendEvent],
     fixed: &[WeekendEvent],
@@ -122,11 +122,10 @@ pub fn format_weekend_plan(
     let (transient_items, fixed_items) = (transient, fixed);
 
     let mut out = String::new();
-    out.push_str(&format!("# Weekend Plan: {} ({})\n\n", dates_str, location));
-    out.push_str(&format!(
-        "**Location:** {}\n**Target Ages:** {}\n**Weather:** {}\n\n",
-        location, target_ages, weather_display
-    ));
+    let _ = write!(out, "# Weekend Plan: {dates_str} ({location})\n\n");
+    let _ = write!(out,
+        "**Location:** {location}\n**Target Ages:** {target_ages}\n**Weather:** {weather_display}\n\n"
+    );
 
     out.push_str(
         "### Fixed / Year-Round Activities (Ranked by Fit Score (computed, not reviews))\n\n",
@@ -147,10 +146,11 @@ pub fn format_weekend_plan(
             } else {
                 ev.description.clone()
             };
-            out.push_str(&format!(
-                "| * {:.1}/5 | {} | {} | {} | Outdoor/Indoor | {} |\n",
+            let _ = writeln!(
+                out,
+                "| * {:.1}/5 | {} | {} | {} | Outdoor/Indoor | {} |",
                 ev.score, loc_str, ev.target_ages, ev.price, desc
-            ));
+            );
         }
         out.push('\n');
     }
@@ -174,16 +174,18 @@ pub fn format_weekend_plan(
             } else {
                 ev.description.clone()
             };
-            out.push_str(&format!(
-                "| * {:.1}/5 | {} | {} | {} | {} | {} |\n",
+            let _ = writeln!(
+                out,
+                "| * {:.1}/5 | {} | {} | {} | {} | {} |",
                 ev.score, loc_str, ev.day, ev.target_ages, ev.price, desc
-            ));
+            );
         }
         out.push('\n');
     }
 
     out
 }
+#[must_use]
 pub fn format_weather_display(raw: &str) -> String {
     let mut parts = Vec::new();
     for line in raw.lines() {
@@ -203,7 +205,7 @@ pub fn format_weather_display(raw: &str) -> String {
                     } else {
                         "clear"
                     };
-                    parts.push(format!("{} {}°C ({})", day_name, temp, cond));
+                    parts.push(format!("{day_name} {temp}°C ({cond})"));
                     continue;
                 }
             }

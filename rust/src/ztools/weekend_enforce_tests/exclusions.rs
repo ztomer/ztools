@@ -67,7 +67,7 @@ fn seasonal_event_exception_is_kept_but_generic_visit_is_dropped() {
     let exclusions = vec!["Toronto Zoo".to_string()];
     let seasonal = event("Terra Lumina Light Festival at Toronto Zoo", "Toronto Zoo");
     let generic = event("A Day at Your Toronto Zoo", "Toronto Zoo");
-    let (kept, notes) = drop_excluded_places(vec![seasonal.clone(), generic.clone()], &exclusions);
+    let (kept, notes) = drop_excluded_places(vec![seasonal, generic], &exclusions);
     assert_eq!(kept.len(), 1, "{notes:?}");
     assert_eq!(kept[0].name, "Terra Lumina Light Festival at Toronto Zoo");
     assert!(
