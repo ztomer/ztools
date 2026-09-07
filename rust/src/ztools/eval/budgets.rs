@@ -169,10 +169,7 @@ pub fn max_tokens_for_task(task: &str, model: &str) -> u32 {
         })
         .filter(|b| *b > 0)
         .map_or(DEFAULT_MAX_TOKENS, |b| b as u32);
-    match model_cap(model) {
-        Some(cap) => budget.min(cap),
-        None => budget,
-    }
+    model_cap(model).map_or(budget, |cap| budget.min(cap))
 }
 
 #[cfg(test)]

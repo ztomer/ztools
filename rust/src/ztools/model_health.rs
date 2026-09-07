@@ -166,11 +166,7 @@ pub fn probe_model_dir_defects(dir: &Path) -> Vec<String> {
 /// Probe model defects given a model name and optional base directory.
 #[must_use]
 pub fn probe_model_defects(model_name: &str, base_dir: Option<&Path>) -> Vec<String> {
-    if let Some(dir) = find_model_dir(model_name, base_dir) {
-        probe_model_dir_defects(&dir)
-    } else {
-        Vec::new()
-    }
+    find_model_dir(model_name, base_dir).map_or_else(Vec::new, |dir| probe_model_dir_defects(&dir))
 }
 
 /// Assess model viability (defect check + decode thrashing check).

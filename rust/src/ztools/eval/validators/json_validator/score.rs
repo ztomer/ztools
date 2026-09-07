@@ -232,6 +232,11 @@ pub fn validate_detailed_json(data: &Value, source_text: &str) -> (i64, String) 
     clippy::cast_precision_loss,
     reason = "a precision figure over true and false positives counted within one answer, clamped to 1.0 afterwards"
 )]
+#[expect(
+    clippy::option_if_let_else,
+    reason = "a nested min/max over an optional expectation. Flattening \
+              it into `map_or` hides which of the two bounds is being chosen"
+)]
 pub fn validate_mixed_signal(
     data: &Value,
     source_text: &str,

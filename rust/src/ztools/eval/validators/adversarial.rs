@@ -62,12 +62,9 @@ pub fn validate_no_fabrication(data: &Value, source_text: &str, lures: &[String]
         .lines()
         .filter_map(|line| {
             let trimmed = line.trim();
-            if let Some(stripped) = trimmed.strip_prefix("- ") {
-                let name = stripped.split(':').next().unwrap_or("").trim();
-                Some(name.to_string())
-            } else {
-                None
-            }
+            trimmed
+                .strip_prefix("- ")
+                .map(|stripped| stripped.split(':').next().unwrap_or("").trim().to_string())
         })
         .collect();
 

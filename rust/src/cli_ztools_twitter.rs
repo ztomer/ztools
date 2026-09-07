@@ -38,10 +38,7 @@ fn tweets_from_json(text: &str) -> Vec<crate::ztools::twitter::Tweet> {
 
 /// Tweets from one file, or nothing when it is absent or unreadable.
 fn tweets_from_file(path: &std::path::Path) -> Vec<crate::ztools::twitter::Tweet> {
-    match std::fs::read_to_string(path) {
-        Ok(content) => tweets_from_json(&content),
-        Err(_) => Vec::new(),
-    }
+    std::fs::read_to_string(path).map_or_else(|_| Vec::new(), |content| tweets_from_json(&content))
 }
 
 /// The first cache file that yields a NON-EMPTY tweet list, and where it came

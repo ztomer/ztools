@@ -33,12 +33,10 @@ pub fn generic_location_ratio(items: &[Value]) -> f64 {
     let generic = rows
         .iter()
         .filter(|r| {
-            if let Some(loc) = r.get("location") {
+            r.get("location").is_some_and(|loc| {
                 let loc_str = loc.to_string().trim_matches('"').trim().to_string();
                 GENERIC_LOCATION_RE.is_match(&loc_str)
-            } else {
-                false
-            }
+            })
         })
         .count();
     ratio(generic, rows.len())

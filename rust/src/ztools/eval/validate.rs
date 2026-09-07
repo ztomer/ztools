@@ -82,8 +82,7 @@ pub fn validate_file_summary(raw: &str) -> (u8, String) {
     match parsed {
         Some(serde_json::Value::Array(items)) => validate_list(&items),
         Some(serde_json::Value::Object(map)) => validate_parsed(map),
-        Some(_) => validate_raw_string(trimmed),
-        None => validate_raw_string(trimmed),
+        Some(_) | None => validate_raw_string(trimmed),
     }
 }
 

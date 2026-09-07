@@ -91,11 +91,9 @@ pub fn is_expired(dir: &Path, max_idle: Duration) -> bool {
     let Ok(mtime) = meta.modified() else {
         return false;
     };
-    if let Ok(elapsed) = SystemTime::now().duration_since(mtime) {
-        elapsed >= max_idle
-    } else {
-        false
-    }
+    SystemTime::now()
+        .duration_since(mtime)
+        .is_ok_and(|elapsed| elapsed >= max_idle)
 }
 
 fn force_remove(dir: &Path) {

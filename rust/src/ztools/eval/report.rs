@@ -81,10 +81,7 @@ const fn default_true() -> bool {
 }
 
 fn history_path(eval_dir: Option<&Path>) -> PathBuf {
-    let base = match eval_dir {
-        Some(d) => d.to_path_buf(),
-        None => default_eval_dir(),
-    };
+    let base = eval_dir.map_or_else(default_eval_dir, Path::to_path_buf);
     base.join("eval_history.json")
 }
 

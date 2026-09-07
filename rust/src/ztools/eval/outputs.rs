@@ -26,10 +26,7 @@ pub fn max_saved_chars() -> usize {
 /// On unless explicitly disabled, because the failure mode is silent loss.
 #[must_use]
 pub fn outputs_enabled() -> bool {
-    match std::env::var("EVAL_SAVE_OUTPUTS") {
-        Ok(v) => !matches!(v.as_str(), "0" | "false" | "no"),
-        Err(_) => true,
-    }
+    std::env::var("EVAL_SAVE_OUTPUTS").map_or(true, |v| !matches!(v.as_str(), "0" | "false" | "no"))
 }
 
 /// Where saved outputs live. Overridable so tests never touch the real one.
@@ -38,10 +35,10 @@ pub fn outputs_dir(eval_dir: Option<&Path>) -> PathBuf {
     if let Ok(override_dir) = std::env::var("EVAL_OUTPUT_DIR") {
         return PathBuf::from(override_dir);
     }
-    let base = match eval_dir {
-        Some(d) => d.to_path_buf(),
-        None => crate::ztools::eval::report::default_eval_dir(),
-    };
+    let base = eval_dir.map_or_else(
+        crate::ztools::eval::report::default_eval_dir,
+        std::path::Path::to_path_buf,
+    );
     base.join("outputs")
 }
 

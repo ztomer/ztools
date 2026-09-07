@@ -226,11 +226,8 @@ mod tests {
         let get_inst = |k: &str| -> &str {
             rn.get(k)
                 .and_then(|v| {
-                    if let Some(s) = v.as_str() {
-                        Some(s)
-                    } else {
-                        v.get("instructions").and_then(|i| i.as_str())
-                    }
+                    v.as_str()
+                        .or_else(|| v.get("instructions").and_then(|i| i.as_str()))
                 })
                 .unwrap_or_else(|| panic!("missing [rename.{k}]"))
         };

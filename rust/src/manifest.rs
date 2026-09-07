@@ -9,11 +9,9 @@ use std::path::PathBuf;
 /// Expand a leading `~` so paths can be written portably in config.
 #[must_use]
 pub fn expand_tilde(p: &str) -> PathBuf {
-    match p.strip_prefix("~/") {
-        Some(rest) => match dirs::home_dir() {
-            Some(h) => h.join(rest),
-            None => PathBuf::from(p),
-        },
-        None => PathBuf::from(p),
-    }
+    // Either half missing -- not a `~/` path, or no home directory -- leaves
+    // the path exactly as written rather than half-expanded.
+    p.strip_prefix("~/")
+        .and_then(|rest| dirs::home_dir().map(|h| h.join(rest)))
+        .unwrap_or_else(|| PathBuf::from(p))
 }

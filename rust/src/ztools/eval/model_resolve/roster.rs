@@ -60,12 +60,11 @@ pub fn parameter_billions(entry: &RosterEntry) -> f64 {
         b'K' => Some(0.000_001),
         _ => None,
     };
-    match scale {
-        Some(scale) => raw[..raw.len() - 1]
+    scale.map_or(0.0, |scale| {
+        raw[..raw.len() - 1]
             .parse::<f64>()
-            .map_or(0.0, |n| n * scale),
-        None => 0.0,
-    }
+            .map_or(0.0, |n| n * scale)
+    })
 }
 
 /// Sort key: biggest model first, then name, so the pick is deterministic.

@@ -183,6 +183,12 @@ pub fn eval_all_models(
 
 /// Split an osaurus base URL ("<http://127.0.0.1:1337>") into host and port.
 #[must_use]
+#[expect(
+    clippy::option_if_let_else,
+    reason = "a host:port split where the `Some` arm parses the port and \
+              falls back again on failure. Two levels of fallback read as two \
+              levels here and as one nested closure otherwise"
+)]
 pub fn parse_osaurus_url(url: &str) -> (String, u16) {
     let stripped = url
         .strip_prefix("http://")

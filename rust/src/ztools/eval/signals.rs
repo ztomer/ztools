@@ -59,6 +59,13 @@ pub fn max_eval_timeout() -> u64 {
 /// capability and forking the store. The home fallback covers an installed
 /// binary with no checkout nearby.
 #[must_use]
+#[expect(
+    clippy::option_if_let_else,
+    reason = "the else branch is a candidate SEARCH over several \
+              directories, not a default value. As a closure argument the \
+              search would read as a fallback expression rather than as the \
+              thing that normally happens"
+)]
 pub fn signals_path() -> PathBuf {
     let dir = if let Ok(d) = std::env::var("EVAL_SIGNALS_DIR") {
         d
@@ -82,10 +89,10 @@ pub type SignalStore = BTreeMap<String, Value>;
 #[must_use]
 pub fn load_signals() -> SignalStore {
     let path = signals_path();
-    match std::fs::read_to_string(&path) {
-        Ok(text) => serde_json::from_str(&text).unwrap_or_default(),
-        Err(_) => SignalStore::new(),
-    }
+    std::fs::read_to_string(&path).map_or_else(
+        |_| SignalStore::new(),
+        |text| serde_json::from_str(&text).unwrap_or_default(),
+    )
 }
 
 pub fn save_signals(signals: &SignalStore) {

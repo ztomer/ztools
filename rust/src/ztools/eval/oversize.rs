@@ -173,10 +173,7 @@ pub fn oversize_refusal(
         return String::new();
     }
 
-    let thrashing = match thrashing {
-        Some(t) => t,
-        None => is_thrashing().unwrap_or_default(),
-    };
+    let thrashing = thrashing.unwrap_or_else(|| is_thrashing().unwrap_or_default());
     if thrashing {
         let detail = match memory_pressure() {
             Some((swap, compressor)) => {

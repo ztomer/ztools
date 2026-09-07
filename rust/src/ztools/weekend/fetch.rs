@@ -134,6 +134,12 @@ fn monolithic_transient(
 ///
 /// Returns the structured events plus the corpus they were judged against.
 #[must_use]
+#[expect(
+    clippy::option_if_let_else,
+    reason = "the else branch is the monolithic-prompt fallback, with the \
+              comment explaining why a dead draft phase must not starve the \
+              plan. That belongs beside the branch, not inside a closure"
+)]
 pub fn fetch_duckduckgo_events(
     location: &str,
     d1: NaiveDate,
