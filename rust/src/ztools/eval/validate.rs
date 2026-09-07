@@ -81,7 +81,7 @@ pub fn validate_file_summary(raw: &str) -> (u8, String) {
     let parsed: Option<serde_json::Value> = serde_json::from_str(trimmed).ok();
     match parsed {
         Some(serde_json::Value::Array(items)) => validate_list(&items),
-        Some(serde_json::Value::Object(map)) => validate_parsed(map),
+        Some(serde_json::Value::Object(map)) => validate_parsed(&map),
         Some(_) | None => validate_raw_string(trimmed),
     }
 }
@@ -155,12 +155,12 @@ fn validate_list(items: &[serde_json::Value]) -> (u8, String) {
     (score.min(100), failures.join("; "))
 }
 
-fn validate_parsed(map: serde_json::Map<String, serde_json::Value>) -> (u8, String) {
+fn validate_parsed(map: &serde_json::Map<String, serde_json::Value>) -> (u8, String) {
     let mut failures: Vec<String> = Vec::new();
     let num_files = map.len();
     let mut detailed_count = 0usize;
 
-    for (filepath, summary) in &map {
+    for (filepath, summary) in map {
         if filepath.is_empty() {
             continue;
         }

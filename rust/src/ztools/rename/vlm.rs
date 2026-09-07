@@ -23,8 +23,10 @@ pub const PROMPT_IMAGE_TO_FILENAME: &str = "Describe the visual objects in this 
 const VLM_QUERY_TIMEOUT_SECS: u64 = 60;
 
 /// The word-extraction post-processing the text path applies to a raw model
-/// reply (Python `query_llm_for_filename`): strip the conversational prefix,
-/// keep `[a-z0-9]+` words, join with `_`, truncate on a word boundary.
+/// reply (Python `query_llm_for_filename`).
+///
+/// Strip the conversational prefix, keep `[a-z0-9]+` words, join with `_`,
+/// truncate on a word boundary.
 #[must_use]
 pub fn words_to_filename(content: &str, max_len: usize, max_words: usize) -> Option<String> {
     // Python lowercases BEFORE extracting words: "[a-z0-9]+" over lowercased text.

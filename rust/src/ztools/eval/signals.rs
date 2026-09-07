@@ -253,7 +253,9 @@ pub fn derived_timeout(model: &str, prompt_chars: usize, max_tokens: u32) -> u64
     ((seconds * TIMEOUT_SAFETY_FACTOR) as u64).min(max_eval_timeout())
 }
 
-/// Timeout actually applied to one request: the largest of the learned
+/// Timeout actually applied to one request.
+///
+/// The largest of the learned
 /// per-model/task value, the per-task CONFIGURED timeout from
 /// `conf/config.toml [timeouts]` (fallback 600, `lib/llm/constants.py
 /// DEFAULT_TIMEOUT`), the documented floor, and the derived estimate.

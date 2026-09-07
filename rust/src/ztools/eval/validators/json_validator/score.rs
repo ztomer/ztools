@@ -85,6 +85,13 @@ pub fn validate_json(data: &Value, source_text: &str) -> (i64, String) {
     (score.min(MAX_SCORE), failures.join("; "))
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one validator: a sequence of independent checks against \
+              one answer, each subtracting from a running score and appending \
+              its own note. The list IS the rubric, and reading it top to \
+              bottom is how you know what the score means"
+)]
 #[must_use]
 #[expect(
     clippy::cast_possible_truncation,

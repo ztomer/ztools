@@ -196,6 +196,12 @@ fn serve_recording() -> (
     (port, handle, recorded)
 }
 
+#[expect(
+    clippy::significant_drop_tightening,
+    reason = "the guard is held across every assertion ON PURPOSE, as the \
+              comment in the body says: a second `take_lock` while this one is \
+              alive deadlocks the non-reentrant mutex"
+)]
 #[test]
 #[serial]
 fn prefill_probe_sends_nonce_led_filler_and_records_capabilities() {

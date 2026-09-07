@@ -110,7 +110,7 @@ pub fn eval_model(
             "temperature": 0.0
         });
 
-        let mut passed = 0;
+        let mut checks_hit = 0;
         let total = case.checks.len();
 
         let resp = client.post(&url).json(&payload).send();
@@ -131,27 +131,31 @@ pub fn eval_model(
                 let parsed = extract_json(&cleaned);
                 for check in &case.checks {
                     if run_check(check, &cleaned, parsed.as_ref()) {
-                        passed += 1;
+                        checks_hit += 1;
                     }
                 }
             }
         }
 
-        if passed != total {
+        if checks_hit != total {
             println!(
                 "Test '{}' failed ({}/{}). Model output:\n---\n{}\n---",
-                case.name, passed, total, output_text
+                case.name, checks_hit, total, output_text
             );
         }
 
-        let score = (ratio(passed, total)) * 100.0;
-        let status = if passed == total { "passed" } else { "failed" };
+        let score = (ratio(checks_hit, total)) * 100.0;
+        let status = if checks_hit == total {
+            "passed"
+        } else {
+            "failed"
+        };
 
         results.push(ModelEvalResult {
             model: model_name.to_string(),
             test_name: case.name.clone(),
             score,
-            passed,
+            passed: checks_hit,
             total,
             latency_ms: elapsed,
             status: status.to_string(),

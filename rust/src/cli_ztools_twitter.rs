@@ -13,6 +13,13 @@ use crate::config::ZtoolsConfig;
 
 /// The `twitter-summarize` flag set, grouped so the function signature stays
 /// one stable struct instead of a growing argument list.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "this struct EXISTS to hold the command's boolean flags -- it was \
+              extracted so the signature stayed one stable argument instead of \
+              a growing list. Collapsing them into an enum would model as \
+              mutually exclusive what the CLI accepts together."
+)]
 pub(crate) struct TwitterSummarizeOpts {
     pub json: Option<String>,
     pub model: Option<String>,
@@ -87,7 +94,10 @@ pub(crate) fn twitter_summarize(config: &ZtoolsConfig, opts: TwitterSummarizeOpt
     }
 
     let mut tweets = Vec::new();
-    let mut explicit_source = false;
+    // An explicit `--json` is a source the caller NAMED, so the cache and the
+    // live fetch below are skipped even when it yielded nothing: silently
+    // falling back would summarise a different set of tweets than was asked for.
+    let explicit_source = json.is_some();
 
     if let Some(path_or_dash) = json {
         if path_or_dash == "-" {
@@ -98,7 +108,6 @@ pub(crate) fn twitter_summarize(config: &ZtoolsConfig, opts: TwitterSummarizeOpt
         } else {
             tweets = tweets_from_file(std::path::Path::new(&path_or_dash));
         }
-        explicit_source = true;
     }
 
     if !explicit_source {

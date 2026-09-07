@@ -210,10 +210,9 @@ fn a_proven_futile_escalation_is_not_re_bought_on_every_task() {
     assert_eq!(outcomes.len(), 3);
 
     let seen = take_lock(&server.seen_max_tokens).clone();
-    let escalated: Vec<u32> = seen.iter().copied().filter(|b| *b > 2_048).collect();
+    let escalated = seen.iter().filter(|b| **b > 2_048).count();
     assert_eq!(
-        escalated.len(),
-        1,
+        escalated, 1,
         "escalation must be bought once per model, not once per task; saw {seen:?}"
     );
     // Two calls prove the shape on the first task, then one base call per task.

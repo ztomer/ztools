@@ -13,6 +13,12 @@ use super::amounts::{
 use super::grounding::{load_grounding, parse_output};
 
 #[expect(
+    clippy::too_many_lines,
+    reason = "one validator, as `validate_detailed_json`: a sequence of \
+              independent checks against one answer, each contributing to a \
+              running score and a running note"
+)]
+#[expect(
     clippy::cast_possible_truncation,
     reason = "a partial-credit score. `round()` makes it whole and `.max(0.0)` puts it above zero before it narrows; the expression's own factor caps it at 30"
 )]
@@ -138,8 +144,7 @@ pub fn validate_taxes_yoy_narrative(
         grounding
             .get("known_amounts")
             .and_then(|v| v.as_array())
-            .map(std::vec::Vec::as_slice)
-            .unwrap_or(&[]),
+            .map_or(&[][..], Vec::as_slice),
     );
     let (prose_score, prose_note) = score_prose_amounts(prose, &known, 20);
     bits.push(prose_note);
@@ -223,8 +228,7 @@ pub fn validate_taxes_qa(output: &Value, explicit_grounding: Option<&Value>) -> 
         grounding
             .get("known_amounts")
             .and_then(|v| v.as_array())
-            .map(std::vec::Vec::as_slice)
-            .unwrap_or(&[]),
+            .map_or(&[][..], Vec::as_slice),
     );
     let (prose_score, prose_note) = score_prose_amounts(prose, &known, 40);
     bits.push(prose_note);
@@ -308,8 +312,7 @@ pub fn validate_taxes_slip_qa(output: &Value, explicit_grounding: Option<&Value>
         grounding
             .get("known_amounts")
             .and_then(|v| v.as_array())
-            .map(std::vec::Vec::as_slice)
-            .unwrap_or(&[]),
+            .map_or(&[][..], Vec::as_slice),
     );
     let amounts = prose_amounts(prose);
     let num_score = if known.is_empty() {

@@ -55,7 +55,7 @@ pub fn ratio(part: usize, whole: usize) -> f64 {
               saturates rather than wrapping, so the only values that move are \
               ones no score can reach"
 )]
-pub fn rounded(value: f64) -> i64 {
+pub const fn rounded(value: f64) -> i64 {
     value.round() as i64
 }
 

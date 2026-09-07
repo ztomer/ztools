@@ -241,7 +241,7 @@ mod tests {
             Self { saved }
         }
 
-        fn point_at_empty(&self, dir: &tempfile::TempDir) {
+        fn point_at_empty(dir: &tempfile::TempDir) {
             std::env::set_var("MLX_MODELS_DIR", dir.path().join("MLXModels"));
             std::env::set_var("HF_HOME", dir.path().join("hf"));
         }
@@ -357,7 +357,7 @@ mod tests {
         std::env::remove_var("HF_HOME");
         let dir = tempfile::tempdir().unwrap();
         let guard = DiskEnvGuard::new(false);
-        guard.point_at_empty(&dir);
+        DiskEnvGuard::point_at_empty(&dir);
 
         assert_eq!(model_disk_bytes("no-such-model"), None);
 
@@ -377,7 +377,7 @@ mod tests {
     fn disk_estimates_round_up_and_never_report_less_than_one_gb() {
         let dir = tempfile::tempdir().unwrap();
         let guard = DiskEnvGuard::new(true);
-        guard.point_at_empty(&dir);
+        DiskEnvGuard::point_at_empty(&dir);
         let model_dir = dir.path().join("MLXModels/Org/TinyModel");
         std::fs::create_dir_all(&model_dir).unwrap();
         std::fs::write(model_dir.join("config.json"), "{}").unwrap();

@@ -83,14 +83,6 @@ fn mlx_layout_matches_case_insensitively_on_the_directory_name() {
 #[test]
 #[serial]
 fn missing_roots_are_skipped_not_errors() {
-    let dir = tempfile::tempdir().unwrap();
-    let keys = ["MLX_MODELS_DIR", "HF_HOME"];
-    // MLX pre-set (sentinel -> was-set restore arm), HF removed before
-    // capture (never-set restore arm): both arms covered deterministically.
-    std::env::set_var("MLX_MODELS_DIR", "/nonexistent-sentinel");
-    std::env::remove_var("HF_HOME");
-    let saved: Vec<(&'static str, Option<std::ffi::OsString>)> =
-        keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
     struct Restore(Vec<(&'static str, Option<std::ffi::OsString>)>);
     impl Drop for Restore {
         fn drop(&mut self) {
@@ -102,6 +94,15 @@ fn missing_roots_are_skipped_not_errors() {
             }
         }
     }
+
+    let dir = tempfile::tempdir().unwrap();
+    let keys = ["MLX_MODELS_DIR", "HF_HOME"];
+    // MLX pre-set (sentinel -> was-set restore arm), HF removed before
+    // capture (never-set restore arm): both arms covered deterministically.
+    std::env::set_var("MLX_MODELS_DIR", "/nonexistent-sentinel");
+    std::env::remove_var("HF_HOME");
+    let saved: Vec<(&'static str, Option<std::ffi::OsString>)> =
+        keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
     let _restore = Restore(saved);
     std::env::set_var("MLX_MODELS_DIR", dir.path().join("nope"));
     std::env::set_var("HF_HOME", dir.path().join("also-nope"));
@@ -140,13 +141,6 @@ fn missing_roots_are_skipped_not_errors() {
 #[test]
 #[serial]
 fn conf_models_root_prefers_env_then_the_checkout_then_a_relative_path() {
-    let keys = ["ZTOOLS_CONF_DIR", "HOME"];
-    // ZTOOLS pre-set (was-set restore arm); HOME removed first
-    // (never-set restore arm).
-    std::env::set_var("ZTOOLS_CONF_DIR", "/nonexistent-sentinel");
-    std::env::remove_var("HOME");
-    let saved: Vec<(&'static str, Option<std::ffi::OsString>)> =
-        keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
     struct Restore(Vec<(&'static str, Option<std::ffi::OsString>)>);
     impl Drop for Restore {
         fn drop(&mut self) {
@@ -158,6 +152,14 @@ fn conf_models_root_prefers_env_then_the_checkout_then_a_relative_path() {
             }
         }
     }
+
+    let keys = ["ZTOOLS_CONF_DIR", "HOME"];
+    // ZTOOLS pre-set (was-set restore arm); HOME removed first
+    // (never-set restore arm).
+    std::env::set_var("ZTOOLS_CONF_DIR", "/nonexistent-sentinel");
+    std::env::remove_var("HOME");
+    let saved: Vec<(&'static str, Option<std::ffi::OsString>)> =
+        keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
     let _restore = Restore(saved);
 
     std::env::set_var("ZTOOLS_CONF_DIR", "/fixture-conf");

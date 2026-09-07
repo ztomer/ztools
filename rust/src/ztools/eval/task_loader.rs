@@ -269,9 +269,18 @@ pub fn load_taxes_tasks_from_dir(dir: &Path) -> Result<Vec<EvalTask>> {
         .filter_map(std::result::Result::ok)
         .map(|e| e.path())
         .filter(|p| {
-            p.file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| n.starts_with("taxes_") && n.ends_with(".json"))
+            p.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
+                // Case-insensitive: the snapshots are hand-placed files and
+                // a `.JSON` on a case-insensitive filesystem is the same file.
+                let lower = n.to_ascii_lowercase();
+                #[expect(
+                    clippy::case_sensitive_file_extension_comparisons,
+                    reason = "`lower` is lowercased on the line above, which is \
+                              what makes this comparison case-insensitive"
+                )]
+                let is_snapshot = lower.starts_with("taxes_") && lower.ends_with(".json");
+                is_snapshot
+            })
         })
         .collect();
     paths.sort();

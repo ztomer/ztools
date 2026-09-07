@@ -33,7 +33,8 @@ pub fn build_search_queries(d1: NaiveDate) -> Vec<String> {
     queries.push(format!(
         "{region} museum family programs {month_name} {year}"
     ));
-    if let Some(seasonal) = seasonal_keywords(&month_name) {
+    {
+        let seasonal = seasonal_keywords(&month_name);
         queries.push(format!("{region} {seasonal} {month_name} {year}"));
     }
     queries

@@ -41,8 +41,8 @@ fn serve_then(first: String, rest: String, first_n: usize) -> (u16, thread::Join
             let mut buf = [0u8; 8192];
             let _ = stream.read(&mut buf);
             let n = count.fetch_add(1, Ordering::SeqCst);
-            let resp = if n < first_n { &first } else { &rest };
-            let _ = stream.write_all(resp.as_bytes());
+            let reply = if n < first_n { &first } else { &rest };
+            let _ = stream.write_all(reply.as_bytes());
             let _ = stream.flush();
         }
     });

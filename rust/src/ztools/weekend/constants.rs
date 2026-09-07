@@ -59,7 +59,7 @@ fn column_value(ev: &WeekendEvent, aliases: &[&str]) -> String {
 #[must_use]
 pub fn flag_constant_columns(
     events: &[WeekendEvent],
-    suspects: &HashMap<String, Vec<String>>,
+    suspects: &HashMap<String, Vec<String>, impl std::hash::BuildHasher>,
 ) -> Vec<String> {
     if events.len() < MIN_ROWS_FOR_CONSTANT {
         return Vec::new();
@@ -77,10 +77,7 @@ pub fn flag_constant_columns(
         if values[1..].iter().any(|v| !v.eq_ignore_ascii_case(first)) {
             continue;
         }
-        let suspects_for_label = suspects
-            .get(*label)
-            .map(std::vec::Vec::as_slice)
-            .unwrap_or(&[]);
+        let suspects_for_label = suspects.get(*label).map_or(&[][..], Vec::as_slice);
         let is_suspect = suspects_for_label
             .iter()
             .filter(|s| !s.trim().is_empty())

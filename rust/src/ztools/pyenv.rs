@@ -152,6 +152,11 @@ fn cache() -> &'static Mutex<HashMap<String, Result<String, PyEnvError>>> {
 /// As [`resolve_with`]: no interpreter satisfies `required`. The result is
 /// cached per requirement set, so a failure is recomputed on each call
 /// rather than being remembered.
+///
+/// # Panics
+///
+/// If the resolution cache mutex is poisoned -- i.e. a previous probe panicked
+/// while holding it, which would mean the cached answers cannot be trusted.
 pub fn resolve(required: &[&str]) -> Result<String, PyEnvError> {
     let key = required.join(",");
     if let Some(hit) = cache().lock().unwrap().get(&key) {

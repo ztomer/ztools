@@ -253,16 +253,20 @@ fn call_osaurus_json(
     parse_llm_events(&resp)
 }
 
-pub(crate) fn seasonal_keywords(month_name: &str) -> Option<&'static str> {
+/// Search keywords for the season a month falls in.
+///
+/// Total: every month maps to a season, and anything unrecognised falls to
+/// spring. It returned `Option` and could not produce `None` on any path.
+pub(crate) fn seasonal_keywords(month_name: &str) -> &'static str {
     let m = month_name.to_lowercase();
     if m == "june" || m == "july" || m == "august" {
-        Some("summer festival fair")
+        "summer festival fair"
     } else if m == "september" || m == "october" || m == "november" {
-        Some("harvest festival farm pumpkin")
+        "harvest festival farm pumpkin"
     } else if m == "december" || m == "january" || m == "february" {
-        Some("winter festival holiday lights")
+        "winter festival holiday lights"
     } else {
-        Some("spring festival maple syrup")
+        "spring festival maple syrup"
     }
 }
 
@@ -349,6 +353,13 @@ pub const SEARCH_MODULES: &[&str] = &["ddgs"];
 /// helper that never ran and a search that genuinely found nothing were the
 /// same answer -- that is how a weekend plan came to say "no events found" when
 /// the truth was that the interpreter could not start.
+///
+/// # Errors
+///
+/// When the Python interpreter cannot be resolved or started, when the search
+/// helper exits non-zero, or when its output is not the JSON shape expected.
+/// Every one of those is an error rather than an empty result, which is the
+/// whole point of the note above.
 pub fn collect_snippets_external(query: &str) -> Result<Vec<String>, String> {
     let mut cmd = pyenv::command(SEARCH_MODULES).map_err(|e| e.to_string())?;
     let script = r#"import json, sys

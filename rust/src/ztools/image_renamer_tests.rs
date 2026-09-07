@@ -375,6 +375,17 @@ fn test_scan_and_rename_skips_directories() {
 
 /// Serve one canned OpenAI-style chat completion, as the other LLM-layer mocks do.
 fn spawn_single_shot_server(body: &'static str) -> String {
+    fn serve_one(mut stream: TcpStream, body: &str) {
+        let mut buf = [0u8; 8192];
+        let _ = stream.read(&mut buf);
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let _ = stream.write_all(resp.as_bytes());
+    }
+
     use std::io::{Read, Write};
     use std::net::{TcpListener, TcpStream};
 
@@ -386,16 +397,6 @@ fn spawn_single_shot_server(body: &'static str) -> String {
         };
         serve_one(stream, body);
     });
-    fn serve_one(mut stream: TcpStream, body: &str) {
-        let mut buf = [0u8; 8192];
-        let _ = stream.read(&mut buf);
-        let resp = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-            body.len(),
-            body
-        );
-        let _ = stream.write_all(resp.as_bytes());
-    }
     format!("http://{addr}")
 }
 

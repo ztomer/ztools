@@ -358,10 +358,7 @@ fn acquire_reclaims_an_expired_lock_even_with_a_live_holder() {
     .unwrap();
     assert!(guard.acquired, "a wedged lock must be reclaimable");
     let owner = read_owner(&lock).unwrap();
-    assert_eq!(
-        owner.2.trim(),
-        "fresh (pid {me})".replace("{me}", &me.to_string())
-    );
+    assert_eq!(owner.2.trim(), format!("fresh (pid {me})"));
 }
 
 #[test]

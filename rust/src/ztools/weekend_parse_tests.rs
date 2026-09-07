@@ -245,12 +245,12 @@ fn test_compute_score_caps_at_5() {
 #[test]
 fn test_seasonal_keywords_all_months() {
     use crate::ztools::weekend::seasonal_keywords;
-    assert!(seasonal_keywords("June").is_some());
-    assert!(seasonal_keywords("July").is_some());
-    assert!(seasonal_keywords("August").is_some());
-    assert!(seasonal_keywords("September").is_some());
-    assert!(seasonal_keywords("December").is_some());
-    assert!(seasonal_keywords("March").is_some());
+    assert!(!seasonal_keywords("June").is_empty());
+    assert!(!seasonal_keywords("July").is_empty());
+    assert!(!seasonal_keywords("August").is_empty());
+    assert!(!seasonal_keywords("September").is_empty());
+    assert!(!seasonal_keywords("December").is_empty());
+    assert!(!seasonal_keywords("March").is_empty());
 }
 
 #[test]

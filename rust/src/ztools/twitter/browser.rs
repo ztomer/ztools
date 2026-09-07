@@ -238,6 +238,12 @@ mod tests {
     fn test_live_collector_passes_since_and_debug_to_runner() {
         static CAPTURED: std::sync::Mutex<Vec<(Option<String>, bool)>> =
             std::sync::Mutex::new(Vec::new());
+        #[expect(
+            clippy::unnecessary_wraps,
+            reason = "the signature is fixed by `LiveBrowserCollector::runner`, \
+                      whose real implementations do fail. A test double that \
+                      cannot fail still has to have the same type."
+        )]
         fn capturing_runner(since: Option<&str>, debug: bool) -> Result<Vec<Tweet>> {
             CAPTURED
                 .lock()

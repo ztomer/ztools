@@ -49,7 +49,6 @@ fn csv_escape(field: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::super::report::tests::{outcome, run};
-    use super::super::report::ModelRun;
     use super::*;
 
     #[test]

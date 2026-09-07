@@ -139,8 +139,8 @@ pub fn call(spec: &RequestSpec, parse_json: bool) -> TransportResult {
     // without SSE support answers plain JSON, which the SSE parser skips) --
     // falls through to the blocking call, which is what knows how to substitute
     // a deleted model.
-    let result = if spec.stream_guard {
-        let quirked_spec = derived_spec(spec, &quirked);
+    let quirked_spec = derived_spec(spec, &quirked);
+    if spec.stream_guard {
         let streamed = stream_with_overrun_guard(&quirked_spec);
         let produced_nothing = streamed.content.is_empty()
             && streamed.reasoning_content.is_empty()
@@ -148,11 +148,8 @@ pub fn call(spec: &RequestSpec, parse_json: bool) -> TransportResult {
         if streamed.error.is_none() && !produced_nothing {
             return streamed;
         }
-        blocking_request(&quirked_spec, parse_json)
-    } else {
-        let quirked_spec = derived_spec(spec, &quirked);
-        blocking_request(&quirked_spec, parse_json)
-    };
+    }
+    let result = blocking_request(&quirked_spec, parse_json);
 
     // Retry once against a servable model when the configured tag is gone.
     // None-of-our-business whenever we lack evidence: a non-404, a 404 about

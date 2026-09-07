@@ -19,10 +19,15 @@ fn a_zero_denominator_stays_nan_rather_than_becoming_zero() {
     // The property the callers actually depend on: neither shape compares
     // below a threshold, which 0.0 would.
     for empty in [ratio(0, 0), ratio(3, 0)] {
-        assert!(
-            !(empty < 0.5),
-            "an empty ratio must not read as below threshold"
-        );
+        // `!(a < b)` rather than `a >= b` ON PURPOSE: the two differ exactly
+        // for the non-finite values this test is about, and the callers use `<`.
+        #[expect(
+            clippy::neg_cmp_op_on_partial_ord,
+            reason = "the negation IS the assertion: NaN and +inf are neither \
+                      below nor at-or-above a threshold, and callers test `<`"
+        )]
+        let not_below = !(empty < 0.5);
+        assert!(not_below, "an empty ratio must not read as below threshold");
     }
 }
 

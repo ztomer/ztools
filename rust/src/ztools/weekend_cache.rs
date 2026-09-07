@@ -242,6 +242,13 @@ pub fn load_exclusions(config: &crate::config::ZtoolsConfig) -> Vec<String> {
 }
 
 /// Load default cached activities returning clean, curated GTA family venues and events.
+#[expect(
+    clippy::too_many_lines,
+    reason = "a cache read with its own staleness, shape and provenance \
+              checks, each of which decides whether the next one runs at all. \
+              A partially-validated cache entry is exactly what this must never \
+              return, so the checks stay in one place"
+)]
 #[must_use]
 pub fn load_cached_activities(
     config: &crate::config::ZtoolsConfig,

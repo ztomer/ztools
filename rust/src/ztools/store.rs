@@ -95,7 +95,7 @@ pub fn last_updated(path: &Path) -> Result<String> {
 pub fn twitter_latest(show_time: bool) -> Result<()> {
     let dir =
         std::env::var("TWITTER_OUTPUT_DIR").map_or_else(|_| twitter_store_dir(), PathBuf::from);
-    print_newest(dir, show_time)
+    print_newest(&dir, show_time)
 }
 
 /// Read-side entry point for `weekend-plan --fetch-latest` / `--last-updated`;
@@ -107,7 +107,7 @@ pub fn twitter_latest(show_time: bool) -> Result<()> {
 pub fn weekend_latest(show_time: bool) -> Result<()> {
     let dir =
         std::env::var("WEEKEND_OUTPUT_DIR").map_or_else(|_| weekend_store_dir(), PathBuf::from);
-    print_newest(dir, show_time)
+    print_newest(&dir, show_time)
 }
 
 /// Resolve the newest stored summary (or its update time) and print it.
@@ -118,8 +118,8 @@ pub fn weekend_latest(show_time: bool) -> Result<()> {
 ///
 /// When the store holds no summary, when its modification time cannot be
 /// read (with `show_time`), or when the file itself cannot be read.
-pub fn print_newest(store_dir: PathBuf, show_time: bool) -> Result<()> {
-    let path = newest_md(&store_dir)?;
+pub fn print_newest(store_dir: &Path, show_time: bool) -> Result<()> {
+    let path = newest_md(store_dir)?;
     if show_time {
         println!("{}", last_updated(&path)?);
     } else {

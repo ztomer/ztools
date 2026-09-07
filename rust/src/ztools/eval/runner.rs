@@ -14,7 +14,7 @@
 //! be read as quality results.
 //!
 //! Scoring is the established Rust pattern (as in `model_eval.rs`): each check
-//! is boolean via `run_check`, and the task score is the fraction passed.
+//! is boolean via `run_check`, and the task score is the fraction hits.
 //!
 //! The learning behaviours -- prefill measurement, per-task learned timeouts,
 //! signal recording, the stall watchdog -- are OFF by default so tests stay
@@ -40,7 +40,7 @@ use crate::ztools::eval::SignalStore;
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 pub struct TaskOutcome {
     pub task: String,
-    /// 0-100: fraction of the task's checks that passed on the best attempt.
+    /// 0-100: fraction of the task's checks that hits on the best attempt.
     pub score: u8,
     /// "ok" (>=90), "partial" (>=50), "fail" (<50).
     pub status: String,
@@ -50,7 +50,7 @@ pub struct TaskOutcome {
     pub aborted: bool,
     pub abort_reason: String,
     /// Why the best attempt failed: INFRA / TIMEOUT / PARSE / FORMAT /
-    /// CONTENT / REASONING ("" when the task passed). Drives retry escalation
+    /// CONTENT / REASONING ("" when the task hits). Drives retry escalation
     /// and infra abandonment, matching eval/failures.py.
     #[serde(default)]
     pub failure_category: String,
@@ -120,7 +120,7 @@ const fn status_for(score: u8) -> &'static str {
 /// When EVERY check is inherently graded (the taxes grounded validators), the
 /// task score is the mean of their numeric verdicts -- an 80/100 answer must
 /// surface as 80/partial, not collapse to 0/fail behind a boolean threshold.
-/// Mixed or purely-boolean tasks keep the passed-fraction semantics.
+/// Mixed or purely-boolean tasks keep the hits-fraction semantics.
 #[must_use]
 #[expect(
     clippy::cast_possible_truncation,
@@ -141,12 +141,12 @@ pub fn score_output(task: &EvalTask, cleaned: &str, parsed: Option<&serde_json::
         let mean = graded.iter().sum::<i64>() / graded.len() as i64;
         return mean.clamp(0, 100) as u8;
     }
-    let passed = task
+    let hits = task
         .checks
         .iter()
         .filter(|c| run_check(c, cleaned, parsed))
         .count();
-    ((passed * 100 + task.checks.len() / 2) / task.checks.len()) as u8
+    ((hits * 100 + task.checks.len() / 2) / task.checks.len()) as u8
 }
 
 /// Is this outcome a SERVER problem rather than a model-quality result?
@@ -181,7 +181,9 @@ pub fn run_eval(model: &str, tasks: &[EvalTask], cfg: &RunnerConfig) -> Vec<Task
     run_eval_inner(model, tasks, cfg, &mut SignalStore::new())
 }
 
-/// The production path (`ztools model-eval --suite full`): measures and records
+/// The production path (`ztools model-eval --suite full`).
+///
+/// Measures and records
 /// this model's prefill/cold-start/decode capabilities up front, sizes each
 /// request from the learned per-task timeout instead of the static floor,
 /// records p95/retry signals after each task, and stops when the watchdog sees
@@ -212,6 +214,14 @@ pub fn run_eval_with_signals(
     outcomes
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the production eval loop: measure capabilities, size each \
+              request from the learned timeout, run the task, record signals, \
+              and watch for a stall. The watchdog and the per-task state are \
+              shared by every step, and splitting them apart is what would \
+              make the stall ceiling hard to see"
+)]
 fn run_eval_inner(
     model: &str,
     tasks: &[EvalTask],

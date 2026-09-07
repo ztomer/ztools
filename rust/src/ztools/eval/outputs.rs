@@ -87,6 +87,12 @@ pub struct OutputRecord<'a> {
 /// must not stop the run, so a caller that saves and moves on is doing the
 /// right thing; requiring it to acknowledge the path would be a lint telling
 /// the design it is wrong.
+#[expect(
+    clippy::must_use_candidate,
+    reason = "the contract above says a lost output must not stop a ten-hour \
+              eval, so a caller that saves and moves on is doing the right \
+              thing. The returned path is informational."
+)]
 pub fn save_output(record: &OutputRecord, eval_dir: Option<&Path>) -> Option<PathBuf> {
     if !outputs_enabled() {
         return None;

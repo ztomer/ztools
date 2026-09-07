@@ -30,6 +30,20 @@ fn task_matches_filter(task_name: &str, filter: &str) -> bool {
         .any(|n| task_name == n || task_name.ends_with(n))
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "a CLI command end to end: resolve dates, fetch, plan, \
+              enforce, render, write. Every step feeds the next and each one's \
+              failure decides what the following one does, so extracting them \
+              means threading that state through six signatures to make one \
+              linear story look like six"
+)]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "a CLI entry point. clap hands these over by value at the one \
+              dispatch site and never uses them again; borrowing would put an \
+              `&` on the dispatch for no owner to keep"
+)]
 pub(crate) fn weekend_plan(
     config: &ZtoolsConfig,
     location: String,
@@ -38,11 +52,13 @@ pub(crate) fn weekend_plan(
     fetch_latest: bool,
     last_updated: bool,
 ) -> Result<()> {
+    use chrono::Datelike;
+
     if fetch_latest || last_updated {
         return crate::ztools::store::weekend_latest(last_updated);
     }
+
     let now = Local::now().naive_local().date();
-    use chrono::Datelike;
 
     // Find upcoming Friday
     let mut friday = now;
@@ -165,6 +181,12 @@ pub(crate) fn weekend_plan(
     Ok(())
 }
 
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "a CLI entry point. clap hands these over by value at the one \
+              dispatch site and never uses them again; borrowing would put an \
+              `&` on the dispatch for no owner to keep"
+)]
 pub(crate) fn image_renamer(config: &ZtoolsConfig, dir: PathBuf, apply: bool) -> Result<()> {
     let max_len = config.max_image_filename_len;
     let candidates =
@@ -190,8 +212,20 @@ mod capabilities;
 use capabilities::print_capabilities;
 
 #[expect(
+    clippy::too_many_lines,
+    reason = "a CLI command end to end: resolve the model, size it \
+              against the machine, run the suite, then render or serialise. The \
+              length is the number of steps, not complexity in any of them"
+)]
+#[expect(
     clippy::cast_precision_loss,
     reason = "an estimated model size in whole gigabytes, rendered for display"
+)]
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "a CLI entry point. clap hands these over by value at the one \
+              dispatch site and never uses them again; borrowing would put an \
+              `&` on the dispatch for no owner to keep"
 )]
 pub(crate) fn model_eval(
     config: &ZtoolsConfig,

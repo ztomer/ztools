@@ -6,7 +6,7 @@
 
 use crate::ztools::weekend::{
     call_llm_json, condense_weather, draft_activities, extract_sources, refine_draft,
-    structure_to_json, PlanContext, CARRY_FIELDS, PHASE_EXTRACT_EVENTS, PHASE_REFINE,
+    structure_to_json, PlanContext, PHASE_EXTRACT_EVENTS, PHASE_REFINE,
     PHASE_STRUCTURE_TRANSIENT_SYSTEM, PHASE_STRUCTURE_USER,
 };
 
@@ -108,7 +108,14 @@ fn prompt_templates_render_fully() {
     );
     assert!(sys.contains(r#"{"transient_events":"#), "{sys}");
     assert!(!sys.contains("{{"), "double braces leaked: {sys}");
-    assert!(sys.contains(CARRY_FIELDS) || true);
+    // NOT asserted here, deliberately: this template's only placeholders are
+    // `{year}` and `{weather_condensed}`, and `phases::structure_to_json` renders
+    // it with exactly those. The carry-fields rule is applied upstream, in the
+    // draft and refine phases, which do bind `("carry")`.
+    //
+    // The line that used to be here was `assert!(sys.contains(CARRY_FIELDS) ||
+    // true)` -- an assertion that could not fail. It was silenced rather than
+    // answered, and `clippy::overly_complex_bool_expr` is what found it.
 }
 
 #[test]

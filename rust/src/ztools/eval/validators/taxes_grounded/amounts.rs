@@ -72,7 +72,11 @@ pub fn known_set(known_amounts: &[Value]) -> HashSet<i64> {
     clippy::cast_precision_loss,
     reason = "a weight times a grounded fraction. The weight is a rubric constant and the fraction is 0.0..=1.0"
 )]
-pub fn score_prose_amounts(prose: &str, known: &HashSet<i64>, weight: i64) -> (i64, String) {
+pub fn score_prose_amounts(
+    prose: &str,
+    known: &HashSet<i64, impl std::hash::BuildHasher>,
+    weight: i64,
+) -> (i64, String) {
     let amounts = prose_amounts(prose);
     if amounts.is_empty() {
         return (weight, format!("prose_amounts=0/0 ({weight}/{weight})"));

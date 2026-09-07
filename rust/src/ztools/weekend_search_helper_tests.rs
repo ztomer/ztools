@@ -13,6 +13,11 @@ use std::process::{ExitStatus, Output};
 
 /// A synthetic process result. `from_raw(code << 8)` is how a wait-status
 /// encodes a normal exit on Unix, so `status.code()` reads back as `code`.
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "builds the `io::Result<Output>` that `Command::output` returns, \
+              so the wrapper is the shape under test rather than an artefact"
+)]
 fn output(code: i32, stdout: &[u8], stderr: &str) -> std::io::Result<Output> {
     Ok(Output {
         status: ExitStatus::from_raw(code << 8),
