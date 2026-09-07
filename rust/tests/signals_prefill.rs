@@ -6,6 +6,8 @@
 //! (nonce-first filler, `max_tokens=1` on the timed call) is verified against
 //! what actually went over the wire.
 
+#![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
+
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;

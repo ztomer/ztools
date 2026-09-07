@@ -320,6 +320,8 @@ fn truncate_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
+
     use super::*;
     use serde_json::json;
 

@@ -42,7 +42,18 @@ pub fn ranking_tasks(tasks: &[String]) -> Vec<String> {
     tasks.iter().filter(|t| !is_gate(t)).cloned().collect()
 }
 
-/// Count distinct float values by sorting and dedupieing (avoids `HashSet`<!f64>).
+/// Count distinct float values, by sorting and scanning for changes.
+///
+/// A `HashSet` is not available: `f64` is not `Hash`, for the same reason
+/// `float_cmp` fires below.
+#[expect(
+    clippy::float_cmp,
+    reason = "exact inequality is the QUESTION here, not an approximation of \
+              it. This counts how many different score values a set of models \
+              produced, and a tolerance would merge two genuinely different \
+              scores that happen to be close -- which is precisely the \
+              collapse the discrimination metric exists to detect."
+)]
 fn count_distinct(values: &[f64]) -> usize {
     if values.is_empty() {
         return 0;
@@ -183,6 +194,8 @@ pub fn ranking_mean(all_results: &[EvalResult]) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    #![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
+
     use super::*;
 
     #[test]

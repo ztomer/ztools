@@ -1,3 +1,5 @@
+#![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
+
 use super::*;
 
 #[test]

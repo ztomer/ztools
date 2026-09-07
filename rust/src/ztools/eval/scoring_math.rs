@@ -6,6 +6,17 @@
 //! conversion, so each site was its own unstated decision about what happens at
 //! the boundary, and no two of them could be checked against each other.
 //!
+//! # On `clippy::float_cmp` in the test modules
+//!
+//! Several test modules carry `#![expect(clippy::float_cmp)]` pointing here.
+//! Every comparison they make is against a value that is EXACT in binary
+//! floating point: small integers, one-half steps, and correctly-rounded
+//! quotients of small integers. IEEE-754 division is correctly rounded, so
+//! `4.0/5.0` and the literal `0.8` are the same bits, and so are `4e6/1e9` and
+//! `0.004`. Replacing those with an epsilon would not make the tests more
+//! robust; it would WEAKEN them, because they assert that the arithmetic is
+//! right rather than that it is close.
+//!
 //! Neither helper changes any existing behaviour. `ratio` deliberately does NOT
 //! special-case a zero denominator -- see its own note.
 

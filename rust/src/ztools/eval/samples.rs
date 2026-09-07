@@ -129,6 +129,8 @@ pub fn add_sample(history: &mut Vec<Sample>, value: f64, clean: bool) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    #![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
+
     use super::*;
 
     #[test]

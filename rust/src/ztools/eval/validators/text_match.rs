@@ -59,6 +59,8 @@ pub fn phrase_overlap(phrase: &str, out_lower: &str) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    #![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
+
     use super::*;
 
     #[test]

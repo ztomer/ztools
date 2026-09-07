@@ -1,5 +1,7 @@
 //! Item shape, name matching, and source-grounding extraction.
 
+#![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
+
 use serde_json::json;
 
 use crate::ztools::eval::validators::json_validator::*;

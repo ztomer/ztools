@@ -1,5 +1,7 @@
 //! Roster entry parsing, scoring, and substitution -- the `roster` submodule's tests.
 
+#![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
+
 use crate::ztools::eval::model_resolve::*;
 
 pub(super) fn entry(model: &str, size: &str) -> RosterEntry {
