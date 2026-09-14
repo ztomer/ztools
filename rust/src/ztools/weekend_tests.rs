@@ -396,3 +396,91 @@ mod weekend_fetch_tests;
 mod weekend_search_tests;
 
 mod weekend_followup_tests;
+
+// — class C4: the word "unknown" never reaches a table —
+
+fn c4_event(absent: &str) -> crate::ztools::weekend::WeekendEvent {
+    crate::ztools::weekend::WeekendEvent {
+        name: "Union Summer".to_string(),
+        location: absent.to_string(),
+        price: absent.to_string(),
+        target_ages: absent.to_string(),
+        day: absent.to_string(),
+        dates: absent.to_string(),
+        description: String::new(),
+        is_transient: true,
+        score: 3.0,
+        start_date: String::new(),
+        end_date: String::new(),
+        weather: absent.to_string(),
+        duration: String::new(),
+    }
+}
+
+#[test]
+fn c4_absent_words_render_as_the_sentinel_in_both_renderers() {
+    for absent in ["unknown", "Unknown", "n/a", "N/A", "none", "TBD", ""] {
+        let ev = c4_event(absent);
+        let md = crate::ztools::weekend::format_weekend_plan(
+            std::slice::from_ref(&ev),
+            std::slice::from_ref(&ev),
+            "Vaughan",
+            "3-7",
+            "Aug 07 to Aug 09",
+            "Fri 24C Clear",
+        );
+        let lower = md.to_lowercase();
+        assert!(!lower.contains("unknown"), "{absent:?} leaked: {md}");
+        assert!(!lower.contains("n/a"), "{absent:?} leaked: {md}");
+        assert!(!lower.contains("tbd"), "{absent:?} leaked: {md}");
+        // An absent location is no parenthetical at all, never "(—)".
+        assert!(md.contains("| **Union Summer** |"), "{md}");
+        assert!(!md.contains("(—)"), "{md}");
+        // No fabricated filler and no constant column stand in for data.
+        assert!(!md.contains("Family activity in GTA"), "{md}");
+        assert!(!md.contains("Outdoor/Indoor"), "{md}");
+        assert!(md.contains("| — | — | — |"), "{md}");
+
+        let tui = crate::ztools::weekend::render_weekend_plan_gorgeous(
+            "Aug 07 to Aug 09",
+            "Fri 24C Clear",
+            std::slice::from_ref(&ev),
+            std::slice::from_ref(&ev),
+        );
+        assert!(!tui.to_lowercase().contains("unknown"), "{tui}");
+        assert!(!tui.contains("Outdoor/Indoor"), "{tui}");
+    }
+}
+
+#[test]
+fn c4_real_values_are_never_mistaken_for_absent() {
+    for real in ["Free", "$12", "5-12", "all ages", "indoor"] {
+        assert_eq!(crate::ztools::weekend::format::fmt_missing(real), real);
+    }
+    let mut ev = c4_event("unknown");
+    ev.location = "Markham".to_string();
+    ev.weather = "outdoor".to_string();
+    ev.price = "$12".to_string();
+    let md = crate::ztools::weekend::format_weekend_plan(
+        std::slice::from_ref(&ev),
+        &[],
+        "Vaughan",
+        "3-7",
+        "Aug 07 to Aug 09",
+        "Fri 24C Clear",
+    );
+    assert!(md.contains("**Union Summer** (Markham)"), "{md}");
+    assert!(md.contains("| $12 |"), "{md}");
+    // The plan's own city is not a parenthetical either.
+    ev.location = "Vaughan".to_string();
+    let md = crate::ztools::weekend::format_weekend_plan(
+        &[],
+        std::slice::from_ref(&ev),
+        "Vaughan",
+        "3-7",
+        "Aug 07 to Aug 09",
+        "Fri 24C Clear",
+    );
+    assert!(md.contains("| **Union Summer** |"), "{md}");
+    assert!(md.contains("| outdoor |"), "{md}");
+}

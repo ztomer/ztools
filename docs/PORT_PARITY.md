@@ -162,7 +162,7 @@ Only `test_llm.py`, `test_mlx.py`, `test_gemma.py` need a live server/GPU.
 | test_weekend_planner_branches.py | RE-EXPRESS | missing parse fixed/transient edge pins (alt-keys, weather-filter) |
 | test_weekend_supply.py | COVERED | float_top.rs::in_window_lines_float_to_the_top_marked_but_nothing_is_removed |
 | test_quality_weekend_scorers.py | DELETE | retired Python quality-harness weekend scorers, no Rust eval home |
-| test_report_class_c4.py | RE-EXPRESS | missing unknown-word sentinel normalization pin |
+| test_report_class_c4.py | COVERED 2026-09-13 — `weekend/format.rs::fmt_missing` (the ABSENT_WORDS → `—` sentinel) applied to every cell of both renderers; absent location = no parenthetical; the fabricated `Family activity in GTA` filler, the constant `Outdoor/Indoor` column and the hardcoded `Vaughan` are gone. `weekend_tests::c4_*` (7 absent spellings, real values preserved, both renderers) |
 | test_report_class_cases.py | DELETE | retired frozen-artifact xfail catalogue + private real samples |
 | test_report_class_fixes.py | COVERED | weekend_enforce_tests.rs (exclusions/dates/defects gates) |
 | test_report_class_region.py | COVERED | weekend_filter_tests.rs::a_foreign_city_beats_any_local_token |

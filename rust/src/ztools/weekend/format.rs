@@ -30,17 +30,12 @@ pub fn render_weekend_plan_gorgeous(
         ]);
 
         for item in fixed_activities {
-            let loc_str = if item.location.is_empty() {
-                item.name.clone()
-            } else {
-                format!("{} ({})", item.name, item.location)
-            };
             table.add_row(vec![
                 Cell::new(format!("* {:.1}/5", item.score)),
-                Cell::new(loc_str),
-                Cell::new(&item.target_ages),
-                Cell::new(&item.price),
-                Cell::new("Outdoor/Indoor"),
+                Cell::new(plain_name_loc(&item.name, &item.location)),
+                Cell::new(fmt_missing(&item.target_ages)),
+                Cell::new(fmt_missing(&item.price)),
+                Cell::new(fmt_missing(&item.weather)),
             ]);
         }
         let _ = write!(out, "{table}\n\n");
@@ -67,19 +62,14 @@ pub fn render_weekend_plan_gorgeous(
         ]);
 
         for item in transient_events {
-            let loc_str = if item.location.is_empty() {
-                item.name.clone()
-            } else {
-                format!("{} ({})", item.name, item.location)
-            };
             table.add_row(vec![
                 Cell::new(format!("* {:.1}/5", item.score)),
-                Cell::new(loc_str),
-                Cell::new(&item.target_ages),
-                Cell::new(&item.price),
-                Cell::new(&item.dates),
-                Cell::new(&item.day),
-                Cell::new("Outdoor/Indoor"),
+                Cell::new(plain_name_loc(&item.name, &item.location)),
+                Cell::new(fmt_missing(&item.target_ages)),
+                Cell::new(fmt_missing(&item.price)),
+                Cell::new(fmt_missing(&item.dates)),
+                Cell::new(fmt_missing(&item.day)),
+                Cell::new(fmt_missing(&item.weather)),
             ]);
         }
         let _ = write!(out, "{table}\n\n");
@@ -110,6 +100,57 @@ pub fn print_weekend_plan_gorgeous(
 /// already has `--md-out`. Taking them as arguments also makes this testable
 /// without a network, which is what let the coverage number drift with the
 /// weather API's availability.
+/// The one missing-value sentinel every table cell uses (class C4).
+pub const MISSING_VALUE_PLACEHOLDER: &str = "—";
+
+/// Words a model writes when the source did not say. The prompts ASK for
+/// "unknown" instead of a fabricated constant, so the renderer must turn
+/// that back into the sentinel: a real run shipped `| — | unknown | — |`,
+/// the honest answer leaking into the table as a word that reads like data.
+const ABSENT_WORDS: &[&str] = &[
+    "unknown",
+    "n/a",
+    "na",
+    "none",
+    "tbd",
+    "not stated",
+    "-",
+    "--",
+];
+
+/// A cell value, or the sentinel when the source did not say.
+#[must_use]
+pub fn fmt_missing(value: &str) -> &str {
+    let text = value.trim();
+    if text.is_empty() || ABSENT_WORDS.contains(&text.to_lowercase().as_str()) {
+        MISSING_VALUE_PLACEHOLDER
+    } else {
+        value
+    }
+}
+
+/// `**Name** (location)`, or just `**Name**` when the source gave no location
+/// or the location is the plan's own city — an absent location is no
+/// parenthetical at all, never `(—)` and never `(unknown)`.
+fn fmt_name_loc(name: &str, location: &str, home: &str) -> String {
+    let loc = location.trim();
+    if fmt_missing(loc) == MISSING_VALUE_PLACEHOLDER || loc == home {
+        format!("**{name}**")
+    } else {
+        format!("**{name}** ({loc})")
+    }
+}
+
+/// Terminal form of [`fmt_name_loc`]: no bold markers.
+fn plain_name_loc(name: &str, location: &str) -> String {
+    let loc = location.trim();
+    if fmt_missing(loc) == MISSING_VALUE_PLACEHOLDER {
+        name.to_string()
+    } else {
+        format!("{name} ({loc})")
+    }
+}
+
 #[must_use]
 pub fn format_weekend_plan(
     transient: &[WeekendEvent],
@@ -136,20 +177,18 @@ pub fn format_weekend_plan(
         out.push_str("| Score | Activity & Location | Target Age(s) | Estimated Price (CAD) | Weather Appropriateness | Why It Fits |\n");
         out.push_str("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
         for ev in fixed_items {
-            let loc_str = if ev.location.is_empty() || ev.location == "Vaughan" {
-                format!("**{}**", ev.name)
-            } else {
-                format!("**{}** ({})", ev.name, ev.location)
-            };
-            let desc = if ev.description.is_empty() {
-                "Family activity in GTA".to_string()
-            } else {
-                ev.description.clone()
-            };
+            // Every cell is the source's value or the sentinel — never a
+            // fabricated filler ("Family activity in GTA") and never a
+            // constant column ("Outdoor/Indoor"), both of which read as data.
             let _ = writeln!(
                 out,
-                "| * {:.1}/5 | {} | {} | {} | Outdoor/Indoor | {} |",
-                ev.score, loc_str, ev.target_ages, ev.price, desc
+                "| * {:.1}/5 | {} | {} | {} | {} | {} |",
+                ev.score,
+                fmt_name_loc(&ev.name, &ev.location, location),
+                fmt_missing(&ev.target_ages),
+                fmt_missing(&ev.price),
+                fmt_missing(&ev.weather),
+                fmt_missing(&ev.description)
             );
         }
         out.push('\n');
@@ -164,20 +203,15 @@ pub fn format_weekend_plan(
         out.push_str("| Score | Event & Location | Day & Time | Target Age(s) | Estimated Price (CAD) | Why It Fits |\n");
         out.push_str("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
         for ev in transient_items {
-            let loc_str = if ev.location.is_empty() || ev.location == location {
-                format!("**{}**", ev.name)
-            } else {
-                format!("**{}** ({})", ev.name, ev.location)
-            };
-            let desc = if ev.description.is_empty() {
-                "Family activity in GTA".to_string()
-            } else {
-                ev.description.clone()
-            };
             let _ = writeln!(
                 out,
                 "| * {:.1}/5 | {} | {} | {} | {} | {} |",
-                ev.score, loc_str, ev.day, ev.target_ages, ev.price, desc
+                ev.score,
+                fmt_name_loc(&ev.name, &ev.location, location),
+                fmt_missing(&ev.day),
+                fmt_missing(&ev.target_ages),
+                fmt_missing(&ev.price),
+                fmt_missing(&ev.description)
             );
         }
         out.push('\n');
