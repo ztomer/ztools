@@ -50,38 +50,12 @@ have checked out right now instead — a local build, no network, no tap — run
 Builds the Rust release and installs it (with the same subcommand aliases)
 straight into the Homebrew bin, `$(brew --prefix)/bin` (`/opt/homebrew/bin`
 here). This overwrites the prefix entry until the next `brew upgrade`;
-`ZTOOLS_INSTALL_DIR=/elsewhere ./install.sh` targets a custom dir.
-| `ab_test` | — | Smoke + parity harness: every subcommand answers, the Rust suite, the collect-parity comparator |
+`ZTOOLS_INSTALL_DIR=/elsewhere ./install.sh` targets a custom dir. These two
+are the only install doors; for an uninstalled dev build use
+`cargo run --manifest-path rust/Cargo.toml -- <subcommand>`.
 | `ztools` | — | Unified native binary dispatcher for all subcommands |
 
----
-
-## Quick Start (from a checkout)
-
-Build the release binaries:
-
-```bash
-./build.sh
-```
-
-Run any tool directly from `./bin/`:
-
-```bash
-# Weekend planner
-./bin/weekend
-
-# Twitter summarizer (live browser scraping + GPU summarization)
-./bin/twitter
-
-# Replay previous Twitter scrape from cache
-./bin/twitter --use-cache
-
-# Image renamer
-./bin/rename_images ~/Desktop/screenshots
-
-# Model evaluation benchmark
-./bin/oeval
-```
+From a checkout, `bin/ab_test` is the smoke + parity harness over the *installed* binary (every subcommand answers, the Rust suite, the collect-parity comparator).
 
 ---
 
@@ -152,9 +126,9 @@ interpreter on the product path; `tools/*.py` are dev gates.
 
 ```bash
 cd rust
-cargo test                          # 532 tests: 469 unit + 63 integration
+cargo test                          # 750 tests: 677 unit + 73 integration
 cargo clippy --all-targets -- -D warnings
-cargo llvm-cov --summary-only       # coverage, floor 94% lines
+make coverage                       # the house coverage gate, floor 95% lines
 ```
 
 Key suites:
@@ -165,7 +139,7 @@ Key suites:
 - `src/ztools/eval/tasks_tests.rs`, `validators/mixed_text_tests.rs` — the eval task table and the mixed-signal scorers pinned to the Python table and verdicts
 - `tests/gpu_lock_shell_parity.rs` — the Rust GPU lock and `tools/gpu_lock.sh` read each other's owner files
 
-**Coverage**: floor **94% lines**, current **94.37%**. The residual uncovered code is live-process spawning (`login_live`, `collect_tweets_live` — a real Camoufox browser), the model-eval run loop (it takes the machine-wide GPU lock and needs a live model server), environment-absent branches, and assertion panic-format arms. The floor may only move up; re-baselining requires a stated reason in the diff. It is 94 rather than the house 95 because reaching 95 by unit test would mean inventing seams for the number's sake — see `routines` ROADMAP O32.
+**Coverage**: floor **95% lines** (the house floor), measured **95.65%** by the house gate (`coverage_gate.sh`, one lcov export per test target, merged — a plain `cargo llvm-cov` reads ~92% because it counts generic instantiations separately). The residual uncovered code is live-process spawning (`login_live`, `collect_tweets_live` — a real Camoufox browser), the model-eval run loop (it takes the machine-wide GPU lock and needs a live model server), environment-absent branches, and assertion panic-format arms. The floor may only move up; re-baselining requires a stated reason in the diff.
 
 ### Shell tooling (dev)
 
@@ -181,17 +155,11 @@ never be weaker than CI. `tools/release.sh` runs it too, because it pushes with
 `--no-verify` and would otherwise tag something nothing had checked.
 
 The steps: the house Rust gate (fmt, clippy `-D warnings`, no `#[allow]`)
-· `cargo audit` · emoji · 500-line cap · `cargo test` · the tools pytest ·
-coverage at the 94% floor.
+· `cargo audit` · the structural gate (native `goh`: emoji, 500-line cap,
+conflict markers, shell lint, secrets; `vendor/` exempt) · `cargo test` · the
+tools pytest · coverage at the 95% floor.
 
-**This repo had no gate at all until 2026-09-02** — `tools/gate.sh` ran
-structural checks with every language layer commented out, and nothing else
-picked them up. The Rust half was therefore ungated and had drifted to **223
-`cargo fmt` violations** while every run reported all-green. Clippy, as it
-happens, was clean; that is precisely why an ungated repo is dangerous rather
-than obviously broken.
-
-- **Pre-commit** (`.githooks/`): emoji, file size, `#[allow]` ban, Ruff, Clippy.
+- **Pre-commit** (`.githooks/`): the structural gate over the staged files only.
 
 GitHub Actions CI is disabled — the local gate is the gate of record.
 
@@ -210,4 +178,4 @@ tools/release.sh            # bump patch from the latest tag (v2.1.7 -> v2.1.8)
 tools/release.sh 2.2.0      # explicit version
 ```
 
-The script syncs `rust/Cargo.toml` to the version, tags HEAD, pushes, computes the GitHub tarball's SHA256, and updates the Homebrew tap formula in `ztomer/homebrew-tap`. Requires `gh` authenticated.
+The script runs `make ci`, syncs `rust/Cargo.toml` to the version, builds the tree from `git archive HEAD` (the bytes the tap will compile — an untracked path dependency fails here, not on the user's machine), runs `./install.sh` and checks the binary on PATH reports the version with every subcommand answering, tags HEAD with the `CHANGELOG.md` section for that version as the tag message (no section, no tag), pushes, computes the GitHub tarball's SHA256, and updates the Homebrew tap formula in `ztomer/homebrew-tap`. Requires `gh` authenticated.

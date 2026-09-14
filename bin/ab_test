@@ -10,27 +10,24 @@
 #   3. Collect parity: the shared-record comparator over its fixtures, plus the
 #      live-run wiring notes (the comparator itself is a python3 stdlib script,
 #      a dev tool like tools/*.py -- never on the product path).
+#
+# A dev tool: it needs the checkout (rust/, tests/fixtures/), so it lives in
+# bin/ and is not installed. It exercises the INSTALLED binary — the one on
+# PATH, or ZTOOLS_BIN — never a build-dir artefact, because the point is to
+# prove what the user runs.
 set -euo pipefail
+
+GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
+# shellcheck source=/Users/ztomer/Projects/gates_of_heck/tui/lib.sh
+source "$GOH/tui/lib.sh"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PY="python3"
 
-RUST=""
-if command -v ztools >/dev/null 2>&1 && [ "$(head -c 2 "$(command -v ztools)")" != '#!' ]; then
-    RUST="ztools"
-elif [ -x "$ROOT/bin/ztools" ]; then
-    RUST="$ROOT/bin/ztools"
-fi
-if [ -z "$RUST" ]; then
-    echo "✗ ztools binary not found — building release binary..." >&2
-    (cd "$ROOT/rust" && cargo build --quiet --release)
-    RUST="$ROOT/bin/ztools"
-fi
-
-echo "============================================================"
-echo "              ZTOOLS SMOKE + PARITY HARNESS                 "
-echo "============================================================"
-echo ""
+RUST="${ZTOOLS_BIN:-$(command -v ztools || true)}"
+[ -n "$RUST" ] && [ -x "$RUST" ] || die "ztools is not installed (no ZTOOLS_BIN, nothing on PATH) — run ./install.sh"
+section "ztools smoke + parity harness"
+info "binary: $RUST ($("$RUST" --version))"
 
 failures=0
 
@@ -39,9 +36,7 @@ now_ms() { perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000'; }
 run_cli_test() {
     local name="$1" subcommand="$2" expect="$3"
 
-    echo "------------------------------------------------------------"
-    echo "CLI Surface: $name"
-    echo "------------------------------------------------------------"
+    section "CLI surface: $name"
 
     local t0 t1 rust_ms rust_status
     t0=$(now_ms)
@@ -49,25 +44,21 @@ run_cli_test() {
     t1=$(now_ms)
     rust_ms=$((t1 - t0))
     if [ "$rust_status" -eq 0 ] && grep -qi "$expect" /tmp/rust_output.txt; then
-        echo "  ✓ $subcommand --help answers in ${rust_ms}ms"
+        ok "$subcommand --help answers in ${rust_ms}ms"
     else
-        echo "  ✗ $subcommand --help failed (exit $rust_status) or lacks '$expect'"
+        err "$subcommand --help failed (exit $rust_status) or lacks '$expect'"
         failures=$((failures + 1))
     fi
-    echo ""
 }
 
 run_rust_suite() {
-    echo "------------------------------------------------------------"
-    echo "Rust suite (unit, integration, frozen-golden parity)"
-    echo "------------------------------------------------------------"
+    section "Rust suite (unit, integration, frozen-golden parity)"
     if (cd "$ROOT/rust" && cargo test --quiet); then
-        echo "  ✓ Rust ztools unit, integration & parity tests passed"
+        ok "Rust ztools unit, integration & parity tests passed"
     else
-        echo "  ✗ Rust ztools tests failed"
+        err "Rust ztools tests failed"
         failures=$((failures + 1))
     fi
-    echo ""
 }
 
 compare_collect_records() {
@@ -138,25 +129,23 @@ sys.exit(0)
 }
 
 run_collect_parity() {
-    echo "------------------------------------------------------------"
-    echo "Collect Parity: shared-record agreement (fixtures + live wiring)"
-    echo "------------------------------------------------------------"
+    section "Collect parity: shared-record agreement (fixtures + live wiring)"
     local fixdir="$ROOT/tests/fixtures/collect_parity"
 
     # Green path: identical records on both sides must pass.
     if compare_collect_records "$fixdir/rust_a.json" "$fixdir/py_a.json"; then
-        echo "  ✓ Fixture pair agrees (green path)"
+        ok "Fixture pair agrees (green path)"
     else
-        echo "  ✗ Fixture pair disagrees — the comparator or fixtures drifted"
+        err "Fixture pair disagrees — the comparator or fixtures drifted"
         failures=$((failures + 1))
     fi
 
     # Partial overlap with agreeing shared records is parity, not drift: the
     # feed is a per-load sample (see compare_collect_records).
     if compare_collect_records "$fixdir/rust_a.json" "$fixdir/py_b.json" >/dev/null 2>&1; then
-        echo "  ✓ Partial overlap with agreeing records passes (sampled feed)"
+        ok "Partial overlap with agreeing records passes (sampled feed)"
     else
-        echo "  ✗ Comparator failed a partial overlap whose shared records agree"
+        err "Comparator failed a partial overlap whose shared records agree"
         failures=$((failures + 1))
     fi
 
@@ -164,18 +153,22 @@ run_collect_parity() {
     # comparator that cannot go red would green-light exactly the parse drift
     # this gate exists to catch.
     if compare_collect_records "$fixdir/rust_a.json" "$fixdir/py_c.json" >/dev/null 2>&1; then
-        echo "  ✗ Comparator accepted a differing shared record — it cannot bite"
+        err "Comparator accepted a differing shared record — it cannot bite"
         failures=$((failures + 1))
     else
-        echo "  ✓ Comparator rejects a differing shared record (red-proof)"
+        ok "Comparator rejects a differing shared record (red-proof)"
     fi
 
-    # Disjoint legs are inconclusive (exit 2), never a pass.
-    compare_collect_records "$fixdir/rust_a.json" "$fixdir/py_d.json" >/dev/null 2>&1
-    if [ $? -eq 2 ]; then
-        echo "  ✓ Disjoint legs report inconclusive, not parity"
+    # Disjoint legs are inconclusive (exit 2), never a pass. The status is
+    # captured in the same statement: under `set -e` a bare non-zero call
+    # ends the script, and until 2026-09-14 that is exactly what happened
+    # here — the harness died with exit 2 before its verdict, every run.
+    local disjoint=0
+    compare_collect_records "$fixdir/rust_a.json" "$fixdir/py_d.json" >/dev/null 2>&1 || disjoint=$?
+    if [ "$disjoint" -eq 2 ]; then
+        ok "Disjoint legs report inconclusive, not parity"
     else
-        echo "  ✗ Disjoint legs did not report inconclusive"
+        err "Disjoint legs did not report inconclusive"
         failures=$((failures + 1))
     fi
 
@@ -190,7 +183,6 @@ run_collect_parity() {
     #   compare_collect_records /tmp/ab_before.json /tmp/ab_after.json
     # The feed is a per-load sample (measured: the same collector minutes apart
     # shared 7 of ~50 IDs), so only the shared records are compared.
-    echo ""
 }
 
 run_cli_test "Twitter Summarizer" twitter-summarize "usage"
@@ -203,12 +195,9 @@ run_cli_test "Twitter status"     twitter-status   "usage"
 run_rust_suite
 run_collect_parity
 
-echo "============================================================"
+hr
 if [ "$failures" -eq 0 ]; then
-    echo "               SMOKE + PARITY HARNESS OK              "
-    echo "============================================================"
+    ok "smoke + parity harness passed"
 else
-    echo "        HARNESS FAILED — $failures check(s) did not pass     "
-    echo "============================================================"
-    exit 1
+    die "harness failed — $failures check(s) did not pass"
 fi

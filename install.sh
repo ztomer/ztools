@@ -54,10 +54,9 @@ for cmd in twitter \
     ln -sf ztools "$BIN_DIR/$cmd"
 done
 
-# Copy ab_test helper if present
-if [ -f "$ROOT/bin/ab_test" ]; then
-    cp "$ROOT/bin/ab_test" "$BIN_DIR/ab_test"
-    chmod +x "$BIN_DIR/ab_test"
-fi
+# An earlier install.sh copied bin/ab_test here too. It is a dev harness that
+# needs the checkout (rust/, tests/fixtures/) and was broken at this path;
+# remove the stale copy if one is present.
+[ -f "$BIN_DIR/ab_test" ] && rm -f "$BIN_DIR/ab_test"
 
 ok "ztools binaries successfully installed to $BIN_DIR"

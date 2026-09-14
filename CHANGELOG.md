@@ -49,6 +49,19 @@ Python verdicts frozen as goldens the Rust tests assert — or explicitly retire
 - `.gatesrc` runs `python3 -m pytest tools/tests` (the shell lock's tests, moved
   beside the tool).
 
+### Release wiring _(2026-09-14)_
+- **`vendor/camoufox-rs` is tracked.** It was gitignored while being a
+  `rust/Cargo.toml` path dependency, so the tap's tarball build — every prior
+  tag — could not have compiled from a clean clone. Structural gates exempt
+  `vendor/`.
+- **Coverage floor 94 → 95** (the house floor): the house gate measures 95.65%.
+- **The CI list runs `structural.sh --full`** (native `goh`: emoji, length,
+  markers, shell lint, secrets) instead of two hand-picked Python checks.
+- **`build.sh` and the `bin/` launcher shims are gone.** They were a third
+  install door (after `brew` and `install.sh`) that resolved the build via
+  `cargo metadata` + `jq` on every launch and hardcoded `~/Projects/ztools`.
+  Dev builds run with `cargo run --manifest-path rust/Cargo.toml -- <cmd>`.
+
 ### Removed
 - `references/` (286 files), `pyproject.toml`, `uv.lock`, the `.venv`, the root
   `ztools` Python TUI wrapper, `routines_twitter_status.py`, `eval_tasks/__init__.py`,

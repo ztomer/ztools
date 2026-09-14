@@ -4,7 +4,7 @@
 
 **ZTools** is a high-performance, native Rust toolkit designed for local LLM workflows on macOS (Apple Silicon) communicating with a local **Osaurus** server (`http://localhost:1337`) or OpenAI-compatible inference servers.
 
-The project began as Python utilities and is now a single native Rust binary (`ztools`) with thin launcher shims (`twitter`, `weekend`, `rename_images`, `oeval`, `ab_test`). The Python tree was retired 2026-09-13; nothing on the product path runs an interpreter.
+The project began as Python utilities and is now a single native Rust binary (`ztools`) that dispatches on `argv[0]`; `twitter`, `weekend`, `rename_images`, `oeval` and their long forms are symlinks to it, installed by `install.sh` and the Homebrew formula. `bin/ab_test` is the smoke harness. The Python tree was retired 2026-09-13; nothing on the product path runs an interpreter.
 
 ```
                               ┌──────────────────────────────────┐
@@ -42,7 +42,7 @@ The project began as Python utilities and is now a single native Rust binary (`z
 
 ```
 ztools/
-├── bin/                    # Standalone executable launchers (twitter, weekend, etc.)
+├── bin/                    # ab_test — smoke + parity harness for the installed binary
 ├── conf/                   # Shared prompt templates and benchmark configs
 │   ├── config.toml         # Benchmark rankings and model slots ([best_models])
 │   ├── prompts.toml        # Canonical LLM prompts across tools
