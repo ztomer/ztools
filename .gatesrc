@@ -1,6 +1,9 @@
 # gates_of_heck configuration. All keys optional; delete what you don't use.
 GOH_MAX_LINES=500                 # file-length cap; unset disables the check
-# GOH_EXCLUDE='vendor/|\.generated\.'   # shared vendor/generated exemption
+# vendor/camoufox-rs is a third-party crate carried in-tree (rust/Cargo.toml
+# path dependency; the tap builds from the tarball). Not ours to split or
+# re-glyph; still secret-scanned by the length/emoji-independent checks.
+export GOH_EXCLUDE='vendor/'
 # GOH_LINE_EXCLUDE='third_party/'       # length-only alias
 # GOH_SWIFT_MODE=xcode            # or spm
 # GOH_SWIFT_SCHEME=MyAppTests

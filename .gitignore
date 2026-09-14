@@ -174,5 +174,8 @@ output/
 # opencode agent session state
 .opencode/
 
-# vendored crates
-vendor/
+# vendored crates: TRACKED. rust/Cargo.toml depends on vendor/camoufox-rs by
+# path and the Homebrew formula builds from the GitHub tarball, so an ignored
+# vendor dir is a release that cannot build. Only its build output is ignored.
+vendor/*/target/
+vendor/*/.cargo-ok
