@@ -2,7 +2,7 @@
   {
     "screen_name": "rustlang",
     "text": "Rust 1.80 is released!",
-    "created_at": "2026-08-20T12:00:00",
+    "created_at": "2026-08-20T12:00:00+00:00",
     "favorite_count": 1500,
     "retweet_count": 350,
     "id_str": "1827394000000000001"
@@ -10,7 +10,7 @@
   {
     "screen_name": "developer",
     "text": "Shipping the Rust rewrite today!",
-    "created_at": "2026-08-20T12:05:00",
+    "created_at": "2026-08-20T12:05:00+00:00",
     "favorite_count": 42,
     "retweet_count": 5,
     "id_str": "1827394000000000002",
@@ -19,7 +19,7 @@
   {
     "screen_name": "intruder",
     "text": "A tweet the other collector never saw",
-    "created_at": "2026-08-20T12:11:00",
+    "created_at": "2026-08-20T12:11:00+00:00",
     "favorite_count": 0,
     "retweet_count": 0,
     "id_str": "1827394000000000004"
@@ -27,7 +27,7 @@
   {
     "screen_name": "extra",
     "text": "One more the other collector never saw",
-    "created_at": "2026-08-20T12:12:00",
+    "created_at": "2026-08-20T12:12:00+00:00",
     "favorite_count": 0,
     "retweet_count": 0,
     "id_str": "1827394000000000005"

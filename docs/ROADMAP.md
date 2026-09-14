@@ -161,16 +161,15 @@ PROGRESS 2026-09-13:
   re-expressed as hook-delegates-to-`structural.sh` + `.gatesrc` `GOH_MAX_LINES=500`
   (the delegation only enforces the cap when the repo wires it).
   Full gate 2805 passed / 0 failed.
-- NEXT: `twitter/session.rs` (profile dir, saved-session check, headed login),
-  then the `camoufox-rs` collect driver behind the `LiveBrowserCollector`
-  runner seam, env-flagged, Python default.
-
-- **2a (needs S1+S2 green):** `camoufox-rs` collector behind the `LiveBrowserCollector`
-  runner seam + login/session port. Env-flag flip per path (`TWITTER_COLLECTOR=rust`
-  style), Python remains default until A/B passes.
-- **2b (independent of S1):** weekend search → `reqwest` (item 4), `ztools status`
-  subcommand (item 5), `eval_tasks` code deletion (item 6). These can land while 2a
-  is still in review.
+- 2a DONE + CUT OVER 2026-09-13: `twitter/session.rs` (profile dir, saved-session
+  check, headed login) and the `camoufox-rs` collect driver landed behind the
+  `LiveBrowserCollector` runner seam; after the Phase 3 verdict below the env
+  flag, the Python subprocess path (`collect_tweets_via_python`,
+  `build_fetch_stmt`, the post-run cache scan) and `ztools/pyenv.rs` were
+  deleted. `collect_tweets_live` / `login_live` call the native driver
+  unconditionally. Proven end to end with no env: `ztools twitter-summarize
+  --fetch-only --since 3h` → 10 tweets on the real Zen profile.
+- 2b: all landed (see above).
 
 ## Phase 3 — Parity proof (A2) before any cutover
 
@@ -187,13 +186,26 @@ PROGRESS 2026-09-13:
   2026-09-13 update 2: BOTH legs ran live despite the load (Rust 49 tweets +
   Python 47 via camoufox per your direction, 100% ID coverage both sides,
   user cache preserved) but ID sets barely overlap (3 shared) on the same
-  account + 24h window. Diagnosis: same authors, same span, monotonic
-  full-window coverage both sides = different feed rankings, i.e. at least
-  one leg silently collected For You instead of Following (a failure mode
-  Python's own comments document). Both sides click the tab but neither
-  verifies captured traffic came from the Following endpoint. Required before
-  the A/B can mean anything: filter or assert recorded responses to the
-  Following endpoint so a wrong-feed run fails loudly.
+  account + 24h window. First diagnosis: wrong feed. Fix landed: both sides
+  now assert that captured timeline traffic came from the Following endpoint
+  (`conf/twitter.toml [endpoints]`, `twitter/endpoints.rs`,
+  `browser.py::is_following_url`) and exit loudly otherwise; zero timeline
+  traffic is reported as an empty run, not blamed on the feed.
+  2026-09-13 update 3 — VERDICT, instrument recalibrated: with the assertion
+  in place both legs PASS it and still share only 1-2 IDs. Calibration run:
+  the SAME Rust collector twice, minutes apart, same account, same 24h window
+  → 46 and 51 tweets, **7 shared**. The Following endpoint is served as a
+  per-load sample (both legs span the full 24h in 1-3 scrolls; a
+  reverse-chronological page would not), so ID-set equality cannot see parity
+  — the one-implementation noise floor is as wide as the cross-implementation
+  gap. `bin/ab_test::compare_collect_records` replaces it with the property
+  the territory supports: every tweet BOTH legs captured must agree on
+  author, text and timestamp (live engagement counts checked for presence
+  only). Live: 2/2 and 1/1 shared records agree; fixtures green-path,
+  partial-overlap pass, differing-record red-proof, disjoint → inconclusive
+  (exit 2, never a pass). Combined with the same-input-same-IDs parse test
+  (`browser_parse.rs`) and the endpoint assertion, Phase 3 for twitter
+  collect is PASSED and the default flipped to native (Phase 2a above).
 - `routines.toml` flip to `ztools status` only after one full daily cycle emits an
   identical page (diff the JSON, not eyeballs).
 - Weekend: **DONE 2026-09-13**: `clean_search_results` extracted in

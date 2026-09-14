@@ -314,10 +314,23 @@ assert is_non_human_readable("HF12345678") is True
 # IDs are deterministic). Rust tweets carry `id`, Python dicts `id_str`
 # (absent when empty); ID-less tweets on either side are reported, never
 # silently dropped from the comparison. Exits 0 on identical sets, 1 otherwise.
-compare_tweet_id_sets() {
+compare_collect_records() {
+    # Record parity over the tweets BOTH legs saw. Set equality was the first
+    # criterion here and it was the wrong instrument: measured 2026-09-13, the
+    # SAME Rust collector run twice minutes apart on the same account and 24h
+    # window shared 7 of ~50 IDs, so cross-implementation overlap (1-3) is
+    # inside the feed's own sampling noise. X serves the Following endpoint as
+    # a per-load sample; no two loads see the same tweets. What IS
+    # deterministic is the record built from a tweet both legs captured:
+    # author, text and timestamp must agree byte-for-byte. Engagement counts
+    # are live and drift between loads, so they are checked for presence only.
+    #
+    # Exit 0: every shared record agrees. Exit 1: a shared record differs, or
+    # an input is unreadable. Exit 2: nothing shared — inconclusive, rerun.
     local rust_file="$1" py_file="$2"
     (cd "$ROOT" && PYTHONPATH="$ROOT/references" "$PY" -c '
 import json, sys
+from datetime import datetime
 rust_file, py_file = sys.argv[1], sys.argv[2]
 try:
     rust = json.load(open(rust_file, encoding="utf-8"))
@@ -326,59 +339,101 @@ except (OSError, ValueError) as e:
     print(f"  ✗ cannot read collect outputs: {e}")
     sys.exit(1)
 assert isinstance(rust, list) and isinstance(py, list), "both files must hold JSON arrays"
-rust_ids = {str(t.get("id", "")) for t in rust if isinstance(t, dict)}
-py_ids = {str(t.get("id_str", "")) for t in py if isinstance(t, dict)}
+
+def when(raw):
+    # Rust writes the GraphQL form, Python ISO-8601; both name one instant.
+    for fmt in ("%a %b %d %H:%M:%S %z %Y", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(str(raw), fmt).isoformat()
+        except ValueError:
+            pass
+    return f"unparsed:{raw}"
+
+rust_by = {str(t.get("id", "")): t for t in rust if isinstance(t, dict) and str(t.get("id", ""))}
+py_by = {str(t.get("id_str", "")): t for t in py if isinstance(t, dict) and str(t.get("id_str", ""))}
 rust_blind = sum(1 for t in rust if isinstance(t, dict) and not str(t.get("id", "")))
 py_blind = sum(1 for t in py if isinstance(t, dict) and not str(t.get("id_str", "")))
-rust_ids.discard("")
-py_ids.discard("")
 if rust_blind or py_blind:
-    print(f"  ! {rust_blind} Rust / {py_blind} Python tweets carry no ID (excluded from the sets)")
-if rust_ids == py_ids:
-    print(f"  ✓ Tweet-ID sets identical ({len(rust_ids)} tweets)")
-    sys.exit(0)
-only_rust = sorted(rust_ids - py_ids)[:10]
-only_py = sorted(py_ids - rust_ids)[:10]
-print(f"  ✗ Tweet-ID sets differ: {len(rust_ids)} Rust vs {len(py_ids)} Python")
-if only_rust:
-    print(f"    only in Rust ({len(rust_ids - py_ids)}): {only_rust}")
-if only_py:
-    print(f"    only in Python ({len(py_ids - rust_ids)}): {only_py}")
-sys.exit(1)
+    print(f"  ! {rust_blind} Rust / {py_blind} Python tweets carry no ID (excluded)")
+shared = sorted(set(rust_by) & set(py_by))
+print(f"  · {len(rust_by)} Rust / {len(py_by)} Python tweets, {len(shared)} shared")
+if not shared:
+    print("  ! no shared tweets — inconclusive (the feed is sampled per load; rerun both legs closer together)")
+    sys.exit(2)
+LIVE_COUNTS = ("favorite_count", "retweet_count")
+bad = 0
+for tid in shared:
+    r, q = rust_by[tid], py_by[tid]
+    diffs = [k for k in ("screen_name", "text") if r.get(k) != q.get(k)]
+    if when(r.get("created_at")) != when(q.get("created_at")):
+        diffs.append("created_at")
+    diffs += [k for k in LIVE_COUNTS if (k in r) != (k in q)]
+    if diffs:
+        bad += 1
+        print(f"  ✗ {tid}: {chr(44).join(diffs)} differ")
+        for k in diffs:
+            print(f"      rust={r.get(k)!r}\n      py  ={q.get(k)!r}")
+if bad:
+    print(f"  ✗ {bad} of {len(shared)} shared records differ")
+    sys.exit(1)
+print(f"  ✓ all {len(shared)} shared records agree (author, text, timestamp; live counts present on both)")
+sys.exit(0)
 ' "$rust_file" "$py_file")
 }
 
-run_collect_id_parity() {
+run_collect_parity() {
     echo "------------------------------------------------------------"
-    echo "Collect Parity: tweet-ID sets (fixtures + live-run wiring)"
+    echo "Collect Parity: shared-record agreement (fixtures + live wiring)"
     echo "------------------------------------------------------------"
     local fixdir="$ROOT/tests/fixtures/collect_parity"
 
-    # Green path: identical ID sets on both sides must pass.
-    if compare_tweet_id_sets "$fixdir/rust_a.json" "$fixdir/py_a.json"; then
+    # Green path: identical records on both sides must pass.
+    if compare_collect_records "$fixdir/rust_a.json" "$fixdir/py_a.json"; then
         echo "  ✓ Fixture pair agrees (green path)"
     else
         echo "  ✗ Fixture pair disagrees — the comparator or fixtures drifted"
         failures=$((failures + 1))
     fi
 
-    # E3 red-proof: divergent ID sets must FAIL. A comparator that cannot go
-    # red would green-light exactly the drift this gate exists to catch.
-    if compare_tweet_id_sets "$fixdir/rust_a.json" "$fixdir/py_b.json" >/dev/null 2>&1; then
-        echo "  ✗ Comparator accepted divergent ID sets — it cannot bite"
+    # Partial overlap with agreeing shared records is parity, not drift: the
+    # feed is a per-load sample (see compare_collect_records).
+    if compare_collect_records "$fixdir/rust_a.json" "$fixdir/py_b.json" >/dev/null 2>&1; then
+        echo "  ✓ Partial overlap with agreeing records passes (sampled feed)"
+    else
+        echo "  ✗ Comparator failed a partial overlap whose shared records agree"
+        failures=$((failures + 1))
+    fi
+
+    # E3 red-proof: a shared tweet whose record differs must FAIL. A
+    # comparator that cannot go red would green-light exactly the parse drift
+    # this gate exists to catch.
+    if compare_collect_records "$fixdir/rust_a.json" "$fixdir/py_c.json" >/dev/null 2>&1; then
+        echo "  ✗ Comparator accepted a differing shared record — it cannot bite"
         failures=$((failures + 1))
     else
-        echo "  ✓ Comparator rejects divergent ID sets (red-proof)"
+        echo "  ✓ Comparator rejects a differing shared record (red-proof)"
+    fi
+
+    # Disjoint legs are inconclusive (exit 2), never a pass.
+    compare_collect_records "$fixdir/rust_a.json" "$fixdir/py_d.json" >/dev/null 2>&1
+    if [ $? -eq 2 ]; then
+        echo "  ✓ Disjoint legs report inconclusive, not parity"
+    else
+        echo "  ✗ Disjoint legs did not report inconclusive"
+        failures=$((failures + 1))
     fi
 
     # Live-run wiring (needs a quiet box + signed-in Zen; skipped otherwise):
-    #   TWITTER_COLLECTOR=native ztools twitter-summarize --fetch-only  # writes ~/.twitter_summary_debug_cache.json
+    #   TWITTER_COLLECTOR=native ztools twitter-summarize --fetch-only --since 24h
     #   cp ~/.twitter_summary_debug_cache.json /tmp/ab_rust.json
-    #   PYTHONPATH=references .venv/bin/python -m twitter --fetch-only  # same path
+    #   TWITTER_BROWSER_BACKEND=camoufox PYTHONPATH=references python3 -c \
+    #     "from datetime import *; from twitter.browser import collect_tweets_via_browser; \
+    #      from twitter.output import save_debug_cache; \
+    #      save_debug_cache(collect_tweets_via_browser(datetime.now(timezone.utc)-timedelta(hours=24), False))"
     #   cp ~/.twitter_summary_debug_cache.json /tmp/ab_py.json
-    #   compare_tweet_id_sets /tmp/ab_rust.json /tmp/ab_py.json
-    # The two collects must target the same account/window; the comparison is
-    # set equality, so ordering and duplicates do not matter.
+    #   compare_collect_records /tmp/ab_rust.json /tmp/ab_py.json
+    # Same account, same window, run back to back; both legs fail loudly on
+    # their own if the traffic never came from the Following endpoint.
     echo ""
 }
 
@@ -388,7 +443,7 @@ run_cli_test "Image Renamer"      image-renamer    rename  "usage"
 run_cli_test "Model Quality Benchmark" model-eval  eval    "usage"
 
 run_functional_tests
-run_collect_id_parity
+run_collect_parity
 
 echo "============================================================"
 if [ "$failures" -eq 0 ]; then

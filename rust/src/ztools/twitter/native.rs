@@ -1,11 +1,10 @@
-//! Native `camoufox-rs` collect + login driver (Phase 2a-ii).
+//! Native `camoufox-rs` collect + login driver — the only timeline collector.
 //!
 //! Behavioral port of `collect_tweets_via_browser` and `run_login` in
-//! `twitter/browser.py` + `twitter/session.py`. Additive: the Python subprocess
-//! path stays the default until Phase 3 A/B passes; `TWITTER_COLLECTOR=native`
-//! selects this driver. Every pure decision (scroll stops, dedup, login check)
-//! lives in [`collect`]; this module only drives the browser and feeds it
-//! observations.
+//! `twitter/browser.py` + `twitter/session.py`; the Python subprocess it
+//! replaced was retired 2026-09-13 after the Phase 3 A/B. Every pure decision
+//! (scroll stops, dedup, login check) lives in [`collect`]; this module only
+//! drives the browser and feeds it observations.
 
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -355,8 +354,7 @@ fn scroll_collect(
 }
 /// Collect timeline tweets through a native `camoufox-rs` browser.
 ///
-/// Additive Phase 2a-ii path behind `TWITTER_COLLECTOR=native`; behavior
-/// mirrors `collect_tweets_via_browser`.
+/// Behavior mirrors `collect_tweets_via_browser`.
 ///
 /// # Errors
 ///
@@ -484,12 +482,6 @@ pub fn login_native() -> Result<()> {
     outcome.map_err(anyhow::Error::from)?;
     println!("· signed in — future runs reuse this profile headlessly");
     Ok(())
-}
-
-/// Whether `TWITTER_COLLECTOR=native` selects this driver.
-#[must_use]
-pub fn native_selected() -> bool {
-    std::env::var("TWITTER_COLLECTOR").is_ok_and(|v| v.trim().eq_ignore_ascii_case("native"))
 }
 
 #[path = "native_tests.rs"]
