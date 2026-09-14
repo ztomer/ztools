@@ -4,7 +4,7 @@
 
 **ZTools** is a high-performance, native Rust toolkit designed for local LLM workflows on macOS (Apple Silicon) communicating with a local **Osaurus** server (`http://localhost:1337`) or OpenAI-compatible inference servers.
 
-The project began as Python utilities and has been completely ported to a unified native Rust binary (`ztools`) with thin launcher shims (`twitter`, `weekend`, `rename_images`, `oeval`, `ab_test`).
+The project began as Python utilities and is now a single native Rust binary (`ztools`) with thin launcher shims (`twitter`, `weekend`, `rename_images`, `oeval`, `ab_test`). The Python tree was retired 2026-09-13; nothing on the product path runs an interpreter.
 
 ```
                               ┌──────────────────────────────────┐
@@ -51,7 +51,7 @@ ztools/
 │   ├── PORT_PARITY.md      # Parity ledger and benchmark comparisons
 │   ├── ROADMAP.md          # Forward-looking backlog (port complete; open items: none)
 │   └── MODEL_QUIRKS.md     # Observed model quirks and workarounds
-├── references/             # Historical Python implementations used for A/B testing
+├── tests/fixtures/         # Parity fixtures + the frozen Python verdicts the Rust goldens assert
 ├── rust/                   # Native Rust crate (ztools)
 │   ├── Cargo.toml          # Rust dependencies (reqwest, serde, clap, chrono, etc.)
 │   └── src/
@@ -164,7 +164,7 @@ Automates regression testing and leaderboard scoring of local LLMs against 30 ch
 - **Oversize refusal (`oversize.rs`)**: a model whose weights exceed 80% of reclaimable memory — or a machine already paging — is refused before measuring (`EVAL_ALLOW_OVERSIZE=1` overrides deliberately).
 - **Config-resolved budgets & timeouts (`budgets.rs`, `signals.rs`)**: `[max_tokens]` / `[timeouts]` tables from `conf/config.toml`; per-model caps from `conf/models/<family>.toml`, family resolved from the architecture recorded in eval_signals before falling back to name matching.
 - **Model Health Probe (`model_health.rs`)**: inspects model directory shards offline before loading, detecting broken MTP speculative drafting weights, missing `.safetensors` parts, and corrupt downloads.
-- **Task data**: canonical snapshots live in `eval_tasks/data/taxes/` and are shared byte-for-byte with the Python reference; validator agreement is enforced every push by the CI parity gate (`rust/tests/validator_parity.rs` + `references/tests/test_rust_validator_parity.py`).
+- **Task data**: the task table is `eval/tasks.rs` (pinned row-for-row to the retired Python table by `tasks_tests.rs`); taxes snapshots live in `eval_tasks/data/taxes/`; the validators' agreement with the Python originals is a golden (`rust/tests/validator_parity.rs` over `tests/fixtures/validator_parity/expected_python_verdicts.json`).
 
 ---
 
@@ -172,17 +172,10 @@ Automates regression testing and leaderboard scoring of local LLMs against 30 ch
 
 Local verification is enforced before code reaches GitHub CI:
 
-- **`.githooks/pre-commit`**:
-  - Emoji gate (permits only Kare icons: `→ ✓ ✗ ⚠ ↔ ↑ ↓`).
-  - File size gate — 500 lines, **Python and Rust alike, no exemption for tests**
-    (`tools/check_file_size.py`). Python-only until 2026-08-23, which is how
-    `json_validator.rs` reached 1126 lines under a green hook; a test-file exemption
-    existed briefly after that and was removed 2026-08-24 — an oversized test file is
-    split the same as production (sibling `test_*.py` files, or a Rust `#[path=...] mod`).
-  - `#[allow]` ban across Rust source (a suppression is a defect, not a configuration).
-  - Python linting (`ruff`) and syntax check.
-  - Rust Clippy (`cargo clippy --all-targets -- -D warnings`) and test suite.
-- **`.githooks/pre-push`**:
-  - Full Python parity suite with a 95% coverage floor (`pytest --cov-fail-under=95`).
-  - Full Rust test suite (403 unit + 61 integration tests).
-  - Rust coverage floor: `cargo llvm-cov --fail-under-lines 94` (~94.8% current; the residual is live-browser process spawning and env-absent branches, itemized in the coverage report).
+- **`.githooks/pre-commit`** delegates to `gates_of_heck/gates/structural.sh` (emoji
+  gate with the Kare icon set, 500-line cap for every tracked `.py`/`.rs` with no
+  exemption for tests, conflict markers, shell lint, secrets).
+- **`.githooks/pre-push`** runs `tools/gate.sh --full`, the ONE step list in `.gatesrc`:
+  the house Rust gate (fmt, clippy `-D warnings`, no `#[allow]`), `cargo audit`, emoji,
+  file length, `cargo test`, the tools pytest, and the Rust coverage floor
+  (`cargo llvm-cov --fail-under-lines 94`).

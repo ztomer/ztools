@@ -35,7 +35,7 @@ set -uo pipefail
 if [ -z "${SWEEP_REEXEC:-}" ]; then
   # ROOT must be resolved from the ORIGINAL location and carried across. After the
   # re-exec BASH_SOURCE points at the snapshot in $TMPDIR, and deriving the repo root
-  # from it sends every relative path -- tui/lib.sh, tools/osaurus_one.sh, .venv --
+  # from it sends every relative path -- tui/lib.sh, tools/osaurus_one.sh --
   # into the temp directory. Caught by running the guard rather than by reading it.
   SWEEP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
   _snapshot="$(mktemp -t sweep_models)"
@@ -135,8 +135,10 @@ for MODEL in $MODELS; do
   info "[$i/$TOTAL] $MODEL — running (log: $LOG)"
   START=$(date +%s)
 
-  timeout "$PER_MODEL_TIMEOUT" "$ROOT/.venv/bin/python" -m eval --model "$MODEL" \
-    > "$LOG" 2>&1
+  # The native eval (the Python `-m eval` was retired 2026-09-13). One model, the
+  # full roster + taxes snapshots, markdown table on stdout.
+  timeout "$PER_MODEL_TIMEOUT" "${ZTOOLS_BIN:-/opt/homebrew/bin/ztools}" model-eval \
+    --model "$MODEL" --suite full > "$LOG" 2>&1
   CODE=$?
 
   ELAPSED=$(( $(date +%s) - START ))
@@ -160,7 +162,9 @@ for MODEL in $MODELS; do
   # `wc -l`, not `grep -c ... || echo 0`: grep -c prints 0 AND exits non-zero when
   # nothing matches, so the fallback fired too and TASKS_DONE became "0\n0" -- which
   # then split the status line in two. wc -l succeeds on empty input.
-  TASKS_DONE=$(grep -ohE '^[[:space:]]+(·|⚠|✗)[[:space:]]+[a-z_]+:' "$LOG" 2>/dev/null \
+  # A scored task is one row of the results table `| task | score | status | ... |`
+  # (the old Python log used `  · task:` lines).
+  TASKS_DONE=$(grep -ohE '^\| [a-z_0-9]+ \| [0-9]+ \| ' "$LOG" 2>/dev/null \
     | tr -d ' ·⚠✗:' | sort -u | wc -l | tr -d ' ')
 
   # Remove any prior line for this model so --resume sees one record per model.

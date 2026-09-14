@@ -29,7 +29,7 @@ import pytest
 #: name and cannot tell a sandboxed invocation from a live one.
 pytestmark = pytest.mark.sandboxed_server_script
 
-REPO = Path(__file__).resolve().parent.parent.parent
+REPO = Path(__file__).resolve().parent.parent.parent  # tools/tests/ -> repo root
 
 
 #: Every gpu_lock shell snippet in this file settles well inside a second.
@@ -222,57 +222,9 @@ class TestTheShellHalfReportsForeignHolders:
         assert "an unknown run" in r.stdout
 
 
-class TestCrossLanguageParity:
-    """One lock, two implementations. If they disagree about any of this, each
-    reads the other's records as an impostor and silently grants a lock the peer
-    is holding -- while both print reassuring "acquired" messages."""
-
-    def test_both_halves_default_to_the_same_path(self, tmp_path):
-        from lib import gpu_lock
-
-        r = sh('printf "%s" "$GPU_LOCK_DIR"', "", {"ZTOOLS_GPU_LOCK_DIR": ""})
-        assert r.stdout == gpu_lock.DEFAULT_LOCK_DIR
-
-    def test_the_shell_half_can_read_a_python_owner_file(self, tmp_path):
-        """The direction that matters most in practice: an eval (Python) holds
-        the GPU and osaurus_one.sh (bash) must see it."""
-        from lib import gpu_lock
-
-        lock = tmp_path / "gpu.lock"
-        os.environ[gpu_lock.DIR_ENV] = str(lock)
-        gpu_lock.acquire("eval from python", log=lambda _: None)
-        try:
-            r = sh("gpu_lock_holder", lock)
-        finally:
-            gpu_lock.release()
-        assert "eval from python" in r.stdout
-
-    def test_python_can_read_a_shell_owner_file(self, tmp_path):
-        from lib import gpu_lock
-
-        lock = tmp_path / "gpu.lock"
-        # A live holder written by bash: keep the bash process alive while Python
-        # reads it, or the liveness check would correctly call it dead.
-        goh = os.environ.get("GOH_DIR", str(Path.home() / "Projects" / "gates_of_heck"))
-        proc = subprocess.Popen(
-            ["bash", "-c",
-             f'source "{goh}/tui/lib.sh"; source "{REPO}/tools/gpu_lock.sh"; '
-             'gpu_lock_acquire "osaurus_one.sh --restart" >/dev/null; '
-             "read -r _"],
-            stdin=subprocess.PIPE, text=True,
-            env={**os.environ, "ZTOOLS_GPU_LOCK_DIR": str(lock)},
-        )
-        try:
-            deadline = time.time() + 10
-            while not (lock / "owner").exists() and time.time() < deadline:
-                time.sleep(0.05)
-            os.environ[gpu_lock.DIR_ENV] = str(lock)
-            assert gpu_lock.holder() == "osaurus_one.sh --restart (pid %d)" % proc.pid
-            assert gpu_lock.foreign_holder() == gpu_lock.holder()
-        finally:
-            proc.communicate("\n", timeout=10)
-
-
+# Cross-language parity (shell <-> the OTHER implementation) lives in
+# rust/tests/gpu_lock_shell_parity.rs since 2026-09-13: the peer of this script
+# is the Rust `eval::gpu_lock` held by `model-eval`, not the retired Python lock.
 @pytest.fixture
 def stubbed_tools(tmp_path):
     """A PATH where osaurus/lsof/pgrep/curl are scripted, not real.

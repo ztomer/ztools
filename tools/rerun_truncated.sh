@@ -86,32 +86,19 @@ for MODEL in "${MODELS[@]}"; do
   #     healthy after a sweep   swap  1.43 GB   compressor  5.1 GB   (fine)
   #
   # A floor on free+available is kept only to catch outright exhaustion.
-  read -r SWAP_GB CMPR_GB AVAIL <<EOF
-$(./.venv/bin/python - <<'PY'
-import re, subprocess, psutil
-vm = subprocess.run(['vm_stat'], capture_output=True, text=True).stdout
-page = 16384
-def pages(label):
-    m = re.search(rf'{label}:\s+(\d+)', vm)
-    return (int(m.group(1)) * page / 1024**3) if m else 0.0
-print(f"{psutil.swap_memory().used/1024**3:.1f} {pages('Pages occupied by compressor'):.1f} "
-      f"{int(psutil.virtual_memory().available/1024**3)}")
-PY
-)
-EOF
+  # Pressure read in shell (the Python/psutil probe retired 2026-09-13 with the
+  # Python runtime): swap from sysctl, compressor and free+inactive from vm_stat,
+  # 16 KiB pages on Apple silicon.
+  SWAP_GB="$(sysctl -n vm.swapusage | awk '{for(i=1;i<=NF;i++) if($i=="used") {sub(/M$/,"",$(i+2)); printf "%.1f", $(i+2)/1024}}')"
+  _VM="$(vm_stat)"
+  _PAGE="$(printf '%s\n' "$_VM" | awk 'NR==1{gsub(/[^0-9]/,"",$0); print}')"
+  _pages() { printf '%s\n' "$_VM" | awk -v l="$1" -F: 'index($0,l)==1{gsub(/[^0-9]/,"",$2); print $2}'; }
+  CMPR_GB="$(awk -v p="$(_pages 'Pages occupied by compressor')" -v s="$_PAGE" 'BEGIN{printf "%.1f", p*s/1024/1024/1024}')"
+  AVAIL="$(awk -v f="$(_pages 'Pages free')" -v i="$(_pages 'Pages inactive')" -v s="$_PAGE" 'BEGIN{printf "%d", (f+i)*s/1024/1024/1024}')"
   if awk "BEGIN{exit !($SWAP_GB > ${RERUN_MAX_SWAP_GB:-8} || $CMPR_GB > ${RERUN_MAX_CMPR_GB:-15})}"; then
-    ./.venv/bin/python - <<'PY'
-import psutil
-rows = []
-for p in psutil.process_iter(['name', 'memory_info']):
-    mi = p.info.get('memory_info')          # None for processes we cannot inspect
-    if mi is not None:
-        rows.append((mi.rss, p.info.get('name') or '?'))
-rows.sort(reverse=True)
-print('  top RSS:', [(n, f'{r/1024**3:.1f}G') for r, n in rows[:5]])
-print('  RSS HIDES A COMPRESSED LEAK -- the 31GB one showed 0.55GB of RSS.')
-print('  Find it with:  top -l 1 -o mem -n 10 -stats pid,command,mem,cmprs')
-PY
+    echo "  top RSS:"; top -l 1 -o mem -n 5 -stats command,mem 2>/dev/null | tail -5 | sed 's/^/    /'
+    echo "  RSS HIDES A COMPRESSED LEAK -- the 31GB one showed 0.55GB of RSS."
+    echo "  Find it with:  top -l 1 -o mem -n 10 -stats pid,command,mem,cmprs"
     die "machine is thrashing (swap ${SWAP_GB}GB, compressor ${CMPR_GB}GB); refusing to measure"
   fi
   [ "$AVAIL" -ge "$MIN_FREE_GB" ] || die "only ${AVAIL}GB available; machine is exhausted"
@@ -121,15 +108,16 @@ PY
   info "running $MODEL, ceiling ${CEILING}s, log: $LOG"
   START=$(date +%s)
   set +e
-  timeout "$CEILING" ./.venv/bin/python -m eval --model "$MODEL" >"$LOG" 2>&1
+  timeout "$CEILING" "${ZTOOLS_BIN:-/opt/homebrew/bin/ztools}" model-eval --model "$MODEL" --suite full >"$LOG" 2>&1
   CODE=$?
   set -e
   ELAPSED=$(( $(date +%s) - START ))
 
   # Count DISTINCT task names that reported a score. Counting lines over-counts retries;
   # counting only the ok marker under-counts, since a warn or a fail is still a score.
-  DONE_COUNT=$(grep -aoE '[·⚠✗][[:space:]]+[a-z_]+: [0-9]+%' "$LOG" 2>/dev/null \
-               | sed -E 's/.*[[:space:]]([a-z_]+): .*/\1/' | sort -u | wc -l | tr -d ' ')
+  # A scored task is one row of the native eval's results table.
+  DONE_COUNT=$(grep -aoE '^\| [a-z_0-9]+ \| [0-9]+ \| ' "$LOG" 2>/dev/null \
+               | sed -E 's/^\| ([a-z_0-9]+) .*/\1/' | sort -u | wc -l | tr -d ' ')
   DONE_COUNT=${DONE_COUNT:-0}
 
   if [ "$CODE" -eq 124 ]; then

@@ -51,7 +51,7 @@ Builds the Rust release and installs it (with the same subcommand aliases)
 straight into the Homebrew bin, `$(brew --prefix)/bin` (`/opt/homebrew/bin`
 here). This overwrites the prefix entry until the next `brew upgrade`;
 `ZTOOLS_INSTALL_DIR=/elsewhere ./install.sh` targets a custom dir.
-| `ab_test` | — | Performance and parity benchmark comparing Rust vs Python references |
+| `ab_test` | — | Smoke + parity harness: every subcommand answers, the Rust suite, the collect-parity comparator |
 | `ztools` | — | Unified native binary dispatcher for all subcommands |
 
 ---
@@ -143,10 +143,12 @@ oeval --model qwen3.8-27b-8bit
 
 ## Testing & Quality Gates
 
-The production implementation is Rust; the Python `references/` tree is kept solely as the
-A/B parity layer. Both stacks are gated.
+The implementation is Rust — the only runtime. The Python reference tree was retired
+2026-09-13 once every behaviour was either ported (with the Python verdicts frozen as
+goldens) or explicitly retired in `docs/PORT_PARITY.md`. No `.venv`, no `uv`, no
+interpreter on the product path; `tools/*.py` are dev gates.
 
-### Rust (production)
+### Rust
 
 ```bash
 cd rust
@@ -159,18 +161,17 @@ Key suites:
 - `tests/model_resolve_http.rs` — missing-model substitution over the wire (dead tag → roster → one retry, surfaced reason, quirk re-derivation)
 - `tests/reasoning_retry.rs` — a REASONING overrun retries with a raised budget against a mock that only answers once it is raised
 - `tests/transport_http.rs`, `tests/signals_prefill.rs` — wire format, stream guard, learned timeouts, capability recording
-- `tests/validator_parity.rs` — prints fixture verdicts from the RUST validators; `references/tests/test_rust_validator_parity.py` asserts they match the PYTHON validators byte-for-byte
+- `tests/validator_parity.rs`, `tests/weekend_parity.rs` — the Rust validators and corpus pipeline reproduce, byte for byte, the verdicts the Python implementation produced on its last run (frozen under `tests/fixtures/*/expected_python_*.json`)
+- `src/ztools/eval/tasks_tests.rs`, `validators/mixed_text_tests.rs` — the eval task table and the mixed-signal scorers pinned to the Python table and verdicts
+- `tests/gpu_lock_shell_parity.rs` — the Rust GPU lock and `tools/gpu_lock.sh` read each other's owner files
 
 **Coverage**: floor **94% lines**, current **94.37%**. The residual uncovered code is live-process spawning (`login_live`, `collect_tweets_live` — a real Camoufox browser), the model-eval run loop (it takes the machine-wide GPU lock and needs a live model server), environment-absent branches, and assertion panic-format arms. The floor may only move up; re-baselining requires a stated reason in the diff. It is 94 rather than the house 95 because reaching 95 by unit test would mean inventing seams for the number's sake — see `routines` ROADMAP O32.
 
-### Python (parity reference)
+### Shell tooling (dev)
 
 ```bash
-OLLAMA_BASE_URL=http://127.0.0.1:1 MLX_MODELS_DIR=/tmp/nonexistent \
-  .venv/bin/pytest --cov --cov-fail-under=95 .
+python3 -m pytest tools/tests -q     # tools/gpu_lock.sh, the bash half of the GPU lock
 ```
-
-2,791 tests at 95%+ coverage. The suite structurally forbids launching real browsers or reading real cookie stores.
 
 ### The gate is ONE list (`.gatesrc`)
 
@@ -179,8 +180,9 @@ same runner over the step list declared once in `.gatesrc`, so the hook can
 never be weaker than CI. `tools/release.sh` runs it too, because it pushes with
 `--no-verify` and would otherwise tag something nothing had checked.
 
-The five steps: the house Rust gate (fmt, clippy `-D warnings`, no `#[allow]`)
-· emoji · 500-line cap · `cargo test` · coverage at the 94% floor.
+The steps: the house Rust gate (fmt, clippy `-D warnings`, no `#[allow]`)
+· `cargo audit` · emoji · 500-line cap · `cargo test` · the tools pytest ·
+coverage at the 94% floor.
 
 **This repo had no gate at all until 2026-09-02** — `tools/gate.sh` ran
 structural checks with every language layer commented out, and nothing else
@@ -208,4 +210,4 @@ tools/release.sh            # bump patch from the latest tag (v2.1.7 -> v2.1.8)
 tools/release.sh 2.2.0      # explicit version
 ```
 
-The script syncs BOTH manifests (`pyproject.toml` + `rust/Cargo.toml`, so the binary and the sdist never disagree), tags HEAD, pushes, computes the GitHub tarball's SHA256, and updates the Homebrew tap formula in `ztomer/homebrew-tap`. Requires `gh` authenticated.
+The script syncs `rust/Cargo.toml` to the version, tags HEAD, pushes, computes the GitHub tarball's SHA256, and updates the Homebrew tap formula in `ztomer/homebrew-tap`. Requires `gh` authenticated.

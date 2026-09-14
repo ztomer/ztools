@@ -6,6 +6,60 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## v3.0.0 — zero Python at runtime _(2026-09-13)_
+
+The Python reference tree is gone. Every behaviour it carried is ported — with the
+Python verdicts frozen as goldens the Rust tests assert — or explicitly retired in
+`docs/PORT_PARITY.md`. Major because the Python entry points (`tw`, `wk`, `rn`, `ev`,
+`python -m twitter`) and `TWITTER_COLLECTOR` no longer exist.
+
+### Changed
+- **Twitter collect is the native camoufox-rs driver, unconditionally.** The Python
+  subprocess path, `pyenv`, the post-run cache scan and the `TWITTER_COLLECTOR` switch
+  are deleted. Both collectors now assert the captured traffic came from the Following
+  endpoint (markers in `conf/twitter.toml [endpoints]`) and fail loudly otherwise.
+- **Collect parity is shared-record agreement**, not ID-set equality: the Following
+  endpoint is served as a per-load sample (the same collector minutes apart shares
+  ~7 of 50 IDs), so only the tweets both legs captured are compared, byte for byte.
+- **`routines.toml` / `routines-twitter.toml` run the binary.** Status commands are
+  `ztools status` and the new `ztools twitter-status`.
+- **One weekend plan store.** The planner always writes the dated
+  `weekend_plan_<Month>_<dd>_to_<Month>_<dd>_<yyyy>.md` into `~/Documents/weekend_plans`
+  (or `WEEKEND_OUTPUT_DIR`), and the status page, the dashboard tab and the writer
+  resolve that one directory. Previously the status read `~/Documents` while the tab
+  read `weekend_plans/`, so a fresh plan read as stale.
+- **Weekend tables use the C4 missing-value sentinel** in every cell; the fabricated
+  "Family activity in GTA" filler, the constant "Outdoor/Indoor" column and a
+  hardcoded "Vaughan" are gone.
+
+### Added
+- **Summarizer fallback chain with provenance** (`twitter/chain.rs`): the intended
+  model resolved against the server roster, then `conf/twitter.toml [fallback]`
+  models; a degraded run prints its reasons and the artifact opens with the
+  DEGRADED OUTPUT banner. `TWITTER_FALLBACK_MODELS` overrides for one run.
+- **`model-eval --suite full` runs the full task roster** (`eval/tasks.rs`, the 24
+  Python table rows + taxes snapshots), graded 0-100 by the ported validators with the
+  prompt as their source; the mixed-signal scorers (`validators/mixed_text.rs`), the
+  vision task (`eval/vision.rs`, fixtures in `conf/eval_vision.toml`, images as OpenAI
+  content parts) and real `parse_json` handling (including the FORMAT/PARSE failure
+  classes) landed with it.
+- Golden parity suites: `tests/validator_parity.rs`, `tests/weekend_parity.rs`,
+  `eval/tasks_tests.rs`, `validators/mixed_text_tests.rs`, `eval/prompts` drift test
+  against `conf/prompts.toml`, `tests/gpu_lock_shell_parity.rs`.
+- `.gatesrc` runs `python3 -m pytest tools/tests` (the shell lock's tests, moved
+  beside the tool).
+
+### Removed
+- `references/` (286 files), `pyproject.toml`, `uv.lock`, the `.venv`, the root
+  `ztools` Python TUI wrapper, `routines_twitter_status.py`, `eval_tasks/__init__.py`,
+  and the Python-only tools (`gen_rust_prompts.py`, `ab_eval_parity.sh`, `mutate.py`,
+  the unwired `check_config_debt.py` / `check_file_size.py`). `tools/sweep_models.sh`
+  and `rerun_truncated.sh` drive `ztools model-eval` and read pressure in shell.
+
+### Deferred (stated, see `docs/ROADMAP.md`)
+Weekend phase retry and timeout learning, eval token/verbosity metrics, the
+`diff_from_last_run` presenter, drain-mode SIGINT.
+
 ## v2.3.0 — pedantic, audited, and one real bug _(2026-09-07)_
 
 Part of an estate-wide Rust quality campaign. The crate went from no lint policy

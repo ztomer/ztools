@@ -64,12 +64,14 @@ info "Running the full gate (make ci) before tagging …"
 make ci >/dev/null || err "gate failed — nothing tagged, nothing pushed"
 ok "Gate green"
 
-# ── 3. Sync BOTH manifests to $V, then tag ────────────────────────
-# pyproject.toml drives the sdist version; rust/Cargo.toml drives the binary
-# and Cargo.lock. At v2.1.5 only pyproject moved and the binary shipped
-# reporting 2.1.4 -- two sources of truth that were allowed to disagree.
+# ── 3. Sync the manifest to $V, then tag ──────────────────────────
+# rust/Cargo.toml drives the binary and Cargo.lock. There used to be a
+# pyproject.toml too (the sdist); at v2.1.5 only that one moved and the binary
+# shipped reporting 2.1.4 -- two sources of truth allowed to disagree. The
+# Python packaging was retired 2026-09-13; one manifest remains, the loop stays
+# so a second one can never be added without this comment being read.
 SYNCED=0
-for manifest in pyproject.toml rust/Cargo.toml; do
+for manifest in rust/Cargo.toml; do
   CURRENT_V=$(grep -m1 '^version = ' "$manifest" | cut -d'"' -f2)
   if [ "$CURRENT_V" != "$V" ]; then
     info "Syncing $manifest version: $CURRENT_V → $V"

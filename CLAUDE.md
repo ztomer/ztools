@@ -8,50 +8,31 @@ Reference docs — read these when the task touches their subject, not by defaul
 
 ### File Size Limit
 No file may exceed 500 lines — **no exemptions, for tests or for any directory.**
-Split into a package (`twitter/`, `weekend/`, `rename/`, `eval/`) or extract a module;
-`lib/config.py`, `lib/quality.py`, `lib/osaurus_lib.py`, `lib/validators/text_validator.py`,
-`lib/quality_scorers.py`, `eval/report.py`, `eval/cli.py` and `eval/run.py` are shims
-re-exporting their split submodules. Check with `wc -l` before adding to a file that is
-already close.
-
-A shim re-exports NAMES, not patch targets: rebinding an attribute on the shim rebinds
-a copy nobody reads. Tests must patch the module that OWNS the function, which each
-submodule's docstring states. `eval/run.py`'s docstring is the worked example.
-
-The rule covers **Rust too**, and it is enforced by one implementation,
-`tools/check_file_size.py`, called by `.githooks/pre-commit` and pinned by
-`references/tests/test_file_size_gate.py`. Rust splits use the same shim pattern:
-`json_validator/` and `taxes_grounded/` are directories whose `mod.rs` re-exports.
-
-**There used to be a test exemption** (Python files under `references/tests/`; Rust
-`*_tests.rs`/`tests.rs` siblings and inline `#[cfg(test)] mod tests` blocks subtracted
-from the count). It is gone as of 2026-08-24. Split an oversized test file the same way
-as production: independent test classes/cases move into sibling `test_*.py` files
-(pytest discovers every file matching that glob — no shim needed), or Rust
-`#[cfg(test)]` modules move into their own `#[path = "..."] mod` file. `conftest.py`
-fixtures that don't fit split into a `fixtures/` package that conftest imports from
-(the shim rule still applies: import by module, patch the module that owns the fixture).
+Enforced by the house gate (`gates_of_heck/checks/check_file_length.py` via
+`.githooks/pre-commit` and `tools/gate.sh --full`; `.gatesrc` sets `GOH_MAX_LINES=500`).
+Split into a module directory whose `mod.rs` re-exports (`json_validator/`,
+`taxes_grounded/`), or move a `#[cfg(test)]` module into its own
+`#[path = "..._tests.rs"] mod tests;` sibling. Check with `wc -l` before adding to a
+file that is already close. A re-export forwards NAMES, not patch targets: test the
+module that owns the function.
 
 ### Testing
-- Every test must have a non-tautological assertion
-- Use the real scorer/validator when possible; mock only the LLM layer
-- Test the real `__main__` block via `exec` of the real source — never re-implement it in the test
-- No test may launch a real browser or read real browser cookies; `references/tests/conftest.py`
-  enforces this. Opt out with `@pytest.mark.real_cookie_discovery` only to test discovery itself.
-- Prove a new test can fail before trusting it green
-- Run (quick): `./.venv/bin/python -m pytest references/tests/ -q`
-- Run (what the gate runs — use this before pushing; it adds the coverage floor
-  and an unreachable LLM server, and a quick run passing proves neither):
-  `OLLAMA_BASE_URL=http://127.0.0.1:1 MLX_MODELS_DIR=/tmp/nonexistent .venv/bin/pytest --cov --cov-fail-under=95 .`
-  Run it exactly as written. It previously carried
-  `--ignore=references/tests/test_img_helpers.py --ignore=references/tests/test_image_renamer.py`
-  for a numpy C-extension crash under coverage tracing; that crash no longer reproduces
-  (numpy 2.x / coverage 7.15, python 3.14), and those two files carry ~95 statements of
-  `rename/helpers.py` and `rename/cli.py`. Excluding them dropped the total to **94.09%**
-  against a 95 floor — the documented gate could not pass, at HEAD, for anyone.
-  With them included it is **95.11%**. If the crash returns, raise it rather than
-  re-adding the ignores: excluding a test file silently subtracts its module's coverage
-  from a floor that is still measuring that module.
+- Every test must have a non-tautological assertion, and prove a new test can fail
+  before trusting it green.
+- Use the real scorer/validator; mock only the LLM layer (per-test stub HTTP servers,
+  see `rust/tests/cli_dispatch_ztools.rs`). No test may launch a real browser or read
+  real browser cookies.
+- Golden parity tests (`rust/tests/validator_parity.rs`, `weekend_parity.rs`,
+  `eval/validators/mixed_text_tests.rs`, `eval/tasks_tests.rs`) pin Rust behaviour to
+  the verdicts the retired Python implementation produced on its last run. A change
+  that moves one of those numbers is a change to reference behaviour: regenerate the
+  golden deliberately and say so in the diff.
+- Run (quick): `cargo test --manifest-path rust/Cargo.toml --all-features`
+- Run (what the gate runs — use this before pushing): `tools/gate.sh --full`
+  (= `make ci`): fmt, clippy `-D warnings`, no `#[allow]`, audit, emoji, file length,
+  tests, coverage floor 94.
+- `tools/tests/` holds the pytest for the shell tooling (`tools/gpu_lock.sh`):
+  `python3 -m pytest tools/tests -q`. `tools/*.py` are dev gates, never the product.
 - Add discovered test patterns or bugs to `docs/TESTING.md` immediately
 
 ### Model Evals
@@ -66,13 +47,14 @@ fixtures that don't fit split into a `fixtures/` package that conftest imports f
 - **Never measure with anything else running against the GPU.** One command at a
   time, serially — including your own background jobs.
 - **The GPU and the osaurus server are held under a machine-wide lock**
-  (`/tmp/mac-osaurus-gpu.lock`; `tools/gpu_lock.sh` + `lib/gpu_lock.py`), because
+  (`/tmp/mac-osaurus-gpu.lock`; `tools/gpu_lock.sh` + `rust/src/ztools/eval/gpu_lock.rs`,
+  cross-checked by `rust/tests/gpu_lock_shell_parity.rs`), because
   several agent sessions run on this Mac concurrently and ONE healthy server is not
   enough on its own: restarting the server a peer is mid-measurement against
   corrupts that run exactly as badly as a second server does. The eval entry point
   holds it for the whole run; `osaurus_one.sh` holds it while it mutates the server;
   both `quit app "osaurus"` call sites REFUSE, with a stated reason, when another
-  session holds it. WHY A LOCK RATHER THAN TRUSTING THE SAMPLE MEDIAN: `eval/samples.py`
+  session holds it. WHY A LOCK RATHER THAN TRUSTING THE SAMPLE MEDIAN: `eval/samples.rs`
   outvotes a bad reading only when it knows the reading is bad, and
   `machine_is_uncontended()` gates on swap and compressor — it cannot see the GPU, so a
   peer's eval is recorded as a CLEAN sample. The median also only protects a model that
@@ -85,7 +67,7 @@ fixtures that don't fit split into a `fixtures/` package that conftest imports f
 - **A contaminated measurement is outvoted, not permanent — but the guard is
   blind to the GPU.** This used to say a bad reading could never be displaced and
   that you had to delete the model's `_capabilities` entry by hand. That stopped
-  being true when `eval/samples.py` landed: samples are a LIST, and the estimate is
+  being true when `eval/samples.rs` landed: samples are a LIST, and the estimate is
   the MEDIAN OF THE LAST 5 CLEAN SAMPLES (`SAMPLE_WINDOW`), so recovery is "take
   another clean sample". Two things that ARE still true and matter more:
   - `machine_is_uncontended()` gates on SWAP (<=8GB) and COMPRESSOR (<=15GB) only.
@@ -106,8 +88,9 @@ fixtures that don't fit split into a `fixtures/` package that conftest imports f
     ~138,000s, and the resulting 2-hour per-task ceiling let a wedged server idle
     83 minutes. A contended machine makes measurements slow, slow measurements
     inflate the derived timeout, and the inflated timeout permits a longer stall.
-    `eval/watchdog.py` is the backstop that depends on no measurement at all.
-- Quick mode for iteration: `python3 -m eval --model <model> --task <task> --quick`
+    `eval/watchdog.rs` is the backstop that depends on no measurement at all.
+- Quick mode for iteration: `ztools model-eval --model <model> --suite full --task <task>`
+  (`--suite smoke` for the five offline fixture tasks; `--json-output` for rows)
 - Add discovered learnings to `docs/MODEL_QUIRKS.md` immediately when found
 
 ### Prompt Engineering
