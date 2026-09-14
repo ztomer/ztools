@@ -42,17 +42,6 @@ pub use failures::{
     classify_failure, reasoning_overrun_was_guard_aborted, reasoning_retry_budget, Diagnosis,
     FAIL_CONTENT, FAIL_INFRA, FAIL_PARSE, FAIL_REASONING, FAIL_TIMEOUT,
 };
-pub use outputs::{outputs_dir, outputs_enabled, save_output};
-pub use oversize::{
-    estimate_model_memory_gb, is_thrashing, model_disk_bytes, oversize_refusal,
-    OVERSIZE_OVERRIDE_ENV,
-};
-pub use report::{
-    compute_task_winners, default_eval_dir, is_test_model, load_historical_stats,
-    render_historical_trends, save_historical_results, ModelRun, ModelStats,
-};
-// Generated from references/eval/tasks_prompts.py by tools/gen_rust_prompts.py;
-// byte-parity gated by references/tests/test_rust_prompt_parity.py.
 pub use gpu_lock::{
     foreign_holder, lock_dir, GpuLockGuard, DEFAULT_LOCK_DIR, DEFAULT_MAX_IDLE_SECS,
 };
@@ -60,6 +49,11 @@ pub use model_resolve::{
     default_fallback_chain, disk_corroborated, fetch_roster, is_generative_model,
     is_missing_model_error, parameter_billions, substitute_model, RosterEntry,
     MISSING_MODEL_MARKERS,
+};
+pub use outputs::{outputs_dir, outputs_enabled, save_output};
+pub use oversize::{
+    estimate_model_memory_gb, is_thrashing, model_disk_bytes, oversize_refusal,
+    OVERSIZE_OVERRIDE_ENV,
 };
 pub use prefill::{measure_prefill_rate, record_prefill_rate, MAX_PLAUSIBLE_PREFILL_RATE};
 pub use prompts::{
@@ -72,6 +66,10 @@ pub use prompts::{
     WEEKEND_USR_TRANSIENT_MIXED,
 };
 pub use quirks::apply_model_quirks;
+pub use report::{
+    compute_task_winners, default_eval_dir, is_test_model, load_historical_stats,
+    render_historical_trends, save_historical_results, ModelRun, ModelStats,
+};
 pub use runner::{run_eval, run_eval_with_signals, RunnerConfig, TaskOutcome};
 pub use samples::{add_sample, clean_estimate, estimate_from, median, Sample, SAMPLE_WINDOW};
 pub use signals::{

@@ -1,0 +1,26 @@
+{
+  "taxes_anomalies": {
+    "score": 74,
+    "reason": "grounding=24/40 (3 signals)  no_leak=30/30  substance=20/30"
+  },
+  "taxes_audit_readiness": {
+    "score": 50,
+    "reason": "grounding=0/40 (0 signals)  no_leak=30/30  substance=20/30  schema=ok"
+  },
+  "taxes_qa": {
+    "score": 100,
+    "reason": "schema=20/20  citations=2/2 (40/40)  prose_amounts=4/4 (40/40)"
+  },
+  "taxes_slip_qa": {
+    "score": 100,
+    "reason": "schema=30/30  flags=0 claimed, 0 known (35/35)  prose_amounts=0 with none sourceable (35/35)"
+  },
+  "taxes_synthesis": {
+    "score": 74,
+    "reason": "grounding=24/40 (3 signals)  no_leak=30/30  substance=20/30  sections=5/5"
+  },
+  "taxes_yoy_narrative": {
+    "score": 100,
+    "reason": "schema=20/20  traceable=4/4 (30/30)  reconcile err=367.68 tol=1568.22 (30/30)  prose_amounts=6/6 (20/20)"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "weekend_corpus": "- Vaughan Fall Fair: Vaughan Fall Fair returns this weekend\n- Big Event: held at Vaughan City Hall fields this Sunday\n- Toronto Zoo: \n- Vaughan Public Library Storytime: Vaughan Public Library hosts a free family storytime session this weekend with crafts, music, and a special appearance by a local author, followed by a scavenger hunt around the main branch and a hands-on reading circle in the children's wing, then a film screening for older kids in the auditorium a\n- York University open house: York University welcomes future students to its Toronto campus",
+  "weekend_candidates": "- [Vaughan Events Guide] TAIWANfest, Harbourfront Centre, August 28-30\n- [Vaughan Events Guide] Maple Syrup Festival returns to the Vaughan fairgrounds\n- [Vaughan Events Guide] Kids craft workshop at the community centre library\n- [Vaughan Events Guide] Fall Fair weekend at Canada's Wonderland\n- [Vaughan Events Guide] Markham theatre presents a puppet show for children",
+  "weekend_aggregator": [
+    true,
+    true,
+    true,
+    false,
+    false,
+    true,
+    false
+  ]
+}

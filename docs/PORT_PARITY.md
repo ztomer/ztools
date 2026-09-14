@@ -317,6 +317,6 @@ Only `test_llm.py`, `test_mlx.py`, `test_gemma.py` need a live server/GPU.
 | test_vision_task.py | RE-EXPRESS | missing vision fixtures/render/validator scoring |
 | test_untrusted_framing.py | RE-EXPRESS | missing slot-ordering + override-merge (framing covered) |
 | test_prompts_conf.py | COVERED | config.rs::test_twitter_prompt_matches_shared_conf + layering tests |
-| test_rust_prompt_parity.py | RE-EXPRESS | re-express as Rust fixture assertions per Phase 4 item 7 |
-| test_rust_validator_parity.py | RE-EXPRESS | re-express as Rust fixture assertions per Phase 4 item 7 |
-| test_rust_weekend_parity.py | RE-EXPRESS | re-express as Rust fixture assertions per Phase 4 item 7 |
+| test_rust_prompt_parity.py | COVERED 2026-09-13 — the generated Rust constants are canonical now; the surviving contract (eval prompt == production `conf/prompts.toml` instructions + fixture timeline) is pinned by `eval/prompts/mod.rs` tests (red-proven against a conf edit) |
+| test_rust_validator_parity.py | COVERED 2026-09-13 — `rust/tests/validator_parity.rs` asserts every fixture verdict against `expected_python_verdicts.json`, frozen from the Python validators' last run; fixture↔golden completeness + mutation calibration tests |
+| test_rust_weekend_parity.py | COVERED 2026-09-13 — `rust/tests/weekend_parity.rs` asserts corpus/candidates/aggregator payloads against `expected_python_payloads.json`, frozen from the Python pipeline's last run; kernel-rule reach + mutation calibration tests |

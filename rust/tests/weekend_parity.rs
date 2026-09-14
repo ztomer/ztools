@@ -1,17 +1,19 @@
-//! The CI drift gate between the Rust and Python weekend CORPUS stacks.
+//! Weekend corpus parity: the deterministic half of the Rust corpus pipeline
+//! (`clean_search_results`, `as_candidate_lines`, `looks_like_aggregator`)
+//! must still produce what the retired Python pipeline produced.
 //!
-//! For every fixture in `tests/fixtures/weekend_parity/`, prints one
-//! `PARITY <task>|0|<json-encoded payload>` line computed by the RUST side of
-//! the weekend corpus pipeline (the deterministic halves only: corpus cleaning,
-//! candidate lines, aggregator classification). The pytest side
-//! (`references/tests/test_rust_weekend_parity.py`) computes the same payloads
-//! with the PYTHON pipeline (`_clean_search_results`, `as_candidate_lines`,
-//! `looks_like_aggregator`) and asserts byte-for-byte agreement.
+//! Until 2026-09-13 this was a two-process gate: this file PRINTED
+//! `PARITY <task>|0|<json>` lines and a pytest half recomputed the payloads
+//! with `weekend.data._clean_search_results` / `weekend.followup` and diffed
+//! them. The Python pipeline is gone; on its last run its payloads over the
+//! fixtures in `tests/fixtures/weekend_parity/` were frozen into
+//! `expected_python_payloads.json`, and this test asserts the Rust side
+//! reproduces them byte for byte.
 //!
-//! The payload is JSON-encoded so multi-line corpora survive one line of
-//! stdout. If this test's output format changes, update the parser — a silent
-//! format change would read as "nothing to compare" and green-light exactly
-//! the drift this gate exists to catch.
+//! Scope is unchanged: live search rankings and page extraction are
+//! corpus-QUALITY concerns and are not byte-compared. The fixtures use only
+//! region inputs both filters agreed on; the deliberate divergence (a foreign
+//! city beats a local token) is pinned by `a_foreign_city_beats_any_local_token`.
 
 use serde_json::Value;
 use ztools::weekend::{
@@ -19,32 +21,32 @@ use ztools::weekend::{
 };
 use ztools::weekend_cache::load_region_lists;
 
+fn fixtures_dir() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("tests/fixtures/weekend_parity")
+}
+
 fn fixture(name: &str) -> String {
-    let manifest = env!("CARGO_MANIFEST_DIR");
-    std::fs::read_to_string(format!(
-        "{manifest}/../tests/fixtures/weekend_parity/{name}"
-    ))
-    .unwrap_or_else(|e| panic!("fixture {name}: {e}"))
+    std::fs::read_to_string(fixtures_dir().join(name))
+        .unwrap_or_else(|e| panic!("fixture {name}: {e}"))
 }
 
 /// Region lists from the same checked-in `conf/weekend.toml` the Python
-/// pipeline reads — the parity comparison is only meaningful over identical
-/// inputs, and the lists are inputs.
+/// pipeline read when the golden was frozen — the lists are inputs.
 fn shipped_region() -> ztools::weekend_cache::RegionLists {
-    let manifest = env!("CARGO_MANIFEST_DIR");
-    let path = std::path::Path::new(manifest)
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
         .join("conf/weekend.toml");
     load_region_lists(&[path.to_string_lossy().into_owned()])
 }
 
-#[test]
-fn print_rust_verdicts_for_python_comparison() {
-    // — weekend_corpus: clean_search_results over the raw scrape fixture —
+fn corpus_results() -> Vec<SearchResult> {
     let corpus_value: Value =
         serde_json::from_str(&fixture("corpus_results.json")).expect("corpus fixture json");
-    let results: Vec<SearchResult> = corpus_value
+    corpus_value
         .as_array()
         .expect("corpus fixture array")
         .iter()
@@ -53,29 +55,69 @@ fn print_rust_verdicts_for_python_comparison() {
             href: r["href"].as_str().unwrap_or("").to_string(),
             body: r["body"].as_str().unwrap_or("").to_string(),
         })
-        .collect();
-    let corpus = clean_search_results(&results, "Event", MAX_BODY_LENGTH, &shipped_region());
-    println!(
-        "PARITY weekend_corpus|0|{}",
-        serde_json::to_string(&corpus).expect("corpus json")
-    );
+        .collect()
+}
 
-    // — weekend_candidates: as_candidate_lines over one aggregator page —
+fn expected() -> Value {
+    serde_json::from_str(&fixture("expected_python_payloads.json")).expect("expected payloads json")
+}
+
+#[test]
+fn corpus_cleaning_reproduces_the_frozen_python_corpus() {
+    let corpus = clean_search_results(
+        &corpus_results(),
+        "Event",
+        MAX_BODY_LENGTH,
+        &shipped_region(),
+    );
+    assert_eq!(Value::String(corpus), expected()["weekend_corpus"]);
+}
+
+#[test]
+fn candidate_lines_reproduce_the_frozen_python_lines() {
     let page: Value = serde_json::from_str(&fixture("aggregator_page.json")).expect("page json");
-    let text = page["text"].as_str().unwrap_or("");
-    let title = page["title"].as_str().unwrap_or("");
-    let candidates = as_candidate_lines(text, title);
-    println!(
-        "PARITY weekend_candidates|0|{}",
-        serde_json::to_string(&candidates).expect("candidates json")
+    let candidates = as_candidate_lines(
+        page["text"].as_str().unwrap_or(""),
+        page["title"].as_str().unwrap_or(""),
     );
+    assert_eq!(Value::String(candidates), expected()["weekend_candidates"]);
+}
 
-    // — weekend_aggregator: looks_like_aggregator over the title set —
-    let titles: Vec<String> = serde_json::from_str(&fixture("aggregator_flags_titles.json"))
-        .expect("aggregator titles json");
+#[test]
+fn aggregator_flags_reproduce_the_frozen_python_flags() {
+    let titles: Vec<String> =
+        serde_json::from_str(&fixture("aggregator_flags_titles.json")).expect("titles json");
     let flags: Vec<bool> = titles.iter().map(|t| looks_like_aggregator(t)).collect();
-    println!(
-        "PARITY weekend_aggregator|0|{}",
-        serde_json::to_string(&flags).expect("aggregator flags json")
+    assert_eq!(serde_json::json!(flags), expected()["weekend_aggregator"]);
+}
+
+#[test]
+fn the_corpus_fixture_exercises_every_kernel_rule() {
+    // The fixture is only evidence if it reaches each rule.
+    let corpus = clean_search_results(
+        &corpus_results(),
+        "Event",
+        MAX_BODY_LENGTH,
+        &shipped_region(),
     );
+    // Title-only dedupe: two same-title different-body rows collapse to one.
+    assert_eq!(corpus.matches("- Vaughan Fall Fair: ").count(), 1);
+    // Trailing-punctuation title dedupes into the plain-title row.
+    assert!(!corpus.contains("- Vaughan Fall Fair!!!"));
+    // Truncation to MAX_BODY_LENGTH: the long row's body is exactly that long.
+    let storytime = corpus
+        .lines()
+        .find(|l| l.contains("Vaughan Public Library Storytime"))
+        .expect("storytime row present");
+    let body = storytime.split_once(": ").map_or("", |(_, b)| b);
+    assert_eq!(body.chars().count(), MAX_BODY_LENGTH);
+}
+
+#[test]
+fn the_golden_can_fail() {
+    // Calibration: a changed title must change the corpus.
+    let mut results = corpus_results();
+    results[0].title = "Vaughan Fall Fairzed".to_string();
+    let mutated = clean_search_results(&results, "Event", MAX_BODY_LENGTH, &shipped_region());
+    assert_ne!(Value::String(mutated), expected()["weekend_corpus"]);
 }
