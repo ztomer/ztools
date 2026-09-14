@@ -24,6 +24,12 @@ def main() -> int:
     # Exclude cargo cache, target, and vendor dirs from search
     rs_files = [f for f in rs_files if not any(f.is_relative_to(p) for p in allowed_paths)]
 
+    if not rs_files:
+        # Compliance over nothing is not compliance: a renamed crate dir or a
+        # changed convention would retire this gate in silence.
+        print("ERROR: no Rust source found to scan — the gate refuses to pass over an empty tree.")
+        return 1
+
     pattern = re.compile(r"#\[allow\([^\]]*\)\]")
     found = False
 
@@ -45,7 +51,7 @@ def main() -> int:
         )
         return 1
 
-    print("OK: No `#[allow]` attributes found in Rust source.")
+    print(f"OK: No `#[allow]` attributes found in {len(rs_files)} Rust source file(s).")
     return 0
 
 if __name__ == "__main__":
