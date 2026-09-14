@@ -383,3 +383,37 @@ fn a_mismatched_forecast_still_pays_a_partial_weather_bonus_to_matching_events()
     // 2.4 populated + 0.5 price + 0.5 location + 1.0 partial bonus = 4.4 / 2.
     assert!((partial - 2.2).abs() < 0.01, "expected ~2.2, got {partial}");
 }
+
+/// A model that emits gemma-style keys (`activity`/`place`/`ages`) instead of
+/// the canonical schema must still yield a named, located event. Port of
+/// `test_dict_with_alt_keys` in `test_weekend_llm_1.py`: the Python pipeline
+/// normalizes alternate keys before structuring, the Rust one used to drop
+/// them silently and emit an empty name/location.
+#[test]
+fn test_parse_llm_events_normalizes_alternate_keys() {
+    let resp: serde_json::Value = serde_json::json!({
+        "choices": [{"message": {"content": "{\"transient_events\":[{\"activity\":\"My Activity\",\"place\":\"My Place\",\"ages\":\"5-10\",\"cost\":\"Free\",\"indoor_outdoor\":\"outdoor\",\"event_date\":\"Saturday\",\"time\":\"2 hours\"}]}"}}]
+    });
+    let events = crate::ztools::weekend::parse_llm_events(&resp).unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].name, "My Activity");
+    assert_eq!(events[0].location, "My Place");
+    assert_eq!(events[0].target_ages, "5-10");
+    assert_eq!(events[0].price, "Free");
+    assert_eq!(events[0].weather, "outdoor");
+    assert_eq!(events[0].day, "Saturday");
+    assert_eq!(events[0].duration, "2 hours");
+}
+
+/// A present canonical key wins over an alternate one, even when the
+/// canonical value is empty: presence, not emptiness, decides. Port of
+/// `test_field_mapping_already_has_standard`.
+#[test]
+fn test_parse_llm_events_canonical_key_beats_alternate_key() {
+    let resp: serde_json::Value = serde_json::json!({
+        "choices": [{"message": {"content": "{\"transient_events\":[{\"name\":\"Bar\",\"activity\":\"Foo\"}]}"}}]
+    });
+    let events = crate::ztools::weekend::parse_llm_events(&resp).unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].name, "Bar");
+}

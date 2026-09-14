@@ -27,18 +27,17 @@ import re
 
 __all__ = ["region_tokens", "has_region_evidence"]
 
-# Municipalities and neighbourhoods of the Greater Toronto Area and its commuter
-# ring. The region is the GTA, not the city limits: a plan must be able to keep
-# "Jurassic Quest (International Centre, Mississauga, ON)".
-_GTA = (
-    "toronto", "vaughan", "markham", "richmond hill", "mississauga", "brampton",
-    "scarborough", "north york", "etobicoke", "york", "woodbridge", "concord",
-    "thornhill", "maple", "kleinburg", "aurora", "newmarket", "oakville",
-    "burlington", "pickering", "ajax", "whitby", "oshawa", "milton", "caledon",
-    "king city", "stouffville", "bolton", "georgetown", "hamilton", "brantford",
-    "guelph", "barrie", "niagara", "gta", "greater toronto", "ontario",
-    "durham region", "peel region", "halton", "yorkdale", "downsview",
-)
+
+def _in_region_places() -> tuple[str, ...]:
+    """Place names from `conf/weekend.toml [region]`, the single source of
+    truth both implementations read. A missing table degrades to the
+    configured city/region alone -- never to a hardcoded list and never to
+    dropping everything."""
+    from weekend import config as weekend_config
+
+    table = getattr(weekend_config, "WEEKEND_CONFIG", {}).get("region", {})
+    places = table.get("in_region", []) if isinstance(table, dict) else []
+    return tuple(t.strip().lower() for t in places if t and t.strip())
 
 # The province abbreviation is matched ONLY in its address form, on the RAW
 # text before case-folding. Matching a lowercased whole word "on" made the
@@ -53,11 +52,12 @@ _PROVINCE_ADDRESS_RE = re.compile(
 
 
 def region_tokens() -> tuple[str, ...]:
-    """In-region place names: the configured city/region plus the GTA."""
+    """In-region place names: the configured city/region plus the `[region]`
+    table from `conf/weekend.toml`."""
     from weekend.config import CITY, REGION
 
     configured = tuple(t.strip().lower() for t in (CITY, REGION) if t and t.strip())
-    return tuple(dict.fromkeys(configured + _GTA))
+    return tuple(dict.fromkeys(configured + _in_region_places()))
 
 
 def has_region_evidence(text: str) -> bool:

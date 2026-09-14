@@ -1,0 +1,62 @@
+[
+  {
+    "title": "Vaughan Fall Fair",
+    "href": "https://example.com/fall-fair",
+    "body": "Vaughan Fall Fair returns this weekend"
+  },
+  {
+    "title": "Vaughan Fall Fair",
+    "href": "https://example.com/fall-fair-2",
+    "body": "Same title, different body: the fair moves to a new site for 2026"
+  },
+  {
+    "title": "Vaughan Fall Fair!!!",
+    "href": "https://example.com/fall-fair-3",
+    "body": "Same title modulo trailing punctuation: this must also dedupe"
+  },
+  {
+    "title": "On Sale Festival",
+    "href": "https://example.com/on-sale",
+    "body": "Tickets on sale now for the festival this weekend"
+  },
+  {
+    "title": "",
+    "href": "https://example.com/body-only",
+    "body": "Body only, no title at all"
+  },
+  {
+    "title": "Big Event",
+    "href": "https://example.com/big-event",
+    "body": "held at Vaughan City Hall fields this Sunday"
+  },
+  {
+    "title": "Toronto Zoo",
+    "href": "https://example.com/toronto-zoo",
+    "body": ""
+  },
+  {
+    "title": "Vaughan Public Library Storytime",
+    "href": "https://example.com/storytime",
+    "body": "Vaughan Public Library hosts a free family storytime session this weekend with crafts, music, and a special appearance by a local author, followed by a scavenger hunt around the main branch and a hands-on reading circle in the children's wing, then a film screening for older kids in the auditorium and a drop-in maker table on the mezzanine level near the main stairwell entrance."
+  },
+  {
+    "title": "London UK Theatre",
+    "href": "https://example.com/london-uk",
+    "body": "London UK theatre listings for this weekend"
+  },
+  {
+    "title": "Festival in Tokyo",
+    "href": "https://example.com/tokyo",
+    "body": "Tokyo festival for the upcoming weekend"
+  },
+  {
+    "title": "Things to Do in York County, PA",
+    "href": "https://example.com/york-pa",
+    "body": "Family attractions across York County Pennsylvania this weekend"
+  },
+  {
+    "title": "York University open house",
+    "href": "https://example.com/yorku",
+    "body": "York University welcomes future students to its Toronto campus"
+  }
+]

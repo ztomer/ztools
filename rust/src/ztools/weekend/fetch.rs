@@ -3,8 +3,82 @@ use chrono::NaiveDate;
 use super::WeekendEvent;
 use super::{
     condense_weather, draft_activities, extract_sources, in_window_count, prioritise_in_window,
-    refine_draft, search_duckduckgo_html, seasonal_keywords, structure_to_json, PlanContext,
+    refine_draft, seasonal_keywords, structure_to_json, PlanContext, SearchResult,
 };
+use super::{follow_aggregators, search_duckduckgo_html};
+
+/// Body truncation bound, mirrored from `WEEKEND_MAX_BODY_LENGTH`.
+///
+/// The corpus byte-parity gate pins this at the Python default (300) — a
+/// change here without the gate going red-with-reason is drift.
+pub const MAX_BODY_LENGTH: usize = 300;
+
+/// Dedupe raw scrape results by normalised TITLE and drop the ones with no
+/// in-region evidence. Byte-exact port of `data.py::_clean_search_results`.
+///
+/// The semantics that must NOT drift, all pinned by the parity fixtures:
+/// - the dedupe key is the TITLE only (lowercased, trailing `.,!?:; ` and
+///   whitespace stripped) — two results sharing a title are one result,
+///   regardless of their bodies;
+/// - an empty title means the result is dropped outright (there is no "Event"
+///   fallback label on the corpus path);
+/// - the body is truncated to `max_body` chars, then stripped;
+/// - region evidence is judged on `"{title} {body}"` against the passed
+///   [`RegionLists`](crate::ztools::weekend_cache::RegionLists) (loaded from
+///   `conf/weekend.toml [region]` — data, not code), and out-of-region
+///   results are counted and reported, never silently kept.
+#[must_use]
+pub fn clean_search_results(
+    results: &[SearchResult],
+    default_label: &str,
+    max_body: usize,
+    region: &crate::ztools::weekend_cache::RegionLists,
+) -> String {
+    let mut seen = std::collections::HashSet::new();
+    let mut cleaned = Vec::new();
+    let mut dropped = 0usize;
+    for r in results {
+        let title = r.title.trim();
+        let norm: String = if title.is_empty() {
+            String::new()
+        } else {
+            // CHAR-SET, not substring: a `&str` pattern to trim_end_matches
+            // would only strip the exact contiguous suffix, but Python's
+            // rstrip(".,!?:; ") strips any of the set. "Vaughan Fall Fair!!!"
+            // must collapse to "vaughan fall fair" to dedupe against the plain
+            // title, exactly as the parity fixture demands.
+            title
+                .to_lowercase()
+                .trim_end_matches(['.', ',', '!', '?', ':', ';', ' '])
+                .to_string()
+        };
+        if norm.is_empty() || seen.contains(&norm) {
+            continue;
+        }
+        seen.insert(norm);
+        let body: String = r
+            .body
+            .chars()
+            .take(max_body)
+            .collect::<String>()
+            .trim()
+            .to_string();
+        if !crate::ztools::weekend_cache::has_region_evidence(&format!("{title} {body}"), region) {
+            dropped += 1;
+            continue;
+        }
+        let label = if title.is_empty() {
+            default_label
+        } else {
+            title
+        };
+        cleaned.push(format!("- {label}: {body}"));
+    }
+    if dropped > 0 {
+        println!("\u{2192} Dropped {dropped} out-of-region search result(s)");
+    }
+    cleaned.join("\n")
+}
 
 /// Search the aggregator for event snippets and return the cleaned, deduped,
 /// in-window-prioritised corpus.
@@ -50,7 +124,7 @@ fn fetch_events_corpus(
 ) -> String {
     let queries = build_search_queries(d1);
 
-    let mut all_results = Vec::new();
+    let mut all_results = Vec::<SearchResult>::new();
     for chunk in queries.chunks(4) {
         let mut handles = Vec::new();
         for q in chunk {
@@ -67,20 +141,27 @@ fn fetch_events_corpus(
         }
     }
 
-    let mut seen = std::collections::HashSet::new();
-    let mut cleaned = Vec::new();
-    for snippet in all_results {
-        let norm = snippet.to_lowercase();
-        if norm.is_empty() || seen.contains(&norm) {
-            continue;
-        }
-        seen.insert(norm);
+    // The scrape results become the corpus through the SAME byte-exact
+    // cleaning the Python pipeline applies (title-only dedupe, max_body
+    // truncation, region evidence on "{title} {body}"); see
+    // `clean_search_results`. The parity gate byte-compares this output
+    // against `_clean_search_results`. Region lists come from the configured
+    // `weekend.toml` files, never from literals.
+    let region = crate::ztools::weekend_cache::load_region_lists(&config.weekend_region_paths);
+    let cleaned = clean_search_results(&all_results, "Event", MAX_BODY_LENGTH, &region);
 
-        if crate::ztools::weekend_cache::has_region_evidence(&snippet) {
-            cleaned.push(format!("- Event: {snippet}"));
-        }
+    // The directory pages themselves are not activities, but the events are
+    // INSIDE them: follow the promising ones and add their text to the corpus
+    // so the extractor can read individual listings out of them.
+    let followed = follow_aggregators(&all_results, &region);
+    let mut lines: Vec<String> = cleaned
+        .lines()
+        .map(std::string::ToString::to_string)
+        .collect();
+    if !followed.is_empty() {
+        lines.extend(followed.lines().map(std::string::ToString::to_string));
     }
-    let raw_text = cleaned.join("\n");
+    let raw_text = lines.join("\n");
 
     // Make the in-window candidates visible WITHOUT removing the rest. Filtering
     // here instead was tried and reverted (in the Python pipeline): it starved

@@ -144,8 +144,10 @@ logs/
 !conf/**/*.json
 !eval_tasks/**/*.json
 !docs/**/*.json
+!tests/fixtures/**/*.json
 *.csv
 *.txt
+!tests/fixtures/**/*.txt
 
 # Model outputs
 *.onnx

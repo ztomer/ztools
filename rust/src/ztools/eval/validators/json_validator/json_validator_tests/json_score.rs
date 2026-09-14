@@ -27,7 +27,7 @@ fn test_validate_json_count_bands() {
     // 3 items: too-few failure, structure 20 + validity 30
     let (score, reason) = validate_json(&mk(3), "");
     assert_eq!(score, 50);
-    assert_eq!(reason, "only 3 items (need 8+)");
+    assert_eq!(reason, "only 3 items (need 10+)");
 }
 
 #[test]
@@ -41,33 +41,34 @@ fn test_validate_json_validity_bands() {
         }
         json!({"activities": items})
     };
-    // 7/8 valid = 0.875 >= 0.7 -> half validity weight + failure note
+    // 7/8 valid = 0.875 >= 0.7 -> half validity weight + failure note.
+    // 8 items clears only the ok-count band (10 needed for good).
     let (score, reason) = validate_json(&mixed(1), "");
-    assert_eq!(score, 20 + 25 + 15);
+    assert_eq!(score, 20 + 15 + 15);
     assert_eq!(reason, "only 7/8 items are valid");
     // 3/8 valid = 0.375 < 0.7 -> no validity points
     let (score, reason) = validate_json(&mixed(5), "");
-    assert_eq!(score, 20 + 25);
+    assert_eq!(score, 20 + 15);
     assert_eq!(reason, "only 3/8 items are valid");
 }
 
 #[test]
 fn test_validate_json_source_ratio_bands() {
     let data = json!({"activities": detailed_items()});
-    // ratio 1.0 -> +25; total caps at exactly MAX_SCORE
-    assert_eq!(validate_json(&data, SRC_FULL), (100, String::new()));
+    // ratio 1.0 -> +25; 8 items clears only ok-count, so 90 not 100
+    assert_eq!(validate_json(&data, SRC_FULL), (90, String::new()));
     // 5/8 match = 0.625 -> +12
     assert_eq!(
         validate_json(&data, SRC_MED),
-        (20 + 25 + 30 + 12, String::new())
+        (20 + 15 + 30 + 12, String::new())
     );
     // 2/8 match = 0.25 -> +6
     assert_eq!(
         validate_json(&data, SRC_LOW),
-        (20 + 25 + 30 + 6, String::new())
+        (20 + 15 + 30 + 6, String::new())
     );
     // ratio 0 -> hallucinated
     let (score, reason) = validate_json(&data, SRC_NONE);
-    assert_eq!(score, 75);
+    assert_eq!(score, 65);
     assert_eq!(reason, "not from input (hallucinated)");
 }

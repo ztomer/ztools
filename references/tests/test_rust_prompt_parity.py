@@ -26,8 +26,10 @@ if sys_path not in __import__("sys").path:
 
 from eval import tasks_prompts as tp  # noqa: E402
 
-# pub const NAME: &str = r##"..."##;   (raw string, 1-4 hashes)
-_STR_RE = re.compile(r'pub const (\w+): &str = r(#{1,4})"(.*?)"\2;', re.DOTALL)
+# pub const NAME: &str = r"..." / r##"..."##;   (raw string, 0-4 hashes;
+# the generator emits the minimal level, zero included, so clippy's
+# needless_raw_string_hashes stays quiet)
+_STR_RE = re.compile(r'pub const (\w+): &str = r(#{0,4})"(.*?)"\2;', re.DOTALL)
 # pub const NAME: &[&str] = &["a", "b"];
 _LIST_RE = re.compile(r"pub const (\w+): &\[&str\] = &\[(.*?)\];", re.DOTALL)
 _LIST_ITEM_RE = re.compile(r'"((?:[^"\\]|\\.)*)"')

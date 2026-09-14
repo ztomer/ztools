@@ -1,6 +1,18 @@
 //! Unit tests for Rust Weekend Planner module.
 
 use super::*;
+use crate::ztools::weekend_cache::RegionLists;
+
+/// Region lists for title-cleaning tests: inline test data with the tokens
+/// these fixtures rely on. The shipped file's contents are pinned by
+/// `region_lists_load_from_the_shipped_config` in `weekend_filter_tests`.
+fn test_region() -> RegionLists {
+    RegionLists {
+        cities: vec!["vaughan".to_string(), "toronto".to_string()],
+        in_region: vec!["ontario".to_string()],
+        foreign: vec![],
+    }
+}
 
 #[test]
 fn test_matches_exclusion() {
@@ -138,24 +150,31 @@ fn test_is_directory_or_list_page() {
 #[test]
 fn test_clean_venue_or_event_title() {
     assert_eq!(
-        clean_venue_or_event_title("Air Riderz Trampoline Park in Toronto: Bounce into Adventure"),
+        clean_venue_or_event_title(
+            "Air Riderz Trampoline Park in Toronto: Bounce into Adventure",
+            &test_region()
+        ),
         Some("Air Riderz Trampoline Park in Toronto: Bounce into Adventure".to_string())
     );
     assert_eq!(
         clean_venue_or_event_title(
-            "Candyland Indoor Play Centre (Vaughan, Canada) - Đa... - Tripadvisor"
+            "Candyland Indoor Play Centre (Vaughan, Canada) - Đa... - Tripadvisor",
+            &test_region()
         ),
         Some("Candyland Indoor Play Centre (Vaughan, Canada)".to_string())
     );
     assert_eq!(
-        clean_venue_or_event_title("Playdium Vaughan – YouTube"),
+        clean_venue_or_event_title("Playdium Vaughan – YouTube", &test_region()),
         Some("Playdium Vaughan".to_string())
     );
     assert_eq!(
-        clean_venue_or_event_title("Best Kids Parks in Vaughan Ontario | TikTok"),
+        clean_venue_or_event_title(
+            "Best Kids Parks in Vaughan Ontario | TikTok",
+            &test_region()
+        ),
         None
     );
-    assert_eq!(clean_venue_or_event_title("ab"), None);
+    assert_eq!(clean_venue_or_event_title("ab", &test_region()), None);
 }
 
 #[test]
@@ -373,3 +392,7 @@ mod weekend_filter_tests;
 mod weekend_phases_tests;
 
 mod weekend_fetch_tests;
+
+mod weekend_search_tests;
+
+mod weekend_followup_tests;

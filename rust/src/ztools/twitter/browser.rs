@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use crate::ztools::pyenv;
 
 use super::cookies::Cookie;
+use super::native;
 use super::Tweet;
 
 #[derive(Debug, Clone)]
@@ -43,17 +44,22 @@ pub trait BrowserCollector: Send + Sync {
 pub struct LiveBrowserCollector {
     pub since: Option<String>,
     pub debug: bool,
+    pub config: crate::config::ZtoolsConfig,
     /// Injection seam so the passthrough logic is testable without spawning
     /// Python; production always wires [`collect_tweets_live`].
-    runner: fn(Option<&str>, bool) -> Result<Vec<Tweet>>,
+    runner: fn(Option<&str>, bool, &crate::config::ZtoolsConfig) -> Result<Vec<Tweet>>,
 }
 
 impl LiveBrowserCollector {
     #[must_use]
-    pub fn new(since: Option<String>, debug: bool) -> Self {
+    pub fn new(since: Option<String>, debug: bool, config: crate::config::ZtoolsConfig) -> Self {
+        // Driver selection lives in `collect_tweets_live` (the single choke
+        // point every caller uses); the runner stays fixed here so tests keep
+        // a stable seam.
         Self {
             since,
             debug,
+            config,
             runner: collect_tweets_live,
         }
     }
@@ -61,7 +67,7 @@ impl LiveBrowserCollector {
 
 impl BrowserCollector for LiveBrowserCollector {
     fn collect_timeline(&self, _target_count: usize) -> Result<Vec<Tweet>> {
-        (self.runner)(self.since.as_deref(), self.debug)
+        (self.runner)(self.since.as_deref(), self.debug, &self.config)
     }
 }
 
@@ -71,11 +77,17 @@ pub const BROWSER_MODULES: &[&str] = &["requests", "playwright", "camoufox"];
 
 /// Run browser login to authenticate and store cookies.
 ///
+/// Dispatches on `TWITTER_COLLECTOR` like collection does: native headed login
+/// or the Python `--login` subprocess.
+///
 /// # Errors
 ///
 /// When the browser login helper cannot be started, or exits non-zero --
 /// which includes the user closing the window without completing sign-in.
 pub fn login_live() -> Result<()> {
+    if native::native_selected() {
+        return native::login_native();
+    }
     let mut cmd = pyenv::command(BROWSER_MODULES)?;
     cmd.args([
         "-c",
@@ -123,13 +135,34 @@ fn tweets_from_cache_candidates(candidates: Vec<PathBuf>) -> Option<Vec<Tweet>> 
 
 /// Collect timeline tweets via the live headless browser driver.
 ///
+/// Dispatch point: `TWITTER_COLLECTOR=native` routes to the `camoufox-rs`
+/// driver; otherwise the Python subprocess below (default until Phase 3 A/B
+/// passes).
+///
 /// # Errors
 ///
 /// When the scraper cannot be executed, exits non-zero, or collects no
 /// tweets. An empty timeline is an error here rather than an empty list:
 /// every caller is about to summarise what it gets back, and summarising
 /// nothing produces a confident summary of no data.
-pub fn collect_tweets_live(since: Option<&str>, debug: bool) -> Result<Vec<Tweet>> {
+pub fn collect_tweets_live(
+    since: Option<&str>,
+    debug: bool,
+    config: &crate::config::ZtoolsConfig,
+) -> Result<Vec<Tweet>> {
+    if native::native_selected() {
+        return native::collect_tweets_native(since, debug, config);
+    }
+    collect_tweets_via_python(since, debug)
+}
+
+/// Collect timeline tweets via the Python subprocess + cache files.
+///
+/// # Errors
+///
+/// When the scraper cannot be executed, exits non-zero, or collects no
+/// tweets (see [`collect_tweets_live`]).
+pub fn collect_tweets_via_python(since: Option<&str>, debug: bool) -> Result<Vec<Tweet>> {
     let mut cmd = pyenv::command(BROWSER_MODULES)?;
     cmd.args(["-c", &build_fetch_stmt(debug, since)]);
     let status = cmd
@@ -176,6 +209,7 @@ mod tests {
         let collector = MockBrowserCollector {
             canned_tweets: vec![
                 Tweet {
+                    id: String::new(),
                     screen_name: "user1".to_string(),
                     text: "Tweet 1".to_string(),
                     created_at: "Thu Aug 20 12:00:00 +0000 2026".to_string(),
@@ -184,6 +218,7 @@ mod tests {
                     reply_to: None,
                 },
                 Tweet {
+                    id: String::new(),
                     screen_name: "user2".to_string(),
                     text: "Tweet 2".to_string(),
                     created_at: "Thu Aug 20 12:01:00 +0000 2026".to_string(),
@@ -212,7 +247,11 @@ mod tests {
 
     #[test]
     fn test_new_collector_keeps_construction_args() {
-        let collector = LiveBrowserCollector::new(Some("2026-08-01".to_string()), true);
+        let collector = LiveBrowserCollector::new(
+            Some("2026-08-01".to_string()),
+            true,
+            crate::config::ZtoolsConfig::default(),
+        );
         assert_eq!(collector.since.as_deref(), Some("2026-08-01"));
         assert!(collector.debug);
     }
@@ -244,7 +283,11 @@ mod tests {
                       whose real implementations do fail. A test double that \
                       cannot fail still has to have the same type."
         )]
-        fn capturing_runner(since: Option<&str>, debug: bool) -> Result<Vec<Tweet>> {
+        fn capturing_runner(
+            since: Option<&str>,
+            debug: bool,
+            _config: &crate::config::ZtoolsConfig,
+        ) -> Result<Vec<Tweet>> {
             CAPTURED
                 .lock()
                 .unwrap()
@@ -254,6 +297,7 @@ mod tests {
         let collector = LiveBrowserCollector {
             since: Some("2026-08-15".to_string()),
             debug: true,
+            config: crate::config::ZtoolsConfig::default(),
             runner: capturing_runner,
         };
 

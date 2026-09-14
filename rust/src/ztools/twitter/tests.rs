@@ -6,6 +6,7 @@ use super::*;
 fn test_deduplicate_tweets() {
     let tweets = vec![
         Tweet {
+            id: String::new(),
             screen_name: "user1".into(),
             text: "Breaking news: Rust 2.0 announced today!".into(),
             created_at: "12:00".into(),
@@ -14,6 +15,7 @@ fn test_deduplicate_tweets() {
             reply_to: None,
         },
         Tweet {
+            id: String::new(),
             screen_name: "user2".into(),
             text: "RT @user1: Breaking news: Rust 2.0 announced today!".into(),
             created_at: "12:01".into(),
@@ -30,6 +32,7 @@ fn test_deduplicate_tweets() {
 #[test]
 fn test_build_prompt() {
     let tweets = vec![Tweet {
+        id: String::new(),
         screen_name: "user1".into(),
         text: "Hello Rust!".into(),
         created_at: "12:00".into(),
@@ -53,6 +56,7 @@ fn test_build_prompt_empty_and_budget() {
 
     let tweets = vec![
         Tweet {
+            id: String::new(),
             screen_name: "user1".into(),
             text: "First tweet content".into(),
             created_at: "12:00".into(),
@@ -61,6 +65,7 @@ fn test_build_prompt_empty_and_budget() {
             reply_to: None,
         },
         Tweet {
+            id: String::new(),
             screen_name: "user2".into(),
             text: "Second tweet content".into(),
             created_at: "12:05".into(),
@@ -112,12 +117,7 @@ fn test_check_summary_quality() {
 
 #[test]
 fn test_call_osaurus_invalid_host() {
-    let res = call_osaurus(
-        "http://127.0.0.1:59999",
-        "model",
-        "prompt",
-        &crate::config::ZtoolsConfig::default(),
-    );
+    let res = call_osaurus("http://127.0.0.1:59999", "model", "prompt", 5);
     assert!(res.is_err());
 }
 
@@ -153,6 +153,7 @@ fn test_call_osaurus_and_run_summary_success() {
     });
 
     let tweets = vec![Tweet {
+        id: String::new(),
         screen_name: "routine_user".into(),
         text: "Testing twitter summarizer with mock server".into(),
         created_at: "14:00".into(),
@@ -278,5 +279,193 @@ fn test_run_summary_empty_fallback() {
         res.is_err(),
         "an unreachable LLM with nothing to summarise must fail, not produce a document"
     );
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn test_merge_thinking_with_summary_includes_analysis() {
+    // Port of test_merge_thinking_with_summary in test_twitter.py.
+    let thinking = "Analysis: This is important";
+    let summary = "## Summary\nMain content";
+    let result = merge_thinking_with_summary(thinking, summary);
+    assert!(result.contains("## Analysis"), "{result}");
+    assert!(result.contains(thinking), "{result}");
+    assert!(result.contains(summary), "{result}");
+}
+
+#[test]
+fn test_merge_with_empty_thinking_returns_summary_unchanged() {
+    assert_eq!(
+        merge_thinking_with_summary("", "## Summary\nMain"),
+        "## Summary\nMain"
+    );
+}
+
+#[test]
+fn test_extract_thinking_splits_block_from_body() {
+    // Verified against the Python original: `cleaned` keeps the raw
+    // `<thinking>` block (`remove_thinking_blocks` strips `<think>` tags,
+    // not `<thinking>` ones) — the thinking is extracted for the Analysis
+    // section, not removed from the body.
+    let (thinking, cleaned) =
+        extract_thinking("## Summary\nMain<thinking type=\"x\">inner reasoning</thinking>\nTail");
+    assert_eq!(thinking, "inner reasoning");
+    assert!(cleaned.contains("Main"), "{cleaned}");
+    assert!(cleaned.contains("<thinking"), "{cleaned}");
+}
+
+#[test]
+fn test_extract_thinking_without_block_returns_text_untouched() {
+    let (thinking, cleaned) = extract_thinking("## Summary\nMain content");
+    assert_eq!(thinking, "");
+    assert_eq!(cleaned, "## Summary\nMain content");
+}
+
+#[test]
+fn test_run_summary_merges_thinking_into_analysis_section() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let base_url = format!("http://{addr}");
+
+    thread::spawn(move || {
+        for mut stream in listener.incoming().flatten() {
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf);
+
+            let request_str = String::from_utf8_lossy(&buf);
+            let body = if request_str.contains("/v1/embeddings") {
+                r#"{"data": [{"embedding": [0.1, 0.2]}]}"#.to_string()
+            } else {
+                r###"{"choices": [{"message": {"content": "## Executive Summary\nKey point<thinking>why it matters</thinking>"}}]}"###.to_string()
+            };
+
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(resp.as_bytes());
+        }
+    });
+
+    let tweets = vec![Tweet {
+        id: String::new(),
+        screen_name: "routine_user".into(),
+        text: "Testing thinking merge with mock server".into(),
+        created_at: "14:00".into(),
+        favorite_count: 1,
+        retweet_count: 0,
+        reply_to: None,
+    }];
+
+    let temp_dir = std::env::temp_dir().join("ztools_test_twitter_thinking");
+    let res = run_summary(
+        &tweets,
+        Some(&temp_dir),
+        Some(&base_url),
+        Some("mock-model"),
+        &crate::config::ZtoolsConfig::default(),
+    );
+    assert!(res.is_ok());
+    let content = std::fs::read_to_string(res.unwrap()).unwrap();
+    assert!(content.contains("## Analysis"), "{content}");
+    assert!(content.contains("why it matters"), "{content}");
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+}
+
+#[test]
+fn test_handle_model_output_passes_good_content_through() {
+    // Port of test_success_first_model in test_twit_summarize.py.
+    let result = handle_model_output("## Topic\n- fact 1\n- fact 2\n- fact 3", 7);
+    let (text, processed) = result.expect("good content must survive the gate");
+    assert!(text.contains("Topic"), "{text}");
+    assert_eq!(processed, 7);
+}
+
+#[test]
+fn test_handle_model_output_merges_thinking_when_present() {
+    // Port of test_success_with_thinking: thinking routes through the merge,
+    // then the merged text faces the same quality gate.
+    let result = handle_model_output(
+        "<thinking>reasoning here</thinking>## Topic\n- a\n- b\n- c",
+        3,
+    );
+    let (text, _) = result.expect("merged thinking must survive the gate");
+    assert!(text.contains("## Analysis"), "{text}");
+    assert!(text.contains("reasoning here"), "{text}");
+}
+
+#[test]
+fn test_handle_model_output_drops_critical_thinking_output() {
+    // Port of test_thinking_critical_skips (single attempt): thinking present
+    // but the body is unstructured, so the attempt yields nothing.
+    assert!(handle_model_output("<thinking>x</thinking>bad", 1).is_none());
+}
+
+#[test]
+fn test_handle_model_output_drops_structureless_content() {
+    // Port of test_target_model_with_known_critical_skips (single attempt).
+    assert!(handle_model_output("no structure here at all", 1).is_none());
+}
+
+#[test]
+fn test_run_summary_fails_when_model_returns_unusable_summary() {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let base_url = format!("http://{addr}");
+
+    thread::spawn(move || {
+        for mut stream in listener.incoming().flatten() {
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf);
+
+            let request_str = String::from_utf8_lossy(&buf);
+            let body = if request_str.contains("/v1/embeddings") {
+                r#"{"data": [{"embedding": [0.1, 0.2]}]}"#.to_string()
+            } else {
+                r#"{"choices": [{"message": {"content": "junk with no structure"}}]}"#.to_string()
+            };
+
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(resp.as_bytes());
+        }
+    });
+
+    let tweets = vec![Tweet {
+        id: String::new(),
+        screen_name: "routine_user".into(),
+        text: "Testing critical-output failure".into(),
+        created_at: "14:00".into(),
+        favorite_count: 1,
+        retweet_count: 0,
+        reply_to: None,
+    }];
+
+    let temp_dir = std::env::temp_dir().join("ztools_test_twitter_critical");
+    let res = run_summary(
+        &tweets,
+        Some(&temp_dir),
+        Some(&base_url),
+        Some("mock-model"),
+        &crate::config::ZtoolsConfig::default(),
+    );
+    assert!(
+        res.is_err(),
+        "a critical-quality summary must fail, not be saved as success"
+    );
+
     let _ = std::fs::remove_dir_all(&temp_dir);
 }

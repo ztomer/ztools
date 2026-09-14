@@ -103,8 +103,13 @@ pub fn parse_tweets_from_response(data: &serde_json::Value) -> Vec<Tweet> {
                 .get("in_reply_to_screen_name")
                 .and_then(|s| s.as_str())
                 .map(std::string::ToString::to_string);
+            let id = legacy
+                .get("id_str")
+                .and_then(|s| s.as_str())
+                .unwrap_or_default();
 
             tweets.push(Tweet {
+                id: id.to_string(),
                 screen_name: screen_name.to_string(),
                 text: full_text.to_string(),
                 created_at: created_at_str.to_string(),
@@ -152,7 +157,8 @@ mod tests {
                                                             "full_text": "Rust 1.80 is released!",
                                                             "created_at": "Thu Aug 20 12:00:00 +0000 2026",
                                                             "favorite_count": 1500,
-                                                            "retweet_count": 350
+                                                            "retweet_count": 350,
+                                                            "id_str": "1827394000000000001"
                                                         }
                                                     }
                                                 }
@@ -203,6 +209,10 @@ mod tests {
         assert_eq!(tweets[0].text, "Rust 1.80 is released!");
         assert_eq!(tweets[0].favorite_count, 1500);
         assert_eq!(tweets[0].reply_to, None);
+        // Tweet IDs survive parsing: the A/B gate compares ID sets, so a
+        // dropped ID reads as a missing tweet. Absent id_str means "".
+        assert_eq!(tweets[0].id, "1827394000000000001");
+        assert_eq!(tweets[1].id, "");
 
         assert_eq!(tweets[1].screen_name, "developer");
         assert_eq!(tweets[1].text, "Shipping the Rust rewrite today!");

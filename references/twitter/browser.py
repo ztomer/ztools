@@ -82,6 +82,16 @@ LOGIN_KEYWORDS = tuple(k.strip() for k in _login_kw_str.split(",") if k.strip())
 LOGGED_OUT_URL_MARKERS = ("/login", "/signin", "/i/flow/login")
 # We always request /home; being left on the bare root means we were bounced.
 LOGGED_OUT_ROOT_URLS = ("https://x.com", "https://twitter.com", "https://www.x.com")
+# The Following (reverse-chron) timeline endpoint, read from
+# `conf/twitter.toml [endpoints]` like every other site value in this
+# module — never spelled literally here. `HomeTimeline` without the `Latest`
+# infix is the For You feed: same shape, different ranking, and comparing ID
+# sets across the two is meaningless. An absent table matches nothing, so a
+# misconfigured checkout fails loudly at the endpoint check below instead of
+# collecting the wrong feed.
+_ENDPOINTS = _TWITTER_CFG.get("endpoints", {}) or {}
+TIMELINE_URL_MARKERS = tuple(_ENDPOINTS.get("timeline", []) or [])
+FOLLOWING_URL_MARKER = _ENDPOINTS.get("following", "") or ""
 EXIT_ERROR = 1
 
 # Pre-compiled regular expressions for performance (John Carmack optimization)
@@ -303,6 +313,11 @@ def open_browser(debug: bool):
             close_browser()
 
 
+def is_following_url(url: str) -> bool:
+    """True when a response URL is the Following timeline endpoint."""
+    return FOLLOWING_URL_MARKER in (url or "")
+
+
 def collect_tweets_via_browser(since_time: datetime, debug: bool) -> list[dict]:
     print(f"{STEP} Looking for an x.com session in your browsers ...")
     cookies, source = get_browser_cookies()
@@ -324,12 +339,17 @@ def collect_tweets_via_browser(since_time: datetime, debug: bool) -> list[dict]:
 
     all_tweets: list[dict] = []
     oldest_seen: datetime | None = None
+    saw_timeline = False
+    saw_following = False
 
     def handle_response(response):
-        nonlocal oldest_seen
+        nonlocal oldest_seen, saw_timeline, saw_following
         url = response.url
-        if "HomeTimeline" not in url and "HomeLatestTimeline" not in url:
+        if not any(m in url for m in TIMELINE_URL_MARKERS):
             return
+        saw_timeline = True
+        if is_following_url(url):
+            saw_following = True
         try:
             body = response.json()
         except Exception:
@@ -401,8 +421,16 @@ def collect_tweets_via_browser(since_time: datetime, debug: bool) -> list[dict]:
                         timeout=TAB_SWITCH_WAIT * MS_PER_SECOND,
                     )
                 except Exception:
-                    pass
-                print(f"{STEP} Switched to the 'Following' tab.")
+                    # The old code printed success here unconditionally, so a
+                    # failed switch read as a Following run all the way down.
+                    print(
+                        f"{WARN} Following tab click did not take — collecting "
+                        "anyway; the endpoint check below fails the run if "
+                        "this was For You.",
+                        file=sys.stderr,
+                    )
+                else:
+                    print(f"{STEP} Switched to the 'Following' tab.")
         except Exception as e:
             msg_fail = (
                 f"{WARN} Failed to switch to 'Following' tab: {e}. "
@@ -418,6 +446,18 @@ def collect_tweets_via_browser(since_time: datetime, debug: bool) -> list[dict]:
             print(f"{STEP} Stopped after {scrolls} scrolls — {stop_reason}.")
         finally:
             _close_quietly(context)
+
+    if saw_timeline and not saw_following:
+        # Timeline traffic without a single Following-endpoint response means
+        # the whole run watched For You: its ID set is not comparable to a
+        # Following run, so fail here rather than return a plausible set. No
+        # timeline traffic at all is a different (empty) outcome, reported by
+        # the caller as zero tweets — not blamed on the feed.
+        print(
+            f"{WARN} No Following-timeline responses captured — the feed never "
+            "switched from For You.",
+        )
+        sys.exit(EXIT_ERROR)
 
     filtered = [t for t in all_tweets if t["created_at"] >= since_time]
     rt_prefix = RT_PREFIX_RE

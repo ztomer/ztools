@@ -55,6 +55,9 @@ enum Cmd {
         /// Open browser to log in to x.com.
         #[arg(long)]
         login: bool,
+        /// Delete stored summary .md files and exit.
+        #[arg(long)]
+        clean: bool,
         /// Print the stored summary from the newest run. Read-only: runs no
         /// model and touches no network (what a dashboard tab must do).
         #[arg(long)]
@@ -83,6 +86,14 @@ enum Cmd {
         #[arg(long)]
         last_updated: bool,
     },
+    /// Print this project's status as JSON for the routines harness.
+    ///
+    /// Additive and read-only: reads the newest weekend plan, runs nothing
+    /// else. The scheduled `ztools status` in `routine do` and the tabs that
+    /// show it need a machine-readable answer, not a summary that reads like
+    /// a person wrote it because the two eventually disagree in tense.
+    #[command(version)]
+    Status,
     /// Run native Rust image renamer.
     #[command(version)]
     ImageRenamer {
@@ -174,6 +185,7 @@ pub fn run() -> Result<()> {
             debug,
             since,
             login,
+            clean,
             fetch_latest,
             last_updated,
         } => crate::cli_ztools_twitter::twitter_summarize(
@@ -187,6 +199,7 @@ pub fn run() -> Result<()> {
                 debug,
                 since,
                 login,
+                clean,
                 fetch_latest,
                 last_updated,
             },
@@ -206,6 +219,7 @@ pub fn run() -> Result<()> {
             last_updated,
         ),
         Cmd::ImageRenamer { dir, apply } => crate::cli_ztools::image_renamer(&config, dir, apply),
+        Cmd::Status => crate::cli_ztools::status(),
         Cmd::ModelEval {
             model,
             suite,

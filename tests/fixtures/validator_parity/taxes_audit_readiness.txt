@@ -1,0 +1,44 @@
+{
+  "risk_items": [
+    {
+      "title": "Foreign Interest Income Reporting",
+      "severity": "high",
+      "rationale": "Foreign interest income is explicitly noted as 'foreign-heavy' (t1.foreign_interest). Inaccurate reporting or failure to properly claim foreign tax credits (t1.fed.ftc) can lead to reassessment.",
+      "documents": [
+        "Foreign interest statements",
+        "Foreign tax payment records"
+      ],
+      "mitigation": "Ensure all foreign interest income and associated foreign tax payments are accurately reported and documented."
+    },
+    {
+      "title": "RRSP Deduction Verification",
+      "severity": "high",
+      "rationale": "The RRSP deduction (t1.rrsp_deduction) is a significant line item. Verification is required to ensure contributions were made within the prescribed deadlines for the 2025 tax year.",
+      "documents": [
+        "RRSP contribution slips for 2025",
+        "Employer contribution statements"
+      ],
+      "mitigation": "Confirm all RRSP contributions were made by the deadline (typically March 2026)."
+    },
+    {
+      "title": "WFH Expense Substantiation",
+      "severity": "medium",
+      "rationale": "The WFH deduction (t1.wfh_deduction) relies on the detailed T2200 method. Substantiation is needed to prove the claimed workspace percentage is legitimate.",
+      "documents": [
+        "Workspace area documentation",
+        "Home area documentation"
+      ],
+      "mitigation": "Document the dedicated workspace area relative to the total home area to support the claimed percentage."
+    },
+    {
+      "title": "Total Income Reconciliation",
+      "severity": "medium",
+      "rationale": "The total income (t1.total_income) is high, involving rental income, foreign interest, and employment income. Reconciliation of all sources is necessary to prevent underreporting.",
+      "documents": [
+        "Rental income statements",
+        "Employment income slips (T4s)"
+      ],
+      "mitigation": "Reconcile all income sources against supporting documentation to ensure the total income figure is accurate."
+    }
+  ]
+}

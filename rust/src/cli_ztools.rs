@@ -211,6 +211,21 @@ pub(crate) fn image_renamer(config: &ZtoolsConfig, dir: PathBuf, apply: bool) ->
 mod capabilities;
 use capabilities::print_capabilities;
 
+/// `ztools status`: the harness's view of this project, as JSON.
+///
+/// Read-only: reads the newest weekend plan and says whether it covers the
+/// upcoming weekend and has transient events. Runs nothing, so a status check
+/// never spends minutes scraping or burns a model run.
+///
+/// # Errors
+///
+/// Only when the status JSON cannot be written to stdout.
+pub(crate) fn status() -> Result<()> {
+    crate::ztools::status::run()
+}
+
+/// `ztools model-eval`: a native-Rust quality benchmark.
+///
 #[expect(
     clippy::too_many_lines,
     reason = "a CLI command end to end: resolve the model, size it \

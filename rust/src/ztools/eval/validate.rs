@@ -59,7 +59,7 @@ fn is_filename_echo(path: &str, desc_lower: &str) -> bool {
     desc_lower.chars().count() <= stem.chars().count() + 25
 }
 
-fn has_text_headers(text: &str) -> bool {
+pub(crate) fn has_text_headers(text: &str) -> bool {
     Regex::new(TEXT_HEADERS_RE)
         .expect("static regex")
         .is_match(text)

@@ -20,6 +20,8 @@ import pytest
         "Kite Festival, Scarborough",
         "Drop-in art, Woodbridge",
         "Museum programme, Hamilton Ontario",
+        "York University open house Toronto",
+        "North York Harvest Festival",
     ],
 )
 def test_C16_in_region_places_are_kept(text):
@@ -39,6 +41,12 @@ def test_C16_in_region_places_are_kept(text):
         "AAIFF - Astana AI Film Festival",
         "Boston's Official Calendar of Events",
         "Family Fun Edmonton",
+        # Bare "york" is not evidence: measured 2026-09-13, every
+        # bare-york-only live hit was York-UK/York-PA junk. Compounds keep
+        # working (see the keep-list above).
+        "Things to Do in York County, PA",
+        "Family Friendly | Visit York",
+        "12 AMAZING things to do in York for families",
     ],
 )
 def test_C16_out_of_region_noise_has_no_evidence(text):

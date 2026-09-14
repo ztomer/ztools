@@ -239,3 +239,29 @@ class TestParseTweetsFromResponse:
         # Re-import normally
         from twitter.browser import parse_tweets_from_response
         assert parse_tweets_from_response({}) == []
+
+
+class TestEndpointMarkersAreDataDriven:
+    """Endpoint markers come from conf/twitter.toml [endpoints], never from
+    literals in code — the same rule as region tokens."""
+
+    def test_markers_match_the_shipped_config(self):
+        import tomllib
+        from pathlib import Path
+
+        import twitter.browser as browser
+
+        conf_path = (
+            Path(__file__).resolve().parent.parent.parent / "conf" / "twitter.toml"
+        )
+        conf = tomllib.loads(conf_path.read_text(encoding="utf-8"))
+        assert tuple(conf["endpoints"]["timeline"]) == tuple(browser.TIMELINE_URL_MARKERS)
+        assert conf["endpoints"]["following"] == browser.FOLLOWING_URL_MARKER
+
+    def test_is_following_url(self):
+        from twitter.browser import is_following_url
+
+        assert is_following_url("https://x.com/api/graphql/HomeLatestTimeline?a=1")
+        assert not is_following_url("https://x.com/api/graphql/HomeTimeline?a=1")
+        assert not is_following_url("https://x.com/api/graphql/UserByScreenName")
+        assert not is_following_url("")

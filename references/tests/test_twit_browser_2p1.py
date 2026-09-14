@@ -140,7 +140,7 @@ class TestCollectTweetsViaBrowser:
         # On page.on("response", handler), invoke handler immediately with mock data
         def on_response(event, handler):
             mock_response = MagicMock()
-            mock_response.url = "https://x.com/api/graphql/HomeTimeline"
+            mock_response.url = "https://x.com/api/graphql/HomeLatestTimeline"
             mock_response.json.return_value = _make_tweet_data(
                 "user1", "Hello world!", "Mon Jun 01 12:00:00 +0000 2026"
             )
@@ -158,6 +158,41 @@ class TestCollectTweetsViaBrowser:
         assert tweets[0]["screen_name"] == "user1"
         assert tweets[0]["text"] == "Hello world!"
         assert tweets[0]["created_at"].year == 2026
+
+    def test_for_you_only_traffic_exits_loudly(self, monkeypatch, capsys):
+        """Timeline traffic with no Following-endpoint response is the wrong
+        feed: exit 1 with the reason, never a plausible-but-wrong set."""
+        from twitter.browser import collect_tweets_via_browser
+        since = datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+        mock_pw = MagicMock()
+        mock_browser = MagicMock()
+        mock_context = MagicMock()
+        mock_page = MagicMock()
+
+        mock_pw.__enter__.return_value.chromium.launch.return_value = mock_browser
+        mock_browser.new_context.return_value = mock_context
+        mock_context.cookies.return_value = SIGNED_IN_COOKIES
+        mock_context.new_page.return_value = mock_page
+        mock_page.title.return_value = "Home / X"
+
+        def on_response(event, handler):
+            mock_response = MagicMock()
+            mock_response.url = "https://x.com/api/graphql/HomeTimeline"  # For You
+            mock_response.json.return_value = _make_tweet_data(
+                "user1", "Hello world!", "Mon Jun 01 12:00:00 +0000 2026"
+            )
+            handler(mock_response)
+        mock_page.on.side_effect = on_response
+
+        with patch("twitter.browser.get_browser_cookies", return_value=(SIGNED_IN_COOKIES, "Zen")), \
+             patch("twitter.browser.sync_playwright", return_value=mock_pw), \
+             patch("twitter.browser.time"), \
+             patch("twitter.browser.MAX_SCROLLS", 0):
+            with pytest.raises(SystemExit) as exc:
+                collect_tweets_via_browser(since_time=since, debug=False)
+        assert exc.value.code == 1
+        assert "never switched from For You" in capsys.readouterr().out
 
     def test_following_tab_click_succeeds(self, monkeypatch):
         """When following tab click works, no exception."""
@@ -242,7 +277,7 @@ class TestCollectTweetsViaBrowser:
         assert tweets == []
 
     def test_response_handler_url_not_match(self, monkeypatch):
-        """Response URL doesn't match HomeTimeline — handler ignores it, oldest_seen stays None."""
+        """Response URL matches no timeline endpoint — handler ignores it, oldest_seen stays None."""
         from twitter.browser import collect_tweets_via_browser
         since = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
@@ -269,7 +304,7 @@ class TestCollectTweetsViaBrowser:
             if len(captured_handler) == 0:
                 return None
             fake_response = MagicMock()
-            fake_response.url = "https://x.com/some/other/endpoint"  # not HomeTimeline
+            fake_response.url = "https://x.com/some/other/endpoint"  # no timeline marker
             captured_handler[0](fake_response)
             return None
         mock_page.evaluate.side_effect = eval_side_effect
@@ -357,7 +392,7 @@ class TestCollectTweetsViaBrowser:
             call_count[0] += 1
             if call_count[0] == 1 and captured_handler:
                 fake_response = MagicMock()
-                fake_response.url = "https://x.com/api/graphql/HomeTimeline"
+                fake_response.url = "https://x.com/api/graphql/HomeLatestTimeline"
                 fake_response.json.return_value = old_tweet_data
                 captured_handler[0](fake_response)
         mock_page.evaluate.side_effect = fake_evaluate
@@ -402,7 +437,7 @@ class TestCollectTweetsViaBrowser:
             call_count[0] += 1
             if captured_handler and call_count[0] <= 2:
                 mock_response = MagicMock()
-                mock_response.url = "https://x.com/api/graphql/HomeTimeline"
+                mock_response.url = "https://x.com/api/graphql/HomeLatestTimeline"
                 mock_response.json.return_value = tweet_data
                 captured_handler[0](mock_response)
         mock_page.evaluate.side_effect = fake_evaluate

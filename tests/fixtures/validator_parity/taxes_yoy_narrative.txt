@@ -1,0 +1,25 @@
+{
+  "prose": "The significant decrease in total tax liability of $78,411.21 CAD between 2024 and 2025 is primarily driven by substantial shifts in income and deductions. The largest tax savings originate from changes in employment income and the RRSP deduction. The reduction in employment income, which dropped by $57,111.67, resulted in the largest tax reduction, saving approximately $30,570.19 in federal tax. Concurrently, the increase in the RRSP deduction by $50,356.89 provided a significant tax shield, reducing the overall tax burden by $26,954.33. Furthermore, the change in foreign tax paid (FTC) also contributed substantially to the tax reduction, with the adjustment resulting in a tax saving of $10,199.58. Other factors, such as the inclusion of rental income and the utilization of home office expenses, contributed smaller, but notable, adjustments to the final tax outcome.",
+  "drivers": [
+    {
+      "label": "Employment Income Change",
+      "delta_cad": -30570.19,
+      "note": "Employment income decreased, likely due to a reduction in RSU vesting or a change in employment status/salary structure."
+    },
+    {
+      "label": "RRSP Deduction Increase",
+      "delta_cad": -26954.33,
+      "note": "The RRSP deduction increased, suggesting the filer made a significant contribution or utilized prior-year room."
+    },
+    {
+      "label": "Foreign Tax Paid Adjustment",
+      "delta_cad": -10199.58,
+      "note": "The foreign tax paid adjustment indicates a change in the foreign tax liability or the application of the Foreign Tax Credit."
+    },
+    {
+      "label": "Rules Effect",
+      "delta_cad": -10319.43,
+      "note": "This represents the net impact of changes in tax rules applied across the return."
+    }
+  ]
+}

@@ -144,7 +144,11 @@ pub fn validate_detailed_json(data: &Value, source_text: &str) -> (i64, String) 
                 .map(|v| v.to_string().trim_matches('"').to_string())
                 .unwrap_or_default(),
             Value::String(s) => s.clone(),
-            _ => String::new(),
+            // Python names non-dict scalars with str(item): numbers keep
+            // their text ("7", not ""). Bool/None render in JSON spelling
+            // ("true"/"null" vs Python "True"/"None") — no fixture covers
+            // those, and the spelling only matters for dedup counting.
+            other => other.to_string(),
         })
         .collect();
     let unique_names: HashSet<String> = names.iter().filter(|n| !n.is_empty()).cloned().collect();

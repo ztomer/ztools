@@ -6,3 +6,13 @@ model = "gemma-4-e2b-it-8bit"
 chrome_cookies_db = "~/Library/Application Support/Google/Chrome/Default/Cookies"
 max_scrolls = 1200
 
+# x.com GraphQL endpoint markers. DATA, not code: both collectors read this
+# table, so one edit here moves both sides together. DO NOT EDIT unless x.com
+# renames their API — these identify the protocol, not operator preference.
+# The Following (reverse-chron) endpoint is what the ID-set A/B compares;
+# `HomeTimeline` without the `Latest` infix is the For You feed, and mixing
+# the two makes collected sets incomparable.
+[endpoints]
+timeline = ["HomeTimeline", "HomeLatestTimeline"]
+following = "HomeLatestTimeline"
+

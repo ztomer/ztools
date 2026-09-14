@@ -128,6 +128,61 @@ pub fn print_newest(store_dir: &Path, show_time: bool) -> Result<()> {
     Ok(())
 }
 
+/// What a folder cleanup removed and what it could not.
+pub struct CleanReport {
+    pub deleted: usize,
+    pub warnings: Vec<String>,
+}
+
+/// Delete `*.md` files in `dir`, keeping everything else.
+///
+/// A missing directory and per-file failures are warnings, never errors:
+/// cleanup is housekeeping before a run, not the run, and must not fail it.
+/// Port of `twitter/output.py::clean_folder` minus the process exit, which
+/// belongs to the CLI layer, not a library function.
+#[must_use]
+pub fn clean_folder(dir: &Path) -> CleanReport {
+    let mut report = CleanReport {
+        deleted: 0,
+        warnings: Vec::new(),
+    };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        report
+            .warnings
+            .push(format!("Directory {} does not exist.", dir.display()));
+        return report;
+    };
+    let mut names: Vec<_> = entries.filter_map(Result::ok).collect();
+    names.sort_by_key(std::fs::DirEntry::file_name);
+    for entry in names {
+        let path = entry.path();
+        // Suffix match, not extension match: `Path::extension` reports no
+        // extension for a dotfile literally named `.md`, while glob `*.md`
+        // matches it. The filter must agree with what it replaces.
+        //
+        // Case-SENSITIVE on purpose, also mirroring glob: `*.md` does not
+        // match `X.MD`, and a case-fold here would delete files Python keeps.
+        #[expect(
+            clippy::case_sensitive_file_extension_comparisons,
+            reason = "parity with Python glob '*.md', which is case-sensitive; folding would delete files the reference keeps"
+        )]
+        let is_md = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.ends_with(".md"));
+        if !is_md {
+            continue;
+        }
+        match std::fs::remove_file(&path) {
+            Ok(()) => report.deleted += 1,
+            Err(e) => report
+                .warnings
+                .push(format!("Failed to delete {}: {e}", path.display())),
+        }
+    }
+    report
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,5 +253,56 @@ mod tests {
             .set_modified(t)
             .unwrap();
         assert_eq!(last_updated(&path).unwrap(), "2026-08-29 17:53");
+    }
+
+    #[test]
+    fn clean_folder_reports_a_missing_directory_without_failing() {
+        let missing = std::env::temp_dir().join("ztools_store_no_such_dir_for_clean");
+        let report = clean_folder(&missing);
+        assert_eq!(report.deleted, 0);
+        assert_eq!(report.warnings.len(), 1);
+        assert!(
+            report.warnings[0].contains("does not exist"),
+            "{:?}",
+            report.warnings
+        );
+    }
+
+    #[test]
+    fn clean_folder_removes_md_files_and_keeps_the_rest() {
+        let (_td, d) = dir_with(&[
+            ("old1.md", "old1"),
+            ("old2.md", "old2"),
+            ("other.txt", "other"),
+        ]);
+        let report = clean_folder(&d);
+        assert_eq!(report.deleted, 2);
+        assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+        assert!(!d.join("old1.md").exists());
+        assert!(!d.join("old2.md").exists());
+        assert!(d.join("other.txt").exists());
+    }
+
+    #[test]
+    fn clean_folder_warns_and_continues_when_a_delete_fails() {
+        // A subdirectory named *.md cannot be unlinked as a file on any
+        // platform or privilege level, so the failure path is deterministic
+        // without chmod games.
+        let td = tempfile::tempdir().unwrap();
+        let d = td.path();
+        std::fs::create_dir(d.join("locked.md")).unwrap();
+        let report = clean_folder(d);
+        assert_eq!(report.deleted, 0);
+        assert_eq!(report.warnings.len(), 1);
+        assert!(
+            report.warnings[0].contains("locked.md"),
+            "{:?}",
+            report.warnings
+        );
+        assert!(
+            report.warnings[0].contains("Failed"),
+            "{:?}",
+            report.warnings
+        );
     }
 }

@@ -1,0 +1,13 @@
+{
+  "prose": "The provided data only contains tax information for the 2025 tax year and does not include the tax return data for the previous year to compare refunds. Therefore, it is not possible to determine why the current refund is smaller than last year's.\n\nFor the 2025 tax year, the calculated balance is $898.31, indicating a small amount owed. This is based on a total tax of $51,382.66 against a source deduction of $50,484.35.\n\nTo compare this to last year, the 2024 balance was $31,987.16.",
+  "citations": [
+    {
+      "fact_id": "t1.2025.balance",
+      "note": "This fact shows the calculated balance for the 2025 tax year is $898.31."
+    },
+    {
+      "fact_id": "t1.2024.balance",
+      "note": "This fact shows the calculated balance for the 2024 tax year was $31,987.16."
+    }
+  ]
+}

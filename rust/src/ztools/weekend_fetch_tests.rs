@@ -106,9 +106,9 @@ fn serve_chat(monolithic_content: &'static str) -> String {
 }
 
 const SNIPPETS_HTML: &str = "<html><body>\
-<div><a class=\"result__snippet\">Vaughan Fall Fair returns this weekend</a></div>\
-<div><a class=\"result__snippet\">Vaughan Fall Fair returns this weekend</a></div>\
-<div><a class=\"result__snippet\">Aspen ski school opens for the season</a></div>\
+<div><a class=\"result__a\" href=\"https://example.com/fall-fair\">Vaughan Fall Fair</a><span class=\"result__snippet\">Vaughan Fall Fair returns this weekend</span></div>\
+<div><a class=\"result__a\" href=\"https://example.com/fall-fair-2\">Vaughan Fall Fair</a><span class=\"result__snippet\">Vaughan Fall Fair weekend guide and family fun</span></div>\
+<div><a class=\"result__a\" href=\"https://example.com/aspen\">Aspen Ski School</a><span class=\"result__snippet\">Aspen ski school opens for the season</span></div>\
 </body></html>";
 
 #[test]
@@ -121,19 +121,24 @@ fn corpus_building_dedupes_keeps_only_region_backed_snippets_and_counts_them() {
         ..crate::config::ZtoolsConfig::default()
     };
 
-    // Every one of the fan-out queries hits the same mock, so the duplicate
-    // snippet arrives many times over; dedup must collapse it to one line,
-    // the Aspen result must be dropped for lacking region evidence, and the
-    // candidate counter must see exactly one line (the operator println path).
+    // Every one of the fan-out queries hits the same mock, so the duplicates
+    // arrive many times over; dedup is on the TITLE alone (the Python
+    // `_clean_search_results` key), so the two different-bodied Fall Fair
+    // results must still collapse to one line, the Aspen result must be
+    // dropped for lacking region evidence, and the candidate counter must see
+    // exactly one line (the operator println path).
     let (events, corpus) =
         fetch_duckduckgo_events("Vaughan", window().0, window().1, "sunny", &ctx(), &config);
 
     assert_eq!(
-        corpus.matches("- Event:").count(),
+        corpus.matches("- Vaughan Fall Fair:").count(),
         1,
-        "duplicate snippets must collapse to one candidate: {corpus}"
+        "duplicate-titled snippets must collapse to one candidate: {corpus}"
     );
-    assert!(corpus.contains("Vaughan Fall Fair"), "{corpus}");
+    assert!(
+        !corpus.contains("- Event:"),
+        "an empty title is dropped outright, never labeled Event (Python parity): {corpus}"
+    );
     assert!(
         !corpus.contains("Aspen"),
         "a snippet without region evidence must not enter the corpus: {corpus}"

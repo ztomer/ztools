@@ -11,7 +11,29 @@ use crate::ztools::weekend::{
 };
 use crate::ztools::weekend_cache::{
     clean_venue_or_event_title, has_region_evidence, is_directory_or_list_page, load_exclusions,
+    load_region_lists, RegionLists,
 };
+
+/// Region lists for filter tests: inline test data mirroring the shipped
+/// `conf/weekend.toml [region]` shape (whitelist + foreign veto, no bare
+/// "york"). The real file's contents are pinned separately by
+/// `region_lists_load_from_the_shipped_config`.
+fn test_region() -> RegionLists {
+    RegionLists {
+        cities: vec!["vaughan".to_string(), "toronto".to_string()],
+        in_region: vec![
+            "mississauga".to_string(),
+            "york region".to_string(),
+            "york university".to_string(),
+            "ontario".to_string(),
+        ],
+        foreign: vec![
+            "new york".to_string(),
+            "chicago".to_string(),
+            "london".to_string(),
+        ],
+    }
+}
 
 fn event(name: &str, location: &str, description: &str) -> WeekendEvent {
     WeekendEvent {
@@ -79,9 +101,57 @@ fn a_numbered_listicle_is_filtered_out() {
 /// it also contains — the wrong continent is not a partial match.
 #[test]
 fn a_foreign_city_beats_any_local_token() {
-    assert!(!has_region_evidence("New York street festival"));
-    assert!(!has_region_evidence("Toronto Blue Jays play in Chicago"));
-    assert!(has_region_evidence("Family day at Vaughan Mills"));
+    let region = test_region();
+    assert!(!has_region_evidence("New York street festival", &region));
+    assert!(!has_region_evidence(
+        "Toronto Blue Jays play in Chicago",
+        &region
+    ));
+    assert!(has_region_evidence("Family day at Vaughan Mills", &region));
+}
+
+/// Bare "york" is not region evidence: measured 2026-09-13, every
+/// bare-york-only live hit was York-UK/York-PA junk. Compounds keep working.
+#[test]
+fn bare_york_is_not_region_evidence_but_compounds_are() {
+    let region = test_region();
+    assert!(!has_region_evidence(
+        "Things to Do in York County, PA",
+        &region
+    ));
+    assert!(!has_region_evidence(
+        "Family Friendly | Visit York",
+        &region
+    ));
+    assert!(has_region_evidence(
+        "York University open house Toronto",
+        &region
+    ));
+}
+
+/// The shipped config is the single source of region truth: both
+/// implementations read `conf/weekend.toml [region]`, so this pins what the
+/// file must contain rather than what the matcher does with it.
+#[test]
+fn region_lists_load_from_the_shipped_config() {
+    let manifest = env!("CARGO_MANIFEST_DIR");
+    let path = std::path::Path::new(manifest)
+        .parent()
+        .unwrap()
+        .join("conf/weekend.toml");
+    let region = load_region_lists(&[path.to_string_lossy().into_owned()]);
+    assert!(region.cities.contains(&"vaughan".to_string()));
+    assert!(region.cities.contains(&"toronto".to_string()));
+    assert!(region.in_region.contains(&"mississauga".to_string()));
+    assert!(region.in_region.contains(&"york region".to_string()));
+    assert!(region.in_region.contains(&"york university".to_string()));
+    assert!(
+        !region.in_region.iter().any(|t| t == "york"),
+        "bare 'york' must not be region evidence: {:?}",
+        region.in_region
+    );
+    assert!(region.foreign.contains(&"new york".to_string()));
+    assert!(region.foreign.contains(&"london".to_string()));
 }
 
 /// Aggregator suffixes get stripped so the venue keeps its own name rather
@@ -100,7 +170,7 @@ fn aggregator_suffixes_are_stripped_from_titles() {
     ] {
         let raw = format!("**Kortright Centre Vaughan** - {site}");
         assert_eq!(
-            clean_venue_or_event_title(&raw).as_deref(),
+            clean_venue_or_event_title(&raw, &test_region()).as_deref(),
             Some("Kortright Centre Vaughan"),
             "suffix {site} was not stripped"
         );
@@ -112,11 +182,17 @@ fn aggregator_suffixes_are_stripped_from_titles() {
 fn a_title_that_cleans_down_to_nothing_is_dropped() {
     // Stripping the aggregator suffix leaves a fragment with no region
     // evidence, so there is nothing left to trust.
-    assert_eq!(clean_venue_or_event_title("Some Cafe - Yelp Toronto"), None);
+    assert_eq!(
+        clean_venue_or_event_title("Some Cafe - Yelp Toronto", &test_region()),
+        None
+    );
     // No region evidence at all.
-    assert_eq!(clean_venue_or_event_title("Some Random Cafe"), None);
+    assert_eq!(
+        clean_venue_or_event_title("Some Random Cafe", &test_region()),
+        None
+    );
     // A directory page.
-    assert_eq!(clean_venue_or_event_title("Toronto"), None);
+    assert_eq!(clean_venue_or_event_title("Toronto", &test_region()), None);
 }
 
 /// With no exclusion file present the built-in defaults still apply. An empty

@@ -111,3 +111,37 @@ fn no_usable_candidate_is_none_so_the_caller_can_say_so() {
     assert!(tweets_from_cache(&[]).is_none());
     assert!(tweets_from_cache(&[tmp.path().join("nope.json"), empty]).is_none());
 }
+
+#[test]
+fn test_save_tweets_json_round_trips_through_the_loader() {
+    // The A/B contract: what `--fetch-only` writes must be readable back by
+    // `--use-cache` (and carry the IDs the gate compares).
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("tweets.json");
+    let tweets = vec![crate::ztools::twitter::Tweet {
+        id: "111".to_string(),
+        screen_name: "u1".into(),
+        text: "hello".into(),
+        created_at: "now".into(),
+        favorite_count: 1,
+        retweet_count: 0,
+        reply_to: None,
+    }];
+    save_tweets_json(&tweets, &path).unwrap();
+    let back = tweets_from_file(&path);
+    assert_eq!(back.len(), 1);
+    assert_eq!(back[0].id, "111");
+    assert_eq!(back[0].text, "hello");
+}
+
+#[test]
+fn test_debug_cache_path_is_the_shared_python_path() {
+    // Both collectors write `~/.twitter_summary_debug_cache.json`: the Rust
+    // `--fetch-only` and Python's `save_debug_cache` must name the same file
+    // or the A/B compares a run against itself.
+    let path = debug_cache_path().unwrap();
+    assert_eq!(
+        path.file_name().unwrap(),
+        ".twitter_summary_debug_cache.json"
+    );
+}

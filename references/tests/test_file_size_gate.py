@@ -117,9 +117,23 @@ class TestTheHookUsesThisChecker:
     fixing the rule here fixes it everywhere it is enforced.
     """
 
-    def test_the_pre_commit_hook_calls_check_file_size(self):
+    def test_the_pre_commit_hook_delegates_to_the_structural_gate(self):
         hook = (ROOT / ".githooks" / "pre-commit").read_text()
-        assert "check_file_size" in hook
+        assert "structural.sh" in hook, (
+            "the hook inlined its own size check again -- it must delegate to "
+            "$GOH/gates/structural.sh so a fix in gates_of_heck reaches this repo"
+        )
+
+    def test_the_size_cap_is_wired_into_the_delegated_gate(self):
+        """The delegation only enforces the cap if the repo asks for it.
+
+        gates_of_heck's structural.sh runs the file-length check only when
+        GOH_MAX_LINES is set in .gatesrc -- otherwise it WARNS "cap not set"
+        and passes. Losing that line is how the cap silently disappears, so
+        the wiring itself is pinned here.
+        """
+        gatesrc = (ROOT / ".gatesrc").read_text()
+        assert "GOH_MAX_LINES=500" in gatesrc
 
     def test_the_hook_no_longer_filters_the_size_gate_to_python(self):
         hook = (ROOT / ".githooks" / "pre-commit").read_text()

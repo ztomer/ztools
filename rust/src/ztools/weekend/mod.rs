@@ -5,6 +5,7 @@ pub mod fetch;
 pub mod format;
 pub mod phases;
 pub mod prompts;
+pub mod report;
 pub mod supply;
 pub use constants::*;
 pub use dates::*;
@@ -16,7 +17,9 @@ pub use prompts::*;
 /// Native Rust Weekend Planner module.
 use serde::{Deserialize, Serialize};
 
-use crate::ztools::pyenv;
+pub use followup::*;
+pub use report::*;
+pub use search::*;
 pub use supply::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -194,6 +197,50 @@ struct WeekendEventLlm {
     description: String,
 }
 
+/// Alternate keys a model may emit for each canonical event field, in
+/// priority order. Port of the `*_KEYS` lists in
+/// `references/weekend/llm.py::normalize_llm_items`: the shipped prompts pin
+/// canonical keys, but a model that answers with gemma-style `activity` /
+/// `venue` must not silently lose its name and location at parse time.
+const ALT_KEYS: &[(&str, &[&str])] = &[
+    (
+        "name",
+        &[
+            "name",
+            "activity",
+            "activity_name",
+            "title",
+            "event",
+            "event_name",
+            "description",
+        ],
+    ),
+    ("location", &["location", "address", "venue", "place"]),
+    (
+        "target_ages",
+        &["target_ages", "age_group", "ages", "age_range"],
+    ),
+    ("price", &["price", "cost", "pricing", "fee"]),
+    ("weather", &["weather", "setting", "type", "indoor_outdoor"]),
+    ("day", &["day", "date", "dates", "event_date"]),
+    ("duration", &["duration", "end_date", "time"]),
+];
+
+/// Fill missing canonical keys on one raw event object from its alternate
+/// keys, first present alternate wins. Presence, not emptiness, decides: a
+/// present-but-empty canonical key is never overwritten, exactly like the
+/// Python original (`if std not in item`).
+fn normalize_llm_item(obj: &mut serde_json::Map<String, serde_json::Value>) {
+    for (canonical, alts) in ALT_KEYS {
+        if obj.contains_key(*canonical) {
+            continue;
+        }
+        if let Some(found) = alts.iter().find_map(|k| obj.get(*k).cloned()) {
+            obj.insert((*canonical).to_string(), found);
+        }
+    }
+}
+
 /// Parse an LLM chat-completions response into weekend events.
 #[must_use]
 pub fn parse_llm_events(resp: &serde_json::Value) -> Option<Vec<WeekendEvent>> {
@@ -205,7 +252,18 @@ pub fn parse_llm_events(resp: &serde_json::Value) -> Option<Vec<WeekendEvent>> {
         .trim_end_matches("```")
         .trim();
 
-    let parsed: LlmResponse = serde_json::from_str(clean_text).ok()?;
+    let mut doc: serde_json::Value = serde_json::from_str(clean_text).ok()?;
+    if let Some(events) = doc
+        .get_mut("transient_events")
+        .and_then(serde_json::Value::as_array_mut)
+    {
+        for event in events {
+            if let Some(obj) = event.as_object_mut() {
+                normalize_llm_item(obj);
+            }
+        }
+    }
+    let parsed: LlmResponse = serde_json::from_value(doc).ok()?;
     Some(
         parsed
             .transient_events
@@ -252,6 +310,9 @@ fn call_osaurus_json(
     let resp = phases::call_llm_json(None, prompt, config)?;
     parse_llm_events(&resp)
 }
+
+pub mod followup;
+pub mod search;
 
 /// Search keywords for the season a month falls in.
 ///
@@ -342,150 +403,9 @@ pub fn is_challenged(html: &str) -> bool {
     markers.iter().any(|m| lower.contains(m))
 }
 
-/// The module the multi-engine search helper needs. Probed before an
-/// interpreter is chosen; see [`crate::ztools::pyenv`].
-pub const SEARCH_MODULES: &[&str] = &["ddgs"];
-
-/// Fallback collector running multi-engine search via ddgs helper.
-///
-/// Returns the snippets, or a stated reason nothing could be collected. It used
-/// to return a bare `Vec` and swallow every failure into an empty one, so a
-/// helper that never ran and a search that genuinely found nothing were the
-/// same answer -- that is how a weekend plan came to say "no events found" when
-/// the truth was that the interpreter could not start.
-///
-/// # Errors
-///
-/// When the Python interpreter cannot be resolved or started, when the search
-/// helper exits non-zero, or when its output is not the JSON shape expected.
-/// Every one of those is an error rather than an empty result, which is the
-/// whole point of the note above.
-pub fn collect_snippets_external(query: &str) -> Result<Vec<String>, String> {
-    let mut cmd = pyenv::command(SEARCH_MODULES).map_err(|e| e.to_string())?;
-    let script = r#"import json, sys
-try:
-    from ddgs import DDGS
-    q = sys.argv[1]
-    res = list(DDGS().text(q, max_results=8))
-    out = []
-    for r in res:
-        title = (r.get("title") or "").strip()
-        body = (r.get("body") or "").strip()
-        if title and body:
-            out.append(f"{title}: {body}")
-        elif body:
-            out.append(body)
-        elif title:
-            out.append(title)
-    print(json.dumps(out))
-except Exception:
-    print(json.dumps([]))
-"#;
-    cmd.args(["-c", script, query]);
-    classify_helper_output(cmd.output())
-}
-
-/// Turn the helper's raw outcome into snippets or a stated reason.
-///
-/// Split from the spawn so every failure shape is provable without a Python
-/// interpreter: a non-zero exit, a silent non-zero exit, output that is not
-/// UTF-8, output that is not the JSON array promised, and a helper that never
-/// started at all. Each of those used to collapse into an empty `Vec`, which
-/// downstream is indistinguishable from a search that legitimately found
-/// nothing -- the bug this whole function exists to have stopped telling.
-pub(crate) fn classify_helper_output(
-    result: std::io::Result<std::process::Output>,
-) -> Result<Vec<String>, String> {
-    let output = match result {
-        Ok(out) if out.status.success() => out.stdout,
-        Ok(out) => {
-            let stderr = String::from_utf8_lossy(&out.stderr);
-            let last = stderr
-                .lines()
-                .rev()
-                .find(|l| !l.trim().is_empty())
-                .unwrap_or("no output")
-                .trim()
-                .to_string();
-            return Err(format!(
-                "search helper exited {:?}: {last}",
-                out.status.code()
-            ));
-        }
-        Err(e) => return Err(format!("search helper could not start: {e}")),
-    };
-    let text =
-        String::from_utf8(output).map_err(|e| format!("search helper wrote non-UTF-8: {e}"))?;
-    serde_json::from_str::<Vec<String>>(&text)
-        .map_err(|e| format!("search helper wrote unparseable JSON: {e}"))
-}
-
-fn search_duckduckgo_html(query: &str, url: &str) -> Vec<String> {
-    if url.contains("duckduckgo.com") {
-        // A helper that could not run is reported, not silently treated as a
-        // search that found nothing: the two look identical downstream and only
-        // one of them is the user's answer.
-        match collect_snippets_external(query) {
-            Ok(snippets) if !snippets.is_empty() => return snippets,
-            Ok(_) => {}
-            Err(why) => eprintln!("\u{26a0} multi-engine search unavailable: {why}"),
-        }
-    }
-
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(3))
-        .build()
-        .unwrap_or_default();
-
-    let user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-
-    // 1. Try GET
-    if let Ok(resp) = client
-        .get(url)
-        .query(&[("q", query)])
-        .header("User-Agent", user_agent)
-        .send()
-    {
-        if resp.status().is_success() {
-            if let Ok(html) = resp.text() {
-                if !is_challenged(&html) {
-                    let s = parse_snippets_from_html(&html);
-                    if !s.is_empty() {
-                        return s;
-                    }
-                }
-            }
-        }
-    }
-
-    // 2. Try POST on mock URL
-    if !url.contains("duckduckgo.com") {
-        if let Ok(resp) = client
-            .post(url)
-            .form(&[("q", query)])
-            .header("User-Agent", user_agent)
-            .send()
-        {
-            if resp.status().is_success() {
-                if let Ok(html) = resp.text() {
-                    if !is_challenged(&html) {
-                        return parse_snippets_from_html(&html);
-                    }
-                }
-            }
-        }
-    }
-
-    Vec::new()
-}
-
 /// Query DuckDuckGo web search endpoint for live event/venue listings.
 /// Format the final weekend markdown plan document.
 /// Flag columns that have constant values across all rows (e.g. repetitive prices or ages).
-#[cfg(test)]
-#[path = "../weekend_search_helper_tests.rs"]
-mod search_helper_tests;
-
 #[cfg(test)]
 #[path = "../weekend_tests.rs"]
 mod tests;

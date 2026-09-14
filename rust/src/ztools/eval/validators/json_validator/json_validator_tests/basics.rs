@@ -29,7 +29,7 @@ fn test_validate_json_valid_list() {
         ]
     });
     let (score, _) = validate_json(&data, "");
-    assert_eq!(score, 75); // structure (20) + count (25) + validity (30) = 75 (no source given)
+    assert_eq!(score, 65); // structure (20) + count-ok (15) + validity (30) = 65 (no source given)
 }
 
 #[test]

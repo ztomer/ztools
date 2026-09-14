@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use std::sync::LazyLock;
 
 pub const MAX_SCORE: i64 = 100;
-pub const MIN_ITEMS_GOOD: usize = 8;
+pub const MIN_ITEMS_GOOD: usize = 10;
 pub const MIN_ITEMS_OK: usize = 5;
 pub const JSON_STRUCTURE_WEIGHT: i64 = 20;
 pub const JSON_COUNT_GOOD: i64 = 25;
@@ -22,16 +22,16 @@ pub const DETAILED_COUNT_GOOD: i64 = 15;
 pub const DETAILED_COUNT_OK: i64 = 10;
 pub const DETAILED_QUALITY_WEIGHT: i64 = 40;
 pub const DETAILED_SOURCE_WEIGHT: i64 = 30;
-pub const JSON_QUALITY_WEIGHT: i64 = 25;
+pub const JSON_QUALITY_WEIGHT: i64 = 20;
 pub const DETAIL_REQUIRED_FIELDS: usize = 3;
 
 pub const SOURCE_THRESHOLD_HIGH: f64 = 0.8;
 pub const SOURCE_THRESHOLD_MED: f64 = 0.5;
-pub const SOURCE_THRESHOLD_LOW: f64 = 0.2;
+pub const SOURCE_THRESHOLD_LOW: f64 = 0.3;
 pub const MAX_SCORE_HIGH_SOURCE: i64 = 100;
-pub const MAX_SCORE_MED_SOURCE: i64 = 85;
-pub const MAX_SCORE_LOW_SOURCE: i64 = 70;
-pub const MAX_SCORE_NO_SOURCE: i64 = 50;
+pub const MAX_SCORE_MED_SOURCE: i64 = 60;
+pub const MAX_SCORE_LOW_SOURCE: i64 = 30;
+pub const MAX_SCORE_NO_SOURCE: i64 = 15;
 
 pub(super) static STOPWORDS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     [

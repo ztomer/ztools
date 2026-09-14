@@ -7,6 +7,7 @@ pub mod model_eval;
 pub mod model_health;
 pub mod pyenv;
 pub mod rename;
+pub mod status;
 pub mod store;
 pub mod twitter;
 pub mod weekend;

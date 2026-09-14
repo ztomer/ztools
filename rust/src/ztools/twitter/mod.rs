@@ -1,8 +1,16 @@
 //! Native Rust Twitter summarizer and browser collection module.
 
 pub mod browser;
+pub mod browser_bin;
 pub mod browser_parse;
+pub mod budget;
+pub mod capture;
+pub mod collect;
 pub mod cookies;
+pub mod endpoints;
+pub mod fallback;
+pub mod native;
+pub mod session;
 
 pub use browser::{BrowserCollector, CamoufoxConfig, MockBrowserCollector};
 pub use browser_parse::parse_tweets_from_response;
@@ -17,11 +25,18 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use chrono::Local;
+use regex::Regex;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Tweet {
+    /// Tweet ID (`legacy.id_str`). The A/B gate compares ID sets across
+    /// collectors, so this must survive parsing — a dropped ID reads as a
+    /// missing tweet. Defaulted for old cache files written before it existed.
+    #[serde(default)]
+    pub id: String,
     pub screen_name: String,
     pub text: String,
     pub created_at: String,
@@ -153,10 +168,10 @@ pub fn call_osaurus(
     base_url: &str,
     model: &str,
     prompt: &str,
-    config: &crate::config::ZtoolsConfig,
+    timeout_secs: u64,
 ) -> Result<String> {
     let client = Client::builder()
-        .timeout(Duration::from_secs(config.llm_extended_timeout_secs))
+        .timeout(Duration::from_secs(timeout_secs))
         .build()?;
 
     let url = format!("{}/v1/chat/completions", base_url.trim_end_matches('/'));
@@ -242,7 +257,19 @@ pub fn run_summary(
         &config.twitter_summarize_prompt,
     );
     eprintln!("· Summarizing {processed} tweets with {model} on {base_url}...");
-    let summary_body = call_osaurus(base_url, model, &prompt, config)?;
+    let timeout_secs = budget::estimate_timeout(
+        prompt.chars().count(),
+        &budget::TimeoutInputs::pessimistic(),
+    );
+    let summary_body = call_osaurus(base_url, model, &prompt, timeout_secs)?;
+
+    // A reasoning model's `<thinking>` block must not land verbatim in the
+    // saved markdown, and an unstructured answer must not be saved as
+    // success: a critical-quality attempt yields nothing, which the retry
+    // chain (not yet ported) will spend on the next model. Single-shot, that
+    // is an error rather than a hollow document.
+    let (summary_body, _) = handle_model_output(&summary_body, processed)
+        .ok_or_else(|| anyhow::anyhow!("model {model} returned no usable summary"))?;
 
     let now = Local::now();
     let filename = format!("{}_summary.md", now.format("%Y-%m-%d_%H%M"));
@@ -285,6 +312,67 @@ fn summary_section_for(summary_body: &str) -> String {
         body.to_string()
     } else {
         format!("## Summary\n\n{body}")
+    }
+}
+
+/// Split a `<thinking>...</thinking>` block out of model output.
+///
+/// Returns the stripped thinking and the body with thinking blocks removed.
+/// With no block, returns the text untouched (not stripped). Port of
+/// `lib/osaurus_lib.py::extract_thinking`.
+#[must_use]
+pub fn extract_thinking(text: &str) -> (String, String) {
+    static THINKING_RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?s)<thinking[^>]*>(.+?)</thinking>").expect("valid regex"));
+    let Some(caps) = THINKING_RE.captures(text) else {
+        return (String::new(), text.to_string());
+    };
+    let thinking = caps
+        .get(1)
+        .map(|m| m.as_str().trim().to_string())
+        .unwrap_or_default();
+    let cleaned = crate::ztools::eval::clean::remove_thinking_blocks(text);
+    (thinking, cleaned)
+}
+
+/// Append extracted thinking under an `## Analysis` heading. Empty thinking
+/// returns the summary unchanged. Port of
+/// `lib/osaurus_lib.py::merge_thinking_with_summary`.
+#[must_use]
+pub fn merge_thinking_with_summary(thinking: &str, summary: &str) -> String {
+    if thinking.is_empty() {
+        summary.to_string()
+    } else {
+        format!("{summary}\n\n## Analysis\n{thinking}")
+    }
+}
+
+/// One model attempt's post-call branch: split thinking, then merge or strip.
+///
+/// The UNMERGED body faces the quality gate, never the merged text: an
+/// appended `## Analysis` heading must not rescue an empty body. A critical
+/// body yields nothing even when thinking is present; the caller tries the
+/// next model. Port of `_summarize_with_model`'s post-call branch in
+/// `references/twitter/summarize.py`; the transport stays with the caller so
+/// this remains unit-testable without a server.
+#[must_use]
+pub fn handle_model_output(content: &str, processed: usize) -> Option<(String, usize)> {
+    let (thinking, cleaned) = extract_thinking(content);
+    if thinking.is_empty() {
+        let stripped = crate::ztools::eval::clean::remove_thinking_blocks(&cleaned);
+        let (_warnings, critical) = check_summary_quality(&stripped);
+        if critical {
+            None
+        } else {
+            Some((stripped, processed))
+        }
+    } else {
+        let (_warnings, critical) = check_summary_quality(&cleaned);
+        if critical {
+            None
+        } else {
+            Some((merge_thinking_with_summary(&thinking, &cleaned), processed))
+        }
     }
 }
 

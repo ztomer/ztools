@@ -91,9 +91,14 @@ pub fn resolve_weekend_model(base_url: &str, preferred_model: &str) -> String {
 #[must_use]
 pub fn call_llm_text(prompt: &str, config: &crate::config::ZtoolsConfig) -> Option<String> {
     let model = resolve_weekend_model(&config.osaurus_url, &config.weekend_model);
-    crate::ztools::twitter::call_osaurus(&config.osaurus_url, &model, prompt, config)
-        .ok()
-        .filter(|s| !s.trim().is_empty())
+    crate::ztools::twitter::call_osaurus(
+        &config.osaurus_url,
+        &model,
+        prompt,
+        config.llm_extended_timeout_secs,
+    )
+    .ok()
+    .filter(|s| !s.trim().is_empty())
 }
 
 /// One JSON LLM call returning the raw response value.

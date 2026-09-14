@@ -309,12 +309,86 @@ assert is_non_human_readable("HF12345678") is True
     echo ""
 }
 
+# Compare two tweet collections by ID set: the ROADMAP Phase 3 Twitter bar is
+# tweet-ID set equality, not summary similarity (summaries are model-sampled;
+# IDs are deterministic). Rust tweets carry `id`, Python dicts `id_str`
+# (absent when empty); ID-less tweets on either side are reported, never
+# silently dropped from the comparison. Exits 0 on identical sets, 1 otherwise.
+compare_tweet_id_sets() {
+    local rust_file="$1" py_file="$2"
+    (cd "$ROOT" && PYTHONPATH="$ROOT/references" "$PY" -c '
+import json, sys
+rust_file, py_file = sys.argv[1], sys.argv[2]
+try:
+    rust = json.load(open(rust_file, encoding="utf-8"))
+    py = json.load(open(py_file, encoding="utf-8"))
+except (OSError, ValueError) as e:
+    print(f"  ✗ cannot read collect outputs: {e}")
+    sys.exit(1)
+assert isinstance(rust, list) and isinstance(py, list), "both files must hold JSON arrays"
+rust_ids = {str(t.get("id", "")) for t in rust if isinstance(t, dict)}
+py_ids = {str(t.get("id_str", "")) for t in py if isinstance(t, dict)}
+rust_blind = sum(1 for t in rust if isinstance(t, dict) and not str(t.get("id", "")))
+py_blind = sum(1 for t in py if isinstance(t, dict) and not str(t.get("id_str", "")))
+rust_ids.discard("")
+py_ids.discard("")
+if rust_blind or py_blind:
+    print(f"  ! {rust_blind} Rust / {py_blind} Python tweets carry no ID (excluded from the sets)")
+if rust_ids == py_ids:
+    print(f"  ✓ Tweet-ID sets identical ({len(rust_ids)} tweets)")
+    sys.exit(0)
+only_rust = sorted(rust_ids - py_ids)[:10]
+only_py = sorted(py_ids - rust_ids)[:10]
+print(f"  ✗ Tweet-ID sets differ: {len(rust_ids)} Rust vs {len(py_ids)} Python")
+if only_rust:
+    print(f"    only in Rust ({len(rust_ids - py_ids)}): {only_rust}")
+if only_py:
+    print(f"    only in Python ({len(py_ids - rust_ids)}): {only_py}")
+sys.exit(1)
+' "$rust_file" "$py_file")
+}
+
+run_collect_id_parity() {
+    echo "------------------------------------------------------------"
+    echo "Collect Parity: tweet-ID sets (fixtures + live-run wiring)"
+    echo "------------------------------------------------------------"
+    local fixdir="$ROOT/tests/fixtures/collect_parity"
+
+    # Green path: identical ID sets on both sides must pass.
+    if compare_tweet_id_sets "$fixdir/rust_a.json" "$fixdir/py_a.json"; then
+        echo "  ✓ Fixture pair agrees (green path)"
+    else
+        echo "  ✗ Fixture pair disagrees — the comparator or fixtures drifted"
+        failures=$((failures + 1))
+    fi
+
+    # E3 red-proof: divergent ID sets must FAIL. A comparator that cannot go
+    # red would green-light exactly the drift this gate exists to catch.
+    if compare_tweet_id_sets "$fixdir/rust_a.json" "$fixdir/py_b.json" >/dev/null 2>&1; then
+        echo "  ✗ Comparator accepted divergent ID sets — it cannot bite"
+        failures=$((failures + 1))
+    else
+        echo "  ✓ Comparator rejects divergent ID sets (red-proof)"
+    fi
+
+    # Live-run wiring (needs a quiet box + signed-in Zen; skipped otherwise):
+    #   TWITTER_COLLECTOR=native ztools twitter-summarize --fetch-only  # writes ~/.twitter_summary_debug_cache.json
+    #   cp ~/.twitter_summary_debug_cache.json /tmp/ab_rust.json
+    #   PYTHONPATH=references .venv/bin/python -m twitter --fetch-only  # same path
+    #   cp ~/.twitter_summary_debug_cache.json /tmp/ab_py.json
+    #   compare_tweet_id_sets /tmp/ab_rust.json /tmp/ab_py.json
+    # The two collects must target the same account/window; the comparison is
+    # set equality, so ordering and duplicates do not matter.
+    echo ""
+}
+
 run_cli_test "Twitter Summarizer" twitter-summarize twitter "usage"
 run_cli_test "Weekend Planner"    weekend-plan     weekend "usage"
 run_cli_test "Image Renamer"      image-renamer    rename  "usage"
 run_cli_test "Model Quality Benchmark" model-eval  eval    "usage"
 
 run_functional_tests
+run_collect_id_parity
 
 echo "============================================================"
 if [ "$failures" -eq 0 ]; then

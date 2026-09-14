@@ -1,0 +1,10 @@
+{
+  "prose": "Review of your 2025 return preparation identified several critical items requiring immediate attention before filing. You are missing the 1042-S Spouse document required for your Canadian tax filing. Furthermore, there is no evidence of filing Form T1135, which is necessary due to your foreign income exposure, potentially exposing you to a significant gross-negligence penalty. You must also reconcile discrepancies between your Israeli RSU income reported on Form 106 and the T4 box 38 figures, as there is a 75.1% difference. Additionally, the RSU paid statement for 2025 is missing, which prevents reconciliation of the per-vest basis. Finally, there is an inconsistency in the foreign rental conversion rates for one property that needs clarification to ensure accurate tax paid reporting. Addressing these items is crucial for a clean filing.",
+  "highlighted_ids": [
+    "completeness.spouse_1042s",
+    "t1135.no_evidence",
+    "rsu_paid_statement_missing.2025",
+    "form106.t4_box38.mismatch",
+    "rental_fx.inconsistent.2025.Ayin Hilel 10/6, Ra'anana"
+  ]
+}

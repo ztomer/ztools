@@ -1,0 +1,44 @@
+**1. Missing Documents**
+* Israeli RSU/Stock Option Payslip [conditional]
+* Record of Employment (ROE) [conditional]
+* Severance / Retiring Allowance Statement [conditional]
+* Signing Bonus / Sign-On Agreement [conditional]
+* T4E - EI Benefits Statement [conditional]
+* Moving Expense Receipts (T1-M) [conditional]
+* Employer Relocation Letter [conditional]
+* T2202 Tuition and Enrolment Certificate [conditional]
+* Final Paystub (Departing Employer) [conditional]
+* 1099-B Proceeds from Broker Transactions (Schwab) [conditional]
+* T2209 Foreign Tax Credit Worksheet [conditional]
+* Israeli Mas Shevach (Capital Gains Tax on RSU Sales) [conditional]
+* 1042-S Spouse (IBKR) [required]
+* Canada Child Benefit (CCB) Notice — Spouse [conditional]
+* Gray Academy Donation Receipt [conditional]
+* Charitable Donation Receipt (other) [conditional]
+* Union / Professional Dues Statement (Spouse) [conditional]
+* Childcare Receipt (Spouse) [conditional]
+* NETFILE / EFILE Filing Confirmation [missing]
+
+**2. Estimated Tax Impact**
+* CA: Owing $XXX – $X,XXX (expected $X,XXX) [confidence: medium, kind: return]
+* IL: $X,XXX withheld at source (claimed as FTC on resident return) [confidence: narrow, kind: withholding_reconciliation]
+*AI estimate — consult a licensed accountant.*
+
+**3. Top 5 Action Items**
+1. File T1 immediately by April 30, 2026, to avoid late-filing penalties. (Risk: [T1135MissingWithForeignProperty] Penalty up to $XX,XXX for late filing).
+2. Obtain 1042-S Spouse (IBKR) immediately to substantiate foreign income reporting. (Risk: [T1135MissingWithForeignProperty] Penalty up to $XX,XXX for late filing).
+3. Prepare T2209 Foreign Tax Credit Worksheet to claim foreign tax credits against Canadian tax liability. (Potential reduction in CA tax owing).
+4. Gather all missing RSU/Foreign income documentation to accurately report compensation and capital gains. (Risk: [RSUPaidStatementMissing] related to underreporting).
+5. Review WFH expense documentation to maximize deductions, specifically workspace percentage claims. ($X,XXX WFH deduction at risk).
+
+**4. Key Risks**
+* [T1135MissingWithForeignProperty] T1135 — no filing evidence on disk. Penalty up to $XX,XXX for late filing.
+* [ERROR] RSUPaidStatementMissing RSU paid statement missing for 2025 ($XX,XXX).
+* [WARNING] Form106VsT4Box38Mismatch Form 106 vs T4 box 38 mismatch ($XX,XXX).
+* [WARNING] RentalFXRateInconsistent One rental record, two ILS conversion rates ($XXX).
+
+**5. Timeline**
+* Now: Prioritize obtaining the 1042-S Spouse document and the T2209 Foreign Tax Credit Worksheet.
+* This Week: Compile all missing RSU and employment documentation.
+* Before April 30: File the T1 return to mitigate late-filing penalties.
+* Before July 1: Finalize all foreign income documentation and ensure all required forms are complete.

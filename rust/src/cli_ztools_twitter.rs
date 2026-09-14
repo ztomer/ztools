@@ -29,6 +29,7 @@ pub(crate) struct TwitterSummarizeOpts {
     pub debug: bool,
     pub since: Option<String>,
     pub login: bool,
+    pub clean: bool,
     pub fetch_latest: bool,
     pub last_updated: bool,
 }
@@ -46,6 +47,28 @@ fn tweets_from_json(text: &str) -> Vec<crate::ztools::twitter::Tweet> {
 /// Tweets from one file, or nothing when it is absent or unreadable.
 fn tweets_from_file(path: &std::path::Path) -> Vec<crate::ztools::twitter::Tweet> {
     std::fs::read_to_string(path).map_or_else(|_| Vec::new(), |content| tweets_from_json(&content))
+}
+
+/// The primary debug-cache path: the same file Python's `--fetch-only`
+/// writes, so either collector's output feeds the other's `--use-cache`
+/// and the A/B harness can compare both sides' tweet sets.
+fn debug_cache_path() -> Option<std::path::PathBuf> {
+    dirs::home_dir().map(|h| h.join(".twitter_summary_debug_cache.json"))
+}
+
+/// Persist collected tweets for `--use-cache` runs and the A/B harness.
+///
+/// # Errors
+///
+/// When the JSON cannot be serialized (cannot happen for `Tweet`) or the
+/// file cannot be written.
+fn save_tweets_json(
+    tweets: &[crate::ztools::twitter::Tweet],
+    path: &std::path::Path,
+) -> Result<()> {
+    let body = serde_json::to_string_pretty(tweets)?;
+    std::fs::write(path, body)?;
+    Ok(())
 }
 
 /// The first cache file that yields a NON-EMPTY tweet list, and where it came
@@ -82,6 +105,7 @@ pub(crate) fn twitter_summarize(config: &ZtoolsConfig, opts: TwitterSummarizeOpt
         debug,
         since,
         login,
+        clean,
         fetch_latest,
         last_updated,
     } = opts;
@@ -91,6 +115,21 @@ pub(crate) fn twitter_summarize(config: &ZtoolsConfig, opts: TwitterSummarizeOpt
     if login {
         println!("· Launching browser for x.com sign-in...");
         return crate::ztools::twitter::browser::login_live();
+    }
+    if clean {
+        // Housekeeping before a run, never the run: clear stored summaries,
+        // report what happened, and exit successfully either way.
+        let dir = crate::ztools::store::twitter_store_dir();
+        let report = crate::ztools::store::clean_folder(&dir);
+        for warning in &report.warnings {
+            eprintln!("⚠ {warning}");
+        }
+        println!(
+            "· Cleanup complete: {} .md file(s) removed from {}.",
+            report.deleted,
+            dir.display()
+        );
+        return Ok(());
     }
 
     let mut tweets = Vec::new();
@@ -133,12 +172,22 @@ pub(crate) fn twitter_summarize(config: &ZtoolsConfig, opts: TwitterSummarizeOpt
                 );
             }
         } else {
-            tweets = crate::ztools::twitter::browser::collect_tweets_live(since.as_deref(), debug)?;
+            tweets = crate::ztools::twitter::browser::collect_tweets_live(
+                since.as_deref(),
+                debug,
+                config,
+            )?;
             if tweets.is_empty() {
                 println!("· No tweets found in the timeline window.");
                 return Ok(());
             }
             if fetch_only {
+                // Persist for `--use-cache` runs and the A/B harness, mirroring
+                // Python's `save_debug_cache` to the same path. The message
+                // used to claim this while writing nothing.
+                if let Some(cache_path) = debug_cache_path() {
+                    save_tweets_json(&tweets, &cache_path)?;
+                }
                 println!(
                     "✓ {} tweets fetched and cached. (--fetch-only provided, exiting)",
                     tweets.len()

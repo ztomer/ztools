@@ -86,77 +86,94 @@ pub fn is_directory_or_list_page(title: &str) -> bool {
     false
 }
 
+/// Region evidence lists: the configured city/region plus the `[region]`
+/// table (`in_region`, `foreign`) of `weekend.toml`.
+///
+/// Data, not code — edit the file, never these literals (there are none:
+/// every list below arrives from [`load_region_lists`]).
+pub struct RegionLists {
+    pub cities: Vec<String>,
+    pub in_region: Vec<String>,
+    pub foreign: Vec<String>,
+}
+
+/// Load region lists from the first candidate file carrying a `[region]` table.
+///
+/// Falls back to the configured city/region alone. A missing table degrades
+/// to city-only matching rather than to dropping everything — the empty
+/// corpus that follows a total drop starves the draft and the model invents
+/// events, which is exactly the failure this filter exists to prevent. Says
+/// so loudly when no file yields a table.
+#[must_use]
+pub fn load_region_lists(paths: &[String]) -> RegionLists {
+    for raw in paths {
+        let path = crate::manifest::expand_tilde(raw);
+        let Ok(content) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(val) = toml::from_str::<toml::Value>(&content) else {
+            continue;
+        };
+        let Some(region) = val.get("region") else {
+            continue;
+        };
+        let mut cities = Vec::new();
+        if let Some(location) = val.get("location") {
+            for key in ["city", "region"] {
+                if let Some(name) = location.get(key).and_then(|v| v.as_str()) {
+                    let name = name.trim().to_lowercase();
+                    if !name.is_empty() {
+                        cities.push(name);
+                    }
+                }
+            }
+        }
+        let strings = |key: &str| -> Vec<String> {
+            region
+                .get(key)
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .map(|s| s.trim().to_lowercase())
+                        .filter(|s| !s.is_empty())
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        return RegionLists {
+            cities,
+            in_region: strings("in_region"),
+            foreign: strings("foreign"),
+        };
+    }
+    eprintln!("⚠ no weekend.toml [region] table found; region evidence falls back to nothing");
+    RegionLists {
+        cities: Vec::new(),
+        in_region: Vec::new(),
+        foreign: Vec::new(),
+    }
+}
+
 /// Positive evidence matcher verifying an activity/event is located within the GTA region.
 #[must_use]
-pub fn has_region_evidence(text: &str) -> bool {
+pub fn has_region_evidence(text: &str, region: &RegionLists) -> bool {
     let lower = text.to_lowercase();
-    let foreign_tokens = [
-        "new york",
-        "nyc",
-        "san diego",
-        "dublin",
-        "acropolis",
-        "athens",
-        "chicago",
-        "london",
-        "paris",
-        "los angeles",
-        "miami",
-        "astana",
-        "berlin",
-        "tokyo",
-    ];
 
-    if foreign_tokens.iter().any(|ft| lower.contains(ft)) {
+    if region.foreign.iter().any(|ft| lower.contains(ft)) {
         return false;
     }
 
-    let gta_tokens = [
-        "toronto",
-        "vaughan",
-        "markham",
-        "richmond hill",
-        "mississauga",
-        "brampton",
-        "scarborough",
-        "north york",
-        "etobicoke",
-        "york",
-        "woodbridge",
-        "concord",
-        "thornhill",
-        "maple",
-        "kleinburg",
-        "aurora",
-        "newmarket",
-        "oakville",
-        "burlington",
-        "pickering",
-        "ajax",
-        "whitby",
-        "oshawa",
-        "milton",
-        "caledon",
-        "king city",
-        "stouffville",
-        "bolton",
-        "georgetown",
-        "hamilton",
-        "guelph",
-        "barrie",
-        "gta",
-        "halton",
-        "yorkdale",
-        "downsview",
-        "ontario",
-    ];
-
-    gta_tokens.iter().any(|tok| lower.contains(tok))
+    region
+        .cities
+        .iter()
+        .chain(region.in_region.iter())
+        .any(|tok| lower.contains(tok))
 }
 
 /// Clean raw search titles to extract clean venue or event names.
 #[must_use]
-pub fn clean_venue_or_event_title(raw_title: &str) -> Option<String> {
+pub fn clean_venue_or_event_title(raw_title: &str, region: &RegionLists) -> Option<String> {
     let mut cleaned = raw_title.replace("**", "").trim().to_string();
 
     for delimiter in [" | ", " - ", " – ", " — "] {
@@ -181,7 +198,7 @@ pub fn clean_venue_or_event_title(raw_title: &str) -> Option<String> {
         return None;
     }
 
-    if !has_region_evidence(&cleaned) {
+    if !has_region_evidence(&cleaned, region) {
         return None;
     }
 

@@ -24,6 +24,12 @@ pub struct ZtoolsConfig {
     /// the loader read whichever machine happens to be running the tests.
     #[serde(default = "default_weekend_exclusions_paths")]
     pub weekend_exclusions_paths: Vec<String>,
+    /// Where the weekend planner looks for its region-evidence lists, in
+    /// order: the `[region]` table (`in_region`, `foreign`) of `weekend.toml`.
+    /// Same candidates as the exclusions paths — one shared helper builds
+    /// both defaults so they cannot drift apart.
+    #[serde(default = "default_weekend_region_paths")]
+    pub weekend_region_paths: Vec<String>,
     /// Where the summarizer looks for a previously captured timeline when it is
     /// handed no tweets. Configurable so a test can point it at a fixture: it
     /// used to be a hardcoded `~/.cache/…` path, and the test that exercised it
@@ -37,6 +43,12 @@ pub struct ZtoolsConfig {
     /// scraper.
     #[serde(default = "default_twitter_collector_dir")]
     pub twitter_collector_dir: String,
+    /// Where the twitter collector looks for `twitter.toml`, in order; the
+    /// `[endpoints]` table (timeline URL markers + the Following marker) is
+    /// read from the first file that carries it. Same two-spot shape as the
+    /// weekend paths: a user overlay, then the shipped checkout file.
+    #[serde(default = "default_twitter_config_paths")]
+    pub twitter_config_paths: Vec<String>,
     #[serde(default = "default_twitter_model")]
     pub twitter_model: String,
     #[serde(default = "default_weekend_model")]
@@ -81,11 +93,23 @@ fn default_twitter_cache_path() -> String {
 fn default_twitter_collector_dir() -> String {
     "~/Projects/ztools".to_string()
 }
-fn default_weekend_exclusions_paths() -> Vec<String> {
+fn default_twitter_config_paths() -> Vec<String> {
+    vec![
+        "~/.config/ztools/twitter.toml".to_string(),
+        "~/Projects/ztools/conf/twitter.toml".to_string(),
+    ]
+}
+fn default_weekend_toml_paths() -> Vec<String> {
     vec![
         "~/.config/weekend.toml".to_string(),
         "~/Projects/ztools/conf/weekend.toml".to_string(),
     ]
+}
+fn default_weekend_exclusions_paths() -> Vec<String> {
+    default_weekend_toml_paths()
+}
+fn default_weekend_region_paths() -> Vec<String> {
+    default_weekend_toml_paths()
 }
 fn default_twitter_model() -> String {
     "gemma-4-e2b-it-8bit".to_string()
@@ -153,8 +177,10 @@ impl Default for ZtoolsConfig {
             osaurus_url: default_osaurus_url(),
             duckduckgo_url: default_duckduckgo_url(),
             weekend_exclusions_paths: default_weekend_exclusions_paths(),
+            weekend_region_paths: default_weekend_region_paths(),
             twitter_cache_path: default_twitter_cache_path(),
             twitter_collector_dir: default_twitter_collector_dir(),
+            twitter_config_paths: default_twitter_config_paths(),
             twitter_model: default_twitter_model(),
             weekend_model: default_weekend_model(),
             image_renamer_model: default_image_renamer_model(),

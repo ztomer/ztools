@@ -19,6 +19,7 @@ fn test_cosine_similarity() {
 fn test_cluster_tweets_fallback() {
     let tweets = vec![
         Tweet {
+            id: String::new(),
             screen_name: "u1".into(),
             text: "t1".into(),
             created_at: "now".into(),
@@ -27,6 +28,7 @@ fn test_cluster_tweets_fallback() {
             reply_to: None,
         },
         Tweet {
+            id: String::new(),
             screen_name: "u2".into(),
             text: "t2".into(),
             created_at: "now".into(),
@@ -74,6 +76,7 @@ fn test_cosine_similarity_opposite() {
 
 fn mock_tweet(name: &str) -> Tweet {
     Tweet {
+        id: String::new(),
         screen_name: name.into(),
         text: format!("text of {name}"),
         created_at: "now".into(),
