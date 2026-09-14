@@ -174,8 +174,16 @@ git add -f ~/.config/ztools/eval_results.json ~/.config/ztools/eval_history.json
 ## Release
 
 ```bash
-tools/release.sh            # bump patch from the latest tag (v2.1.7 -> v2.1.8)
-tools/release.sh 2.2.0      # explicit version
+tools/release.sh 3.1.0              # explicit version; --dry-run to see the plan
 ```
 
-The script runs `make ci`, syncs `rust/Cargo.toml` to the version, builds the tree from `git archive HEAD` (the bytes the tap will compile — an untracked path dependency fails here, not on the user's machine), runs `./install.sh` and checks the binary on PATH reports the version with every subcommand answering, tags HEAD with the `CHANGELOG.md` section for that version as the tag message (no section, no tag), pushes, computes the GitHub tarball's SHA256, and updates the Homebrew tap formula in `ztomer/homebrew-tap`. Requires `gh` authenticated.
+`tools/release.sh` holds only what is specific to this repo — syncing
+`rust/Cargo.toml` (the one version source), the archive build, the
+install-and-exercise check, the tap — and hands the sequencing to the house
+release kit (`gates_of_heck/tools/release-kit/release.sh`): `make ci`, then a
+build from `git archive HEAD` (the bytes the tap compiles — an untracked path
+dependency fails here, not on the user's machine), then `./install.sh` plus a
+check that the binary on PATH reports the version and `bin/ab_test` passes,
+then the `CHANGELOG.md` stanza as the tag message (no stanza, no tag), push,
+GitHub release, and the `ztomer/homebrew-tap` formula bump. Requires `gh`
+authenticated.
