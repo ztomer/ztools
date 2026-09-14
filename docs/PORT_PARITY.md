@@ -183,7 +183,7 @@ Only `test_llm.py`, `test_mlx.py`, `test_gemma.py` need a live server/GPU.
 | test_twit_browser_4.py | COVERED | cookies_tests.rs normalize_expiry_bounds/read_firefox_cookies_filters_like_python |
 | test_twit_cookies.py | DELETE | retired Chrome keychain/AES Cookies-DB reader |
 | test_twit_output.py | RE-EXPRESS (partial: clean_folder + `--clean` covered 2026-09-13 by `store.rs` (3 tests incl. deterministic delete-failure via subdir trick) wired to the store dir; glob/dotfile/case semantics verified against Python. Still open: last_run state, bat plumbing, write_markdown shape) |
-| test_twit_summarize.py | RE-EXPRESS (partial: timeout-estimate by `twitter/budget.rs`; per-attempt branch by `handle_model_output` + 5 tests; model selection + fallback-chain construction by `twitter/fallback.rs` (`select_best_model`, `fallback_chain`, `resolve_target_model`, 11 tests, select cases verified against Python output). Still open: the retry loop itself across fallback models + restart/MLX tiers) |
+| test_twit_summarize.py | COVERED 2026-09-13 — timeout-estimate (`twitter/budget.rs`), per-attempt branch (`handle_model_output`), selection + chain construction (`twitter/fallback.rs`), and now the retry loop itself: `twitter/chain.rs` runs the intended model then the `conf/twitter.toml [fallback]` models (roster-resolved, `TWITTER_FALLBACK_MODELS` override), records provenance and writes the C9 degraded banner into the artifact; 13 tests + the stub-server dispatch test. Restart and direct-MLX tiers retired (ops-side / no Rust counterpart) |
 | test_twit_summarize_mlx_fallback.py | DELETE | retired local mlx/mlx-vlm fallback tier |
 | test_routines_twitter_status.py | COVERED | store.rs newest_md_picks_the_latest_by_mtime_not_name |
 

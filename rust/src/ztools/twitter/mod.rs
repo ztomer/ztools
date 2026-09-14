@@ -5,6 +5,7 @@ pub mod browser_bin;
 pub mod browser_parse;
 pub mod budget;
 pub mod capture;
+pub mod chain;
 pub mod collect;
 pub mod cookies;
 pub mod endpoints;
@@ -256,20 +257,32 @@ pub fn run_summary(
         config.twitter_prompt_max_chars,
         &config.twitter_summarize_prompt,
     );
-    eprintln!("· Summarizing {processed} tweets with {model} on {base_url}...");
+    // The chain: intended model resolved against what the server serves,
+    // then the configured fallbacks. A roster the server will not give us is
+    // an unknown roster, not an empty one — the intent stands unfiltered.
+    let policy = chain::load_fallback_policy(&config.twitter_config_paths)?;
+    let available =
+        crate::ztools::model_eval::get_available_models(base_url, config).unwrap_or_default();
+    let plan = chain::plan_chain(model, &available, &policy);
     let timeout_secs = budget::estimate_timeout(
         prompt.chars().count(),
         &budget::TimeoutInputs::pessimistic(),
     );
-    let summary_body = call_osaurus(base_url, model, &prompt, timeout_secs)?;
-
-    // A reasoning model's `<thinking>` block must not land verbatim in the
-    // saved markdown, and an unstructured answer must not be saved as
-    // success: a critical-quality attempt yields nothing, which the retry
-    // chain (not yet ported) will spend on the next model. Single-shot, that
-    // is an error rather than a hollow document.
-    let (summary_body, _) = handle_model_output(&summary_body, processed)
-        .ok_or_else(|| anyhow::anyhow!("model {model} returned no usable summary"))?;
+    let ((summary_body, _), provenance) = chain::run_chain(&plan, model, |candidate| {
+        eprintln!("· Summarizing {processed} tweets with {candidate} on {base_url}...");
+        let raw = call_osaurus(base_url, candidate, &prompt, timeout_secs)?;
+        // A reasoning model's `<thinking>` block must not land verbatim in
+        // the saved markdown, and an unstructured answer must not be saved
+        // as success: a critical-quality attempt yields nothing, which the
+        // chain spends on the next model.
+        Ok(handle_model_output(&raw, processed))
+    })?;
+    if provenance.degraded() {
+        eprintln!("⚠ Degraded summary: {}", provenance.describe());
+        for reason in &provenance.reasons {
+            eprintln!("  → {reason}");
+        }
+    }
 
     let now = Local::now();
     let filename = format!("{}_summary.md", now.format("%Y-%m-%d_%H%M"));
@@ -283,12 +296,12 @@ pub fn run_summary(
         "# Twitter Timeline Summary\n\n\
          **Period:** {}\n\
          **Tweets:** {} fetched, {} processed\n\
-         **Model:** {}\n\n\
+         {}\n\n\
          {}\n",
         now.format("%Y-%m-%d %H:%M UTC"),
         total,
         processed,
-        model,
+        provenance.banner(),
         summary_section_for(&summary_body)
     );
 

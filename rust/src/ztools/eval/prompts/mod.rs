@@ -46,11 +46,11 @@ mod tests {
     }
 
     /// The eval's twitter prompt is the shared production instructions with
-    /// the fixture timeline wrapped in — exactly how the Python harness
-    /// composed it (`load_prompt("twitter", "summarize") + "\n\n<timeline>\n"
-    /// + timeline + "</timeline>\n\nProvide the summary (start your response):"`).
-    /// If `conf/prompts.toml` changes and this constant does not, the eval
-    /// measures a prompt production no longer sends.
+    /// the fixture timeline wrapped in, composed exactly as the Python harness
+    /// did: shared instructions, a blank line, the `<timeline>` block, then
+    /// the "Provide the summary" tail. If `conf/prompts.toml` changes and this
+    /// constant does not, the eval measures a prompt production no longer
+    /// sends.
     #[test]
     fn twitter_eval_prompt_wraps_the_shared_production_instructions() {
         let shared = shared_twitter_instructions();

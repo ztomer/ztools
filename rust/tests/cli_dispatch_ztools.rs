@@ -43,6 +43,19 @@ fn write_config(home: &std::path::Path, content: &str) {
     fs::write(home.join("ztools.toml"), content).unwrap();
 }
 
+/// The summarizer's `[fallback]` policy is data the binary refuses to run
+/// without; a fake HOME has no checkout, so the test ships one and points the
+/// config at it. Returns the config line to append.
+fn write_twitter_policy(home: &std::path::Path) -> String {
+    let path = home.join("twitter.toml");
+    fs::write(
+        &path,
+        "[fallback]\nmodels = [\"foundation\"]\npreferred = [\"foundation\", \"qwen\", \"gemma\"]\n",
+    )
+    .unwrap();
+    format!("twitter_config_paths = [\"{}\"]\n", path.display())
+}
+
 fn stdout_of(out: &std::process::Output) -> String {
     assert!(
         out.status.success(),
@@ -92,7 +105,10 @@ fn twitter_summarize_writes_a_summary_and_an_md_copy() {
     let port = stub_server(LLM_TEXT);
     write_config(
         &home,
-        &format!("osaurus_url = \"http://127.0.0.1:{port}\"\nllm_timeout_secs = 10\n"),
+        &format!(
+            "osaurus_url = \"http://127.0.0.1:{port}\"\nllm_timeout_secs = 10\n{}",
+            write_twitter_policy(&home)
+        ),
     );
 
     // Tweets must be supplied: with an empty list the summarizer falls back to
@@ -145,7 +161,10 @@ fn twitter_summarize_tolerates_a_missing_tweets_file() {
     let port = stub_server(LLM_TEXT);
     write_config(
         &home,
-        &format!("osaurus_url = \"http://127.0.0.1:{port}\"\nllm_timeout_secs = 10\n"),
+        &format!(
+            "osaurus_url = \"http://127.0.0.1:{port}\"\nllm_timeout_secs = 10\n{}",
+            write_twitter_policy(&home)
+        ),
     );
     let out = Command::new(bin())
         .env("HOME", &home)

@@ -3,11 +3,9 @@
 //! Port of the selection half of `references/twitter/summarize.py`
 //! (`select_best_model` lives in `lib/osaurus_models.py`): which model to
 //! try first and in what order to fall back when an attempt yields nothing.
-//! Pure list arithmetic — no transport — so the retry loop can be tested
-//! without a server. The loop itself is still open.
-
-/// Default preference substrings, mirroring `OSAURUS_PREFERRED_MODELS`.
-pub const DEFAULT_PREFERRED_MODELS: &[&str] = &["foundation", "qwen", "gemma"];
+//! Pure list arithmetic — no transport — so the retry loop ([`super::chain`])
+//! can be tested without a server. Preference and fallback names arrive from
+//! `conf/twitter.toml [fallback]`; nothing here names a model.
 
 /// Pick a model from a roster by preference-substring match, case-insensitive.
 /// First preference wins; with no match the first listed model wins; an empty

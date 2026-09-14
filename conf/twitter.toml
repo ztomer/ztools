@@ -16,3 +16,12 @@ max_scrolls = 1200
 timeline = ["HomeTimeline", "HomeLatestTimeline"]
 following = "HomeLatestTimeline"
 
+# Summarizer fallback policy. DATA, not code: `models` are tried after the
+# intended model, in order, when it is unserved, fails, or answers with
+# nothing usable; `preferred` is the substring preference order used to pick
+# a substitute when the intended model is absent from the server's roster.
+# `foundation` is the on-device model and is always kept as the last resort.
+# `TWITTER_FALLBACK_MODELS=a,b` overrides `models` for one run.
+[fallback]
+models = ["foundation"]
+preferred = ["foundation", "qwen", "gemma"]
