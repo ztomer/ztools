@@ -94,6 +94,12 @@ enum Cmd {
     /// a person wrote it because the two eventually disagree in tense.
     #[command(version)]
     Status,
+    /// Print the twitter summarizer's status as JSON for the routines harness.
+    ///
+    /// Read-only: reads the newest stored summary, runs no browser and no
+    /// model. The `[status]` command in `routines-twitter.toml`.
+    #[command(version)]
+    TwitterStatus,
     /// Run native Rust image renamer.
     #[command(version)]
     ImageRenamer {
@@ -220,6 +226,7 @@ pub fn run() -> Result<()> {
         ),
         Cmd::ImageRenamer { dir, apply } => crate::cli_ztools::image_renamer(&config, dir, apply),
         Cmd::Status => crate::cli_ztools::status(),
+        Cmd::TwitterStatus => crate::ztools::twitter_status::run(),
         Cmd::ModelEval {
             model,
             suite,

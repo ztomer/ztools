@@ -9,6 +9,7 @@ pub mod rename;
 pub mod status;
 pub mod store;
 pub mod twitter;
+pub mod twitter_status;
 pub mod weekend;
 pub mod weekend_cache;
 

@@ -58,26 +58,26 @@ fn newest_plan(directory: &std::path::Path) -> Option<std::path::PathBuf> {
         .flatten()
         .map(|e| e.path())
         .filter(|p| {
+            // Dated plans only. The store also holds `weekend_plan_latest.md`
+            // (the tab's pointer copy of a dated plan) and older `*_plan.md`
+            // shapes; neither carries the weekend in its name, and a status
+            // built on one reports "an unreadable date range" for a plan
+            // that exists under its dated name right beside it.
             let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            name.starts_with("weekend_plan_") && p.extension().is_some_and(|e| e == "md")
+            p.extension().is_some_and(|e| e == "md") && parse_window_from_filename(name).is_some()
         })
         .collect();
     plans.sort_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok());
     plans.last().cloned()
 }
 
-/// The store directory status reads plans from: `$WEEKEND_OUTPUT_DIR` else
-/// the home `Documents` dir, matching `weekend.cli.OUTPUT_DIR_PATH`.
+/// The store directory status reads plans from — the same one
+/// `weekend-plan` writes and the dashboard tab reads
+/// (`store::weekend_output_dir`). The Python original read `~/Documents`
+/// while the tab read `~/Documents/weekend_plans/`; two directories for one
+/// fact is how a plan the tab showed came to be one the status called stale.
 fn output_dir() -> std::path::PathBuf {
-    std::env::var("WEEKEND_OUTPUT_DIR").map_or_else(
-        |_| {
-            dirs::home_dir().map_or_else(
-                || std::path::PathBuf::from(""),
-                |home| home.join("Documents"),
-            )
-        },
-        std::path::PathBuf::from,
-    )
+    crate::ztools::store::weekend_output_dir()
 }
 
 /// Build the status JSON for `today`, reading the newest plan in the store.
@@ -236,6 +236,10 @@ mod tests {
         )
         .unwrap();
         std::fs::write(td.path().join("notes.txt"), "not a plan").unwrap();
+        // The tab's pointer copy is newest of all and must NOT win: it has
+        // no window in its name.
+        std::fs::write(td.path().join("weekend_plan_latest.md"), "y").unwrap();
+        set_mtime(&td.path().join("weekend_plan_latest.md"), 1);
         set_mtime(
             &td.path()
                 .join("weekend_plan_August_07_to_August_09_2026.md"),

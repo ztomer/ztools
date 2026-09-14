@@ -5,10 +5,16 @@ name = "ztools-twitter"
 description = "twitter summarizer: scrape feeds, summarize topics with local model"
 
 [run]
-command = "uv run --frozen tw"
+# The native binary; the `uv run --frozen tw` Python entry point was retired
+# 2026-09-13 with the rest of the Python runtime. Absolute path because the
+# routines runner's PATH has no /opt/homebrew.
+command = "/opt/homebrew/bin/ztools twitter-summarize"
 schedule = "daily at 08:00"
 timeout_ms = 1800000
 
 [status]
-command = "uv run --frozen python routines_twitter_status.py"
+# `ztools twitter-status` is the Rust port of the retired
+# `routines_twitter_status.py`; A/B on the real summary directory agreed on
+# every field (ran_at differs only in sub-microsecond rounding).
+command = "/opt/homebrew/bin/ztools twitter-status"
 timeout_ms = 30000

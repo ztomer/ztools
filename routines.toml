@@ -12,7 +12,10 @@ description = "weekend planner: scrape, filter to the home region, draft with a 
 #
 # A failure here most often means Osaurus is not serving: a wedged server
 # answers /v1/models instantly while serving nothing (see PENDING 5.3).
-command = "uv run --frozen wk"
+# The native binary; the `uv run --frozen wk` Python entry point was retired
+# 2026-09-13 with the rest of the Python runtime. Absolute path because the
+# routines runner's PATH has no /opt/homebrew.
+command = "/opt/homebrew/bin/ztools weekend-plan --md-out /Users/ztomer/Documents/weekend_plans/weekend_plan_latest.md"
 schedule = "weekly on mon at 08:00"
 # A full run scrapes the web and drives a 35B model; the 120s default would
 # kill it and report a false failure.
@@ -22,7 +25,9 @@ timeout_ms = 1800000
 # Read-only: reads back the newest plan from the configured output directory
 # ($WEEKEND_OUTPUT_DIR) and counts its rows
 # using the checkers' own parsers. Runs no model and touches no network.
-command = "uv run --frozen python references/routines_status.py"
+# `ztools status` is the Rust port of the retired `references/routines_status.py`;
+# A/B on the real plan directory was a semantic-identical JSON diff.
+command = "/opt/homebrew/bin/ztools status"
 timeout_ms = 30000
 
 [tab]

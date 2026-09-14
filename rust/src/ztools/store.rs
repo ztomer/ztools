@@ -1,10 +1,15 @@
-//! Read-side access to stored summaries and plans.
+//! The store directories, and read-side access to what is in them.
 //!
-//! The summarizer and planner WRITE dated `.md` files into a store directory
-//! (the twitter side in its own `default_dir`, the weekend side via `--md-out`);
-//! their `--fetch-latest` / `--last-updated` read the newest one back. Read-only
-//! by construction: nothing here touches a model or the network, so a dashboard
-//! tab can open on it without ever re-running the pipeline.
+//! The summarizer and planner WRITE dated `.md` files into a store directory;
+//! their `--fetch-latest` / `--last-updated` and the routines `status`
+//! commands read the newest one back. ONE directory per tool: the weekend
+//! planner used to have two (Python `wk` wrote `~/Documents/weekend_plan_*.md`,
+//! which the status page read, while the dashboard tab read
+//! `~/Documents/weekend_plans/`), so a run the tab showed was one the status
+//! page called stale. Every reader and the writer now resolve
+//! [`weekend_store_dir`] (or `WEEKEND_OUTPUT_DIR`). Nothing here touches a
+//! model or the network, so a dashboard tab can open on it without ever
+//! re-running the pipeline.
 
 use anyhow::{bail, Result};
 use std::path::{Path, PathBuf};
@@ -20,12 +25,52 @@ pub fn twitter_store_dir() -> PathBuf {
         .join("Documents/twitter_summaries")
 }
 
-/// Default directory weekend plans are stored in (the weekly `--md-out`).
+/// Default directory weekend plans are stored in.
 #[must_use]
 pub fn weekend_store_dir() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join("Documents/weekend_plans")
+}
+
+/// The weekend store, honouring `WEEKEND_OUTPUT_DIR` — the one seam the
+/// writer, the status page and the dashboard tab all resolve.
+#[must_use]
+pub fn weekend_output_dir() -> PathBuf {
+    std::env::var("WEEKEND_OUTPUT_DIR").map_or_else(|_| weekend_store_dir(), PathBuf::from)
+}
+
+/// File name of the stored plan for one weekend.
+///
+/// `weekend_plan_August_14_to_August_16_2026.md` — byte-compatible with the
+/// Python writer (`f"{PLAN_FILE_PREFIX}{dates_str.replace(' ', '_').replace(',', '')}.md"`
+/// over `"%B %d to %B %d, %Y"`), because `weekend::report::parse_window_from_filename`
+/// — which the status page uses to decide whether a plan is stale — reads the
+/// weekend back out of this name.
+#[must_use]
+pub fn weekend_plan_filename(friday: chrono::NaiveDate, sunday: chrono::NaiveDate) -> String {
+    format!(
+        "weekend_plan_{}_to_{}.md",
+        friday.format("%B_%d"),
+        sunday.format("%B_%d_%Y")
+    )
+}
+
+/// Write the dated plan into `dir`, creating it, and return the path written.
+///
+/// # Errors
+///
+/// When the directory cannot be created or the file cannot be written.
+pub fn save_weekend_plan(
+    dir: &Path,
+    friday: chrono::NaiveDate,
+    sunday: chrono::NaiveDate,
+    markdown: &str,
+) -> Result<PathBuf> {
+    std::fs::create_dir_all(dir)?;
+    let path = dir.join(weekend_plan_filename(friday, sunday));
+    std::fs::write(&path, markdown)?;
+    Ok(path)
 }
 
 /// Newest `*.md` in `dir` by modification time. Errors with a stated reason
@@ -105,9 +150,7 @@ pub fn twitter_latest(show_time: bool) -> Result<()> {
 ///
 /// As [`print_newest`]: no stored summary, or an unreadable one.
 pub fn weekend_latest(show_time: bool) -> Result<()> {
-    let dir =
-        std::env::var("WEEKEND_OUTPUT_DIR").map_or_else(|_| weekend_store_dir(), PathBuf::from);
-    print_newest(&dir, show_time)
+    print_newest(&weekend_output_dir(), show_time)
 }
 
 /// Resolve the newest stored summary (or its update time) and print it.
@@ -304,5 +347,39 @@ mod tests {
             "{:?}",
             report.warnings
         );
+    }
+
+    #[test]
+    fn weekend_plan_filename_is_the_python_shape_and_round_trips() {
+        use chrono::NaiveDate;
+        let fri = NaiveDate::from_ymd_opt(2026, 8, 14).unwrap();
+        let sun = NaiveDate::from_ymd_opt(2026, 8, 16).unwrap();
+        let name = weekend_plan_filename(fri, sun);
+        assert_eq!(name, "weekend_plan_August_14_to_August_16_2026.md");
+        // The status page reads the weekend back out of the name.
+        assert_eq!(
+            crate::ztools::weekend::report::parse_window_from_filename(&name),
+            Some((fri, sun))
+        );
+        // Year boundary keeps Python's shape (year printed once, from Sunday).
+        let fri = NaiveDate::from_ymd_opt(2026, 12, 31).unwrap();
+        let sun = NaiveDate::from_ymd_opt(2027, 1, 2).unwrap();
+        assert_eq!(
+            weekend_plan_filename(fri, sun),
+            "weekend_plan_December_31_to_January_02_2027.md"
+        );
+    }
+
+    #[test]
+    fn save_weekend_plan_creates_the_store_and_the_status_reader_finds_it() {
+        use chrono::NaiveDate;
+        let td = tempfile::tempdir().unwrap();
+        let store = td.path().join("nested/weekend_plans");
+        let fri = NaiveDate::from_ymd_opt(2026, 9, 18).unwrap();
+        let sun = NaiveDate::from_ymd_opt(2026, 9, 20).unwrap();
+        let path = save_weekend_plan(&store, fri, sun, "# plan\n").unwrap();
+        assert!(path.ends_with("weekend_plan_September_18_to_September_20_2026.md"));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "# plan\n");
+        assert_eq!(newest_md(&store).unwrap(), path);
     }
 }

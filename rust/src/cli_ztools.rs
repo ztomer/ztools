@@ -167,6 +167,16 @@ pub(crate) fn weekend_plan(
         &weather_str,
     );
 
+    // The dated plan always lands in the store (what `ztools status` and the
+    // dashboard tab read); `--md-out` is an extra copy, e.g. a `_latest`
+    // pointer the tab's refresh keeps.
+    let stored = crate::ztools::store::save_weekend_plan(
+        &crate::ztools::store::weekend_output_dir(),
+        friday,
+        sunday,
+        &md_str,
+    )?;
+    println!("✓ saved to {}", stored.display());
     if let Some(out_path) = md_out {
         std::fs::write(&out_path, &md_str)?;
         println!("✓ saved to {}", out_path.display());
