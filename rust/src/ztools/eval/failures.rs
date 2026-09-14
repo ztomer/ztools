@@ -137,7 +137,7 @@ pub fn classify_failure(
     score: u8,
     parse_json: bool,
 ) -> Diagnosis {
-    let _ = (parsed, finish_reason);
+    let _ = finish_reason;
     if score >= 90 {
         return Diagnosis::none();
     }
@@ -170,14 +170,7 @@ pub fn classify_failure(
     }
 
     if parse_json {
-        // The Rust task set carries no parse_json tasks yet; when one arrives,
-        // port the FORMAT/PARSE/prose-before-JSON branches from failures.py
-        // here rather than letting them fall through to CONTENT.
-        return Diagnosis {
-            category: FAIL_CONTENT,
-            reason: "parse_json task scored below threshold".to_string(),
-            evidence: String::new(),
-        };
+        return classify_json_failure(content, parsed, score);
     }
 
     if content.is_empty() {
@@ -223,6 +216,60 @@ const fn finish_reason_or_unknown(finish_reason: &str) -> &str {
         "unknown"
     } else {
         finish_reason
+    }
+}
+
+/// The `parse_json` branches of `failures.py::classify_failure`: no brackets
+/// at all is a FORMAT failure, brackets the parser could not use is PARSE,
+/// a long prose preamble before the first bracket is FORMAT when the score
+/// collapsed (the reasoning likely ate the context) and CONTENT otherwise.
+fn classify_json_failure(content: &str, parsed: Option<&Value>, score: u8) -> Diagnosis {
+    let raw_len = content.len();
+    let first_bracket = ['[', '{']
+        .iter()
+        .filter_map(|c| content.find(*c))
+        .min()
+        .unwrap_or(raw_len);
+    let has_json_chars = first_bracket < raw_len;
+    let has_prose_before_json = has_json_chars && first_bracket > 200;
+    match (parsed.is_some(), has_json_chars) {
+        (false, false) => Diagnosis {
+            category: FAIL_FORMAT,
+            reason: "No JSON in output".to_string(),
+            evidence: format!("Output was {raw_len} chars of prose with no JSON brackets"),
+        },
+        (false, true) => Diagnosis {
+            category: FAIL_PARSE,
+            reason: "JSON extraction failed".to_string(),
+            evidence: format!(
+                "Output had JSON-like content at char {first_bracket} of {raw_len} but parser \
+                 couldn't extract valid JSON"
+            ),
+        },
+        (true, _) if has_prose_before_json => {
+            let evidence = format!(
+                "Model emitted {first_bracket} chars of reasoning before first JSON bracket \
+                 (total {raw_len} chars)"
+            );
+            if score < 50 {
+                Diagnosis {
+                    category: FAIL_FORMAT,
+                    reason: "parse_json task scored below threshold".to_string(),
+                    evidence: format!("{evidence}; reasoning may have consumed the context window"),
+                }
+            } else {
+                Diagnosis {
+                    category: FAIL_CONTENT,
+                    reason: "parse_json task scored below threshold".to_string(),
+                    evidence,
+                }
+            }
+        }
+        (true, _) => Diagnosis {
+            category: FAIL_CONTENT,
+            reason: "parse_json task scored below threshold".to_string(),
+            evidence: String::new(),
+        },
     }
 }
 
@@ -285,5 +332,31 @@ mod tests {
         assert_eq!(reasoning_retry_budget(32_000), 64_000);
         assert_eq!(reasoning_retry_budget(10_000), 20_000);
         assert_eq!(reasoning_retry_budget(40_000), 64_000);
+    }
+
+    #[test]
+    fn json_task_failures_are_classified_like_python() {
+        let d = classify_failure(None, "just prose, no brackets", "", "stop", None, 10, true);
+        assert_eq!(d.category, FAIL_FORMAT);
+        assert_eq!(d.reason, "No JSON in output");
+
+        let d = classify_failure(None, "here: {broken json", "", "stop", None, 10, true);
+        assert_eq!(d.category, FAIL_PARSE);
+        assert!(d.evidence.contains("at char 6 of 18"), "{}", d.evidence);
+
+        let preamble = format!("{}{{\"a\": 1}}", "reasoning ".repeat(30));
+        let parsed = serde_json::json!({"a": 1});
+        let d = classify_failure(None, &preamble, "", "stop", Some(&parsed), 20, true);
+        assert_eq!(d.category, FAIL_FORMAT);
+        assert!(d.evidence.contains("consumed the context window"));
+        let d = classify_failure(None, &preamble, "", "stop", Some(&parsed), 70, true);
+        assert_eq!(d.category, FAIL_CONTENT);
+        assert!(d
+            .evidence
+            .contains("chars of reasoning before first JSON bracket"));
+
+        let d = classify_failure(None, "{\"a\": 1}", "", "stop", Some(&parsed), 40, true);
+        assert_eq!(d.category, FAIL_CONTENT);
+        assert!(d.evidence.is_empty());
     }
 }

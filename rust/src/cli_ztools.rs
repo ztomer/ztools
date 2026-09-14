@@ -266,7 +266,10 @@ pub(crate) fn model_eval(
         return print_capabilities(url, &model);
     }
     if suite == "full" {
-        let mut tasks = crate::ztools::eval::load_all_eval_tasks(tasks_dir);
+        let default_tasks_dir = config.eval_tasks_dir();
+        let tasks_dir = tasks_dir.or(default_tasks_dir.as_deref());
+        let mut tasks =
+            crate::ztools::eval::load_all_eval_tasks(&config.eval_roster_inputs()?, tasks_dir)?;
         if let Some(filter) = task_filter {
             tasks.retain(|t| task_matches_filter(&t.name, filter));
             if tasks.is_empty() {

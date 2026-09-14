@@ -1,0 +1,41 @@
+# Synthetic images with KNOWN contents, for measuring whether a model can SEE.
+# DATA, not code: the eval draws each fixture from this spec at run time and
+# grades the answer against `accept`, so the ground truth lives next to the
+# drawing that produces it and the two cannot drift.
+#
+# Each fixture is deliberately unmistakable and mutually unrelated -- a model
+# that gets one right by luck cannot get all three right by luck. `accept` is
+# generous about synonyms (a circle is legitimately "round", "dot", "sphere")
+# because the task measures SIGHT, not vocabulary; it is not generous about
+# the subject: nothing overlaps between fixtures.
+#
+# DELIBERATELY NO TEXT IN THE IMAGES. `rn` reaches its vision path only when
+# OCR found nothing, and a fixture containing readable words could be passed
+# by a model that reads but cannot see.
+#
+# Canvas is `size` x `size` RGB on `background`; geometry is in pixels.
+size = 512
+
+[[fixture]]
+name = "red_circle"
+background = [255, 255, 255]
+shape = "ellipse"
+box = [120, 120, 392, 392]
+colour = [220, 30, 30]
+accept = ["red", "circle", "round", "dot", "sphere", "ball", "crimson"]
+
+[[fixture]]
+name = "green_triangle"
+background = [255, 255, 255]
+shape = "polygon"
+points = [[256, 110], [410, 400], [102, 400]]
+colour = [30, 150, 60]
+accept = ["green", "triangle", "triangular", "cone", "arrow", "pyramid"]
+
+[[fixture]]
+name = "blue_square"
+background = [255, 255, 255]
+shape = "rectangle"
+box = [140, 140, 372, 372]
+colour = [40, 70, 200]
+accept = ["blue", "square", "rectangle", "box", "cube", "navy"]

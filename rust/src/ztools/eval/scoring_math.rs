@@ -59,6 +59,42 @@ pub const fn rounded(value: f64) -> i64 {
     value.round() as i64
 }
 
+/// Python's `round(100 * part / whole)`: percent with ties to even, which is
+/// what Python's `round` does and `f64::round` does not (`12.5` → 12, not 13).
+///
+/// # Panics
+///
+/// Never for `whole > 0`; a zero denominator saturates like [`rounded`].
+#[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "`round_ties_even()` has made the value whole and `as i64` saturates"
+)]
+pub fn pct_round(part: usize, whole: usize) -> i64 {
+    (100.0 * ratio(part, whole)).round_ties_even() as i64
+}
+
+/// Python's `int(100 * part / whole)`: percent truncated toward zero.
+#[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "`trunc()` has made the value whole and `as i64` saturates"
+)]
+pub fn pct_floor(part: usize, whole: usize) -> i64 {
+    (100.0 * ratio(part, whole)).trunc() as i64
+}
+
+/// Python's `int(100 * (0.5 * a + 0.5 * b))`: the truncated percent of the
+/// mean of two ratios — the recall/precision blend the mixed validators use.
+#[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "`trunc()` has made the value whole and `as i64` saturates"
+)]
+pub fn pct_floor_mean(a: f64, b: f64) -> i64 {
+    (100.0 * 0.5f64.mul_add(b, 0.5 * a)).trunc() as i64
+}
+
 #[cfg(test)]
 #[path = "scoring_math_tests.rs"]
 mod tests;

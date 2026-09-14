@@ -133,10 +133,7 @@ fn task_with_system_prompt(name: &str) -> EvalTask {
     let mut t = EvalTask::new(name, "p", vec![Check::Contains("answer".to_string())]);
     t.messages.insert(
         0,
-        ztools::eval::task_loader::ChatMessage {
-            role: "system".to_string(),
-            content: "Extract events from the timeline.".to_string(),
-        },
+        ztools::eval::task_loader::ChatMessage::system("Extract events from the timeline."),
     );
     t
 }

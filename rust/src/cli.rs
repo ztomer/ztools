@@ -117,12 +117,14 @@ enum Cmd {
         #[arg(long, default_value = "all")]
         model: String,
         /// "smoke" (default) runs the built-in smoke suite; "full" runs the
-        /// eval-loop runner over smoke + taxes tasks with retries and the
-        /// reasoning-overrun guard.
+        /// eval-loop runner over the full task roster (the 24 prompt tasks
+        /// plus the taxes snapshots) with retries and the reasoning-overrun
+        /// guard.
         #[arg(long, default_value = "smoke")]
         suite: String,
         /// Optional directory of task JSON snapshots for --suite full
-        /// (e.g. `eval_tasks/data`). Without it, only built-in tasks run.
+        /// (e.g. `eval_tasks/data`). Without it, the first existing
+        /// `eval_tasks_dirs` entry of the ztools config is used.
         #[arg(long)]
         tasks_dir: Option<PathBuf>,
         /// With --suite full: run only the named task(s), comma-separated

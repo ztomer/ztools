@@ -215,11 +215,33 @@ fn snapshot_shape_decides_messages_and_check_routing() {
     );
 }
 
+fn shipped_conf() -> crate::ztools::eval::tasks::RosterInputs {
+    crate::ztools::eval::tasks::RosterInputs::in_dir(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("conf"),
+    )
+}
+
 #[test]
-fn load_all_eval_tasks_without_dir_returns_smoke_only() {
-    let tasks = load_all_eval_tasks(None);
-    assert_eq!(tasks.len(), get_built_in_smoke_tasks().len());
-    assert_eq!(tasks[0].name, "Weekend Planner (JSON Extraction)");
+fn load_all_eval_tasks_without_dir_returns_the_roster_only() {
+    let tasks = load_all_eval_tasks(&shipped_conf(), None).unwrap();
+    assert_eq!(
+        tasks.len(),
+        24,
+        "the Python TASKS table had 24 non-taxes rows"
+    );
+    assert_eq!(tasks[0].name, "weekend_transient");
+    assert!(!tasks.iter().any(|t| t.name.starts_with("taxes_")));
+}
+
+#[test]
+fn load_all_eval_tasks_needs_the_roster_inputs() {
+    let temp = tempfile::tempdir().unwrap();
+    let files = crate::ztools::eval::tasks::RosterInputs::in_dir(temp.path());
+    let err = load_all_eval_tasks(&files, None).unwrap_err().to_string();
+    assert!(err.contains("eval inputs"), "{err}");
 }
 
 #[test]
@@ -238,8 +260,8 @@ fn load_all_eval_tasks_prefers_a_taxes_subdir() {
     )
     .unwrap();
 
-    let tasks = load_all_eval_tasks(Some(temp.path()));
-    assert_eq!(tasks.len(), get_built_in_smoke_tasks().len() + 1);
+    let tasks = load_all_eval_tasks(&shipped_conf(), Some(temp.path())).unwrap();
+    assert_eq!(tasks.len(), 24 + 1);
     assert!(
         tasks.iter().any(|t| t.name == "taxes_qa"),
         "subdir task loaded"
@@ -259,8 +281,8 @@ fn load_all_eval_tasks_reads_a_flat_dir_when_no_subdir_exists() {
     )
     .unwrap();
 
-    let tasks = load_all_eval_tasks(Some(temp.path()));
-    assert_eq!(tasks.len(), get_built_in_smoke_tasks().len() + 1);
+    let tasks = load_all_eval_tasks(&shipped_conf(), Some(temp.path())).unwrap();
+    assert_eq!(tasks.len(), 24 + 1);
     assert!(tasks.iter().any(|t| t.name == "taxes_yoy_narrative"));
 }
 

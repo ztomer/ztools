@@ -313,7 +313,7 @@ fn run_eval_inner(
                 allow_substitution: cfg.allow_model_substitution,
                 stream_guard: true,
             };
-            let r = transport::call(&spec, false);
+            let r = transport::call(&spec, task.parse_json);
             let candidate = outcome_from(task, &r);
             let is_best = match &best {
                 // Errors rank below any scored attempt.
@@ -323,15 +323,22 @@ fn run_eval_inner(
             if is_best {
                 best = Some(candidate);
             }
-            let score = score_output(task, &r.content, None);
+            // A JSON task's answer is parsed once here and handed to every
+            // check; an unparseable answer scores as the raw text would.
+            let parsed = if task.parse_json {
+                serde_json::from_str::<serde_json::Value>(&r.content).ok()
+            } else {
+                None
+            };
+            let score = score_output(task, &r.content, parsed.as_ref());
             best_diagnosis = classify_failure(
                 r.error.as_deref(),
                 &r.content,
                 &r.reasoning_content,
                 &r.finish_reason,
-                None,
+                parsed.as_ref(),
                 score,
-                false,
+                task.parse_json,
             );
             // An escalated attempt the guard cut as well is the evidence that this
             // model expands to fill: strictly more room, strictly more of it spent

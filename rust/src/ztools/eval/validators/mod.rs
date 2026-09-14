@@ -9,6 +9,7 @@
 //! - `attribution`: tweet summary author and timestamp citation faithfulness.
 //! - `faithfulness`: instruction-leak, strict-schema, and contradiction gates.
 //! - `filename`: filename-quality scorer with leak and relevance gates.
+//! - `mixed_text`: signal-from-noise scorers and the factual probes.
 //! - `summary`: summary-quality scorer with misattribution and placeholder caps.
 //! - `taxes_grounded`: arithmetic and citation grounding for financial tasks.
 
@@ -19,6 +20,7 @@ pub mod defects;
 pub mod faithfulness;
 pub mod filename;
 pub mod json_validator;
+pub mod mixed_text;
 pub mod summary;
 pub mod taxes_grounded;
 pub mod taxes_rubric;
@@ -37,6 +39,10 @@ pub use json_validator::{
     check_source_extraction, extract_list_from_dict, has_item_details, is_valid_list_item,
     name_tokens, names_match, norm_name, validate_detailed_json, validate_json,
     validate_mixed_signal,
+};
+pub use mixed_text::{
+    extract_tweet_senders, validate_factual_accuracy, validate_factual_coverage,
+    validate_mixed_file_summary, validate_mixed_filename, validate_mixed_summary,
 };
 pub use summary::{validate_summary, MISATTRIBUTION_MAX_SCORE};
 pub use taxes_grounded::{

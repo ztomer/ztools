@@ -1,6 +1,6 @@
 #![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
 
-use super::{ratio, rounded};
+use super::{pct_floor, pct_floor_mean, pct_round, ratio, rounded};
 
 #[test]
 fn ratio_is_the_ordinary_quotient() {
@@ -47,4 +47,25 @@ fn rounded_saturates_and_never_wraps() {
     assert_eq!(rounded(f64::NEG_INFINITY), i64::MIN);
     assert_eq!(rounded(f64::NAN), 0);
     assert_eq!(rounded(1e30), i64::MAX);
+}
+
+#[test]
+fn pct_round_ties_to_even_like_python() {
+    // round(12.5) == 12 and round(37.5) == 38 in Python.
+    assert_eq!(pct_round(1, 8), 12);
+    assert_eq!(pct_round(3, 8), 38);
+    assert_eq!(pct_round(2, 3), 67);
+}
+
+#[test]
+fn pct_floor_truncates_like_python_int() {
+    assert_eq!(pct_floor(2, 3), 66);
+    assert_eq!(pct_floor(1, 1), 100);
+    assert_eq!(pct_floor(0, 5), 0);
+}
+
+#[test]
+fn pct_floor_mean_blends_then_truncates() {
+    assert_eq!(pct_floor_mean(1.0, 0.5), 75);
+    assert_eq!(pct_floor_mean(2.0 / 3.0, 1.0), 83);
 }

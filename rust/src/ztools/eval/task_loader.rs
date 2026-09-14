@@ -10,10 +10,18 @@ use std::path::Path;
 
 use crate::ztools::eval::validate_file_summary;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// One chat message.
+///
+/// `content` is the prompt text; `images` are `data:` URIs sent alongside it
+/// as `OpenAI` content parts (`image_url`), the payload shape osaurus actually
+/// honours — the Ollama-style `images` key is silently ignored, which is how
+/// `rn` once renamed every image from a hallucination. A message without
+/// images serialises as plain `{role, content}`.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChatMessage {
     pub role: String,
     pub content: String,
+    pub images: Vec<String>,
 }
 
 impl ChatMessage {
@@ -21,6 +29,7 @@ impl ChatMessage {
         Self {
             role: "user".to_string(),
             content: content.into(),
+            images: Vec::new(),
         }
     }
 
@@ -28,7 +37,83 @@ impl ChatMessage {
         Self {
             role: "system".to_string(),
             content: content.into(),
+            images: Vec::new(),
         }
+    }
+
+    /// A user message carrying the prompt and every image as a content part.
+    #[must_use]
+    pub fn user_with_images(content: impl Into<String>, images: Vec<String>) -> Self {
+        Self {
+            role: "user".to_string(),
+            content: content.into(),
+            images,
+        }
+    }
+}
+
+/// Wire form: `content` is a string, or a list of content parts when images
+/// ride along.
+#[derive(Serialize, Deserialize)]
+struct WireMessage {
+    role: String,
+    content: serde_json::Value,
+}
+
+impl Serialize for ChatMessage {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let content =
+            if self.images.is_empty() {
+                serde_json::Value::String(self.content.clone())
+            } else {
+                let mut parts = vec![serde_json::json!({"type": "text", "text": self.content})];
+                parts.extend(self.images.iter().map(
+                    |url| serde_json::json!({"type": "image_url", "image_url": {"url": url}}),
+                ));
+                serde_json::Value::Array(parts)
+            };
+        WireMessage {
+            role: self.role.clone(),
+            content,
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for ChatMessage {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let wire = WireMessage::deserialize(deserializer)?;
+        let (content, images) = match wire.content {
+            serde_json::Value::String(s) => (s, Vec::new()),
+            serde_json::Value::Array(parts) => {
+                let mut text = String::new();
+                let mut images = Vec::new();
+                for part in parts {
+                    match part.get("type").and_then(|t| t.as_str()) {
+                        Some("text") => {
+                            text.push_str(part.get("text").and_then(|t| t.as_str()).unwrap_or(""));
+                        }
+                        Some("image_url") => {
+                            if let Some(url) = part
+                                .get("image_url")
+                                .and_then(|i| i.get("url"))
+                                .and_then(|u| u.as_str())
+                            {
+                                images.push(url.to_string());
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                (text, images)
+            }
+            other => (other.to_string(), Vec::new()),
+        };
+        Ok(Self {
+            role: wire.role,
+            content,
+            images,
+        })
     }
 }
 
@@ -68,6 +153,9 @@ pub enum Check {
         task_name: String,
     },
     SectionHeaders(Vec<String>),
+    /// A 0-100 validator verdict (`super::graded`): the task's score IS the
+    /// verdict, exactly as the Python `TASKS` table scored it.
+    Graded(super::graded::Graded),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -75,6 +163,10 @@ pub struct EvalTask {
     pub name: String,
     pub messages: Vec<ChatMessage>,
     pub checks: Vec<Check>,
+    /// Ask for `response_format: json_object` and parse the answer before
+    /// scoring — the Python task table's `parse_json` flag.
+    #[serde(default)]
+    pub parse_json: bool,
 }
 
 impl EvalTask {
@@ -83,6 +175,7 @@ impl EvalTask {
             name: name.into(),
             messages: vec![ChatMessage::user(prompt)],
             checks,
+            parse_json: false,
         }
     }
 
@@ -96,7 +189,15 @@ impl EvalTask {
             name: name.into(),
             messages: vec![ChatMessage::system(system), ChatMessage::user(user)],
             checks,
+            parse_json: false,
         }
+    }
+
+    /// The same task, answered as JSON and parsed before scoring.
+    #[must_use]
+    pub const fn json(mut self) -> Self {
+        self.parse_json = true;
+        self
     }
 }
 
@@ -141,6 +242,7 @@ pub fn check_graded_score(
             };
             Some(score)
         }
+        Check::Graded(graded) => Some(graded.score(cleaned, parsed).0),
         _ => None,
     }
 }
@@ -227,6 +329,7 @@ pub fn run_check(check: &Check, cleaned: &str, parsed: Option<&serde_json::Value
             };
             score >= 50
         }
+        Check::Graded(graded) => graded.score(cleaned, parsed).0 >= 50,
     }
 }
 
@@ -332,65 +435,23 @@ pub fn load_taxes_tasks_from_dir(dir: &Path) -> Result<Vec<EvalTask>> {
     Ok(tasks)
 }
 
-/// Built-in smoke tasks (offline fixtures).
-#[must_use]
-pub fn get_built_in_smoke_tasks() -> Vec<EvalTask> {
-    vec![
-        EvalTask::new(
-            "Weekend Planner (JSON Extraction)",
-            "You are an expert family activity planner. Extract up to 10 time-limited events happening STRICTLY this weekend (between 2026-08-07 and 2026-08-09) in Vaughan from the text below.\nOutput JSON now. Use EXACT schema:\n{\"transient_events\": [{\"name\": \"str\", \"location\": \"str\", \"target_ages\": \"str\", \"price\": \"str\", \"start_date\": \"str\", \"end_date\": \"str\", \"duration\": \"str\", \"weather\": \"str\", \"day\": \"str\", \"description\": \"str\"}]}\nRules for every field:\n- Suggest up to 10 specific weekend activities. Do NOT stop after just 1 or 2 events. Find as many as you can.\n- Only extract events that occur within or overlap with the dates 2026-08-07 to 2026-08-09. Discard events from past or future weekends.\n- Copy values from the source text. NEVER invent one.\n\nSearch results:\nEvent 1: Summer Rib Fest at Vaughan Park. August 7 2026. Kids all ages. Free.\nEvent 2: Fall Fair at Markham. August 8 2026. Kids 5-10. $10.\nEvent 3: Food Truck Festival at Toronto. August 9 2026. All ages. Free.\nEvent 4: Magic Show at Vaughan Library. August 7 2026. Kids 4-8. Free.\nEvent 5: Future Festival at Vaughan Park. August 14 2026. All ages. Free.\nOutput ONLY JSON.",
-            vec![
-                Check::Contains("transient_events".to_string()),
-                Check::Contains("Summer Rib Fest".to_string()),
-                Check::Contains("Magic Show".to_string()),
-                Check::JsonArrayLen("transient_events".to_string(), 2),
-            ],
-        ),
-        EvalTask::new(
-            "Twitter Summarizer (Markdown formatting)",
-            "Summarize these tweets into a markdown report. Use ## headers and - bullet points.\nTweets:\n- \"New Rust version 1.75 released!\"\n- \"I had a great sandwich today.\"\n- \"Learn about lifetime elision in Rust.\"",
-            vec![
-                Check::Contains("##".to_string()),
-                Check::ContainsAny(vec!["- ".to_string(), "* ".to_string()]),
-                Check::ContainsLower("rust".to_string()),
-                Check::NotContainsLower("```html".to_string()),
-            ],
-        ),
-        EvalTask::new(
-            "Image Renamer (Constraint adherence)",
-            "Analyze this image description and output a snake_case filename. End with .jpg.\nDescription: A red sports car parked on a sunny beach.\nRules: Output ONLY the filename. No markdown, no conversational text.",
-            vec![
-                Check::Contains(".jpg".to_string()),
-                Check::Contains("_".to_string()),
-                Check::NotContains(" ".to_string()),
-                Check::NotContainsLower("here is".to_string()),
-            ],
-        ),
-        EvalTask::new(
-            "Twitter Summarizer (Factual Consistency)",
-            "Summarize this tweet timeline:\nTweet 1: @john_doe (2026-08-01): Just launched the new API!\nTweet 2: @jane_smith (2026-08-02): The new API is incredibly fast.",
-            vec![
-                Check::NotContains("@elonmusk".to_string()),
-                Check::NotContains("@realDonaldTrump".to_string()),
-                Check::ContainsAny(vec!["john_doe".to_string(), "@john_doe".to_string()]),
-                Check::ContainsAny(vec!["jane_smith".to_string(), "@jane_smith".to_string()]),
-                Check::ContainsAny(vec!["2026-08".to_string(), "August".to_string()]),
-                Check::NotContains("2025".to_string()),
-                Check::NotContains("2024".to_string()),
-            ],
-        ),
-        EvalTask::new(
-            "File Summary (Content detail)",
-            "Read the file list below and give one-line summary for each file.\n\nCRITICAL: Rely ONLY on provided content context. DO NOT infer functionality from file names, words, or puns. Describe what each file DOES.\n- Bad: \"a python library\" (infers from .py extension)\n- Good: \"parses web content and extracts metadata\"\n\nFiles:\n- lib/parser.py\n- lib/validator.py\n- lib/fetcher.py\n- lib/reporter.py\n\nOutput a JSON array of {\"path\": \"...\", \"desc\": \"...\"} objects.",
-            vec![Check::FileSummary(50)],
-        ),
-    ]
-}
+pub use super::smoke_tasks::get_built_in_smoke_tasks;
 
-/// Load all eval tasks: smoke tasks plus tasks from data snapshots if found.
-#[must_use]
-pub fn load_all_eval_tasks(eval_tasks_data_dir: Option<&Path>) -> Vec<EvalTask> {
-    let mut tasks = get_built_in_smoke_tasks();
+/// Load the full eval task set.
+///
+/// The roster (`super::tasks`, the Python `TASKS` table) is built from
+/// `files`; the taxes snapshots come from `eval_tasks_data_dir` (a
+/// `taxes/` subdir wins over a flat dir) when given.
+///
+/// # Errors
+///
+/// When the roster's inputs (`eval_inputs.toml`, `eval_vision.toml`) cannot
+/// be read: the eval refuses to run a partial table silently.
+pub fn load_all_eval_tasks(
+    files: &super::tasks::RosterInputs,
+    eval_tasks_data_dir: Option<&Path>,
+) -> Result<Vec<EvalTask>> {
+    let mut tasks = super::tasks::roster(files)?;
     if let Some(dir) = eval_tasks_data_dir {
         let taxes_dir = dir.join("taxes");
         let search_dir = if taxes_dir.is_dir() {
@@ -402,7 +463,7 @@ pub fn load_all_eval_tasks(eval_tasks_data_dir: Option<&Path>) -> Vec<EvalTask> 
             tasks.extend(loaded);
         }
     }
-    tasks
+    Ok(tasks)
 }
 
 #[cfg(test)]

@@ -27,6 +27,7 @@ clap = { version = "4", features = ["derive"] }
 comfy-table = "8.0.0"
 dirs = "5"
 flate2 = "1"
+png = "0.18.1"
 regex = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking", "json"] }
 rusqlite = { version = "0.32", features = ["bundled"] }

@@ -194,14 +194,14 @@ Only `test_llm.py`, `test_mlx.py`, `test_gemma.py` need a live server/GPU.
 | test_eval_failures.py | COVERED | eval/failures.rs::infra_timeout_and_reasoning_are_distinguished |
 | test_eval_outputs.py | COVERED | eval/outputs.rs::save_output_writes_header_body_and_reasoning_to_the_seamed_dir |
 | test_eval_report.py | RE-EXPRESS (partial: score-stats/error-rates/failure-groups covered 2026-09-13 by `eval/report_metrics.rs` + 7 tests; still open: token-estimates/verbosity need per-outcome content capture in `TaskOutcome`, a serialization decision) |
-| test_eval_report_extra_1.py | RE-EXPRESS | rich print_* summary tables unported |
-| test_eval_report_extra_2.py | RE-EXPRESS | diff_from_last_run/print_diff unported (CSV covered in report_csv.rs) |
+| test_eval_report_extra_1.py | DELETE — rich `print_*` summary tables were the Python presenter; the Rust report renders through `eval/report.rs` (`render_eval_report`, `render_historical_trends`), covered by `tests/model_eval.rs` |
+| test_eval_report_extra_2.py | COVERED (partial) 2026-09-13 — CSV in `report_csv.rs`; history in `report.rs::{save_historical_results, load_historical_stats, render_historical_trends}`. Python's `diff_from_last_run` presenter is not ported (B4 deferral: the trend table already shows the per-model delta) |
 | test_eval_run_integration_1.py | COVERED | tests/eval_runner.rs::perfect_output_scores_ok_without_retry |
 | test_eval_run_integration_2.py | COVERED | task_loader_tests::graded_score_dispatches_every_graded_variant |
 | test_eval_run_integration_3.py | COVERED | tests/eval_runner.rs::consecutive_infra_failures_abandon_the_model_early |
 | test_eval_server_restart.py | DELETE | osaurus_one.sh/osascript restart plumbing retired, no Rust counterpart |
-| test_eval_task_sources.py | RE-EXPRESS | sourceless-task-on-source-gated-validator check unported |
-| test_eval_tasks_core.py | RE-EXPRESS | _extract_items_from_text table/bullet parser unported |
+| test_eval_task_sources.py | COVERED 2026-09-13 — `tasks_tests::the_source_is_the_prompt_the_model_was_shown` pins that every source-gated validator (summary, mixed summary, attribution, fabrication, injection) is fed the prompt as its source; `filename` is fed the raw input |
+| test_eval_tasks_core.py | COVERED 2026-09-13 — the task table is `eval/tasks.rs` (24 rows incl. `json`/`detailed_json` aliases), pinned row-for-row to the Python table (name, roles, `parse_json`, validator) by `tasks_tests.rs`; `_extract_items_from_text` (table/bullet fallback parser) was a `run_validate`-only helper with no roster consumer — retired |
 | test_eval_validate.py | COVERED | eval/validate.rs::all_detailed_scores_100 |
 | test_eval_watchdog.py | COVERED | eval/watchdog.rs::test_watchdog_detects_stall |
 | test_adversarial_tasks.py | COVERED | validators/adversarial.rs::test_validate_no_fabrication_catches_lures |
@@ -216,7 +216,7 @@ Only `test_llm.py`, `test_mlx.py`, `test_gemma.py` need a live server/GPU.
 
 | file | verdict | evidence |
 |---|---|---|
-| test_faithfulness_validators.py | RE-EXPRESS (partial: no_leak/strict_schema/no_contradiction covered 2026-09-13 by `eval/validators/faithfulness.rs` + 11 tests; task wiring for `filename_leak`/`weekend_transient_schema`/`summarize_contradiction` still open) |
+| test_faithfulness_validators.py | COVERED 2026-09-13 — validators in `eval/validators/faithfulness.rs` (11 tests) and now WIRED: `weekend_transient_schema` / `summarize_contradiction` / `filename_leak` rows of `eval/tasks.rs` via `Graded::{StrictSchema,NoContradiction,NoLeak}` |
 | test_g3_edge_cases.py | RE-EXPRESS | prompt_render refusal + fetch/extract/ensure_server branches unported |
 | test_name_matching_boundaries.py | COVERED | shape.rs::test_names_match_containment_and_token_overlap |
 | test_quality_entry.py | DELETE | retired lib/quality_* benchmark harness |
@@ -314,7 +314,7 @@ Only `test_llm.py`, `test_mlx.py`, `test_gemma.py` need a live server/GPU.
 | test_gpu_lock_call_sites.py | RE-EXPRESS | missing entry-holds-lock + heartbeat-per-task assertions |
 | test_gpu_lock_shell.py | RE-EXPRESS | shell impl stays ops-side; script wiring has no Rust test |
 | test_vision_payload.py | COVERED | image_renamer_tests.rs VLM data_uri + quirks.rs multimodal passthrough |
-| test_vision_task.py | RE-EXPRESS | missing vision fixtures/render/validator scoring |
+| test_vision_task.py | COVERED 2026-09-13 — `eval/vision.rs`: fixtures as data (`conf/eval_vision.toml`), flat-fill PNG renderer (decoded and probed in tests), data-URI content parts on `ChatMessage.images`, `validate_image_description` (full/synonym/partial/blind/empty cases); wired as the `image_real` row |
 | test_untrusted_framing.py | RE-EXPRESS | missing slot-ordering + override-merge (framing covered) |
 | test_prompts_conf.py | COVERED | config.rs::test_twitter_prompt_matches_shared_conf + layering tests |
 | test_rust_prompt_parity.py | COVERED 2026-09-13 — the generated Rust constants are canonical now; the surviving contract (eval prompt == production `conf/prompts.toml` instructions + fixture timeline) is pinned by `eval/prompts/mod.rs` tests (red-proven against a conf edit) |
