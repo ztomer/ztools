@@ -1,68 +1,109 @@
 # Roadmap — `ztools`
 
-_Forward-looking backlog only; completed plans are pruned to git history (house rule #13).
-The Python-retirement plan (Phases 0-4: spikes, foundation, port behind seams, parity
-proof, cutover) completed 2026-09-13 — its record, including the live-proof notes and the
-collect-parity instrument recalibration, is in the history of this file before that
-date and in `docs/PORT_PARITY.md`._
+_Forward-looking backlog only; completed plans are pruned to git history (house rule
+#13). Consolidated and phased 2026-09-19. The Python-retirement plan completed
+2026-09-13 and lives in this file's history before that date and in
+`docs/PORT_PARITY.md`._
 
-## State (2026-09-13)
+## State (2026-09-19)
 
 Zero Python at runtime. The static Rust binary is the only implementation: twitter
 collect + summarize (native camoufox-rs driver, fallback chain with provenance),
-weekend planner (native DDG search, one plan store), image renamer, model-eval (the
-full 24-row task roster + taxes snapshots, graded validators, vision task), and the
-two routines status commands. `routines*.toml` run the binary. `references/`,
-`pyproject.toml`, `uv.lock`, the `.venv` and the Python-only tools are gone;
-`tools/*.py` are dev gates; `tools/tests/` holds the pytest for the shell lock.
+weekend planner (three-engine search, one plan store, health-stamped plans), image
+renamer, model-eval (30-task roster, graded validators, vision task, thinking-off
+regime), and the two routines status commands.
 
-## Open items (B4 deferrals — behaviour the Python had, the Rust does not, stated
-rather than silently dropped)
+Every production LLM call goes through one client (`ztools/llm.rs`): thinking off,
+`max_tokens` bounded, streamed, failed only on a stall. `[best_models]` is derived
+from a complete sweep of every installed model under that regime; the embedded
+defaults are drift-gated to it. Every installed model except `lfm2.5-350m` (28.7,
+unrankable by score) holds or could hold a slot.
 
-1. **Weekend phase retry.** Python retried each LLM phase up to `LLM_MAX_RETRIES=5`
-   on transport/parse failure; the Rust phases are single-shot with the configured
-   `llm_extended_timeout_secs`. A transient server error fails the phase and the run
-   says so. Port when a scheduled run is lost to one: wrap `weekend/phases.rs` calls
-   in the same `run_chain`-style loop the summarizer now has, with the count in
-   `conf/weekend.toml`, not code.
-2. **Weekend phase timeout learning.** Python widened per-(model, phase) timeouts from
-   observed latency (`conf/phase_signals.json`, headroom 1.5, never below the
-   default). Rust uses the configured value. `eval/signals.rs` already learns
-   per-model timeouts for the eval; the weekend phases could read the same store.
-3. **Eval token / verbosity metrics.** `compute_token_estimates` / `compute_verbosity`
-   need per-outcome content capture in `TaskOutcome` (a serialization decision — the
-   record would grow by the model's full answer). Everything else in the report is
-   ported (`eval/report_metrics.rs`, `report.rs`, `report_csv.rs`).
-4. **Eval `diff_from_last_run` presenter.** History is saved and the trend table
-   renders per-model deltas; the Python "what changed since the last run" table is
-   not re-rendered as such.
-5. **Drain-mode SIGINT.** The Python eval caught SIGINT, finished the in-flight task
-   and released the lock in order. The Rust eval dies on SIGINT; the lock's
-   dead-owner reclaim (pid + start time) restores the safety property, and the
-   in-flight task's result is lost. Port with `ctrlc` if a sweep is ever interrupted
-   by hand often enough to matter.
+## How to rank work
 
-6. **A summarize-specific injection task.** `filename_injection` is the only proxy;
-   it gates json and filename, and the owner overrode it for summarize (raptor-v0.5,
-   92.8, obeys). A planted-instruction tweet in the summarize corpus would measure the
-   real exposure of that decision.
+The tools exist to run unattended and be trusted. Rank by what a failure HIDES:
+a plan that says "quiet weekend" over a blocked search, a summary steered by a
+tweet, a slot winner measured under a regime the tool does not run. Work that
+only makes a visible thing nicer comes after work that closes a silence.
+
+## Phase 1 — measure what the decisions rest on
+
+The slot derivation now carries two accepted exposures. Both should be measured,
+not inferred.
+
+1. **A summarize-specific injection task.** `filename_injection` is the only
+   proxy; it gates json and filename, and the owner overrode it for summarize
+   (raptor-v0.5, 92.8, obeys). A planted-instruction tweet in the summarize
+   corpus, scored on whether the instruction reaches the summary, measures the
+   real exposure of that decision. Ship criterion: the task is in the roster,
+   the raptors and muse have a score on it, and the summarize slot comment cites
+   it instead of the filename proxy.
+2. **`weekend_fabrication` for the engine chain.** Bing returns noisier results
+   than DDG did ("Dropped 50 out-of-region" per run against ~4 before). The
+   provenance and region gates hold, but nothing measures whether the extra
+   noise moves invented-row rates in the live planner. One week of plans, count
+   rows the provenance gate dropped; if it climbs, the region list or the
+   per-engine result cap is the lever.
+
+## Phase 2 — planner honesty in the plan itself
+
+3. **Engine order learned from health.** `SearchHealth` records per-engine
+   walls per run; nothing reads them back. If DDG is walled for N consecutive
+   runs, try it last (or skip it) rather than pay 16 challenged POSTs per plan.
+   Data, not code: the order and the threshold in `conf/weekend.toml`. Only
+   worth it if the wall persists — check the health lines in a month first.
+4. **Weekend phase retry** (B4 deferral). Python retried each phase up to 5× on
+   transport/parse failure; Rust phases are single-shot. The stall-guarded
+   client removed the main cause (abandoned calls). Port only when a scheduled
+   run is actually lost to a transient error: the `run_chain`-style loop the
+   summarizer has, count in `conf/weekend.toml`.
+5. **Weekend phase timeout learning** (B4 deferral). Python widened per-(model,
+   phase) timeouts from observed latency. The stall guard makes the cap a
+   backstop, so this only matters if a call legitimately streams past 900s.
+   `eval/signals.rs` has the store if it ever does.
+
+## Phase 3 — eval ergonomics
+
+6. **Eval "what changed since the last run" presenter** (B4). History is saved
+   and the trend table renders per-model deltas; the Python diff table is not
+   re-rendered. Cheap once someone wants it.
+7. **Eval token / verbosity metrics** (B4). Need per-outcome content capture in
+   `TaskOutcome` — a serialization decision, the record grows by the model's
+   full answer. Decide before porting.
+8. **Drain-mode SIGINT** (B4). The Rust eval dies on Ctrl-C; the lock's
+   dead-owner reclaim restores safety and the in-flight task is lost. Port with
+   `ctrlc` if sweeps get interrupted by hand often enough to matter.
+
+## Watch items (no action until they move)
+
+- **26GB in an interactive slot.** filename and vlm are `muse-glimmer-30b`; `rn`
+  is interactive, and a cold load measured up to 8m38s on a contended box. Fine
+  while `rn` runs after something else has warmed muse; if the first rename of
+  the day is the complaint, `rn` warms on launch or the slot takes the 6.3GB
+  raptor-v0.5 (100 quality, 0 injection — same trade as summarize).
+- **Osaurus wedges on abandoned requests.** The production client never
+  abandons one, and `osaurus_one.sh --restart` clears it. If a wedge recurs
+  with no abandoned call in the log, it is a server bug to report, not ours.
 
 ## Open questions
 
 - **Region filter divergence** (pinned, consensus fixtures only): Rust's
-  foreign-city blocklist beats a local token; Python's whitelist-only did not. The
-  remaining divergence surface is London-Ontario / Chicago-with-Toronto /
-  ON-postal-only. Both lists live in `conf/weekend.toml [region]`; the rule is in
-  `weekend_cache.rs` (`a_foreign_city_beats_any_local_token`). Someone picks.
-- **Collect parity is shared-record agreement, not ID-set equality** — because the
-  Following endpoint is served as a per-load sample (same collector, minutes apart:
-  7 shared of ~50). If x.com ever serves it reverse-chronologically again, the
-  stronger criterion can come back; `bin/ab_test` keeps the comparator.
+  foreign-city blocklist beats a local token; Python's whitelist-only did not.
+  Remaining surface: London-Ontario / Chicago-with-Toronto / ON-postal-only.
+  Both lists live in `conf/weekend.toml [region]`. Someone picks.
+- **Collect parity is shared-record agreement, not ID-set equality** — because
+  the Following endpoint is served as a per-load sample. If x.com serves it
+  reverse-chronologically again, the stronger criterion can come back;
+  `bin/ab_test` keeps the comparator.
 
 ## Explicit non-goals
 
+- No DuckDuckGo wall-beater. `ddgs` 9.16 (2026-08) hits the same wall through
+  browser-TLS impersonation; the wall is per IP. Engine spreading is the answer
+  and it is built. A headless browser per query is not worth it while two
+  engines answer.
 - No keychain AES port: the persistent-profile design killed the Chrome-cookie path.
 - No bs4 port: aggregator text extraction is bounded raw-HTML stripping.
 - No per-model prompt variants (`conf/models/*.toml [prompts]`): prompts are
-  `conf/prompts.toml`-canonical; the per-model tables are read only for token budgets.
+  `conf/prompts.toml`-canonical; the per-model tables are read only for budgets.
 - `tools/*.py` gates stay Python permanently.

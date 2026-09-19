@@ -82,6 +82,11 @@ fn test_parse_llm_events_empty_defaults() {
     assert_eq!(events[0].price, "unknown");
     assert_eq!(events[0].target_ages, "unknown");
     assert_eq!(events[0].day, "This Weekend");
+    assert!(
+        events[0].description.is_empty(),
+        "a missing description is a missing value, never a copy of the name: {:?}",
+        events[0]
+    );
 }
 
 #[test]

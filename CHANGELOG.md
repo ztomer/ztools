@@ -55,7 +55,11 @@ server unable to answer `pong`. Four causes, each closed at the class level.
   the injection gate -- it obeys planted instructions, and the trade is stated in
   the config); think/default → `qwen3.8-27b-jang_6d`. Injection resistance gates
   json and filename.
-- **`lfm2.5-2.6b-4bit` deleted** -- it could not load on this Osaurus. The embedded Rust defaults
+- **`lfm2.5-2.6b-4bit` deleted** -- it could not load on this Osaurus.
+- **A missing event description is `—`, not a copy of the name.** "Why It Fits"
+  used to repeat the event's own title as its reason (class C4).
+- **ROADMAP consolidated and phased**: measure the two accepted exposures first,
+  planner honesty second, eval ergonomics third; watch items and non-goals stated. The embedded Rust defaults
   match, kept equal by a drift-gate test. Proven live: the planner with muse
   produced 10 rows in 8m08s.
 - **`sweep_models.sh` records a refusal as `REFUSED`**, not `DONE tasks=0`, so

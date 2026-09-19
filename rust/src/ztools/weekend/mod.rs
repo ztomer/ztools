@@ -271,11 +271,10 @@ pub fn parse_llm_events(resp: &serde_json::Value) -> Option<Vec<WeekendEvent>> {
             .transient_events
             .into_iter()
             .map(|e| WeekendEvent {
-                description: if e.description.is_empty() {
-                    e.name.clone()
-                } else {
-                    e.description
-                },
+                // Empty stays empty: the renderer prints the missing-value
+                // sentinel (class C4). It used to copy the name here, so
+                // "Why It Fits" repeated the event's own title as its reason.
+                description: e.description,
                 name: e.name,
                 location: e.location,
                 price: if e.price.is_empty() {
