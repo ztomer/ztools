@@ -165,10 +165,20 @@ fn compressor_gb() -> Option<f64> {
 /// it cannot tell -- an unverifiable sample must not masquerade as clean.
 #[must_use]
 pub fn machine_is_uncontended() -> bool {
-    if foreign_holder().is_some() {
+    uncontended_verdict(foreign_holder().is_some(), memory_pressure())
+}
+
+/// The contention rule over one reading of each input.
+///
+/// Pure, so it can be pinned without asking the box what it is doing right
+/// now. `None` pressure means "cannot tell", and an unverifiable sample must
+/// not masquerade as clean.
+#[must_use]
+pub fn uncontended_verdict(foreign_lock_held: bool, pressure: Option<(f64, f64)>) -> bool {
+    if foreign_lock_held {
         return false;
     }
-    match memory_pressure() {
+    match pressure {
         None => false,
         Some((swap_gb, compressor_gb)) => {
             swap_gb <= MAX_CLEAN_SWAP_GB && compressor_gb <= MAX_CLEAN_COMPRESSOR_GB

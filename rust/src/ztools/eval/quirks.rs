@@ -14,14 +14,10 @@
 
 use serde_json::{json, Value};
 
-pub const MODEL_FAMILIES: &[&str] = &[
-    "qwopus",
-    "qwen",
-    "gemma",
-    "nemotron",
-    "laguna",
-    "foundation",
-];
+// Families with a quirk file in `conf/models/`. `qwopus`, `nemotron` and
+// `laguna` were removed 2026-09-19 with their files: no installed model
+// belongs to them, and a family list that names ghosts reads as support.
+pub const MODEL_FAMILIES: &[&str] = &["qwen", "gemma", "foundation"];
 const QWEN_FAMILY: &str = "qwen";
 const GEMMA4_FAMILY: &str = "gemma4";
 

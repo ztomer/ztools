@@ -42,15 +42,12 @@ rather than silently dropped)
    in-flight task's result is lost. Port with `ctrlc` if a sweep is ever interrupted
    by hand often enough to matter.
 
-6. **`conf/config.toml` names models that are not installed** (2026-09-19):
-   `ornith-1.0-35b-jang_4m` (default_model, think), `gemma-4-e2b-it-8bit` (summarize,
-   filename — the tool falls through its chain every run) and `qwen3.8-27b-8bit` (vlm).
-   Installed and unranked: `raptor-v0.5-8b-a1b`, `raptor-v1-26b-a4b-vl`,
-   `gemma-4-e4b-it-8bit`, `muse-glimmer-30b`, `lfm2.5-*`, `bonsai-2-27b-crack-ternary-jang`
-   (complete at `~/MLXModels/dealignai/`; the 241MB `OsaurusAI/Bonsai-2-27B-1.75bit-JANG`
-   stub beside it was a different, abandoned download, removed 2026-09-19). Re-sweep the installed roster
-   (thinking off — the production regime, the eval's default since 2026-09-19) and
-   re-derive the slots.
+6. **Five models still unranked** (2026-09-19): `muse-glimmer-30b`, both `raptor`
+   builds, `qwen3.8-27b-jang_6d-crack` and `bonsai-2-27b-crack-ternary-jang` were
+   refused by the eval's paging guard in the first thinking-off sweep;
+   `tools/sweep_models.sh --resume` re-runs them. Re-derive `[best_models]` after.
+   `lfm2.5-2.6b-4bit` cannot load on this Osaurus ("Unhandled keys [language_model]
+   in LFM2Model") — delete it or report upstream.
 
 ## Open questions
 

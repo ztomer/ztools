@@ -2,7 +2,9 @@
 state_file = "~/.twitter_summary_state.json"
 output_dir = "~/Documents/twitter_summaries"
 llm_url = "http://localhost:1337"
-model = "gemma-4-e2b-it-8bit"
+# No `model` key here: the summarizer's model is `conf/config.toml
+# [best_models].summarize`, derived from the eval sweep. A key here named an
+# uninstalled model for a month and nothing read it (2026-09-19).
 chrome_cookies_db = "~/Library/Application Support/Google/Chrome/Default/Cookies"
 max_scrolls = 1200
 

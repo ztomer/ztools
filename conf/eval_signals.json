@@ -1,4 +1,243 @@
 {
+  "bonsai-2-27b-crack-ternary-jang": {
+    "_capabilities": {
+      "cold_start_seconds": 0.63,
+      "cold_start_seconds_samples": [
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 0.6276
+        }
+      ],
+      "decode_tokens_per_sec": 29.53,
+      "decode_tokens_per_sec_samples": [
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 29.5327
+        }
+      ],
+      "prefill_chars_per_sec": 402.6,
+      "prefill_chars_per_sec_samples": [
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 402.6
+        }
+      ],
+      "prefill_samples": 1
+    },
+    "detailed_json": {
+      "p95_latency": 26.1,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "file_summary": {
+      "p95_latency": 31.3,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "file_summary_mixed": {
+      "p95_latency": 39.2,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "filename": {
+      "p95_latency": 0.7,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "filename_injection": {
+      "p95_latency": 1.9,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "filename_leak": {
+      "p95_latency": 0.9,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "filename_mixed": {
+      "p95_latency": 5.7,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "image_real": {
+      "p95_latency": 8.7,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "image_rename": {
+      "p95_latency": 4.5,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "image_rename_mixed": {
+      "p95_latency": 9.0,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "json": {
+      "p95_latency": 37.1,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "rename_mixed": {
+      "p95_latency": 6.7,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "summarize": {
+      "p95_latency": 57.7,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "summarize_contradiction": {
+      "p95_latency": 75.2,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "summarize_factual_accuracy": {
+      "p95_latency": 89.0,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "summarize_factual_coverage": {
+      "p95_latency": 55.3,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "summarize_misattribution": {
+      "p95_latency": 18.8,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "summarize_mixed": {
+      "p95_latency": 72.9,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "taxes_anomalies": {
+      "p95_latency": 48.9,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "taxes_audit_readiness": {
+      "p95_latency": 56.2,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "taxes_qa": {
+      "p95_latency": 88.1,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "taxes_slip_qa": {
+      "p95_latency": 3.5,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "taxes_synthesis": {
+      "p95_latency": 60.8,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "taxes_yoy_narrative": {
+      "p95_latency": 85.5,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_fabrication": {
+      "p95_latency": 11.2,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "weekend_fixed": {
+      "p95_latency": 32.7,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_fixed_mixed": {
+      "p95_latency": 27.4,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient": {
+      "p95_latency": 43.7,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient_mixed": {
+      "p95_latency": 42.5,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient_schema": {
+      "p95_latency": 39.9,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    }
+  },
   "bonsai-27b-ternary-jang": {
     "_capabilities": {
       "cold_start_seconds": 0.9,
@@ -2161,7 +2400,7 @@
   },
   "muse-glimmer-30b-jang_6m": {
     "_capabilities": {
-      "cold_start_seconds": 5.74,
+      "cold_start_seconds": 10.87,
       "cold_start_seconds_samples": [
         {
           "clean": false,
@@ -2178,9 +2417,14 @@
           "clean": true,
           "ts": 1787109543.0,
           "v": 0.6194
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 10.954
         }
       ],
-      "decode_tokens_per_sec": 17.62,
+      "decode_tokens_per_sec": 17.81,
       "decode_tokens_per_sec_samples": [
         {
           "clean": false,
@@ -2197,12 +2441,17 @@
           "clean": true,
           "ts": 1787109546.6,
           "v": 17.955
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 17.8079
         }
       ],
       "disk_bytes": 27566984848,
       "family": "muse_glimmer",
       "generative": true,
-      "prefill_chars_per_sec": 511.7,
+      "prefill_chars_per_sec": 612.7,
       "prefill_chars_per_sec_samples": [
         {
           "clean": false,
@@ -2219,218 +2468,223 @@
           "clean": true,
           "ts": 1787109579.3,
           "v": 612.7
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 747.6
         }
       ],
-      "prefill_samples": 3,
+      "prefill_samples": 4,
       "vision": true
     },
     "detailed_json": {
-      "p95_latency": 233.2,
+      "p95_latency": 226.1,
       "parse_failures": 0,
-      "samples": 6,
+      "samples": 7,
       "timeout": 900,
       "total_retries": 1
     },
     "file_summary": {
-      "p95_latency": 204.6,
+      "p95_latency": 197.8,
       "parse_failures": 0,
-      "samples": 7,
+      "samples": 8,
       "timeout": 900,
-      "total_retries": 5
+      "total_retries": 6
     },
     "file_summary_mixed": {
-      "p95_latency": 218.1,
+      "p95_latency": 210.8,
       "parse_failures": 0,
-      "samples": 7,
+      "samples": 8,
       "timeout": 900,
       "total_retries": 1
     },
     "filename": {
-      "p95_latency": 31.8,
+      "p95_latency": 30.8,
       "parse_failures": 0,
-      "samples": 6,
+      "samples": 7,
       "timeout": 900,
       "total_retries": 1
     },
     "filename_injection": {
-      "p95_latency": 63.1,
-      "parse_failures": 0,
-      "samples": 2,
-      "timeout": 900,
-      "total_retries": 0
-    },
-    "filename_leak": {
-      "p95_latency": 32.0,
-      "parse_failures": 0,
-      "samples": 6,
-      "timeout": 900,
-      "total_retries": 1
-    },
-    "filename_mixed": {
-      "p95_latency": 113.1,
-      "parse_failures": 0,
-      "samples": 6,
-      "timeout": 900,
-      "total_retries": 1
-    },
-    "image_real": {
-      "p95_latency": 37.7,
-      "parse_failures": 0,
-      "samples": 1,
-      "timeout": 900,
-      "total_retries": 0
-    },
-    "image_rename": {
-      "p95_latency": 171.5,
-      "parse_failures": 0,
-      "samples": 6,
-      "timeout": 900,
-      "total_retries": 1
-    },
-    "image_rename_mixed": {
-      "p95_latency": 150.6,
-      "parse_failures": 0,
-      "samples": 6,
-      "timeout": 900,
-      "total_retries": 1
-    },
-    "json": {
-      "p95_latency": 615.4,
-      "parse_failures": 0,
-      "samples": 6,
-      "timeout": 923,
-      "total_retries": 1
-    },
-    "rename_mixed": {
-      "p95_latency": 151.3,
-      "parse_failures": 0,
-      "samples": 6,
-      "timeout": 900,
-      "total_retries": 1
-    },
-    "summarize": {
-      "p95_latency": 601.0,
-      "parse_failures": 0,
-      "samples": 6,
-      "timeout": 901,
-      "total_retries": 1
-    },
-    "summarize_contradiction": {
-      "p95_latency": 542.2,
-      "parse_failures": 0,
-      "samples": 6,
-      "timeout": 900,
-      "total_retries": 1
-    },
-    "summarize_factual_accuracy": {
-      "p95_latency": 628.1,
-      "parse_failures": 0,
-      "samples": 6,
-      "timeout": 942,
-      "total_retries": 1
-    },
-    "summarize_factual_coverage": {
-      "p95_latency": 520.1,
-      "parse_failures": 0,
-      "samples": 6,
-      "timeout": 900,
-      "total_retries": 1
-    },
-    "summarize_misattribution": {
-      "p95_latency": 174.0,
+      "p95_latency": 60.4,
       "parse_failures": 0,
       "samples": 3,
       "timeout": 900,
       "total_retries": 0
     },
-    "summarize_mixed": {
-      "p95_latency": 617.2,
+    "filename_leak": {
+      "p95_latency": 30.9,
       "parse_failures": 0,
-      "samples": 6,
-      "timeout": 925,
+      "samples": 7,
+      "timeout": 900,
       "total_retries": 1
+    },
+    "filename_mixed": {
+      "p95_latency": 109.0,
+      "parse_failures": 0,
+      "samples": 7,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "image_real": {
+      "p95_latency": 36.6,
+      "parse_failures": 0,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "image_rename": {
+      "p95_latency": 164.6,
+      "parse_failures": 0,
+      "samples": 7,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "image_rename_mixed": {
+      "p95_latency": 144.4,
+      "parse_failures": 0,
+      "samples": 7,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "json": {
+      "p95_latency": 589.5,
+      "parse_failures": 0,
+      "samples": 7,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "rename_mixed": {
+      "p95_latency": 145.4,
+      "parse_failures": 0,
+      "samples": 7,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "summarize": {
+      "p95_latency": 575.6,
+      "parse_failures": 0,
+      "samples": 7,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "summarize_contradiction": {
+      "p95_latency": 519.7,
+      "parse_failures": 0,
+      "samples": 7,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "summarize_factual_accuracy": {
+      "p95_latency": 602.1,
+      "parse_failures": 0,
+      "samples": 7,
+      "timeout": 903,
+      "total_retries": 2
+    },
+    "summarize_factual_coverage": {
+      "p95_latency": 498.3,
+      "parse_failures": 0,
+      "samples": 7,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "summarize_misattribution": {
+      "p95_latency": 166.9,
+      "parse_failures": 0,
+      "samples": 4,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "summarize_mixed": {
+      "p95_latency": 591.0,
+      "parse_failures": 0,
+      "samples": 7,
+      "timeout": 900,
+      "total_retries": 2
     },
     "taxes_anomalies": {
-      "p95_latency": 178.2,
+      "p95_latency": 174.1,
       "parse_failures": 0,
-      "samples": 6,
+      "samples": 7,
       "timeout": 900,
-      "total_retries": 1
+      "total_retries": 2
     },
     "taxes_audit_readiness": {
-      "p95_latency": 157.1,
+      "p95_latency": 154.1,
       "parse_failures": 0,
-      "samples": 6,
+      "samples": 7,
       "timeout": 900,
-      "total_retries": 1
+      "total_retries": 2
     },
     "taxes_qa": {
-      "p95_latency": 112.5,
+      "p95_latency": 111.6,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
     "taxes_slip_qa": {
-      "p95_latency": 25.2,
+      "p95_latency": 24.6,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
     "taxes_synthesis": {
-      "p95_latency": 216.6,
+      "p95_latency": 212.7,
       "parse_failures": 0,
-      "samples": 6,
+      "samples": 7,
+      "timeout": 900,
+      "total_retries": 2
+    },
+    "taxes_yoy_narrative": {
+      "p95_latency": 359.9,
+      "parse_failures": 0,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 1
     },
-    "taxes_yoy_narrative": {
-      "p95_latency": 306.4,
-      "parse_failures": 0,
-      "samples": 1,
-      "timeout": 900,
-      "total_retries": 0
-    },
     "weekend_fabrication": {
-      "p95_latency": 201.8,
+      "p95_latency": 193.4,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
     "weekend_fixed": {
-      "p95_latency": 274.1,
+      "p95_latency": 265.1,
       "parse_failures": 0,
-      "samples": 6,
+      "samples": 7,
       "timeout": 900,
       "total_retries": 1
     },
     "weekend_fixed_mixed": {
-      "p95_latency": 329.3,
+      "p95_latency": 317.3,
       "parse_failures": 0,
-      "samples": 6,
+      "samples": 7,
       "timeout": 900,
       "total_retries": 1
     },
     "weekend_transient": {
-      "p95_latency": 700.2,
+      "p95_latency": 670.5,
       "parse_failures": 0,
-      "samples": 6,
-      "timeout": 1050,
+      "samples": 7,
+      "timeout": 1005,
       "total_retries": 1
     },
     "weekend_transient_mixed": {
-      "p95_latency": 542.5,
+      "p95_latency": 519.5,
       "parse_failures": 0,
-      "samples": 6,
+      "samples": 7,
       "timeout": 900,
       "total_retries": 1
     },
     "weekend_transient_schema": {
-      "p95_latency": 499.8,
+      "p95_latency": 479.7,
       "parse_failures": 0,
-      "samples": 6,
+      "samples": 7,
       "timeout": 900,
       "total_retries": 1
     }

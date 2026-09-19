@@ -182,33 +182,33 @@ fn load_degrades_to_empty_and_save_roundtrips() {
 }
 
 #[test]
-#[serial]
 fn an_unreadable_pressure_reading_is_never_evidence_of_contention() {
     // Documented contract: None means "cannot tell" and uncontended must
     // then be FALSE -- an unverifiable sample must not masquerade as clean.
-    match memory_pressure() {
-        None => assert!(!machine_is_uncontended()),
-        Some((swap, compressor)) => {
-            assert!(swap.is_finite() && swap >= 0.0);
-            assert!(compressor.is_finite() && compressor >= 0.0);
-            assert_eq!(
-                machine_is_uncontended(),
-                swap <= MAX_CLEAN_SWAP_GB && compressor <= MAX_CLEAN_COMPRESSOR_GB
-            );
-        }
+    // Pinned on the pure rule with injected inputs: the previous version
+    // read the live lock and live memory, twice, and went red whenever a
+    // sweep held the GPU or a reading moved between the two calls.
+    assert!(!uncontended_verdict(false, None));
+    assert!(!uncontended_verdict(true, None));
+    assert!(uncontended_verdict(
+        false,
+        Some((MAX_CLEAN_SWAP_GB, MAX_CLEAN_COMPRESSOR_GB))
+    ));
+    assert!(!uncontended_verdict(
+        false,
+        Some((MAX_CLEAN_SWAP_GB + 0.1, 0.0))
+    ));
+    assert!(!uncontended_verdict(
+        false,
+        Some((0.0, MAX_CLEAN_COMPRESSOR_GB + 0.1))
+    ));
+    // A foreign holder outranks clean pressure.
+    assert!(!uncontended_verdict(true, Some((0.0, 0.0))));
+    // The live reader, when it can read, yields finite non-negative numbers.
+    if let Some((swap, compressor)) = memory_pressure() {
+        assert!(swap.is_finite() && swap >= 0.0);
+        assert!(compressor.is_finite() && compressor >= 0.0);
     }
-    // The same contract through the foreign-holder seam: with no owner
-    // file the verdict must come from pressure alone.
-    let dir = Fixture::new(&[]);
-    let _g = &dir.guard;
-    assert!(foreign_holder().is_none());
-    let expected = match memory_pressure() {
-        None => false,
-        Some((swap, compressor)) => {
-            swap <= MAX_CLEAN_SWAP_GB && compressor <= MAX_CLEAN_COMPRESSOR_GB
-        }
-    };
-    assert_eq!(machine_is_uncontended(), expected);
 }
 
 #[test]
