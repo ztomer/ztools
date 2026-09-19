@@ -161,20 +161,24 @@ fn default_weekend_exclusions_paths() -> Vec<String> {
 fn default_weekend_region_paths() -> Vec<String> {
     default_weekend_toml_paths()
 }
+// The embedded slot defaults are what a static binary uses with no checkout.
+// `config_tests::embedded_slot_defaults_match_conf_best_models` keeps them
+// equal to `conf/config.toml [best_models]`, the derived source of truth --
+// they named three uninstalled models for a month before that gate existed.
 fn default_twitter_model() -> String {
-    "gemma-4-e2b-it-8bit".to_string()
+    "gemma-4-e4b-it-8bit".to_string()
 }
 fn default_weekend_model() -> String {
     "qwen3.8-27b-jang_6d".to_string()
 }
 fn default_image_renamer_model() -> String {
-    "gemma-4-e2b-it-8bit".to_string()
+    "qwen3.8-27b-jang_6d".to_string()
 }
 fn default_image_renamer_vlm_model() -> String {
-    "qwen3.8-27b-8bit".to_string()
+    "qwen3.8-27b-jang_6d".to_string()
 }
 fn default_think_model() -> String {
-    "ornith-1.0-35b-jang_4m".to_string()
+    "qwen3.8-27b-jang_6d".to_string()
 }
 const fn default_llm_timeout_secs() -> u64 {
     120

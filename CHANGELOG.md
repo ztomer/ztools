@@ -47,6 +47,15 @@ server unable to answer `pong`. Four causes, each closed at the class level.
   kept saying this one was "not planned".
 
 ### Changed
+- **`[best_models]` re-derived from the first thinking-off sweep** (2026-09-19, five
+  complete models; five refused under memory pressure and are pending
+  `sweep_models.sh --resume`). Three slots had named models that were not
+  installed since mid-August. New: think/default, json, filename, vlm →
+  `qwen3.8-27b-jang_6d`; summarize → `gemma-4-e4b-it-8bit` (a deliberate,
+  documented deviation from the raw ranking on injection resistance). The embedded
+  Rust defaults now match, kept equal by a drift-gate test.
+- **`sweep_models.sh` records a refusal as `REFUSED`**, not `DONE tasks=0`, so
+  `--resume` re-runs it; four refusals from today's sweep are re-filed.
 - **`model-eval` measures thinking OFF by default** (`--thinking` restores the old
   regime), so a sweep ranks models as the production tools now call them. Sweeps
   before this version measured with reasoning on; compare across the boundary with

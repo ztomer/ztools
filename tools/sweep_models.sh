@@ -3,7 +3,8 @@
 # one model at a time, resumably, without ever recording a truncated run as complete.
 #
 #   ./tools/sweep_models.sh            sweep every installed model
-#   ./tools/sweep_models.sh --resume   skip models already recorded DONE
+#   ./tools/sweep_models.sh --resume   skip models already recorded DONE (a REFUSED,
+#                                      TRUNCATED or FAILED model is re-run)
 #   ./tools/sweep_models.sh --status   print the status file and exit
 #   ./tools/sweep_models.sh --model X  just one model
 #
@@ -173,7 +174,16 @@ for MODEL in $MODELS; do
     mv "$STATUS.tmp" "$STATUS"
   fi
 
-  if [ "$CODE" -eq 0 ]; then
+  if [ "$CODE" -eq 0 ] && [ "$TASKS_DONE" -eq 0 ]; then
+    # Exit 0 with nothing scored is the eval REFUSING (oversize, paging, held
+    # lock) -- a correct refusal, but not a measurement. Recorded as DONE it
+    # was skipped by --resume forever: 2026-09-19 filed four models this way
+    # in one sweep while a 17GB browser held the box, and a re-run on the
+    # quiet box would have walked past all four.
+    REASON=$(grep -m1 -oE 'Skipping [^:]+: .*' "$LOG" 2>/dev/null | cut -c1-120 || true)
+    printf 'REFUSED\t%s\t%ss\ttasks=0\texit=0\t%s\n' "$MODEL" "$ELAPSED" "${REASON:-no reason logged}" >> "$STATUS"
+    warn "[$i/$TOTAL] $MODEL — REFUSED, nothing scored: ${REASON:-see $LOG}"
+  elif [ "$CODE" -eq 0 ]; then
     printf 'DONE\t%s\t%ss\ttasks=%s\texit=0\n' "$MODEL" "$ELAPSED" "$TASKS_DONE" >> "$STATUS"
     ok "[$i/$TOTAL] $MODEL — done in ${ELAPSED}s, $TASKS_DONE task(s) scored"
   elif [ "$CODE" -eq 124 ]; then

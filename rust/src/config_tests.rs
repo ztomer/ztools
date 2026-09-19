@@ -1,14 +1,16 @@
 use super::*;
 
+/// The slot names themselves are pinned against `conf/config.toml` by
+/// `embedded_slot_defaults_match_conf_best_models` below -- a literal here
+/// pinned three uninstalled models for a month, which is a golden test
+/// encoding a wrong value (house rule #8).
 #[test]
 fn test_default_config_values() {
     let cfg = ZtoolsConfig::default();
-    assert_eq!(cfg.twitter_model, "gemma-4-e2b-it-8bit");
-    assert_eq!(cfg.weekend_model, "qwen3.8-27b-jang_6d");
-    assert_eq!(cfg.image_renamer_model, "gemma-4-e2b-it-8bit");
-    assert_eq!(cfg.image_renamer_vlm_model, "qwen3.8-27b-8bit");
-    assert_eq!(cfg.think_model, "ornith-1.0-35b-jang_4m");
     assert_eq!(cfg.llm_timeout_secs, 120);
+    assert_eq!(cfg.llm_stall_secs, 120);
+    assert_eq!(cfg.llm_max_tokens, 4096);
+    assert_eq!(cfg.llm_warmup_timeout_secs, 900);
 }
 
 #[test]
@@ -149,4 +151,32 @@ fn a_directory_at_a_candidate_path_is_skipped() {
     );
     let cfg = ZtoolsConfig::default().with_shared_prompts_from(&[dir, good]);
     assert_eq!(cfg.twitter_summarize_prompt, "from the real file");
+}
+
+/// The drift gate for the model slots: the embedded defaults a static binary
+/// falls back on must equal `conf/config.toml [best_models]`, the derived
+/// source of truth. Before this gate the defaults named three models that
+/// were not installed for a month, and a checkout-less run would have fallen
+/// through its chain on every call.
+#[test]
+fn embedded_slot_defaults_match_conf_best_models() {
+    let conf_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("conf/config.toml");
+    let content = std::fs::read_to_string(&conf_path)
+        .unwrap_or_else(|e| panic!("conf/config.toml missing at {}: {e}", conf_path.display()));
+    let val: toml::Value = toml::from_str(&content).expect("conf/config.toml must parse");
+    let best = &val["best_models"];
+    let slot = |k: &str| {
+        best[k]
+            .as_str()
+            .unwrap_or_else(|| panic!("[best_models].{k} missing"))
+    };
+    let d = ZtoolsConfig::default();
+    assert_eq!(d.twitter_model, slot("summarize"));
+    assert_eq!(d.weekend_model, slot("json"));
+    assert_eq!(d.image_renamer_model, slot("filename"));
+    assert_eq!(d.image_renamer_vlm_model, slot("vlm"));
+    assert_eq!(d.think_model, slot("think"));
 }
