@@ -46,8 +46,9 @@ rather than silently dropped)
    `ornith-1.0-35b-jang_4m` (default_model, think), `gemma-4-e2b-it-8bit` (summarize,
    filename — the tool falls through its chain every run) and `qwen3.8-27b-8bit` (vlm).
    Installed and unranked: `raptor-v0.5-8b-a1b`, `raptor-v1-26b-a4b-vl`,
-   `gemma-4-e4b-it-8bit`, `muse-glimmer-30b`, `lfm2.5-*`. `bonsai-2-27b` is a 241MB
-   directory — a failed download listed as a model. Re-sweep the installed roster
+   `gemma-4-e4b-it-8bit`, `muse-glimmer-30b`, `lfm2.5-*`, `bonsai-2-27b-crack-ternary-jang`
+   (complete at `~/MLXModels/dealignai/`; the 241MB `OsaurusAI/Bonsai-2-27B-1.75bit-JANG`
+   stub beside it was a different, abandoned download, removed 2026-09-19). Re-sweep the installed roster
    (thinking off — the production regime, the eval's default since 2026-09-19) and
    re-derive the slots.
 
