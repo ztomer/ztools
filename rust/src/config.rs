@@ -22,6 +22,9 @@ pub struct ZtoolsConfig {
     /// empties a query. Configurable for the same reason as the first.
     #[serde(default = "default_bing_url")]
     pub bing_url: String,
+    /// The third engine, consulted only when the first two both fail a query.
+    #[serde(default = "default_brave_url")]
+    pub brave_url: String,
     /// Where the weekend planner looks for its exclusion list, in order; the
     /// first file that yields entries wins, and an empty list means "use the
     /// built-in defaults". Configurable because a hardcoded `~/…` path makes
@@ -121,6 +124,9 @@ fn default_duckduckgo_url() -> String {
 }
 fn default_bing_url() -> String {
     "https://www.bing.com/search".to_string()
+}
+fn default_brave_url() -> String {
+    "https://search.brave.com/search".to_string()
 }
 fn default_twitter_cache_path() -> String {
     "~/.cache/twitter/debug_tweets.json".to_string()
@@ -247,6 +253,7 @@ impl Default for ZtoolsConfig {
             osaurus_url: default_osaurus_url(),
             duckduckgo_url: default_duckduckgo_url(),
             bing_url: default_bing_url(),
+            brave_url: default_brave_url(),
             weekend_exclusions_paths: default_weekend_exclusions_paths(),
             weekend_region_paths: default_weekend_region_paths(),
             twitter_cache_path: default_twitter_cache_path(),

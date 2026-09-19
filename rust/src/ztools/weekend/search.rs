@@ -229,7 +229,16 @@ pub enum EngineVerdict {
 }
 
 /// The engines, in the order they are tried.
-pub const ENGINES: [&str; 2] = ["DuckDuckGo", "Bing"];
+///
+/// Three, because a wall is per IP and per engine, and the upstream `ddgs`
+/// library (9.16, 2026-08) answers the same wall the same way — its own
+/// `DuckDuckGo` leg is this exact POST behind a browser-TLS impersonator and
+/// still returned nothing from this machine, while its Bing and Brave legs
+/// answered; its "auto" mode simply spreads queries across engines. DDG's
+/// text results are Bing's anyway (`provider = "bing"` upstream), so Bing
+/// second loses nothing; Brave third is a different index and a different wall.
+pub const ENGINES: [&str; 3] = ["DuckDuckGo", "Bing", "Brave"];
+pub const ENGINE_COUNT: usize = ENGINES.len();
 
 /// One query's results and what each engine said about it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -237,7 +246,7 @@ pub struct QueryOutcome {
     pub query: String,
     pub results: Vec<SearchResult>,
     /// Indexed like [`ENGINES`].
-    pub verdicts: [EngineVerdict; 2],
+    pub verdicts: [EngineVerdict; ENGINE_COUNT],
 }
 
 impl QueryOutcome {
@@ -257,24 +266,27 @@ impl QueryOutcome {
 /// failure are both recorded and printed, never silently turned into "the
 /// search found nothing".
 #[must_use]
-pub fn search_engines(query: &str, ddg_url: &str, bing_url: &str) -> QueryOutcome {
+pub fn search_engines(query: &str, urls: &EngineUrls) -> QueryOutcome {
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(8))
         .build()
         .unwrap_or_default();
 
-    let mut verdicts = [EngineVerdict::Skipped; 2];
-    let (results, ddg) = search_duckduckgo(&client, query, ddg_url);
-    verdicts[0] = ddg;
-    if !results.is_empty() {
-        return QueryOutcome {
-            query: query.to_string(),
-            results,
-            verdicts,
-        };
+    let mut verdicts = [EngineVerdict::Skipped; ENGINE_COUNT];
+    let mut results = Vec::new();
+    let legs: [(&str, LegFn); ENGINE_COUNT] = [
+        (&urls.duckduckgo, search_duckduckgo),
+        (&urls.bing, search_bing),
+        (&urls.brave, search_brave),
+    ];
+    for (i, (url, leg)) in legs.iter().enumerate() {
+        let (found, verdict) = leg(&client, query, url);
+        verdicts[i] = verdict;
+        if !found.is_empty() {
+            results = found;
+            break;
+        }
     }
-    let (results, bing) = search_bing(&client, query, bing_url);
-    verdicts[1] = bing;
     for (engine, verdict) in ENGINES.iter().zip(verdicts) {
         match verdict {
             EngineVerdict::Blocked => {
@@ -292,6 +304,17 @@ pub fn search_engines(query: &str, ddg_url: &str, bing_url: &str) -> QueryOutcom
         verdicts,
     }
 }
+
+/// Where each engine is asked, in [`ENGINES`] order. Loopback in every test.
+#[derive(Debug, Clone)]
+pub struct EngineUrls {
+    pub duckduckgo: String,
+    pub bing: String,
+    pub brave: String,
+}
+
+type Leg = (Vec<SearchResult>, EngineVerdict);
+type LegFn = fn(&reqwest::blocking::Client, &str, &str) -> Leg;
 
 /// The DDG leg: POST, then GET. Challenged GET responses are expected on the
 /// real endpoint — that wall is why POST is the primary.
@@ -366,6 +389,83 @@ fn search_bing(
         Ok(_) => (Vec::new(), EngineVerdict::Empty),
         Err(_) => (Vec::new(), EngineVerdict::Unreachable),
     }
+}
+
+/// The Brave leg: one GET with the same browser scent.
+fn search_brave(
+    client: &reqwest::blocking::Client,
+    query: &str,
+    url: &str,
+) -> (Vec<SearchResult>, EngineVerdict) {
+    match client
+        .get(url)
+        .query(&[("q", query), ("source", "web")])
+        .header("User-Agent", SEARCH_UA)
+        .header("Accept-Language", "en-CA,en;q=0.9")
+        .send()
+    {
+        Ok(resp) if resp.status().is_success() => {
+            let Ok(html) = resp.text() else {
+                return (Vec::new(), EngineVerdict::Unreachable);
+            };
+            let results = parse_brave_results(&html);
+            classify(&html, results)
+        }
+        Ok(_) => (Vec::new(), EngineVerdict::Empty),
+        Err(_) => (Vec::new(), EngineVerdict::Unreachable),
+    }
+}
+
+/// Parse Brave's web results (2026-09-19 markup).
+///
+/// One `data-type="web"` block per hit; the first `<a href>` is the
+/// destination, the title is the `search-snippet-title` div's `title`
+/// attribute, and the body is the first `content` or `description` div after
+/// it. Class tokens are matched by their stable stems — the page is
+/// Svelte-compiled and every class carries a hash suffix that changes per
+/// build.
+#[must_use]
+pub fn parse_brave_results(html: &str) -> Vec<SearchResult> {
+    let mut results = Vec::new();
+    let mut idx = 0;
+    while let Some(rel) = html[idx..].find("data-type=\"web\"") {
+        let start = idx + rel;
+        let end = html[start + 1..]
+            .find("data-type=\"web\"")
+            .map_or(html.len(), |e| start + 1 + e);
+        let block = &html[start..end];
+        let href = block
+            .find("href=\"")
+            .and_then(|h| {
+                let after = &block[h + 6..];
+                after.find('"').map(|e| after[..e].to_string())
+            })
+            .unwrap_or_default()
+            .replace("&amp;", "&");
+        let title = block.find("search-snippet-title").and_then(|t| {
+            let tag = &block[t..];
+            let a = tag.find("title=\"")?;
+            let after = &tag[a + 7..];
+            let e = after.find('"')?;
+            Some(strip_tags(&after[..e]))
+        });
+        let body = block
+            .find("class=\"content ")
+            .or_else(|| block.find("class=\"description "))
+            .and_then(|c| {
+                let text_start = block[c..].find('>')? + c + 1;
+                let text_end = block[text_start..].find("</div>")? + text_start;
+                Some(strip_tags(&block[text_start..text_end]))
+            })
+            .unwrap_or_default();
+        if let Some(title) = title.filter(|t| !t.is_empty()) {
+            if href.starts_with("http") {
+                results.push(SearchResult { title, href, body });
+            }
+        }
+        idx = end;
+    }
+    results
 }
 
 /// Results FIRST, wall SECOND. A page that parsed into results is an answer

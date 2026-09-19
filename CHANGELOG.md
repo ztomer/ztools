@@ -13,12 +13,16 @@ zero transient events on every run since August, in 22 minutes, and then left th
 server unable to answer `pong`. Four causes, each closed at the class level.
 
 ### Fixed
-- **A second search engine.** Every `DuckDuckGo` query — `html` and `lite`, POST and
+- **Two more search engines.** Every `DuckDuckGo` query — `html` and `lite`, POST and
   GET — came back as an `anomaly-modal` challenge, so the planner had no corpus and
   said "no events". `weekend/search.rs` now tries Bing when DDG walls or empties a
   query (`bing_url`, loopback in every test), reads its `li.b_algo` markup and
   unwraps its `ck/a?u=a1<base64>` redirects so the aggregator follow-up fetches the
-  listing page, not the redirect. Verdicts are classified RESULTS-FIRST: Bing's page
+  listing page, not the redirect; Brave (`brave_url`) is the third leg. This is what
+  upstream does too: `ddgs` 9.16 (2026-08-26) drives the identical DDG POST behind
+  a browser-TLS impersonator (`primp`) and still got "No results found" from this
+  machine, while its Bing and Brave legs answered — its `auto` mode is engine
+  spreading, not a wall-beater, and DDG's text results are Bing's anyway. Verdicts are classified RESULTS-FIRST: Bing's page
   lists `challenges.cloudflare.com` in a script allowlist, and the marker scan alone
   called nine answered queries "blocked" on the first live run.
 - **Thinking off, output bounded, streaming with a stall guard** (`ztools/llm.rs`,

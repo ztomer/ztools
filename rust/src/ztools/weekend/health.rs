@@ -8,7 +8,7 @@
 //! was accurate and useless. These records travel from the fetch into the
 //! rendered plan so the sentence names the cause.
 
-use super::search::{EngineVerdict, QueryOutcome, ENGINES};
+use super::search::{EngineVerdict, QueryOutcome, ENGINES, ENGINE_COUNT};
 
 /// Tally of what the search engines said across a run's fan-out.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -19,8 +19,8 @@ pub struct SearchHealth {
     /// Queries that produced nothing AND hit at least one bot wall.
     pub starved: usize,
     /// Per engine, indexed like [`ENGINES`].
-    pub blocked: [usize; 2],
-    pub unreachable: [usize; 2],
+    pub blocked: [usize; ENGINE_COUNT],
+    pub unreachable: [usize; ENGINE_COUNT],
 }
 
 impl SearchHealth {
@@ -148,7 +148,7 @@ mod tests {
     use super::*;
     use crate::ztools::weekend::search::SearchResult;
 
-    fn outcome(results: usize, verdicts: [EngineVerdict; 2]) -> QueryOutcome {
+    fn outcome(results: usize, verdicts: [EngineVerdict; ENGINE_COUNT]) -> QueryOutcome {
         QueryOutcome {
             query: "q".into(),
             results: (0..results)
@@ -167,16 +167,24 @@ mod tests {
         let mut h = SearchHealth::default();
         h.record(&outcome(
             0,
-            [EngineVerdict::Blocked, EngineVerdict::Blocked],
+            [
+                EngineVerdict::Blocked,
+                EngineVerdict::Blocked,
+                EngineVerdict::Empty,
+            ],
         ));
         h.record(&outcome(
             3,
-            [EngineVerdict::Blocked, EngineVerdict::Answered(3)],
+            [
+                EngineVerdict::Blocked,
+                EngineVerdict::Answered(3),
+                EngineVerdict::Skipped,
+            ],
         ));
         assert_eq!(h.queries, 2);
         assert_eq!(h.answered, 1);
         assert_eq!(h.starved, 1, "a walled query Bing rescued is not starved");
-        assert_eq!(h.blocked, [2, 1]);
+        assert_eq!(h.blocked, [2, 1, 0]);
         assert!(h.bot_walled());
         assert_eq!(
             h.summary().unwrap(),
@@ -189,7 +197,11 @@ mod tests {
         let mut h = SearchHealth::default();
         h.record(&outcome(
             2,
-            [EngineVerdict::Answered(2), EngineVerdict::Skipped],
+            [
+                EngineVerdict::Answered(2),
+                EngineVerdict::Skipped,
+                EngineVerdict::Skipped,
+            ],
         ));
         assert!(!h.bot_walled());
         assert_eq!(h.summary(), None);
@@ -200,7 +212,11 @@ mod tests {
         let mut search = SearchHealth::default();
         search.record(&outcome(
             0,
-            [EngineVerdict::Blocked, EngineVerdict::Unreachable],
+            [
+                EngineVerdict::Blocked,
+                EngineVerdict::Unreachable,
+                EngineVerdict::Blocked,
+            ],
         ));
         let health = PlanHealth {
             search,

@@ -198,6 +198,7 @@ fn weekend_plan_renders_and_writes_the_markdown() {
             "osaurus_url = \"http://127.0.0.1:{port}\"\n\
              duckduckgo_url = \"http://127.0.0.1:{port}/\"\n\
              bing_url = \"http://127.0.0.1:{port}/\"\n\
+             brave_url = \"http://127.0.0.1:{port}/\"\n\
              llm_timeout_secs = 10\n"
         ),
     );
@@ -353,6 +354,7 @@ fn weekend_plan_says_so_when_nothing_is_on() {
             "osaurus_url = \"http://127.0.0.1:{port}\"\n\
              duckduckgo_url = \"http://127.0.0.1:{port}/\"\n\
              bing_url = \"http://127.0.0.1:{port}/\"\n\
+             brave_url = \"http://127.0.0.1:{port}/\"\n\
              llm_timeout_secs = 10\n"
         ),
     );

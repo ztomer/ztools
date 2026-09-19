@@ -40,6 +40,7 @@ fn config_with_url(url: &str) -> ZtoolsConfig {
         // site, and a unit test that reaches it measures its uptime.
         duckduckgo_url: "http://127.0.0.1:1/".into(),
         bing_url: "http://127.0.0.1:1/".into(),
+        brave_url: "http://127.0.0.1:1/".into(),
         ..ZtoolsConfig::default()
     }
 }

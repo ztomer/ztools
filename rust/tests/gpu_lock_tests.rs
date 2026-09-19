@@ -185,13 +185,17 @@ fn foreign_holder_is_none_for_missing_dead_and_own_locks() {
     let _g = EnvGuard::unset(OWNER_ENV);
     let tmp = TempDir::new().unwrap();
     let lock = tmp.path().join("fh.lock");
+    // Redirected BEFORE the first read. This test used to ask the real
+    // `/tmp/mac-osaurus-gpu.lock` for its "nothing there" case, so it went
+    // red whenever a model sweep held the lock -- the one state the lock
+    // exists for, and a unit test must not depend on what the box is doing.
+    let _d = EnvGuard::set(ztools::eval::gpu_lock::DIR_ENV, lock.to_str().unwrap());
 
     // Nothing there at all.
     assert_eq!(foreign_holder(), None);
 
     // A dead holder is nobody.
     write_owner(&lock, IMPOSSIBLE_PID, "whenever", "corpse");
-    let _d = EnvGuard::set(ztools::eval::gpu_lock::DIR_ENV, lock.to_str().unwrap());
     assert_eq!(foreign_holder(), None);
 
     // Ourselves holding it is not foreign.

@@ -132,11 +132,12 @@ fn fetch_events_corpus(
         let mut handles = Vec::new();
         for q in chunk {
             let q_clone = q.clone();
-            let ddg = config.duckduckgo_url.clone();
-            let bing = config.bing_url.clone();
-            handles.push(std::thread::spawn(move || {
-                search_engines(&q_clone, &ddg, &bing)
-            }));
+            let urls = super::EngineUrls {
+                duckduckgo: config.duckduckgo_url.clone(),
+                bing: config.bing_url.clone(),
+                brave: config.brave_url.clone(),
+            };
+            handles.push(std::thread::spawn(move || search_engines(&q_clone, &urls)));
         }
         for h in handles {
             if let Ok(outcome) = h.join() {

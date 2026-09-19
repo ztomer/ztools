@@ -4,6 +4,26 @@
 
 ---
 
+## Search: no library beats the DuckDuckGo wall; spread engines (2026-09-19)
+
+Researched while the sweep ran. `ddgs` 9.16.0 (PyPI, 2026-08-26) — the current
+successor of `duckduckgo_search` — drives `https://html.duckduckgo.com/html/` with the
+same `q`/`b`/`l` POST this repo sends, through `primp` (random browser TLS + OS
+impersonation). Measured from this machine the same afternoon:
+
+    ddgs backend     result
+    duckduckgo       "No results found" (walled)
+    bing             10 results, 2.0s
+    brave            10 results, 1.9s
+    startpage/mojeek/yahoo  nothing
+
+So the wall is per source IP, not per client fingerprint; upstream's answer is its
+`auto` backend (spread across engines), and its DuckDuckGo engine declares
+`provider = "bing"` — the results were Bing's all along. `weekend/search.rs` now does
+the same: DDG, then Bing, then Brave, each verdict recorded (`weekend/health.rs`).
+No Rust crate does better; a headless browser (camoufox) would beat the wall at the
+cost of a browser per query and is not worth it while two engines answer.
+
 ## Production calls: thinking OFF, streaming, stall-guarded (2026-09-19)
 
 `ztools/llm.rs` is the one client the tools (`tw`, `wk`) call the server through.

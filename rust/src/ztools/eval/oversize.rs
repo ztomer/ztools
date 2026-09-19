@@ -273,8 +273,12 @@ mod tests {
             !r.contains("cannot read memory headroom"),
             "injected headroom must not be replaced by a real read"
         );
-        // Cannot-tell pressure does not refuse on its own.
-        assert_eq!(oversize_refusal(1.0, Some(50.0), false, None), "");
+        // `None` is NOT "cannot tell" -- it is "read this machine", and a
+        // unit test must not assert what the box is doing right now: this
+        // line used to say `""` and went red the moment a model sweep was
+        // paging in the background. The cannot-tell branch is
+        // `is_thrashing() == None -> false`, inside the reader, and is the
+        // reader's own test to write.
         // The deliberate escape hatch wins over everything.
         assert_eq!(oversize_refusal(28.0, Some(31.0), true, Some(true)), "");
     }

@@ -117,6 +117,7 @@ fn corpus_building_dedupes_keeps_only_region_backed_snippets_and_counts_them() {
     let config = crate::config::ZtoolsConfig {
         duckduckgo_url: ddg,
         bing_url: "http://127.0.0.1:1/".into(),
+        brave_url: "http://127.0.0.1:1/".into(),
         osaurus_url: "http://127.0.0.1:1".into(),
         llm_timeout_secs: 1,
         llm_warmup_timeout_secs: 1,
@@ -158,6 +159,7 @@ fn a_dead_draft_phase_falls_back_to_the_monolithic_prompt_and_parses_real_events
     let config = crate::config::ZtoolsConfig {
         duckduckgo_url: "http://127.0.0.1:1/".into(),
         bing_url: "http://127.0.0.1:1/".into(),
+        brave_url: "http://127.0.0.1:1/".into(),
         osaurus_url: osaurus,
         llm_timeout_secs: 1,
         ..crate::config::ZtoolsConfig::default()
@@ -183,6 +185,7 @@ fn test_fetch_duckduckgo_events() {
     let config = crate::config::ZtoolsConfig {
         duckduckgo_url: "http://127.0.0.1:1/".into(),
         bing_url: "http://127.0.0.1:1/".into(),
+        brave_url: "http://127.0.0.1:1/".into(),
         osaurus_url: "http://127.0.0.1:1".into(),
         llm_timeout_secs: 1,
         llm_warmup_timeout_secs: 1,
@@ -203,8 +206,8 @@ fn test_fetch_duckduckgo_events() {
     assert!(n > 0);
     assert_eq!(
         health.search.unreachable,
-        [n, n],
-        "every query must record both engines unreachable: {:?}",
+        [n, n, n],
+        "every query must record every engine unreachable: {:?}",
         health.search
     );
 }
@@ -347,6 +350,7 @@ fn a_partly_walled_search_is_noted_under_a_populated_table() {
         query: "q".into(),
         results: Vec::new(),
         verdicts: [
+            crate::ztools::weekend::EngineVerdict::Blocked,
             crate::ztools::weekend::EngineVerdict::Blocked,
             crate::ztools::weekend::EngineVerdict::Blocked,
         ],
