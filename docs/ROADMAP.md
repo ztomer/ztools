@@ -42,12 +42,13 @@ rather than silently dropped)
    in-flight task's result is lost. Port with `ctrlc` if a sweep is ever interrupted
    by hand often enough to matter.
 
-6. **Five models still unranked** (2026-09-19): `muse-glimmer-30b`, both `raptor`
-   builds, `qwen3.8-27b-jang_6d-crack` and `bonsai-2-27b-crack-ternary-jang` were
-   refused by the eval's paging guard in the first thinking-off sweep;
-   `tools/sweep_models.sh --resume` re-runs them. Re-derive `[best_models]` after.
-   `lfm2.5-2.6b-4bit` cannot load on this Osaurus ("Unhandled keys [language_model]
-   in LFM2Model") — delete it or report upstream.
+6. **`lfm2.5-2.6b-4bit` cannot load** on this Osaurus ("Unhandled keys
+   [language_model] in LFM2Model") — delete it or report upstream. Every other
+   installed model is ranked (sweep of 2026-09-19, thinking off).
+7. **A summarize-specific injection task.** `filename_injection` is the only proxy
+   and it now gates three slots; the raptors lose `summarize` on it despite 92.8 and
+   88.8. A planted-instruction tweet in the summarize corpus would measure the real
+   exposure and let a raptor win the slot honestly if it resists there.
 
 ## Open questions
 

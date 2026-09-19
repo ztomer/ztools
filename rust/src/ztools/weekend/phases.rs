@@ -76,8 +76,10 @@ pub fn resolve_weekend_model(base_url: &str, preferred_model: &str) -> String {
         "qwen"
     } else if pref_lower.contains("gemma") {
         "gemma"
-    } else if pref_lower.contains("ornith") {
-        "ornith"
+    } else if pref_lower.contains("muse") {
+        "muse"
+    } else if pref_lower.contains("raptor") {
+        "raptor"
     } else {
         ""
     };

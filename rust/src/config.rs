@@ -166,16 +166,16 @@ fn default_weekend_region_paths() -> Vec<String> {
 // equal to `conf/config.toml [best_models]`, the derived source of truth --
 // they named three uninstalled models for a month before that gate existed.
 fn default_twitter_model() -> String {
-    "gemma-4-e4b-it-8bit".to_string()
+    "muse-glimmer-30b-jang_6m".to_string()
 }
 fn default_weekend_model() -> String {
-    "qwen3.8-27b-jang_6d".to_string()
+    "muse-glimmer-30b-jang_6m".to_string()
 }
 fn default_image_renamer_model() -> String {
-    "qwen3.8-27b-jang_6d".to_string()
+    "muse-glimmer-30b-jang_6m".to_string()
 }
 fn default_image_renamer_vlm_model() -> String {
-    "qwen3.8-27b-jang_6d".to_string()
+    "muse-glimmer-30b-jang_6m".to_string()
 }
 fn default_think_model() -> String {
     "qwen3.8-27b-jang_6d".to_string()

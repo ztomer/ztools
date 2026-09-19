@@ -47,13 +47,15 @@ server unable to answer `pong`. Four causes, each closed at the class level.
   kept saying this one was "not planned".
 
 ### Changed
-- **`[best_models]` re-derived from the first thinking-off sweep** (2026-09-19, five
-  complete models; five refused under memory pressure and are pending
-  `sweep_models.sh --resume`). Three slots had named models that were not
-  installed since mid-August. New: think/default, json, filename, vlm →
-  `qwen3.8-27b-jang_6d`; summarize → `gemma-4-e4b-it-8bit` (a deliberate,
-  documented deviation from the raw ranking on injection resistance). The embedded
-  Rust defaults now match, kept equal by a drift-gate test.
+- **`[best_models]` re-derived from the first thinking-off sweep** (2026-09-19, all
+  ten rankable installed models, 30 tasks each). Three slots had named models that
+  were not installed since mid-August. New: json, summarize, filename, vlm →
+  `muse-glimmer-30b-jang_6m` (90.0 mean, 100 on injection); think/default →
+  `qwen3.8-27b-jang_6d`. Injection resistance is now a gate for every slot that
+  reads strangers' text, which keeps `raptor-v0.5` (92.8 on summarize, 0 on
+  injection) out; the cost is stated in the config. The embedded Rust defaults
+  match, kept equal by a drift-gate test. Proven live: the planner with muse
+  produced 10 rows in 8m08s.
 - **`sweep_models.sh` records a refusal as `REFUSED`**, not `DONE tasks=0`, so
   `--resume` re-runs it; four refusals from today's sweep are re-filed.
 - **`model-eval` measures thinking OFF by default** (`--thinking` restores the old
