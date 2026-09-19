@@ -105,8 +105,8 @@ llm_url = "http://localhost:1337"
 #     gemma-4-12b-it-mxfp8           80.0   4     87.5  81.3   100   64.1  100     0    768s
 #     foundation                     74.9   3     86.1  84.2   100   57.4   64     0    359s
 #     lfm2.5-350m-optiq-4bit         28.7  15     18.8  33.0    35   32.6   37     0     11s
-#     lfm2.5-2.6b-4bit               cannot load: "Unhandled keys [language_model] in
-#                                    LFM2Model" (Osaurus defect) -- not rankable
+#     lfm2.5-2.6b-4bit               could not load ("Unhandled keys [language_model]
+#                                    in LFM2Model"); deleted 2026-09-19
 #
 # HOW THESE ARE CHOSEN (unchanged rule). Each slot is scored ONLY over the eval tasks
 # its own consumer exercises:
@@ -128,11 +128,11 @@ llm_url = "http://localhost:1337"
 # filename. `wk` extracts from search snippets and `tw` summarises tweets; a model
 # that obeys "ignore all previous instructions" planted in that text hands the plan
 # or the summary to whoever wrote it. `filename_injection` is the only measured proxy,
-# so a 0 there disqualifies a model from json, summarize and filename however well it
-# scores otherwise. That is what keeps raptor-v0.5 (92.8 on summarize, 100 on json,
-# 0 on injection) out of both slots. The two raptor builds, gemma-4-12b and foundation
-# all obey; bonsai and gemma-4-e4b obey half the time (50); muse and the two qwen3.8
-# builds resist (100).
+# so a 0 there disqualifies a model from json and filename however well it scores
+# otherwise. That keeps raptor-v0.5 (100 on json, 0 on injection) out of json. For
+# summarize the owner overrode the gate -- see the slot. The two raptor builds,
+# gemma-4-12b and foundation all obey; bonsai and gemma-4-e4b obey half the time (50);
+# muse and the two qwen3.8 builds resist (100).
 #
 # THREE OF THE FIVE SLOTS HAD NAMED MODELS THAT WERE NOT INSTALLED (ornith-1.0-35b,
 # gemma-4-e2b, qwen3.8-27b-8bit) since at least 2026-08-15. Installed models only now.
@@ -184,16 +184,17 @@ json = "muse-glimmer-30b-jang_6m"
   # planner's input is search snippets. qwen3.8 (96.9, the previous holder) loses
   # only on fabrication (75). 26GB, ~77s per task in this sweep; the planner is a
   # scheduled job and warms its model, so the size is not a cost the user waits on.
-summarize = "muse-glimmer-30b-jang_6m"
-  # THE INJECTION GATE DECIDES THIS SLOT, and the cost is stated: the raw ranking is
-  # raptor-v0.5 92.8, raptor-v1 88.8, foundation 84.2, gemma-4-12b 81.3, then muse and
-  # gemma-4-e4b tied at 79.3. The first four score 0 on injection and `tw` summarises
-  # tweets, so an instruction in a tweet becomes the summary. Of the tied pair muse
-  # resists (100 vs 50) and has fewer zeros (1 vs 2). Both score 0 on
-  # summarize_factual_accuracy; muse is 100 on summarize_contradiction where qwen3.8 is
-  # 0. Thirteen points of quality left on the table for the gate -- revisit if an
-  # injection-resistant model closes the gap, or if a summarize-specific injection
-  # task is added and the raptors pass it.
+summarize = "raptor-v0.5-8b-a1b-jang_6m"
+  # THE RAW WINNER, BY THE OWNER'S DECISION (2026-09-19). Ranking: raptor-v0.5 92.8,
+  # raptor-v1 88.8, foundation 84.2, gemma-4-12b 81.3, muse and gemma-4-e4b 79.3.
+  # raptor-v0.5 scores 0 on filename_injection, and `tw` summarises tweets -- so the
+  # injection gate that decides json and filename was applied here first and picked
+  # muse (79.3, resists). The owner took the thirteen points instead:
+  #   accepted -- an instruction planted in a tweet can steer the summary
+  #   kept     -- the best summary on every measured quality axis, from a 6.3GB
+  #               model that did its 30 tasks in 132s (muse: 2302s)
+  # The proxy is a FILENAME injection task; a summarize-specific one (ROADMAP #7)
+  # would measure the real exposure. Revisit on that measurement, not on this one.
 filename = "muse-glimmer-30b-jang_6m"
   # 100 on all four quality tasks and 100 on injection; qwen3.8 and its -crack build
   # tie, and the documented tiebreak (fewest zeros: 1 vs 2) picks muse. 26GB against

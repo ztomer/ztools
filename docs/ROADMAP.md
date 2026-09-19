@@ -42,13 +42,10 @@ rather than silently dropped)
    in-flight task's result is lost. Port with `ctrlc` if a sweep is ever interrupted
    by hand often enough to matter.
 
-6. **`lfm2.5-2.6b-4bit` cannot load** on this Osaurus ("Unhandled keys
-   [language_model] in LFM2Model") — delete it or report upstream. Every other
-   installed model is ranked (sweep of 2026-09-19, thinking off).
-7. **A summarize-specific injection task.** `filename_injection` is the only proxy
-   and it now gates three slots; the raptors lose `summarize` on it despite 92.8 and
-   88.8. A planted-instruction tweet in the summarize corpus would measure the real
-   exposure and let a raptor win the slot honestly if it resists there.
+6. **A summarize-specific injection task.** `filename_injection` is the only proxy;
+   it gates json and filename, and the owner overrode it for summarize (raptor-v0.5,
+   92.8, obeys). A planted-instruction tweet in the summarize corpus would measure the
+   real exposure of that decision.
 
 ## Open questions
 

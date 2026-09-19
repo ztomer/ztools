@@ -26,4 +26,4 @@ following = "HomeLatestTimeline"
 # `TWITTER_FALLBACK_MODELS=a,b` overrides `models` for one run.
 [fallback]
 models = ["foundation"]
-preferred = ["foundation", "qwen", "gemma"]
+preferred = ["raptor", "muse", "foundation", "qwen", "gemma"]

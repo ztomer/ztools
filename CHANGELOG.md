@@ -49,11 +49,13 @@ server unable to answer `pong`. Four causes, each closed at the class level.
 ### Changed
 - **`[best_models]` re-derived from the first thinking-off sweep** (2026-09-19, all
   ten rankable installed models, 30 tasks each). Three slots had named models that
-  were not installed since mid-August. New: json, summarize, filename, vlm →
-  `muse-glimmer-30b-jang_6m` (90.0 mean, 100 on injection); think/default →
-  `qwen3.8-27b-jang_6d`. Injection resistance is now a gate for every slot that
-  reads strangers' text, which keeps `raptor-v0.5` (92.8 on summarize, 0 on
-  injection) out; the cost is stated in the config. The embedded Rust defaults
+  were not installed since mid-August. New: json, filename, vlm →
+  `muse-glimmer-30b-jang_6m` (90.0 mean, 100 on injection); summarize →
+  `raptor-v0.5-8b-a1b-jang_6m` (92.8, the raw winner, by the owner's decision over
+  the injection gate -- it obeys planted instructions, and the trade is stated in
+  the config); think/default → `qwen3.8-27b-jang_6d`. Injection resistance gates
+  json and filename.
+- **`lfm2.5-2.6b-4bit` deleted** -- it could not load on this Osaurus. The embedded Rust defaults
   match, kept equal by a drift-gate test. Proven live: the planner with muse
   produced 10 rows in 8m08s.
 - **`sweep_models.sh` records a refusal as `REFUSED`**, not `DONE tasks=0`, so

@@ -166,7 +166,7 @@ fn default_weekend_region_paths() -> Vec<String> {
 // equal to `conf/config.toml [best_models]`, the derived source of truth --
 // they named three uninstalled models for a month before that gate existed.
 fn default_twitter_model() -> String {
-    "muse-glimmer-30b-jang_6m".to_string()
+    "raptor-v0.5-8b-a1b-jang_6m".to_string()
 }
 fn default_weekend_model() -> String {
     "muse-glimmer-30b-jang_6m".to_string()
