@@ -23,7 +23,7 @@
 //! looks identical to this week's unless someone compares its window to the
 //! calendar).
 
-use chrono::{Datelike, Local};
+use chrono::Local;
 
 use crate::ztools::weekend::report::{fixed_rows, parse_window_from_filename, transient_rows};
 
@@ -39,16 +39,10 @@ fn unknown(summary: &str) -> serde_json::Value {
     serde_json::json!({ "name": NAME, "state": "unknown", "summary": summary })
 }
 
-/// The Friday-to-Sunday a plan should currently cover.
-///
-/// During a weekend the answer is *this* one, not the next: a plan for the
-/// days you are living through is current, not stale.
-///
-/// Monday = 0 ... Friday = 4, Saturday = 5, Sunday = 6.
+/// The Friday-to-Sunday a plan should currently cover — the planner's own
+/// definition, so the two cannot disagree about which weekend is "upcoming".
 fn upcoming_weekend(today: chrono::NaiveDate) -> (chrono::NaiveDate, chrono::NaiveDate) {
-    let weekday = i64::from(today.weekday().num_days_from_monday());
-    let friday = today - chrono::Duration::days(weekday - 4);
-    (friday, friday + chrono::Duration::days(2))
+    crate::ztools::weekend::plan_window(today)
 }
 
 /// Newest `weekend_plan_*.md` in `directory` by modification time.
@@ -118,17 +112,28 @@ fn build_status(today: chrono::NaiveDate) -> serde_json::Value {
             "action": "not generated yet",
         }));
     }
+    // The plan's own degraded-warning says WHY it is empty (weekend/health.rs);
+    // the wall is the cause worth naming on the dashboard, because it is the
+    // one that looks like a quiet weekend and is not.
+    let bot_walled = text.contains("blocked by a bot wall");
     if transient == 0 {
         // The known open defect, and the one an empty plan hides best: every
         // content check passes when there are no rows to be wrong.
         state = "attention";
         items.push(serde_json::json!({
             "name": "transient events",
-            "action": "none in the latest plan",
+            "action": if bot_walled {
+                "none — search was blocked by a bot wall"
+            } else {
+                "none in the latest plan"
+            },
         }));
     }
 
     let mut summary = format!("latest plan {when}: {fixed} fixed, {transient} transient");
+    if bot_walled {
+        summary.push_str(" (search bot-walled)");
+    }
     if !covers_upcoming {
         use std::fmt::Write as _;
         let _ = write!(

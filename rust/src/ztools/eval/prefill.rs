@@ -47,6 +47,7 @@ fn spec<'a>(
         max_tokens,
         timeout_secs: default_eval_timeout(),
         allow_substitution: true,
+        thinking: false,
         stream_guard: false,
     }
 }

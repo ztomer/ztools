@@ -14,6 +14,13 @@ use super::prompts::{
 };
 
 pub const WEATHER_PREVIEW_LIMIT: usize = 200;
+/// Consecutive extract-batch failures that trip the pass-through breaker.
+///
+/// Without a breaker a dead model cost FOUR timeouts per
+/// line (8 -> 4 -> 2 -> 1 -> raw) across every line of the corpus — at 300s
+/// each, a 66-line corpus was a 22-hour run that the scheduler killed at 30
+/// minutes, every week, with nothing to show.
+pub const EXTRACT_FAILURE_BREAKER: usize = 3;
 pub const DEFAULT_BATCH_SIZE: usize = 8;
 pub const MAX_BATCH_SIZE: usize = 12;
 pub const BATCH_GROWTH_STREAK_LIMIT: usize = 3;
@@ -87,6 +94,51 @@ pub fn resolve_weekend_model(base_url: &str, preferred_model: &str) -> String {
         .unwrap_or_else(|| preferred_model.to_string())
 }
 
+/// Wake the weekend model with one tiny request, waiting the LOADING budget.
+///
+/// Every other call in this pipeline carries a generation timeout (120s /
+/// 300s). A cold 25GB model can take minutes to page in, and a client that
+/// disconnects mid-load makes the server cancel the load — so the next call
+/// starts it again, and the model never becomes ready. One call with the
+/// warm-up budget, before any phase, turns that livelock into one wait.
+#[must_use]
+pub fn warm_model(config: &crate::config::ZtoolsConfig) -> super::ModelHealth {
+    let model = resolve_weekend_model(&config.osaurus_url, &config.weekend_model);
+    let started = std::time::Instant::now();
+    // The stall guard IS the budget here: no token until the model has
+    // loaded is the expected shape of a cold start, not a stalled server.
+    let outcome = crate::ztools::llm::chat(
+        &crate::ztools::llm::ChatRequest {
+            base_url: &config.osaurus_url,
+            model: &model,
+            system: None,
+            user: "Reply with the single word: ready",
+            json: false,
+        },
+        &crate::ztools::llm::ChatBudget {
+            stall_secs: config.llm_warmup_timeout_secs,
+            cap_secs: config.llm_warmup_timeout_secs,
+            max_tokens: 8,
+        },
+    );
+    let secs = started.elapsed().as_secs();
+    match outcome {
+        Ok(_) => super::ModelHealth::Ready { model, secs },
+        Err(e) => super::ModelHealth::Unavailable {
+            model,
+            reason: format!(
+                "no answer within {secs}s of a {}s warm-up budget: {}",
+                config.llm_warmup_timeout_secs,
+                first_line(&e.to_string())
+            ),
+        },
+    }
+}
+
+fn first_line(text: &str) -> &str {
+    text.lines().next().unwrap_or(text).trim()
+}
+
 /// One plain-text LLM call against the configured osaurus endpoint.
 #[must_use]
 pub fn call_llm_text(prompt: &str, config: &crate::config::ZtoolsConfig) -> Option<String> {
@@ -96,43 +148,35 @@ pub fn call_llm_text(prompt: &str, config: &crate::config::ZtoolsConfig) -> Opti
         &model,
         prompt,
         config.llm_extended_timeout_secs,
+        config,
     )
     .ok()
     .filter(|s| !s.trim().is_empty())
 }
 
 /// One JSON LLM call returning the raw response value.
+///
+/// The answer is re-wrapped in the completion shape the parsers expect
+/// (`choices[0].message.content`), so a streamed answer and a stubbed one
+/// look the same to `parse_llm_events`.
 pub(crate) fn call_llm_json(
     system: Option<&str>,
     user: &str,
     config: &crate::config::ZtoolsConfig,
 ) -> Option<serde_json::Value> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(config.llm_timeout_secs))
-        .build()
-        .ok()?;
-    let mut messages = Vec::new();
-    if let Some(sys) = system {
-        messages.push(serde_json::json!({"role": "system", "content": sys}));
-    }
-    messages.push(serde_json::json!({"role": "user", "content": user}));
     let model = resolve_weekend_model(&config.osaurus_url, &config.weekend_model);
-    let payload = serde_json::json!({
-        "model": model,
-        "messages": messages,
-        "response_format": {"type": "json_object"},
-        "temperature": 0.0
-    });
-    let url = format!(
-        "{}/v1/chat/completions",
-        config.osaurus_url.trim_end_matches('/')
-    );
-    let resp: serde_json::Value = client.post(&url).json(&payload).send().ok()?.json().ok()?;
-    if resp.get("choices").is_some() {
-        Some(resp)
-    } else {
-        None
-    }
+    let content = crate::ztools::llm::chat(
+        &crate::ztools::llm::ChatRequest {
+            base_url: &config.osaurus_url,
+            model: &model,
+            system,
+            user,
+            json: true,
+        },
+        &config.chat_budget(config.llm_extended_timeout_secs),
+    )
+    .ok()?;
+    Some(serde_json::json!({"choices": [{"message": {"content": content}}]}))
 }
 
 /// Condense a forecast to 1-2 sentences; fall back to a preview on failure.
@@ -176,8 +220,18 @@ pub fn extract_sources(
     let mut results = Vec::new();
     let mut batch_size = DEFAULT_BATCH_SIZE;
     let mut streak = 0;
+    let mut failures = 0;
     let mut i = 0;
     while i < lines.len() {
+        if failures >= EXTRACT_FAILURE_BREAKER {
+            eprintln!(
+                "\u{26a0} extract: {failures} consecutive model failures; passing the \
+                 remaining {} line(s) through raw",
+                lines.len() - i
+            );
+            results.extend(lines[i..].iter().map(ToString::to_string));
+            break;
+        }
         let end = cmp::min(i + batch_size, lines.len());
         let chunk = lines[i..end].join("\n");
         let prompt = render(
@@ -187,12 +241,14 @@ pub fn extract_sources(
         if let Some(res) = call_llm_text(&prompt, config) {
             results.push(res);
             streak += 1;
+            failures = 0;
             i = end;
             if streak >= BATCH_GROWTH_STREAK_LIMIT && batch_size < MAX_BATCH_SIZE {
                 batch_size += 1;
             }
         } else {
             streak = 0;
+            failures += 1;
             batch_size = cmp::max(batch_size / 2, 1);
             if batch_size == 1 {
                 // A single line that even the model rejects is passed through

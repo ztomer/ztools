@@ -3,6 +3,7 @@ pub mod dates;
 pub mod enforce;
 pub mod fetch;
 pub mod format;
+pub mod health;
 pub mod phases;
 pub mod prompts;
 pub mod report;
@@ -12,6 +13,7 @@ pub use dates::*;
 pub use enforce::*;
 pub use fetch::*;
 pub use format::*;
+pub use health::*;
 pub use phases::*;
 pub use prompts::*;
 /// Native Rust Weekend Planner module.

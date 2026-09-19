@@ -60,6 +60,7 @@ fn spec(port: u16, max_tokens: u32, timeout_secs: u64) -> RequestSpec<'static> {
         max_tokens,
         timeout_secs,
         allow_substitution: false,
+        thinking: false,
         stream_guard: false,
     }
 }
@@ -112,6 +113,7 @@ fn blocking_call_survives_a_dead_server() {
         max_tokens: 100,
         timeout_secs: 2,
         allow_substitution: false,
+        thinking: false,
         stream_guard: false,
     };
     let r = call(&spec, false);
@@ -206,4 +208,50 @@ fn stream_deadline_enforced_in_wall_clock() {
         started.elapsed().as_secs() < 4,
         "must not wait out the stall"
     );
+}
+
+/// The regime switch reaches the wire on BOTH request paths, blocking and
+/// streamed, and defaults to the production regime (off). A sweep whose
+/// payload silently kept thinking on would rank models the tools never run.
+#[test]
+fn thinking_flag_reaches_both_wire_shapes() {
+    fn serve_recording(response: String) -> (u16, std::sync::mpsc::Receiver<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (tx, rx) = std::sync::mpsc::channel();
+        thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { continue };
+                let mut buf = vec![0u8; 65536];
+                let n = stream.read(&mut buf).unwrap_or(0);
+                let _ = tx.send(String::from_utf8_lossy(&buf[..n]).into_owned());
+                let _ = stream.write_all(response.as_bytes());
+                let _ = stream.flush();
+            }
+        });
+        thread::sleep(std::time::Duration::from_millis(50));
+        (port, rx)
+    }
+    fn payload_of(wire: &str) -> serde_json::Value {
+        serde_json::from_str(wire.split("\r\n\r\n").nth(1).unwrap_or("")).unwrap()
+    }
+
+    let json_body = r#"{"choices":[{"message":{"content":"ok"}}]}"#;
+    let (port, rx) = serve_recording(http_response("application/json", json_body));
+    let mut s = spec(port, 100, 5);
+    let r = call(&s, false);
+    assert!(r.error.is_none(), "{r:?}");
+    assert_eq!(payload_of(&rx.recv().unwrap())["enable_thinking"], false);
+
+    s.thinking = true;
+    let (port, rx) = serve_recording(http_response(
+        "text/event-stream",
+        &sse_body(&[r#"{"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}"#]),
+    ));
+    s.port = port;
+    let r = stream_with_overrun_guard(&s);
+    assert!(r.error.is_none(), "{r:?}");
+    let payload = payload_of(&rx.recv().unwrap());
+    assert_eq!(payload["stream"], true, "{payload}");
+    assert_eq!(payload["enable_thinking"], true, "{payload}");
 }

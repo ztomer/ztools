@@ -36,6 +36,10 @@ fn mock_server(response_body: &'static str) -> (u16, thread::JoinHandle<()>) {
 fn config_with_url(url: &str) -> ZtoolsConfig {
     ZtoolsConfig {
         osaurus_url: url.into(),
+        // Loopback, never the defaults: a default engine URL is the live
+        // site, and a unit test that reaches it measures its uptime.
+        duckduckgo_url: "http://127.0.0.1:1/".into(),
+        bing_url: "http://127.0.0.1:1/".into(),
         ..ZtoolsConfig::default()
     }
 }
@@ -76,7 +80,7 @@ fn call_osaurus_json_parses_mock_llm_response() {
         year: 2026,
         exclusions: "none".into(),
     };
-    let (events, corpus) = ztools::weekend::fetch_duckduckgo_events(
+    let (events, corpus, _health) = ztools::weekend::fetch_duckduckgo_events(
         "Vaughan",
         chrono::NaiveDate::parse_from_str("2026-08-07", "%Y-%m-%d").unwrap(),
         chrono::NaiveDate::parse_from_str("2026-08-09", "%Y-%m-%d").unwrap(),

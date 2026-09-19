@@ -138,6 +138,11 @@ enum Cmd {
         /// footprint, viability) without running any task.
         #[arg(long)]
         capabilities: bool,
+        /// Let reasoning models think before answering. Off by default,
+        /// because that is how the production tools call them; on measures
+        /// the pre-2026-09-19 regime for comparison with older sweeps.
+        #[arg(long)]
+        thinking: bool,
     },
 }
 
@@ -236,14 +241,18 @@ pub fn run() -> Result<()> {
             task,
             json_output,
             capabilities,
+            thinking,
         } => crate::cli_ztools::model_eval(
             &config,
             model,
-            &suite,
-            tasks_dir.as_deref(),
-            task.as_deref(),
-            json_output,
-            capabilities,
+            &crate::cli_ztools::EvalOptions {
+                suite: &suite,
+                tasks_dir: tasks_dir.as_deref(),
+                task_filter: task.as_deref(),
+                json_output,
+                capabilities,
+                thinking,
+            },
         ),
     }
 }

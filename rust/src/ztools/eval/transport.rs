@@ -99,6 +99,12 @@ pub struct RequestSpec<'a> {
     pub max_tokens: u32,
     pub timeout_secs: u64,
     pub allow_substitution: bool,
+    /// Let a reasoning model think before it answers. OFF is the regime the
+    /// production tools run (`ztools::llm` sends `enable_thinking: false` on
+    /// every call, because reasoning ran `qwen3.8` past every timeout), so a
+    /// sweep with it off ranks models as the tools will use them; ON is the
+    /// pre-2026-09-19 regime, kept for comparison against older sweeps.
+    pub thinking: bool,
     /// Try the streamed request under the reasoning-overrun guard first,
     /// falling back to the blocking POST when it errors or produces nothing.
     /// The eval loop runs with this ON; the prefill probe OFF -- its three-call
@@ -209,6 +215,7 @@ fn blocking_request(spec: &RequestSpec, parse_json: bool) -> TransportResult {
         "messages": spec.messages,
         "temperature": spec.temperature,
         "max_tokens": spec.max_tokens,
+        "enable_thinking": spec.thinking,
     });
     if parse_json {
         payload["response_format"] = json!({"type": "json_object"});
@@ -334,6 +341,7 @@ pub fn stream_with_overrun_guard(spec: &RequestSpec) -> TransportResult {
         "messages": spec.messages,
         "temperature": spec.temperature,
         "max_tokens": spec.max_tokens,
+        "enable_thinking": spec.thinking,
         "stream": true,
     });
     let url = format!("{}/v1/chat/completions", base_url(spec.host, spec.port));

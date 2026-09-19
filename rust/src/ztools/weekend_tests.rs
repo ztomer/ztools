@@ -227,7 +227,15 @@ fn a_configured_exclusion_file_filters_the_curated_list() {
 
 #[test]
 fn test_format_weekend_plan_empty_and_populated() {
-    let plan1 = format_weekend_plan(&[], &[], "Vaughan", "6-13", "Aug 07-09", "Sat 24C (clear)");
+    let plan1 = format_weekend_plan(
+        &[],
+        &[],
+        "Vaughan",
+        "6-13",
+        "Aug 07-09",
+        "Sat 24C (clear)",
+        &PlanHealth::nominal(),
+    );
     assert!(plan1.contains("# Weekend Plan: Aug 07-09 (Vaughan)"));
     assert!(plan1.contains("Score"));
     // The forecast is the caller's, printed verbatim -- not refetched for a
@@ -257,6 +265,7 @@ fn test_format_weekend_plan_empty_and_populated() {
         "6-13",
         "Aug 07-09",
         "Sat 24C (clear)",
+        &PlanHealth::nominal(),
     );
     assert!(plan2.contains("Harvest Fair"));
 }
@@ -333,40 +342,6 @@ fn test_apply_scores_empty_ages() {
     assert!(events[0].score > 0.0);
 }
 
-#[test]
-/// The fan-out runs and yields nothing when neither the search nor the model
-/// can be reached. Both endpoints point at a closed port so the outcome does
-/// not depend on `DuckDuckGo` being up -- this test used to hit the live site
-/// thirteen times, and whether it answered moved the coverage number.
-fn test_fetch_duckduckgo_events() {
-    let config = crate::config::ZtoolsConfig {
-        duckduckgo_url: "http://127.0.0.1:1/".into(),
-        osaurus_url: "http://127.0.0.1:1".into(),
-        llm_timeout_secs: 1,
-        ..crate::config::ZtoolsConfig::default()
-    };
-    let ctx = crate::ztools::weekend::PlanContext {
-        location: "Vaughan".into(),
-        ages: "6-12".into(),
-        date_range: "Aug 7 to Aug 9".into(),
-        year: 2026,
-        exclusions: "none".into(),
-    };
-    let (events, corpus) = fetch_duckduckgo_events(
-        "Vaughan",
-        chrono::NaiveDate::parse_from_str("2026-08-07", "%Y-%m-%d").unwrap(),
-        chrono::NaiveDate::parse_from_str("2026-08-09", "%Y-%m-%d").unwrap(),
-        "sunny",
-        &ctx,
-        &config,
-    );
-    assert!(
-        events.is_empty(),
-        "unreachable search and model must yield nothing, not invented events: {events:?}"
-    );
-    assert!(corpus.is_empty());
-}
-
 fn sample_event(name: &str, location: &str, score: f32) -> crate::ztools::weekend::WeekendEvent {
     crate::ztools::weekend::WeekendEvent {
         name: name.into(),
@@ -428,6 +403,7 @@ fn c4_absent_words_render_as_the_sentinel_in_both_renderers() {
             "3-7",
             "Aug 07 to Aug 09",
             "Fri 24C Clear",
+            &PlanHealth::nominal(),
         );
         let lower = md.to_lowercase();
         assert!(!lower.contains("unknown"), "{absent:?} leaked: {md}");
@@ -468,6 +444,7 @@ fn c4_real_values_are_never_mistaken_for_absent() {
         "3-7",
         "Aug 07 to Aug 09",
         "Fri 24C Clear",
+        &PlanHealth::nominal(),
     );
     assert!(md.contains("**Union Summer** (Markham)"), "{md}");
     assert!(md.contains("| $12 |"), "{md}");
@@ -480,6 +457,7 @@ fn c4_real_values_are_never_mistaken_for_absent() {
         "3-7",
         "Aug 07 to Aug 09",
         "Fri 24C Clear",
+        &PlanHealth::nominal(),
     );
     assert!(md.contains("| **Union Summer** |"), "{md}");
     assert!(md.contains("| outdoor |"), "{md}");

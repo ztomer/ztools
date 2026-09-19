@@ -42,6 +42,15 @@ rather than silently dropped)
    in-flight task's result is lost. Port with `ctrlc` if a sweep is ever interrupted
    by hand often enough to matter.
 
+6. **`conf/config.toml` names models that are not installed** (2026-09-19):
+   `ornith-1.0-35b-jang_4m` (default_model, think), `gemma-4-e2b-it-8bit` (summarize,
+   filename — the tool falls through its chain every run) and `qwen3.8-27b-8bit` (vlm).
+   Installed and unranked: `raptor-v0.5-8b-a1b`, `raptor-v1-26b-a4b-vl`,
+   `gemma-4-e4b-it-8bit`, `muse-glimmer-30b`, `lfm2.5-*`. `bonsai-2-27b` is a 241MB
+   directory — a failed download listed as a model. Re-sweep the installed roster
+   (thinking off — the production regime, the eval's default since 2026-09-19) and
+   re-derive the slots.
+
 ## Open questions
 
 - **Region filter divergence** (pinned, consensus fixtures only): Rust's

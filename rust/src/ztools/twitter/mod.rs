@@ -22,12 +22,10 @@ pub use cookies::{
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::Local;
 use regex::Regex;
-use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 
@@ -128,83 +126,34 @@ pub fn build_prompt(tweets: &[Tweet], max_chars: usize, instructions: &str) -> (
     (prompt, lines.len())
 }
 
-#[derive(Serialize)]
-struct ChatMessage<'a> {
-    role: &'a str,
-    content: &'a str,
-}
-
-#[derive(Serialize)]
-struct ChatRequest<'a> {
-    model: &'a str,
-    messages: Vec<ChatMessage<'a>>,
-    temperature: f64,
-    stream: bool,
-}
-
-#[derive(Deserialize)]
-struct ChatChoice {
-    message: ChatMessageResponse,
-}
-
-#[derive(Deserialize)]
-struct ChatMessageResponse {
-    content: String,
-}
-
-#[derive(Deserialize)]
-struct ChatResponse {
-    choices: Vec<ChatChoice>,
-}
-
-/// Call local Osaurus LLM server at localhost:1337.
+/// Call the local Osaurus server for one plain-text answer.
+///
+/// Streams through [`crate::ztools::llm::chat`]: `timeout_secs` is the CAP
+/// on a call whose tokens keep flowing; the stall guard is the configured
+/// default, because a call that stopped producing is failed the same way
+/// whoever made it.
 ///
 /// # Errors
 ///
-/// When the request cannot be sent, the response cannot be read, or the
-/// body is not the JSON shape expected. The raw body is included in the
-/// parse error, because the usual cause is a server answering something
-/// other than the API -- a proxy page, or an error in plain text.
+/// When the request cannot be sent, the stream stalls, or the body is not
+/// the API's shape (see `ztools::llm`).
 pub fn call_osaurus(
     base_url: &str,
     model: &str,
     prompt: &str,
     timeout_secs: u64,
+    config: &crate::config::ZtoolsConfig,
 ) -> Result<String> {
-    let client = Client::builder()
-        .timeout(Duration::from_secs(timeout_secs))
-        .build()?;
-
-    let url = format!("{}/v1/chat/completions", base_url.trim_end_matches('/'));
-    let req = ChatRequest {
-        model,
-        messages: vec![ChatMessage {
-            role: "user",
-            content: prompt,
-        }],
-        temperature: 0.0,
-        stream: false,
-    };
-
-    let raw = client
-        .post(&url)
-        .json(&req)
-        .send()
-        .context("Failed to send request to Osaurus server")?
-        .text()
-        .context("Failed to read Osaurus server response text")?;
-
-    let resp: ChatResponse = serde_json::from_str(&raw).map_err(|e| {
-        anyhow::anyhow!("Failed to parse Osaurus server response JSON: {e}, raw: {raw}")
-    })?;
-
-    let text = resp
-        .choices
-        .first()
-        .map(|c| c.message.content.clone())
-        .unwrap_or_default();
-
-    Ok(text)
+    crate::ztools::llm::chat(
+        &crate::ztools::llm::ChatRequest {
+            base_url,
+            model,
+            system: None,
+            user: prompt,
+            json: false,
+        },
+        &config.chat_budget(timeout_secs),
+    )
 }
 
 /// Run full Twitter summary flow and save markdown artifact.
@@ -270,7 +219,7 @@ pub fn run_summary(
     );
     let ((summary_body, _), provenance) = chain::run_chain(&plan, model, |candidate| {
         eprintln!("· Summarizing {processed} tweets with {candidate} on {base_url}...");
-        let raw = call_osaurus(base_url, candidate, &prompt, timeout_secs)?;
+        let raw = call_osaurus(base_url, candidate, &prompt, timeout_secs, config)?;
         // A reasoning model's `<thinking>` block must not land verbatim in
         // the saved markdown, and an unstructured answer must not be saved
         // as success: a critical-quality attempt yields nothing, which the

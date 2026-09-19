@@ -117,7 +117,13 @@ fn test_check_summary_quality() {
 
 #[test]
 fn test_call_osaurus_invalid_host() {
-    let res = call_osaurus("http://127.0.0.1:59999", "model", "prompt", 5);
+    let res = call_osaurus(
+        "http://127.0.0.1:59999",
+        "model",
+        "prompt",
+        5,
+        &crate::config::ZtoolsConfig::default(),
+    );
     assert!(res.is_err());
 }
 

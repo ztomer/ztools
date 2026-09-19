@@ -5,7 +5,8 @@ use super::{
     condense_weather, draft_activities, extract_sources, in_window_count, prioritise_in_window,
     refine_draft, seasonal_keywords, structure_to_json, PlanContext, SearchResult,
 };
-use super::{follow_aggregators, search_duckduckgo_html};
+use super::{follow_aggregators, search_engines, warm_model};
+use super::{ModelHealth, PlanHealth, SearchHealth};
 
 /// Body truncation bound, mirrored from `WEEKEND_MAX_BODY_LENGTH`.
 ///
@@ -115,30 +116,37 @@ pub fn build_search_queries(d1: NaiveDate) -> Vec<String> {
 }
 
 /// Search the aggregator for event snippets and return the cleaned, deduped,
-/// in-window-prioritised corpus. This is the ground truth the provenance gate
-/// judges extracted rows against.
+/// in-window-prioritised corpus, plus what the engines said while building
+/// it. The corpus is the ground truth the provenance gate judges extracted
+/// rows against; the health is what the plan says when that corpus is empty.
 fn fetch_events_corpus(
     d1: NaiveDate,
     d2: NaiveDate,
     config: &crate::config::ZtoolsConfig,
-) -> String {
+) -> (String, SearchHealth) {
     let queries = build_search_queries(d1);
 
     let mut all_results = Vec::<SearchResult>::new();
+    let mut health = SearchHealth::default();
     for chunk in queries.chunks(4) {
         let mut handles = Vec::new();
         for q in chunk {
             let q_clone = q.clone();
-            let url = config.duckduckgo_url.clone();
+            let ddg = config.duckduckgo_url.clone();
+            let bing = config.bing_url.clone();
             handles.push(std::thread::spawn(move || {
-                search_duckduckgo_html(&q_clone, &url)
+                search_engines(&q_clone, &ddg, &bing)
             }));
         }
         for h in handles {
-            if let Ok(res) = h.join() {
-                all_results.extend(res);
+            if let Ok(outcome) = h.join() {
+                health.record(&outcome);
+                all_results.extend(outcome.results);
             }
         }
+    }
+    if let Some(summary) = health.summary() {
+        println!("\u{2192} Search: {summary}");
     }
 
     // The scrape results become the corpus through the SAME byte-exact
@@ -173,7 +181,7 @@ fn fetch_events_corpus(
     if total > 0 {
         println!("→ Candidates: {in_window}/{total} mention a date this weekend");
     }
-    marked_text
+    (marked_text, health)
 }
 
 /// The monolithic single-shot extraction used as a fallback when the 4-phase
@@ -214,7 +222,12 @@ fn monolithic_transient(
 /// extract -> draft -> refine -> structure, with a monolithic fallback when a
 /// phase yields nothing.
 ///
-/// Returns the structured events plus the corpus they were judged against.
+/// The model is warmed on its own thread WHILE the search runs, so a cold
+/// start overlaps the network work instead of following it; if the warm-up
+/// never answers, no phase is attempted and the health record says so.
+///
+/// Returns the structured events, the corpus they were judged against, and
+/// the health record the plan's warning is written from.
 #[must_use]
 #[expect(
     clippy::option_if_let_else,
@@ -229,8 +242,26 @@ pub fn fetch_duckduckgo_events(
     weather_str: &str,
     ctx: &PlanContext,
     config: &crate::config::ZtoolsConfig,
-) -> (Vec<WeekendEvent>, String) {
-    let corpus = fetch_events_corpus(d1, d2, config);
+) -> (Vec<WeekendEvent>, String, PlanHealth) {
+    let warm = {
+        let config = config.clone();
+        std::thread::spawn(move || warm_model(&config))
+    };
+    let (corpus, search) = fetch_events_corpus(d1, d2, config);
+    let model = warm.join().unwrap_or_else(|_| ModelHealth::Unavailable {
+        model: config.weekend_model.clone(),
+        reason: "the warm-up thread panicked".to_string(),
+    });
+    match &model {
+        ModelHealth::Ready { model, secs } => println!("\u{2192} Model {model} ready ({secs}s)"),
+        ModelHealth::Unavailable { model, reason } => {
+            eprintln!("\u{26a0} Model {model} unavailable: {reason}; skipping extraction");
+        }
+    }
+    let health = PlanHealth { search, model };
+    if !health.model.is_ready() {
+        return (Vec::new(), corpus, health);
+    }
 
     let weather_condensed = condense_weather(weather_str, config);
     let cleaned = extract_sources(&corpus, location, config);
@@ -244,7 +275,7 @@ pub fn fetch_duckduckgo_events(
         monolithic_transient(&corpus, location, d1, d2, config)
     };
 
-    (events, corpus)
+    (events, corpus, health)
 }
 
 /// Default Open-Meteo URL builder for Vaughan / GTA.

@@ -82,6 +82,9 @@ pub struct RunnerConfig {
     pub max_consecutive_infra: u32,
     /// Retry once against a servable stand-in when the configured tag is gone.
     pub allow_model_substitution: bool,
+    /// Let reasoning models think (see `RequestSpec::thinking`). Off by
+    /// default: the production regime.
+    pub thinking: bool,
     /// Production-path switches, off so unit/integration tests stay hermetic:
     /// measure this model's prefill rate up front, size every request from the
     /// learned per-task timeout, record signals after each task, and enforce
@@ -100,6 +103,7 @@ impl Default for RunnerConfig {
             max_retries: 1,
             max_consecutive_infra: 4,
             allow_model_substitution: true,
+            thinking: false,
             record_signals: false,
         }
     }
@@ -311,6 +315,7 @@ fn run_eval_inner(
                 max_tokens: attempt_tokens,
                 timeout_secs,
                 allow_substitution: cfg.allow_model_substitution,
+                thinking: cfg.thinking,
                 stream_guard: true,
             };
             let r = transport::call(&spec, task.parse_json);

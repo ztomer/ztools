@@ -4,6 +4,42 @@
 
 ---
 
+## Production calls: thinking OFF, streaming, stall-guarded (2026-09-19)
+
+`ztools/llm.rs` is the one client the tools (`tw`, `wk`) call the server through.
+Measured on `qwen3.8-27b-jang_6d`, warm, quiet box:
+
+    request field                      `pong` content   reasoning chars
+    (none)                             ""               86  (finish=length at 20)
+    "enable_thinking": false           "pong"           0
+    "reasoning_effort": "none"         "pong"           0
+    "chat_template_kwargs": {...}      "\n\npong"       110 (ignored)
+    "/no_think" prefix                 "\n\npong"       82  (ignored)
+
+So the server honours TOP-LEVEL `enable_thinking` / `reasoning_effort`, and nothing
+else. With thinking on, a two-line extract spent 1,720 reasoning characters and an
+eight-line one ran past 300s; with it off the same five-line extract answered in 11s,
+correctly, at 14 tok/s.
+
+**The eval measures the same regime.** `model-eval` sends `enable_thinking: false`
+by default (`RunnerConfig::thinking`, `--thinking` to turn it on), so a sweep ranks
+models as the tools will call them. Every sweep before 2026-09-19 measured thinking
+ON; compare across that date only with `--thinking`. `[max_tokens] = 32000` stays —
+it is the room a reasoner needs when the switch is on.
+
+**A client timeout wedges the server.** Osaurus runs requests serially and does not
+free itself when a client disconnects: after three abandoned 300s calls it answered
+nothing for 60s at 0% CPU and needed `osaurus_one.sh --restart`. The production
+client therefore never gives up on a call that is producing tokens; it fails only
+on a STALL (`llm_stall_secs`, 120), and bounds output with `max_tokens` (4,096)
+server-side instead. The eval's `watchdog.rs` is the same lesson from the other side.
+
+**Cold start is not 46s any more, sometimes.** The same model measured an 8m38s
+cold load this session (RSS flat at 7GB for 15 minutes first, then a 25GB page-in
+after the abandoned requests were cleared). The planner warms the model once with
+`llm_warmup_timeout_secs` (900) before any phase, because a 300s client on a
+9-minute load cancels the load and restarts it on the next call, forever.
+
 ## ⚠ Half this document names models that are no longer installed (2026-08-15)
 
 `qwen3.6-35b-a3b-mxfp8-mtp`, `qwen3.6-27b-mxfp8-mtp`, `qwen-agentworld-35b-a3b-mxfp8`

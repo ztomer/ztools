@@ -159,6 +159,7 @@ pub fn format_weekend_plan(
     target_ages: &str,
     dates_str: &str,
     weather_display: &str,
+    health: &super::PlanHealth,
 ) -> String {
     let (transient_items, fixed_items) = (transient, fixed);
 
@@ -198,7 +199,13 @@ pub fn format_weekend_plan(
         "### Transient / Limited-Time Events (Ranked by Fit Score (computed, not reviews))\n\n",
     );
     if transient_items.is_empty() {
-        out.push_str("> [!WARNING]\n> **Plan Degraded**: No live transient events found for this weekend (search/extraction yielded 0 events). Showing year-round fixed venues as fallback.\n\n*No transient events scheduled for this weekend.*\n\n");
+        // The warning names its cause (health.rs): a bot-walled search and a
+        // model that never loaded each read differently from a quiet weekend.
+        let _ = write!(
+            out,
+            "> [!WARNING]\n> **Plan Degraded**: {}\n\n*No transient events scheduled for this weekend.*\n\n",
+            health.degraded_reason()
+        );
     } else {
         out.push_str("| Score | Event & Location | Day & Time | Target Age(s) | Estimated Price (CAD) | Why It Fits |\n");
         out.push_str("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
@@ -215,6 +222,15 @@ pub fn format_weekend_plan(
             );
         }
         out.push('\n');
+        // Events were found, but not from the whole fan-out: say so, so a
+        // short list reads as "partly blocked", not "that is all there is".
+        if health.search.bot_walled() {
+            let _ = write!(
+                out,
+                "> [!NOTE]\n> {} of {} searches were blocked by a bot wall; this list may be incomplete.\n\n",
+                health.search.starved, health.search.queries
+            );
+        }
     }
 
     out

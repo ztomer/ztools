@@ -1,7 +1,25 @@
 //! Calendar-date scanning shared between the weekend enforcer and any
 //! in-window prioritiser. Ported from `lib/dates.py`.
 
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
+
+/// The Friday-to-Sunday a plan should cover, seen from `today`.
+///
+/// During a weekend the answer is *this* one, not the next: a plan for the
+/// days you are living through is current, not stale. Monday = 0 ... Friday
+/// = 4, Saturday = 5, Sunday = 6, so Saturday and Sunday step BACK to their
+/// own Friday.
+///
+/// ONE definition, used by both the planner and the status page. They used
+/// to disagree — the planner walked forward to the next Friday, so a Saturday
+/// refresh planned the FOLLOWING weekend while the status page kept saying
+/// this one was "not planned" — and the two only agreed Monday to Friday.
+#[must_use]
+pub fn plan_window(today: NaiveDate) -> (NaiveDate, NaiveDate) {
+    let weekday = i64::from(today.weekday().num_days_from_monday());
+    let friday = today - chrono::Duration::days(weekday - 4);
+    (friday, friday + chrono::Duration::days(2))
+}
 
 /// Full month names, in order. Three-letter prefixes are the matching stems.
 const MONTHS: [&str; 12] = [

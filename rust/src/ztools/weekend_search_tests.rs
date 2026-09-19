@@ -45,12 +45,110 @@ fn parse_unescapes_entities_in_titles_and_hrefs() {
 fn search_reports_a_challenge_instead_of_silent_empty() {
     let challenge =
         "<html><body>challenges.cloudflare.com just a moment verifying browser</body></html>";
-    let server = serve_html(challenge);
-    let results = search::search_duckduckgo_html("kids events", &server);
+    let ddg = serve_html(challenge);
+    let bing = serve_html(challenge);
+    let outcome = search::search_engines("kids events", &ddg, &bing);
     assert!(
-        results.is_empty(),
-        "a WAF wall must yield no results, not parse the wall page: {results:?}"
+        outcome.results.is_empty(),
+        "a WAF wall must yield no results, not parse the wall page: {outcome:?}"
     );
+    assert_eq!(
+        outcome.verdicts,
+        [
+            search::EngineVerdict::Blocked,
+            search::EngineVerdict::Blocked
+        ],
+        "{outcome:?}"
+    );
+    assert!(outcome.starved_by_bot_wall());
+}
+
+#[test]
+fn a_walled_duckduckgo_falls_through_to_bing() {
+    let challenge = "<html><body><div class=\"anomaly-modal\">checking</div></body></html>";
+    let ddg = serve_html(challenge);
+    let bing = serve_html(BING_HTML);
+    let outcome = search::search_engines("kids events", &ddg, &bing);
+    assert_eq!(outcome.results.len(), 2, "{outcome:?}");
+    assert_eq!(outcome.results[0].title, "Vaughan Fall Fair 2026");
+    assert_eq!(outcome.results[0].href, "https://example.com/fair?a=1&b=2");
+    assert_eq!(
+        outcome.results[0].body,
+        "Rides, animals & a corn maze this weekend in Vaughan."
+    );
+    assert_eq!(
+        outcome.verdicts,
+        [
+            search::EngineVerdict::Blocked,
+            search::EngineVerdict::Answered(2)
+        ]
+    );
+    assert!(!outcome.starved_by_bot_wall(), "Bing rescued the query");
+}
+
+#[test]
+fn an_answering_duckduckgo_never_consults_bing() {
+    let ddg = serve_html(TITLED_HTML);
+    let outcome = search::search_engines("kids events", &ddg, "http://127.0.0.1:1/");
+    assert_eq!(outcome.results.len(), 2);
+    assert_eq!(
+        outcome.verdicts,
+        [
+            search::EngineVerdict::Answered(2),
+            search::EngineVerdict::Skipped
+        ]
+    );
+}
+
+#[test]
+fn unreachable_engines_are_recorded_as_such() {
+    let outcome =
+        search::search_engines("kids events", "http://127.0.0.1:1/", "http://127.0.0.1:1/");
+    assert!(outcome.results.is_empty());
+    assert_eq!(
+        outcome.verdicts,
+        [
+            search::EngineVerdict::Unreachable,
+            search::EngineVerdict::Unreachable
+        ]
+    );
+    assert!(!outcome.starved_by_bot_wall(), "unreachable is not a wall");
+}
+
+/// Real Bing markup shape (2026-09-19): `li.b_algo` > `h2 > a` + `p`, the
+/// `h2` carrying an empty class and the first href a `ck/a` redirect whose
+/// `u=a1<base64url>` payload is the destination.
+const BING_HTML: &str = "<html><body><ol id=\"b_results\">\
+<li class=\"b_algo\" data-id iid=\"SERP.1\"><div class=\"b_title\"><h2 class=\"\"><a target=\"_blank\" href=\"https://www.bing.com/ck/a?!&amp;&amp;p=30cd&amp;u=a1aHR0cHM6Ly9leGFtcGxlLmNvbS9mYWlyP2E9MSZiPTI&amp;ntb=1\" h=\"ID=1\">Vaughan <strong>Fall Fair</strong> 2026</a></h2></div>\
+<div class=\"b_caption\"><p class=\"b_lineclamp2\"><span class=\"algoSlug_icon\">Sep 1</span>Rides, animals &amp; a corn maze this weekend in Vaughan.</p></div></li>\
+<li class=\"b_algo\"><h2><a href=\"https://example.com/zoo\">Toronto Zoo</a></h2><p>Family programs.</p></li>\
+<li class=\"b_ad\"><h2><a href=\"https://ads.example.com\">Sponsored</a></h2></li>\
+</ol></body></html>";
+
+/// The real page (2026-09-19): ten results AND `challenges.cloudflare.com`
+/// in a script's domain list. The markers explain an empty page; they do
+/// not overrule a parsed one.
+#[test]
+fn a_results_page_that_merely_mentions_a_challenge_host_is_an_answer() {
+    let html = format!(
+        "<html><script>var allow=[\"login.live.com\",\"challenges.cloudflare.com\"];</script>{}",
+        BING_HTML.trim_start_matches("<html>")
+    );
+    let bing = serve_html(&html);
+    let outcome = search::search_engines("kids events", "http://127.0.0.1:1/", &bing);
+    assert_eq!(
+        outcome.verdicts[1],
+        search::EngineVerdict::Answered(2),
+        "{outcome:?}"
+    );
+}
+
+#[test]
+fn bing_parser_reads_only_algo_blocks_and_strips_inline_markup() {
+    let results = search::parse_bing_results(BING_HTML);
+    assert_eq!(results.len(), 2, "ads are not results: {results:?}");
+    assert_eq!(results[1].title, "Toronto Zoo");
+    assert_eq!(results[1].body, "Family programs.");
 }
 
 fn serve_html(body: &str) -> String {

@@ -6,6 +6,55 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## v3.1.0 — the weekend planner produces events again _(2026-09-19)_
+
+Measured end to end against a healthy server, `ztools weekend-plan` had produced
+zero transient events on every run since August, in 22 minutes, and then left the
+server unable to answer `pong`. Four causes, each closed at the class level.
+
+### Fixed
+- **A second search engine.** Every `DuckDuckGo` query — `html` and `lite`, POST and
+  GET — came back as an `anomaly-modal` challenge, so the planner had no corpus and
+  said "no events". `weekend/search.rs` now tries Bing when DDG walls or empties a
+  query (`bing_url`, loopback in every test), reads its `li.b_algo` markup and
+  unwraps its `ck/a?u=a1<base64>` redirects so the aggregator follow-up fetches the
+  listing page, not the redirect. Verdicts are classified RESULTS-FIRST: Bing's page
+  lists `challenges.cloudflare.com` in a script allowlist, and the marker scan alone
+  called nine answered queries "blocked" on the first live run.
+- **Thinking off, output bounded, streaming with a stall guard** (`ztools/llm.rs`,
+  the one client every production call now goes through). `qwen3.8` reasoned past
+  the 300s timeout on an eight-line extract; the client disconnected; the server
+  kept the abandoned generation, queued the next request behind it, and after
+  three of these no longer answered at all. Now: `enable_thinking: false` (measured:
+  the same extract in 11s), `max_tokens` (4,096), `stream: true`, and the call fails
+  only when no byte arrives for `llm_stall_secs` (120) — tokens that keep flowing
+  keep it waiting, up to a cap that is a backstop, not a budget.
+- **One warm-up before any phase** (`llm_warmup_timeout_secs`, 900). A cold 25GB
+  model measured an 8m38s load; a 300s client made the server cancel the load, and
+  the next call restarted it — a livelock in which the model never became ready.
+  The warm-up runs on its own thread while the search does, and if it never
+  answers no phase is attempted and the plan says which model did not.
+- **An extract breaker.** A dead model cost four timeouts per line (8 -> 4 -> 2 -> 1
+  -> raw); after `EXTRACT_FAILURE_BREAKER` (3) consecutive failures the rest of the
+  corpus passes through raw.
+- **One definition of "the upcoming weekend"** (`weekend::dates::plan_window`). The
+  planner walked forward to the next Friday while the status page counted the
+  weekend you are in, so a Saturday refresh planned NEXT weekend and the dashboard
+  kept saying this one was "not planned".
+
+### Changed
+- **`model-eval` measures thinking OFF by default** (`--thinking` restores the old
+  regime), so a sweep ranks models as the production tools now call them. Sweeps
+  before this version measured with reasoning on; compare across the boundary with
+  the flag.
+
+### Added
+- **The plan says why it is empty** (`weekend/health.rs`). The degraded warning names
+  a bot wall ("9 of 16 searches were blocked by a bot wall — the corpus was starved,
+  not the weekend quiet") or a model that never answered; a populated plan behind a
+  partly walled search carries a note that the list may be incomplete; `ztools status`
+  appends `(search bot-walled)` so the dashboard line carries it too.
+
 ## v3.0.0 — zero Python at runtime _(2026-09-13)_
 
 The Python reference tree is gone. Every behaviour it carried is ported — with the

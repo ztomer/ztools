@@ -60,12 +60,8 @@ pub(crate) fn weekend_plan(
 
     let now = Local::now().naive_local().date();
 
-    // Find upcoming Friday
-    let mut friday = now;
-    while friday.weekday() != chrono::Weekday::Fri {
-        friday = friday.succ_opt().unwrap();
-    }
-    let sunday = friday.succ_opt().unwrap().succ_opt().unwrap();
+    // The same window `ztools status` checks the stored plan against.
+    let (friday, sunday) = crate::ztools::weekend::plan_window(now);
 
     let d1 = friday.format("%Y-%m-%d").to_string();
     let d2 = sunday.format("%Y-%m-%d").to_string();
@@ -91,7 +87,7 @@ pub(crate) fn weekend_plan(
         exclusions: exclusions_str,
     };
 
-    let (transient, corpus) = crate::ztools::weekend::fetch_duckduckgo_events(
+    let (transient, corpus, health) = crate::ztools::weekend::fetch_duckduckgo_events(
         &location,
         friday,
         sunday,
@@ -165,6 +161,7 @@ pub(crate) fn weekend_plan(
         &ages,
         &dates_str,
         &weather_str,
+        &health,
     );
 
     // The dated plan always lands in the store (what `ztools status` and the
@@ -236,6 +233,17 @@ pub(crate) fn status() -> Result<()> {
 
 /// `ztools model-eval`: a native-Rust quality benchmark.
 ///
+/// The `model-eval` switches that are not the model: which suite, where the
+/// tasks are, which of them, how to print, and under which regime.
+pub(crate) struct EvalOptions<'a> {
+    pub suite: &'a str,
+    pub tasks_dir: Option<&'a std::path::Path>,
+    pub task_filter: Option<&'a str>,
+    pub json_output: bool,
+    pub capabilities: bool,
+    pub thinking: bool,
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "a CLI command end to end: resolve the model, size it \
@@ -255,12 +263,16 @@ pub(crate) fn status() -> Result<()> {
 pub(crate) fn model_eval(
     config: &ZtoolsConfig,
     model: String,
-    suite: &str,
-    tasks_dir: Option<&std::path::Path>,
-    task_filter: Option<&str>,
-    json_output: bool,
-    capabilities: bool,
+    opts: &EvalOptions<'_>,
 ) -> Result<()> {
+    let EvalOptions {
+        suite,
+        tasks_dir,
+        task_filter,
+        json_output,
+        capabilities,
+        thinking,
+    } = *opts;
     let url = &config.osaurus_url;
     if capabilities {
         return print_capabilities(url, &model);
@@ -320,6 +332,7 @@ pub(crate) fn model_eval(
                 host: host.clone(),
                 port,
                 record_signals: true,
+                thinking,
                 ..Default::default()
             };
             // The learning path: prefill/cold-start/decode measurement, learned

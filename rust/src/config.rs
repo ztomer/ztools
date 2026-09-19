@@ -18,6 +18,10 @@ pub struct ZtoolsConfig {
     /// makes every run depend on someone else's uptime.
     #[serde(default = "default_duckduckgo_url")]
     pub duckduckgo_url: String,
+    /// The second search engine, consulted only when `DuckDuckGo` walls or
+    /// empties a query. Configurable for the same reason as the first.
+    #[serde(default = "default_bing_url")]
+    pub bing_url: String,
     /// Where the weekend planner looks for its exclusion list, in order; the
     /// first file that yields entries wins, and an empty list means "use the
     /// built-in defaults". Configurable because a hardcoded `~/…` path makes
@@ -78,6 +82,25 @@ pub struct ZtoolsConfig {
     pub llm_extended_timeout_secs: u64,
     #[serde(default = "default_llm_quick_timeout_secs")]
     pub llm_quick_timeout_secs: u64,
+    /// How long ONE warm-up request may wait for a cold model to load before
+    /// the pipeline declares the model unavailable. Separate from the call
+    /// timeouts above, because those measure GENERATION and this measures
+    /// LOADING: a 25GB model measured an 8m38s cold start on 2026-09-19, and
+    /// a client that gives up at 300s makes the server cancel the load, so
+    /// every subsequent call restarted it and none ever finished.
+    #[serde(default = "default_llm_warmup_timeout_secs")]
+    pub llm_warmup_timeout_secs: u64,
+    /// No token for this long means the server is not generating. The one
+    /// timeout that decides a call has failed; the per-call figures above
+    /// are CAPS on a call whose tokens keep flowing (see `ztools::llm`).
+    #[serde(default = "default_llm_stall_secs")]
+    pub llm_stall_secs: u64,
+    /// The bound every production answer is generated under. The weekend
+    /// JSON for ten events is ~1,500 tokens and a timeline summary ~3,000;
+    /// this is room, not a target. Server-side, so a runaway is cut by the
+    /// server rather than abandoned by the client (which wedges it).
+    #[serde(default = "default_llm_max_tokens")]
+    pub llm_max_tokens: u32,
     #[serde(default = "default_twitter_prompt_max_chars")]
     pub twitter_prompt_max_chars: usize,
     #[serde(default = "default_max_image_filename_len")]
@@ -95,6 +118,9 @@ fn default_osaurus_url() -> String {
 }
 fn default_duckduckgo_url() -> String {
     "https://html.duckduckgo.com/html/".to_string()
+}
+fn default_bing_url() -> String {
+    "https://www.bing.com/search".to_string()
 }
 fn default_twitter_cache_path() -> String {
     "~/.cache/twitter/debug_tweets.json".to_string()
@@ -148,10 +174,24 @@ const fn default_llm_timeout_secs() -> u64 {
     120
 }
 const fn default_llm_extended_timeout_secs() -> u64 {
-    300
+    // A CAP on a streaming call, not a wait: reached only when tokens keep
+    // arriving for this long. 4,096 tokens at the slowest measured decode
+    // (14 tok/s) is ~290s, so 300 would cut a full-length answer that was
+    // going fine. The stall guard (`llm_stall_secs`) is what catches a dead
+    // server.
+    900
 }
 const fn default_llm_quick_timeout_secs() -> u64 {
     10
+}
+const fn default_llm_warmup_timeout_secs() -> u64 {
+    900
+}
+const fn default_llm_stall_secs() -> u64 {
+    120
+}
+const fn default_llm_max_tokens() -> u32 {
+    4096
 }
 const fn default_twitter_prompt_max_chars() -> usize {
     24000
@@ -189,11 +229,24 @@ pub(crate) fn default_twitter_summarize_prompt() -> String {
     TWITTER_SUMMARIZE_PROMPT.to_string()
 }
 
+impl ZtoolsConfig {
+    /// The streaming budget for one production call capped at `cap_secs`.
+    #[must_use]
+    pub const fn chat_budget(&self, cap_secs: u64) -> crate::ztools::llm::ChatBudget {
+        crate::ztools::llm::ChatBudget {
+            stall_secs: self.llm_stall_secs,
+            cap_secs,
+            max_tokens: self.llm_max_tokens,
+        }
+    }
+}
+
 impl Default for ZtoolsConfig {
     fn default() -> Self {
         Self {
             osaurus_url: default_osaurus_url(),
             duckduckgo_url: default_duckduckgo_url(),
+            bing_url: default_bing_url(),
             weekend_exclusions_paths: default_weekend_exclusions_paths(),
             weekend_region_paths: default_weekend_region_paths(),
             twitter_cache_path: default_twitter_cache_path(),
@@ -209,6 +262,9 @@ impl Default for ZtoolsConfig {
             llm_timeout_secs: default_llm_timeout_secs(),
             llm_extended_timeout_secs: default_llm_extended_timeout_secs(),
             llm_quick_timeout_secs: default_llm_quick_timeout_secs(),
+            llm_warmup_timeout_secs: default_llm_warmup_timeout_secs(),
+            llm_stall_secs: default_llm_stall_secs(),
+            llm_max_tokens: default_llm_max_tokens(),
             twitter_prompt_max_chars: default_twitter_prompt_max_chars(),
             max_image_filename_len: default_max_image_filename_len(),
             twitter_summarize_prompt: default_twitter_summarize_prompt(),

@@ -116,8 +116,10 @@ fn corpus_building_dedupes_keeps_only_region_backed_snippets_and_counts_them() {
     let ddg = serve_html(SNIPPETS_HTML);
     let config = crate::config::ZtoolsConfig {
         duckduckgo_url: ddg,
+        bing_url: "http://127.0.0.1:1/".into(),
         osaurus_url: "http://127.0.0.1:1".into(),
         llm_timeout_secs: 1,
+        llm_warmup_timeout_secs: 1,
         ..crate::config::ZtoolsConfig::default()
     };
 
@@ -127,7 +129,7 @@ fn corpus_building_dedupes_keeps_only_region_backed_snippets_and_counts_them() {
     // results must still collapse to one line, the Aspen result must be
     // dropped for lacking region evidence, and the candidate counter must see
     // exactly one line (the operator println path).
-    let (events, corpus) =
+    let (events, corpus, _health) =
         fetch_duckduckgo_events("Vaughan", window().0, window().1, "sunny", &ctx(), &config);
 
     assert_eq!(
@@ -155,12 +157,13 @@ fn a_dead_draft_phase_falls_back_to_the_monolithic_prompt_and_parses_real_events
     let osaurus = serve_chat(monolithic_json);
     let config = crate::config::ZtoolsConfig {
         duckduckgo_url: "http://127.0.0.1:1/".into(),
+        bing_url: "http://127.0.0.1:1/".into(),
         osaurus_url: osaurus,
         llm_timeout_secs: 1,
         ..crate::config::ZtoolsConfig::default()
     };
 
-    let (events, corpus) =
+    let (events, corpus, _health) =
         fetch_duckduckgo_events("Vaughan", window().0, window().1, "sunny", &ctx(), &config);
 
     assert!(corpus.is_empty(), "search is dead, so no corpus: {corpus}");
@@ -169,6 +172,41 @@ fn a_dead_draft_phase_falls_back_to_the_monolithic_prompt_and_parses_real_events
     assert_eq!(events[0].price, "By donation");
     assert_eq!(events[0].day, "Saturday");
     assert!(events[0].is_transient);
+}
+
+/// The fan-out runs and yields nothing when neither the search nor the model
+/// can be reached. Both endpoints point at a closed port so the outcome does
+/// not depend on `DuckDuckGo` being up -- this test used to hit the live site
+/// thirteen times, and whether it answered moved the coverage number.
+#[test]
+fn test_fetch_duckduckgo_events() {
+    let config = crate::config::ZtoolsConfig {
+        duckduckgo_url: "http://127.0.0.1:1/".into(),
+        bing_url: "http://127.0.0.1:1/".into(),
+        osaurus_url: "http://127.0.0.1:1".into(),
+        llm_timeout_secs: 1,
+        llm_warmup_timeout_secs: 1,
+        ..crate::config::ZtoolsConfig::default()
+    };
+    let (events, corpus, health) =
+        fetch_duckduckgo_events("Vaughan", window().0, window().1, "sunny", &ctx(), &config);
+    assert!(
+        events.is_empty(),
+        "unreachable search and model must yield nothing, not invented events: {events:?}"
+    );
+    assert!(corpus.is_empty());
+    assert!(
+        !health.model.is_ready(),
+        "a model that never answered the warm-up must be recorded as unavailable: {health:?}"
+    );
+    let n = health.search.queries;
+    assert!(n > 0);
+    assert_eq!(
+        health.search.unreachable,
+        [n, n],
+        "every query must record both engines unreachable: {:?}",
+        health.search
+    );
 }
 
 // --- parse_snippets_from_html: pure parsing of synthetic DDG markup ---
@@ -294,7 +332,64 @@ fn test_degradation_banner_rendered_when_transient_empty() {
         "6-12",
         "Sep 04 to Sep 06",
         "Sunny",
+        &PlanHealth::nominal(),
     );
     assert!(markdown.contains("> [!WARNING]"));
     assert!(markdown.contains("Plan Degraded"));
+}
+
+/// A plan WITH events still says when the search behind it was partly
+/// walled — and the status page reads the same phrase off either shape.
+#[test]
+fn a_partly_walled_search_is_noted_under_a_populated_table() {
+    let mut search = SearchHealth::default();
+    search.record(&crate::ztools::weekend::QueryOutcome {
+        query: "q".into(),
+        results: Vec::new(),
+        verdicts: [
+            crate::ztools::weekend::EngineVerdict::Blocked,
+            crate::ztools::weekend::EngineVerdict::Blocked,
+        ],
+    });
+    let health = PlanHealth {
+        search,
+        model: ModelHealth::Ready {
+            model: "m".into(),
+            secs: 1,
+        },
+    };
+    let event = WeekendEvent {
+        name: "Fall Fair".into(),
+        location: "Vaughan".into(),
+        price: "$12".into(),
+        target_ages: "all".into(),
+        day: "Saturday".into(),
+        dates: "2026-08-08".into(),
+        description: "rides".into(),
+        is_transient: true,
+        score: 3.0,
+        start_date: "2026-08-08".into(),
+        end_date: "2026-08-08".into(),
+        weather: "outdoor".into(),
+        duration: String::new(),
+    };
+    let markdown = format_weekend_plan(
+        &[event],
+        &[],
+        "Vaughan",
+        "6-12",
+        "Aug 07-09",
+        "Sunny",
+        &health,
+    );
+    assert!(markdown.contains("**Fall Fair**"), "{markdown}");
+    assert!(
+        markdown
+            .contains("> 1 of 1 searches were blocked by a bot wall; this list may be incomplete."),
+        "{markdown}"
+    );
+    assert!(
+        !markdown.contains("Plan Degraded"),
+        "events were found: {markdown}"
+    );
 }
