@@ -125,3 +125,23 @@ value copied back into its own test proves nothing.
 - Tweet-ID set equality as the collect-parity criterion: the same collector run twice
   minutes apart shares ~7 of 50 IDs (the feed is a per-load sample), so the instrument
   could not see parity. Replaced by shared-record agreement.
+
+## A unit test must not read the live machine (2026-09-19)
+
+Three tests asserted what THIS box was doing: real memory pressure through an
+`Option` argument whose `None` meant "go and look"; the real
+`/tmp/mac-osaurus-gpu.lock` for a "nothing there" case before the temp-dir
+redirect; and both, twice, compared. All went red whenever a sweep ran. The rule
+is a pure function over injected readings (`uncontended_verdict(lock_held,
+pressure)`); the live function composes it; the test pins the rule. Grep
+`#[test]` bodies for `memory_pressure()`, `foreign_holder()`, `/tmp/`, `sysctl`
+and env reads: each is injected or a flake with a schedule.
+
+## Loopback stubs answer either wire shape
+
+`ztools/llm.rs` streams (`stream: true`) but reads a plain JSON completion too,
+so every existing `{"choices":[{"message":{"content":…}}]}` stub keeps working
+and a stall test is one stub that accepts and sends nothing (the verdict must
+land at the stall budget, not the cap). Search stubs: every engine URL in a
+config must be loopback (`bing_url`, `brave_url` too) — a default is the live
+site, and a dead DDG stub falls through to it.

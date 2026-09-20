@@ -85,7 +85,7 @@ weekend --md-out ~/Documents/weekend_plan.md
 ```
 
 - **Weather-Aware**: Fetches 3-day forecasts from Open-Meteo REST API.
-- **Dual-Source Scraping**: Scrapes seasonal festivals and activities from DuckDuckGo (with automatic fallback to DuckDuckGo Lite).
+- **Dual-Source Scraping**: Scrapes seasonal festivals and activities through a three-engine search (DuckDuckGo, then Bing, then Brave); the plan states when a bot wall starved the corpus instead of calling the weekend quiet.
 - **4-Phase LLM Pipeline**: Condenses weather → Extracts candidate snippets → Drafts itinerary → Structures validated JSON.
 - **Rule Enforcement**: Drops unsourced rows, ensures in-window dates, and applies venue exclusions from `conf/weekend.toml`.
 

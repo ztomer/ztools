@@ -94,5 +94,5 @@ module that owns the function.
 - Add discovered learnings to `docs/MODEL_QUIRKS.md` immediately when found
 
 ### Prompt Engineering
-- Always prepend "Output JSON now." for qwen3.6 to prevent thinking
+- Production calls (`ztools/llm.rs`) send `enable_thinking: false`, and so does `model-eval` by default (`--thinking` for the old regime); "Output JSON now." is still the qwen quirk prefix for JSON tasks but no longer what stops reasoning
 - Test changes with a quick single-task eval before a full run

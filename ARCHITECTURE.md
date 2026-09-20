@@ -61,7 +61,7 @@ ztools/
 │       ├── config.rs       # Dynamic TOML config loader & model fallbacks
 │       └── ztools/         # Tool subsystem implementations
 │           ├── twitter/    # Browser scraping, embedding clustering, summarization
-│           ├── weekend/    # Weather API, DuckDuckGo scraper, 4-phase LLM pipeline
+│           ├── weekend/    # Weather API, DDG→Bing→Brave search, 4-phase LLM pipeline
 │           ├── rename/     # OCR sanitization, prompt injection defense, VLM naming
 │           ├── eval/       # GPU locks, benchmark runners, validation suites
 │           ├── embeddings.rs # Semantic embedding vector calculations
@@ -116,7 +116,7 @@ The Twitter summarizer scrapes your authenticated Following timeline, extracts k
 The weekend planner generates family weekend itineraries tailored for kids, combining live weather forecasts, real-time event web scraping, curated GTA venues, and strict rule enforcement.
 
 ```
- [Open-Meteo API]              [DuckDuckGo HTML + Lite Scraper]
+ [Open-Meteo API]              [DuckDuckGo → Bing → Brave search]
  (Weather Forecast)            (Seasonal Events & Festivals)
          │                                    │
          └─────────────────┬──────────────────┘
@@ -138,7 +138,7 @@ The weekend planner generates family weekend itineraries tailored for kids, comb
                [Formatted Console & Markdown Table (format.rs)]
 ```
 
-- **Dual-Source Scraping**: Queries Open-Meteo REST API for precise weekend weather and DuckDuckGo (with automatic fallback to DuckDuckGo Lite) for local events.
+- **Dual-Source Scraping**: Queries Open-Meteo REST API for precise weekend weather and a three-engine search (DuckDuckGo, then Bing, then Brave — each consulted only when the one before walls or empties the query) for local events. Every engine's verdict per query is recorded and the plan says when a bot wall starved it.
 - **4-Phase LLM Pipeline**: Progressively refines raw search text into validated JSON items, falling back to monolithic extraction if any phase stalls.
 - **Enforcement Rules**: Drops unsourced rows (anti-hallucination), reconciles day names with ISO dates, and enforces user exclusion lists.
 
