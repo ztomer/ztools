@@ -42,30 +42,25 @@ is a reading that takes a week to exist.
 
 ## Phase 2 — planner honesty in the plan itself
 
-3. **Engine order learned from health.** `SearchHealth` records per-engine
-   walls per run; nothing reads them back. If DDG is walled for N consecutive
-   runs, try it last (or skip it) rather than pay 16 challenged POSTs per plan.
-   Data, not code: the order and the threshold in `conf/weekend.toml`. Only
-   worth it if the wall persists — check the health lines in a month first.
-4. **Weekend phase retry** (B4 deferral). Python retried each phase up to 5× on
+2. **Weekend phase retry** (B4 deferral). Python retried each phase up to 5× on
    transport/parse failure; Rust phases are single-shot. The stall-guarded
    client removed the main cause (abandoned calls). Port only when a scheduled
    run is actually lost to a transient error: the `run_chain`-style loop the
    summarizer has, count in `conf/weekend.toml`.
-5. **Weekend phase timeout learning** (B4 deferral). Python widened per-(model,
+3. **Weekend phase timeout learning** (B4 deferral). Python widened per-(model,
    phase) timeouts from observed latency. The stall guard makes the cap a
    backstop, so this only matters if a call legitimately streams past 900s.
    `eval/signals.rs` has the store if it ever does.
 
 ## Phase 3 — eval ergonomics
 
-6. **Eval "what changed since the last run" presenter** (B4). History is saved
+4. **Eval "what changed since the last run" presenter** (B4). History is saved
    and the trend table renders per-model deltas; the Python diff table is not
    re-rendered. Cheap once someone wants it.
-7. **Eval token / verbosity metrics** (B4). Need per-outcome content capture in
+5. **Eval token / verbosity metrics** (B4). Need per-outcome content capture in
    `TaskOutcome` — a serialization decision, the record grows by the model's
    full answer. Decide before porting.
-8. **Drain-mode SIGINT** (B4). The Rust eval dies on Ctrl-C; the lock's
+6. **Drain-mode SIGINT** (B4). The Rust eval dies on Ctrl-C; the lock's
    dead-owner reclaim restores safety and the in-flight task is lost. Port with
    `ctrlc` if sweeps get interrupted by hand often enough to matter.
 
