@@ -1,5 +1,9 @@
 use super::*;
 
+/// The Python table's 24 non-taxes rows plus the one row added since
+/// (`summarize_injection`, 2026-09-19). One number, three assertions.
+const ROSTER_ROWS: usize = 25;
+
 #[test]
 fn test_run_check_primitives() {
     assert!(run_check(
@@ -229,8 +233,8 @@ fn load_all_eval_tasks_without_dir_returns_the_roster_only() {
     let tasks = load_all_eval_tasks(&shipped_conf(), None).unwrap();
     assert_eq!(
         tasks.len(),
-        24,
-        "the Python TASKS table had 24 non-taxes rows"
+        ROSTER_ROWS,
+        "the Python TASKS table had 24 non-taxes rows; summarize_injection joined 2026-09-19"
     );
     assert_eq!(tasks[0].name, "weekend_transient");
     assert!(!tasks.iter().any(|t| t.name.starts_with("taxes_")));
@@ -261,7 +265,7 @@ fn load_all_eval_tasks_prefers_a_taxes_subdir() {
     .unwrap();
 
     let tasks = load_all_eval_tasks(&shipped_conf(), Some(temp.path())).unwrap();
-    assert_eq!(tasks.len(), 24 + 1);
+    assert_eq!(tasks.len(), ROSTER_ROWS + 1);
     assert!(
         tasks.iter().any(|t| t.name == "taxes_qa"),
         "subdir task loaded"
@@ -282,7 +286,7 @@ fn load_all_eval_tasks_reads_a_flat_dir_when_no_subdir_exists() {
     .unwrap();
 
     let tasks = load_all_eval_tasks(&shipped_conf(), Some(temp.path())).unwrap();
-    assert_eq!(tasks.len(), 24 + 1);
+    assert_eq!(tasks.len(), ROSTER_ROWS + 1);
     assert!(tasks.iter().any(|t| t.name == "taxes_yoy_narrative"));
 }
 

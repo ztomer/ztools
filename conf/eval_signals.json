@@ -667,7 +667,7 @@
   },
   "foundation": {
     "_capabilities": {
-      "cold_start_seconds": 0.88,
+      "cold_start_seconds": 0.84,
       "cold_start_seconds_samples": [
         {
           "clean": false,
@@ -709,9 +709,19 @@
           "clean": true,
           "ts": 0.0,
           "v": 2.2781
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 0.8161
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 0.7602
         }
       ],
-      "decode_tokens_per_sec": 69.25,
+      "decode_tokens_per_sec": 50.12,
       "decode_tokens_per_sec_samples": [
         {
           "clean": false,
@@ -753,10 +763,20 @@
           "clean": true,
           "ts": 0.0,
           "v": 22.0903
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 50.1186
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 49.0839
         }
       ],
       "generative": true,
-      "prefill_chars_per_sec": 3875.3,
+      "prefill_chars_per_sec": 3250.4,
       "prefill_chars_per_sec_samples": [
         {
           "clean": false,
@@ -798,9 +818,19 @@
           "clean": true,
           "ts": 0.0,
           "v": 1633.2
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 3250.4
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 3230.2
         }
       ],
-      "prefill_samples": 9
+      "prefill_samples": 11
     },
     "detailed_json": {
       "p95_latency": 24.2,
@@ -833,9 +863,9 @@
     "filename_injection": {
       "p95_latency": 0.8,
       "parse_failures": 0,
-      "samples": 4,
+      "samples": 5,
       "timeout": 900,
-      "total_retries": 1
+      "total_retries": 2
     },
     "filename_leak": {
       "p95_latency": 0.9,
@@ -911,6 +941,13 @@
       "samples": 16,
       "timeout": 900,
       "total_retries": 2
+    },
+    "summarize_injection": {
+      "p95_latency": 6.9,
+      "parse_failures": 0,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 0
     },
     "summarize_misattribution": {
       "p95_latency": 11.4,
@@ -1013,7 +1050,7 @@
   },
   "gemma-4-12b-it-mxfp8": {
     "_capabilities": {
-      "cold_start_seconds": 5.12,
+      "cold_start_seconds": 5.15,
       "cold_start_seconds_samples": [
         {
           "clean": false,
@@ -1050,9 +1087,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 6.715
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 5.4174
         }
       ],
-      "decode_tokens_per_sec": 33.74,
+      "decode_tokens_per_sec": 34.81,
       "decode_tokens_per_sec_samples": [
         {
           "clean": false,
@@ -1089,6 +1131,11 @@
           "clean": true,
           "ts": 0.0,
           "v": 32.1946
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 37.0024
         }
       ],
       "disk_bytes": 13360263832,
@@ -1131,9 +1178,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 1556.3
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 1080.9
         }
       ],
-      "prefill_samples": 8,
+      "prefill_samples": 9,
       "vision": true
     },
     "detailed_json": {
@@ -1245,6 +1297,13 @@
       "p95_latency": 71.8,
       "parse_failures": 0,
       "samples": 8,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "summarize_injection": {
+      "p95_latency": 14.0,
+      "parse_failures": 0,
+      "samples": 1,
       "timeout": 900,
       "total_retries": 0
     },
@@ -1792,9 +1851,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 9.2002
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 8.4573
         }
       ],
-      "decode_tokens_per_sec": 66.07,
+      "decode_tokens_per_sec": 67.95,
       "decode_tokens_per_sec_samples": [
         {
           "clean": false,
@@ -1831,6 +1895,11 @@
           "clean": true,
           "ts": 0.0,
           "v": 66.0691
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 70.8435
         }
       ],
       "disk_bytes": 8965299280,
@@ -1873,9 +1942,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 7424.1
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 5910.5
         }
       ],
-      "prefill_samples": 8,
+      "prefill_samples": 9,
       "vision": true
     },
     "detailed_json": {
@@ -1989,6 +2063,13 @@
       "samples": 9,
       "timeout": 900,
       "total_retries": 1
+    },
+    "summarize_injection": {
+      "p95_latency": 5.3,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
     },
     "summarize_misattribution": {
       "p95_latency": 19.8,
@@ -2400,7 +2481,7 @@
   },
   "muse-glimmer-30b-jang_6m": {
     "_capabilities": {
-      "cold_start_seconds": 10.87,
+      "cold_start_seconds": 10.66,
       "cold_start_seconds_samples": [
         {
           "clean": false,
@@ -2422,9 +2503,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 10.954
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 10.4595
         }
       ],
-      "decode_tokens_per_sec": 17.81,
+      "decode_tokens_per_sec": 17.88,
       "decode_tokens_per_sec_samples": [
         {
           "clean": false,
@@ -2446,12 +2532,17 @@
           "clean": true,
           "ts": 0.0,
           "v": 17.8079
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 18.2154
         }
       ],
       "disk_bytes": 27566984848,
       "family": "muse_glimmer",
       "generative": true,
-      "prefill_chars_per_sec": 612.7,
+      "prefill_chars_per_sec": 649.35,
       "prefill_chars_per_sec_samples": [
         {
           "clean": false,
@@ -2473,9 +2564,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 747.6
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 686.0
         }
       ],
-      "prefill_samples": 4,
+      "prefill_samples": 5,
       "vision": true
     },
     "detailed_json": {
@@ -2589,6 +2685,13 @@
       "samples": 7,
       "timeout": 900,
       "total_retries": 1
+    },
+    "summarize_injection": {
+      "p95_latency": 49.8,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
     },
     "summarize_misattribution": {
       "p95_latency": 166.9,
@@ -4622,7 +4725,7 @@
   },
   "qwen3.8-27b-jang_6d": {
     "_capabilities": {
-      "cold_start_seconds": 10.93,
+      "cold_start_seconds": 10.29,
       "cold_start_seconds_samples": [
         {
           "clean": false,
@@ -4634,9 +4737,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 10.9327
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 9.6409
         }
       ],
-      "decode_tokens_per_sec": 17.39,
+      "decode_tokens_per_sec": 16.56,
       "decode_tokens_per_sec_samples": [
         {
           "clean": false,
@@ -4648,12 +4756,17 @@
           "clean": true,
           "ts": 0.0,
           "v": 17.3873
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 15.737
         }
       ],
       "disk_bytes": 25820834377,
       "family": "qwen3_5",
       "generative": true,
-      "prefill_chars_per_sec": 528.8,
+      "prefill_chars_per_sec": 577.1,
       "prefill_chars_per_sec_samples": [
         {
           "clean": false,
@@ -4665,9 +4778,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 528.8
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 625.4
         }
       ],
-      "prefill_samples": 2,
+      "prefill_samples": 3,
       "vision": true
     },
     "detailed_json": {
@@ -4779,6 +4897,13 @@
       "p95_latency": 107.6,
       "parse_failures": 0,
       "samples": 3,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "summarize_injection": {
+      "p95_latency": 26.7,
+      "parse_failures": 0,
+      "samples": 1,
       "timeout": 900,
       "total_retries": 0
     },
@@ -5150,6 +5275,16 @@
           "clean": true,
           "ts": 0.0,
           "v": 4.3784
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 303.4422
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 2.7783
         }
       ],
       "decode_tokens_per_sec": 134.6,
@@ -5158,17 +5293,37 @@
           "clean": true,
           "ts": 0.0,
           "v": 134.6012
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 132.5075
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 144.8889
         }
       ],
-      "prefill_chars_per_sec": 7890.2,
+      "prefill_chars_per_sec": 10724.5,
       "prefill_chars_per_sec_samples": [
         {
           "clean": true,
           "ts": 0.0,
           "v": 7890.2
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 11239.0
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 10724.5
         }
       ],
-      "prefill_samples": 1
+      "prefill_samples": 3
     },
     "detailed_json": {
       "p95_latency": 2.8,
@@ -5201,9 +5356,9 @@
     "filename_injection": {
       "p95_latency": 0.1,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
-      "total_retries": 1
+      "total_retries": 2
     },
     "filename_leak": {
       "p95_latency": 0.1,
@@ -5279,6 +5434,13 @@
       "samples": 1,
       "timeout": 900,
       "total_retries": 0
+    },
+    "summarize_injection": {
+      "p95_latency": 2.7,
+      "parse_failures": 0,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 1
     },
     "summarize_misattribution": {
       "p95_latency": 2.2,
@@ -5381,7 +5543,7 @@
   },
   "raptor-v1-26b-a4b-vl-jang": {
     "_capabilities": {
-      "cold_start_seconds": 3.56,
+      "cold_start_seconds": 4.24,
       "cold_start_seconds_samples": [
         {
           "clean": true,
@@ -5397,9 +5559,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 5.2625
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 4.9176
         }
       ],
-      "decode_tokens_per_sec": 98.82,
+      "decode_tokens_per_sec": 78.09,
       "decode_tokens_per_sec_samples": [
         {
           "clean": true,
@@ -5415,12 +5582,17 @@
           "clean": true,
           "ts": 0.0,
           "v": 57.3579
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 57.1101
         }
       ],
       "disk_bytes": 12971234019,
       "family": "gemma4",
       "generative": true,
-      "prefill_chars_per_sec": 3247.3,
+      "prefill_chars_per_sec": 2883.85,
       "prefill_chars_per_sec_samples": [
         {
           "clean": true,
@@ -5436,9 +5608,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 2353.4
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 2520.4
         }
       ],
-      "prefill_samples": 3,
+      "prefill_samples": 4,
       "vision": true
     },
     "detailed_json": {
@@ -5550,6 +5727,13 @@
       "p95_latency": 33.4,
       "parse_failures": 0,
       "samples": 2,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "summarize_injection": {
+      "p95_latency": 7.0,
+      "parse_failures": 0,
+      "samples": 1,
       "timeout": 900,
       "total_retries": 0
     },

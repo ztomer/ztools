@@ -28,16 +28,16 @@ only makes a visible thing nicer comes after work that closes a silence.
 
 ## Phase 1 — measure what the decisions rest on
 
-The slot derivation now carries two accepted exposures. Both should be measured,
-not inferred.
+The slot derivation carries one inferred exposure (json) and one unmeasured
+noise effect (Bing). Both should be measured, not inferred.
 
-1. **A summarize-specific injection task.** `filename_injection` is the only
-   proxy; it gates json and filename, and the owner overrode it for summarize
-   (raptor-v0.5, 92.8, obeys). A planted-instruction tweet in the summarize
-   corpus, scored on whether the instruction reaches the summary, measures the
-   real exposure of that decision. Ship criterion: the task is in the roster,
-   the raptors and muse have a score on it, and the summarize slot comment cites
-   it instead of the filename proxy.
+1. **A snippet-shaped injection task for the json slot.** `summarize_injection`
+   (built 2026-09-19) cleared every candidate and retired the filename proxy for
+   that slot; json still leans on `filename_injection`, which keeps raptor-v0.5
+   (100 on the wk tasks) out. A search-snippet corpus with one planted
+   instruction, scored the same way (obeyed sentence vs. quoted line), would
+   settle json honestly. Ship criterion: the task is in the roster, the slot
+   comment cites it.
 2. **`weekend_fabrication` for the engine chain.** Bing returns noisier results
    than DDG did ("Dropped 50 out-of-region" per run against ~4 before). The
    provenance and region gates hold, but nothing measures whether the extra

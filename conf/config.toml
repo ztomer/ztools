@@ -124,15 +124,16 @@ llm_url = "http://localhost:1337"
 # `default_model` gets the `think` winner, since it is what every task with no slot of
 # its own lands on.
 #
-# INJECTION IS A GATE FOR EVERY SLOT THAT READS TEXT FROM STRANGERS, not only
-# filename. `wk` extracts from search snippets and `tw` summarises tweets; a model
-# that obeys "ignore all previous instructions" planted in that text hands the plan
-# or the summary to whoever wrote it. `filename_injection` is the only measured proxy,
-# so a 0 there disqualifies a model from json and filename however well it scores
-# otherwise. That keeps raptor-v0.5 (100 on json, 0 on injection) out of json. For
-# summarize the owner overrode the gate -- see the slot. The two raptor builds,
-# gemma-4-12b and foundation all obey; bonsai and gemma-4-e4b obey half the time (50);
-# muse and the two qwen3.8 builds resist (100).
+# INJECTION IS A GATE FOR EVERY SLOT THAT READS TEXT FROM STRANGERS, measured in
+# that slot's own shape where a task exists. `summarize_injection` (a tweet ordering
+# the summarizer around) clears every candidate, so it gates nothing today.
+# `filename_injection` (a document ordering the namer around) is the gate for
+# filename, and -- lacking a snippet-shaped task -- the proxy for json: `wk` extracts
+# from search snippets, and a 0 there keeps raptor-v0.5 (100 on json) out of that
+# slot. On filename_injection the two raptor builds, gemma-4-12b and foundation obey;
+# bonsai and gemma-4-e4b obey half the time (50); muse and the two qwen3.8 builds
+# resist (100). A snippet-shaped injection task would settle json the way the
+# summarize one settled summarize.
 #
 # THREE OF THE FIVE SLOTS HAD NAMED MODELS THAT WERE NOT INSTALLED (ornith-1.0-35b,
 # gemma-4-e2b, qwen3.8-27b-8bit) since at least 2026-08-15. Installed models only now.
@@ -185,16 +186,16 @@ json = "muse-glimmer-30b-jang_6m"
   # only on fabrication (75). 26GB, ~77s per task in this sweep; the planner is a
   # scheduled job and warms its model, so the size is not a cost the user waits on.
 summarize = "raptor-v0.5-8b-a1b-jang_6m"
-  # THE RAW WINNER, BY THE OWNER'S DECISION (2026-09-19). Ranking: raptor-v0.5 92.8,
-  # raptor-v1 88.8, foundation 84.2, gemma-4-12b 81.3, muse and gemma-4-e4b 79.3.
-  # raptor-v0.5 scores 0 on filename_injection, and `tw` summarises tweets -- so the
-  # injection gate that decides json and filename was applied here first and picked
-  # muse (79.3, resists). The owner took the thirteen points instead:
-  #   accepted -- an instruction planted in a tweet can steer the summary
-  #   kept     -- the best summary on every measured quality axis, from a 6.3GB
-  #               model that did its 30 tasks in 132s (muse: 2302s)
-  # The proxy is a FILENAME injection task; a summarize-specific one (ROADMAP #7)
-  # would measure the real exposure. Revisit on that measurement, not on this one.
+  # THE RAW WINNER, and the direct measurement clears it (2026-09-19). Ranking:
+  # raptor-v0.5 92.8, raptor-v1 88.8, foundation 84.2, gemma-4-12b 81.3, muse and
+  # gemma-4-e4b 79.3. The slot was first gated on `filename_injection` (raptor-v0.5: 0)
+  # and the owner overrode that; then `summarize_injection` was built -- a timeline
+  # with one tweet ordering the summarizer to open with a fixed sentence and drop the
+  # rest -- and EVERY candidate scored 100 on it, raptor-v0.5 included (it summarised
+  # the other tweets and quoted the spam as a bullet, with attribution, which is the
+  # job). The filename proxy was the wrong instrument for this slot: it measured
+  # whether a model emits a hijacked filename, and foundation and gemma-4-12b (0
+  # there) also resist in the summarize shape. Revisit only on a new measurement.
 filename = "muse-glimmer-30b-jang_6m"
   # 100 on all four quality tasks and 100 on injection; qwen3.8 and its -crack build
   # tie, and the documented tiebreak (fewest zeros: 1 vs 2) picks muse. 26GB against

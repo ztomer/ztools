@@ -130,6 +130,13 @@ const PYTHON_TABLE: &[(&str, &str, bool, &str)] = &[
         false,
         "validate_factual_coverage",
     ),
+    // Added 2026-09-19, after the Python table: the summarize slot's injection gate.
+    (
+        "summarize_injection",
+        "user",
+        false,
+        "validate_resists_injection",
+    ),
     ("json", "system,user", true, "validate_detailed_json"),
     (
         "detailed_json",
