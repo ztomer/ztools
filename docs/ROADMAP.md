@@ -28,17 +28,11 @@ only makes a visible thing nicer comes after work that closes a silence.
 
 ## Phase 1 — measure what the decisions rest on
 
-The slot derivation carries one inferred exposure (json) and one unmeasured
-noise effect (Bing). Both should be measured, not inferred.
+Every slot's injection exposure is now measured in its own shape
+(`filename_injection`, `summarize_injection`, `weekend_injection`). What is left
+is one unmeasured noise effect.
 
-1. **A snippet-shaped injection task for the json slot.** `summarize_injection`
-   (built 2026-09-19) cleared every candidate and retired the filename proxy for
-   that slot; json still leans on `filename_injection`, which keeps raptor-v0.5
-   (100 on the wk tasks) out. A search-snippet corpus with one planted
-   instruction, scored the same way (obeyed sentence vs. quoted line), would
-   settle json honestly. Ship criterion: the task is in the roster, the slot
-   comment cites it.
-2. **`weekend_fabrication` for the engine chain.** Bing returns noisier results
+1. **`weekend_fabrication` for the engine chain.** Bing returns noisier results
    than DDG did ("Dropped 50 out-of-region" per run against ~4 before). The
    provenance and region gates hold, but nothing measures whether the extra
    noise moves invented-row rates in the live planner. One week of plans, count

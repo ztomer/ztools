@@ -137,6 +137,12 @@ const PYTHON_TABLE: &[(&str, &str, bool, &str)] = &[
         false,
         "validate_resists_injection",
     ),
+    (
+        "weekend_injection",
+        "user",
+        true,
+        "validate_resists_injection",
+    ),
     ("json", "system,user", true, "validate_detailed_json"),
     (
         "detailed_json",

@@ -1,8 +1,9 @@
 use super::*;
 
-/// The Python table's 24 non-taxes rows plus the one row added since
-/// (`summarize_injection`, 2026-09-19). One number, three assertions.
-const ROSTER_ROWS: usize = 25;
+/// The Python table's 24 non-taxes rows plus the two added since
+/// (`summarize_injection`, `weekend_injection`, 2026-09-19). One number,
+/// three assertions.
+const ROSTER_ROWS: usize = 26;
 
 #[test]
 fn test_run_check_primitives() {

@@ -1,31 +1,46 @@
 {
   "bonsai-2-27b-crack-ternary-jang": {
     "_capabilities": {
-      "cold_start_seconds": 0.63,
+      "cold_start_seconds": 2.48,
       "cold_start_seconds_samples": [
         {
           "clean": true,
           "ts": 0.0,
           "v": 0.6276
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 4.3318
         }
       ],
-      "decode_tokens_per_sec": 29.53,
+      "decode_tokens_per_sec": 28.82,
       "decode_tokens_per_sec_samples": [
         {
           "clean": true,
           "ts": 0.0,
           "v": 29.5327
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 28.1041
         }
       ],
-      "prefill_chars_per_sec": 402.6,
+      "prefill_chars_per_sec": 373.9,
       "prefill_chars_per_sec_samples": [
         {
           "clean": true,
           "ts": 0.0,
           "v": 402.6
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 345.2
         }
       ],
-      "prefill_samples": 1
+      "prefill_samples": 2
     },
     "detailed_json": {
       "p95_latency": 26.1,
@@ -211,6 +226,13 @@
     },
     "weekend_fixed_mixed": {
       "p95_latency": 27.4,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_injection": {
+      "p95_latency": 10.2,
       "parse_failures": 0,
       "samples": 1,
       "timeout": 900,
@@ -667,14 +689,8 @@
   },
   "foundation": {
     "_capabilities": {
-      "cold_start_seconds": 0.84,
+      "cold_start_seconds": 0.88,
       "cold_start_seconds_samples": [
-        {
-          "clean": false,
-          "legacy": true,
-          "ts": 0.0,
-          "v": 0.85
-        },
         {
           "clean": true,
           "ts": 1787068392.8,
@@ -719,16 +735,15 @@
           "clean": true,
           "ts": 0.0,
           "v": 0.7602
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 1.0197
         }
       ],
       "decode_tokens_per_sec": 50.12,
       "decode_tokens_per_sec_samples": [
-        {
-          "clean": false,
-          "legacy": true,
-          "ts": 0.0,
-          "v": 68.01
-        },
         {
           "clean": true,
           "ts": 1787068394.0,
@@ -773,17 +788,16 @@
           "clean": true,
           "ts": 0.0,
           "v": 49.0839
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 50.1226
         }
       ],
       "generative": true,
-      "prefill_chars_per_sec": 3250.4,
+      "prefill_chars_per_sec": 3233.3,
       "prefill_chars_per_sec_samples": [
-        {
-          "clean": false,
-          "legacy": true,
-          "ts": 0.0,
-          "v": 3642.7
-        },
         {
           "clean": true,
           "ts": 1787068396.2,
@@ -828,9 +842,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 3230.2
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 3233.3
         }
       ],
-      "prefill_samples": 11
+      "prefill_samples": 12
     },
     "detailed_json": {
       "p95_latency": 24.2,
@@ -1026,6 +1045,13 @@
       "timeout": 900,
       "total_retries": 2
     },
+    "weekend_injection": {
+      "p95_latency": 0.7,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 1
+    },
     "weekend_transient": {
       "p95_latency": 8.9,
       "parse_failures": 0,
@@ -1092,9 +1118,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 5.4174
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 5.1166
         }
       ],
-      "decode_tokens_per_sec": 34.81,
+      "decode_tokens_per_sec": 34.89,
       "decode_tokens_per_sec_samples": [
         {
           "clean": false,
@@ -1136,12 +1167,17 @@
           "clean": true,
           "ts": 0.0,
           "v": 37.0024
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 36.8794
         }
       ],
       "disk_bytes": 13360263832,
       "family": "gemma4_unified",
       "generative": true,
-      "prefill_chars_per_sec": 1017.0,
+      "prefill_chars_per_sec": 1080.9,
       "prefill_chars_per_sec_samples": [
         {
           "clean": false,
@@ -1183,9 +1219,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 1080.9
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 1138.3
         }
       ],
-      "prefill_samples": 9,
+      "prefill_samples": 10,
       "vision": true
     },
     "detailed_json": {
@@ -1381,6 +1422,13 @@
       "p95_latency": 43.0,
       "parse_failures": 0,
       "samples": 11,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "weekend_injection": {
+      "p95_latency": 2.6,
+      "parse_failures": 1,
+      "samples": 1,
       "timeout": 900,
       "total_retries": 1
     },
@@ -1814,7 +1862,7 @@
   },
   "gemma-4-e4b-it-8bit": {
     "_capabilities": {
-      "cold_start_seconds": 8.57,
+      "cold_start_seconds": 8.46,
       "cold_start_seconds_samples": [
         {
           "clean": false,
@@ -1856,9 +1904,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 8.4573
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 6.9708
         }
       ],
-      "decode_tokens_per_sec": 67.95,
+      "decode_tokens_per_sec": 68.99,
       "decode_tokens_per_sec_samples": [
         {
           "clean": false,
@@ -1900,6 +1953,11 @@
           "clean": true,
           "ts": 0.0,
           "v": 70.8435
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 68.9889
         }
       ],
       "disk_bytes": 8965299280,
@@ -1947,9 +2005,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 5910.5
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 7365.5
         }
       ],
-      "prefill_samples": 9,
+      "prefill_samples": 10,
       "vision": true
     },
     "detailed_json": {
@@ -2147,6 +2210,13 @@
       "samples": 11,
       "timeout": 900,
       "total_retries": 1
+    },
+    "weekend_injection": {
+      "p95_latency": 2.4,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
     },
     "weekend_transient": {
       "p95_latency": 24.6,
@@ -2481,7 +2551,7 @@
   },
   "muse-glimmer-30b-jang_6m": {
     "_capabilities": {
-      "cold_start_seconds": 10.66,
+      "cold_start_seconds": 10.46,
       "cold_start_seconds_samples": [
         {
           "clean": false,
@@ -2508,9 +2578,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 10.4595
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 10.193
         }
       ],
-      "decode_tokens_per_sec": 17.88,
+      "decode_tokens_per_sec": 17.95,
       "decode_tokens_per_sec_samples": [
         {
           "clean": false,
@@ -2537,12 +2612,17 @@
           "clean": true,
           "ts": 0.0,
           "v": 18.2154
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 18.2853
         }
       ],
       "disk_bytes": 27566984848,
       "family": "muse_glimmer",
       "generative": true,
-      "prefill_chars_per_sec": 649.35,
+      "prefill_chars_per_sec": 686.0,
       "prefill_chars_per_sec_samples": [
         {
           "clean": false,
@@ -2569,9 +2649,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 686.0
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 783.6
         }
       ],
-      "prefill_samples": 5,
+      "prefill_samples": 6,
       "vision": true
     },
     "detailed_json": {
@@ -2769,6 +2854,13 @@
       "samples": 7,
       "timeout": 900,
       "total_retries": 1
+    },
+    "weekend_injection": {
+      "p95_latency": 30.0,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
     },
     "weekend_transient": {
       "p95_latency": 670.5,
@@ -4725,7 +4817,7 @@
   },
   "qwen3.8-27b-jang_6d": {
     "_capabilities": {
-      "cold_start_seconds": 10.29,
+      "cold_start_seconds": 9.73,
       "cold_start_seconds_samples": [
         {
           "clean": false,
@@ -4742,9 +4834,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 9.6409
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 9.7313
         }
       ],
-      "decode_tokens_per_sec": 16.56,
+      "decode_tokens_per_sec": 15.74,
       "decode_tokens_per_sec_samples": [
         {
           "clean": false,
@@ -4761,12 +4858,17 @@
           "clean": true,
           "ts": 0.0,
           "v": 15.737
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 15.4403
         }
       ],
       "disk_bytes": 25820834377,
       "family": "qwen3_5",
       "generative": true,
-      "prefill_chars_per_sec": 577.1,
+      "prefill_chars_per_sec": 625.4,
       "prefill_chars_per_sec_samples": [
         {
           "clean": false,
@@ -4783,9 +4885,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 625.4
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 666.6
         }
       ],
-      "prefill_samples": 3,
+      "prefill_samples": 4,
       "vision": true
     },
     "detailed_json": {
@@ -4984,6 +5091,13 @@
       "timeout": 900,
       "total_retries": 0
     },
+    "weekend_injection": {
+      "p95_latency": 14.8,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
     "weekend_transient": {
       "p95_latency": 79.8,
       "parse_failures": 0,
@@ -5008,31 +5122,46 @@
   },
   "qwen3.8-27b-jang_6d-crack": {
     "_capabilities": {
-      "cold_start_seconds": 41.41,
+      "cold_start_seconds": 31.47,
       "cold_start_seconds_samples": [
         {
           "clean": true,
           "ts": 0.0,
           "v": 41.4082
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 21.5366
         }
       ],
-      "decode_tokens_per_sec": 13.16,
+      "decode_tokens_per_sec": 15.87,
       "decode_tokens_per_sec_samples": [
         {
           "clean": true,
           "ts": 0.0,
           "v": 13.1568
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 18.5926
         }
       ],
-      "prefill_chars_per_sec": 448.6,
+      "prefill_chars_per_sec": 514.4,
       "prefill_chars_per_sec_samples": [
         {
           "clean": true,
           "ts": 0.0,
           "v": 448.6
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 580.2
         }
       ],
-      "prefill_samples": 1
+      "prefill_samples": 2
     },
     "detailed_json": {
       "p95_latency": 33.0,
@@ -5223,6 +5352,13 @@
       "timeout": 900,
       "total_retries": 0
     },
+    "weekend_injection": {
+      "p95_latency": 29.1,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
     "weekend_transient": {
       "p95_latency": 71.3,
       "parse_failures": 0,
@@ -5269,7 +5405,7 @@
   },
   "raptor-v0.5-8b-a1b-jang_6m": {
     "_capabilities": {
-      "cold_start_seconds": 4.38,
+      "cold_start_seconds": 3.58,
       "cold_start_seconds_samples": [
         {
           "clean": true,
@@ -5285,9 +5421,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 2.7783
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 0.7707
         }
       ],
-      "decode_tokens_per_sec": 134.6,
+      "decode_tokens_per_sec": 134.88,
       "decode_tokens_per_sec_samples": [
         {
           "clean": true,
@@ -5303,9 +5444,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 144.8889
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 135.1534
         }
       ],
-      "prefill_chars_per_sec": 10724.5,
+      "prefill_chars_per_sec": 10907.2,
       "prefill_chars_per_sec_samples": [
         {
           "clean": true,
@@ -5321,9 +5467,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 10724.5
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 11089.9
         }
       ],
-      "prefill_samples": 3
+      "prefill_samples": 4
     },
     "detailed_json": {
       "p95_latency": 2.8,
@@ -5519,6 +5670,13 @@
       "timeout": 900,
       "total_retries": 0
     },
+    "weekend_injection": {
+      "p95_latency": 0.9,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
     "weekend_transient": {
       "p95_latency": 4.4,
       "parse_failures": 0,
@@ -5543,7 +5701,7 @@
   },
   "raptor-v1-26b-a4b-vl-jang": {
     "_capabilities": {
-      "cold_start_seconds": 4.24,
+      "cold_start_seconds": 4.92,
       "cold_start_seconds_samples": [
         {
           "clean": true,
@@ -5564,9 +5722,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 4.9176
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 4.9548
         }
       ],
-      "decode_tokens_per_sec": 78.09,
+      "decode_tokens_per_sec": 57.36,
       "decode_tokens_per_sec_samples": [
         {
           "clean": true,
@@ -5587,12 +5750,17 @@
           "clean": true,
           "ts": 0.0,
           "v": 57.1101
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 55.5811
         }
       ],
       "disk_bytes": 12971234019,
       "family": "gemma4",
       "generative": true,
-      "prefill_chars_per_sec": 2883.85,
+      "prefill_chars_per_sec": 3161.3,
       "prefill_chars_per_sec_samples": [
         {
           "clean": true,
@@ -5613,9 +5781,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 2520.4
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 3161.3
         }
       ],
-      "prefill_samples": 4,
+      "prefill_samples": 5,
       "vision": true
     },
     "detailed_json": {
@@ -5811,6 +5984,13 @@
       "p95_latency": 10.9,
       "parse_failures": 0,
       "samples": 2,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_injection": {
+      "p95_latency": 7.5,
+      "parse_failures": 0,
+      "samples": 1,
       "timeout": 900,
       "total_retries": 0
     },

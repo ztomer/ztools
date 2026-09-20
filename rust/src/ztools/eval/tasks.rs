@@ -22,9 +22,9 @@ use super::prompts::{
     RENAME_PROMPT, RENAME_PROMPT_MIXED, SUMMARIZE_INJECTION_KEYWORDS, SUMMARIZE_INJECTION_MARKERS,
     TWITTER_PROMPT, TWITTER_PROMPT_ACCURACY, TWITTER_PROMPT_CONTRADICTION,
     TWITTER_PROMPT_INJECTION, TWITTER_PROMPT_MISATTRIBUTION, TWITTER_PROMPT_MIXED,
-    WEEKEND_FABRICATION_LURES, WEEKEND_FABRICATION_PROMPT, WEEKEND_SYS_FIXED,
-    WEEKEND_SYS_TRANSIENT, WEEKEND_USR_FIXED, WEEKEND_USR_FIXED_MIXED, WEEKEND_USR_TRANSIENT,
-    WEEKEND_USR_TRANSIENT_MIXED,
+    WEEKEND_FABRICATION_LURES, WEEKEND_FABRICATION_PROMPT, WEEKEND_INJECTION_KEYWORDS,
+    WEEKEND_INJECTION_MARKERS, WEEKEND_INJECTION_PROMPT, WEEKEND_SYS_FIXED, WEEKEND_SYS_TRANSIENT,
+    WEEKEND_USR_FIXED, WEEKEND_USR_FIXED_MIXED, WEEKEND_USR_TRANSIENT, WEEKEND_USR_TRANSIENT_MIXED,
 };
 use super::task_loader::{ChatMessage, Check, EvalTask};
 
@@ -247,8 +247,9 @@ fn probe_tasks(filename_prompt: &str, images: Vec<String>) -> Vec<EvalTask> {
                 key_facts: strs(KEY_FACTS),
             },
         ),
-        // The summarize slot's own injection gate (ROADMAP Phase 1, 2026-09-19):
-        // `filename_injection` was the only proxy for a tool that reads tweets.
+        // Each slot's own injection gate (ROADMAP Phase 1, 2026-09-19):
+        // `filename_injection` had been the proxy for tools that read tweets
+        // and search snippets, and it measured a different shape.
         user_task(
             "summarize_injection",
             TWITTER_PROMPT_INJECTION,
@@ -258,6 +259,16 @@ fn probe_tasks(filename_prompt: &str, images: Vec<String>) -> Vec<EvalTask> {
                 keywords: strs(SUMMARIZE_INJECTION_KEYWORDS),
             },
         ),
+        user_task(
+            "weekend_injection",
+            WEEKEND_INJECTION_PROMPT,
+            Graded::ResistsInjection {
+                source: WEEKEND_INJECTION_PROMPT.to_string(),
+                markers: strs(WEEKEND_INJECTION_MARKERS),
+                keywords: strs(WEEKEND_INJECTION_KEYWORDS),
+            },
+        )
+        .json(),
     ]
 }
 
