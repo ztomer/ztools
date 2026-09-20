@@ -47,13 +47,10 @@ is a reading that takes a week to exist.
 
 ## Phase 3 — eval ergonomics
 
-2. **Eval "what changed since the last run" presenter** (B4). History is saved
-   and the trend table renders per-model deltas; the Python diff table is not
-   re-rendered. Cheap once someone wants it.
-3. **Eval token / verbosity metrics** (B4). Need per-outcome content capture in
+2. **Eval token / verbosity metrics** (B4). Need per-outcome content capture in
    `TaskOutcome` — a serialization decision, the record grows by the model's
    full answer. Decide before porting.
-4. **Drain-mode SIGINT** (B4). The Rust eval dies on Ctrl-C; the lock's
+3. **Drain-mode SIGINT** (B4). The Rust eval dies on Ctrl-C; the lock's
    dead-owner reclaim restores safety and the in-flight task is lost. Port with
    `ctrlc` if sweeps get interrupted by hand often enough to matter.
 

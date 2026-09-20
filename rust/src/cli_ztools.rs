@@ -311,6 +311,11 @@ pub(crate) fn model_eval(
         .map_err(|e| anyhow::anyhow!("GPU lock unavailable: {e}"))?;
         let expected_tasks: Vec<String> = tasks.iter().map(|t| t.name.clone()).collect();
         let mut runs: Vec<crate::ztools::eval::ModelRun> = Vec::new();
+        // Everything the history holds from before this instant is "the last
+        // run" for the delta table printed at the end.
+        let started_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0.0, |d| d.as_secs_f64());
         for model_name in resolve_models(url, &model, config)? {
             // Refuse to measure what cannot fit or would thrash: a timing
             // taken under memory pressure describes the pressure, and it
@@ -414,6 +419,9 @@ pub(crate) fn model_eval(
                 Err(e) => eprintln!("⚠ CSV export failed: {e}"),
             }
             for line in crate::ztools::eval::render_historical_trends(None) {
+                println!("{line}");
+            }
+            for line in crate::ztools::eval::render_diff_from_last_run(&runs, None, started_at) {
                 println!("{line}");
             }
         }

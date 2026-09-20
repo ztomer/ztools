@@ -132,6 +132,12 @@ pub fn save_historical_results(
     Ok(history)
 }
 
+/// The history file as a map, for the delta table (`report_diff.rs`).
+#[must_use]
+pub fn load_history_entries(eval_dir: Option<&Path>) -> BTreeMap<String, Vec<HistoryEntry>> {
+    load_history(eval_dir)
+}
+
 fn load_history(eval_dir: Option<&Path>) -> BTreeMap<String, Vec<HistoryEntry>> {
     let path = history_path(eval_dir);
     std::fs::read_to_string(path)
@@ -279,7 +285,7 @@ pub fn render_historical_trends(eval_dir: Option<&Path>) -> Vec<String> {
     lines
 }
 
-fn truncate_name(name: &str) -> String {
+pub(super) fn truncate_name(name: &str) -> String {
     if name.len() <= 36 {
         name.to_string()
     } else {
