@@ -5405,7 +5405,7 @@
   },
   "raptor-v0.5-8b-a1b-jang_6m": {
     "_capabilities": {
-      "cold_start_seconds": 2.83,
+      "cold_start_seconds": 0.81,
       "cold_start_seconds_samples": [
         {
           "clean": true,
@@ -5436,9 +5436,19 @@
           "clean": true,
           "ts": 0.0,
           "v": 2.8298
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 0.8118
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 0.2606
         }
       ],
-      "decode_tokens_per_sec": 136.42,
+      "decode_tokens_per_sec": 135.15,
       "decode_tokens_per_sec_samples": [
         {
           "clean": true,
@@ -5469,6 +5479,16 @@
           "clean": true,
           "ts": 0.0,
           "v": 136.4184
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 133.8414
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 132.5196
         }
       ],
       "prefill_chars_per_sec": 11089.9,
@@ -5502,9 +5522,19 @@
           "clean": true,
           "ts": 0.0,
           "v": 11435.3
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 11914.2
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 10597.3
         }
       ],
-      "prefill_samples": 6
+      "prefill_samples": 8
     },
     "detailed_json": {
       "p95_latency": 2.8,
@@ -5530,7 +5560,7 @@
     "filename": {
       "p95_latency": 0.2,
       "parse_failures": 0,
-      "samples": 3,
+      "samples": 5,
       "timeout": 900,
       "total_retries": 0
     },
@@ -5591,7 +5621,7 @@
     "summarize": {
       "p95_latency": 8.1,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 3,
       "timeout": 900,
       "total_retries": 1
     },

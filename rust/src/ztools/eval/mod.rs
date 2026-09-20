@@ -8,6 +8,7 @@ pub mod budgets;
 pub mod clean;
 pub mod completeness;
 pub mod discrimination;
+pub mod drain;
 pub mod failures;
 pub mod gpu_lock;
 pub mod graded;

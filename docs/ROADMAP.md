@@ -47,9 +47,8 @@ is a reading that takes a week to exist.
 
 ## Phase 3 — eval ergonomics
 
-2. **Drain-mode SIGINT** (B4). The Rust eval dies on Ctrl-C; the lock's
-   dead-owner reclaim restores safety and the in-flight task is lost. Port with
-   `ctrlc` if sweeps get interrupted by hand often enough to matter.
+Closed 2026-09-19: the diff-since-last-run table, verbosity metrics and
+Ctrl-C drain mode all shipped. Nothing open.
 
 ## Watch items (no action until they move)
 

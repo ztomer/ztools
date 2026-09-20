@@ -260,6 +260,15 @@ fn run_eval_inner(
             eprintln!("⚠ Abandoning {model}: no task completed within the stall ceiling");
             break;
         }
+        // The operator's Ctrl-C lands here, between tasks: what is done is
+        // kept, what is not is not started (eval/drain.rs).
+        if super::drain::requested() {
+            eprintln!(
+                "⚠ Stopping {model} on request after {} task(s); the run is recorded as truncated",
+                outcomes.len()
+            );
+            break;
+        }
 
         let mut best: Option<TaskOutcome> = None;
         let prompt_chars: usize = task.messages.iter().map(|m| m.content.len()).sum();
@@ -427,4 +436,35 @@ fn run_eval_inner(
     }
 
     outcomes
+}
+
+#[cfg(test)]
+mod drain_tests {
+    use super::*;
+    use crate::ztools::eval::task_loader::EvalTask;
+
+    /// A Ctrl-C request is honoured between tasks: nothing further is started
+    /// and what ran is returned. Serial with nothing -- the flag is
+    /// process-wide, so this test sets and clears it itself and no other test
+    /// reads it.
+    #[test]
+    fn a_drain_request_stops_the_loop_between_tasks() {
+        let tasks: Vec<EvalTask> = (0..3)
+            .map(|i| EvalTask::new(format!("t{i}"), "hi", Vec::new()))
+            .collect();
+        let cfg = RunnerConfig {
+            host: "127.0.0.1".into(),
+            port: 1,
+            timeout_secs: 1,
+            max_retries: 0,
+            ..Default::default()
+        };
+        super::super::drain::request_for_test();
+        let outcomes = run_eval("m", &tasks, &cfg);
+        super::super::drain::reset_for_test();
+        assert!(
+            outcomes.is_empty(),
+            "requested before the first task: none run: {outcomes:?}"
+        );
+    }
 }

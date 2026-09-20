@@ -311,12 +311,20 @@ pub(crate) fn model_eval(
         .map_err(|e| anyhow::anyhow!("GPU lock unavailable: {e}"))?;
         let expected_tasks: Vec<String> = tasks.iter().map(|t| t.name.clone()).collect();
         let mut runs: Vec<crate::ztools::eval::ModelRun> = Vec::new();
+        // Ctrl-C drains rather than kills (eval/drain.rs): the task in flight
+        // finishes, the outcomes are recorded, the lock guard releases.
+        crate::ztools::eval::drain::install();
         // Everything the history holds from before this instant is "the last
         // run" for the delta table printed at the end.
         let started_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0.0, |d| d.as_secs_f64());
         for model_name in resolve_models(url, &model, config)? {
+            // A drained run stops at the model boundary too: the next model
+            // is not started once the operator has asked to stop.
+            if crate::ztools::eval::drain::requested() {
+                break;
+            }
             // Refuse to measure what cannot fit or would thrash: a timing
             // taken under memory pressure describes the pressure, and it
             // hardens into config exactly like a real number. Same gate as
@@ -429,6 +437,14 @@ pub(crate) fn model_eval(
             ) {
                 println!("{line}");
             }
+        }
+        // Recorded and reported; now say the run was cut, with the exit code
+        // a sweep files as FAILED so --resume runs this model again.
+        if crate::ztools::eval::drain::requested() {
+            anyhow::bail!(
+                "interrupted by Ctrl-C after {} model run(s); outcomes recorded as truncated",
+                runs.len()
+            );
         }
         return Ok(());
     }
