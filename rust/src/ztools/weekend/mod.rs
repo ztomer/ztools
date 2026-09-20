@@ -22,6 +22,8 @@ use serde::{Deserialize, Serialize};
 pub use followup::*;
 pub use report::*;
 pub use search::*;
+pub use search_order::*;
+pub use search_parse::*;
 pub use supply::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -314,6 +316,8 @@ fn call_osaurus_json(
 
 pub mod followup;
 pub mod search;
+pub mod search_order;
+pub mod search_parse;
 
 /// Search keywords for the season a month falls in.
 ///

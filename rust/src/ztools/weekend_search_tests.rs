@@ -149,7 +149,7 @@ fn a_results_page_that_merely_mentions_a_challenge_host_is_an_answer() {
 
 #[test]
 fn bing_parser_reads_only_algo_blocks_and_strips_inline_markup() {
-    let results = search::parse_bing_results(BING_HTML);
+    let results = search_parse::parse_bing_results(BING_HTML);
     assert_eq!(results.len(), 2, "ads are not results: {results:?}");
     assert_eq!(results[1].title, "Toronto Zoo");
     assert_eq!(results[1].body, "Family programs.");
@@ -177,7 +177,7 @@ const BRAVE_HTML: &str = "<html><body><div id=\"results\">\
 
 #[test]
 fn brave_parser_reads_web_blocks_only_and_takes_the_title_attribute() {
-    let results = search::parse_brave_results(BRAVE_HTML);
+    let results = search_parse::parse_brave_results(BRAVE_HTML);
     assert_eq!(
         results.len(),
         2,

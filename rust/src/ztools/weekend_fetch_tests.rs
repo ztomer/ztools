@@ -20,6 +20,15 @@ fn ctx() -> PlanContext {
     }
 }
 
+/// A throwaway record file per test process: the fetch appends this run's
+/// engine walls to it, and a unit test must not write the operator's.
+fn record_path() -> String {
+    std::env::temp_dir()
+        .join(format!("ztools-search-record-{}.json", std::process::id()))
+        .to_string_lossy()
+        .into_owned()
+}
+
 fn window() -> (chrono::NaiveDate, chrono::NaiveDate) {
     (
         chrono::NaiveDate::parse_from_str("2026-08-07", "%Y-%m-%d").unwrap(),
@@ -118,6 +127,7 @@ fn corpus_building_dedupes_keeps_only_region_backed_snippets_and_counts_them() {
         duckduckgo_url: ddg,
         bing_url: "http://127.0.0.1:1/".into(),
         brave_url: "http://127.0.0.1:1/".into(),
+        search_record_path: record_path(),
         osaurus_url: "http://127.0.0.1:1".into(),
         llm_timeout_secs: 1,
         llm_warmup_timeout_secs: 1,
@@ -160,6 +170,7 @@ fn a_dead_draft_phase_falls_back_to_the_monolithic_prompt_and_parses_real_events
         duckduckgo_url: "http://127.0.0.1:1/".into(),
         bing_url: "http://127.0.0.1:1/".into(),
         brave_url: "http://127.0.0.1:1/".into(),
+        search_record_path: record_path(),
         osaurus_url: osaurus,
         llm_timeout_secs: 1,
         ..crate::config::ZtoolsConfig::default()
@@ -186,6 +197,7 @@ fn test_fetch_duckduckgo_events() {
         duckduckgo_url: "http://127.0.0.1:1/".into(),
         bing_url: "http://127.0.0.1:1/".into(),
         brave_url: "http://127.0.0.1:1/".into(),
+        search_record_path: record_path(),
         osaurus_url: "http://127.0.0.1:1".into(),
         llm_timeout_secs: 1,
         llm_warmup_timeout_secs: 1,

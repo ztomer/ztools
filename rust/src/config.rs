@@ -25,6 +25,11 @@ pub struct ZtoolsConfig {
     /// The third engine, consulted only when the first two both fail a query.
     #[serde(default = "default_brave_url")]
     pub brave_url: String,
+    /// Where the planner keeps the per-run engine walls it learns the engine
+    /// order from (`weekend/search_order.rs`). In the config, not an env
+    /// var, so a test points it at a temp file without touching the process.
+    #[serde(default = "default_search_record_path")]
+    pub search_record_path: String,
     /// Where the weekend planner looks for its exclusion list, in order; the
     /// first file that yields entries wins, and an empty list means "use the
     /// built-in defaults". Configurable because a hardcoded `~/…` path makes
@@ -127,6 +132,9 @@ fn default_bing_url() -> String {
 }
 fn default_brave_url() -> String {
     "https://search.brave.com/search".to_string()
+}
+fn default_search_record_path() -> String {
+    "~/.config/ztools/search_health.json".to_string()
 }
 fn default_twitter_cache_path() -> String {
     "~/.cache/twitter/debug_tweets.json".to_string()
@@ -258,6 +266,7 @@ impl Default for ZtoolsConfig {
             duckduckgo_url: default_duckduckgo_url(),
             bing_url: default_bing_url(),
             brave_url: default_brave_url(),
+            search_record_path: default_search_record_path(),
             weekend_exclusions_paths: default_weekend_exclusions_paths(),
             weekend_region_paths: default_weekend_region_paths(),
             twitter_cache_path: default_twitter_cache_path(),

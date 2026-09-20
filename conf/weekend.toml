@@ -116,3 +116,11 @@ gender = "boy"
 [[children]]
 birthday = "2020-06-01"
 gender = "boy"
+
+# Engine order learned from recent runs (weekend/search_order.rs). An engine
+# that walled at least `demote_wall_ratio` of its queries over the last
+# `demote_after_runs` runs is tried last; it returns to the front the run
+# after it answers again. The record lives in ~/.config/ztools/search_health.json.
+[search]
+demote_after_runs = 3
+demote_wall_ratio = 0.8

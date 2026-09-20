@@ -5,7 +5,8 @@ use super::{
     condense_weather, draft_activities, extract_sources, in_window_count, prioritise_in_window,
     refine_draft, seasonal_keywords, structure_to_json, PlanContext, SearchResult,
 };
-use super::{follow_aggregators, search_engines, warm_model};
+use super::{follow_aggregators, search_engines_in, warm_model};
+use super::{DemotionPolicy, SearchRecord};
 use super::{ModelHealth, PlanHealth, SearchHealth};
 
 /// Body truncation bound, mirrored from `WEEKEND_MAX_BODY_LENGTH`.
@@ -126,6 +127,16 @@ fn fetch_events_corpus(
 ) -> (String, SearchHealth) {
     let queries = build_search_queries(d1);
 
+    // The order is learned from the runs before this one (search_order.rs):
+    // an engine that walled most of its queries lately goes last.
+    let record_path = crate::manifest::expand_tilde(&config.search_record_path);
+    let mut record = SearchRecord::load(&record_path);
+    let policy = DemotionPolicy::load(&config.weekend_region_paths);
+    let order = record.order(&policy);
+    if let Some(line) = record.describe(&policy, &order) {
+        println!("\u{2192} Search order: {line}");
+    }
+
     let mut all_results = Vec::<SearchResult>::new();
     let mut health = SearchHealth::default();
     for chunk in queries.chunks(4) {
@@ -137,7 +148,9 @@ fn fetch_events_corpus(
                 bing: config.bing_url.clone(),
                 brave: config.brave_url.clone(),
             };
-            handles.push(std::thread::spawn(move || search_engines(&q_clone, &urls)));
+            handles.push(std::thread::spawn(move || {
+                search_engines_in(&q_clone, &urls, &order)
+            }));
         }
         for h in handles {
             if let Ok(outcome) = h.join() {
@@ -149,6 +162,7 @@ fn fetch_events_corpus(
     if let Some(summary) = health.summary() {
         println!("\u{2192} Search: {summary}");
     }
+    record.record(&record_path, &d1.format("%Y-%m-%d").to_string(), &health);
 
     // The scrape results become the corpus through the SAME byte-exact
     // cleaning the Python pipeline applies (title-only dedupe, max_body
