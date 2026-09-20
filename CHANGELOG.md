@@ -6,7 +6,7 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
-## Unreleased
+## v3.2.0 — the roadmap, closed _(2026-09-19)_
 
 ### Added
 - **Every plan carries a provenance ledger** (`_Provenance: N extracted, N unsourced,
