@@ -61,6 +61,12 @@ pub struct TaskOutcome {
     pub substituted_to: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub substitution_reason: Option<String>,
+    /// Length of the best attempt's answer (content only, reasoning
+    /// excluded). The size, not the text: the full answer is already archived
+    /// per (model, task) under `outputs/`, so the record carries the number
+    /// the verbosity metrics need and nothing that is on disk twice.
+    #[serde(default)]
+    pub answer_chars: usize,
 }
 
 /// Knobs for one eval sweep over one model.
@@ -171,6 +177,7 @@ fn outcome_from(task: &EvalTask, r: &transport::TransportResult) -> TaskOutcome 
         substituted_from: r.substituted_from.clone(),
         substituted_to: r.substituted_to.clone(),
         substitution_reason: r.substitution_reason.clone(),
+        answer_chars: r.content.chars().count(),
         ..Default::default()
     }
 }

@@ -424,6 +424,11 @@ pub(crate) fn model_eval(
             for line in crate::ztools::eval::render_diff_from_last_run(&runs, None, started_at) {
                 println!("{line}");
             }
+            for line in crate::ztools::eval::render_verbosity(
+                &crate::ztools::eval::compute_verbosity(&runs),
+            ) {
+                println!("{line}");
+            }
         }
         return Ok(());
     }

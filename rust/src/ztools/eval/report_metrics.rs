@@ -220,6 +220,80 @@ pub fn compute_error_rates(runs: &[ModelRun]) -> BTreeMap<String, ErrorRates> {
     rates
 }
 
+/// Per-model verbosity over a run.
+///
+/// Mean answer length in characters and the token estimate that follows from
+/// it (`CHARS_PER_TOKEN`, the transport's own rate). Port of
+/// `compute_verbosity` / `compute_token_estimates`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Verbosity {
+    pub tasks: usize,
+    pub mean_chars: f64,
+    pub max_chars: usize,
+    pub est_tokens: f64,
+}
+
+/// Verbosity by model, over answered outcomes only (an error with no answer
+/// is not a short answer).
+#[must_use]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "answer lengths in characters and a count of tasks; both far below 2^52"
+)]
+pub fn compute_verbosity(runs: &[ModelRun]) -> BTreeMap<String, Verbosity> {
+    let mut out = BTreeMap::new();
+    for run in runs {
+        let lengths: Vec<usize> = run
+            .outcomes
+            .iter()
+            .filter(|o| o.error.is_none() && o.answer_chars > 0)
+            .map(|o| o.answer_chars)
+            .collect();
+        if lengths.is_empty() {
+            continue;
+        }
+        let total: usize = lengths.iter().sum();
+        let mean_chars = total as f64 / lengths.len() as f64;
+        out.insert(
+            run.model.clone(),
+            Verbosity {
+                tasks: lengths.len(),
+                mean_chars,
+                max_chars: *lengths.iter().max().unwrap_or(&0),
+                est_tokens: mean_chars / super::transport::CHARS_PER_TOKEN as f64,
+            },
+        );
+    }
+    out
+}
+
+/// One line per model, for the end of a run.
+#[must_use]
+pub fn render_verbosity(verbosity: &BTreeMap<String, Verbosity>) -> Vec<String> {
+    if verbosity.is_empty() {
+        return Vec::new();
+    }
+    let mut lines = vec![
+        "Verbosity (answer length, content only; tokens estimated at the transport's chars/token)"
+            .to_string(),
+        format!(
+            "{:<36} {:>5} {:>10} {:>9} {:>10}",
+            "Model", "Tasks", "Mean chars", "Max chars", "Est tokens"
+        ),
+    ];
+    for (model, v) in verbosity {
+        lines.push(format!(
+            "{:<36} {:>5} {:>10.0} {:>9} {:>10.0}",
+            super::report::truncate_name(model),
+            v.tasks,
+            v.mean_chars,
+            v.max_chars,
+            v.est_tokens
+        ));
+    }
+    lines
+}
+
 #[cfg(test)]
 mod tests {
     #![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
@@ -380,5 +454,31 @@ mod tests {
         let r = &rates["m1"];
         assert_eq!((r.success, r.infra, r.quality), (1, 1, 1));
         assert_eq!(r.success_rate + r.infra_rate + r.quality_rate, 1.0);
+    }
+
+    #[test]
+    fn verbosity_is_over_answered_outcomes_only() {
+        let mut long = outcome("a", 100, "", None);
+        long.answer_chars = 300;
+        let mut short = outcome("b", 100, "", None);
+        short.answer_chars = 100;
+        let mut errored = outcome("c", 0, "INFRA", Some("Timeout"));
+        errored.answer_chars = 5000;
+        let runs = vec![ModelRun::new(
+            "m",
+            &["a".into(), "b".into(), "c".into()],
+            vec![long, short, errored],
+        )];
+        let v = compute_verbosity(&runs);
+        let m = &v["m"];
+        assert_eq!(m.tasks, 2);
+        assert!((m.mean_chars - 200.0).abs() < 1e-9);
+        assert_eq!(m.max_chars, 300);
+        assert!((m.est_tokens - 200.0 / 3.0).abs() < 1e-9);
+        let lines = render_verbosity(&v);
+        assert_eq!(lines.len(), 3);
+        assert!(lines[2].starts_with("m "), "{}", lines[2]);
+        assert!(compute_verbosity(&[]).is_empty());
+        assert!(render_verbosity(&BTreeMap::new()).is_empty());
     }
 }

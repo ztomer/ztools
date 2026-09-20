@@ -23,7 +23,10 @@ pub mod report_diff;
 pub mod report_metrics;
 pub use report_csv::export_csv;
 pub use report_diff::render_diff_from_last_run;
-pub use report_metrics::{categorize_failures, compute_error_rates, compute_score_stats};
+pub use report_metrics::{
+    categorize_failures, compute_error_rates, compute_score_stats, compute_verbosity,
+    render_verbosity,
+};
 pub mod runner;
 pub mod samples;
 pub mod scoring_math;
