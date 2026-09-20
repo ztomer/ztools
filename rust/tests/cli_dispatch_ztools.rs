@@ -371,6 +371,10 @@ fn weekend_plan_says_so_when_nothing_is_on() {
         doc.contains("No transient events scheduled"),
         "an empty weekend must be stated: {doc}"
     );
+    assert!(
+        doc.contains("_Provenance: 0 extracted, 0 unsourced, 0 outside the window, 0 excluded._"),
+        "every plan carries its provenance ledger, zeros included: {doc}"
+    );
 }
 
 #[test]

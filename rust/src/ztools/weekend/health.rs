@@ -90,11 +90,62 @@ impl ModelHealth {
     }
 }
 
+/// What the enforcement gates did to the extracted rows.
+///
+/// So a week of plans can say whether a noisier corpus moves the
+/// invented-row rate. Counted where the rows are dropped
+/// (`cli_ztools::weekend_plan`), written into the plan as its provenance
+/// line, and read back by `ztools status`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Provenance {
+    /// Transient rows the model produced before any gate.
+    pub extracted: usize,
+    /// Dropped because nothing in the fetched corpus supports them.
+    pub unsourced: usize,
+    /// Dropped because their dates fall outside the plan's weekend.
+    pub outside_window: usize,
+    /// Dropped by the operator's exclusion list.
+    pub excluded: usize,
+}
+
+impl Provenance {
+    /// The plan's provenance line — always written, zeros included, so the
+    /// reading exists for the runs where nothing was dropped too.
+    #[must_use]
+    pub fn line(&self) -> String {
+        format!(
+            "_Provenance: {} extracted, {} unsourced, {} outside the window, {} excluded._",
+            self.extracted, self.unsourced, self.outside_window, self.excluded
+        )
+    }
+
+    /// Parse the line back out of a stored plan.
+    #[must_use]
+    pub fn parse(plan: &str) -> Option<Self> {
+        let line = plan.lines().find(|l| l.starts_with("_Provenance: "))?;
+        let nums: Vec<usize> = line
+            .split(|c: char| !c.is_ascii_digit())
+            .filter(|s| !s.is_empty())
+            .filter_map(|s| s.parse().ok())
+            .collect();
+        match nums[..] {
+            [extracted, unsourced, outside_window, excluded, ..] => Some(Self {
+                extracted,
+                unsourced,
+                outside_window,
+                excluded,
+            }),
+            _ => None,
+        }
+    }
+}
+
 /// Everything the plan's degraded-warning needs to name its cause.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlanHealth {
     pub search: SearchHealth,
     pub model: ModelHealth,
+    pub provenance: Provenance,
 }
 
 impl PlanHealth {
@@ -108,6 +159,7 @@ impl PlanHealth {
                 model: String::new(),
                 secs: 0,
             },
+            provenance: Provenance::default(),
         }
     }
 
@@ -224,6 +276,7 @@ mod tests {
                 model: "qwen".into(),
                 reason: "no answer within 900s".into(),
             },
+            provenance: Provenance::default(),
         };
         let reason = health.degraded_reason();
         assert!(
@@ -235,6 +288,23 @@ mod tests {
             "{reason}"
         );
         assert!(reason.starts_with("No live transient events:"), "{reason}");
+    }
+
+    #[test]
+    fn the_provenance_line_round_trips_zeros_included() {
+        let p = Provenance {
+            extracted: 12,
+            unsourced: 3,
+            outside_window: 0,
+            excluded: 1,
+        };
+        let plan = format!("# Weekend Plan\n\n| a |\n\n{}\n", p.line());
+        assert_eq!(Provenance::parse(&plan), Some(p));
+        assert_eq!(Provenance::parse("# Weekend Plan\n"), None);
+        assert_eq!(
+            Provenance::default().line(),
+            "_Provenance: 0 extracted, 0 unsourced, 0 outside the window, 0 excluded._"
+        );
     }
 
     #[test]

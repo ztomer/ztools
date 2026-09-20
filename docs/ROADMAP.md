@@ -28,16 +28,17 @@ only makes a visible thing nicer comes after work that closes a silence.
 
 ## Phase 1 — measure what the decisions rest on
 
-Every slot's injection exposure is now measured in its own shape
+Every slot's injection exposure is measured in its own shape
 (`filename_injection`, `summarize_injection`, `weekend_injection`). What is left
-is one unmeasured noise effect.
+is a reading that takes a week to exist.
 
-1. **`weekend_fabrication` for the engine chain.** Bing returns noisier results
-   than DDG did ("Dropped 50 out-of-region" per run against ~4 before). The
-   provenance and region gates hold, but nothing measures whether the extra
-   noise moves invented-row rates in the live planner. One week of plans, count
-   rows the provenance gate dropped; if it climbs, the region list or the
-   per-engine result cap is the lever.
+1. **Read the provenance ledger after a week** (instrument built 2026-09-19).
+   Every plan now ends with `_Provenance: N extracted, N unsourced, N outside the
+   window, N excluded._` and `ztools status` carries it under
+   `details.provenance`. First reading, on the Bing-heavy corpus: 5 extracted,
+   0 dropped. Compare a week of plans; if `unsourced` climbs, the region list or
+   a per-engine result cap is the lever. Nothing to build — a reading to take:
+   `for f in ~/Documents/weekend_plans/weekend_plan_*.md; do grep -H _Provenance "$f"; done`
 
 ## Phase 2 — planner honesty in the plan itself
 

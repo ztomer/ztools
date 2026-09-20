@@ -232,6 +232,10 @@ pub fn format_weekend_plan(
             );
         }
     }
+    // The run's own ledger, every run: what the gates dropped is the reading
+    // a week of plans is compared on (ROADMAP Phase 1).
+    out.push_str(&health.provenance.line());
+    out.push('\n');
 
     out
 }

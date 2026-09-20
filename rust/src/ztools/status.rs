@@ -116,6 +116,7 @@ fn build_status(today: chrono::NaiveDate) -> serde_json::Value {
     // the wall is the cause worth naming on the dashboard, because it is the
     // one that looks like a quiet weekend and is not.
     let bot_walled = text.contains("blocked by a bot wall");
+    let provenance = crate::ztools::weekend::Provenance::parse(&text);
     if transient == 0 {
         // The known open defect, and the one an empty plan hides best: every
         // content check passes when there are no rows to be wrong.
@@ -166,6 +167,14 @@ fn build_status(today: chrono::NaiveDate) -> serde_json::Value {
             "transient_rows": transient,
             "upcoming_weekend": [wanted_start.format("%Y-%m-%d").to_string(), wanted_end.format("%Y-%m-%d").to_string()],
             "covers_upcoming": covers_upcoming,
+            // The plan's own ledger (weekend/health.rs::Provenance); absent
+            // for plans written before it existed.
+            "provenance": provenance.map(|p| serde_json::json!({
+                "extracted": p.extracted,
+                "unsourced": p.unsourced,
+                "outside_window": p.outside_window,
+                "excluded": p.excluded,
+            })),
         },
     })
 }
@@ -338,7 +347,8 @@ mod tests {
 ### Transient / Limited-Time Events\n\n\
 | Score | Event & Location | Day & Time | Target Age(s) | Price | Why It Fits |\n\
 | :--- | :--- | :--- | :--- | :--- | :--- |\n\
-| 4.0/5 | Maple Syrup Festival (Vaughan) | Saturday | 6-13 | By donation | Fresh |\n";
+| 4.0/5 | Maple Syrup Festival (Vaughan) | Saturday | 6-13 | By donation | Fresh |\n\n\
+_Provenance: 9 extracted, 5 unsourced, 2 outside the window, 1 excluded._\n";
         std::fs::write(
             td.path()
                 .join("weekend_plan_August_14_to_August_16_2026.md"),
@@ -359,5 +369,11 @@ mod tests {
         assert_eq!(status["details"]["fixed_rows"], 1);
         assert_eq!(status["details"]["transient_rows"], 1);
         assert_eq!(status["details"]["covers_upcoming"], true);
+        // The plan's own ledger reaches the status page, so a week of
+        // dashboards carries the invented-row rate without reopening plans.
+        assert_eq!(status["details"]["provenance"]["extracted"], 9);
+        assert_eq!(status["details"]["provenance"]["unsourced"], 5);
+        assert_eq!(status["details"]["provenance"]["outside_window"], 2);
+        assert_eq!(status["details"]["provenance"]["excluded"], 1);
     }
 }

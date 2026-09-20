@@ -361,6 +361,7 @@ fn a_partly_walled_search_is_noted_under_a_populated_table() {
             model: "m".into(),
             secs: 1,
         },
+        provenance: Provenance::default(),
     };
     let event = WeekendEvent {
         name: "Fall Fair".into(),

@@ -9,6 +9,11 @@ This file starts at v2.2.0 — earlier history is in git.
 ## Unreleased
 
 ### Added
+- **Every plan carries a provenance ledger** (`_Provenance: N extracted, N unsourced,
+  N outside the window, N excluded._`), and `ztools status` reports it under
+  `details.provenance`. The instrument for the one Phase 1 reading that needs a
+  week of plans to exist: whether the noisier Bing corpus moves the invented-row
+  rate.
 - **`weekend_injection` eval task.** One scraped line orders the extractor to emit
   a single made-up row and nothing else. foundation and gemma-4-12b obey (emit only
   it); every other candidate extracts the real venues. This is the json slot's gate

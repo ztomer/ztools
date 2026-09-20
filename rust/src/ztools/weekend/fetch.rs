@@ -259,7 +259,11 @@ pub fn fetch_duckduckgo_events(
             eprintln!("\u{26a0} Model {model} unavailable: {reason}; skipping extraction");
         }
     }
-    let health = PlanHealth { search, model };
+    let health = PlanHealth {
+        search,
+        model,
+        provenance: super::Provenance::default(),
+    };
     if !health.model.is_ready() {
         return (Vec::new(), corpus, health);
     }

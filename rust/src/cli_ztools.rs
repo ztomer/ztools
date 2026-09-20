@@ -87,7 +87,7 @@ pub(crate) fn weekend_plan(
         exclusions: exclusions_str,
     };
 
-    let (transient, corpus, health) = crate::ztools::weekend::fetch_duckduckgo_events(
+    let (transient, corpus, mut health) = crate::ztools::weekend::fetch_duckduckgo_events(
         &location,
         friday,
         sunday,
@@ -97,14 +97,19 @@ pub(crate) fn weekend_plan(
     );
     // Provenance FIRST: a row that traces to nothing we fetched is invention,
     // and there is no point judging an invented row's dates or weather label.
+    // Each gate's drop count goes into the plan's own ledger line.
+    health.provenance.extracted = transient.len();
     let (transient, provenance_notes) =
         crate::ztools::weekend::drop_unsourced_rows(transient, &corpus);
+    health.provenance.unsourced = health.provenance.extracted - transient.len();
     for note in &provenance_notes {
         println!("→ {note}");
     }
     let exclusions = crate::ztools::weekend::load_exclusions(config);
+    let before = transient.len();
     let (transient, drop_notes) =
         crate::ztools::weekend::drop_excluded_places(transient, &exclusions);
+    health.provenance.excluded = before - transient.len();
     for note in &drop_notes {
         println!("→ {note}");
     }
@@ -112,8 +117,10 @@ pub(crate) fn weekend_plan(
 
     // C3: a dated transient event outside the plan's weekend is dropped; then
     // each surviving row's `day` is reconciled with its own dates.
+    let before = transient.len();
     let (transient, window_notes) =
         crate::ztools::weekend::drop_events_outside_window(transient, friday, sunday);
+    health.provenance.outside_window = before - transient.len();
     let (transient, day_notes) =
         crate::ztools::weekend::reconcile_day_with_dates(transient, friday, sunday);
     for note in window_notes.iter().chain(day_notes.iter()) {
