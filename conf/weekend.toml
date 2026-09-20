@@ -124,3 +124,10 @@ gender = "boy"
 [search]
 demote_after_runs = 3
 demote_wall_ratio = 0.8
+
+# Retries per LLM phase call after a transport failure or an empty answer
+# (weekend/phases.rs). The Python planner used 5; the stall-guarded client
+# removed the main cause, and each retry is another bounded call against a
+# serial server, so one.
+[llm]
+phase_retries = 1

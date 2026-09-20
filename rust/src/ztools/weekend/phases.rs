@@ -141,19 +141,69 @@ fn first_line(text: &str) -> &str {
     text.lines().next().unwrap_or(text).trim()
 }
 
-/// One plain-text LLM call against the configured osaurus endpoint.
+/// How many times a phase call is retried after a transport failure or an
+/// empty answer, from `conf/weekend.toml [llm] phase_retries`.
+///
+/// The Python planner retried five times; the stall-guarded client removed
+/// the main cause (abandoned calls that wedged the server), so the default is
+/// modest. A retry is never free — each one is another bounded call against
+/// a serial server — and a phase that fails twice running is not flaky.
+#[must_use]
+pub fn phase_retries(paths: &[String]) -> u32 {
+    for raw in paths {
+        let path = crate::manifest::expand_tilde(raw);
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(val) = toml::from_str::<toml::Value>(&content) else {
+            continue;
+        };
+        if let Some(n) = val
+            .get("llm")
+            .and_then(|l| l.get("phase_retries"))
+            .and_then(toml::Value::as_integer)
+        {
+            return u32::try_from(n).unwrap_or(0);
+        }
+    }
+    1
+}
+
+/// Run `call` up to `1 + retries` times until it answers, saying so on the
+/// operator's channel each time it did not.
+fn with_retries<T>(what: &str, retries: u32, mut call: impl FnMut() -> Option<T>) -> Option<T> {
+    for attempt in 0..=retries {
+        if let Some(v) = call() {
+            return Some(v);
+        }
+        if attempt < retries {
+            eprintln!(
+                "\u{26a0} {what}: no answer on attempt {}; retrying ({} left)",
+                attempt + 1,
+                retries - attempt
+            );
+        }
+    }
+    None
+}
+
+/// One plain-text LLM call against the configured osaurus endpoint, retried
+/// per `phase_retries`.
 #[must_use]
 pub fn call_llm_text(prompt: &str, config: &crate::config::ZtoolsConfig) -> Option<String> {
     let model = resolve_weekend_model(&config.osaurus_url, &config.weekend_model);
-    crate::ztools::twitter::call_osaurus(
-        &config.osaurus_url,
-        &model,
-        prompt,
-        config.llm_extended_timeout_secs,
-        config,
-    )
-    .ok()
-    .filter(|s| !s.trim().is_empty())
+    let retries = phase_retries(&config.weekend_region_paths);
+    with_retries("llm text call", retries, || {
+        crate::ztools::twitter::call_osaurus(
+            &config.osaurus_url,
+            &model,
+            prompt,
+            config.llm_extended_timeout_secs,
+            config,
+        )
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+    })
 }
 
 /// One JSON LLM call returning the raw response value.
@@ -167,17 +217,20 @@ pub(crate) fn call_llm_json(
     config: &crate::config::ZtoolsConfig,
 ) -> Option<serde_json::Value> {
     let model = resolve_weekend_model(&config.osaurus_url, &config.weekend_model);
-    let content = crate::ztools::llm::chat(
-        &crate::ztools::llm::ChatRequest {
-            base_url: &config.osaurus_url,
-            model: &model,
-            system,
-            user,
-            json: true,
-        },
-        &config.chat_budget(config.llm_extended_timeout_secs),
-    )
-    .ok()?;
+    let retries = phase_retries(&config.weekend_region_paths);
+    let content = with_retries("llm json call", retries, || {
+        crate::ztools::llm::chat(
+            &crate::ztools::llm::ChatRequest {
+                base_url: &config.osaurus_url,
+                model: &model,
+                system,
+                user,
+                json: true,
+            },
+            &config.chat_budget(config.llm_extended_timeout_secs),
+        )
+        .ok()
+    })?;
     Some(serde_json::json!({"choices": [{"message": {"content": content}}]}))
 }
 

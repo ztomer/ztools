@@ -42,25 +42,18 @@ is a reading that takes a week to exist.
 
 ## Phase 2 — planner honesty in the plan itself
 
-2. **Weekend phase retry** (B4 deferral). Python retried each phase up to 5× on
-   transport/parse failure; Rust phases are single-shot. The stall-guarded
-   client removed the main cause (abandoned calls). Port only when a scheduled
-   run is actually lost to a transient error: the `run_chain`-style loop the
-   summarizer has, count in `conf/weekend.toml`.
-3. **Weekend phase timeout learning** (B4 deferral). Python widened per-(model,
-   phase) timeouts from observed latency. The stall guard makes the cap a
-   backstop, so this only matters if a call legitimately streams past 900s.
-   `eval/signals.rs` has the store if it ever does.
+(The Python-parity deferrals that lived here are closed: phase retry shipped as
+`[llm] phase_retries`; phase timeout learning is a non-goal, below.)
 
 ## Phase 3 — eval ergonomics
 
-4. **Eval "what changed since the last run" presenter** (B4). History is saved
+2. **Eval "what changed since the last run" presenter** (B4). History is saved
    and the trend table renders per-model deltas; the Python diff table is not
    re-rendered. Cheap once someone wants it.
-5. **Eval token / verbosity metrics** (B4). Need per-outcome content capture in
+3. **Eval token / verbosity metrics** (B4). Need per-outcome content capture in
    `TaskOutcome` — a serialization decision, the record grows by the model's
    full answer. Decide before porting.
-6. **Drain-mode SIGINT** (B4). The Rust eval dies on Ctrl-C; the lock's
+4. **Drain-mode SIGINT** (B4). The Rust eval dies on Ctrl-C; the lock's
    dead-owner reclaim restores safety and the in-flight task is lost. Port with
    `ctrlc` if sweeps get interrupted by hand often enough to matter.
 
@@ -87,6 +80,12 @@ is a reading that takes a week to exist.
   `bin/ab_test` keeps the comparator.
 
 ## Explicit non-goals
+
+- No per-(model, phase) timeout learning for the planner (the Python planner
+  had it). Every production call is streamed and fails only on a stall, and
+  its output is bounded server-side by `max_tokens`; the per-call cap is a
+  backstop that a legitimate answer cannot reach. A learned cap would learn a
+  number nothing consults.
 
 - No DuckDuckGo wall-beater. `ddgs` 9.16 (2026-08) hits the same wall through
   browser-TLS impersonation; the wall is per IP. Engine spreading is the answer

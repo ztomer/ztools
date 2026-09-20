@@ -152,3 +152,61 @@ fn resolve_weekend_model_family_fallback() {
     let chosen = crate::ztools::weekend::resolve_weekend_model(&url, "qwen3.8-27b-8bit");
     assert_eq!(chosen, "qwen3.8-27b-jang_6d");
 }
+
+/// A phase call retries per `[llm] phase_retries` and then gives up: the
+/// stub counts requests, and a retries value of 2 must mean exactly three
+/// attempts — not two, not forever. Read from a weekend.toml the test wrote,
+/// never the shipped one, so the number under test is the one asserted.
+#[test]
+fn a_phase_call_retries_the_configured_number_of_times_then_yields_nothing() {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let hits = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counter = hits.clone();
+    std::thread::spawn(move || {
+        while let Ok((mut stream, _)) = listener.accept() {
+            let mut buf = [0u8; 8192];
+            let _ = stream.read(&mut buf);
+            let req = String::from_utf8_lossy(&buf);
+            // The roster probe answers; every chat call answers EMPTY, which
+            // `call_llm_text` treats as no answer.
+            let body = if req.starts_with("GET /v1/models") {
+                r#"{"data":[{"id":"test-model"}]}"#.to_string()
+            } else {
+                counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                r#"{"choices":[{"message":{"content":""}}]}"#.to_string()
+            };
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = stream.write_all(resp.as_bytes());
+        }
+    });
+    let td = tempfile::tempdir().unwrap();
+    let toml_path = td.path().join("weekend.toml");
+    std::fs::write(&toml_path, "[llm]\nphase_retries = 2\n").unwrap();
+    let cfg = crate::config::ZtoolsConfig {
+        osaurus_url: format!("http://{addr}"),
+        weekend_model: "test-model".into(),
+        weekend_region_paths: vec![toml_path.to_string_lossy().into_owned()],
+        llm_timeout_secs: 5,
+        ..crate::config::ZtoolsConfig::default()
+    };
+    assert_eq!(
+        crate::ztools::weekend::phase_retries(&cfg.weekend_region_paths),
+        2
+    );
+    assert!(crate::ztools::weekend::call_llm_text("hi", &cfg).is_none());
+    assert_eq!(
+        hits.load(std::sync::atomic::Ordering::SeqCst),
+        3,
+        "1 + 2 retries"
+    );
+    // No table: the default, one retry.
+    assert_eq!(
+        crate::ztools::weekend::phase_retries(&["/nonexistent".into()]),
+        1
+    );
+}
