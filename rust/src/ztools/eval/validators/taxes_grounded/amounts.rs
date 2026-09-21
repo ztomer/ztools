@@ -3,6 +3,7 @@
 //! Split out of `taxes_grounded.rs` for the 500-line production cap. Pure value
 //! transformers over numbers -- no I/O, no task knowledge.
 
+use crate::units::signed;
 use crate::ztools::eval::scoring_math::{ratio, rounded};
 use regex::Regex;
 use serde_json::Value;
@@ -68,10 +69,6 @@ pub fn known_set(known_amounts: &[Value]) -> HashSet<i64> {
 }
 
 #[must_use]
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "a weight times a grounded fraction. The weight is a rubric constant and the fraction is 0.0..=1.0"
-)]
 pub fn score_prose_amounts(
     prose: &str,
     known: &HashSet<i64, impl std::hash::BuildHasher>,
@@ -85,7 +82,7 @@ pub fn score_prose_amounts(
         .iter()
         .filter(|a| known.contains(&(rounded(a.abs() * 100.0))))
         .count();
-    let score = rounded(weight as f64 * ratio(grounded, amounts.len()));
+    let score = rounded(signed(weight) * ratio(grounded, amounts.len()));
     (
         score,
         format!(

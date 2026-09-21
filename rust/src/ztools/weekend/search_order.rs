@@ -9,6 +9,7 @@
 //! DATA (`conf/weekend.toml [search]`); the record is a small JSON file the
 //! planner appends to after each run.
 
+use crate::units::count;
 use serde::{Deserialize, Serialize};
 
 use super::health::SearchHealth;
@@ -185,12 +186,8 @@ impl SearchRecord {
     }
 }
 
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "query counts per run are in the tens; f64 is exact far beyond that"
-)]
 fn ratio(part: usize, whole: usize) -> f64 {
-    part as f64 / whole as f64
+    count(part) / count(whole)
 }
 
 #[cfg(test)]

@@ -82,17 +82,9 @@ pub struct OutputRecord<'a> {
 /// to save. Never fails the run: losing an output is bad, but ending a
 /// ten-hour eval over a full disk would be worse.
 ///
-/// Deliberately NOT `#[must_use]`, though `clippy::must_use_candidate` asks for
-/// it. The return is informational and the contract above says a lost output
-/// must not stop the run, so a caller that saves and moves on is doing the
-/// right thing; requiring it to acknowledge the path would be a lint telling
-/// the design it is wrong.
-#[expect(
-    clippy::must_use_candidate,
-    reason = "the contract above says a lost output must not stop a ten-hour \
-              eval, so a caller that saves and moves on is doing the right \
-              thing. The returned path is informational."
-)]
+/// The path is informational; a caller that saves and moves on writes
+/// `let _ =`, which says so at the call site.
+#[must_use = "the path written, or None when nothing was saved; discard it with `let _ =`"]
 pub fn save_output(record: &OutputRecord, eval_dir: Option<&Path>) -> Option<PathBuf> {
     if !outputs_enabled() {
         return None;

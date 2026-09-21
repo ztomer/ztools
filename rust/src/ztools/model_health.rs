@@ -140,13 +140,9 @@ pub fn probe_model_dir_defects(dir: &Path) -> Vec<String> {
             // macOS filesystems are case-INSENSITIVE by default, so a
             // `.LOCK` left by another tool is the same file to the OS and must
             // count as one here too.
-            let lower = fname.to_ascii_lowercase();
-            #[expect(
-                clippy::case_sensitive_file_extension_comparisons,
-                reason = "`lower` is lowercased on the line above, which is \
-                          what makes this comparison case-insensitive"
-            )]
-            let is_partial = lower.ends_with(".incomplete") || lower.ends_with(".lock");
+            let is_partial = std::path::Path::new(&fname).extension().is_some_and(|e| {
+                e.eq_ignore_ascii_case("incomplete") || e.eq_ignore_ascii_case("lock")
+            });
             if is_partial {
                 incomplete.push(fname);
             }

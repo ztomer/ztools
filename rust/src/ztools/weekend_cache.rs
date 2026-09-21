@@ -258,137 +258,126 @@ pub fn load_exclusions(config: &crate::config::ZtoolsConfig) -> Vec<String> {
     ]
 }
 
+/// One curated row: the fields a `WeekendEvent` is built from.
+struct Curated {
+    name: &'static str,
+    location: &'static str,
+    price: &'static str,
+    ages: &'static str,
+    day: &'static str,
+    dates: &'static str,
+    description: &'static str,
+}
+
+impl Curated {
+    fn event(&self, is_transient: bool) -> WeekendEvent {
+        WeekendEvent {
+            name: self.name.into(),
+            location: self.location.into(),
+            price: self.price.into(),
+            target_ages: self.ages.into(),
+            day: self.day.into(),
+            dates: self.dates.into(),
+            description: self.description.into(),
+            is_transient,
+            score: 0.0,
+            start_date: String::new(),
+            end_date: String::new(),
+            weather: String::new(),
+            duration: String::new(),
+        }
+    }
+}
+
+/// Year-round venues.
+const CURATED_FIXED: &[Curated] = &[
+    Curated {
+        name: "Kortright Centre for Conservation",
+        location: "Vaughan",
+        price: "$8-12",
+        ages: "All Ages",
+        day: "Sat-Sun",
+        dates: "Year-Round",
+        description: "800 acres of outdoor hiking trails, pond dipping, and interactive nature exhibits great for ages 6-13.",
+    },
+    Curated {
+        name: "Air Riderz Trampoline Park",
+        location: "Vaughan",
+        price: "$18-24",
+        ages: "6-13",
+        day: "Fri-Sun",
+        dates: "Year-Round",
+        description: "Indoor trampoline zone, 24ft climbing walls, dodgeball court, and ninja warrior obstacle course.",
+    },
+    Curated {
+        name: "Playdium Vaughan Arcade & VR",
+        location: "Vaughan",
+        price: "$15-30",
+        ages: "6-13",
+        day: "Fri-Sun",
+        dates: "Year-Round",
+        description: "40,000 sq ft venue featuring high-tech arcade games, virtual reality arenas, and indoor ropes courses.",
+    },
+    Curated {
+        name: "Mount Nemo Conservation Area",
+        location: "Halton / GTA",
+        price: "$7-10",
+        ages: "6-13",
+        day: "Fri-Sun",
+        dates: "Year-Round",
+        description: "Escarpment cliffside walking trails, cliffside lookout points, and limestone cave exploration.",
+    },
+    Curated {
+        name: "McMichael Canadian Art Collection Trails",
+        location: "Kleinburg / Vaughan",
+        price: "Free Trails / $15",
+        ages: "All Ages",
+        day: "Sat-Sun",
+        dates: "Year-Round",
+        description: "100-acre outdoor sculpture park, pine forest trails, and hands-on family art activities.",
+    },
+];
+
+/// Dated events.
+const CURATED_TRANSIENT: &[Curated] = &[
+    Curated {
+        name: "Vaughan Public Library Youth Science Workshop",
+        location: "Vaughan Library",
+        price: "Free",
+        ages: "6-13",
+        day: "Saturday",
+        dates: "Aug 08",
+        description: "Free hands-on STEM experiment and creative tech coding activity for kids ages 6-13.",
+    },
+    Curated {
+        name: "GTA Outdoor Nature Trail Discovery Walk",
+        location: "Kortright Conservation",
+        price: "Free with admission",
+        ages: "All Ages",
+        day: "Sunday",
+        dates: "Aug 09",
+        description: "Guided family nature walk with wildlife tracking, pond exploration, and bug identification.",
+    },
+    Curated {
+        name: "High Park Family Birding & Biodiversity Tour",
+        location: "Toronto / High Park",
+        price: "Free",
+        ages: "All Ages",
+        day: "Saturday",
+        dates: "Aug 08",
+        description: "Interactive woodland nature walk and birdwatching session tailored for young explorers.",
+    },
+];
+
 /// Load default cached activities returning clean, curated GTA family venues and events.
-#[expect(
-    clippy::too_many_lines,
-    reason = "a cache read with its own staleness, shape and provenance \
-              checks, each of which decides whether the next one runs at all. \
-              A partially-validated cache entry is exactly what this must never \
-              return, so the checks stay in one place"
-)]
 #[must_use]
 pub fn load_cached_activities(
     config: &crate::config::ZtoolsConfig,
 ) -> (Vec<WeekendEvent>, Vec<WeekendEvent>) {
     let exclusions = load_exclusions(config);
-
-    let all_fixed = vec![
-        WeekendEvent {
-            name: "Kortright Centre for Conservation".into(),
-            location: "Vaughan".into(),
-            price: "$8-12".into(),
-            target_ages: "All Ages".into(),
-            day: "Sat-Sun".into(),
-            dates: "Year-Round".into(),
-            description: "800 acres of outdoor hiking trails, pond dipping, and interactive nature exhibits great for ages 6-13.".into(),
-            is_transient: false, score: 0.0,
-            start_date: String::new(),
-            end_date: String::new(),
-            weather: String::new(),
-            duration: String::new(),
-},
-        WeekendEvent {
-            name: "Air Riderz Trampoline Park".into(),
-            location: "Vaughan".into(),
-            price: "$18-24".into(),
-            target_ages: "6-13".into(),
-            day: "Fri-Sun".into(),
-            dates: "Year-Round".into(),
-            description: "Indoor trampoline zone, 24ft climbing walls, dodgeball court, and ninja warrior obstacle course.".into(),
-            is_transient: false, score: 0.0,
-            start_date: String::new(),
-            end_date: String::new(),
-            weather: String::new(),
-            duration: String::new(),
-},
-        WeekendEvent {
-            name: "Playdium Vaughan Arcade & VR".into(),
-            location: "Vaughan".into(),
-            price: "$15-30".into(),
-            target_ages: "6-13".into(),
-            day: "Fri-Sun".into(),
-            dates: "Year-Round".into(),
-            description: "40,000 sq ft venue featuring high-tech arcade games, virtual reality arenas, and indoor ropes courses.".into(),
-            is_transient: false, score: 0.0,
-            start_date: String::new(),
-            end_date: String::new(),
-            weather: String::new(),
-            duration: String::new(),
-},
-        WeekendEvent {
-            name: "Mount Nemo Conservation Area".into(),
-            location: "Halton / GTA".into(),
-            price: "$7-10".into(),
-            target_ages: "6-13".into(),
-            day: "Fri-Sun".into(),
-            dates: "Year-Round".into(),
-            description: "Escarpment cliffside walking trails, cliffside lookout points, and limestone cave exploration.".into(),
-            is_transient: false, score: 0.0,
-            start_date: String::new(),
-            end_date: String::new(),
-            weather: String::new(),
-            duration: String::new(),
-},
-        WeekendEvent {
-            name: "McMichael Canadian Art Collection Trails".into(),
-            location: "Kleinburg / Vaughan".into(),
-            price: "Free Trails / $15".into(),
-            target_ages: "All Ages".into(),
-            day: "Sat-Sun".into(),
-            dates: "Year-Round".into(),
-            description: "100-acre outdoor sculpture park, pine forest trails, and hands-on family art activities.".into(),
-            is_transient: false, score: 0.0,
-            start_date: String::new(),
-            end_date: String::new(),
-            weather: String::new(),
-            duration: String::new(),
-},
-    ];
-
-    let all_transient = vec![
-        WeekendEvent {
-            name: "Vaughan Public Library Youth Science Workshop".into(),
-            location: "Vaughan Library".into(),
-            price: "Free".into(),
-            target_ages: "6-13".into(),
-            day: "Saturday".into(),
-            dates: "Aug 08".into(),
-            description: "Free hands-on STEM experiment and creative tech coding activity for kids ages 6-13.".into(),
-            is_transient: true, score: 0.0,
-            start_date: String::new(),
-            end_date: String::new(),
-            weather: String::new(),
-            duration: String::new(),
-},
-        WeekendEvent {
-            name: "GTA Outdoor Nature Trail Discovery Walk".into(),
-            location: "Kortright Conservation".into(),
-            price: "Free with admission".into(),
-            target_ages: "All Ages".into(),
-            day: "Sunday".into(),
-            dates: "Aug 09".into(),
-            description: "Guided family nature walk with wildlife tracking, pond exploration, and bug identification.".into(),
-            is_transient: true, score: 0.0,
-            start_date: String::new(),
-            end_date: String::new(),
-            weather: String::new(),
-            duration: String::new(),
-},
-        WeekendEvent {
-            name: "High Park Family Birding & Biodiversity Tour".into(),
-            location: "Toronto / High Park".into(),
-            price: "Free".into(),
-            target_ages: "All Ages".into(),
-            day: "Saturday".into(),
-            dates: "Aug 08".into(),
-            description: "Interactive woodland nature walk and birdwatching session tailored for young explorers.".into(),
-            is_transient: true, score: 0.0,
-            start_date: String::new(),
-            end_date: String::new(),
-            weather: String::new(),
-            duration: String::new(),
-},
-    ];
+    let all_fixed: Vec<WeekendEvent> = CURATED_FIXED.iter().map(|c| c.event(false)).collect();
+    let all_transient: Vec<WeekendEvent> =
+        CURATED_TRANSIENT.iter().map(|c| c.event(true)).collect();
 
     let fixed = super::weekend::drop_excluded_places(all_fixed, &exclusions).0;
 

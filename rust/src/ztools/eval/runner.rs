@@ -25,16 +25,17 @@ use std::time::Instant;
 
 use serde::Serialize;
 
-use crate::ztools::eval::failures::{
-    classify_failure, reasoning_overrun_was_guard_aborted, reasoning_retry_budget, FAIL_REASONING,
-};
 use crate::ztools::eval::model_resolve::is_generative_model;
 use crate::ztools::eval::prefill::{measure_prefill_rate, record_prefill_rate};
-use crate::ztools::eval::signals::{effective_timeout, load_signals, record_signal, save_signals};
+use crate::ztools::eval::signals::{load_signals, record_signal, save_signals};
 use crate::ztools::eval::task_loader::{check_graded_score, run_check, EvalTask};
-use crate::ztools::eval::transport::{self, RequestSpec};
+use crate::ztools::eval::transport;
 use crate::ztools::eval::watchdog::{is_stalled, model_stall_duration};
 use crate::ztools::eval::SignalStore;
+
+#[path = "runner_task.rs"]
+mod task;
+use task::{run_task, task_budget};
 
 /// Result of evaluating ONE task for ONE model. Errors are data.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
@@ -132,12 +133,6 @@ const fn status_for(score: u8) -> &'static str {
 /// surface as 80/partial, not collapse to 0/fail behind a boolean threshold.
 /// Mixed or purely-boolean tasks keep the hits-fraction semantics.
 #[must_use]
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    reason = "a mean of per-check scores, each 0..=100, then clamped to that same range before it narrows to u8. The integer form is deliberate -- averaging in f64 and rounding would move pinned scores"
-)]
 pub fn score_output(task: &EvalTask, cleaned: &str, parsed: Option<&serde_json::Value>) -> u8 {
     if task.checks.is_empty() {
         return 0;
@@ -148,15 +143,15 @@ pub fn score_output(task: &EvalTask, cleaned: &str, parsed: Option<&serde_json::
         .filter_map(|c| check_graded_score(c, cleaned, parsed))
         .collect();
     if graded.len() == task.checks.len() {
-        let mean = graded.iter().sum::<i64>() / graded.len() as i64;
-        return mean.clamp(0, 100) as u8;
+        let mean = graded.iter().sum::<i64>() / i64::try_from(graded.len()).unwrap_or(i64::MAX);
+        return u8::try_from(mean.clamp(0, 100)).unwrap_or(100);
     }
     let hits = task
         .checks
         .iter()
         .filter(|c| run_check(c, cleaned, parsed))
         .count();
-    ((hits * 100 + task.checks.len() / 2) / task.checks.len()) as u8
+    u8::try_from((hits * 100 + task.checks.len() / 2) / task.checks.len()).unwrap_or(100)
 }
 
 /// Is this outcome a SERVER problem rather than a model-quality result?
@@ -225,14 +220,6 @@ pub fn run_eval_with_signals(
     outcomes
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "the production eval loop: measure capabilities, size each \
-              request from the learned timeout, run the task, record signals, \
-              and watch for a stall. The watchdog and the per-task state are \
-              shared by every step, and splitting them apart is what would \
-              make the stall ceiling hard to see"
-)]
 fn run_eval_inner(
     model: &str,
     tasks: &[EvalTask],
@@ -270,145 +257,9 @@ fn run_eval_inner(
             break;
         }
 
-        let mut best: Option<TaskOutcome> = None;
-        let prompt_chars: usize = task.messages.iter().map(|m| m.content.len()).sum();
-        // Production path resolves the output budget per task/model from
-        // config exactly like the Python eval (`get_max_tokens_for_task`);
-        // the hermetic path keeps the configured constant.
-        let max_tokens = if cfg.record_signals {
-            crate::ztools::eval::budgets::max_tokens_for_task(&task.name, model)
-        } else {
-            cfg.max_tokens
-        };
-        let timeout_secs = if cfg.record_signals {
-            effective_timeout(model, &task.name, prompt_chars, max_tokens)
-        } else {
-            cfg.timeout_secs
-        };
-        let mut attempts_used: u32 = 0;
-        let mut best_diagnosis = crate::ztools::eval::failures::Diagnosis {
-            category: "",
-            reason: String::new(),
-            evidence: String::new(),
-        };
-
-        for attempt in 0..=cfg.max_retries {
-            attempts_used += 1;
-            // A retry that repeats the identical call cannot fix a reasoning
-            // overrun -- the model will think itself past the budget again.
-            // Retry with MORE room, bounded: reasoning scales with the TASK.
-            if attempt > 0
-                && best_diagnosis.category == FAIL_REASONING
-                && reasoning_escalation_futile
-            {
-                // Proven on an earlier task: this model fills whatever budget it
-                // gets and the guard cuts it every time. Escalating again buys a
-                // longer failure, and repeating the base call cannot help either --
-                // attempt 1 already hit the guard at exactly that budget. Take the
-                // zero now instead of paying twice more for it.
-                eprintln!(
-                    "  · skipping the retry for {}: {model} already reasoned past an \
-                     escalated budget, so more room cannot help",
-                    task.name
-                );
-                break;
-            }
-            let attempt_tokens = if attempt > 0 && best_diagnosis.category == FAIL_REASONING {
-                let escalated = reasoning_retry_budget(max_tokens);
-                eprintln!(
-                    "  · previous attempt reasoned past {max_tokens}; retrying with {escalated}"
-                );
-                escalated
-            } else {
-                max_tokens
-            };
-            let spec = RequestSpec {
-                model,
-                messages: &task.messages,
-                host: &cfg.host,
-                port: cfg.port,
-                temperature: cfg.temperature,
-                max_tokens: attempt_tokens,
-                timeout_secs,
-                allow_substitution: cfg.allow_model_substitution,
-                thinking: cfg.thinking,
-                stream_guard: true,
-            };
-            let r = transport::call(&spec, task.parse_json);
-            let candidate = outcome_from(task, &r);
-            let is_best = match &best {
-                // Errors rank below any scored attempt.
-                Some(b) => b.error.is_some() && candidate.error.is_none(),
-                None => true,
-            };
-            if is_best {
-                best = Some(candidate);
-            }
-            // A JSON task's answer is parsed once here and handed to every
-            // check; an unparseable answer scores as the raw text would.
-            let parsed = if task.parse_json {
-                serde_json::from_str::<serde_json::Value>(&r.content).ok()
-            } else {
-                None
-            };
-            let score = score_output(task, &r.content, parsed.as_ref());
-            best_diagnosis = classify_failure(
-                r.error.as_deref(),
-                &r.content,
-                &r.reasoning_content,
-                &r.finish_reason,
-                parsed.as_ref(),
-                score,
-                task.parse_json,
-            );
-            // An escalated attempt the guard cut as well is the evidence that this
-            // model expands to fill: strictly more room, strictly more of it spent
-            // thinking, still no answer. Recorded next to the attempt that proves
-            // it, so no later task re-buys the proof.
-            if attempt_tokens > max_tokens && reasoning_overrun_was_guard_aborted(&r.finish_reason)
-            {
-                reasoning_escalation_futile = true;
-            }
-            // Archive what the model actually said BEFORE anything decides
-            // what this score means. A scorer question asked after the fact is
-            // unanswerable without the output, and re-running costs hours on a
-            // one-model-at-a-time machine.
-            if cfg.record_signals {
-                crate::ztools::eval::outputs::save_output(
-                    &crate::ztools::eval::outputs::OutputRecord {
-                        model,
-                        task: &task.name,
-                        content: &r.content,
-                        reasoning: &r.reasoning_content,
-                        error: r.error.as_deref(),
-                        score,
-                        failure_reason: &best_diagnosis.reason,
-                    },
-                    None,
-                );
-            }
-            // A scored attempt always outranks the error/empty placeholder in
-            // `best`, even at 0 -- otherwise the placeholder's blank status
-            // leaks into the result. Ties take the later attempt.
-            if let Some(b) = best.as_mut() {
-                if b.error.is_some() || score >= b.score {
-                    b.score = score;
-                    b.status = status_for(score).to_string();
-                }
-            }
-            if best.as_ref().is_some_and(|b| b.score >= 90) {
-                break;
-            }
-        }
-
-        let mut outcome = best.unwrap_or_else(|| TaskOutcome {
-            task: task.name.clone(),
-            status: "fail".to_string(),
-            ..Default::default()
-        });
-        // What the BEST attempt died of -- "" when nothing failed. Drives
-        // parse-failure counting below and names the failure in reports.
-        outcome.failure_category = best_diagnosis.category.to_string();
+        let budget = task_budget(model, task, cfg);
+        let (outcome, attempts_used) =
+            run_task(model, task, cfg, &budget, &mut reasoning_escalation_futile);
 
         if cfg.record_signals {
             let is_parse_failure = outcome.failure_category == "PARSE";

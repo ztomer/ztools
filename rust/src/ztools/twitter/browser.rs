@@ -169,28 +169,19 @@ mod tests {
     fn test_live_collector_passes_since_and_debug_to_runner() {
         static CAPTURED: std::sync::Mutex<Vec<(Option<String>, bool)>> =
             std::sync::Mutex::new(Vec::new());
-        #[expect(
-            clippy::unnecessary_wraps,
-            reason = "the signature is fixed by `LiveBrowserCollector::runner`, \
-                      whose real implementations do fail. A test double that \
-                      cannot fail still has to have the same type."
-        )]
-        fn capturing_runner(
-            since: Option<&str>,
-            debug: bool,
-            _config: &crate::config::ZtoolsConfig,
-        ) -> Result<Vec<Tweet>> {
-            CAPTURED
-                .lock()
-                .unwrap()
-                .push((since.map(str::to_string), debug));
-            Ok(Vec::new())
-        }
+        // A non-capturing closure coerces to the runner's fn pointer; it
+        // records its arguments and answers an empty timeline.
         let collector = LiveBrowserCollector {
             since: Some("2026-08-15".to_string()),
             debug: true,
             config: crate::config::ZtoolsConfig::default(),
-            runner: capturing_runner,
+            runner: |since, debug, _config| {
+                CAPTURED
+                    .lock()
+                    .unwrap()
+                    .push((since.map(str::to_string), debug));
+                Ok(Vec::new())
+            },
         };
 
         let tweets = collector.collect_timeline(5).unwrap();

@@ -1,5 +1,3 @@
-#![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
-
 use super::*;
 
 #[test]
@@ -253,7 +251,7 @@ fn recording_a_sample_creates_capabilities_and_rederives_the_estimate() {
     let caps = &signals["m"]["_capabilities"];
     let history: Vec<Sample> = serde_json::from_value(caps["rate_samples"].clone()).unwrap();
     assert_eq!(history.len(), 1);
-    assert_eq!(history[0].v, 42.5);
+    assert_exact!(history[0].v, 42.5);
     // The clean tag comes verbatim from the live contention verdict --
     // asserted against the public verdict, not a hardcoded bool, so the
     // test holds whether or not this box happens to be busy.
@@ -272,10 +270,10 @@ fn a_legacy_scalar_is_seeded_once_as_an_unclean_sample_then_outvoted() {
     let history: Vec<Sample> =
         serde_json::from_value(signals["m"]["_capabilities"]["rate_samples"].clone()).unwrap();
     assert_eq!(history.len(), 2);
-    assert_eq!(history[0].v, 100.0);
+    assert_exact!(history[0].v, 100.0);
     assert_eq!(history[0].legacy, Some(true), "scalar seed marked legacy");
     assert!(!history[0].clean, "scalar seed never trusted as clean");
-    assert_eq!(history[1].v, 42.0);
+    assert_exact!(history[1].v, 42.0);
     // Estimate depends on the live clean tag: a clean reading outvotes the
     // legacy scalar outright; otherwise both count and the median wins.
     let expected = if history[1].clean { 42.0 } else { 71.0 };

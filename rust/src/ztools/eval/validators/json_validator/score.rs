@@ -3,6 +3,7 @@
 //! Split out of `json_validator.rs` for the 500-line production cap. These are the
 //! entry points; everything they call lives in the sibling modules.
 
+use crate::units::{count, whole_i64};
 use crate::ztools::eval::scoring_math::{ratio, rounded};
 use serde_json::Value;
 use std::collections::HashSet;
@@ -27,10 +28,6 @@ use super::weights::{
 };
 
 #[must_use]
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "a validity fraction over the items in one JSON answer. Both sides are counts of elements the model emitted"
-)]
 pub fn validate_json(data: &Value, source_text: &str) -> (i64, String) {
     let items = extract_list_from_dict(data);
     if items.is_empty() {
@@ -54,7 +51,7 @@ pub fn validate_json(data: &Value, source_text: &str) -> (i64, String) {
     let valid_items = items.iter().filter(|i| is_valid_list_item(i)).count();
     if valid_items == items.len() {
         score += JSON_VALIDITY_WEIGHT;
-    } else if valid_items as f64 >= items.len() as f64 * JSON_VALIDITY_THRESHOLD {
+    } else if count(valid_items) >= count(items.len()) * JSON_VALIDITY_THRESHOLD {
         score += JSON_COUNT_OK;
         failures.push(format!(
             "only {}/{} items are valid",
@@ -85,19 +82,65 @@ pub fn validate_json(data: &Value, source_text: &str) -> (i64, String) {
     (score.min(MAX_SCORE), failures.join("; "))
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "one validator: a sequence of independent checks against \
-              one answer, each subtracting from a running score and appending \
-              its own note. The list IS the rubric, and reading it top to \
-              bottom is how you know what the score means"
-)]
+/// Points for how many items carry details: all, most (80%+), some, none.
+/// Returns the score delta and the failure note, if any.
+fn detail_coverage_points(items: &[Value]) -> (i64, Option<String>) {
+    let valid_with_details = items.iter().filter(|i| has_item_details(i)).count();
+    if valid_with_details == items.len() {
+        return (DETAILED_QUALITY_WEIGHT, None);
+    }
+    if count(valid_with_details) >= count(items.len()) * 0.8 {
+        return (DETAILED_QUALITY_WEIGHT * 8 / 10, None);
+    }
+    if valid_with_details == 0 {
+        return (0, Some("no items with details".to_string()));
+    }
+    (
+        0,
+        Some(format!(
+            "only {}/{} have details",
+            valid_with_details,
+            items.len()
+        )),
+    )
+}
+
+/// Points for distinct names: the quality weight when every name is unique,
+/// a deduction proportional to the duplicate share past 10% otherwise.
+fn name_duplicate_points(items: &[Value]) -> (i64, Option<String>) {
+    let names: Vec<String> = items
+        .iter()
+        .map(|i| match i {
+            Value::Object(m) => m
+                .get("name")
+                .map(|v| v.to_string().trim_matches('"').to_string())
+                .unwrap_or_default(),
+            Value::String(s) => s.clone(),
+            // Python names non-dict scalars with str(item): numbers keep
+            // their text ("7", not ""). Bool/None render in JSON spelling
+            // ("true"/"null" vs Python "True"/"None") — no fixture covers
+            // those, and the spelling only matters for dedup counting.
+            other => other.to_string(),
+        })
+        .collect();
+    let unique_names: HashSet<String> = names.iter().filter(|n| !n.is_empty()).cloned().collect();
+    if unique_names.len() >= names.len() {
+        return (JSON_QUALITY_WEIGHT, None);
+    }
+    let duplicate_ratio = ratio(names.len() - unique_names.len(), names.len());
+    if duplicate_ratio > 0.1 {
+        return (
+            -whole_i64(duplicate_ratio * 20.0),
+            Some(format!(
+                "duplicates ({}%)",
+                whole_i64(duplicate_ratio * 100.0)
+            )),
+        );
+    }
+    (0, None)
+}
+
 #[must_use]
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    reason = "counts of items in one answer converted for fractions, and those fractions scaled into whole-number score deltas. Each fraction is 0.0..=1.0 by construction, so the scaled values are within a hundred of zero before they narrow"
-)]
 pub fn validate_detailed_json(data: &Value, source_text: &str) -> (i64, String) {
     let items = extract_list_from_dict(data);
     if items.is_empty() {
@@ -118,52 +161,12 @@ pub fn validate_detailed_json(data: &Value, source_text: &str) -> (i64, String) 
         ));
     }
 
-    let valid_with_details = items.iter().filter(|i| has_item_details(i)).count();
-    let all_have_details = valid_with_details == items.len();
-    let most_have_details = valid_with_details as f64 >= items.len() as f64 * 0.8;
-
-    if all_have_details {
-        score += DETAILED_QUALITY_WEIGHT;
-    } else if most_have_details {
-        score += DETAILED_QUALITY_WEIGHT * 8 / 10;
-    } else if valid_with_details == 0 {
-        failures.push("no items with details".to_string());
-    } else {
-        failures.push(format!(
-            "only {}/{} have details",
-            valid_with_details,
-            items.len()
-        ));
-    }
-
-    let names: Vec<String> = items
-        .iter()
-        .map(|i| match i {
-            Value::Object(m) => m
-                .get("name")
-                .map(|v| v.to_string().trim_matches('"').to_string())
-                .unwrap_or_default(),
-            Value::String(s) => s.clone(),
-            // Python names non-dict scalars with str(item): numbers keep
-            // their text ("7", not ""). Bool/None render in JSON spelling
-            // ("true"/"null" vs Python "True"/"None") — no fixture covers
-            // those, and the spelling only matters for dedup counting.
-            other => other.to_string(),
-        })
-        .collect();
-    let unique_names: HashSet<String> = names.iter().filter(|n| !n.is_empty()).cloned().collect();
-    if unique_names.len() < names.len() {
-        let duplicate_ratio = ratio(names.len() - unique_names.len(), names.len());
-        if duplicate_ratio > 0.1 {
-            score -= (duplicate_ratio * 20.0) as i64;
-            failures.push(format!(
-                "duplicates ({}%)",
-                (duplicate_ratio * 100.0) as i64
-            ));
-        }
-    } else {
-        score += JSON_QUALITY_WEIGHT;
-    }
+    let (delta, failure) = detail_coverage_points(&items);
+    score += delta;
+    failures.extend(failure);
+    let (delta, failure) = name_duplicate_points(&items);
+    score += delta;
+    failures.extend(failure);
 
     let mut source_ratio = 0.0;
     if !source_text.is_empty() && !items.is_empty() {
@@ -183,7 +186,7 @@ pub fn validate_detailed_json(data: &Value, source_text: &str) -> (i64, String) 
     if generic >= GENERIC_LOCATION_LIMIT {
         failures.push(format!(
             "{}% of locations are generic placeholders",
-            (generic * 100.0) as i64
+            whole_i64(generic * 100.0)
         ));
         score = score.min(GENERIC_LOCATION_MAX_SCORE);
     }
@@ -207,7 +210,7 @@ pub fn validate_detailed_json(data: &Value, source_text: &str) -> (i64, String) 
     if near_dupes >= NEAR_DUPLICATE_LIMIT {
         failures.push(format!(
             "{}% of rows repeat an earlier venue",
-            (near_dupes * 100.0) as i64
+            whole_i64(near_dupes * 100.0)
         ));
         score = score.min(NEAR_DUPLICATE_MAX_SCORE);
     }
@@ -239,15 +242,6 @@ pub fn validate_detailed_json(data: &Value, source_text: &str) -> (i64, String) 
 }
 
 #[must_use]
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "a precision figure over true and false positives counted within one answer, clamped to 1.0 afterwards"
-)]
-#[expect(
-    clippy::option_if_let_else,
-    reason = "a nested min/max over an optional expectation. Flattening \
-              it into `map_or` hides which of the two bounds is being chosen"
-)]
 pub fn validate_mixed_signal(
     data: &Value,
     source_text: &str,
@@ -295,15 +289,7 @@ pub fn validate_mixed_signal(
     let total_signal = signal_set.len();
     let total_noise = noise_set.len();
     let asked_for = requested_item_count(source_text);
-    let expected_signal = if let Some(asked) = asked_for {
-        if asked < total_signal {
-            asked
-        } else {
-            total_signal
-        }
-    } else {
-        total_signal
-    };
+    let expected_signal = asked_for.map_or(total_signal, |asked| asked.min(total_signal));
 
     let recall = if expected_signal > 0 {
         (ratio(tp, expected_signal)).min(1.0)
@@ -311,7 +297,7 @@ pub fn validate_mixed_signal(
         1.0
     };
     let precision = if tp + fp > 0 {
-        (tp as f64 / (tp + fp) as f64).min(1.0)
+        (count(tp) / count(tp + fp)).min(1.0)
     } else if tp == 0 && total_signal == 0 {
         1.0
     } else {

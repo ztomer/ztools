@@ -12,6 +12,7 @@
 //! outcome record and plumbing content through the runner, a serialization
 //! decision, not a math port. If content capture lands, these two follow.
 
+use crate::units::{count, unsigned};
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::completeness::record_is_complete;
@@ -55,19 +56,11 @@ pub struct ErrorRates {
     pub success_rate: f64,
 }
 
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "counts of outcomes in one run -- tens -- exact in f64, same shape as discrimination::ranking_mean"
-)]
 fn mean(scores: &[f64]) -> f64 {
-    scores.iter().sum::<f64>() / scores.len() as f64
+    scores.iter().sum::<f64>() / count(scores.len())
 }
 
-#[expect(
-    clippy::missing_const_for_fn,
-    reason = "cannot be const: calls non-const f64::midpoint and indexes a slice"
-)]
-fn median_of_sorted(scores: &[f64]) -> f64 {
+const fn median_of_sorted(scores: &[f64]) -> f64 {
     let n = scores.len();
     if n % 2 == 1 {
         scores[n / 2]
@@ -78,29 +71,21 @@ fn median_of_sorted(scores: &[f64]) -> f64 {
 
 /// Sample standard deviation (n-1), matching Python `statistics.stdev`.
 /// A single score has no spread: 0, matching the `len > 1` guard.
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "counts of outcomes in one run -- tens -- exact in f64"
-)]
 fn sample_stdev(scores: &[f64], mean: f64) -> f64 {
     if scores.len() < 2 {
         return 0.0;
     }
     let variance =
-        scores.iter().map(|s| (s - mean) * (s - mean)).sum::<f64>() / (scores.len() - 1) as f64;
+        scores.iter().map(|s| (s - mean) * (s - mean)).sum::<f64>() / count(scores.len() - 1);
     variance.sqrt()
 }
 
 /// A rate over one run's outcomes; 0 when there is nothing to rate.
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "counts of outcomes in one run -- tens -- exact in f64"
-)]
 fn rate(n: usize, total: usize) -> f64 {
     if total == 0 {
         0.0
     } else {
-        n as f64 / total as f64
+        count(n) / count(total)
     }
 }
 
@@ -236,10 +221,6 @@ pub struct Verbosity {
 /// Verbosity by model, over answered outcomes only (an error with no answer
 /// is not a short answer).
 #[must_use]
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "answer lengths in characters and a count of tasks; both far below 2^52"
-)]
 pub fn compute_verbosity(runs: &[ModelRun]) -> BTreeMap<String, Verbosity> {
     let mut out = BTreeMap::new();
     for run in runs {
@@ -253,14 +234,14 @@ pub fn compute_verbosity(runs: &[ModelRun]) -> BTreeMap<String, Verbosity> {
             continue;
         }
         let total: usize = lengths.iter().sum();
-        let mean_chars = total as f64 / lengths.len() as f64;
+        let mean_chars = count(total) / count(lengths.len());
         out.insert(
             run.model.clone(),
             Verbosity {
                 tasks: lengths.len(),
                 mean_chars,
                 max_chars: *lengths.iter().max().unwrap_or(&0),
-                est_tokens: mean_chars / super::transport::CHARS_PER_TOKEN as f64,
+                est_tokens: mean_chars / unsigned(super::transport::CHARS_PER_TOKEN),
             },
         );
     }
@@ -296,7 +277,6 @@ pub fn render_verbosity(verbosity: &BTreeMap<String, Verbosity>) -> Vec<String> 
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
 
     use super::*;
     use crate::ztools::eval::runner::TaskOutcome;
@@ -331,9 +311,9 @@ mod tests {
         )];
         let stats = compute_score_stats(&runs);
         let s = &stats["model_a"];
-        assert_eq!(s.mean, 85.0);
-        assert_eq!(s.median, 85.0);
-        assert_eq!(s.stdev, 0.0);
+        assert_exact!(s.mean, 85.0);
+        assert_exact!(s.median, 85.0);
+        assert_exact!(s.stdev, 0.0);
         assert_eq!((s.min, s.max, s.count), (85, 85, 1));
         assert!(s.complete);
     }
@@ -355,9 +335,9 @@ mod tests {
         let stats = compute_score_stats(&runs);
         assert!(!stats.contains_key("m_empty"));
         let s = &stats["m1"];
-        assert_eq!(s.mean, 90.0);
-        assert_eq!(s.median, 90.0);
-        assert_eq!(s.stdev, 10.0);
+        assert_exact!(s.mean, 90.0);
+        assert_exact!(s.median, 90.0);
+        assert_exact!(s.stdev, 10.0);
         assert_eq!((s.min, s.max, s.count), (80, 100, 3));
     }
 
@@ -423,7 +403,7 @@ mod tests {
             (rates["m1"].success, rates["m1"].infra, rates["m1"].quality),
             (1, 0, 0)
         );
-        assert_eq!(rates["m1"].success_rate, 1.0);
+        assert_exact!(rates["m1"].success_rate, 1.0);
 
         let infra = vec![run(
             "m1",
@@ -453,7 +433,7 @@ mod tests {
         let rates = compute_error_rates(&mixed);
         let r = &rates["m1"];
         assert_eq!((r.success, r.infra, r.quality), (1, 1, 1));
-        assert_eq!(r.success_rate + r.infra_rate + r.quality_rate, 1.0);
+        assert_exact!(r.success_rate + r.infra_rate + r.quality_rate, 1.0);
     }
 
     #[test]

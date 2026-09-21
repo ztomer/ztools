@@ -1,15 +1,13 @@
-#![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
-
 use super::*;
 
 #[test]
 fn test_cosine_similarity() {
     let a = vec![1.0, 0.0, 0.0];
     let b = vec![0.0, 1.0, 0.0];
-    assert_eq!(cosine_similarity(&a, &b), 0.0);
+    assert_exact!(cosine_similarity(&a, &b), 0.0);
 
     let c = vec![1.0, 0.0, 0.0];
-    assert_eq!(cosine_similarity(&a, &c), 1.0);
+    assert_exact!(cosine_similarity(&a, &c), 1.0);
 
     let d = vec![0.5, 0.5, 0.0];
     assert!(cosine_similarity(&a, &d) > 0.7);
@@ -61,8 +59,8 @@ fn test_cluster_tweets_empty() {
 fn test_cosine_similarity_zero_vector() {
     let a = vec![0.0, 0.0, 0.0];
     let b = vec![1.0, 2.0, 3.0];
-    assert_eq!(cosine_similarity(&a, &b), 0.0);
-    assert_eq!(cosine_similarity(&b, &a), 0.0);
+    assert_exact!(cosine_similarity(&a, &b), 0.0);
+    assert_exact!(cosine_similarity(&b, &a), 0.0);
 }
 
 #[test]

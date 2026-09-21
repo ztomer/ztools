@@ -1,5 +1,3 @@
-#![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
-
 use super::{pct_floor, pct_floor_mean, pct_round, ratio, rounded};
 
 #[test]
@@ -15,19 +13,18 @@ fn a_zero_denominator_stays_nan_rather_than_becoming_zero() {
     // a threshold, and `NaN < x` is false where `0.0 < x` is true -- so
     // "tidying" this to 0.0 flips the verdict for every empty input.
     assert!(ratio(0, 0).is_nan(), "0/0 is NaN");
-    assert_eq!(ratio(3, 0), f64::INFINITY, "n/0 is +inf, not NaN");
+    assert_exact!(ratio(3, 0), f64::INFINITY, "n/0 is +inf, not NaN");
     // The property the callers actually depend on: neither shape compares
     // below a threshold, which 0.0 would.
     for empty in [ratio(0, 0), ratio(3, 0)] {
-        // `!(a < b)` rather than `a >= b` ON PURPOSE: the two differ exactly
-        // for the non-finite values this test is about, and the callers use `<`.
-        #[expect(
-            clippy::neg_cmp_op_on_partial_ord,
-            reason = "the negation IS the assertion: NaN and +inf are neither \
-                      below nor at-or-above a threshold, and callers test `<`"
-        )]
-        let not_below = !(empty < 0.5);
-        assert!(not_below, "an empty ratio must not read as below threshold");
+        // Not `a >= b`: for the non-finite values this test is about, `<`
+        // and `>=` are BOTH false, and the callers use `<`. `partial_cmp`
+        // says the same thing without a negated operator: never `Less`.
+        assert_ne!(
+            empty.partial_cmp(&0.5),
+            Some(std::cmp::Ordering::Less),
+            "an empty ratio must not read as below threshold"
+        );
     }
 }
 
@@ -68,4 +65,22 @@ fn pct_floor_truncates_like_python_int() {
 fn pct_floor_mean_blends_then_truncates() {
     assert_eq!(pct_floor_mean(1.0, 0.5), 75);
     assert_eq!(pct_floor_mean(2.0 / 3.0, 1.0), 83);
+}
+
+#[test]
+fn pct_multiplies_before_it_divides_like_python() {
+    // `100.0 * (29.0 / 100.0)` is 28.999999999999996 in f64; Python's
+    // `int(100 * 29 / 100)` multiplies first and gets 29. So do we.
+    assert_eq!(pct_floor(29, 100), 29);
+    assert_eq!(pct_round(29, 100), 29);
+    for whole in 1..=400_usize {
+        for part in 0..=whole {
+            let exact = (100 * part) / whole;
+            assert_eq!(
+                pct_floor(part, whole),
+                i64::try_from(exact).unwrap(),
+                "{part}/{whole}"
+            );
+        }
+    }
 }

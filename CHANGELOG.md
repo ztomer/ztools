@@ -6,9 +6,36 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
-## v3.2.1 — reqwest 0.13, rusqlite 0.40 _(2026-09-20)_
+## v3.2.1 — reqwest 0.13, rusqlite 0.40, no suppression attributes _(2026-09-21)_
+
+### Fixed
+- **Percent scores multiply before they divide, like the Python they
+  mirror.** `pct_floor` and `pct_round` computed `100.0 * (part / whole)`;
+  Python's `int(100 * part / whole)` computes `(100 * part) / whole`. The
+  two round differently: `29/100` came out as `28.999…` and truncated to
+  28 where Python says 29. Both are integer arithmetic now (`scoring_math`),
+  pinned against the exact integer quotient for every `part/whole` up to
+  400. Scores that hit the boundary move up by one point.
 
 ### Changed
+- **No `#[expect]` anywhere in the crate** (85 sites; the house `no_allow`
+  gate refuses `#[expect]` since gates_of_heck v0.12.2). Every finding is
+  fixed rather than annotated:
+  - the numeric casts go through `units`: `count` / `unsigned` / `signed`
+    (exact integer → `f64` in two halves) and `whole_i64` / `whole_u64` /
+    `whole_u32` (`num-traits` `ToPrimitive`, with the cast's saturating
+    boundaries stated and tested);
+  - exact float comparisons in tests say so with `assert_exact!`
+    (`partial_cmp`, `==` semantics), which is where the `float_cmp`
+    argument in `scoring_math` now points;
+  - `twitter-summarize`'s seven flags resolve to a `TwitterCommand` at the
+    dispatch, with the precedence the body used to apply by early return;
+  - the six functions over 100 lines are split (`cli::run`, `weekend_plan`,
+    `model_eval`, the eval runner's task/attempt loop,
+    `validate_detailed_json`, the taxes narrative validator) and the curated
+    activities are a data table with one constructor;
+  - CLI entry points borrow their arguments; extension checks use
+    `Path::extension` (`*.md` no longer matches a bare `.md`, matching glob).
 - **reqwest 0.12 → 0.13** (locked at 0.13.1). The TLS feature was renamed
   upstream (`rustls-tls` → `rustls` + `webpki-roots`); `query` and `form` are
   now declared explicitly. No call-site changes — the 0.13 API is

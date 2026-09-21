@@ -11,6 +11,7 @@
 //! [`TimeoutInputs::pessimistic`] (the same fallback constants) until the
 //! `model_caps` wiring lands.
 
+use crate::units::{count, unsigned, whole_u64};
 /// Pessimistic fallback constants.
 ///
 /// Mirrors the Python defaults used when no per-model measurement exists.
@@ -57,20 +58,14 @@ impl TimeoutInputs {
 /// A zero rate degrades to 1 (never divide by zero); the clamped estimate
 /// truncates toward zero, matching Python `int()`.
 #[must_use]
-#[expect(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "a timeout in seconds from prompt length (thousands of chars) and token budgets (thousands). Both are exact in f64 by orders of magnitude; the result is clamped at or above min_timeout_secs (>= 0) before truncation, so negativity is unreachable"
-)]
 pub fn estimate_timeout(prompt_chars: usize, inputs: &TimeoutInputs) -> u64 {
-    let prefill = prompt_chars as f64 / inputs.prefill_chars_per_sec.max(1.0);
-    let decode = inputs.output_tokens as f64 / inputs.decode_tokens_per_sec.max(1.0);
+    let prefill = count(prompt_chars) / inputs.prefill_chars_per_sec.max(1.0);
+    let decode = unsigned(inputs.output_tokens) / inputs.decode_tokens_per_sec.max(1.0);
     let estimate = inputs.cold_start_secs + prefill + decode;
     let clamped = estimate
-        .max(inputs.min_timeout_secs as f64)
-        .min(inputs.max_timeout_secs as f64);
-    clamped as u64
+        .max(unsigned(inputs.min_timeout_secs))
+        .min(unsigned(inputs.max_timeout_secs));
+    whole_u64(clamped)
 }
 
 #[cfg(test)]

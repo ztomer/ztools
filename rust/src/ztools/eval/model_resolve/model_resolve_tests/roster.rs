@@ -1,7 +1,5 @@
 //! Roster entry parsing, scoring, and substitution -- the `roster` submodule's tests.
 
-#![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
-
 use crate::ztools::eval::model_resolve::*;
 
 pub(super) fn entry(model: &str, size: &str) -> RosterEntry {
@@ -22,10 +20,10 @@ fn missing_model_404_is_recognised_not_other_404s_or_statuses() {
 
 #[test]
 fn parameter_billions_parses_b_m_and_garbage() {
-    assert_eq!(parameter_billions(&entry("a", "27B")), 27.0);
-    assert_eq!(parameter_billions(&entry("a", "4M")), 0.004);
-    assert_eq!(parameter_billions(&entry("a", "")), 0.0);
-    assert_eq!(parameter_billions(&entry("a", "junk")), 0.0);
+    assert_exact!(parameter_billions(&entry("a", "27B")), 27.0);
+    assert_exact!(parameter_billions(&entry("a", "4M")), 0.004);
+    assert_exact!(parameter_billions(&entry("a", "")), 0.0);
+    assert_exact!(parameter_billions(&entry("a", "junk")), 0.0);
 }
 
 #[test]
@@ -111,22 +109,22 @@ fn parameter_billions_k_suffix_unknown_suffixes_and_parse_failures() {
         (parameter_billions(&entry("a", "640K")) - 0.00064).abs() < 1e-12,
         "640K is 0.00064B"
     );
-    assert_eq!(
+    assert_exact!(
         parameter_billions(&entry("a", "27X")),
         0.0,
         "unknown suffix"
     );
-    assert_eq!(
+    assert_exact!(
         parameter_billions(&entry("a", "junk!")),
         0.0,
         "non-numeric body"
     );
-    assert_eq!(
+    assert_exact!(
         parameter_billions(&entry("a", " 12B ")),
         12.0,
         "surrounding whitespace"
     );
-    assert_eq!(
+    assert_exact!(
         parameter_billions(&entry("a", "12.5B")),
         12.5,
         "fractional sizes"

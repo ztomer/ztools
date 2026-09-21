@@ -59,7 +59,6 @@ pub fn phrase_overlap(phrase: &str, out_lower: &str) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
 
     use super::*;
 
@@ -91,6 +90,6 @@ mod tests {
         let phrase = "Canadian GDP grows 0.5% in Q3";
         let output = "The Canadian GDP grew 0.5% in Q3 according to analysts.";
         let overlap = phrase_overlap(phrase, output);
-        assert_eq!(overlap, 0.8); // 4 out of 5 tokens match (canadian, gdp, 0.5%, q3)
+        assert_exact!(overlap, 0.8); // 4 out of 5 tokens match (canadian, gdp, 0.5%, q3)
     }
 }

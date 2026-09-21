@@ -12,6 +12,7 @@
 
 use std::collections::HashSet;
 
+use crate::units::count;
 use chrono::{Datelike, NaiveDate};
 
 use super::WeekendEvent;
@@ -411,7 +412,7 @@ pub fn reconcile_day_with_dates(
 
 /// A row's name must be traceable to the fetched corpus. Below this fraction of
 /// the name's significant words appearing in the corpus, the row is invention.
-const PROVENANCE_MIN_COVERAGE: f32 = 0.6;
+const PROVENANCE_MIN_COVERAGE: f64 = 0.6;
 
 /// Content words of a venue/event name, folded for matching.
 fn significant_words(text: &str) -> Vec<String> {
@@ -427,10 +428,6 @@ fn significant_words(text: &str) -> Vec<String> {
 /// The corpus is passed already-normalised. A row with no name is kept: an
 /// unnamed row is class C7's problem, not provenance's.
 #[must_use]
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "a coverage fraction in f32 over the words of one row. f32 is exact to 2^24; these are word counts in a single table cell"
-)]
 pub fn row_is_sourced(name: &str, corpus_normalized: &str) -> bool {
     let words = significant_words(name);
     if words.is_empty() {
@@ -440,7 +437,7 @@ pub fn row_is_sourced(name: &str, corpus_normalized: &str) -> bool {
         .iter()
         .filter(|w| corpus_normalized.contains(w.as_str()))
         .count();
-    (hits as f32 / words.len() as f32) >= PROVENANCE_MIN_COVERAGE
+    count(hits) / count(words.len()) >= PROVENANCE_MIN_COVERAGE
 }
 
 /// Drop rows whose name appears nowhere in the fetched corpus.

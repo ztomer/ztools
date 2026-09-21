@@ -13,6 +13,7 @@
 //! (a flat-fill renderer is enough — the task measures sight, not
 //! anti-aliasing) and grades answers against them.
 
+use crate::units::signed;
 use anyhow::{Context, Result};
 use base64::Engine as _;
 use serde::Deserialize;
@@ -75,15 +76,11 @@ fn inside_polygon(points: &[[i64; 2]], x: f64, y: f64) -> bool {
     let n = points.len();
     let mut j = n - 1;
     for i in 0..n {
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "pixel coordinates on a 512-px canvas"
-        )]
         let (xi, yi, xj, yj) = (
-            points[i][0] as f64,
-            points[i][1] as f64,
-            points[j][0] as f64,
-            points[j][1] as f64,
+            signed(points[i][0]),
+            signed(points[i][1]),
+            signed(points[j][0]),
+            signed(points[j][1]),
         );
         if (yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi {
             inside = !inside;
@@ -98,13 +95,11 @@ fn covers(fixture: &VisionFixture, x: u32, y: u32) -> bool {
     let (px, py) = (f64::from(x) + 0.5, f64::from(y) + 0.5);
     match (fixture.shape.as_str(), fixture.r#box, &fixture.points) {
         ("rectangle", Some([x0, y0, x1, y1]), _) => {
-            #[expect(clippy::cast_precision_loss, reason = "pixel coordinates")]
-            let (x0, y0, x1, y1) = (x0 as f64, y0 as f64, x1 as f64, y1 as f64);
+            let (x0, y0, x1, y1) = (signed(x0), signed(y0), signed(x1), signed(y1));
             px >= x0 && px <= x1 && py >= y0 && py <= y1
         }
         ("ellipse", Some([x0, y0, x1, y1]), _) => {
-            #[expect(clippy::cast_precision_loss, reason = "pixel coordinates")]
-            let (x0, y0, x1, y1) = (x0 as f64, y0 as f64, x1 as f64, y1 as f64);
+            let (x0, y0, x1, y1) = (signed(x0), signed(y0), signed(x1), signed(y1));
             let (cx, cy) = (f64::midpoint(x0, x1), f64::midpoint(y0, y1));
             let (rx, ry) = ((x1 - x0) / 2.0, (y1 - y0) / 2.0);
             let (dx, dy) = ((px - cx) / rx, (py - cy) / ry);

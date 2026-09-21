@@ -11,27 +11,40 @@ use anyhow::Result;
 
 use crate::config::ZtoolsConfig;
 
-/// The `twitter-summarize` flag set, grouped so the function signature stays
-/// one stable struct instead of a growing argument list.
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "this struct EXISTS to hold the command's boolean flags -- it was \
-              extracted so the signature stayed one stable argument instead of \
-              a growing list. Collapsing them into an enum would model as \
-              mutually exclusive what the CLI accepts together."
-)]
+/// What `twitter-summarize` was asked to do. The CLI accepts every flag
+/// together; `cli::run` resolves their precedence once, at the dispatch,
+/// instead of the body doing it by the order of its early returns.
+pub(crate) enum TwitterCommand {
+    /// `--fetch-latest` / `--last-updated`: the stored summary, read-only.
+    Latest { last_updated: bool },
+    /// `--login`: open the browser to sign in to x.com.
+    Login,
+    /// `--clean`: delete the stored summaries.
+    Clean,
+    /// The run itself.
+    Summarize(TwitterSummarizeOpts),
+}
+
+/// Where the tweets come from. `--json` names a source the caller chose, so
+/// the cache and a live fetch are never fallbacks for it.
+pub(crate) enum TweetSource {
+    /// A JSON file path, or `-` for stdin.
+    Json(String),
+    /// `--use-cache`: the previous live fetch.
+    Cache,
+    /// A live timeline scrape; `fetch_only` stops after caching it.
+    Live {
+        since: Option<String>,
+        debug: bool,
+        fetch_only: bool,
+    },
+}
+
+/// The summarize run: its source and its two outputs.
 pub(crate) struct TwitterSummarizeOpts {
-    pub json: Option<String>,
+    pub source: TweetSource,
     pub model: Option<String>,
     pub md_out: Option<PathBuf>,
-    pub use_cache: bool,
-    pub fetch_only: bool,
-    pub debug: bool,
-    pub since: Option<String>,
-    pub login: bool,
-    pub clean: bool,
-    pub fetch_latest: bool,
-    pub last_updated: bool,
 }
 
 /// Parse a tweet array, or nothing.
@@ -95,62 +108,52 @@ fn tweets_from_cache(
     None
 }
 
-pub(crate) fn twitter_summarize(config: &ZtoolsConfig, opts: TwitterSummarizeOpts) -> Result<()> {
+pub(crate) fn twitter_summarize(config: &ZtoolsConfig, command: TwitterCommand) -> Result<()> {
+    let opts = match command {
+        TwitterCommand::Latest { last_updated } => {
+            return crate::ztools::store::twitter_latest(last_updated);
+        }
+        TwitterCommand::Login => {
+            println!("· Launching browser for x.com sign-in...");
+            return crate::ztools::twitter::browser::login_live();
+        }
+        TwitterCommand::Clean => {
+            // Housekeeping before a run, never the run: clear stored summaries,
+            // report what happened, and exit successfully either way.
+            let dir = crate::ztools::store::twitter_store_dir();
+            let report = crate::ztools::store::clean_folder(&dir);
+            for warning in &report.warnings {
+                eprintln!("⚠ {warning}");
+            }
+            println!(
+                "· Cleanup complete: {} .md file(s) removed from {}.",
+                report.deleted,
+                dir.display()
+            );
+            return Ok(());
+        }
+        TwitterCommand::Summarize(opts) => opts,
+    };
     let TwitterSummarizeOpts {
-        json,
+        source,
         model,
         md_out,
-        use_cache,
-        fetch_only,
-        debug,
-        since,
-        login,
-        clean,
-        fetch_latest,
-        last_updated,
     } = opts;
-    if fetch_latest || last_updated {
-        return crate::ztools::store::twitter_latest(last_updated);
-    }
-    if login {
-        println!("· Launching browser for x.com sign-in...");
-        return crate::ztools::twitter::browser::login_live();
-    }
-    if clean {
-        // Housekeeping before a run, never the run: clear stored summaries,
-        // report what happened, and exit successfully either way.
-        let dir = crate::ztools::store::twitter_store_dir();
-        let report = crate::ztools::store::clean_folder(&dir);
-        for warning in &report.warnings {
-            eprintln!("⚠ {warning}");
-        }
-        println!(
-            "· Cleanup complete: {} .md file(s) removed from {}.",
-            report.deleted,
-            dir.display()
-        );
-        return Ok(());
-    }
 
-    let mut tweets = Vec::new();
-    // An explicit `--json` is a source the caller NAMED, so the cache and the
-    // live fetch below are skipped even when it yielded nothing: silently
-    // falling back would summarise a different set of tweets than was asked for.
-    let explicit_source = json.is_some();
-
-    if let Some(path_or_dash) = json {
-        if path_or_dash == "-" {
+    let tweets = match source {
+        // An explicit `--json` is a source the caller NAMED, so it is never
+        // fallen back from, even when it yielded nothing: that would summarise
+        // a different set of tweets than was asked for.
+        TweetSource::Json(path_or_dash) if path_or_dash == "-" => {
             let mut buffer = String::new();
             if std::io::Read::read_to_string(&mut std::io::stdin(), &mut buffer).is_ok() {
-                tweets = tweets_from_json(&buffer);
+                tweets_from_json(&buffer)
+            } else {
+                Vec::new()
             }
-        } else {
-            tweets = tweets_from_file(std::path::Path::new(&path_or_dash));
         }
-    }
-
-    if !explicit_source {
-        if use_cache {
+        TweetSource::Json(path) => tweets_from_file(std::path::Path::new(&path)),
+        TweetSource::Cache => {
             let candidates: Vec<PathBuf> = [
                 dirs::home_dir().map(|h| h.join(".twitter_summary_debug_cache.json")),
                 dirs::home_dir().map(|h| h.join(".cache/twitter/debug_tweets.json")),
@@ -158,21 +161,26 @@ pub(crate) fn twitter_summarize(config: &ZtoolsConfig, opts: TwitterSummarizeOpt
             .into_iter()
             .flatten()
             .collect();
-            if let Some((from, cached)) = tweets_from_cache(&candidates) {
-                println!(
-                    "· Using {} cached tweets from {}",
-                    cached.len(),
-                    from.display()
-                );
-                tweets = cached;
-            }
-            if tweets.is_empty() {
+            let Some((from, cached)) =
+                tweets_from_cache(&candidates).filter(|(_, t)| !t.is_empty())
+            else {
                 anyhow::bail!(
                     "No cached tweets found. Run without --use-cache first to scrape live tweets."
                 );
-            }
-        } else {
-            tweets = crate::ztools::twitter::browser::collect_tweets_live(
+            };
+            println!(
+                "· Using {} cached tweets from {}",
+                cached.len(),
+                from.display()
+            );
+            cached
+        }
+        TweetSource::Live {
+            since,
+            debug,
+            fetch_only,
+        } => {
+            let tweets = crate::ztools::twitter::browser::collect_tweets_live(
                 since.as_deref(),
                 debug,
                 config,
@@ -194,8 +202,9 @@ pub(crate) fn twitter_summarize(config: &ZtoolsConfig, opts: TwitterSummarizeOpt
                 );
                 return Ok(());
             }
+            tweets
         }
-    }
+    };
 
     let path = crate::ztools::twitter::run_summary(&tweets, None, None, model.as_deref(), config)?;
     if let Ok(doc) = std::fs::read_to_string(&path) {

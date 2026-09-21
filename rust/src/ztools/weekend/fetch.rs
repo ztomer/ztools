@@ -244,12 +244,6 @@ fn monolithic_transient(
 /// Returns the structured events, the corpus they were judged against, and
 /// the health record the plan's warning is written from.
 #[must_use]
-#[expect(
-    clippy::option_if_let_else,
-    reason = "the else branch is the monolithic-prompt fallback, with the \
-              comment explaining why a dead draft phase must not starve the \
-              plan. That belongs beside the branch, not inside a closure"
-)]
 pub fn fetch_duckduckgo_events(
     location: &str,
     d1: NaiveDate,
@@ -285,14 +279,15 @@ pub fn fetch_duckduckgo_events(
     let weather_condensed = condense_weather(weather_str, config);
     let cleaned = extract_sources(&corpus, location, config);
 
-    let events = if let Some(draft) = draft_activities(&weather_condensed, &cleaned, ctx, config) {
-        let refined = refine_draft(&draft, config);
-        structure_to_json(&refined, &weather_condensed, ctx.year, config).unwrap_or_default()
-    } else {
+    let events = draft_activities(&weather_condensed, &cleaned, ctx, config).map_or_else(
         // A dead draft phase must not starve the plan: fall back to the
         // monolithic prompt rather than returning nothing.
-        monolithic_transient(&corpus, location, d1, d2, config)
-    };
+        || monolithic_transient(&corpus, location, d1, d2, config),
+        |draft| {
+            let refined = refine_draft(&draft, config);
+            structure_to_json(&refined, &weather_condensed, ctx.year, config).unwrap_or_default()
+        },
+    );
 
     (events, corpus, health)
 }

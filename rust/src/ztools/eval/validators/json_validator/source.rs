@@ -2,6 +2,7 @@
 //!
 //! Split out of `json_validator.rs` for the 500-line production cap.
 
+use crate::units::count;
 use serde_json::Value;
 use std::collections::HashSet;
 
@@ -9,10 +10,6 @@ use super::names::norm_name;
 use super::weights::STOPWORDS;
 
 #[must_use]
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "a match fraction over the items in one answer"
-)]
 pub fn check_source_extraction(items: &[Value], source_text: &str) -> f64 {
     if items.is_empty() || source_text.is_empty() {
         return 0.0;
@@ -78,5 +75,5 @@ pub fn check_source_extraction(items: &[Value], source_text: &str) -> f64 {
             matches += 1;
         }
     }
-    f64::from(matches) / items.len() as f64
+    f64::from(matches) / count(items.len())
 }

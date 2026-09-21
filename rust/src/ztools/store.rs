@@ -205,14 +205,8 @@ pub fn clean_folder(dir: &Path) -> CleanReport {
         //
         // Case-SENSITIVE on purpose, also mirroring glob: `*.md` does not
         // match `X.MD`, and a case-fold here would delete files Python keeps.
-        #[expect(
-            clippy::case_sensitive_file_extension_comparisons,
-            reason = "parity with Python glob '*.md', which is case-sensitive; folding would delete files the reference keeps"
-        )]
-        let is_md = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .is_some_and(|n| n.ends_with(".md"));
+        // (Nor does `*.md` match a bare `.md`, which has no extension.)
+        let is_md = path.extension().is_some_and(|e| e == "md");
         if !is_md {
             continue;
         }

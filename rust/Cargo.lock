@@ -2593,6 +2593,7 @@ dependencies = [
  "ctrlc",
  "dirs",
  "flate2",
+ "num-traits",
  "png",
  "regex",
  "reqwest",

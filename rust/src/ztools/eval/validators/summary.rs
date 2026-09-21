@@ -7,6 +7,7 @@
 //! misattribution is disqualifying, not a deduction, because a plausible
 //! wrong author gets believed while template text gets discarded.
 
+use crate::units::count;
 pub const MISATTRIBUTION_MAX_SCORE: i64 = 45;
 const PLACEHOLDER_LEAK_MAX_SCORE: i64 = 40;
 const MAX_SCORE: i64 = 100;
@@ -185,22 +186,18 @@ fn coverage_points(data_str: &str, failures: &mut Vec<String>) -> i64 {
     }
 }
 
-#[expect(
-    clippy::cast_possible_wrap,
-    clippy::cast_precision_loss,
-    reason = "narrative-word and bullet counts in one summary -- dozens -- and their ratio. Both exact in their targets by orders of magnitude"
-)]
 fn specificity_points(
     data_str: &str,
     source_text: &str,
     failures: &mut Vec<String>,
 ) -> (i64, usize, usize) {
-    let narrative_words = NARRATIVE_WORDS_RE.find_iter(data_str).count() as i64;
+    let narrative_words =
+        i64::try_from(NARRATIVE_WORDS_RE.find_iter(data_str).count()).unwrap_or(i64::MAX);
     let (faithful, total_bullets, attribution_reasons) =
         attribution_faithfulness(data_str, source_text);
     let mut specificity_score: i64 = 0;
     if !source_text.is_empty() && total_bullets > 0 {
-        let ratio = faithful as f64 / total_bullets as f64;
+        let ratio = count(faithful) / count(total_bullets);
         if ratio >= 0.8 {
             specificity_score += TIMESTAMP_SPECIFICITY_SCORE;
         } else if ratio >= 0.5 {

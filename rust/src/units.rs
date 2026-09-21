@@ -5,6 +5,7 @@
 //! two unrelated tools to hold twenty lines would be the larger mistake -- but
 //! if a third repo needs these, that is the moment to extract them.
 
+use num_traits::ToPrimitive;
 use std::time::Duration;
 
 /// A process id as the signed `pid_t` the libc calls take.
@@ -33,6 +34,81 @@ pub fn pid(id: u32) -> i32 {
 #[must_use]
 pub fn millis(d: Duration) -> u64 {
     u64::try_from(d.as_millis()).unwrap_or(u64::MAX)
+}
+
+/// A count as `f64`, exact.
+///
+/// `usize as f64` is `cast_precision_loss` because a count above 2^53 would
+/// round. Every count this crate converts is items in one answer or tasks in
+/// one run, but the conversion should not have to argue that: it is done in
+/// two exact halves and is exact for every value below 2^53, which is where
+/// `f64` itself stops being able to hold an integer.
+#[must_use]
+pub fn count(n: usize) -> f64 {
+    unsigned(u64::try_from(n).unwrap_or(u64::MAX))
+}
+
+/// A `u64` as `f64`, exact below 2^53 -- the two-halves conversion behind
+/// [`count`], for the sizes and totals that are already 64-bit.
+#[must_use]
+pub fn unsigned(n: u64) -> f64 {
+    let hi = u32::try_from(n >> 32).unwrap_or(u32::MAX);
+    let lo = u32::try_from(n & 0xffff_ffff).unwrap_or(u32::MAX);
+    f64::from(hi).mul_add(4_294_967_296.0, f64::from(lo))
+}
+
+/// A signed whole number as `f64`, exact below 2^53 in magnitude.
+#[must_use]
+pub fn signed(n: i64) -> f64 {
+    let magnitude = unsigned(n.unsigned_abs());
+    if n < 0 {
+        -magnitude
+    } else {
+        magnitude
+    }
+}
+
+/// An `f64` as `i64`, truncating toward zero, with the cast's boundaries.
+///
+/// `f64 as i64` has saturated out of range and sent NaN to 0 since Rust
+/// 1.45. Stated here so the narrowing is one named decision instead of an
+/// `as` at every site.
+#[must_use]
+pub fn whole_i64(v: f64) -> i64 {
+    v.to_i64().unwrap_or_else(|| {
+        if v.is_nan() {
+            0
+        } else if v.is_sign_negative() {
+            i64::MIN
+        } else {
+            i64::MAX
+        }
+    })
+}
+
+/// An `f64` as `u64`, truncating toward zero: negative and NaN are 0, too
+/// large saturates -- the `f64 as u64` boundaries, made explicit.
+#[must_use]
+pub fn whole_u64(v: f64) -> u64 {
+    v.to_u64().unwrap_or_else(|| {
+        if v.is_nan() || v.is_sign_negative() {
+            0
+        } else {
+            u64::MAX
+        }
+    })
+}
+
+/// An `f64` as `u32`, same boundaries as [`whole_u64`].
+#[must_use]
+pub fn whole_u32(v: f64) -> u32 {
+    v.to_u32().unwrap_or_else(|| {
+        if v.is_nan() || v.is_sign_negative() {
+            0
+        } else {
+            u32::MAX
+        }
+    })
 }
 
 #[cfg(test)]

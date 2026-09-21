@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::units::{count, signed};
 use crate::ztools::eval::completeness::{record_is_complete, Completeness};
 use crate::ztools::eval::runner::TaskOutcome;
 
@@ -167,10 +168,6 @@ pub struct ModelStats {
 }
 
 #[must_use]
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "a mean, median and standard deviation over past run scores. Each score is 0..=100 and the count is the number of retained runs, so every value is exact in f64 and the arithmetic is the statistic itself"
-)]
 pub fn load_historical_stats(eval_dir: Option<&Path>) -> BTreeMap<String, ModelStats> {
     let mut stats = BTreeMap::new();
     for (model, entries) in load_history(eval_dir) {
@@ -187,21 +184,21 @@ pub fn load_historical_stats(eval_dir: Option<&Path>) -> BTreeMap<String, ModelS
         }
         scores.sort_unstable();
         let n = scores.len();
-        let mean = scores.iter().sum::<i64>() as f64 / n as f64;
+        let mean = signed(scores.iter().sum::<i64>()) / count(n);
         let median = if n % 2 == 1 {
-            scores[n / 2] as f64
+            signed(scores[n / 2])
         } else {
-            (scores[n / 2 - 1] + scores[n / 2]) as f64 / 2.0
+            signed(scores[n / 2 - 1] + scores[n / 2]) / 2.0
         };
         let stdev = if n > 1 {
             let var = scores
                 .iter()
                 .map(|s| {
-                    let d = *s as f64 - mean;
+                    let d = signed(*s) - mean;
                     d * d
                 })
                 .sum::<f64>()
-                / (n - 1) as f64;
+                / count(n - 1);
             var.sqrt()
         } else {
             0.0
@@ -295,7 +292,6 @@ pub(super) fn truncate_name(name: &str) -> String {
 
 #[cfg(test)]
 pub(in crate::ztools::eval) mod tests {
-    #![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
 
     use super::*;
     use serde_json::json;
@@ -385,7 +381,7 @@ pub(in crate::ztools::eval) mod tests {
             .unwrap()
             .clone();
         assert_eq!((stats.runs, stats.excluded), (1, 1));
-        assert_eq!(stats.mean, 60.0, "the unclean 100 must not be averaged");
+        assert_exact!(stats.mean, 60.0, "the unclean 100 must not be averaged");
     }
 
     #[test]
@@ -415,7 +411,7 @@ pub(in crate::ztools::eval) mod tests {
         .unwrap();
         let stats = load_historical_stats(Some(dir.path())).remove("m").unwrap();
         assert_eq!((stats.runs, stats.min, stats.max), (2, 0, 100));
-        assert_eq!(stats.mean, 50.0);
+        assert_exact!(stats.mean, 50.0);
     }
 
     #[test]

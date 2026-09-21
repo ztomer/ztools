@@ -15,6 +15,7 @@
 
 use std::time::Instant;
 
+use crate::units::count;
 use crate::ztools::eval::signals::{default_eval_timeout, record_capability_sample, SignalStore};
 use crate::ztools::eval::task_loader::ChatMessage;
 use crate::ztools::eval::transport::{call, RequestSpec};
@@ -63,10 +64,6 @@ fn spec<'a>(
 ///
 /// Returns None when the probe cannot run, so "not measured" stays distinct
 /// from a measurement.
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "a characters-per-second rate. `PREFILL_PROBE_CHARS` is a compile-time constant of a few thousand"
-)]
 pub fn measure_prefill_rate(
     signals: &mut SignalStore,
     model: &str,
@@ -110,7 +107,7 @@ pub fn measure_prefill_rate(
     if result.error.is_some() || elapsed <= 0.0 {
         return None;
     }
-    let rate = PREFILL_PROBE_CHARS as f64 / elapsed;
+    let rate = count(PREFILL_PROBE_CHARS) / elapsed;
     if rate > MAX_PLAUSIBLE_PREFILL_RATE {
         // An instant answer is not a measurement.
         return None;

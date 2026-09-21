@@ -4,6 +4,10 @@
 //! dead-code lint the way it does in a pure binary crate (these items were
 //! library-public in `routines` and are still public API here).
 
+#[cfg(test)]
+#[macro_use]
+mod test_support;
+
 pub mod cli;
 pub mod cli_ztools;
 pub mod cli_ztools_twitter;

@@ -1,7 +1,5 @@
 //! Item shape, name matching, and source-grounding extraction.
 
-#![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
-
 use serde_json::json;
 
 use crate::ztools::eval::validators::json_validator::*;
@@ -108,26 +106,26 @@ fn test_names_match_longest_token_arms() {
 #[test]
 fn test_check_source_extraction_guards() {
     let items = vec![json!({"name": "Alpha Beta"})];
-    assert_eq!(check_source_extraction(&[], "some source"), 0.0);
-    assert_eq!(check_source_extraction(&items, ""), 0.0);
+    assert_exact!(check_source_extraction(&[], "some source"), 0.0);
+    assert_exact!(check_source_extraction(&items, ""), 0.0);
     // every source word is a stopword or under 3 chars -> no terms to match
-    assert_eq!(check_source_extraction(&items, "of the a an to"), 0.0);
+    assert_exact!(check_source_extraction(&items, "of the a an to"), 0.0);
 }
 
 #[test]
 fn test_check_source_extraction_object_string_and_other_items() {
     // object item matches via term overlap
     let objects = vec![json!({"name": "Alpha Beta Gamma"})];
-    assert_eq!(
+    assert_exact!(
         check_source_extraction(&objects, "alpha beta gamma delta report"),
         1.0
     );
     // string item matches via terms...
     let strings = vec![json!("alpha beta")];
-    assert_eq!(check_source_extraction(&strings, "alpha beta zone"), 1.0);
+    assert_exact!(check_source_extraction(&strings, "alpha beta zone"), 1.0);
     // ...and a non-string item falls back to raw-text containment ("other" arm)
     let others = vec![json!(12345)];
-    assert_eq!(check_source_extraction(&others, "route 12345 north"), 1.0);
+    assert_exact!(check_source_extraction(&others, "route 12345 north"), 1.0);
 }
 
 #[test]
@@ -141,23 +139,23 @@ fn test_check_source_extraction_skips_empty_text_and_counts_partials() {
 fn test_check_source_extraction_primary_name_fallbacks() {
     // term overlap is zero ("who" is a stopword) but the normalized primary is in the source
     let who = vec![json!({"name": "The Who"})];
-    assert_eq!(
+    assert_exact!(
         check_source_extraction(&who, "tickets for the who tribute night"),
         1.0
     );
     // falls back through event fields when name is absent; single shared term
     // is below the >=2 threshold so the normalized-name containment decides
     let titled = vec![json!({"event": "Winterfolk"})];
-    assert_eq!(
+    assert_exact!(
         check_source_extraction(&titled, "the winterfolk lineup"),
         1.0
     );
     let fenice = vec![json!({"title": "La Fenice"})];
-    assert_eq!(
+    assert_exact!(
         check_source_extraction(&fenice, "an evening at la fenice opera house"),
         1.0
     );
     // normalized search shorter than 4 chars is not searched at all
     let short = vec![json!({"name": "Oh!"})];
-    assert_eq!(check_source_extraction(&short, "oh what a night"), 0.0);
+    assert_exact!(check_source_extraction(&short, "oh what a night"), 0.0);
 }

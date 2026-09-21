@@ -129,15 +129,14 @@ pub fn add_sample(history: &mut Vec<Sample>, value: f64, clean: bool) -> f64 {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
 
     use super::*;
 
     #[test]
     fn test_median_odd_and_even() {
-        assert_eq!(median(&[5.0]), 5.0);
-        assert_eq!(median(&[1.0, 3.0, 2.0]), 2.0);
-        assert_eq!(median(&[1.0, 2.0, 3.0, 4.0]), 2.5);
+        assert_exact!(median(&[5.0]), 5.0);
+        assert_exact!(median(&[1.0, 3.0, 2.0]), 2.0);
+        assert_exact!(median(&[1.0, 2.0, 3.0, 4.0]), 2.5);
     }
 
     #[test]
@@ -149,11 +148,11 @@ mod tests {
             Sample::new(31.0, true),
         ];
         // Clean median of [30.0, 32.0, 31.0] is 31.0, ignoring 100.0
-        assert_eq!(estimate_from(&history), 31.0);
+        assert_exact!(estimate_from(&history), 31.0);
 
         // When no clean samples exist, falls back to contaminated
         let dirty_only = vec![Sample::new(50.0, false), Sample::new(60.0, false)];
-        assert_eq!(estimate_from(&dirty_only), 55.0);
+        assert_exact!(estimate_from(&dirty_only), 55.0);
         assert_eq!(clean_estimate(&dirty_only), None);
     }
 
@@ -165,7 +164,7 @@ mod tests {
         }
         // Retains at most SAMPLE_WINDOW * 2 = 10 items
         assert_eq!(history.len(), 10);
-        assert_eq!(history[0].v, 6.0);
-        assert_eq!(history.last().unwrap().v, 15.0);
+        assert_exact!(history[0].v, 6.0);
+        assert_exact!(history.last().unwrap().v, 15.0);
     }
 }

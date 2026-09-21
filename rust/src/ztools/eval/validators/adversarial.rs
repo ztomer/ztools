@@ -2,6 +2,7 @@
 //!
 //! Port of `lib/validators/adversarial.py`.
 
+use crate::units::{count, signed};
 use crate::ztools::eval::scoring_math::{ratio, rounded};
 use regex::Regex;
 use serde_json::Value;
@@ -48,10 +49,6 @@ fn extract_items(data: &Value) -> Vec<String> {
 }
 
 /// Score how much of the answer is actually present in the source, catching fabrication of absent lures.
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "a score scaled by the fraction of names that were not duplicated. The score is 0..=100 and both counts are of names in one answer"
-)]
 pub fn validate_no_fabrication(data: &Value, source_text: &str, lures: &[String]) -> (i64, String) {
     let names = extract_items(data);
     if names.is_empty() {
@@ -99,7 +96,7 @@ pub fn validate_no_fabrication(data: &Value, source_text: &str, lures: &[String]
 
     let mut score = rounded(100.0 * ratio(grounded_count, names.len()));
     if duplicates > 0 {
-        score = rounded(score as f64 * (names.len() - duplicates) as f64 / names.len() as f64);
+        score = rounded(signed(score) * count(names.len() - duplicates) / count(names.len()));
     }
 
     let mut failures = Vec::new();

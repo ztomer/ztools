@@ -18,6 +18,7 @@ use std::process::Command;
 
 use serde_json::Value;
 
+use crate::units::{count, whole_u64};
 use crate::ztools::eval::gpu_lock::foreign_holder;
 use crate::ztools::eval::samples::{clean_estimate, migrate_sample_history, Sample};
 
@@ -59,28 +60,20 @@ pub fn max_eval_timeout() -> u64 {
 /// capability and forking the store. The home fallback covers an installed
 /// binary with no checkout nearby.
 #[must_use]
-#[expect(
-    clippy::option_if_let_else,
-    reason = "the else branch is a candidate SEARCH over several \
-              directories, not a default value. As a closure argument the \
-              search would read as a fallback expression rather than as the \
-              thing that normally happens"
-)]
 pub fn signals_path() -> PathBuf {
-    let dir = if let Ok(d) = std::env::var("EVAL_SIGNALS_DIR") {
-        d
-    } else {
+    let dir = std::env::var("EVAL_SIGNALS_DIR").unwrap_or_else(|_| {
         let candidates = [
             std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .parent()
                 .map(|p| p.join("conf")),
             dirs::home_dir().map(|h| h.join("Projects/ztools/conf")),
         ];
-        match candidates.into_iter().flatten().find(|p| p.is_dir()) {
-            Some(p) => p.to_string_lossy().to_string(),
-            None => "conf".to_string(),
-        }
-    };
+        candidates
+            .into_iter()
+            .flatten()
+            .find(|p| p.is_dir())
+            .map_or_else(|| "conf".to_string(), |p| p.to_string_lossy().to_string())
+    });
     PathBuf::from(dir).join("eval_signals.json")
 }
 
@@ -244,12 +237,6 @@ fn caps_clean_estimate(signals: &SignalStore, model: &str, key: &str) -> Option<
 /// plausible constant is how a guess ends up wearing a measurement's authority.
 /// Returns 0 when unmeasurable, and the caller keeps its documented floor.
 #[must_use]
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss,
-    reason = "a timeout in seconds, derived from prompt length and a token budget. The inputs are thousands of characters and tokens, and the result is `.min()`-ed against the configured ceiling"
-)]
 pub fn derived_timeout(model: &str, prompt_chars: usize, max_tokens: u32) -> u64 {
     let signals = load_signals();
     let (Some(prefill), Some(decode), Some(cold_start)) = (
@@ -259,8 +246,8 @@ pub fn derived_timeout(model: &str, prompt_chars: usize, max_tokens: u32) -> u64
     ) else {
         return 0;
     };
-    let seconds = cold_start + prompt_chars as f64 / prefill + f64::from(max_tokens) / decode;
-    ((seconds * TIMEOUT_SAFETY_FACTOR) as u64).min(max_eval_timeout())
+    let seconds = cold_start + count(prompt_chars) / prefill + f64::from(max_tokens) / decode;
+    whole_u64(seconds * TIMEOUT_SAFETY_FACTOR).min(max_eval_timeout())
 }
 
 /// Timeout actually applied to one request.
@@ -270,10 +257,6 @@ pub fn derived_timeout(model: &str, prompt_chars: usize, max_tokens: u32) -> u64
 /// `conf/config.toml [timeouts]` (fallback 600, `lib/llm/constants.py
 /// DEFAULT_TIMEOUT`), the documented floor, and the derived estimate.
 #[must_use]
-#[expect(
-    clippy::cast_sign_loss,
-    reason = "a timeout read from configuration, in seconds. A negative timeout is not a value this accepts"
-)]
 /// # Panics
 ///
 /// If the configured timeouts cannot be ordered -- which requires a NaN in
@@ -301,7 +284,7 @@ pub fn effective_timeout(
                     .and_then(|t| t.get(task_name))
                     .and_then(toml::Value::as_integer)
                     .filter(|v| *v > 0)
-                    .map(|v| v as u64)
+                    .and_then(|v| u64::try_from(v).ok())
             })
             .unwrap_or(FALLBACK_CONFIGURED_TIMEOUT);
     let derived = derived_timeout(model, prompt_chars, max_tokens);
@@ -313,11 +296,6 @@ pub fn effective_timeout(
 
 /// Record one completed task observation: p95 latency (EMA weighted toward
 /// recent), retry/parse counters, and the learned timeout derived from them.
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "a p95 latency scaled by a safety factor, then `.max()`-ed against the default. Latencies are seconds of model inference"
-)]
 /// # Panics
 ///
 /// If an existing signal or per-task entry is not a JSON object; see
@@ -382,7 +360,7 @@ pub fn record_signal(
     );
 
     if p95 > 0.0 {
-        let new_timeout = default_eval_timeout().max((p95 * 1.5) as u64);
+        let new_timeout = default_eval_timeout().max(whole_u64(p95 * 1.5));
         if task.get("timeout").and_then(serde_json::Value::as_u64) != Some(new_timeout) {
             task.insert("timeout".to_string(), serde_json::json!(new_timeout));
         }

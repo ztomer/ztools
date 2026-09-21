@@ -23,6 +23,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
 
+use crate::units::{unsigned, whole_u64};
 use crate::ztools::eval::clean::{clean_model_output, extract_json};
 use crate::ztools::eval::model_resolve::{
     default_fallback_chain, fetch_roster, is_missing_model_error, substitute_model,
@@ -319,12 +320,6 @@ fn sse_choice(line: &str) -> Option<Value> {
 /// timeouts: a model emitting one slow token at a time never trips a per-read
 /// gap timeout, and that exact case hung a real sweep for 97 minutes.
 #[must_use]
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss,
-    reason = "a character budget from a token budget times two constants, `.max()`-ed above one. Token budgets are thousands"
-)]
 pub fn stream_with_overrun_guard(spec: &RequestSpec) -> TransportResult {
     let mut result = TransportResult {
         model: spec.model.to_string(),
@@ -332,9 +327,10 @@ pub fn stream_with_overrun_guard(spec: &RequestSpec) -> TransportResult {
     };
     let start = Instant::now();
     let deadline = start + Duration::from_secs(spec.timeout_secs);
-    let budget_chars =
-        (f64::from(spec.max_tokens) * REASONING_OVERRUN_FRACTION * CHARS_PER_TOKEN as f64).max(1.0)
-            as u64;
+    let budget_chars = whole_u64(
+        (f64::from(spec.max_tokens) * REASONING_OVERRUN_FRACTION * unsigned(CHARS_PER_TOKEN))
+            .max(1.0),
+    );
 
     let payload = json!({
         "model": spec.model,

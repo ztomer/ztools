@@ -38,16 +38,12 @@ const MONTHS: [&str; 12] = [
 ];
 
 /// 1-12 for a month name or its three-letter stem, mirroring `lib/dates.py`.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "a month index from a fixed twelve-element table, plus one"
-)]
 fn month_number(run: &str) -> Option<u32> {
     let stem = run.get(..3)?;
     MONTHS
         .iter()
         .position(|m| m.starts_with(stem))
-        .map(|i| i as u32 + 1)
+        .and_then(|i| u32::try_from(i + 1).ok())
 }
 
 fn push_date(found: &mut Vec<NaiveDate>, year: i32, month: u32, day: u32) {
@@ -68,11 +64,6 @@ fn push_date(found: &mut Vec<NaiveDate>, year: i32, month: u32, day: u32) {
 /// prioritiser cannot drift apart (they already did once: the enforcer read
 /// three-letter stems while the prioritiser matched only full month names).
 #[must_use]
-#[expect(
-    clippy::cast_possible_wrap,
-    clippy::cast_sign_loss,
-    reason = "digits of a fixed-width date, parsed one character at a time. `to_digit(10)` yields 0..=9, so the assembled fields cannot leave the range a date has"
-)]
 /// # Panics
 ///
 /// Never: the digits are read through `to_digit(10)` only after the
@@ -94,13 +85,11 @@ pub fn find_dates_in(value: &str, year: i32) -> Vec<NaiveDate> {
         if !all_digits {
             continue;
         }
-        let at = |k: usize| chars[i + k].to_digit(10).unwrap() as i32;
-        push_date(
-            &mut found,
-            at(0) * 1000 + at(1) * 100 + at(2) * 10 + at(3),
-            (at(5) * 10 + at(6)) as u32,
-            (at(8) * 10 + at(9)) as u32,
-        );
+        // Every digit was checked above, so `to_digit` is `Some` and the
+        // four-digit year fits `i32` by construction.
+        let at = |k: usize| chars[i + k].to_digit(10).unwrap_or(0);
+        let year = i32::try_from(at(0) * 1000 + at(1) * 100 + at(2) * 10 + at(3)).unwrap_or(0);
+        push_date(&mut found, year, at(5) * 10 + at(6), at(8) * 10 + at(9));
     }
 
     // Named-month forms: "Aug 15", "August 15, 2026", "Aug. 15 2026",

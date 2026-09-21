@@ -152,7 +152,9 @@ enum Cmd {
 ///
 /// When an explicitly named config cannot be read or parsed, and from
 /// whichever subcommand was dispatched -- each states its own reason.
-pub fn run() -> Result<()> {
+/// The argv with the subcommand implied by the program's own name inserted:
+/// a `weekend` symlink runs `ztools weekend-plan`, and so on.
+fn args_with_implied_subcommand() -> Vec<std::ffi::OsString> {
     let mut args: Vec<std::ffi::OsString> = std::env::args_os().collect();
     if let Some(first) = args.first() {
         let prog = std::path::Path::new(first)
@@ -172,22 +174,44 @@ pub fn run() -> Result<()> {
             }
         }
     }
-    let cli = Cli::parse_from(args);
-    // An explicit `--config` is authoritative: the file is exactly what runs,
-    // so a test (or a CI job) can point the URLs at stubs without the dynamic
-    // `[best_models]` override reaching out to the operator's real config.
-    // Without it, defaults apply and `[best_models]` is layered on top.
-    let config = match cli.config {
-        Some(path) => {
+    args
+}
+
+/// The configuration a run uses.
+///
+/// An explicit `--config` is authoritative: the file is exactly what runs,
+/// so a test (or a CI job) can point the URLs at stubs without the dynamic
+/// `[best_models]` override reaching out to the operator's real config.
+/// Without it, defaults apply and `[best_models]` is layered on top.
+///
+/// # Errors
+///
+/// When the explicit file cannot be read or is not valid `ZtoolsConfig` TOML.
+fn load_config(explicit: Option<PathBuf>) -> Result<ZtoolsConfig> {
+    explicit.map_or_else(
+        || {
+            Ok(ZtoolsConfig::default()
+                .with_ztools_best_models()
+                .with_shared_prompts())
+        },
+        |path| {
             let content = std::fs::read_to_string(&path)
                 .map_err(|e| anyhow::anyhow!("cannot read config {}: {e}", path.display()))?;
             toml::from_str::<ZtoolsConfig>(&content)
-                .map_err(|e| anyhow::anyhow!("cannot parse config {}: {e}", path.display()))?
-        }
-        None => ZtoolsConfig::default()
-            .with_ztools_best_models()
-            .with_shared_prompts(),
-    };
+                .map_err(|e| anyhow::anyhow!("cannot parse config {}: {e}", path.display()))
+        },
+    )
+}
+
+/// Parse the CLI, resolve config, and dispatch to the tool handlers.
+///
+/// # Errors
+///
+/// When an explicitly named config cannot be read or parsed, and from
+/// whichever subcommand was dispatched -- each states its own reason.
+pub fn run() -> Result<()> {
+    let cli = Cli::parse_from(args_with_implied_subcommand());
+    let config = load_config(cli.config)?;
     match cli.cmd {
         Cmd::TwitterSummarize {
             json,
@@ -201,22 +225,35 @@ pub fn run() -> Result<()> {
             clean,
             fetch_latest,
             last_updated,
-        } => crate::cli_ztools_twitter::twitter_summarize(
-            &config,
-            crate::cli_ztools_twitter::TwitterSummarizeOpts {
-                json,
-                model,
-                md_out,
-                use_cache,
-                fetch_only,
-                debug,
-                since,
-                login,
-                clean,
-                fetch_latest,
-                last_updated,
-            },
-        ),
+        } => {
+            use crate::cli_ztools_twitter::{TweetSource, TwitterCommand, TwitterSummarizeOpts};
+            // The precedence the command has always applied: the read-only
+            // queries, then login, then clean, then a run whose source is
+            // `--json`, else the cache, else live.
+            let command = if fetch_latest || last_updated {
+                TwitterCommand::Latest { last_updated }
+            } else if login {
+                TwitterCommand::Login
+            } else if clean {
+                TwitterCommand::Clean
+            } else {
+                let source = match json {
+                    Some(path_or_dash) => TweetSource::Json(path_or_dash),
+                    None if use_cache => TweetSource::Cache,
+                    None => TweetSource::Live {
+                        since,
+                        debug,
+                        fetch_only,
+                    },
+                };
+                TwitterCommand::Summarize(TwitterSummarizeOpts {
+                    source,
+                    model,
+                    md_out,
+                })
+            };
+            crate::cli_ztools_twitter::twitter_summarize(&config, command)
+        }
         Cmd::WeekendPlan {
             location,
             ages,
@@ -225,13 +262,13 @@ pub fn run() -> Result<()> {
             last_updated,
         } => crate::cli_ztools::weekend_plan(
             &config,
-            location,
-            ages,
+            &location,
+            &ages,
             md_out,
             fetch_latest,
             last_updated,
         ),
-        Cmd::ImageRenamer { dir, apply } => crate::cli_ztools::image_renamer(&config, dir, apply),
+        Cmd::ImageRenamer { dir, apply } => crate::cli_ztools::image_renamer(&config, &dir, apply),
         Cmd::Status => crate::cli_ztools::status(),
         Cmd::TwitterStatus => crate::ztools::twitter_status::run(),
         Cmd::ModelEval {
@@ -244,7 +281,7 @@ pub fn run() -> Result<()> {
             thinking,
         } => crate::cli_ztools::model_eval(
             &config,
-            model,
+            &model,
             &crate::cli_ztools::EvalOptions {
                 suite: &suite,
                 tasks_dir: tasks_dir.as_deref(),

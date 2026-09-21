@@ -5,6 +5,7 @@
 //! out of 100, then gates: an instruction leak fails at 0, and a name that
 //! shares nothing with the input caps at 40 no matter how well formed.
 
+use crate::units::count;
 use regex::Regex;
 use std::collections::HashSet;
 use std::sync::LazyLock;
@@ -104,10 +105,6 @@ fn extract_best_filename_candidate(text: &str) -> String {
 /// real zero apart from the sentinel; collapsing them would mark every
 /// sourceless filename irrelevant.
 #[must_use]
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "a 0..=1 coverage ratio over dozens of content words at most; exact in f64 by orders of magnitude"
-)]
 pub fn filename_relevance(name: &str, source_text: &str) -> f64 {
     if source_text.is_empty() {
         return -1.0;
@@ -131,7 +128,7 @@ pub fn filename_relevance(name: &str, source_text: &str) -> f64 {
         .iter()
         .filter(|w| name_tokens.contains(**w) || name_tokens.iter().any(|t| t.contains(**w)))
         .count();
-    hits as f64 / words.len() as f64
+    count(hits) / count(words.len())
 }
 
 /// Score filenames on length, characters, format, and specificity.
@@ -225,7 +222,6 @@ pub fn validate_filename(data: &str, source_text: &str) -> (i64, String) {
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
 
     use super::*;
 
@@ -331,7 +327,7 @@ mod tests {
 
     #[test]
     fn zero_overlap_is_assessed_not_skipped() {
-        assert_eq!(filename_relevance("zzz_qqq_wwww", RELEVANCE_SOURCE), 0.0);
+        assert_exact!(filename_relevance("zzz_qqq_wwww", RELEVANCE_SOURCE), 0.0);
     }
 
     #[test]
@@ -349,12 +345,12 @@ mod tests {
 
     #[test]
     fn no_source_returns_the_sentinel_not_zero() {
-        assert_eq!(filename_relevance("scott_adams_essays", ""), -1.0);
+        assert_exact!(filename_relevance("scott_adams_essays", ""), -1.0);
     }
 
     #[test]
     fn stopword_only_source_returns_the_sentinel() {
-        assert_eq!(
+        assert_exact!(
             filename_relevance("scott_adams_essays", "a to the of"),
             -1.0
         );

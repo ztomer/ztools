@@ -1,5 +1,6 @@
 //! Eval discrimination: classifies tasks as ranking or gate.
 
+use crate::units::count;
 /// Minimal result record used by the discrimination module.
 /// This mirrors the fields needed from the Python `references/eval/discrimination.py`:
 /// `task` (task name) and `quality_score` (score 0-100).
@@ -46,27 +47,19 @@ pub fn ranking_tasks(tasks: &[String]) -> Vec<String> {
 ///
 /// A `HashSet` is not available: `f64` is not `Hash`, for the same reason
 /// `float_cmp` fires below.
-#[expect(
-    clippy::float_cmp,
-    reason = "exact inequality is the QUESTION here, not an approximation of \
-              it. This counts how many different score values a set of models \
-              produced, and a tolerance would merge two genuinely different \
-              scores that happen to be close -- which is precisely the \
-              collapse the discrimination metric exists to detect."
-)]
 fn count_distinct(values: &[f64]) -> usize {
     if values.is_empty() {
         return 0;
     }
     let mut sorted = values.to_vec();
     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    let mut count = 1usize;
-    for i in 1..sorted.len() {
-        if sorted[i] != sorted[i - 1] {
-            count += 1;
-        }
-    }
-    count
+    // Exact inequality IS the question: two genuinely different scores that
+    // happen to be close are two values, which is the collapse this metric
+    // exists to detect. `partial_cmp` says so where `!=` reads as an accident.
+    1 + sorted
+        .windows(2)
+        .filter(|w| w[0].partial_cmp(&w[1]) != Some(std::cmp::Ordering::Equal))
+        .count()
 }
 
 /// Every model's score for each task, from a set of per-model records.
@@ -168,17 +161,13 @@ pub fn disagreements(all_results: &[EvalResult]) -> Vec<String> {
 /// what `--task image_real` produces. Returning 0 there would report a model
 /// that scored 100 on the one task it was asked for as having failed.
 #[must_use]
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "counts and i64 scores averaged in f64. Both are bounded by the number of tasks in one eval run -- tens -- so the conversions are exact"
-)]
 pub fn ranking_mean(all_results: &[EvalResult]) -> f64 {
     let scored_tasks: Vec<&EvalResult> = all_results.iter().filter(|r| !is_gate(&r.task)).collect();
 
     if scored_tasks.is_empty() {
         // Fallback: mean over all tasks
         let all_scores: f64 = all_results.iter().map(|r| f64::from(r.quality_score)).sum();
-        let count = all_results.len() as f64;
+        let count = count(all_results.len());
         if count == 0.0 {
             return 0.0;
         }
@@ -188,13 +177,12 @@ pub fn ranking_mean(all_results: &[EvalResult]) -> f64 {
             .iter()
             .map(|r| f64::from(r.quality_score))
             .sum();
-        sum / scored_tasks.len() as f64
+        sum / count(scored_tasks.len())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
 
     use super::*;
 
@@ -330,7 +318,7 @@ mod tests {
             },
         ];
         let mean = ranking_mean(&results);
-        assert_eq!(mean, 90.0);
+        assert_exact!(mean, 90.0);
     }
 
     #[test]
@@ -346,6 +334,6 @@ mod tests {
             },
         ];
         let mean = ranking_mean(&results);
-        assert_eq!(mean, 90.0);
+        assert_exact!(mean, 90.0);
     }
 }

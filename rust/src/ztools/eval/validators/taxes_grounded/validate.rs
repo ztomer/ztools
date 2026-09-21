@@ -3,6 +3,7 @@
 //! Split out of `taxes_grounded.rs` for the 500-line production cap. These are the
 //! entry points; the arithmetic lives in `amounts`, the fixtures in `grounding`.
 
+use crate::units::whole_i64;
 use crate::ztools::eval::scoring_math::{ratio, rounded};
 use serde_json::Value;
 use std::collections::HashSet;
@@ -12,16 +13,6 @@ use super::amounts::{
 };
 use super::grounding::{load_grounding, parse_output};
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "one validator, as `validate_detailed_json`: a sequence of \
-              independent checks against one answer, each contributing to a \
-              running score and a running note"
-)]
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "a partial-credit score. `round()` makes it whole and `.max(0.0)` puts it above zero before it narrows; the expression's own factor caps it at 30"
-)]
 pub fn validate_taxes_yoy_narrative(
     output: &Value,
     explicit_grounding: Option<&Value>,
@@ -74,21 +65,7 @@ pub fn validate_taxes_yoy_narrative(
     }
     bits.push(format!("schema={schema}/20"));
 
-    let attribution = grounding.get("attribution").and_then(|v| v.as_object());
-    let mut effects = Vec::new();
-    if let Some(attr) = attribution {
-        if let Some(drivers) = attr.get("drivers").and_then(|v| v.as_array()) {
-            for d in drivers {
-                if let Some(c) = d.get("tax_effect_cad").and_then(cents) {
-                    effects.push(c);
-                }
-            }
-        }
-        if let Some(r) = attr.get("rules_effect_cad").and_then(cents) {
-            effects.push(r);
-        }
-    }
-    let traceable = traceable_sums(&effects);
+    let traceable = traceable_sums(&attribution_effects(grounding));
 
     let reported: Vec<f64> = well_formed
         .iter()
@@ -111,34 +88,8 @@ pub fn validate_taxes_yoy_narrative(
         0
     };
 
-    let total_delta = grounding.get("total_tax_delta").and_then(cents);
-    let tol_abs = grounding
-        .get("tolerance_abs_cad")
-        .and_then(cents)
-        .unwrap_or(0.0);
-    let tol_pct = grounding
-        .get("tolerance_pct")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or(0.0);
-
-    let recon_score = if let (false, Some(target)) = (reported.is_empty(), total_delta) {
-        let tolerance = tol_abs.max((target * tol_pct).abs());
-        let rep_sum: f64 = reported.iter().sum();
-        let error = (rep_sum - target).abs();
-        let s = if error <= tolerance {
-            30
-        } else {
-            let span = target.abs().max(1.0);
-            (30.0 * (1.0 - (error - tolerance) / span)).round().max(0.0) as i64
-        };
-        bits.push(format!(
-            "reconcile err={error:.2} tol={tolerance:.2} ({s}/30)"
-        ));
-        s
-    } else {
-        bits.push("reconcile=n/a (0/30)".to_string());
-        0
-    };
+    let (recon_score, recon_note) = reconcile_points(grounding, &reported);
+    bits.push(recon_note);
 
     let known = known_set(
         grounding
@@ -151,6 +102,57 @@ pub fn validate_taxes_yoy_narrative(
 
     let total = schema + trace_score + recon_score + prose_score;
     (total.min(MAX_SCORE), bits.join("  "))
+}
+
+/// The attribution's tax effects in cents: one per driver, plus the rules
+/// effect -- the amounts a reported delta may trace to.
+fn attribution_effects(grounding: &Value) -> Vec<f64> {
+    let mut effects = Vec::new();
+    if let Some(attr) = grounding.get("attribution").and_then(|v| v.as_object()) {
+        if let Some(drivers) = attr.get("drivers").and_then(|v| v.as_array()) {
+            for d in drivers {
+                if let Some(c) = d.get("tax_effect_cad").and_then(cents) {
+                    effects.push(c);
+                }
+            }
+        }
+        if let Some(r) = attr.get("rules_effect_cad").and_then(cents) {
+            effects.push(r);
+        }
+    }
+    effects
+}
+
+/// Up to 30 points for the reported deltas summing to the grounding's total
+/// within tolerance (absolute or a percentage of the target, whichever is
+/// wider), falling off linearly with the excess error. Returns the points
+/// and the ledger note.
+fn reconcile_points(grounding: &Value, reported: &[f64]) -> (i64, String) {
+    let total_delta = grounding.get("total_tax_delta").and_then(cents);
+    let (Some(target), false) = (total_delta, reported.is_empty()) else {
+        return (0, "reconcile=n/a (0/30)".to_string());
+    };
+    let tol_abs = grounding
+        .get("tolerance_abs_cad")
+        .and_then(cents)
+        .unwrap_or(0.0);
+    let tol_pct = grounding
+        .get("tolerance_pct")
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(0.0);
+    let tolerance = tol_abs.max((target * tol_pct).abs());
+    let rep_sum: f64 = reported.iter().sum();
+    let error = (rep_sum - target).abs();
+    let s = if error <= tolerance {
+        30
+    } else {
+        let span = target.abs().max(1.0);
+        whole_i64((30.0 * (1.0 - (error - tolerance) / span)).round().max(0.0))
+    };
+    (
+        s,
+        format!("reconcile err={error:.2} tol={tolerance:.2} ({s}/30)"),
+    )
 }
 
 #[must_use]

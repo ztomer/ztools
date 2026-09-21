@@ -8,6 +8,10 @@
 //! regenerate instead. Parity enforced by
 //! `references/tests/test_rust_prompt_parity.py`.
 
+/// The slot in [`RENAME_PROMPT`] that the input text replaces. A template
+/// token, not a `format!` argument: the prompt is filled by `str::replace`.
+pub const RENAME_TEXT_SLOT: &str = "{text}";
+
 pub const RENAME_PROMPT: &str = r"Give a short 2-4 word summary of: {text}
 
 Output ONLY the filename string, lowercase with underscores. Max 50 characters.";

@@ -17,6 +17,7 @@
 //! memory it does not have -- so it is disqualifying on its own, and headroom
 //! is measured against what is RECLAIMABLE.
 
+use crate::units::{unsigned, whole_u64};
 use crate::ztools::eval::model_resolve::model_config_path;
 use crate::ztools::eval::signals::{memory_pressure, MAX_CLEAN_COMPRESSOR_GB, MAX_CLEAN_SWAP_GB};
 
@@ -66,15 +67,9 @@ pub fn model_disk_bytes(model: &str) -> Option<u64> {
 /// and a KV cache, so the honest direction for a memory estimate is generous.
 /// Falls back to the name only for models with nothing on disk to measure.
 #[must_use]
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss,
-    reason = "bytes on disk converted to whole gigabytes. `ceil()` makes it whole and `.max(1.0)` puts it above zero before it narrows; a model file is at most terabytes"
-)]
 pub fn estimate_model_memory_gb(model: &str) -> u64 {
     if let Some(disk) = model_disk_bytes(model) {
-        return ((disk as f64) / BYTES_PER_GB).ceil().max(1.0) as u64;
+        return whole_u64((unsigned(disk) / BYTES_PER_GB).ceil().max(1.0));
     }
     // The parameter count in the name, e.g. "ornith-1.0-35b-mxfp8" -> 35.
     let lower = model.to_lowercase();
@@ -158,11 +153,6 @@ pub fn is_thrashing() -> Option<bool> {
 /// Both `available_gb` and `thrashing` are injectable so every branch is
 /// testable without a 28.8GB model or a deliberately wrecked machine.
 #[must_use]
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "a configured memory fraction rendered as a percentage. The constant is 0.0..=1.0, so the value is at most 100"
-)]
 pub fn oversize_refusal(
     model_gb: f64,
     available_gb: Option<f64>,
@@ -205,7 +195,7 @@ pub fn oversize_refusal(
     if model_gb <= available_gb * OVERSIZE_MEMORY_FRACTION {
         return String::new();
     }
-    let limit_pct = (OVERSIZE_MEMORY_FRACTION * 100.0).round() as u64;
+    let limit_pct = whole_u64((OVERSIZE_MEMORY_FRACTION * 100.0).round());
     format!(
         "needs ~{model_gb:.0}GB against {available_gb:.0}GB reclaimable \
          (limit {limit_pct}%). A timing taken here would \

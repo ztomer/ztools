@@ -11,15 +11,12 @@ use anyhow::Result;
 
 use super::resolve_models;
 use crate::config::ZtoolsConfig;
+use crate::units::unsigned;
 
 /// `--capabilities`: probe what each servable model IS -- family (recorded
 /// architecture first, name match as fallback), generative verdict, on-disk
 /// weight footprint, and viability (packaging defects + learned decode rate)
 /// -- WITHOUT running a single task. Port of `ev --capabilities`.
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "bytes rendered as gigabytes to one decimal place -- a display conversion, where the precision shown is far coarser than the loss"
-)]
 pub(super) fn print_capabilities(url: &str, model_selector: &str) -> Result<()> {
     let models = resolve_models(url, model_selector, &ZtoolsConfig::default())?;
     if models.is_empty() {
@@ -31,7 +28,7 @@ pub(super) fn print_capabilities(url: &str, model_selector: &str) -> Result<()> 
         let family = recorded_family_or_name(m);
         let disk_gb = crate::ztools::eval::model_disk_bytes(m).map_or_else(
             || "-".to_string(),
-            |b| format!("{:.1}", b as f64 / 1024.0 / 1024.0 / 1024.0),
+            |b| format!("{:.1}", unsigned(b) / 1024.0 / 1024.0 / 1024.0),
         );
         let gen = if crate::ztools::eval::is_generative_model(m) {
             "yes"

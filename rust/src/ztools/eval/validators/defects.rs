@@ -2,6 +2,7 @@
 //!
 //! Port of `lib/validators/report_defects.py`.
 
+use crate::units::count;
 use crate::ztools::eval::scoring_math::ratio;
 use regex::Regex;
 use serde_json::Value;
@@ -43,10 +44,6 @@ pub fn generic_location_ratio(items: &[Value]) -> f64 {
 }
 
 #[must_use]
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "a fraction of columns that never vary, over the columns in one table. Both are counts of fields in a single answer"
-)]
 pub fn constant_column_ratio(items: &[Value]) -> (f64, Vec<String>) {
     let rows: Vec<&serde_json::Map<String, Value>> =
         items.iter().filter_map(|i| i.as_object()).collect();
@@ -82,11 +79,13 @@ pub fn constant_column_ratio(items: &[Value]) -> (f64, Vec<String>) {
         }
     }
     (
-        constant.len() as f64
-            / first
-                .keys()
-                .filter(|k| !exempt.contains(&k.as_str()))
-                .count() as f64,
+        count(constant.len())
+            / count(
+                first
+                    .keys()
+                    .filter(|k| !exempt.contains(&k.as_str()))
+                    .count(),
+            ),
         constant,
     )
 }
@@ -133,10 +132,6 @@ fn acronym_of(name: &str) -> String {
 }
 
 #[must_use]
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "a fraction of near-duplicate names over the names in one answer -- a count of items the model produced, not of anything unbounded"
-)]
 pub fn near_duplicate_ratio(items: &[Value]) -> f64 {
     let names: Vec<String> = items
         .iter()
@@ -189,5 +184,5 @@ pub fn near_duplicate_ratio(items: &[Value]) -> f64 {
             kept.push((tokens, acronym));
         }
     }
-    f64::from(dupes) / names.len() as f64
+    f64::from(dupes) / count(names.len())
 }

@@ -42,10 +42,6 @@ fn load_rubric(task_name: &str) -> Value {
 /// (score 0-40, hits). Signals are matched case-insensitively as substrings.
 /// An empty expected list scores full marks -- nothing was promised, so
 /// nothing can be missing.
-#[expect(
-    clippy::cast_possible_wrap,
-    reason = "a hit count from one answer multiplied by a rubric weight. The match arm has already bounded the count at 1"
-)]
 fn grounding_score(output: &str, expected_signals: &[String]) -> (i64, usize) {
     if expected_signals.is_empty() {
         return (40, 0);
@@ -56,7 +52,7 @@ fn grounding_score(output: &str, expected_signals: &[String]) -> (i64, usize) {
         .filter(|sig| out_lower.contains(&sig.to_lowercase()))
         .count();
     let score = match hits {
-        0..=1 => (hits as i64) * 8,
+        0..=1 => i64::try_from(hits).unwrap_or(i64::MAX) * 8,
         2 => 16,
         3 => 24,
         4 => 32,

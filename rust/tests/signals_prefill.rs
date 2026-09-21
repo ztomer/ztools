@@ -6,8 +6,6 @@
 //! (nonce-first filler, `max_tokens=1` on the timed call) is verified against
 //! what actually went over the wire.
 
-#![expect(clippy::float_cmp, reason = "exact; see eval::scoring_math")]
-
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -138,11 +136,20 @@ fn capability_samples_migrate_scalar_once_then_outvote_it() {
     // ...and re-seeding is a no-op once real samples exist.
     ztools::eval::samples::migrate_sample_history(&mut history, Some(99.0));
     assert_eq!(history.len(), 1);
-    assert_eq!(history[0].v, 33.0);
+    assert_eq!(
+        history[0].v.partial_cmp(&33.0),
+        Some(std::cmp::Ordering::Equal),
+        "exact: {}",
+        history[0].v
+    );
     // A real CLEAN sample outvotes the legacy scalar in estimate_from.
     ztools::eval::samples::add_sample(&mut history, 100.0, true);
     let est = ztools::eval::samples::estimate_from(&history);
-    assert_eq!(est, 100.0, "clean median of [100] beats unclean [33]");
+    assert_eq!(
+        est.partial_cmp(&100.0),
+        Some(std::cmp::Ordering::Equal),
+        "clean median of [100] beats unclean [33], got {est}"
+    );
 }
 
 #[test]
@@ -196,12 +203,6 @@ fn serve_recording() -> (
     (port, handle, recorded)
 }
 
-#[expect(
-    clippy::significant_drop_tightening,
-    reason = "the guard is held across every assertion ON PURPOSE, as the \
-              comment in the body says: a second `take_lock` while this one is \
-              alive deadlocks the non-reentrant mutex"
-)]
 #[test]
 #[serial]
 fn prefill_probe_sends_nonce_led_filler_and_records_capabilities() {
@@ -215,9 +216,9 @@ fn prefill_probe_sends_nonce_led_filler_and_records_capabilities() {
     assert_eq!(rate, None, "a microseconds answer is not a measurement");
 
     // Three calls were made: LOAD(max_tokens=1), DECODE(max_tokens=64), PROBE(max_tokens=1).
-    // ONE lock acquisition for all body assertions -- a second take_lock while
-    // the first guard is alive deadlocks the non-reentrant mutex.
-    let bodies = take_lock(&recorded);
+    // ONE lock acquisition, copying the bodies out: a second take_lock while
+    // a guard is alive deadlocks the non-reentrant mutex.
+    let bodies: Vec<String> = take_lock(&recorded).clone();
     assert_eq!(bodies.len(), 3, "{}", bodies.len());
     for (i, body) in bodies.iter().enumerate() {
         if i == 1 {

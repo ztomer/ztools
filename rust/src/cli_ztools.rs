@@ -7,9 +7,10 @@
 
 use anyhow::Result;
 use chrono::Local;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::config::ZtoolsConfig;
+use crate::units::unsigned;
 
 /// Whether a task name is selected by a `--task` filter.
 ///
@@ -30,24 +31,10 @@ fn task_matches_filter(task_name: &str, filter: &str) -> bool {
         .any(|n| task_name == n || task_name.ends_with(n))
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "a CLI command end to end: resolve dates, fetch, plan, \
-              enforce, render, write. Every step feeds the next and each one's \
-              failure decides what the following one does, so extracting them \
-              means threading that state through six signatures to make one \
-              linear story look like six"
-)]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "a CLI entry point. clap hands these over by value at the one \
-              dispatch site and never uses them again; borrowing would put an \
-              `&` on the dispatch for no owner to keep"
-)]
 pub(crate) fn weekend_plan(
     config: &ZtoolsConfig,
-    location: String,
-    ages: String,
+    location: &str,
+    ages: &str,
     md_out: Option<PathBuf>,
     fetch_latest: bool,
     last_updated: bool,
@@ -80,92 +67,33 @@ pub(crate) fn weekend_plan(
         exclusions.join(", ")
     };
     let ctx = crate::ztools::weekend::PlanContext {
-        location: location.clone(),
-        ages: ages.clone(),
+        location: location.to_string(),
+        ages: ages.to_string(),
         date_range: dates_str.clone(),
         year,
         exclusions: exclusions_str,
     };
 
     let (transient, corpus, mut health) = crate::ztools::weekend::fetch_duckduckgo_events(
-        &location,
+        location,
         friday,
         sunday,
         &weather_str,
         &ctx,
         config,
     );
-    // Provenance FIRST: a row that traces to nothing we fetched is invention,
-    // and there is no point judging an invented row's dates or weather label.
-    // Each gate's drop count goes into the plan's own ledger line.
-    health.provenance.extracted = transient.len();
-    let (transient, provenance_notes) =
-        crate::ztools::weekend::drop_unsourced_rows(transient, &corpus);
-    health.provenance.unsourced = health.provenance.extracted - transient.len();
-    for note in &provenance_notes {
-        println!("→ {note}");
-    }
-    let exclusions = crate::ztools::weekend::load_exclusions(config);
-    let before = transient.len();
-    let (transient, drop_notes) =
-        crate::ztools::weekend::drop_excluded_places(transient, &exclusions);
-    health.provenance.excluded = before - transient.len();
-    for note in &drop_notes {
-        println!("→ {note}");
-    }
-    let (_, fixed) = crate::ztools::weekend::load_cached_activities(config);
+    let (mut fixed, mut transient) =
+        gate_rows(transient, &corpus, config, friday, sunday, &mut health);
+    report_constant_columns(&fixed, &transient, ages);
 
-    // C3: a dated transient event outside the plan's weekend is dropped; then
-    // each surviving row's `day` is reconciled with its own dates.
-    let before = transient.len();
-    let (transient, window_notes) =
-        crate::ztools::weekend::drop_events_outside_window(transient, friday, sunday);
-    health.provenance.outside_window = before - transient.len();
-    let (transient, day_notes) =
-        crate::ztools::weekend::reconcile_day_with_dates(transient, friday, sunday);
-    for note in window_notes.iter().chain(day_notes.iter()) {
-        println!("→ {note}");
-    }
-
-    let (mut fixed, weather_notes) = crate::ztools::weekend::correct_weather_labels(fixed);
-    let (mut transient, weather_notes_t) =
-        crate::ztools::weekend::correct_weather_labels(transient);
-    for note in weather_notes.iter().chain(weather_notes_t.iter()) {
-        println!("→ {note}");
-    }
-
-    // Constant-column check runs LAST, over what survived; it reports and
-    // changes nothing. The configured family range is the one suspect that is
-    // not a literal (C4).
-    let mut suspects: std::collections::HashMap<String, Vec<String>> =
-        std::collections::HashMap::new();
-    suspects.insert("Target Age(s)".to_string(), vec![ages.clone()]);
-    for (label, values) in crate::ztools::weekend::PROMPT_CONSTANTS {
-        suspects.insert(
-            label.to_string(),
-            values
-                .iter()
-                .map(std::string::ToString::to_string)
-                .collect(),
-        );
-    }
-    for note in crate::ztools::weekend::flag_constant_columns(&fixed, &suspects)
-        .into_iter()
-        .chain(crate::ztools::weekend::flag_constant_columns(
-            &transient, &suspects,
-        ))
-    {
-        println!("→ {note}");
-    }
-
-    crate::ztools::weekend::apply_scores(&mut fixed, &weather_str, &ages);
-    crate::ztools::weekend::apply_scores(&mut transient, &weather_str, &ages);
+    crate::ztools::weekend::apply_scores(&mut fixed, &weather_str, ages);
+    crate::ztools::weekend::apply_scores(&mut transient, &weather_str, ages);
 
     let md_str = crate::ztools::weekend::format_weekend_plan(
         &transient,
         &fixed,
-        &location,
-        &ages,
+        location,
+        ages,
         &dates_str,
         &weather_str,
         &health,
@@ -195,16 +123,94 @@ pub(crate) fn weekend_plan(
     Ok(())
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "a CLI entry point. clap hands these over by value at the one \
-              dispatch site and never uses them again; borrowing would put an \
-              `&` on the dispatch for no owner to keep"
-)]
-pub(crate) fn image_renamer(config: &ZtoolsConfig, dir: PathBuf, apply: bool) -> Result<()> {
+/// The row gates, in order, each one's drop count going into the plan's own
+/// ledger line: provenance first (a row that traces to nothing we fetched is
+/// invention, and there is no point judging an invented row's dates or
+/// weather label), then the exclusion list, then C3 (a dated transient event
+/// outside the plan's weekend is dropped and each survivor's `day` reconciled
+/// with its own dates), then the weather labels on both lists.
+///
+/// Returns `(fixed, transient)`.
+fn gate_rows(
+    transient: Vec<crate::ztools::weekend::WeekendEvent>,
+    corpus: &str,
+    config: &ZtoolsConfig,
+    friday: chrono::NaiveDate,
+    sunday: chrono::NaiveDate,
+    health: &mut crate::ztools::weekend::PlanHealth,
+) -> (
+    Vec<crate::ztools::weekend::WeekendEvent>,
+    Vec<crate::ztools::weekend::WeekendEvent>,
+) {
+    health.provenance.extracted = transient.len();
+    let (transient, provenance_notes) =
+        crate::ztools::weekend::drop_unsourced_rows(transient, corpus);
+    health.provenance.unsourced = health.provenance.extracted - transient.len();
+    for note in &provenance_notes {
+        println!("→ {note}");
+    }
+    let exclusions = crate::ztools::weekend::load_exclusions(config);
+    let before = transient.len();
+    let (transient, drop_notes) =
+        crate::ztools::weekend::drop_excluded_places(transient, &exclusions);
+    health.provenance.excluded = before - transient.len();
+    for note in &drop_notes {
+        println!("→ {note}");
+    }
+    let (_, fixed) = crate::ztools::weekend::load_cached_activities(config);
+
+    let before = transient.len();
+    let (transient, window_notes) =
+        crate::ztools::weekend::drop_events_outside_window(transient, friday, sunday);
+    health.provenance.outside_window = before - transient.len();
+    let (transient, day_notes) =
+        crate::ztools::weekend::reconcile_day_with_dates(transient, friday, sunday);
+    for note in window_notes.iter().chain(day_notes.iter()) {
+        println!("→ {note}");
+    }
+
+    let (fixed, weather_notes) = crate::ztools::weekend::correct_weather_labels(fixed);
+    let (transient, weather_notes_t) = crate::ztools::weekend::correct_weather_labels(transient);
+    for note in weather_notes.iter().chain(weather_notes_t.iter()) {
+        println!("→ {note}");
+    }
+    (fixed, transient)
+}
+
+/// The constant-column check runs LAST, over what survived; it reports and
+/// changes nothing. The configured family range is the one suspect that is
+/// not a literal (C4).
+fn report_constant_columns(
+    fixed: &[crate::ztools::weekend::WeekendEvent],
+    transient: &[crate::ztools::weekend::WeekendEvent],
+    ages: &str,
+) {
+    let mut suspects: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    suspects.insert("Target Age(s)".to_string(), vec![ages.to_string()]);
+    for (label, values) in crate::ztools::weekend::PROMPT_CONSTANTS {
+        suspects.insert(
+            label.to_string(),
+            values
+                .iter()
+                .map(std::string::ToString::to_string)
+                .collect(),
+        );
+    }
+    for note in crate::ztools::weekend::flag_constant_columns(fixed, &suspects)
+        .into_iter()
+        .chain(crate::ztools::weekend::flag_constant_columns(
+            transient, &suspects,
+        ))
+    {
+        println!("→ {note}");
+    }
+}
+
+pub(crate) fn image_renamer(config: &ZtoolsConfig, dir: &Path, apply: bool) -> Result<()> {
     let max_len = config.max_image_filename_len;
     let candidates =
-        crate::ztools::image_renamer::scan_and_rename(&dir, "*", apply, max_len, config)?;
+        crate::ztools::image_renamer::scan_and_rename(dir, "*", apply, max_len, config)?;
     let mode = if apply { "APPLIED" } else { "DRY-RUN" };
     println!(
         "image-renamer ({mode}): {} file(s) processed",
@@ -251,27 +257,7 @@ pub(crate) struct EvalOptions<'a> {
     pub thinking: bool,
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "a CLI command end to end: resolve the model, size it \
-              against the machine, run the suite, then render or serialise. The \
-              length is the number of steps, not complexity in any of them"
-)]
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "an estimated model size in whole gigabytes, rendered for display"
-)]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "a CLI entry point. clap hands these over by value at the one \
-              dispatch site and never uses them again; borrowing would put an \
-              `&` on the dispatch for no owner to keep"
-)]
-pub(crate) fn model_eval(
-    config: &ZtoolsConfig,
-    model: String,
-    opts: &EvalOptions<'_>,
-) -> Result<()> {
+pub(crate) fn model_eval(config: &ZtoolsConfig, model: &str, opts: &EvalOptions<'_>) -> Result<()> {
     let EvalOptions {
         suite,
         tasks_dir,
@@ -282,22 +268,10 @@ pub(crate) fn model_eval(
     } = *opts;
     let url = &config.osaurus_url;
     if capabilities {
-        return print_capabilities(url, &model);
+        return print_capabilities(url, model);
     }
     if suite == "full" {
-        let default_tasks_dir = config.eval_tasks_dir();
-        let tasks_dir = tasks_dir.or(default_tasks_dir.as_deref());
-        let mut tasks =
-            crate::ztools::eval::load_all_eval_tasks(&config.eval_roster_inputs()?, tasks_dir)?;
-        if let Some(filter) = task_filter {
-            tasks.retain(|t| task_matches_filter(&t.name, filter));
-            if tasks.is_empty() {
-                anyhow::bail!("--task filter {filter} matched no loaded tasks");
-            }
-        }
-        if tasks.is_empty() {
-            anyhow::bail!("no eval tasks found (pass --tasks-dir pointing at task snapshots)");
-        }
+        let tasks = load_suite_tasks(config, tasks_dir, task_filter)?;
         let (host, port) = crate::ztools::model_eval::parse_osaurus_url(url);
         // The GPU and the single healthy server are held under a machine-wide
         // lock: several sessions measure against this box, and a second
@@ -319,7 +293,7 @@ pub(crate) fn model_eval(
         let started_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0.0, |d| d.as_secs_f64());
-        for model_name in resolve_models(url, &model, config)? {
+        for model_name in resolve_models(url, model, config)? {
             // A drained run stops at the model boundary too: the next model
             // is not started once the operator has asked to stop.
             if crate::ztools::eval::drain::requested() {
@@ -329,7 +303,7 @@ pub(crate) fn model_eval(
             // taken under memory pressure describes the pressure, and it
             // hardens into config exactly like a real number. Same gate as
             // the Python eval (eval/cli_runtime.py::oversize_refusal).
-            let model_gb = crate::ztools::eval::estimate_model_memory_gb(&model_name) as f64;
+            let model_gb = unsigned(crate::ztools::eval::estimate_model_memory_gb(&model_name));
             let refusal = crate::ztools::eval::oversize_refusal(model_gb, None, false, None);
             if !refusal.is_empty() {
                 eprintln!("✗ Skipping {model_name}: {refusal}");
@@ -376,68 +350,9 @@ pub(crate) fn model_eval(
                 eprintln!("⚠ could not write eval history: {e}");
             }
             runs.push(run_record);
-            if json_output {
-                use serde::Serialize;
-                #[derive(Serialize)]
-                struct OutcomeRow<'a> {
-                    task: &'a str,
-                    score: u8,
-                    status: &'a str,
-                    time_secs: f64,
-                    error: Option<&'a String>,
-                    failure_category: &'a str,
-                    #[serde(skip_serializing_if = "Option::is_none")]
-                    substituted_to: Option<&'a String>,
-                    #[serde(skip_serializing_if = "Option::is_none")]
-                    substitution_reason: Option<&'a String>,
-                }
-                let rows: Vec<OutcomeRow> = outcomes
-                    .iter()
-                    .map(|o| OutcomeRow {
-                        task: &o.task,
-                        score: o.score,
-                        status: o.status.as_str(),
-                        time_secs: o.time_secs,
-                        error: o.error.as_ref(),
-                        failure_category: o.failure_category.as_str(),
-                        substituted_to: o.substituted_to.as_ref(),
-                        substitution_reason: o.substitution_reason.as_ref(),
-                    })
-                    .collect();
-                println!("{}", serde_json::to_string_pretty(&rows)?);
-            } else {
-                for note in outcomes
-                    .iter()
-                    .filter_map(|o| o.substitution_reason.as_deref())
-                {
-                    eprintln!("⚠ {note}");
-                }
-                print!(
-                    "{}",
-                    crate::ztools::model_eval::render_task_outcomes(&outcomes)
-                );
-            }
+            print_outcomes(&outcomes, json_output)?;
         }
-        // Persistence + reporting, matching the Python evaluator's exports:
-        // per-(model, task) CSV sheet and the historical trends table.
-        if !runs.is_empty() {
-            let csv_path = crate::ztools::eval::default_eval_dir().join("eval_results.csv");
-            match crate::ztools::eval::export_csv(&runs, &csv_path) {
-                Ok(()) => println!("→ Exported to {}", csv_path.display()),
-                Err(e) => eprintln!("⚠ CSV export failed: {e}"),
-            }
-            for line in crate::ztools::eval::render_historical_trends(None) {
-                println!("{line}");
-            }
-            for line in crate::ztools::eval::render_diff_from_last_run(&runs, None, started_at) {
-                println!("{line}");
-            }
-            for line in crate::ztools::eval::render_verbosity(
-                &crate::ztools::eval::compute_verbosity(&runs),
-            ) {
-                println!("{line}");
-            }
-        }
+        report_suite(&runs, started_at);
         // Recorded and reported; now say the run was cut, with the exit code
         // a sweep files as FAILED so --resume runs this model again.
         if crate::ztools::eval::drain::requested() {
@@ -451,7 +366,7 @@ pub(crate) fn model_eval(
     let results = if model == "all" {
         crate::ztools::model_eval::eval_all_models(url, config)?
     } else {
-        crate::ztools::model_eval::eval_model(url, &model, config)?
+        crate::ztools::model_eval::eval_model(url, model, config)?
     };
     println!(
         "{}",
@@ -462,6 +377,100 @@ pub(crate) fn model_eval(
 
 /// "all" expands to every servable model on the server; any other value is
 /// taken literally.
+/// The full suite's tasks: the roster's inputs from `--tasks-dir` (or the
+/// configured directory), narrowed by `--task`.
+fn load_suite_tasks(
+    config: &ZtoolsConfig,
+    tasks_dir: Option<&Path>,
+    task_filter: Option<&str>,
+) -> Result<Vec<crate::ztools::eval::EvalTask>> {
+    let default_tasks_dir = config.eval_tasks_dir();
+    let tasks_dir = tasks_dir.or(default_tasks_dir.as_deref());
+    let mut tasks =
+        crate::ztools::eval::load_all_eval_tasks(&config.eval_roster_inputs()?, tasks_dir)?;
+    if let Some(filter) = task_filter {
+        tasks.retain(|t| task_matches_filter(&t.name, filter));
+        if tasks.is_empty() {
+            anyhow::bail!("--task filter {filter} matched no loaded tasks");
+        }
+    }
+    if tasks.is_empty() {
+        anyhow::bail!("no eval tasks found (pass --tasks-dir pointing at task snapshots)");
+    }
+    Ok(tasks)
+}
+
+/// One model's outcomes: a JSON array under `--json-output` (stdout carries
+/// nothing else), otherwise the rendered table with substitutions noted.
+fn print_outcomes(outcomes: &[crate::ztools::eval::TaskOutcome], json_output: bool) -> Result<()> {
+    if json_output {
+        use serde::Serialize;
+        #[derive(Serialize)]
+        struct OutcomeRow<'a> {
+            task: &'a str,
+            score: u8,
+            status: &'a str,
+            time_secs: f64,
+            error: Option<&'a String>,
+            failure_category: &'a str,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            substituted_to: Option<&'a String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            substitution_reason: Option<&'a String>,
+        }
+        let rows: Vec<OutcomeRow> = outcomes
+            .iter()
+            .map(|o| OutcomeRow {
+                task: &o.task,
+                score: o.score,
+                status: o.status.as_str(),
+                time_secs: o.time_secs,
+                error: o.error.as_ref(),
+                failure_category: o.failure_category.as_str(),
+                substituted_to: o.substituted_to.as_ref(),
+                substitution_reason: o.substitution_reason.as_ref(),
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&rows)?);
+    } else {
+        for note in outcomes
+            .iter()
+            .filter_map(|o| o.substitution_reason.as_deref())
+        {
+            eprintln!("⚠ {note}");
+        }
+        print!(
+            "{}",
+            crate::ztools::model_eval::render_task_outcomes(outcomes)
+        );
+    }
+    Ok(())
+}
+
+/// Persistence + reporting, matching the Python evaluator's exports: the
+/// per-(model, task) CSV sheet, the historical trends table, the delta from
+/// the last run and the verbosity table. Nothing to do for an empty sweep.
+fn report_suite(runs: &[crate::ztools::eval::ModelRun], started_at: f64) {
+    if runs.is_empty() {
+        return;
+    }
+    let csv_path = crate::ztools::eval::default_eval_dir().join("eval_results.csv");
+    match crate::ztools::eval::export_csv(runs, &csv_path) {
+        Ok(()) => println!("→ Exported to {}", csv_path.display()),
+        Err(e) => eprintln!("⚠ CSV export failed: {e}"),
+    }
+    for line in crate::ztools::eval::render_historical_trends(None) {
+        println!("{line}");
+    }
+    for line in crate::ztools::eval::render_diff_from_last_run(runs, None, started_at) {
+        println!("{line}");
+    }
+    for line in crate::ztools::eval::render_verbosity(&crate::ztools::eval::compute_verbosity(runs))
+    {
+        println!("{line}");
+    }
+}
+
 fn resolve_models(url: &str, model: &str, config: &ZtoolsConfig) -> Result<Vec<String>> {
     if model != "all" {
         return Ok(vec![model.to_string()]);

@@ -1,3 +1,4 @@
+use crate::units::count;
 use crate::ztools::eval::scoring_math::ratio;
 use anyhow::Result;
 use reqwest::blocking::Client;
@@ -187,34 +188,22 @@ pub fn eval_all_models(
 
 /// Split an osaurus base URL ("<http://127.0.0.1:1337>") into host and port.
 #[must_use]
-#[expect(
-    clippy::option_if_let_else,
-    reason = "a host:port split where the `Some` arm parses the port and \
-              falls back again on failure. Two levels of fallback read as two \
-              levels here and as one nested closure otherwise"
-)]
 pub fn parse_osaurus_url(url: &str) -> (String, u16) {
     let stripped = url
         .strip_prefix("http://")
         .or_else(|| url.strip_prefix("https://"))
         .unwrap_or(url);
     let trimmed = stripped.trim_end_matches('/');
-    match trimmed.rsplit_once(':') {
-        Some((host, port)) => match port.parse() {
-            Ok(p) => (host.to_string(), p),
-            Err(_) => (trimmed.to_string(), 1337),
-        },
-        None => (trimmed.to_string(), 1337),
-    }
+    let whole = || (trimmed.to_string(), 1337);
+    trimmed.rsplit_once(':').map_or_else(whole, |(host, port)| {
+        port.parse()
+            .map_or_else(|_| whole(), |p| (host.to_string(), p))
+    })
 }
 
 /// Render full-suite [`TaskOutcome`]s as a markdown table, worst first: the
 /// failures are what a reader scans for, so they lead.
 #[must_use]
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "a mean over per-task scores, each 0..=100, divided by the number of tasks in the run"
-)]
 pub fn render_task_outcomes(outcomes: &[crate::ztools::eval::TaskOutcome]) -> String {
     use std::fmt::Write;
     let mut report = String::from("# Full Suite Eval\n\n");
@@ -234,7 +223,7 @@ pub fn render_task_outcomes(outcomes: &[crate::ztools::eval::TaskOutcome]) -> St
         );
     }
     if !rows.is_empty() {
-        let mean: f64 = rows.iter().map(|o| f64::from(o.score)).sum::<f64>() / rows.len() as f64;
+        let mean: f64 = rows.iter().map(|o| f64::from(o.score)).sum::<f64>() / count(rows.len());
         let ok = rows.iter().filter(|o| o.status == "ok").count();
         let _ = writeln!(report);
         let _ = writeln!(
