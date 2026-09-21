@@ -6,6 +6,16 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## v3.2.1 — reqwest 0.13, rusqlite 0.40 _(2026-09-20)_
+
+### Changed
+- **reqwest 0.12 → 0.13** (locked at 0.13.1). The TLS feature was renamed
+  upstream (`rustls-tls` → `rustls` + `webpki-roots`); `query` and `form` are
+  now declared explicitly. No call-site changes — the 0.13 API is
+  source-compatible with everything this crate uses.
+- **rusqlite 0.32 → 0.40** (locked at 0.40.2, still `bundled`). No call-site
+  changes.
+
 ## v3.2.0 — the roadmap, closed _(2026-09-19)_
 
 ### Added
