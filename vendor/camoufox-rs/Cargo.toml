@@ -6,6 +6,29 @@ description = "Pure Rust client for Camoufox browser via the Juggler protocol"
 license = "MIT"
 rust-version = "1.70"
 
+# LOCAL CARRIED FIX, 2026-10-04 (ztools). Upstream had no lint table at all.
+# This states the policy the crate MEASURABLY meets, and `all` is all it meets:
+#
+#   clippy::all alone          1 finding  ->  0 after the 2026-10-04 sweep
+#   all + pedantic + nursery    365 unique findings, 668 records, 28 files
+#
+# `cargo clippy --all-targets -- -D warnings` exits 0 here in BOTH feature modes
+# (default and --all-features), so `all` is a floor this crate stands on rather
+# than an aspiration.
+#
+# pedantic and nursery are deliberately NOT declared. The remaining 208 findings
+# under them are tracked as shrink-only ceilings in tools/vendor_lint_baseline.json
+# and enforced by tools/vendor_lint_ratchet.py; declaring the groups here would
+# print 208 warnings on every build while enforcing nothing extra.
+#
+# This table is NOT a way to soften a `-D warnings` gate. Measured 2026-10-04 on
+# a scratch crate: with `all = { level = "warn" }` here and `-D warnings` on the
+# command line, rustc reports "-D clippy::ptr_arg implied by -D warnings" and
+# exits 101. A command-line group beats this table's specific level, so adding
+# the crate as a workspace member would still be held to `all` at `-D warnings`.
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

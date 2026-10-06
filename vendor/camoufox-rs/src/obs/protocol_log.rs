@@ -51,7 +51,7 @@ impl ProtocolLogger {
     pub fn log_send(method: &str, params: &serde_json::Value) {
         if log::log_enabled!(log::Level::Trace) {
             let preview = truncate_json(params);
-            log::trace!("SEND {} {}", method, preview);
+            log::trace!("SEND {method} {preview}");
         }
     }
 
@@ -78,7 +78,7 @@ impl ProtocolLogger {
             match result {
                 Ok(value) => {
                     let preview = truncate_json(value);
-                    log::trace!("RECV id={} OK {}", id, preview);
+                    log::trace!("RECV id={id} OK {preview}");
                 }
                 Err(error) => {
                     log::trace!("RECV id={} ERR {:?}", id, error.message);
@@ -111,7 +111,7 @@ impl ProtocolLogger {
                 Some(id) => format!("[session={}]", truncate_str(id, 36)),
                 None => "[root]".to_owned(),
             };
-            log::trace!("EVNT {} {}", method, session_label);
+            log::trace!("EVNT {method} {session_label}");
         }
     }
 
@@ -131,7 +131,7 @@ impl ProtocolLogger {
                 Some(id) => format!(" session={}", truncate_str(id, 36)),
                 None => String::new(),
             };
-            log::trace!("SEND id={} {}{}", id, method, session_label);
+            log::trace!("SEND id={id} {method}{session_label}");
         }
     }
 
@@ -142,7 +142,7 @@ impl ProtocolLogger {
     /// - `event`: Description of the lifecycle event (e.g., `"connected"`,
     ///   `"disconnected"`, `"session created"`).
     pub fn log_lifecycle(event: &str) {
-        log::debug!("LIFECYCLE {}", event);
+        log::debug!("LIFECYCLE {event}");
     }
 
     /// Log a warning about a protocol anomaly.
@@ -154,7 +154,7 @@ impl ProtocolLogger {
     ///
     /// - `message`: Description of the anomaly.
     pub fn log_anomaly(message: &str) {
-        log::warn!("PROTOCOL {}", message);
+        log::warn!("PROTOCOL {message}");
     }
 }
 

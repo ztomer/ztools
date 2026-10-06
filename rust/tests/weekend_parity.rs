@@ -17,7 +17,7 @@
 
 use serde_json::Value;
 use ztools::weekend::{
-    as_candidate_lines, clean_search_results, looks_like_aggregator, SearchResult, MAX_BODY_LENGTH,
+    MAX_BODY_LENGTH, SearchResult, as_candidate_lines, clean_search_results, looks_like_aggregator,
 };
 use ztools::weekend_cache::load_region_lists;
 

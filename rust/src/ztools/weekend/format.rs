@@ -1,6 +1,36 @@
 use super::WeekendEvent;
 use std::fmt::Write as _;
 
+/// The saved plan's two section headings and two table headers, in ONE spelling.
+///
+/// [`format_weekend_plan`] is the only writer of the saved markdown, and
+/// everything that reads it back is header-keyed: `weekend/report.rs`
+/// (`fixed_rows`, `transient_rows`), the G3 checks, and `ztools status`. A
+/// sample document, a status fixture or a golden that spells a heading
+/// differently therefore still parses — which is exactly why three spellings
+/// existed with nothing red. These constants are shared so the parser samples
+/// are built from the writer's own strings rather than retyped, and
+/// `weekend/report.rs` gates its sample against a live render so the sample
+/// cannot drift from the constant either.
+///
+/// The TERMINAL table ([`render_weekend_plan_gorgeous`]) keeps its own headings
+/// and headers on purpose: it is a different artefact — no `Why It Fits`
+/// column, and column names short enough to sit in a colour table. It is not a
+/// third spelling of this one.
+pub const FIXED_SECTION_HEADING: &str = "### Fixed / Year-Round Activities (Ranked by Fit Score)";
+pub const TRANSIENT_SECTION_HEADING: &str =
+    "### Transient / Limited-Time Events (Ranked by Fit Score)";
+pub const FIXED_TABLE_HEADER: &str = "| Score | Activity & Location | Dates | Target Age(s) | Estimated Price (CAD) | Weather Appropriateness | Why It Fits |";
+pub const TRANSIENT_TABLE_HEADER: &str = "| Score | Event & Location | Dates | Day & Time | Target Age(s) | Estimated Price (CAD) | Why It Fits |";
+
+/// The separator row under both tables.
+///
+/// Both tables have seven columns, so both separators are the same line. It is
+/// kept beside the headers rather than written out twice: a column count that
+/// disagrees with its own separator renders as a broken table, and this is the
+/// only place that can be checked against [`FIXED_TABLE_HEADER`].
+pub const TABLE_SEPARATOR: &str = "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |";
+
 /// Build the gorgeous weekend plan output into a string. Pure so it is
 /// testable; `print_weekend_plan_gorgeous` writes it to stdout.
 #[must_use]
@@ -26,6 +56,7 @@ pub fn render_weekend_plan_gorgeous(
                 .add_attribute(comfy_table::Attribute::Bold),
             Cell::new("Ages"),
             Cell::new("Price (CAD)").fg(Color::Magenta),
+            Cell::new("Dates"),
             Cell::new("Weather Appropriateness").add_attribute(comfy_table::Attribute::Italic),
         ]);
 
@@ -35,6 +66,7 @@ pub fn render_weekend_plan_gorgeous(
                 Cell::new(plain_name_loc(&item.name, &item.location)),
                 Cell::new(fmt_missing(&item.target_ages)),
                 Cell::new(fmt_missing(&item.price)),
+                Cell::new(fmt_missing(&item.dates)),
                 Cell::new(fmt_missing(&item.weather)),
             ]);
         }
@@ -165,27 +197,30 @@ pub fn format_weekend_plan(
 
     let mut out = String::new();
     let _ = write!(out, "# Weekend Plan: {dates_str} ({location})\n\n");
-    let _ = write!(out,
+    let _ = write!(
+        out,
         "**Location:** {location}\n**Target Ages:** {target_ages}\n**Weather:** {weather_display}\n\n"
     );
 
-    out.push_str(
-        "### Fixed / Year-Round Activities (Ranked by Fit Score (computed, not reviews))\n\n",
-    );
+    out.push_str(FIXED_SECTION_HEADING);
+    out.push_str("\n\n");
     if fixed_items.is_empty() {
         out.push_str("*No fixed activities listed.*\n\n");
     } else {
-        out.push_str("| Score | Activity & Location | Target Age(s) | Estimated Price (CAD) | Weather Appropriateness | Why It Fits |\n");
-        out.push_str("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
+        out.push_str(FIXED_TABLE_HEADER);
+        out.push('\n');
+        out.push_str(TABLE_SEPARATOR);
+        out.push('\n');
         for ev in fixed_items {
             // Every cell is the source's value or the sentinel — never a
             // fabricated filler ("Family activity in GTA") and never a
             // constant column ("Outdoor/Indoor"), both of which read as data.
             let _ = writeln!(
                 out,
-                "| * {:.1}/5 | {} | {} | {} | {} | {} |",
+                "| * {:.1}/5 | {} | {} | {} | {} | {} | {} |",
                 ev.score,
                 fmt_name_loc(&ev.name, &ev.location, location),
+                fmt_missing(&ev.dates),
                 fmt_missing(&ev.target_ages),
                 fmt_missing(&ev.price),
                 fmt_missing(&ev.weather),
@@ -195,9 +230,8 @@ pub fn format_weekend_plan(
         out.push('\n');
     }
 
-    out.push_str(
-        "### Transient / Limited-Time Events (Ranked by Fit Score (computed, not reviews))\n\n",
-    );
+    out.push_str(TRANSIENT_SECTION_HEADING);
+    out.push_str("\n\n");
     if transient_items.is_empty() {
         // The warning names its cause (health.rs): a bot-walled search and a
         // model that never loaded each read differently from a quiet weekend.
@@ -207,14 +241,24 @@ pub fn format_weekend_plan(
             health.degraded_reason()
         );
     } else {
-        out.push_str("| Score | Event & Location | Day & Time | Target Age(s) | Estimated Price (CAD) | Why It Fits |\n");
-        out.push_str("| :--- | :--- | :--- | :--- | :--- | :--- |\n");
+        // `Dates` is `WeekendEvent.dates` printed verbatim through
+        // `fmt_missing`, the same cell the terminal table has always printed:
+        // no range is re-spelled or re-derived here, because a second
+        // spelling of a date is a second thing that can be wrong. `Day & Time`
+        // stays the model's free text and the two columns do not overlap —
+        // `dates` answers WHICH CALENDAR DATES, `day` answers what time of day.
+        // An absent value is the sentinel, never an empty cell.
+        out.push_str(TRANSIENT_TABLE_HEADER);
+        out.push('\n');
+        out.push_str(TABLE_SEPARATOR);
+        out.push('\n');
         for ev in transient_items {
             let _ = writeln!(
                 out,
-                "| * {:.1}/5 | {} | {} | {} | {} | {} |",
+                "| * {:.1}/5 | {} | {} | {} | {} | {} | {} |",
                 ev.score,
                 fmt_name_loc(&ev.name, &ev.location, location),
+                fmt_missing(&ev.dates),
                 fmt_missing(&ev.day),
                 fmt_missing(&ev.target_ages),
                 fmt_missing(&ev.price),
@@ -233,14 +277,86 @@ pub fn format_weekend_plan(
         }
     }
     // The run's own ledger, every run: what the gates dropped is the reading
-    // a week of plans is compared on (ROADMAP Phase 1).
+    // a week of plans is compared on (ROADMAP R1).
     out.push_str(&health.provenance.line());
     out.push('\n');
 
     out
 }
+/// The ONE value a failed forecast fetch produces, and the ONE value
+/// [`format_weather_display`] recognises as "there is no forecast here".
+///
+/// It is `weekend::fetch::fallback_forecast`'s return value, byte for byte.
+/// That is not an accident of history, it is the seam: the fetcher's signature
+/// is `fn(url) -> String`, so the only channel a failure has between the wire
+/// and the document is the VALUE, and the fetcher cannot tell its own fallback
+/// apart from a real forecast once it is handed back as one. Pinning the string
+/// here — and pinning `fetch_weather_from`'s live output against THIS constant
+/// in `tests/weather_failure.rs`, so the two cannot drift — is what lets the
+/// formatter decide by identity instead of by re-reading prose.
+///
+/// THE OTHER HALF OF THE FIX IS THE RENDERED VALUE, below. Two independent
+/// fabricated forecasts used to reach a reader: this one (from the fetcher,
+/// skipped by the formatter because it starts with "Daily Forecast") and one
+/// hardcoded inside the formatter itself for the empty case. An operator could
+/// not tell either from a reading.
+pub const FORECAST_FETCH_FAILED: &str =
+    "Daily Forecast: Friday: 24.5°C Clear, Saturday: 26.0°C Clear, Sunday: 23.0°C Clear";
+
+/// The sentence a missing forecast renders INSTEAD of numbers.
+///
+/// `⚠` and the word "unavailable" rather than a plausible temperature: the
+/// house rule is that a placeholder must be visually distinct and say WHY, and
+/// a placeholder that reads as data is worse than no placeholder. The reason
+/// this can hold the numbers out is that the string is also the forecast the
+/// scoring and prompting paths see — `compute_score` reads
+/// `weather_str.to_lowercase()` for "clear"/"sunny"/"warm" and would have paid
+/// an outdoor row +2.0 for the fabricated "clear" it used to be handed.
+///
+/// It also must not contain any word `compute_score` matches (see
+/// `weekend/mod.rs::compute_score`): "sunny", "clear", "warm", "cloudy",
+/// "rain", "precipitation". A failure that scores rows is a failure that
+/// invents a fit.
+pub const WEATHER_UNAVAILABLE: &str = "⚠ Forecast unavailable";
+
+/// The cause the document names when the forecast is missing.
+///
+/// The fetcher knows WHICH of its four failure classes happened (client not
+/// built / no daily block / body not JSON / request failed) and prints it with
+/// `{e:?}` to stderr — but `fetch_weather_from` returns `String`, so that cause
+/// has no path into the document and inventing a specificity here would be a
+/// second fabrication. This names the class the sentinel itself proves, and
+/// says where the specific reason was written. Closing the gap properly means
+/// the fetcher returning the reason (a `Result<String, ForecastFailure>`), which
+/// is a change to `weekend/fetch.rs` and to the two test files that pin its
+/// signature.
+pub const WEATHER_FAILURE_CAUSE: &str = "no forecast came back — the endpoint was unreachable, refused, or answered with no usable daily block. The specific reason was written to stderr.";
+
+/// Is this the fetcher's failure value rather than a forecast?
+///
+/// Identity, not shape: a forecast that merely *looks* like the fallback (a real
+/// three-day dry spell at exactly those temperatures) must still render as a
+/// forecast, and the fallback must be recognised without re-deriving what
+/// "unavailable" looks like in prose. Trimmed on both sides because the value
+/// travels through config-shaped strings.
+#[must_use]
+pub fn is_forecast_failure(raw: &str) -> bool {
+    raw.trim() == FORECAST_FETCH_FAILED
+}
+
+/// The one-line weather field: a real forecast, or [`WEATHER_UNAVAILABLE`].
+///
+/// It used to SKIP every line starting with `Daily Forecast` — which is the
+/// fetcher's entire fallback — and then, finding nothing left to print, render
+/// a second hardcoded forecast of its own. So the value the code documented as
+/// the failure never reached a human, and what the planner saved on a failed
+/// fetch was a forecast nobody had ever measured. Both are now the same
+/// sentence, and neither carries a temperature.
 #[must_use]
 pub fn format_weather_display(raw: &str) -> String {
+    if is_forecast_failure(raw) {
+        return format!("{WEATHER_UNAVAILABLE}: {WEATHER_FAILURE_CAUSE}");
+    }
     let mut parts = Vec::new();
     for line in raw.lines() {
         let line = line.trim();
@@ -266,8 +382,13 @@ pub fn format_weather_display(raw: &str) -> String {
             parts.push(line.to_string());
         }
     }
+    // Nothing parseable: an empty body, or a body that was never a forecast at
+    // all. It is the same failure as the fetcher's sentinel — no forecast was
+    // obtained — so it renders the same sentence. A second hardcoded forecast
+    // lived here, and an empty forecast is exactly when a reader most needs to
+    // be told that nobody measured anything.
     if parts.is_empty() {
-        "Fri 28.2°C (clear), Sat 32.0°C (precipitation), Sun 29.7°C (clear)".to_string()
+        format!("{WEATHER_UNAVAILABLE}: {WEATHER_FAILURE_CAUSE}")
     } else {
         parts.join(", ")
     }

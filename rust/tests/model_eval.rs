@@ -4,6 +4,17 @@
 //! exercises `get_available_models`, `eval_model`, `eval_all_models`, and
 //! `render_eval_report` against it. This covers the HTTP-dependent code that
 //! unit tests can't reach.
+//!
+//! The `thread::sleep` each mock used to take after `bind` was a guess about the
+//! serving thread's scheduling; it is now `support::await_stub`, which waits for
+//! the condition a client actually needs -- a completed handshake -- under a
+//! deadline that names what never happened.
+
+#[path = "support/mod.rs"]
+mod support;
+// See `eval_runner.rs`: the shared module's items are reachable API of this
+// test binary, so one consumer not needing one is not dead code.
+pub use support::*;
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -51,7 +62,7 @@ fn mock_llm_server() -> (u16, thread::JoinHandle<()>) {
             let _ = stream.flush();
         }
     });
-    thread::sleep(std::time::Duration::from_millis(50));
+    await_stub(port);
     (port, handle)
 }
 
@@ -152,7 +163,7 @@ fn mock_llm_server_with_thinking() -> (u16, thread::JoinHandle<()>) {
             let _ = stream.flush();
         }
     });
-    thread::sleep(std::time::Duration::from_millis(50));
+    await_stub(port);
     (port, handle)
 }
 

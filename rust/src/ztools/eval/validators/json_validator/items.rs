@@ -36,10 +36,10 @@ pub fn extract_list_from_dict(data: &Value) -> Vec<Value> {
         }
         let mut best: Vec<Value> = Vec::new();
         for val in map.values() {
-            if let Value::Array(arr) = val {
-                if arr.len() > best.len() {
-                    best.clone_from(arr);
-                }
+            if let Value::Array(arr) = val
+                && arr.len() > best.len()
+            {
+                best.clone_from(arr);
             }
         }
         return best;
@@ -81,12 +81,11 @@ pub fn has_item_details(item: &Value) -> bool {
         return map.len() >= 2;
     }
     for field in DETAIL_FIELDS {
-        if !name_fields.contains(field) {
-            if let Some(val) = map.get(*field) {
-                if !val.to_string().trim_matches('"').trim().is_empty() {
-                    return true;
-                }
-            }
+        if !name_fields.contains(field)
+            && let Some(val) = map.get(*field)
+            && !val.to_string().trim_matches('"').trim().is_empty()
+        {
+            return true;
         }
     }
     map.len() >= 2

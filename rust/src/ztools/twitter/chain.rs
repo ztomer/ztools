@@ -147,6 +147,10 @@ impl Provenance {
         for reason in &self.reasons {
             lines.push(format!("> **Why:** {reason}"));
         }
+        // Same idiom as above the Backend line: a `>` on its own ends the
+        // paragraph inside the block quote, so the advice is its own paragraph
+        // instead of a fourth continuation of `**Why:**`.
+        lines.push(">".to_string());
         lines.push(
             "> Treat the content below as lower quality than a normal run: the \
              fallback models have smaller context windows and weaker summarisation."

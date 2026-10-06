@@ -9,6 +9,38 @@
 
 ---
 
+> ## ⚠ Observed divergence from this specification (local note, 2026-10-04)
+>
+> **This document is the upstream spec, transcribed from the Firefox patches.
+> It is not a description of the binary this crate actually drives.** One claim
+> in it is contradicted by the patched build, and the crate follows the binary:
+>
+> | Claim in this doc | Observed on the pinned build |
+> | --- | --- |
+> | § 3 / § 12: watch **stderr** for `"Juggler listening to the pipe"` | the sentinel arrives on **stdout**; stderr never carries a Juggler line |
+>
+> Measured by launching the patched binary with the two streams captured to
+> separate files (macOS, build `152.0.4-beta.31-7b8d12d6`):
+>
+> ```
+> camoufox -no-remote -headless -profile <tmp> -juggler-pipe -silent
+>   stdout -> 31 bytes, contains "Juggler listening to the pipe"
+>             (30-char line + newline: the sentinel and nothing else)
+>   stderr -> 840 bytes, no Juggler line
+> ```
+>
+> The sentinel *text* in this document is correct: `"Juggler listening to the
+> pipe"` occurs in `Camoufox.app/Contents/Resources/omni.ja`. Only the stream is
+> wrong here.
+>
+> `src/process/readiness.rs` therefore reads **stdout**, and the tests
+> `sentinel_on_stdout_is_ready` / `sentinel_on_stderr_alone_is_not_ready` in
+> that file's test module fail if the read ever moves back to stderr. Do not
+> "correct" the code to match § 3 — that breaks every launch. Everything else in
+> this document remains the reference.
+
+---
+
 ## Table of Contents
 
 1. [Wire Format](#1-wire-format)
@@ -165,6 +197,10 @@ Parent accesses: `stdio[3]` (writable — commands out), `stdio[4]` (readable �
 ### Startup Detection
 
 - Watch **stderr** for substring: `"Juggler listening to the pipe"`
+  > ⚠ **Divergence (local note, 2026-10-04)**: the patched build emits this on
+  > **stdout**; stderr never carries a Juggler line. The sentinel text is right,
+  > the stream is not. See the note at the top of this file — and do not "fix"
+  > `src/process/readiness.rs` to match this line.
 - Default launch timeout: **180,000ms** (3 minutes), enforced by outer progress controller
 - If process exits before string appears: `"Failed to launch the browser process"` error
 - If timeout expires with process alive: abort launch, trigger close/kill cleanup

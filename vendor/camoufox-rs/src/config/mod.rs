@@ -18,7 +18,6 @@ const DEFAULT_CLOSE_TIMEOUT: Duration = Duration::from_secs(30);
 const CAMOU_CONFIG_CHUNK_SIZE_UNIX: usize = 32767;
 
 /// Maximum chunk size for `CAMOU_CONFIG_*` environment variable values on Windows.
-#[allow(dead_code)]
 const CAMOU_CONFIG_CHUNK_SIZE_WINDOWS: usize = 2047;
 
 // ---------------------------------------------------------------------------
@@ -335,7 +334,7 @@ mod tests {
     #[test]
     fn validate_rejects_empty_arg() {
         let cfg = LaunchConfig {
-            args: vec!["".into()],
+            args: vec![String::new()],
             ..Default::default()
         };
         assert!(matches!(cfg.validate(), Err(ConfigError::EmptyArg)));

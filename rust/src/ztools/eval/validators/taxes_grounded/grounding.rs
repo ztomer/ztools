@@ -20,12 +20,11 @@ pub(super) fn load_grounding(task_name: &str) -> Value {
         },
     );
 
-    if let Ok(content) = std::fs::read_to_string(&candidate) {
-        if let Ok(val) = serde_json::from_str::<Value>(&content) {
-            if let Some(grounding) = val.get("grounding") {
-                return grounding.clone();
-            }
-        }
+    if let Ok(content) = std::fs::read_to_string(&candidate)
+        && let Ok(val) = serde_json::from_str::<Value>(&content)
+        && let Some(grounding) = val.get("grounding")
+    {
+        return grounding.clone();
     }
     Value::Null
 }
@@ -54,14 +53,12 @@ pub(super) fn parse_output(raw: &Value) -> (Option<Value>, String) {
     if let Ok(val) = serde_json::from_str::<Value>(clean_text) {
         return (Some(val), note);
     }
-    if let Some(start) = clean_text.find('{') {
-        if let Some(end) = clean_text.rfind('}') {
-            if start < end {
-                if let Ok(val) = serde_json::from_str::<Value>(&clean_text[start..=end]) {
-                    return (Some(val), "extracted-from-prose".to_string());
-                }
-            }
-        }
+    if let Some(start) = clean_text.find('{')
+        && let Some(end) = clean_text.rfind('}')
+        && start < end
+        && let Ok(val) = serde_json::from_str::<Value>(&clean_text[start..=end])
+    {
+        return (Some(val), "extracted-from-prose".to_string());
     }
     (None, "not-json".to_string())
 }

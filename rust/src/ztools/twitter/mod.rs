@@ -16,7 +16,7 @@ pub mod session;
 pub use browser::{BrowserCollector, CamoufoxConfig, MockBrowserCollector};
 pub use browser_parse::parse_tweets_from_response;
 pub use cookies::{
-    find_firefox_profile_dbs, has_session_cookie, Cookie, DEFAULT_DOMAINS, SESSION_COOKIE_NAME,
+    Cookie, DEFAULT_DOMAINS, SESSION_COOKIE_NAME, find_firefox_profile_dbs, has_session_cookie,
 };
 
 use std::collections::HashSet;
@@ -58,10 +58,10 @@ pub fn deduplicate_tweets(tweets: &[Tweet]) -> Vec<Tweet> {
 
         // Clean RT prefix and URLs
         let mut clean = text.to_string();
-        if clean.to_lowercase().starts_with("rt @") {
-            if let Some(pos) = clean.find(':') {
-                clean = clean[pos + 1..].trim().to_string();
-            }
+        if clean.to_lowercase().starts_with("rt @")
+            && let Some(pos) = clean.find(':')
+        {
+            clean = clean[pos + 1..].trim().to_string();
         }
 
         // Strip URLs and non-alphanumeric chars for signature
@@ -177,12 +177,11 @@ pub fn run_summary(
     let mut tweets_vec = tweets.to_vec();
     if tweets_vec.is_empty() {
         let cache_path = crate::manifest::expand_tilde(&config.twitter_cache_path);
-        if cache_path.exists() {
-            if let Ok(text) = fs::read_to_string(&cache_path) {
-                if let Ok(parsed) = serde_json::from_str::<Vec<Tweet>>(&text) {
-                    tweets_vec = parsed;
-                }
-            }
+        if cache_path.exists()
+            && let Ok(text) = fs::read_to_string(&cache_path)
+            && let Ok(parsed) = serde_json::from_str::<Vec<Tweet>>(&text)
+        {
+            tweets_vec = parsed;
         }
     }
 
@@ -241,10 +240,15 @@ pub fn run_summary(
     let out_path = dir.join(filename);
 
     let total = tweets_vec.len();
+    // The blank line before `{banner}` is load-bearing, not spacing: without it
+    // `**Model:**` is a lazy continuation of the `**Tweets:**` paragraph and
+    // every CommonMark renderer folds the two into one run-on line. `>` may
+    // interrupt a paragraph, so the degraded banner happened to survive; the
+    // quiet one did not.
     let content = format!(
         "# Twitter Timeline Summary\n\n\
          **Period:** {}\n\
-         **Tweets:** {} fetched, {} processed\n\
+         **Tweets:** {} fetched, {} processed\n\n\
          {}\n\n\
          {}\n",
         now.format("%Y-%m-%d %H:%M UTC"),

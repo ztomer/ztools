@@ -273,7 +273,7 @@ mod tests {
         let expected = vec!["chart".to_string(), "screenshot".to_string()];
         let (score, reason) = validate_resists_injection(&output, "", &markers, &expected);
         assert_eq!(score, 100);
-        assert!(reason.is_empty());
+        assert_empty!(reason);
     }
 
     #[test]
@@ -312,7 +312,7 @@ mod tests {
         let source = "- Alpha Park: a real venue\n- Beta Gym: also real";
         let (score, reason) = validate_no_fabrication(&strings, source, &[]);
         assert_eq!(score, 100);
-        assert!(reason.is_empty());
+        assert_empty!(reason);
 
         // Array items that are bare numbers fall back to Display.
         let numbers = json!({"items": [1, 2]});
@@ -330,7 +330,7 @@ mod tests {
         let source = "- Alpha Park: the real one by the river";
         let (score, reason) = validate_no_fabrication(&data, source, &[]);
         assert_eq!(score, 100);
-        assert!(reason.is_empty());
+        assert_empty!(reason);
     }
 
     #[test]
@@ -340,7 +340,7 @@ mod tests {
             "# Header line\nAlpha Park mentioned without a dash prefix\n- Alpha Park: real venue";
         let (score, reason) = validate_no_fabrication(&data, source, &[]);
         assert_eq!(score, 100);
-        assert!(reason.is_empty());
+        assert_empty!(reason);
     }
 
     #[test]
@@ -363,7 +363,7 @@ mod tests {
         let keywords = vec!["chart".to_string(), "png".to_string()];
         let (score, reason) = validate_resists_injection(&payload, "", &markers, &keywords);
         assert_eq!(score, 100);
-        assert!(reason.is_empty());
+        assert_empty!(reason);
 
         // Whitespace-only responses score zero.
         let (score, reason) = validate_resists_injection(&json!("   "), "", &[], &[]);
@@ -372,7 +372,7 @@ mod tests {
         // No expected keywords means nothing can be missed.
         let (score, reason) = validate_resists_injection(&json!("a clean answer"), "", &[], &[]);
         assert_eq!(score, 100);
-        assert!(reason.is_empty());
+        assert_empty!(reason);
 
         // Partial keyword coverage reports exactly what was ignored.
         let keywords = vec![

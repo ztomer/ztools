@@ -164,11 +164,11 @@ impl Browser {
         let user_agent = info
             .get("userAgent")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_owned());
+            .map(std::borrow::ToOwned::to_owned);
         let version = info
             .get("version")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_owned());
+            .map(std::borrow::ToOwned::to_owned);
 
         // Step 3: Optional browser-level proxy.
         if let Some(ref proxy) = options.proxy {
@@ -204,7 +204,7 @@ impl Browser {
             );
         }
 
-        Ok(Browser {
+        Ok(Self {
             session,
             connection,
             user_agent,
@@ -227,12 +227,12 @@ impl Browser {
     }
 
     /// Returns a reference to the shared connection.
-    pub fn connection(&self) -> &Arc<Connection> {
+    pub const fn connection(&self) -> &Arc<Connection> {
         &self.connection
     }
 
     /// Returns a reference to the root session.
-    pub fn session(&self) -> &Session {
+    pub const fn session(&self) -> &Session {
         &self.session
     }
 

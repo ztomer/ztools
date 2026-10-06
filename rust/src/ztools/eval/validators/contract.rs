@@ -64,8 +64,8 @@ mod tests {
     #[test]
     fn test_parse_signal_noise_without_marker_is_empty() {
         let (signal, noise) = parse_signal_noise("just a prompt with no sections");
-        assert!(signal.is_empty());
-        assert!(noise.is_empty());
+        assert_empty!(signal);
+        assert_empty!(noise);
     }
 
     #[test]

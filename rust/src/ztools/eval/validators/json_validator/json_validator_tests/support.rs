@@ -1,6 +1,6 @@
 //! Shared fixtures for `json_validator`'s test modules.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub(super) fn detailed_items() -> Vec<Value> {
     [

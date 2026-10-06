@@ -40,7 +40,41 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
-source "$GOH/tui/lib.sh"
+
+# The output helpers, defined BEFORE the source so a missing tui degrades instead of
+# dying. `require_commands` is in the list because it lives in tui/lib.sh too and this
+# script calls it below: sourcing nothing leaves it undefined, and "command not found"
+# at 127 names neither the cause nor the remedy. Same rule tools/gpu_lock.sh states --
+# a guard that only returns non-zero is not enough, because `return` from a sourced file
+# returns from the SOURCE and the caller carries on -- so the helpers are DEFINED here,
+# not merely checked for.
+for _osaurus_helper in info ok warn err; do
+  declare -F "$_osaurus_helper" >/dev/null 2>&1 || eval "
+    $_osaurus_helper() { printf '%s\n' \"\$*\" >&2; }"
+done
+declare -F die >/dev/null 2>&1 || die() { err "$*"; exit "${2:-1}"; }
+# The real check, not a stub. A fallback that merely printed would take the OTHER
+# failure: this script would proceed with `osaurus` or `lsof` absent and report a
+# server state it never observed. `if`, not `[ ... ] && die`, because the caller runs
+# it bare under `set -e` and the false branch would exit the script.
+declare -F require_commands >/dev/null 2>&1 || require_commands() {
+  local missing=() _cmd
+  for _cmd in "$@"; do
+    command -v "$_cmd" >/dev/null 2>&1 || missing+=("$_cmd")
+  done
+  if [ "${#missing[@]}" -gt 0 ]; then
+    die "missing required command(s): ${missing[*]}"
+  fi
+}
+if [ -f "$GOH/tui/lib.sh" ]; then
+  # shellcheck source=/dev/null
+  source "$GOH/tui/lib.sh"
+else
+  warn "no tui/lib.sh under $GOH — output is plain text, no icons or colour."
+  warn "set GOH_DIR to your gates_of_heck checkout (or run its install.sh) for the house TUI style."
+fi
+unset _osaurus_helper
+
 # shellcheck disable=SC1091
 source "$ROOT/tools/gpu_lock.sh"
 
@@ -86,7 +120,13 @@ listener_pids() {
 
 describe() {
   local pid="$1" rss_kb
-  rss_kb="$(/bin/ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ' || echo 0)"
+  rss_kb="$(/bin/ps -o rss= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
+  # A PID that died between the census and here makes `ps` fail and print NOTHING, and
+  # the old `|| echo 0` could not catch it: `tr` is the last stage of the pipeline and
+  # exits 0 on empty input, so the fallback never fired and rss_kb stayed empty --
+  # a fallback that cannot run. Validate the VALUE instead, so the description is
+  # always a number and never "pid 123 (.0 GB resident)" read from an empty field.
+  [[ "$rss_kb" =~ ^[0-9]+$ ]] || rss_kb=0
   printf 'pid %s (%.1f GB resident)' "$pid" "$(echo "$rss_kb" | awk '{print $1/1048576}')"
 }
 
@@ -127,7 +167,13 @@ stop_all() {
 # installed a newer bash. Word-splitting a list of PIDs is safe -- they are digits.
 survey() {
   FOUND="$(server_pids)"
-  COUNT="$(printf '%s' "$FOUND" | grep -c . || true)"
+  # awk, not `grep -c . || true`. Both agree today, but only because the fallback
+  # discards grep's non-zero exit while its stdout -- the count -- is already the
+  # answer. That is the same exit-status-is-part-of-the-output contract that made
+  # sweep_models.sh's summary `INCOMPLETE` the two-line string "0\n0"; awk always
+  # exits 0 and always prints a number, so the value cannot depend on how the count
+  # was produced.
+  COUNT="$(printf '%s' "$FOUND" | awk 'NF { n++ } END { printf "%d\n", n + 0 }')"
   FIRST="$(printf '%s\n' "$FOUND" | head -1)"
 }
 survey
@@ -212,7 +258,7 @@ if ! wait_until_serving; then
 fi
 
 NOW="$(server_pids)"
-NOW_COUNT="$(printf '%s' "$NOW" | grep -c . || true)"
+NOW_COUNT="$(printf '%s' "$NOW" | awk 'NF { n++ } END { printf "%d\n", n + 0 }')"
 if [ "$NOW_COUNT" -ne 1 ]; then
   die "expected exactly one osaurus process, found $NOW_COUNT — see $LOG"
 fi

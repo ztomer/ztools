@@ -13,7 +13,7 @@ pub use helpers::{
     clean_filename, is_generic_name, is_meaningful_text, is_non_human_readable,
     strip_instruction_prefix,
 };
-pub use ocr::{extract_first_line, extract_full_text, ocr_available, OcrEngine, TesseractEngine};
+pub use ocr::{OcrEngine, TesseractEngine, extract_first_line, extract_full_text, ocr_available};
 pub use vlm::{acceptable_name, query_llm_filename, query_vlm_for_filename};
 
 use std::fs;

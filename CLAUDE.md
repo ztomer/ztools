@@ -7,14 +7,26 @@ Reference docs — read these when the task touches their subject, not by defaul
 ## Key Rules
 
 ### File Size Limit
-No file may exceed 500 lines — **no exemptions, for tests or for any directory.**
+500 lines, with **no exemption for tests or for any source directory.**
 Enforced by the house gate (`gates_of_heck/checks/check_file_length.py` via
-`.githooks/pre-commit` and `tools/gate.sh --full`; `.gatesrc` sets `GOH_MAX_LINES=500`).
-Split into a module directory whose `mod.rs` re-exports (`json_validator/`,
-`taxes_grounded/`), or move a `#[cfg(test)]` module into its own
-`#[path = "..._tests.rs"] mod tests;` sibling. Check with `wc -l` before adding to a
-file that is already close. A re-export forwards NAMES, not patch targets: test the
-module that owns the function.
+`.githooks/pre-commit` and `tools/gate.sh --full`; `.gatesrc` sets
+`GOH_MAX_LINES=500`). Split into a module directory whose `mod.rs` re-exports
+(`json_validator/`, `taxes_grounded/`), or move a `#[cfg(test)]` module into its
+own `#[path = "..._tests.rs"] mod tests;` sibling. Check with `wc -l` before
+adding to a file that is already close. A re-export forwards NAMES, not patch
+targets: test the module that owns the function.
+
+**The cap is enforced per file SUFFIX, and that is the whole of it.** The checker
+walks tracked files and skips anything not ending in one of `.rs .py .swift .c
+.h .cpp .hpp .cc .m .mm .kt .java .go .ts .tsx .js .jsx .sh .bash .rb`
+(`check_file_length.py:28-49` defines that list; `:65` skips everything else). So
+markdown, TOML, JSON and extensionless files are NOT policed, whatever their length:
+`docs/MODEL_QUIRKS.md` is 1300 lines and `conf/eval_signals.json` is 6078 (measured
+2026-10-04). An earlier version of
+this rule said "no file may exceed 500 lines — no exemptions, for tests or for
+any directory", which is not what runs; a doc that overstates its own gate is
+worse than one that admits the seam. If you add a new language, its files are
+unpoliced until that suffix list grows, and nothing warns you.
 
 ### Testing
 - Every test must have a non-tautological assertion, and prove a new test can fail
@@ -30,9 +42,19 @@ module that owns the function.
 - Run (quick): `cargo test --manifest-path rust/Cargo.toml --all-features`
 - Run (what the gate runs — use this before pushing): `tools/gate.sh --full`
   (= `make ci`): fmt, clippy `-D warnings`, no `#[allow]`, audit, emoji, file length,
-  tests, coverage floor 94.
+  tests, coverage floor **95** (`.gatesrc:26` `GOH_CI_STEPS` →
+  `coverage_gate.sh --lang rust --floor 95 rust`; `Makefile:19` states the same).
 - `tools/tests/` holds the pytest for the shell tooling (`tools/gpu_lock.sh`):
   `python3 -m pytest tools/tests -q`. `tools/*.py` are dev gates, never the product.
+  A test that drives `tools/osaurus_one.sh` — the script that stops and SIGKILLs
+  the real server — must carry `pytest.mark.sandboxed_server_script`, which is
+  what switches on `tools/tests/conftest.py`'s `no_real_server_restart` guard: it
+  proves the sandbox (machine-reaching commands stubbed, lock at `tmp_path`) rather
+  than assuming it. Lint and format for `tools/` are configured in
+  `pyproject.toml` (ruff, line-length 100, `PLW`/`BLE` selected because those are
+  the two that bit here) — run `ruff check tools/` and
+  `ruff format --check tools/`. Ruff is NOT in the gate's step list yet, so
+  nothing runs it for you.
 - Add discovered test patterns or bugs to `docs/TESTING.md` immediately
 
 ### Model Evals

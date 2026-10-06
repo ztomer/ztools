@@ -37,14 +37,41 @@ pub fn requested() -> bool {
     SIGNALS.load(Ordering::SeqCst) > 0
 }
 
-/// For tests: pretend the operator pressed Ctrl-C once.
+/// For tests: pretend the operator pressed Ctrl-C once, for as long as the
+/// returned value is alive.
+///
+/// SCOPED, not a setter. `SIGNALS` is process-global and the flag used to be
+/// raised and cleared by hand, so a panic in between leaked it into every
+/// later test in the binary -- and `requested()` returning true for the rest
+/// of the run is a silent pass, not a failure: the eval loops under test would
+/// simply stop after zero tasks. `raise` also refuses to start if the flag is
+/// already set, which is what makes a leak LOUD instead of invisible.
 #[cfg(test)]
-pub(crate) fn request_for_test() {
-    SIGNALS.store(1, Ordering::SeqCst);
+#[derive(Debug)]
+pub(crate) struct DrainRequest;
+
+#[cfg(test)]
+impl DrainRequest {
+    /// # Panics
+    ///
+    /// If the flag is already raised, which can only mean a previous test
+    /// leaked it. That is a test bug with no innocent explanation, so it is
+    /// named rather than absorbed.
+    pub(crate) fn raise() -> Self {
+        assert!(
+            !requested(),
+            "the drain flag was already set when this test started: a previous \
+             test leaked it, and every later test would silently stop after \
+             zero tasks"
+        );
+        SIGNALS.store(1, Ordering::SeqCst);
+        Self
+    }
 }
 
-/// For tests: clear the request.
 #[cfg(test)]
-pub(crate) fn reset_for_test() {
-    SIGNALS.store(0, Ordering::SeqCst);
+impl Drop for DrainRequest {
+    fn drop(&mut self) {
+        SIGNALS.store(0, Ordering::SeqCst);
+    }
 }

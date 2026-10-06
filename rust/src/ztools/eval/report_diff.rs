@@ -10,7 +10,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use super::report::{load_history_entries, HistoryEntry, ModelRun};
+use super::report::{HistoryEntry, ModelRun, load_history_entries};
 
 /// One task that moved.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -185,7 +185,7 @@ mod tests {
     fn nothing_moved_is_one_line_and_an_unknown_model_is_no_change() {
         let run = ModelRun::new("new-model", &["a".into()], vec![outcome("a", 80)]);
         let deltas = deltas_since(&[run], &BTreeMap::new(), 1.0);
-        assert!(deltas.is_empty());
+        assert_empty!(&deltas);
         assert_eq!(
             render_deltas(&deltas),
             vec!["Changed since the last run: nothing moved".to_string()]

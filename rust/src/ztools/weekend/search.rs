@@ -248,12 +248,12 @@ fn search_duckduckgo(
         .header("Accept-Language", "en-CA,en;q=0.9")
         .send()
     {
-        if resp.status().is_success() {
-            if let Ok(html) = resp.text() {
-                match classify(&html, parse_results_from_html(&html)) {
-                    (results, EngineVerdict::Answered(_)) => return answered(results),
-                    (_, v) => verdict = v,
-                }
+        if resp.status().is_success()
+            && let Ok(html) = resp.text()
+        {
+            match classify(&html, parse_results_from_html(&html)) {
+                (results, EngineVerdict::Answered(_)) => return answered(results),
+                (_, v) => verdict = v,
             }
         }
     } else if unreachable {

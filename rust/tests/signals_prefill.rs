@@ -5,6 +5,19 @@
 //! server that RECORDS the requests it received, so the probe's wire contract
 //! (nonce-first filler, `max_tokens=1` on the timed call) is verified against
 //! what actually went over the wire.
+//!
+//! The `thread::sleep` the mock used to take after `bind` was a guess about the
+//! serving thread's scheduling; it is now `support::await_stub`, which waits for
+//! the condition a client actually needs -- a completed handshake -- under a
+//! deadline that names what never happened. The recorder also stops counting a
+//! connection that carried no request, which is what makes the probe's
+//! three-request count mean three requests.
+
+#[path = "support/mod.rs"]
+mod support;
+// See `eval_runner.rs`: the shared module's items are reachable API of this
+// test binary, so one consumer not needing one is not dead code.
+pub use support::*;
 
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
@@ -12,63 +25,7 @@ use std::net::TcpListener;
 use std::thread;
 
 use serial_test::serial;
-
-/// Point `EVAL_SIGNALS_DIR` at a fresh tmp dir for the duration of one test,
-/// restoring the previous environment afterwards -- a leaked env var pointing
-/// at a deleted dir silently empties every later test's store.
-fn signals_dir_guard() -> SignalsDirGuard {
-    SignalsDirGuard::new()
-}
-
-impl SignalsDirGuard {
-    fn path(&self) -> &std::path::Path {
-        self.dir.path()
-    }
-}
-
-struct SignalsDirGuard {
-    dir: tempfile::TempDir,
-    prev: Option<std::ffi::OsString>,
-}
-
-impl SignalsDirGuard {
-    fn new() -> Self {
-        let dir = tempfile::tempdir().unwrap();
-        let prev = std::env::var_os("EVAL_SIGNALS_DIR");
-        std::env::set_var("EVAL_SIGNALS_DIR", dir.path());
-        Self { dir, prev }
-    }
-}
-
-impl Drop for SignalsDirGuard {
-    fn drop(&mut self) {
-        match self.prev.take() {
-            Some(v) => std::env::set_var("EVAL_SIGNALS_DIR", v),
-            None => std::env::remove_var("EVAL_SIGNALS_DIR"),
-        }
-    }
-}
-
-/// The probe sizes its requests from `EVAL_DEFAULT_TIMEOUT` (default 900s); a
-/// mock that fails to answer must fail FAST, not hang a CI run for 15 minutes.
-struct BoundedProbeTimeout;
-
-fn bounded_probe_timeout() -> BoundedProbeTimeout {
-    std::env::set_var("EVAL_DEFAULT_TIMEOUT", "5");
-    BoundedProbeTimeout
-}
-
-impl Drop for BoundedProbeTimeout {
-    fn drop(&mut self) {
-        std::env::remove_var("EVAL_DEFAULT_TIMEOUT");
-    }
-}
-
-/// A poisoned mutex must not kill a server thread: that turns one failed
-/// request into every subsequent connection hanging out its full timeout.
-fn take_lock<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
-}
+use ztools::test_env::TestEnv;
 
 // --- signal store -----------------------------------------------------------
 
@@ -106,7 +63,10 @@ fn p95_ema_rises_with_a_later_slow_reading_and_never_shrinks_it() {
 #[test]
 #[serial]
 fn effective_timeout_never_falls_below_the_documented_floor() {
-    let _g = signals_dir_guard();
+    // The sandbox, not a bare `let _`: it is what makes the policy knobs
+    // absent, so the floor asserted here is the documented default rather than
+    // whatever the operator's shell exported.
+    let _env = TestEnv::new();
     let got = ztools::eval::effective_timeout("never-measured-model", "task", 0, 0);
     assert!(
         got >= ztools::eval::default_eval_timeout(),
@@ -155,7 +115,7 @@ fn capability_samples_migrate_scalar_once_then_outvote_it() {
 #[test]
 #[serial]
 fn store_roundtrips_through_disk() {
-    let g = signals_dir_guard();
+    let (_env, signals_dir) = TestEnv::new().at("EVAL_SIGNALS_DIR");
     let mut s = ztools::eval::load_signals();
     ztools::eval::record_signal(&mut s, "model-x", "task-y", 42.0, true, false);
     ztools::eval::save_signals(&s);
@@ -164,15 +124,25 @@ fn store_roundtrips_through_disk() {
         reloaded["model-x"]["task-y"]["total_retries"],
         serde_json::json!(1)
     );
-    assert!(g.path().join("eval_signals.json").exists());
+    assert!(signals_dir.join("eval_signals.json").exists());
     // Sorted, pretty JSON so diffs on the tracked file stay readable.
-    let text = std::fs::read_to_string(g.path().join("eval_signals.json")).unwrap();
+    let text = std::fs::read_to_string(signals_dir.join("eval_signals.json")).unwrap();
     assert!(text.starts_with('{'), "{text}");
 }
 
 // --- prefill probe ----------------------------------------------------------
 
 /// Server that captures request bodies and answers each with a tiny completion.
+///
+/// The probe sizes its requests from `EVAL_DEFAULT_TIMEOUT` (default 900s), so a
+/// mock that fails to answer has to fail FAST: the alternative is a CI run that
+/// sits on a 15-minute timeout. `TestEnv::policy("EVAL_DEFAULT_TIMEOUT", "5")`
+/// in the test below is what buys that.
+///
+/// A connection that carried no request is NOT recorded. `await_stub` opens one
+/// and sends nothing, and recording it would make the probe's three-request
+/// count four and the `max_tokens` assertions below read a request that never
+/// happened.
 fn serve_recording() -> (
     u16,
     thread::JoinHandle<()>,
@@ -189,6 +159,9 @@ fn serve_recording() -> (
             let Ok(mut stream) = stream else { continue };
             let mut buf = vec![0u8; 65_536];
             let n = stream.read(&mut buf).unwrap_or(0);
+            if n == 0 {
+                continue;
+            }
             take_lock(&value).push(String::from_utf8_lossy(&buf[..n]).to_string());
             let body = r#"{"choices":[{"message":{"content":"ok"},"finish_reason":"stop"}]}"#;
             let resp = format!(
@@ -199,15 +172,18 @@ fn serve_recording() -> (
             let _ = stream.flush();
         }
     });
-    thread::sleep(std::time::Duration::from_millis(50));
+    await_stub(port);
     (port, handle, recorded)
 }
 
 #[test]
 #[serial]
 fn prefill_probe_sends_nonce_led_filler_and_records_capabilities() {
-    let _g = signals_dir_guard();
-    let _t = bounded_probe_timeout();
+    // `EVAL_DEFAULT_TIMEOUT` is one of the policy knobs `TestEnv` clears on
+    // construction, so `policy` is the whole of the old `BoundedProbeTimeout`:
+    // a `Drop` that removed the variable outright discarded whatever the
+    // operator had exported and left it absent for every later test.
+    let _env = TestEnv::new().policy("EVAL_DEFAULT_TIMEOUT", "5");
     let (port, _h, recorded) = serve_recording();
     let mut store = ztools::eval::load_signals();
     let rate = ztools::eval::measure_prefill_rate(&mut store, "probe-model", "127.0.0.1", port);
@@ -216,10 +192,21 @@ fn prefill_probe_sends_nonce_led_filler_and_records_capabilities() {
     assert_eq!(rate, None, "a microseconds answer is not a measurement");
 
     // Three calls were made: LOAD(max_tokens=1), DECODE(max_tokens=64), PROBE(max_tokens=1).
-    // ONE lock acquisition, copying the bodies out: a second take_lock while
-    // a guard is alive deadlocks the non-reentrant mutex.
+    // The wait states the condition rather than trusting the ordering: the
+    // recorder appends before it answers, so all three are already there, and
+    // "already there" is precisely the assumption a fixed sleep was standing in
+    // for. ONE lock acquisition per use: a second take_lock while a guard is
+    // alive deadlocks the non-reentrant mutex.
+    wait_for("the recorder to hold all three probe requests", || {
+        take_lock(&recorded).len() == 3
+    });
     let bodies: Vec<String> = take_lock(&recorded).clone();
-    assert_eq!(bodies.len(), 3, "{}", bodies.len());
+    assert_eq!(
+        bodies.len(),
+        3,
+        "LOAD, DECODE and PROBE, and nothing else: {}",
+        bodies.len()
+    );
     for (i, body) in bodies.iter().enumerate() {
         if i == 1 {
             assert!(

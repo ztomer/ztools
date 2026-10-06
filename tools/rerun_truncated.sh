@@ -26,11 +26,36 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$ROOT"
 GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
-source "$GOH/tui/lib.sh"
 
+# The output helpers, defined BEFORE the source so a missing tui degrades instead of
+# dying: `source` on an absent file prints "No such file or directory" and, under
+# `set -e`, exits with nothing named. Same rule tools/gpu_lock.sh states -- a guard
+# that only returns non-zero is not enough, because `return` from a sourced file
+# returns from the SOURCE and the caller carries on -- so the helpers are DEFINED here,
+# not merely checked for.
+for _rerun_helper in info ok warn err; do
+  declare -F "$_rerun_helper" >/dev/null 2>&1 || eval "
+    $_rerun_helper() { printf '%s\n' \"\$*\" >&2; }"
+done
+declare -F die >/dev/null 2>&1 || die() { err "$*"; exit "${2:-1}"; }
+if [ -f "$GOH/tui/lib.sh" ]; then
+  # shellcheck source=/dev/null
+  source "$GOH/tui/lib.sh"
+else
+  warn "no tui/lib.sh under $GOH — output is plain text, no icons or colour."
+  warn "set GOH_DIR to your gates_of_heck checkout (or run its install.sh) for the house TUI style."
+fi
+unset _rerun_helper
+
+# Seams, so this script is testable without a 27GB server, without the machine's real
+# /tmp and without writing the repo's own .sweep_status. `SWEEP_STATUS` is the SAME
+# variable sweep_models.sh reads, so the two scripts default to one status file and a
+# test redirects both with one setting. Production sets none of them.
+OSAURUS_ONE="${ZTOOLS_OSAURUS_ONE:-$ROOT/tools/osaurus_one.sh}"
+STATUS="${SWEEP_STATUS:-$ROOT/.sweep_status}"
 CEILING="${RERUN_TIMEOUT:-36000}"
 MIN_FREE_GB="${RERUN_MIN_FREE_GB:-6}"   # exhaustion floor only; pressure is gated separately
-LOGDIR="${TMPDIR:-/tmp}/ztools-sweep"; mkdir -p "$LOGDIR"
+LOGDIR="${RERUN_LOGDIR:-${TMPDIR:-/tmp}/ztools-sweep}"; mkdir -p "$LOGDIR"
 
 # Models to redo. Default: whatever .sweep_status recorded as not DONE.
 if [ "$#" -gt 0 ]; then
@@ -54,7 +79,7 @@ else
       TRUNCATED|FAILED) MODELS+=("$model") ;;
     esac
   done < <(awk -F'\t' 'NF>1 {last[$2]=$1} END {for (m in last) print last[m] "\t" m}' \
-             "$ROOT/.sweep_status" 2>/dev/null || true)
+             "$STATUS" 2>/dev/null || true)
 fi
 [ "${#MODELS[@]}" -gt 0 ] || { ok "nothing truncated; nothing to redo"; exit 0; }
 info "to redo: ${MODELS[*]}"
@@ -70,7 +95,7 @@ for MODEL in "${MODELS[@]}"; do
   # machine. Restarting frees it, which is also the state the sweep itself starts from,
   # so the check then measures what it is actually about -- whether something ELSE is
   # eating the box.
-  ./tools/osaurus_one.sh --restart >/dev/null 2>&1 || die "could not restart osaurus"
+  "$OSAURUS_ONE" --restart >/dev/null 2>&1 || die "could not restart osaurus"
 
   # Gate on PRESSURE (swap + compressor), not on headroom.
   #
@@ -116,9 +141,19 @@ for MODEL in "${MODELS[@]}"; do
   # Count DISTINCT task names that reported a score. Counting lines over-counts retries;
   # counting only the ok marker under-counts, since a warn or a fail is still a score.
   # A scored task is one row of the native eval's results table.
-  DONE_COUNT=$(grep -aoE '^\| [a-z_0-9]+ \| [0-9]+ \| ' "$LOG" 2>/dev/null \
-               | sed -E 's/^\| ([a-z_0-9]+) .*/\1/' | sort -u | wc -l | tr -d ' ')
-  DONE_COUNT=${DONE_COUNT:-0}
+  #
+  # The `|| true` is INSIDE the braces, on the grep stage, and it is load-bearing rather
+  # than defensive. `grep -o` prints its matches and then exits 1 when it matched
+  # nothing, and this script runs `set -euo pipefail`, so pipefail made that exit the
+  # ASSIGNMENT's status -- which aborted the script. The model that wedges before
+  # scoring anything produces an empty log, so the trigger was precisely the case this
+  # script exists for: it exited 1 at the count, recorded NOTHING, and never reached the
+  # second model in its list. `DONE_COUNT=${DONE_COUNT:-0}` sat on the next line as
+  # unreachable code. `wc -l` prints 0 for empty input, so isolating grep's exit status
+  # is all it takes to make the count a value again.
+  DONE_COUNT="$( { grep -aoE '^\| [a-z_0-9]+ \| [0-9]+ \| ' "$LOG" 2>/dev/null || true; } \
+                 | sed -E 's/^\| ([a-z_0-9]+) .*/\1/' | sort -u | wc -l | tr -d ' ')"
+  [[ "$DONE_COUNT" =~ ^[0-9]+$ ]] || DONE_COUNT=0
 
   if [ "$CODE" -eq 124 ]; then
     warn "$MODEL TRUNCATED AGAIN at ${CEILING}s after $DONE_COUNT task(s) — raise RERUN_TIMEOUT"
@@ -131,5 +166,5 @@ for MODEL in "${MODELS[@]}"; do
     STATE=DONE
   fi
   printf '%s\t%s\t%ss\ttasks=%s\texit=%s\n' \
-    "$STATE" "$MODEL" "$ELAPSED" "$DONE_COUNT" "$CODE" >> "$ROOT/.sweep_status"
+    "$STATE" "$MODEL" "$ELAPSED" "$DONE_COUNT" "$CODE" >> "$STATUS"
 done

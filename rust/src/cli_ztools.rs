@@ -56,8 +56,10 @@ pub(crate) fn weekend_plan(
     let year = friday.year();
 
     // Weather is needed BEFORE the pipeline: the draft and structure phases
-    // condition their suggestions and weather labels on the forecast.
-    let raw_weather = crate::ztools::weekend::fetch_weather(&d1, &d2);
+    // condition their suggestions and weather labels on the forecast. The
+    // endpoint comes from the config (`weather_url`), so a run can be pointed at
+    // a stub and no invocation of this command has to leave the machine.
+    let raw_weather = crate::ztools::weekend::fetch_weather(&d1, &d2, config);
     let weather_str = crate::ztools::weekend::format_weather_display(&raw_weather);
 
     let exclusions = crate::ztools::weekend::load_exclusions(config);
@@ -231,6 +233,14 @@ pub(crate) fn image_renamer(config: &ZtoolsConfig, dir: &Path, apply: bool) -> R
 mod capabilities;
 use capabilities::print_capabilities;
 
+// The other half of that split: what a run PRINTS once it has run them. Kept
+// next to the dispatch that decides whether a run happened, because the two are
+// one change — a table that renders scores for a run which measured nothing is
+// the defect, and it is fixed in both places or in neither.
+#[path = "cli_ztools_eval_report.rs"]
+mod eval_report;
+use eval_report::{note_unmeasured, print_outcomes, report_suite};
+
 /// `ztools status`: the harness's view of this project, as JSON.
 ///
 /// Read-only: reads the newest weekend plan and says whether it covers the
@@ -285,6 +295,13 @@ pub(crate) fn model_eval(config: &ZtoolsConfig, model: &str, opts: &EvalOptions<
         .map_err(|e| anyhow::anyhow!("GPU lock unavailable: {e}"))?;
         let expected_tasks: Vec<String> = tasks.iter().map(|t| t.name.clone()).collect();
         let mut runs: Vec<crate::ztools::eval::ModelRun> = Vec::new();
+        // Every model this command declined to measure, with the reason. Held
+        // to the end so the refusal can be BOTH printed next to the table and
+        // turned into a non-zero exit: the old `continue` after
+        // `eprintln!("✗ Skipping …")` exited 0, which made "I refused to
+        // measure this" indistinguishable from "I measured it and it scored
+        // nothing" — and a sweep files a 0 as a model it never ran.
+        let mut not_measured: Vec<String> = Vec::new();
         // Ctrl-C drains rather than kills (eval/drain.rs): the task in flight
         // finishes, the outcomes are recorded, the lock guard releases.
         crate::ztools::eval::drain::install();
@@ -306,7 +323,8 @@ pub(crate) fn model_eval(config: &ZtoolsConfig, model: &str, opts: &EvalOptions<
             let model_gb = unsigned(crate::ztools::eval::estimate_model_memory_gb(&model_name));
             let refusal = crate::ztools::eval::oversize_refusal(model_gb, None, false, None);
             if !refusal.is_empty() {
-                eprintln!("✗ Skipping {model_name}: {refusal}");
+                not_measured.push(format!("{model_name}: {refusal}"));
+                note_unmeasured(&model_name, &refusal, json_output);
                 continue;
             }
             // The banner is human progress, not data: under --json-output it
@@ -334,23 +352,28 @@ pub(crate) fn model_eval(config: &ZtoolsConfig, model: &str, opts: &EvalOptions<
             // stall watchdog. Loaded from and saved back to conf/eval_signals.json.
             let outcomes = crate::ztools::eval::run_eval_with_signals(&model_name, &tasks, &cfg);
 
+            // A server that is down does not fail any task, it never lets one
+            // START: every outcome comes back `INFRA` with score 0, and the
+            // completeness check above is happy — it counts tasks that reported,
+            // and a dead server's tasks all report. That is the run that printed
+            // "mean score 0.0" and wrote a 0 into the history a ranking reads.
+            // The verdict belongs here, where the outcomes are still in hand.
+            if let Some(why) = crate::ztools::model_eval::tasks_unmeasured_reason(&outcomes) {
+                not_measured.push(format!("{model_name}: {why}"));
+                note_unmeasured(&model_name, &why, json_output);
+            }
+
             // Completeness is DERIVED by diffing expected vs reported -- no
             // abandon path can forget to set a flag. A truncated run says so
             // out loud here AND carries the verdict into its history entries,
             // which load_historical_stats refuses to average (the bonsai 62%
             // vs 79% class of misread).
-            let run_record =
-                crate::ztools::eval::ModelRun::new(&model_name, &expected_tasks, outcomes.clone());
-            if let Some(c) = &run_record.completeness {
-                if !c.complete {
-                    eprintln!("⚠ {} (partial): {}", model_name, c.reason);
-                }
-            }
-            if let Err(e) = crate::ztools::eval::save_historical_results(&run_record, None) {
-                eprintln!("⚠ could not write eval history: {e}");
-            }
-            runs.push(run_record);
-            print_outcomes(&outcomes, json_output)?;
+            runs.push(record_run(
+                &model_name,
+                &expected_tasks,
+                &outcomes,
+                json_output,
+            )?);
         }
         report_suite(&runs, started_at);
         // Recorded and reported; now say the run was cut, with the exit code
@@ -359,6 +382,18 @@ pub(crate) fn model_eval(config: &ZtoolsConfig, model: &str, opts: &EvalOptions<
             anyhow::bail!(
                 "interrupted by Ctrl-C after {} model run(s); outcomes recorded as truncated",
                 runs.len()
+            );
+        }
+        // After the tables, never before: everything that WAS measured is still
+        // written and printed, and the run still files as FAILED. The message
+        // names each model and its cause, because a non-zero exit that does not
+        // say why is a refusal with no diagnosis.
+        if !not_measured.is_empty() {
+            anyhow::bail!(
+                "{} model run(s) were {} — nothing was measured for them: {}",
+                not_measured.len(),
+                crate::ztools::model_eval::NOT_MEASURED,
+                not_measured.join(" | ")
             );
         }
         return Ok(());
@@ -372,7 +407,43 @@ pub(crate) fn model_eval(config: &ZtoolsConfig, model: &str, opts: &EvalOptions<
         "{}",
         crate::ztools::model_eval::render_eval_report(&results)
     );
+    // Print the table FIRST, then fail: the rows carry the URL and the error for
+    // every task that was not measured, and discarding them to save an exit code
+    // would throw away the diagnosis the operator needs to fix the server.
+    if let Some(reason) = crate::ztools::model_eval::unmeasured_reason(&results) {
+        anyhow::bail!(reason);
+    }
     Ok(())
+}
+
+/// One model's full-suite run, recorded and printed.
+///
+/// Completeness is DERIVED by diffing expected vs reported -- no abandon path
+/// can forget to set a flag. A truncated run says so out loud here AND carries
+/// the verdict into its history entry, which `load_historical_stats` refuses to
+/// average (the bonsai 62% vs 79% class of misread).
+///
+/// Extracted from the dispatch loop so the loop's own shape is the refusal
+/// policy: one `continue` for a model it declined to measure, one push per run,
+/// and one verdict at the end.
+fn record_run(
+    model_name: &str,
+    expected_tasks: &[String],
+    outcomes: &[crate::ztools::eval::TaskOutcome],
+    json_output: bool,
+) -> Result<crate::ztools::eval::ModelRun> {
+    let run_record =
+        crate::ztools::eval::ModelRun::new(model_name, expected_tasks, outcomes.to_vec());
+    if let Some(c) = &run_record.completeness
+        && !c.complete
+    {
+        eprintln!("⚠ {} (partial): {}", model_name, c.reason);
+    }
+    if let Err(e) = crate::ztools::eval::save_historical_results(&run_record, None) {
+        eprintln!("⚠ could not write eval history: {e}");
+    }
+    print_outcomes(outcomes, json_output)?;
+    Ok(run_record)
 }
 
 /// "all" expands to every servable model on the server; any other value is
@@ -398,77 +469,6 @@ fn load_suite_tasks(
         anyhow::bail!("no eval tasks found (pass --tasks-dir pointing at task snapshots)");
     }
     Ok(tasks)
-}
-
-/// One model's outcomes: a JSON array under `--json-output` (stdout carries
-/// nothing else), otherwise the rendered table with substitutions noted.
-fn print_outcomes(outcomes: &[crate::ztools::eval::TaskOutcome], json_output: bool) -> Result<()> {
-    if json_output {
-        use serde::Serialize;
-        #[derive(Serialize)]
-        struct OutcomeRow<'a> {
-            task: &'a str,
-            score: u8,
-            status: &'a str,
-            time_secs: f64,
-            error: Option<&'a String>,
-            failure_category: &'a str,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            substituted_to: Option<&'a String>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            substitution_reason: Option<&'a String>,
-        }
-        let rows: Vec<OutcomeRow> = outcomes
-            .iter()
-            .map(|o| OutcomeRow {
-                task: &o.task,
-                score: o.score,
-                status: o.status.as_str(),
-                time_secs: o.time_secs,
-                error: o.error.as_ref(),
-                failure_category: o.failure_category.as_str(),
-                substituted_to: o.substituted_to.as_ref(),
-                substitution_reason: o.substitution_reason.as_ref(),
-            })
-            .collect();
-        println!("{}", serde_json::to_string_pretty(&rows)?);
-    } else {
-        for note in outcomes
-            .iter()
-            .filter_map(|o| o.substitution_reason.as_deref())
-        {
-            eprintln!("⚠ {note}");
-        }
-        print!(
-            "{}",
-            crate::ztools::model_eval::render_task_outcomes(outcomes)
-        );
-    }
-    Ok(())
-}
-
-/// Persistence + reporting, matching the Python evaluator's exports: the
-/// per-(model, task) CSV sheet, the historical trends table, the delta from
-/// the last run and the verbosity table. Nothing to do for an empty sweep.
-fn report_suite(runs: &[crate::ztools::eval::ModelRun], started_at: f64) {
-    if runs.is_empty() {
-        return;
-    }
-    let csv_path = crate::ztools::eval::default_eval_dir().join("eval_results.csv");
-    match crate::ztools::eval::export_csv(runs, &csv_path) {
-        Ok(()) => println!("→ Exported to {}", csv_path.display()),
-        Err(e) => eprintln!("⚠ CSV export failed: {e}"),
-    }
-    for line in crate::ztools::eval::render_historical_trends(None) {
-        println!("{line}");
-    }
-    for line in crate::ztools::eval::render_diff_from_last_run(runs, None, started_at) {
-        println!("{line}");
-    }
-    for line in crate::ztools::eval::render_verbosity(&crate::ztools::eval::compute_verbosity(runs))
-    {
-        println!("{line}");
-    }
 }
 
 fn resolve_models(url: &str, model: &str, config: &ZtoolsConfig) -> Result<Vec<String>> {

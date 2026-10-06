@@ -6,12 +6,13 @@
 //! must never reach the plan, and a search title has to survive cleaning with
 //! its meaning intact.
 
+use crate::test_env::TestEnv;
 use crate::ztools::weekend::{
-    flag_constant_columns, format_weather_display, render_weekend_plan_gorgeous, WeekendEvent,
+    WeekendEvent, flag_constant_columns, format_weather_display, render_weekend_plan_gorgeous,
 };
 use crate::ztools::weekend_cache::{
-    clean_venue_or_event_title, has_region_evidence, is_directory_or_list_page, load_exclusions,
-    load_region_lists, RegionLists,
+    RegionLists, clean_venue_or_event_title, has_region_evidence, is_directory_or_list_page,
+    load_exclusions, load_region_lists,
 };
 
 /// Region lists for filter tests: inline test data mirroring the shipped
@@ -200,13 +201,15 @@ fn a_title_that_cleans_down_to_nothing_is_dropped() {
 /// deliberately excluded back into the plan.
 #[test]
 fn exclusions_fall_back_to_the_built_in_defaults() {
+    let env = TestEnv::new();
     let config = crate::config::ZtoolsConfig {
         weekend_exclusions_paths: vec!["/definitely/not/a/file.toml".to_string()],
         ..crate::config::ZtoolsConfig::default()
     };
     let excl = load_exclusions(&config);
-    assert!(!excl.is_empty());
+    assert_nonempty!(&excl);
     assert!(excl.iter().any(|e| e.contains("Wonderland")), "{excl:?}");
+    drop(env);
 }
 
 /// An event with no location is titled by its name alone — "Rib Fest ()" would
@@ -230,8 +233,11 @@ fn an_event_without_a_location_renders_as_its_name_alone() {
 fn a_single_row_flags_no_constant_columns() {
     let suspects =
         std::collections::HashMap::from([("Target Age(s)".to_string(), vec!["6-12".to_string()])]);
-    assert!(flag_constant_columns(&[], &suspects).is_empty());
-    assert!(flag_constant_columns(&[event("Solo", "Vaughan", "d")], &suspects).is_empty());
+    assert_empty!(flag_constant_columns(&[], &suspects));
+    assert_empty!(flag_constant_columns(
+        &[event("Solo", "Vaughan", "d")],
+        &suspects
+    ));
 }
 
 #[test]
@@ -249,11 +255,10 @@ fn identical_columns_across_rows_are_flagged_only_when_a_suspect_value() {
     );
     // Same constant but no suspect configured -> NOT the C4 defect.
     let none: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
-    assert!(flag_constant_columns(
+    assert_empty!(flag_constant_columns(
         &[event("A", "Vaughan", "d"), event("B", "Markham", "d")],
         &none
-    )
-    .is_empty());
+    ));
 }
 
 /// A forecast line the parser cannot decompose is passed through verbatim
@@ -268,11 +273,32 @@ fn an_unparseable_forecast_line_is_passed_through() {
     assert_eq!(out, "Saturday: 28.2°C, Clear (0.0mm)");
 }
 
-/// With nothing parseable at all the display falls back to a stated default
-/// rather than rendering an empty weather field.
+/// With nothing parseable at all the display states that the forecast is
+/// MISSING, naming the cause.
+///
+/// THIS ASSERTION WAS WRONG AND HAS BEEN REVERSED (2026-10-05, the
+/// "a failure that hides" audit). It required the empty forecast to render
+/// "Fri" and "Sun" — the fabricated `"Fri 28.2°C (clear), Sat 32.0°C
+/// (precipitation), Sun 29.7°C (clear)"` that `format_weather_display` carried
+/// as a hardcoded fallback. So the defect was pinned as a requirement: a
+/// planner with no weather invented a weekend's temperatures, and this test
+/// said that was correct. The fabricated forecast is gone; the failure now
+/// renders as `WEATHER_UNAVAILABLE` plus its cause (see
+/// `tests/weather_failure.rs` for the end-to-end document and the anti-drift
+/// guard against `weekend/fetch.rs`'s own fallback literal).
 #[test]
-fn an_empty_forecast_falls_back_to_a_stated_default() {
+fn an_empty_forecast_states_that_the_forecast_is_missing() {
     let out = format_weather_display("Daily Forecast:\n\n");
-    assert!(out.contains("Fri"), "{out}");
-    assert!(out.contains("Sun"), "{out}");
+    assert!(
+        out.starts_with(crate::ztools::weekend::WEATHER_UNAVAILABLE),
+        "an empty forecast must render the failure value, not an invented one: {out}"
+    );
+    assert!(
+        out.contains(crate::ztools::weekend::WEATHER_FAILURE_CAUSE),
+        "the failure must name its cause: {out}"
+    );
+    assert!(
+        !out.contains("°C"),
+        "no temperature may be invented for a forecast that was never fetched: {out}"
+    );
 }

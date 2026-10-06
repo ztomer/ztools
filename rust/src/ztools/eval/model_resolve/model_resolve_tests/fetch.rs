@@ -13,7 +13,7 @@ use serial_test::serial;
 #[serial]
 fn drop_uncorroborated_filters_ghosts_but_never_empties_a_roster() {
     let guard = DiskGuard::new();
-    let model_dir = guard.dir.path().join("mlx/Org/DiskModel");
+    let model_dir = guard.dir().join("mlx/Org/DiskModel");
     std::fs::create_dir_all(&model_dir).unwrap();
     std::fs::write(model_dir.join("config.json"), "{}").unwrap();
 
@@ -29,6 +29,7 @@ fn drop_uncorroborated_filters_ghosts_but_never_empties_a_roster() {
     // roster far more likely means a broken probe than zero models.
     let all_ghost = vec![entry("ghost-a", "7B"), entry("ghost-b", "70B")];
     assert_eq!(drop_uncorroborated(all_ghost.clone()), all_ghost);
+    drop(guard);
 }
 
 /// One-shot localhost HTTP mock for `fetch_roster`.
@@ -57,7 +58,7 @@ fn serve_roster(body: &'static str, status_line: &'static str) -> (u16, thread::
 #[serial]
 fn fetch_roster_keeps_disk_backed_entries_and_drops_ghosts_over_the_wire() {
     let guard = DiskGuard::new();
-    let model_dir = guard.dir.path().join("mlx/Org/DiskModel");
+    let model_dir = guard.dir().join("mlx/Org/DiskModel");
     std::fs::create_dir_all(&model_dir).unwrap();
     std::fs::write(model_dir.join("config.json"), "{}").unwrap();
 
@@ -75,12 +76,13 @@ fn fetch_roster_keeps_disk_backed_entries_and_drops_ghosts_over_the_wire() {
         vec![entry("DiskModel", "8B")],
         "the ghost must not survive"
     );
+    drop(guard);
 }
 
 #[test]
 #[serial]
 fn fetch_roster_accepts_a_full_url_host() {
-    let _guard = DiskGuard::new();
+    let guard = DiskGuard::new();
     let body = r#"{"models":[{"model":"any-model"}]}"#;
     let (port, handle) = serve_roster(body, "HTTP/1.1 200 OK");
     let host = format!("http://127.0.0.1:{port}");
@@ -94,34 +96,36 @@ fn fetch_roster_accepts_a_full_url_host() {
     let roster2 = fetch_roster(&host2, 0);
     handle2.join().unwrap();
     assert_eq!(roster, roster2, "trailing slash is trimmed");
+    drop(guard);
 }
 
 #[test]
 #[serial]
 fn fetch_roster_answers_empty_when_the_server_cannot_be_asked() {
-    let _guard = DiskGuard::new();
+    let guard = DiskGuard::new();
 
     // Non-200 status.
     let (port, handle) = serve_roster("{}", "HTTP/1.1 503 Service Unavailable");
-    assert!(fetch_roster("127.0.0.1", port).is_empty());
+    assert_empty!(fetch_roster("127.0.0.1", port));
     handle.join().unwrap();
 
     // 200 with unparseable JSON.
     let (port, handle) = serve_roster("{not json", "HTTP/1.1 200 OK");
-    assert!(fetch_roster("127.0.0.1", port).is_empty());
+    assert_empty!(fetch_roster("127.0.0.1", port));
     handle.join().unwrap();
 
     // 200 with JSON lacking a models array.
     let (port, handle) = serve_roster(r#"{"other": []}"#, "HTTP/1.1 200 OK");
-    assert!(fetch_roster("127.0.0.1", port).is_empty());
+    assert_empty!(fetch_roster("127.0.0.1", port));
     handle.join().unwrap();
 
     // Connection refused: a bound-then-dropped port.
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
     drop(listener);
-    assert!(
-        fetch_roster("127.0.0.1", port).is_empty(),
+    assert_empty!(
+        fetch_roster("127.0.0.1", port),
         "down server == no evidence"
     );
+    drop(guard);
 }

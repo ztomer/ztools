@@ -136,23 +136,170 @@ pub fn iso_date(date: NaiveDate) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ztools::weekend::{
+        FIXED_SECTION_HEADING, FIXED_TABLE_HEADER, PlanHealth, TABLE_SEPARATOR,
+        TRANSIENT_SECTION_HEADING, TRANSIENT_TABLE_HEADER, WeekendEvent, format_weekend_plan,
+    };
 
+    /// A saved plan, byte for byte as [`format_weekend_plan`] writes it.
+    ///
+    /// It was hand-typed, and it drifted: the six-column header and the
+    /// `(Ranked by Fit Score (computed, not reviews))` headings it carried were
+    /// the PRE-`Dates` spelling, which no writer has produced since the column
+    /// was added. Nothing noticed for a month, because the parsers here are
+    /// header-keyed — a document with the wrong columns still parses, it just
+    /// parses into rows whose keys are columns the writer never emits. A parser
+    /// fixture that is not a writer's output is a test that cannot fail for the
+    /// reason it exists.
+    ///
+    /// So the document is the writer's, and
+    /// `the_embedded_sample_is_the_document_the_writer_produces` renders the same
+    /// inputs and requires the bytes to match. It stays a LITERAL on purpose:
+    /// building it by calling the writer would make this file's parser tests
+    /// agree with a broken writer by construction.
     const SAMPLE: &str = "\
-# Weekend Plan: August 14 to August 16, 2026
+# Weekend Plan: August 14 to August 16, 2026 (Vaughan)
 
-### Fixed / Year-Round Activities (Ranked by Fit Score (computed, not reviews))
+**Location:** Vaughan
+**Target Ages:** 6-12
+**Weather:** Fri 28.2°C (clear), Sat 32.0°C (precipitation)
 
-| Score | Activity & Location | Target Age(s) | Estimated Price (CAD) | Weather Appropriateness | Why It Fits |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| * 2.5/5 | **Air Riderz** (Vaughan, ON) | 5 and up | — | outdoor | Good |
-| * 1.9/5 | **Kortright Centre** (Toronto, ON) | 5 and up | — | indoor | Good |
+### Fixed / Year-Round Activities (Ranked by Fit Score)
 
-### Transient / Limited-Time Events (Ranked by Fit Score (computed, not reviews))
+| Score | Activity & Location | Dates | Target Age(s) | Estimated Price (CAD) | Weather Appropriateness | Why It Fits |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| * 2.5/5 | **Air Riderz** (Vaughan, ON) | — | 5 and up | — | outdoor | Indoor inflatable park |
+| * 1.9/5 | **Kortright Centre** (Toronto, ON) | Year-Round | 5 and up | — | indoor | Trails and a centre for discovery |
 
-| Score | Event & Location | Day & Time | Target Age(s) | Estimated Price (CAD) | Why It Fits |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| * 4.0/5 | Maple Syrup Festival (Vaughan) | Saturday | 6-13 | By donation | Fresh |
+### Transient / Limited-Time Events (Ranked by Fit Score)
+
+| Score | Event & Location | Dates | Day & Time | Target Age(s) | Estimated Price (CAD) | Why It Fits |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| * 4.0/5 | **Maple Syrup Festival** | April 11 to 12 | Saturday 10am-4pm | 6-13 | By donation | Fresh maple, made on site |
+
+_Provenance: 3 extracted, 1 unsourced, 1 outside the window, 1 excluded._
 ";
+
+    // `Maple Syrup Festival` carries NO location parenthetical while the two
+    // fixed rows do, and that is the writer's `fmt_name_loc` rule rather than a
+    // slip: an event at the plan's own city has nowhere else to be. It is left
+    // in because a fixture that exercises both branches is worth more than one
+    // that exercises the easy one — and because "fixing" it back is the exact
+    // edit this gate exists to catch.
+
+    fn event(name: &str, location: &str, price: &str, ages: &str, score: f32) -> WeekendEvent {
+        WeekendEvent {
+            name: name.to_string(),
+            location: location.to_string(),
+            price: price.to_string(),
+            target_ages: ages.to_string(),
+            dates: String::new(),
+            day: String::new(),
+            weather: String::new(),
+            description: String::new(),
+            is_transient: true,
+            score,
+            start_date: String::new(),
+            end_date: String::new(),
+            duration: String::new(),
+        }
+    }
+
+    /// The inputs [`SAMPLE`] is the output of. Kept beside the literal so the
+    /// two are edited together — see the drift gate below.
+    fn sample_plan() -> String {
+        let mut health = PlanHealth::nominal();
+        health.provenance.extracted = 3;
+        health.provenance.unsourced = 1;
+        health.provenance.outside_window = 1;
+        health.provenance.excluded = 1;
+
+        // Location `Vaughan` IS the plan's own city, so this row's location
+        // prints with no parenthetical while the two fixed rows keep theirs.
+        let mut festival = event(
+            "Maple Syrup Festival",
+            "Vaughan",
+            "By donation",
+            "6-13",
+            4.0,
+        );
+        festival.dates = "April 11 to 12".to_string();
+        festival.day = "Saturday 10am-4pm".to_string();
+        festival.description = "Fresh maple, made on site".to_string();
+
+        // No dates and no price at all: the writer must print the missing-value
+        // sentinel in both cells rather than leave them empty.
+        let mut air_riderz = event("Air Riderz", "Vaughan, ON", "", "5 and up", 2.5);
+        air_riderz.weather = "outdoor".to_string();
+        air_riderz.description = "Indoor inflatable park".to_string();
+
+        let mut kortright = event("Kortright Centre", "Toronto, ON", "", "5 and up", 1.9);
+        kortright.dates = "Year-Round".to_string();
+        kortright.weather = "indoor".to_string();
+        kortright.description = "Trails and a centre for discovery".to_string();
+
+        format_weekend_plan(
+            &[festival],
+            &[air_riderz, kortright],
+            "Vaughan",
+            "6-12",
+            "August 14 to August 16, 2026",
+            "Fri 28.2°C (clear), Sat 32.0°C (precipitation)",
+            &health,
+        )
+    }
+
+    /// The drift gate. A shared constant stops the SPELLING from drifting; this
+    /// stops the SAMPLE from drifting from the constant, which is the half a
+    /// constant alone cannot do — nothing in the type system says a hand-typed
+    /// fixture is still what the writer prints.
+    #[test]
+    fn the_embedded_sample_is_the_document_the_writer_produces() {
+        let rendered = sample_plan();
+        if rendered == SAMPLE {
+            return;
+        }
+        // Print the first difference and both sides' line counts: a reader needs
+        // to tell a moved heading from a dropped row, and that is the whole
+        // failure this replaces.
+        let first = rendered
+            .lines()
+            .zip(SAMPLE.lines())
+            .position(|(a, b)| a != b)
+            .unwrap_or_else(|| rendered.lines().count().min(SAMPLE.lines().count()));
+        panic!(
+            "the sample plan in this file is not what format_weekend_plan writes.\n  \
+             first difference at line {}\n  rendered: {:?}\n  sample:   {:?}\n  \
+             lines: rendered {}, sample {}\nA parser fixture that is not a writer's output \
+             tests nothing: fix SAMPLE or the inputs beside it, and read the difference \
+             before changing either.",
+            first + 1,
+            rendered.lines().nth(first),
+            SAMPLE.lines().nth(first),
+            rendered.lines().count(),
+            SAMPLE.lines().count(),
+        );
+    }
+
+    /// The headings and headers the shared constants promise, in the bytes the
+    /// sample carries — so the sample cannot quietly go back to the old
+    /// six-column spelling under a passing drift gate.
+    #[test]
+    fn the_sample_carries_the_shared_headings_and_headers() {
+        for (name, expected) in [
+            ("fixed heading", FIXED_SECTION_HEADING),
+            ("transient heading", TRANSIENT_SECTION_HEADING),
+            ("fixed header", FIXED_TABLE_HEADER),
+            ("transient header", TRANSIENT_TABLE_HEADER),
+            ("separator", TABLE_SEPARATOR),
+        ] {
+            assert!(SAMPLE.contains(expected), "{name} missing from SAMPLE");
+        }
+        assert!(
+            !SAMPLE.contains("(computed, not reviews)"),
+            "the old heading text is back in the sample"
+        );
+    }
 
     #[test]
     fn parse_tables_adds_the_separator_and_keeps_header_text() {
@@ -174,7 +321,7 @@ mod tests {
         assert_eq!(fixed_rows(SAMPLE).len(), 2);
         assert_eq!(transient_rows(SAMPLE).len(), 1);
         // The fixed heading contains neither needle; a missing section is [].
-        assert!(rows_matching("## Some Other Section\n", "fixed").is_empty());
+        assert_empty!(rows_matching("## Some Other Section\n", "fixed"));
     }
 
     #[test]

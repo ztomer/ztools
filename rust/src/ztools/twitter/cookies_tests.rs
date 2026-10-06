@@ -93,7 +93,7 @@ fn unreadable_db_yields_empty_not_error() {
     let db = dir.path().join("cookies.sqlite");
     std::fs::write(&db, b"not a database").unwrap();
     let cookies = read_firefox_cookies(&db, DEFAULT_DOMAINS).unwrap();
-    assert!(cookies.is_empty());
+    assert_empty!(cookies);
 }
 
 #[test]
@@ -194,24 +194,81 @@ fn test_find_profile_dbs_under_collects_only_cookie_files() {
 fn test_find_profile_dbs_under_missing_profiles_dir_is_empty() {
     let home = tempfile::tempdir().unwrap();
     // Home exists but has no Firefox profiles at all.
-    assert!(find_profile_dbs_under(home.path()).is_empty());
+    assert_empty!(find_profile_dbs_under(home.path()));
 }
 
+/// The scanner, against a fixture HOME.
+///
+/// It used to call `find_firefox_profile_dbs()`, which resolves
+/// `dirs::home_dir()` -- so it walked the DEVELOPER'S real
+/// `~/Library/Application Support/Firefox/Profiles` and asserted only an
+/// invariant over whatever happened to be installed there. Zero assertions on
+/// a clean machine, and a reading of the real browser profile tree from a unit
+/// test, which the suite's own rule forbids.
+///
+/// The fixture is the whole point: `find_profile_dbs_under` is the seam
+/// `find_firefox_profile_dbs` itself exists to delegate to, so pinning it pins
+/// the only line of behaviour there is a test can own.
 #[test]
-fn test_find_firefox_profile_dbs_reports_only_cookie_dbs() {
-    // Contract over the real home dir (no env mutation): whatever it finds
-    // must be a cookies.sqlite inside a Firefox Profiles subtree. Whether
-    // the user has Firefox at all is not part of this contract.
-    for db in find_firefox_profile_dbs() {
-        assert_eq!(db.file_name().unwrap().to_string_lossy(), "cookies.sqlite");
-        let ancestors: Vec<_> = db
-            .ancestors()
-            .map(|p| p.to_string_lossy().to_string())
-            .collect();
-        assert!(
-            ancestors.iter().any(|a| a.ends_with("Firefox/Profiles")),
-            "{db:?} is not under a Firefox Profiles dir"
-        );
-        assert!(db.is_file(), "reported db {db:?} is not a file");
-    }
+fn the_firefox_profile_scanner_finds_only_cookie_dbs_under_a_profiles_dir() {
+    let home = tempfile::tempdir().unwrap();
+    let profiles = home
+        .path()
+        .join("Library/Application Support/Firefox/Profiles");
+    // A real Firefox profile.
+    std::fs::create_dir_all(profiles.join("abc123.default-release")).unwrap();
+    std::fs::write(
+        profiles.join("abc123.default-release/cookies.sqlite"),
+        b"sqlite",
+    )
+    .unwrap();
+    // A profile with no cookie store: nothing to read, so nothing reported.
+    std::fs::create_dir_all(profiles.join("empty.dev-edition")).unwrap();
+    // A DIRECTORY named cookies.sqlite in a SECOND profile: the scanner tests
+    // `is_file`, not `exists`, so this must not be reported as a database.
+    let trap = profiles.join("def456.dev-edition");
+    std::fs::create_dir_all(trap.join("cookies.sqlite")).unwrap();
+
+    let dbs = find_profile_dbs_under(home.path());
+
+    assert_eq!(
+        dbs,
+        vec![profiles.join("abc123.default-release/cookies.sqlite")],
+        "exactly the one real cookie store: a directory of that name is not a \
+         database, and a profile without one is not a hit"
+    );
+}
+
+/// The wrapper's own half, which is the `dirs::home_dir()` lookup.
+///
+/// `find_firefox_profile_dbs` is three lines and the only one with behaviour
+/// is "follow `$HOME`", so that is what this pins. `$HOME` is MANAGED but
+/// PRESERVED (see `Point::Preserved`), so `set_managed` writes the fixture and
+/// the guard's drop puts the operator's back -- which matters more here than
+/// anywhere else in the crate, because the alternative is a walk of the real
+/// Firefox profile tree.
+#[test]
+#[serial_test::serial]
+fn the_home_anchored_wrapper_follows_home_rather_than_the_real_machine() {
+    let env = crate::test_env::TestEnv::new();
+    let home = env.root().join("fake-home");
+    let profile = home.join("Library/Application Support/Firefox/Profiles/abc.default");
+    std::fs::create_dir_all(&profile).unwrap();
+    std::fs::write(profile.join("cookies.sqlite"), b"sqlite").unwrap();
+    env.set_managed("HOME", home.as_os_str());
+
+    let dbs = find_firefox_profile_dbs();
+
+    assert_eq!(
+        dbs,
+        vec![profile.join("cookies.sqlite")],
+        "the answer is the FIXTURE home's, not the developer's profile tree"
+    );
+    drop(env);
+    assert_ne!(
+        std::env::var_os("HOME").as_deref(),
+        Some(home.as_os_str()),
+        "the operator's `$HOME` is back: a test that left a fixture home behind \
+         would send every later `~` reader in the binary into this sandbox"
+    );
 }

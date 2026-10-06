@@ -1,96 +1,109 @@
 //! Integration tests for the weekend module's HTTP-dependent functions.
 //!
-//! Spins up a mock HTTP server that responds to Open-Meteo and Ollama-style
-//! endpoints, then exercises the real `fetch_weather` and `call_osaurus_json`
-//! wrappers against it. This covers the HTTP request/response cycle that the
-//! pure-parsing unit tests can't reach.
+//! Both endpoints are loopback stubs bound to `127.0.0.1:0`, so the real
+//! transport runs — client build, request line, body decode, and the failure
+//! path — and nothing here can reach the live Open-Meteo endpoint. The stub
+//! RECORDS what it was asked for, so a passing test proves the bytes crossed a
+//! socket rather than that a hand-fed value parsed.
+//!
+//! The LLM half of the pipeline is covered where its mock is built for what it
+//! returns: `weekend_fetch_tests.rs` drives `fetch_duckduckgo_events` against a
+//! loopback chat endpoint and asserts the parsed events field by field.
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
-use ztools::config::ZtoolsConfig;
-
-/// A mock HTTP server that handles one request then stops. Returns the port.
-fn mock_server(response_body: &'static str) -> (u16, thread::JoinHandle<()>) {
+/// A loopback stub answering up to `requests` connections with `body` as JSON,
+/// recording each request line. Returns the URL and the recorder.
+fn stub_server(body: &'static str, requests: usize) -> (String, Arc<Mutex<Vec<String>>>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
-    let handle = thread::spawn(move || {
-        let Some(Ok(mut stream)) = listener.incoming().next() else {
-            return;
-        };
-        let mut buf = [0u8; 2048];
-        let _ = stream.read(&mut buf);
-        let http = format!(
-            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{}",
-            response_body.len(),
-            response_body
-        );
-        let _ = stream.write_all(http.as_bytes());
-        let _ = stream.flush();
-    });
-    thread::sleep(std::time::Duration::from_millis(50));
-    (port, handle)
-}
-
-fn config_with_url(url: &str) -> ZtoolsConfig {
-    ZtoolsConfig {
-        osaurus_url: url.into(),
-        // Loopback, never the defaults: a default engine URL is the live
-        // site, and a unit test that reaches it measures its uptime.
-        duckduckgo_url: "http://127.0.0.1:1/".into(),
-        bing_url: "http://127.0.0.1:1/".into(),
-        brave_url: "http://127.0.0.1:1/".into(),
-        ..ZtoolsConfig::default()
-    }
-}
-
-#[test]
-fn fetch_weather_parses_mock_meteo_response() {
-    let (port, _handle) = mock_server(
-        r#"{"daily":{"time":["2026-08-07","2026-08-08"],"temperature_2m_max":[28.2,32.0],"precipitation_sum":[0.0,1.2]}}"#,
-    );
-    // fetch_weather builds its own URL pointing at the real Open-Meteo API, so
-    // we test the parsing path via the mock by calling parse_weather_json
-    // directly with the mock's response shape. The HTTP wrapper is too
-    // hardcoded to redirect, but the parsing is the valuable logic.
-    let json: serde_json::Value = serde_json::json!({
-        "daily": {
-            "time": ["2026-08-07", "2026-08-08"],
-            "temperature_2m_max": [28.2, 32.0],
-            "precipitation_sum": [0.0, 1.2]
+    let addr = listener.local_addr().unwrap();
+    let seen: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+    let recorder = Arc::clone(&seen);
+    thread::spawn(move || {
+        for _ in 0..requests {
+            let Ok((mut stream, _)) = listener.accept() else {
+                return;
+            };
+            let mut buf = [0u8; 4096];
+            let read = stream.read(&mut buf).unwrap_or(0);
+            let head = String::from_utf8_lossy(&buf[..read]).into_owned();
+            if let Some(line) = head.lines().next() {
+                recorder
+                    .lock()
+                    .expect("recorder lock")
+                    .push(line.to_string());
+            }
+            let http = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = stream.write_all(http.as_bytes());
+            let _ = stream.flush();
         }
     });
-    let forecast = ztools::weekend::parse_weather_json(&json).unwrap();
-    assert!(forecast.contains("2026-08-07: 28.2°C"));
-    assert!(forecast.contains("Clear"));
-    assert!(forecast.contains("Precipitation"));
-    let _ = port;
+    (format!("http://{addr}/v1/forecast"), seen)
+}
+
+/// The exact forecast line for a day: `{date}: {temp}°C, {cond} ({precip}mm)`.
+/// Rain is `precip > 0.5`, so 1.2mm is Precipitation and 0.0mm is Clear.
+const METEO_BODY: &str = r#"{"daily":{"time":["2026-08-07","2026-08-08"],"temperature_2m_max":[28.2,32.0],"precipitation_sum":[0.0,1.2]}}"#;
+
+#[test]
+fn fetch_weather_over_http_returns_the_forecast_the_stub_served() {
+    let (url, seen) = stub_server(METEO_BODY, 1);
+
+    let forecast = ztools::weekend::fetch_weather_from(&url);
+
+    // Both days, both conditions, byte for byte — the parser AND the transport
+    // that delivered the bytes it parsed.
+    assert_eq!(
+        forecast,
+        "Daily Forecast:\n\
+         2026-08-07: 28.2°C, Clear (0.0mm)\n\
+         2026-08-08: 32.0°C, Precipitation (1.2mm)"
+    );
+    let requests = seen.lock().expect("recorder lock").clone();
+    assert_eq!(
+        requests,
+        vec!["GET /v1/forecast HTTP/1.1".to_string()],
+        "the forecast came off a socket, so the endpoint must actually have been asked"
+    );
+}
+
+/// The exact fallback both failure paths must produce. Pinned verbatim: the
+/// plan renders this string, so "the fetch failed" is only honest if the words
+/// on the page are these ones.
+const FALLBACK_FORECAST: &str =
+    "Daily Forecast: Friday: 24.5°C Clear, Saturday: 26.0°C Clear, Sunday: 23.0°C Clear";
+
+#[test]
+fn fetch_weather_returns_the_fixed_forecast_when_the_endpoint_is_dead() {
+    // Port 1 on loopback refuses: the transport fails and the wrapper must
+    // answer with the documented fallback rather than panic or return "".
+    let forecast = ztools::weekend::fetch_weather_from("http://127.0.0.1:1/v1/forecast");
+
+    assert_eq!(forecast, FALLBACK_FORECAST);
 }
 
 #[test]
-fn call_osaurus_json_parses_mock_llm_response() {
-    let (port, _handle) = mock_server(
-        r#"{"choices":[{"message":{"content":"{\"transient_events\":[{\"name\":\"Test Event\",\"location\":\"Toronto\"}]}"}}]}"#,
+fn a_reachable_endpoint_answering_zero_days_still_yields_the_fixed_forecast() {
+    // A valid envelope and a 200 with an EMPTY daily block: the other failure
+    // mode, reached after a successful round trip rather than instead of one.
+    // The plan must not be handed an empty "Daily Forecast:" header instead.
+    let (url, seen) = stub_server(
+        r#"{"daily":{"time":[],"temperature_2m_max":[],"precipitation_sum":[]}}"#,
+        1,
     );
-    let config = config_with_url(&format!("http://127.0.0.1:{port}"));
-    let ctx = ztools::weekend::PlanContext {
-        location: "Vaughan".into(),
-        ages: "6-12".into(),
-        date_range: "Aug 7 to Aug 9".into(),
-        year: 2026,
-        exclusions: "none".into(),
-    };
-    let (events, corpus, _health) = ztools::weekend::fetch_duckduckgo_events(
-        "Vaughan",
-        chrono::NaiveDate::parse_from_str("2026-08-07", "%Y-%m-%d").unwrap(),
-        chrono::NaiveDate::parse_from_str("2026-08-09", "%Y-%m-%d").unwrap(),
-        "sunny",
-        &ctx,
-        &config,
+
+    let forecast = ztools::weekend::fetch_weather_from(&url);
+
+    assert_eq!(forecast, FALLBACK_FORECAST);
+    assert_eq!(
+        seen.lock().expect("recorder lock").len(),
+        1,
+        "the endpoint answered, so this must be the parse-fail path and not a dead one"
     );
-    // The function may return events or empty depending on the LLM response
-    // shape, but it must not panic. The dispatch + HTTP + parse cycle runs.
-    let _ = events.len();
-    let _ = corpus.len();
 }

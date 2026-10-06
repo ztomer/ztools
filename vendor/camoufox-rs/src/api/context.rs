@@ -20,6 +20,19 @@ use crate::protocol::errors::{ProtocolError, ProtocolErrorKind};
 // Context configuration types
 // ---------------------------------------------------------------------------
 
+/// One attach we saw and skipped while waiting for the page frame: the session
+/// id, and the target id when the event carried one.
+type SkippedAttach = (String, Option<String>);
+
+/// The bounded, listener-shared record of [`SkippedAttach`]s, handed to the
+/// timeout path so a failed attach can name what it skipped.
+///
+/// Named because the inline spelling (`Arc<Mutex<Vec<(String, Option<String>)>>>`)
+/// is what `clippy::type_complexity` rejects, and it used to be silenced by a
+/// function-level `#[allow(clippy::type_complexity)]` on `new_main_frame` — an
+/// attribute on the whole function, to quiet a lint on one local binding.
+type SkippedAttaches = Arc<Mutex<Vec<SkippedAttach>>>;
+
 /// Options for configuring a browser context.
 ///
 /// All fields are optional. Only the non-`None` / non-default fields result
@@ -185,7 +198,7 @@ pub struct CookieOptions {
     /// Whether the cookie is HTTP-only (not accessible via JavaScript).
     #[serde(rename = "httpOnly", skip_serializing_if = "Option::is_none")]
     pub http_only: Option<bool>,
-    /// SameSite attribute: `"Strict"`, `"Lax"`, or `"None"`.
+    /// `SameSite` attribute: `"Strict"`, `"Lax"`, or `"None"`.
     #[serde(rename = "sameSite", skip_serializing_if = "Option::is_none")]
     pub same_site: Option<String>,
     /// Expiry as a Unix timestamp in seconds. `-1` for session cookies.
@@ -216,7 +229,7 @@ pub struct Cookie {
     pub secure: bool,
     /// Whether this is a session cookie.
     pub session: bool,
-    /// SameSite attribute: `"Strict"`, `"Lax"`, or `"None"`.
+    /// `SameSite` attribute: `"Strict"`, `"Lax"`, or `"None"`.
     #[serde(rename = "sameSite")]
     pub same_site: String,
 }
@@ -276,7 +289,7 @@ impl BrowserContext {
     /// This is an internal constructor. External users should use
     /// [`Browser::new_context`](crate::api::browser::Browser::new_context).
     pub(crate) fn new(context_id: String, session: &Session, connection: Arc<Connection>) -> Self {
-        BrowserContext {
+        Self {
             context_id,
             session: session.clone(),
             connection,
@@ -289,12 +302,12 @@ impl BrowserContext {
     }
 
     /// Returns a reference to the shared connection.
-    pub fn connection(&self) -> &Arc<Connection> {
+    pub const fn connection(&self) -> &Arc<Connection> {
         &self.connection
     }
 
     /// Get a reference to the root session.
-    fn session(&self) -> &Session {
+    const fn session(&self) -> &Session {
         &self.session
     }
 
@@ -575,7 +588,6 @@ impl BrowserContext {
     /// - `"timeout waiting for main frame attach …"` — `ATTACH_TIMEOUT`
     ///   elapsed and no `Page.frameAttached` with `parentFrameId` absent
     ///   was seen on the page session.
-    #[allow(clippy::type_complexity)]
     pub fn new_main_frame(&self) -> Result<MainFrame, ProtocolError> {
         const MAX_SKIPPED_ATTACHES: usize = 16;
         let conn = &self.connection;
@@ -586,7 +598,7 @@ impl BrowserContext {
         // event. Skipped attaches go into a bounded Vec for the timeout
         // diagnostic.
         let (attach_tx, attach_rx) = mpsc::channel::<(String, String)>();
-        let skipped: Arc<Mutex<Vec<(String, Option<String>)>>> =
+        let skipped: SkippedAttaches =
             Arc::new(Mutex::new(Vec::with_capacity(MAX_SKIPPED_ATTACHES)));
         let skipped_clone = Arc::clone(&skipped);
         conn.on_event(
@@ -601,7 +613,7 @@ impl BrowserContext {
                 let t_url = ti
                     .and_then(|v| v.get("url"))
                     .and_then(|v| v.as_str())
-                    .map(|s| s.to_owned());
+                    .map(std::borrow::ToOwned::to_owned);
 
                 if t_type == "page" {
                     let session_id = event
@@ -729,8 +741,7 @@ impl BrowserContext {
             let is_main_world = aux
                 .and_then(|a| a.get("name"))
                 .and_then(|n| n.as_str())
-                .map(|n| n.is_empty())
-                .unwrap_or(true);
+                .map_or(true, str::is_empty);
             let ctx_id = match event
                 .params
                 .get("executionContextId")

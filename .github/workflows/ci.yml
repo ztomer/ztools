@@ -1,0 +1,73 @@
+# The gate of record, on every push and pull request.
+#
+# WHY THIS EXISTS (ROADMAP G6, decided 2026-10-06). The gate used to run only
+# from a pre-push hook, and `core.hooksPath` is local config: a fresh clone had
+# no gate at all, and nothing outside this machine ever checked a commit. This
+# job runs the SAME step list -- `make ci` -> gates_of_heck's local_ci.sh ->
+# .gatesrc GOH_CI_STEPS -- so CI cannot be weaker or stronger than the hook.
+#
+# macOS on Apple silicon, because that is the platform this tool ships for:
+# install.sh rejects macOS Intel, and the eval and twitter paths are macOS-first.
+#
+# gates_of_heck is cloned at its main HEAD, exactly what the local hooks
+# delegate to at runtime. Its install.sh is the documented bootstrap: it builds
+# the native `goh` binary the structural layer execs.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      GOH_DIR: ${{ runner.temp }}/gates_of_heck
+      CARGO_TERM_COLOR: never
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain from rust-toolchain.toml
+        run: |
+          rustup toolchain install   # reads rust-toolchain.toml: channel + components
+          rustup component add llvm-tools-preview
+          rustc -V
+          cargo clippy -V
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rust
+            vendor/camoufox-rs
+
+      - name: Gate tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit,cargo-deny,cargo-llvm-cov
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Python and shell tools
+        run: |
+          python -m pip install --upgrade ruff pytest
+          brew install shellcheck
+
+      - name: gates_of_heck
+        run: |
+          git clone --depth 1 https://github.com/ztomer/gates_of_heck "$GOH_DIR"
+          "$GOH_DIR/install.sh" "$GITHUB_WORKSPACE"
+
+      - name: make ci
+        run: make ci

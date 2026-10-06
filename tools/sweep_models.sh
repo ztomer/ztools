@@ -46,7 +46,37 @@ fi
 
 ROOT="${SWEEP_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
-source "$GOH/tui/lib.sh"
+
+# The output helpers, defined BEFORE the source so a missing tui degrades instead of
+# dying. Two separate failures, one cause: `source` on an absent file prints
+# "tui/lib.sh: No such file or directory" and, under `set -e`, exits with no
+# explanation -- and had `die` then been undefined, the bare "die: command not found"
+# is not an abort at all but a CONTINUE. tools/gpu_lock.sh documents the damage that
+# caused: gpu_lock_acquire could never time out, it spun forever, and the test suite
+# hung at 24%. A guard that only returns non-zero is not enough either -- `return` from
+# a sourced file returns from the SOURCE and the caller carries on -- so the helpers
+# are DEFINED here, not merely checked for.
+for _sweep_helper in info ok warn err; do
+  declare -F "$_sweep_helper" >/dev/null 2>&1 || eval "
+    $_sweep_helper() { printf '%s\n' \"\$*\" >&2; }"
+done
+declare -F die >/dev/null 2>&1 || die() { err "$*"; exit "${2:-1}"; }
+if [ -f "$GOH/tui/lib.sh" ]; then
+  # shellcheck source=/dev/null
+  source "$GOH/tui/lib.sh"
+else
+  section() { printf '\n-- %s --\n' "$*"; }
+  warn "no tui/lib.sh under $GOH — output is plain text, no icons or colour."
+  warn "set GOH_DIR to your gates_of_heck checkout (or run its install.sh) for the house TUI style."
+fi
+unset _sweep_helper
+
+# The server guard, as a PATH-INDEPENDENT seam. This runs unattended for hours and its
+# results are worthless without exactly one server, so the guarantee is this file
+# succeeding -- and a test must be able to prove the sweep REFUSES without one without
+# loading 27GB of weights. A bare absolute path can be stubbed by neither PATH nor
+# $ROOT, so production keeps the default and a test overrides the whole path.
+OSAURUS_ONE="${ZTOOLS_OSAURUS_ONE:-$ROOT/tools/osaurus_one.sh}"
 
 STATUS="${SWEEP_STATUS:-$ROOT/.sweep_status}"
 # Per-RUN log directory, with a `latest` symlink.
@@ -109,7 +139,7 @@ ln -sfn "$LOGDIR" "$LOGROOT/latest"
 touch "$STATUS"
 
 # One server, or the numbers are worthless. See tools/osaurus_one.sh.
-"$ROOT/tools/osaurus_one.sh" >/dev/null || die "could not establish a single osaurus server"
+"$OSAURUS_ONE" >/dev/null || die "could not establish a single osaurus server"
 
 if [ -n "$ONLY_MODEL" ]; then
   MODELS="$ONLY_MODEL"
@@ -119,7 +149,11 @@ fi
 [ -n "$MODELS" ] || die "no models to sweep (skip pattern: $SKIP_RE)"
 info "skipping: $SKIP_RE"
 
-TOTAL="$(printf '%s\n' "$MODELS" | grep -c .)"
+# Count the model list with awk, not `grep -c .`. Same reason as the two counts below
+# and for the same class: `grep -c` prints its count on stdout and THEN exits non-zero
+# when nothing matched, so a value built from it is only correct by accident, and a
+# `|| echo 0` fallback turns "0" into the two-line string "0\n0".
+TOTAL="$(printf '%s\n' "$MODELS" | awk 'NF { n++ } END { printf "%d\n", n + 0 }')"
 section "Sweeping $TOTAL model(s)"
 info "status: $STATUS"
 info "logs:   $LOGDIR"
@@ -157,16 +191,26 @@ for MODEL in $MODELS; do
   # every model and made a model that scored badly look like a model that ran fewer
   # tasks, which is the truncated-looks-complete confusion this script exists to
   # prevent, inverted.
-  # DISTINCT task names, because a retried task logs a second score line and a raw
-  # line count then exceeds the number of tasks that exist -- 30 of 23, which is not
-  # a progress number, it is a bug wearing one.
+# DISTINCT task NAMES, not distinct rows. The old `tr -d ' ·⚠✗:'` normalised the
+  # matched row but kept the SCORE in it, so `sort -u` deduped (name, score) pairs: a
+  # retry that came back with a different score counted twice, and the progress number
+  # exceeded the number of tasks that exist -- 30 of 23, which is not a progress
+  # number, it is a bug wearing one. The name is extracted FIRST and the dedup runs on
+  # the name alone, which is what rerun_truncated.sh already does.
   # `wc -l`, not `grep -c ... || echo 0`: grep -c prints 0 AND exits non-zero when
   # nothing matches, so the fallback fired too and TASKS_DONE became "0\n0" -- which
   # then split the status line in two. wc -l succeeds on empty input.
+  # The `|| true` on the grep stage is the same rule for the sibling failure mode: the
+  # matcher exits non-zero when it matched NOTHING, which is the ordinary case for a
+  # model that refused to score. This script has no `set -e` so that exit is harmless
+  # here, but it reaches the assignment's status, and rerun_truncated.sh -- which does
+  # have `set -euo pipefail` -- aborted on exactly this before the fix. `|| true`
+  # INSIDE the braces keeps the count a value and not an exit status.
   # A scored task is one row of the results table `| task | score | status | ... |`
   # (the old Python log used `  · task:` lines).
-  TASKS_DONE=$(grep -ohE '^\| [a-z_0-9]+ \| [0-9]+ \| ' "$LOG" 2>/dev/null \
-    | tr -d ' ·⚠✗:' | sort -u | wc -l | tr -d ' ')
+  TASKS_DONE="$( { grep -ohE '^\| [a-z_0-9]+ \| [0-9]+ \| ' "$LOG" 2>/dev/null || true; } \
+    | sed -E 's/^\| ([a-z_0-9]+) .*/\1/' | sort -u | wc -l | tr -d ' ')"
+  [[ "$TASKS_DONE" =~ ^[0-9]+$ ]] || TASKS_DONE=0
 
   # Remove any prior line for this model so --resume sees one record per model.
   if [ -s "$STATUS" ]; then
@@ -198,7 +242,22 @@ done
 
 section "Sweep summary"
 cat "$STATUS"
-INCOMPLETE="$(grep -cE '^(TRUNCATED|FAILED)' "$STATUS" 2>/dev/null || echo 0)"
+# How many models did not finish. This is the verdict an operator reads, so it is
+# counted by a tool that ALWAYS exits 0 and ALWAYS prints a number, with the
+# unreadable-status-file case named rather than silently counted as zero.
+#
+# `grep -cE '^(TRUNCATED|FAILED)' "$STATUS" 2>/dev/null || echo 0` was here and was
+# wrong twice: `grep -c` prints 0 AND exits 1 when nothing matches, so the fallback
+# fired as well and INCOMPLETE became the two-line string "0\n0", which `[ -gt 0 ]`
+# rejected with "integer expression expected" on every all-green sweep. It did not
+# fail OPEN (a real TRUNCATED/FAILED row makes grep -c exit 0 with a valid count) --
+# it printed an error instead of a verdict. It was also a re-introduction of the very
+# construct this file had already fixed at TASKS_DONE, which is why the fix is now a
+# RULE rather than a patched line: never build a number from a command whose EXIT
+# STATUS is part of its output contract. Every count in this file ends in wc -l or
+# awk, both of which succeed on empty input.
+INCOMPLETE="$(awk '/^(TRUNCATED|FAILED)/ { n++ } END { printf "%d\n", n + 0 }' "$STATUS")" \
+  || die "could not read the status file at $STATUS — not claiming the sweep completed"
 if [ "$INCOMPLETE" -gt 0 ]; then
   warn "$INCOMPLETE model(s) did not finish — do NOT rank those against complete runs"
   exit 1

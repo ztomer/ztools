@@ -1,8 +1,28 @@
 //! Eval validators. Ported from `eval/validate.py`: the file-summary scorer
 //! that detects filename inference and generic filler instead of real content
 //! detail.
+//!
+//! WHAT CHANGED ON 2026-10-05, and why it is not a knob. The scorer counted
+//! descriptions containing one of [`CONTENT_VERBS`] and bucketed the ratio. That
+//! measures SENTENCE SHAPE, and the prompt it graded told the model to rely only
+//! on file CONTENT — which the prompt never sent, so the only description
+//! available was one guessed from the name. A name guess like "parses the
+//! manifest and loads metadata" carries two verbs and scored full marks; a
+//! truthful sentence about `rust/src/manifest.rs` ("expands a leading `~` against
+//! the home directory") carries none and scored nothing. The metric and the
+//! instruction pointed in opposite directions.
+//!
+//! So for the rows [`grounding`] has truth for, "detailed" now means GROUNDED:
+//! the description is checked against what that file actually says. Rows with no
+//! pinned truth — the synthetic fixtures, `Check::FileSummary` on any other
+//! repo's paths — keep the verb heuristic unchanged, because for those there is
+//! nothing better to grade against and a stricter rule would score every
+//! existing caller zero.
 
 use regex::Regex;
+
+#[path = "validate_grounding.rs"]
+pub mod grounding;
 
 /// A description that is essentially the file's own name re-spaced ("config
 /// loader" for `config_loader.py`) is filename inference, not file reading, which
@@ -86,6 +106,48 @@ pub fn validate_file_summary(raw: &str) -> (u8, String) {
     }
 }
 
+/// The score ladder, shared by the list and dict branches.
+///
+/// `judged` is the number of descriptions that earned the row: GROUNDED for a
+/// row with pinned truth, verb-bearing otherwise. An echo or a generic filler
+/// never reaches it, which is how `echo_count`/`generic_count` reduce the score
+/// rather than only annotating it.
+const fn ladder(judged: usize, num_files: usize) -> (u8, bool) {
+    if judged * 10 >= num_files * 8 {
+        (100, false)
+    } else if judged * 2 >= num_files {
+        (85, false)
+    } else if judged >= 2 {
+        (70, false)
+    } else if judged >= 1 {
+        (50, false)
+    } else {
+        (25, true)
+    }
+}
+
+/// The score ladder for a list answer: `detailed` was GROUNDED for a row with
+/// pinned truth, verb-bearing otherwise.
+///
+/// The dict shape keeps its OWN ladder, lower at every rung. That is the ported
+/// shape and it is not negotiable here: the dict form is the weaker ANSWER FORMAT
+/// (paths as keys, no description field), and collapsing its rungs into the list
+/// ones would have moved `dict_score_ladder_middle_rungs` from 55 to 70 for
+/// reasons that have nothing to do with grounding.
+const fn dict_ladder(judged: usize, num_files: usize) -> (u8, bool) {
+    if judged * 10 >= num_files * 8 {
+        (85, false)
+    } else if judged * 2 >= num_files {
+        (70, false)
+    } else if judged >= 2 {
+        (55, false)
+    } else if judged >= 1 {
+        (40, false)
+    } else {
+        (25, true)
+    }
+}
+
 fn validate_list(items: &[serde_json::Value]) -> (u8, String) {
     let mut failures: Vec<String> = Vec::new();
     let generic_desc = Regex::new(GENERIC_DESC_RE).expect("static regex");
@@ -97,6 +159,8 @@ fn validate_list(items: &[serde_json::Value]) -> (u8, String) {
     let mut detailed_count = 0usize;
     let mut generic_count = 0usize;
     let mut echo_count = 0usize;
+    let mut grounded_count = 0usize;
+    let mut ungrounded_count = 0usize;
 
     for item in items {
         let Some(obj) = item.as_object() else {
@@ -123,8 +187,19 @@ fn validate_list(items: &[serde_json::Value]) -> (u8, String) {
             continue;
         }
 
-        if CONTENT_VERBS.iter().any(|kw| desc_lower.contains(kw)) {
-            detailed_count += 1;
+        match grounding::facts_for(path) {
+            Some(facts) => {
+                if grounding::grounded(facts, &desc_lower) {
+                    grounded_count += 1;
+                } else {
+                    ungrounded_count += 1;
+                }
+            }
+            None => {
+                if CONTENT_VERBS.iter().any(|kw| desc_lower.contains(kw)) {
+                    detailed_count += 1;
+                }
+            }
         }
     }
 
@@ -132,24 +207,20 @@ fn validate_list(items: &[serde_json::Value]) -> (u8, String) {
         return (0, "no items".to_string());
     }
 
-    let score = if detailed_count * 10 >= num_files * 8 {
-        100
-    } else if detailed_count * 2 >= num_files {
-        85
-    } else if detailed_count >= 2 {
-        70
-    } else if detailed_count >= 1 {
-        50
-    } else {
+    let (score, no_detail) = ladder(grounded_count + detailed_count, num_files);
+    if no_detail {
         failures.push("no content details".to_string());
-        25
-    };
-
+    }
     if generic_count > 0 {
         failures.push(format!("{generic_count} generic description(s)"));
     }
     if echo_count > 0 {
         failures.push(format!("{echo_count} filename-only description(s)"));
+    }
+    if ungrounded_count > 0 {
+        failures.push(format!(
+            "{ungrounded_count} description(s) not supported by the file's content"
+        ));
     }
 
     (score.min(100), failures.join("; "))
@@ -159,6 +230,7 @@ fn validate_parsed(map: &serde_json::Map<String, serde_json::Value>) -> (u8, Str
     let mut failures: Vec<String> = Vec::new();
     let num_files = map.len();
     let mut detailed_count = 0usize;
+    let mut ungrounded_count = 0usize;
 
     for (filepath, summary) in map {
         if filepath.is_empty() {
@@ -171,28 +243,35 @@ fn validate_parsed(map: &serde_json::Map<String, serde_json::Value>) -> (u8, Str
             continue;
         }
         let summary_lower = summary_str.to_lowercase();
-        if CONTENT_VERBS.iter().any(|kw| summary_lower.contains(kw)) {
-            detailed_count += 1;
+        match grounding::facts_for(filepath) {
+            Some(facts) => {
+                if grounding::grounded(facts, &summary_lower) {
+                    detailed_count += 1;
+                } else {
+                    ungrounded_count += 1;
+                }
+            }
+            None => {
+                if CONTENT_VERBS.iter().any(|kw| summary_lower.contains(kw)) {
+                    detailed_count += 1;
+                }
+            }
         }
     }
 
-    let score = if detailed_count * 10 >= num_files * 8 {
-        85
-    } else if detailed_count * 2 >= num_files {
-        70
-    } else if detailed_count >= 2 {
-        55
-    } else if detailed_count >= 1 {
-        40
-    } else {
-        25
-    };
-
-    if detailed_count == 0 {
+    // The dict shape keeps its own ceiling: it is the weaker ANSWER FORMAT, and
+    // that is a property of the format rather than of the grounding.
+    let (score, no_detail) = dict_ladder(detailed_count, num_files);
+    if no_detail {
         failures.push("no content details".to_string());
     }
+    if ungrounded_count > 0 {
+        failures.push(format!(
+            "{ungrounded_count} description(s) not supported by the file's content"
+        ));
+    }
 
-    (score.min(100), failures.join("; "))
+    (score, failures.join("; "))
 }
 
 fn validate_raw_string(data_str: &str) -> (u8, String) {
@@ -211,206 +290,5 @@ fn validate_raw_string(data_str: &str) -> (u8, String) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn empty_data() {
-        assert_eq!(validate_file_summary(""), (0, "empty response".to_string()));
-    }
-
-    #[test]
-    fn empty_list() {
-        assert_eq!(validate_file_summary("[]"), (0, "no items".to_string()));
-    }
-
-    #[test]
-    fn few_files_flagged() {
-        let (score, msg) = validate_file_summary(r#"[{"path": "a.py", "desc": "does stuff"}]"#);
-        assert!(msg.contains("only"));
-        assert!(score <= 25);
-    }
-
-    #[test]
-    fn all_detailed_scores_100() {
-        let data = r#"[
-            {"path": "a.py", "desc": "parses config files and loads settings"},
-            {"path": "b.py", "desc": "validates JSON output format"},
-            {"path": "c.py", "desc": "fetches data from external API"},
-            {"path": "d.py", "desc": "handles error processing logic"}
-        ]"#;
-        let (score, msg) = validate_file_summary(data);
-        assert_eq!(score, 100);
-        assert_eq!(msg, "");
-    }
-
-    #[test]
-    fn no_content_details() {
-        let data = r#"[
-            {"path": "a.py", "desc": "some file"},
-            {"path": "b.py", "desc": "another file"}
-        ]"#;
-        let (score, msg) = validate_file_summary(data);
-        assert_eq!(score, 25);
-        assert!(msg.contains("no content details"));
-    }
-
-    #[test]
-    fn dict_input_scores_85() {
-        let data = r#"{"main.py": "parses input data", "utils.py": "validates output"}"#;
-        let (score, msg) = validate_file_summary(data);
-        assert_eq!(score, 85);
-        assert_eq!(msg, "");
-    }
-
-    #[test]
-    fn generic_description_counted() {
-        // "a python script" is generic; the others are content verbs.
-        let data = r#"[
-            {"path": "a.py", "desc": "a python script"},
-            {"path": "b.py", "desc": "parses config files and loads settings"},
-            {"path": "c.py", "desc": "validates JSON output format"},
-            {"path": "d.py", "desc": "fetches data from external API"}
-        ]"#;
-        let (score, msg) = validate_file_summary(data);
-        // 3/4 detailed >= 0.5 -> 85
-        assert_eq!(score, 85);
-        assert!(msg.contains("1 generic description(s)"));
-    }
-
-    #[test]
-    fn filename_echo_counted() {
-        let data = r#"[
-            {"path": "config_loader.py", "desc": "config loader"},
-            {"path": "b.py", "desc": "validates JSON output format"},
-            {"path": "c.py", "desc": "fetches data from external API"},
-            {"path": "d.py", "desc": "handles error processing logic"}
-        ]"#;
-        let (score, msg) = validate_file_summary(data);
-        assert_eq!(score, 85);
-        assert!(msg.contains("1 filename-only description(s)"));
-    }
-
-    #[test]
-    fn string_with_headers_scores_20() {
-        let content =
-            "## Main module\nhandles configuration and api calls\n## Utils\nvalidation helpers";
-        let (score, msg) = validate_file_summary(content);
-        assert_eq!(score, 20);
-        assert!(msg.contains("no headers"));
-    }
-
-    #[test]
-    fn string_too_short() {
-        let (_, msg) = validate_file_summary("hello");
-        assert!(msg.contains("no headers"));
-    }
-
-    #[test]
-    fn non_dict_items_skipped_but_counted() {
-        let data = r#"[
-            "string item", 42, null,
-            {"path": "a.py", "desc": "parses config files"},
-            {"path": "b.py", "desc": "validates JSON output format"},
-            {"path": "c.py", "desc": "fetches data from external API"},
-            {"path": "d.py", "desc": "handles error processing logic"}
-        ]"#;
-        let (score, _) = validate_file_summary(data);
-        // 4 detailed / 7 total >= 0.5 -> 85
-        assert_eq!(score, 85);
-    }
-
-    #[test]
-    fn scalar_json_input_uses_the_raw_string_scorer() {
-        // A bare JSON number parses but is neither array nor object.
-        let (score, msg) = validate_file_summary("42");
-        assert_eq!(score, 20, "clamped floor for a headerless short string");
-        assert!(msg.contains("no headers"));
-    }
-
-    #[test]
-    fn items_missing_path_or_desc_are_skipped_but_still_counted() {
-        let data = r#"[
-            {"path": "", "desc": "parses config files"},
-            {"path": "b.py", "desc": ""},
-            {"path": "c.py", "desc": "validates JSON output format"},
-            {"path": "d.py", "desc": "fetches data from external API"},
-            {"path": "e.py", "desc": "handles error processing logic"}
-        ]"#;
-        let (score, _) = validate_file_summary(data);
-        // num_files=5 (skipped items still count), detailed=3 -> 3*2 >= 5 -> 85
-        assert_eq!(score, 85);
-    }
-
-    #[test]
-    fn list_score_ladder_middle_rungs() {
-        // 7 files, only 2 detailed: misses the 85 gate, hits the >=2 rung -> 70.
-        let data_70 = r#"[
-            {"path": "a.py", "desc": "parses config files"},
-            {"path": "b.py", "desc": "validates JSON output format"},
-            {"path": "c.py", "desc": "some file"},
-            {"path": "d.py", "desc": "another file"},
-            {"path": "e.py", "desc": "more filler text here"},
-            {"path": "f.py", "desc": "yet another entry"},
-            {"path": "g.py", "desc": "and one more"}
-        ]"#;
-        let (score, _) = validate_file_summary(data_70);
-        assert_eq!(score, 70);
-
-        // 4 files, only 1 detailed: -> 50.
-        let data_50 = r#"[
-            {"path": "a.py", "desc": "parses config files"},
-            {"path": "b.py", "desc": "some file"},
-            {"path": "c.py", "desc": "another file"},
-            {"path": "d.py", "desc": "one more"}
-        ]"#;
-        let (score, _) = validate_file_summary(data_50);
-        assert_eq!(score, 50);
-    }
-
-    #[test]
-    fn dict_entries_that_cannot_be_summarized_are_skipped() {
-        // Empty key, non-string value and empty summary all skip; the rest counts.
-        let data = r#"{"": "parses input data", "utils.py": 42, "notes.md": "", "main.py": "validates output"}"#;
-        let (score, msg) = validate_file_summary(data);
-        assert_eq!(score, 40);
-        assert_eq!(msg, "");
-    }
-
-    #[test]
-    fn dict_with_no_usable_summaries_scores_the_floor() {
-        let data = r#"{"utils.py": 42, "notes.md": ""}"#;
-        let (score, msg) = validate_file_summary(data);
-        assert_eq!(score, 25);
-        assert!(msg.contains("no content details"));
-    }
-
-    #[test]
-    fn dict_score_ladder_middle_rungs() {
-        // 5 entries, 2 detailed: -> 55.
-        let data_55 = r#"{
-            "a.py": "parses data",
-            "b.py": "validates output",
-            "c.py": "stuff",
-            "d.py": "things",
-            "e.py": "junk"
-        }"#;
-        let (score, _) = validate_file_summary(data_55);
-        assert_eq!(score, 55);
-
-        // 2 entries, 1 detailed: -> 70.
-        let data_70 = r#"{"main.py": "parses input data", "utils.py": "nothing much"}"#;
-        let (score, _) = validate_file_summary(data_70);
-        assert_eq!(score, 70);
-    }
-
-    #[test]
-    fn long_markdown_body_scores_headers_plus_length() {
-        let mut body = String::from("## Sections\n\n");
-        body.push_str(&"word ".repeat(60));
-        let (score, msg) = validate_file_summary(&body);
-        assert_eq!(score, 40, "20 headers + 20 length");
-        assert_eq!(msg, "");
-        assert!(body.chars().count() >= 200);
-    }
-}
+#[path = "validate_tests.rs"]
+mod tests;

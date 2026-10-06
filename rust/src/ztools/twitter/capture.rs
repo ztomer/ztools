@@ -12,10 +12,10 @@ use std::sync::Mutex;
 use anyhow::{Context, Result};
 use chrono::{DateTime, FixedOffset};
 
+use super::Tweet;
 use super::browser_parse;
 use super::collect::parse_created_at;
 use super::endpoints::EndpointMarkers;
-use super::Tweet;
 
 /// Decode a captured response body.
 ///
@@ -83,6 +83,7 @@ pub(crate) fn decode_body(bytes: &[u8], encoding: Option<&str>) -> Result<Vec<u8
 
 /// One captured timeline response: its protocol request id plus encoding.
 /// The URL served its purpose at filter time and is not retained.
+#[derive(Debug)]
 pub(crate) struct Captured {
     encoding: Option<String>,
     request_id: String,
@@ -173,18 +174,18 @@ pub(crate) fn record_response(state: &Mutex<CaptureState>, params: &serde_json::
         return;
     }
     let mut st = state.lock().unwrap();
-    if let Some(url) = st.urls.get(rid).cloned() {
-        if st.markers.is_timeline_url(&url) {
-            st.saw_timeline = true;
-            if st.markers.is_following_url(&url) {
-                st.saw_following = true;
-            }
-            let enc = header(params, "content-encoding").map(str::to_owned);
-            st.pending.push(Captured {
-                encoding: enc,
-                request_id: rid.to_owned(),
-            });
+    if let Some(url) = st.urls.get(rid).cloned()
+        && st.markers.is_timeline_url(&url)
+    {
+        st.saw_timeline = true;
+        if st.markers.is_following_url(&url) {
+            st.saw_following = true;
         }
+        let enc = header(params, "content-encoding").map(str::to_owned);
+        st.pending.push(Captured {
+            encoding: enc,
+            request_id: rid.to_owned(),
+        });
     }
 }
 
@@ -219,10 +220,10 @@ pub(crate) fn drain_responses(
             continue;
         };
         for t in browser_parse::parse_tweets_from_response(&json) {
-            if let Some(created) = parse_created_at(&t.created_at) {
-                if oldest.is_none_or(|o| created < o) {
-                    *oldest = Some(created);
-                }
+            if let Some(created) = parse_created_at(&t.created_at)
+                && oldest.is_none_or(|o| created < o)
+            {
+                *oldest = Some(created);
             }
             tweets.push(t);
         }
@@ -293,6 +294,6 @@ mod tests {
         assert!(!collected_wrong_feed(&state));
         feed_url(&state, "r1", "https://x.com/api/graphql/UserByScreenName");
         assert!(!collected_wrong_feed(&state));
-        assert!(state.lock().unwrap().pending.is_empty());
+        assert_empty!(&state.lock().unwrap().pending);
     }
 }

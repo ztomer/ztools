@@ -78,20 +78,20 @@ pub fn probe_model_dir_defects(dir: &Path) -> Vec<String> {
 
     let jang_config_path = dir.join("jang_config.json");
     if jang_config_path.is_file() {
-        if let Ok(content) = std::fs::read_to_string(&jang_config_path) {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                let runtime_avail = json
-                    .get("runtime_available")
-                    .and_then(serde_json::Value::as_bool)
-                    .unwrap_or(true);
-                let mtp_mode = json.get("mtp_mode").and_then(|v| v.as_str()).unwrap_or("");
+        if let Ok(content) = std::fs::read_to_string(&jang_config_path)
+            && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+        {
+            let runtime_avail = json
+                .get("runtime_available")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(true);
+            let mtp_mode = json.get("mtp_mode").and_then(|v| v.as_str()).unwrap_or("");
 
-                if (!runtime_avail || mtp_mode == "preserved_enabled") && !mtp_shards.is_empty() {
-                    defects.push(format!(
+            if (!runtime_avail || mtp_mode == "preserved_enabled") && !mtp_shards.is_empty() {
+                defects.push(format!(
                         "unsupported MTP speculative drafting shards present with runtime_available=false ({})",
                         mtp_shards.join(", ")
                     ));
-                }
             }
         }
     } else if !mtp_shards.is_empty() {
@@ -103,32 +103,30 @@ pub fn probe_model_dir_defects(dir: &Path) -> Vec<String> {
 
     // 2. Check for missing safetensor shards referenced in index
     let index_path = dir.join("model.safetensors.index.json");
-    if index_path.is_file() {
-        if let Ok(content) = std::fs::read_to_string(&index_path) {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let Some(map) = json.get("weight_map").and_then(|v| v.as_object()) {
-                    let mut expected = HashSet::new();
-                    for shard_val in map.values() {
-                        if let Some(s) = shard_val.as_str() {
-                            expected.insert(s.to_string());
-                        }
-                    }
-                    let mut missing = Vec::new();
-                    for shard in &expected {
-                        if !dir.join(shard).is_file() {
-                            missing.push(shard.clone());
-                        }
-                    }
-                    if !missing.is_empty() {
-                        missing.sort();
-                        defects.push(format!(
-                            "missing {} safetensor shard(s) in index: {:?}",
-                            missing.len(),
-                            missing
-                        ));
-                    }
-                }
+    if index_path.is_file()
+        && let Ok(content) = std::fs::read_to_string(&index_path)
+        && let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+        && let Some(map) = json.get("weight_map").and_then(|v| v.as_object())
+    {
+        let mut expected = HashSet::new();
+        for shard_val in map.values() {
+            if let Some(s) = shard_val.as_str() {
+                expected.insert(s.to_string());
             }
+        }
+        let mut missing = Vec::new();
+        for shard in &expected {
+            if !dir.join(shard).is_file() {
+                missing.push(shard.clone());
+            }
+        }
+        if !missing.is_empty() {
+            missing.sort();
+            defects.push(format!(
+                "missing {} safetensor shard(s) in index: {:?}",
+                missing.len(),
+                missing
+            ));
         }
     }
 
@@ -149,13 +147,13 @@ pub fn probe_model_dir_defects(dir: &Path) -> Vec<String> {
         }
     }
     let cache_dir = dir.join(".cache");
-    if cache_dir.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(&cache_dir) {
-            for entry in entries.flatten() {
-                let fname = entry.file_name().to_string_lossy().to_string();
-                if fname.ends_with(".incomplete") {
-                    incomplete.push(format!(".cache/{fname}"));
-                }
+    if cache_dir.is_dir()
+        && let Ok(entries) = std::fs::read_dir(&cache_dir)
+    {
+        for entry in entries.flatten() {
+            let fname = entry.file_name().to_string_lossy().to_string();
+            if fname.ends_with(".incomplete") {
+                incomplete.push(format!(".cache/{fname}"));
             }
         }
     }
@@ -192,12 +190,12 @@ pub fn assess_viability(
         return Err(format!("broken: {}", defects.join("; ")));
     }
 
-    if let Some(rate) = decode_tok_per_sec {
-        if rate < THRASHING_DECODE_TOKENS_PER_SEC {
-            return Err(format!(
-                "unviable: decode rate {rate:.2} tok/s is below thrashing threshold ({THRASHING_DECODE_TOKENS_PER_SEC:.1} tok/s)"
-            ));
-        }
+    if let Some(rate) = decode_tok_per_sec
+        && rate < THRASHING_DECODE_TOKENS_PER_SEC
+    {
+        return Err(format!(
+            "unviable: decode rate {rate:.2} tok/s is below thrashing threshold ({THRASHING_DECODE_TOKENS_PER_SEC:.1} tok/s)"
+        ));
     }
 
     Ok(())

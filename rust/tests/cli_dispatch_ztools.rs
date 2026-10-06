@@ -9,39 +9,29 @@
 //! Ported from `routines/tests/cli_dispatch_ztools.rs` when the ztools modules
 //! moved into their own crate. The config seam changed from routines'
 //! `ROUTINES_HOME` + `[ztools]` block to this binary's `--config` flag.
+//!
+//! The `thread::sleep` each stub used to take after `bind` was a guess about the
+//! serving thread's scheduling; all three are now `support::await_stub`, which
+//! waits for the condition a client actually needs -- a completed handshake --
+//! under a deadline that names what never happened. The sandbox helpers are in
+//! `support` because the refusal and drain suites need the same ones, and one
+//! copy of "a private HOME" is one thing to get right.
+
+#[path = "support/mod.rs"]
+mod support;
+// The forecast endpoint's stub and the test that pins it, split out because
+// together they are more than half of what is left in this file.
+#[path = "support/cli_weather.rs"]
+mod weather;
+// See `eval_runner.rs`: the shared module's items are reachable API of this
+// test binary, so one consumer not needing one is not dead code.
+pub use support::*;
 
 use std::fs;
 use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::path::PathBuf;
 use std::process::Command;
 use std::thread;
-
-fn bin() -> PathBuf {
-    PathBuf::from(env!("CARGO_BIN_EXE_ztools"))
-}
-
-fn fresh(name: &str) -> PathBuf {
-    let mut d = std::env::temp_dir();
-    d.push(format!("ztools-cli-{}-{name}", std::process::id()));
-    let _ = fs::remove_dir_all(&d);
-    fs::create_dir_all(&d).unwrap();
-    d
-}
-
-/// Run the binary with `HOME` inside the sandbox and the stub `--config`.
-fn ztool(home: &std::path::Path) -> Command {
-    let mut c = Command::new(bin());
-    c.env("HOME", home)
-        .arg("--config")
-        .arg(home.join("ztools.toml"));
-    c
-}
-
-/// Write the flat `ZtoolsConfig` TOML the `--config` flag loads.
-fn write_config(home: &std::path::Path, content: &str) {
-    fs::write(home.join("ztools.toml"), content).unwrap();
-}
 
 /// The summarizer's `[fallback]` policy is data the binary refuses to run
 /// without; a fake HOME has no checkout, so the test ships one and points the
@@ -88,7 +78,7 @@ fn stub_server(body: &'static str) -> u16 {
             });
         }
     });
-    thread::sleep(std::time::Duration::from_millis(50));
+    await_stub(port);
     port
 }
 
@@ -98,6 +88,27 @@ const LLM_EVENTS: &str = r#"{"choices":[{"message":{"content":"{\"transient_even
 
 /// The planner's other real outcome: the model found nothing for this weekend.
 const LLM_NO_EVENTS: &str = r#"{"choices":[{"message":{"content":"{\"transient_events\":[]}"}}]}"#;
+
+/// The weekend planner's `--config` lines every test below shares: the model
+/// and the three search engines on one loopback stub, the engine-wall record in
+/// the sandbox, and a bounded LLM timeout.
+///
+/// `weather_port` is separate from `model_port` so the forecast's ORIGIN is
+/// load-bearing in the assertions below: with both on one port, a planner that
+/// built its forecast URL from the wrong configured field would reach the right
+/// server anyway and the test would pass.
+fn weekend_config(model_port: u16, weather_port: u16, home: &std::path::Path) -> String {
+    format!(
+        "osaurus_url = \"http://127.0.0.1:{model_port}\"\n\
+         duckduckgo_url = \"http://127.0.0.1:{model_port}/\"\n\
+         bing_url = \"http://127.0.0.1:{model_port}/\"\n\
+         brave_url = \"http://127.0.0.1:{model_port}/\"\n\
+         weather_url = \"http://127.0.0.1:{weather_port}\"\n\
+         search_record_path = \"{}\"\n\
+         llm_timeout_secs = 10\n",
+        home.join("search_health.json").display()
+    )
+}
 
 #[test]
 fn twitter_summarize_writes_a_summary_and_an_md_copy() {
@@ -190,20 +201,11 @@ fn weekend_plan_renders_and_writes_the_markdown() {
     let home = fresh("weekend");
     // One stub answers both the search fan-out and the LLM extraction: the
     // search parser simply finds no snippets in a JSON body, which is the same
-    // shape as a search that returned nothing useful.
+    // shape as a search that returned nothing useful. The forecast goes to the
+    // same stub through `weather_url` -- before that endpoint was config, this
+    // test made a real HTTPS request to api.open-meteo.com on every run.
     let port = stub_server(LLM_EVENTS);
-    write_config(
-        &home,
-        &format!(
-            "osaurus_url = \"http://127.0.0.1:{port}\"\n\
-             duckduckgo_url = \"http://127.0.0.1:{port}/\"\n\
-             bing_url = \"http://127.0.0.1:{port}/\"\n\
-             brave_url = \"http://127.0.0.1:{port}/\"\n\
-             search_record_path = \"{}\"\n\
-             llm_timeout_secs = 10\n",
-            home.join("search_health.json").display()
-        ),
-    );
+    write_config(&home, &weekend_config(port, port, &home));
 
     let md_out = home.join("weekend.md");
     let out = ztool(&home)
@@ -325,7 +327,7 @@ fn model_eval_all_evaluates_every_discovered_model() {
             });
         }
     });
-    thread::sleep(std::time::Duration::from_millis(50));
+    await_stub(port);
 
     write_config(
         &home,
@@ -350,18 +352,7 @@ fn model_eval_all_evaluates_every_discovered_model() {
 fn weekend_plan_says_so_when_nothing_is_on() {
     let home = fresh("weekend-empty");
     let port = stub_server(LLM_NO_EVENTS);
-    write_config(
-        &home,
-        &format!(
-            "osaurus_url = \"http://127.0.0.1:{port}\"\n\
-             duckduckgo_url = \"http://127.0.0.1:{port}/\"\n\
-             bing_url = \"http://127.0.0.1:{port}/\"\n\
-             brave_url = \"http://127.0.0.1:{port}/\"\n\
-             search_record_path = \"{}\"\n\
-             llm_timeout_secs = 10\n",
-            home.join("search_health.json").display()
-        ),
-    );
+    write_config(&home, &weekend_config(port, port, &home));
     let md_out = home.join("weekend.md");
     let out = ztool(&home)
         .arg("weekend-plan")

@@ -75,12 +75,11 @@ pub fn is_directory_or_list_page(title: &str) -> bool {
     }
 
     let mut words = lower.split_whitespace();
-    if let Some(first) = words.next() {
-        if first.chars().any(|c| c.is_ascii_digit())
-            && (lower.contains("best") || lower.contains("things") || lower.contains("top"))
-        {
-            return true;
-        }
+    if let Some(first) = words.next()
+        && first.chars().any(|c| c.is_ascii_digit())
+        && (lower.contains("best") || lower.contains("things") || lower.contains("top"))
+    {
+        return true;
     }
 
     false

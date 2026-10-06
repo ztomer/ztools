@@ -34,7 +34,7 @@ pub use attribution::*;
 pub use contract::*;
 pub use defects::*;
 pub use faithfulness::{validate_no_contradiction, validate_no_leak, validate_strict_schema};
-pub use filename::{filename_relevance, validate_filename, FILENAME_IRRELEVANT_MAX_SCORE};
+pub use filename::{FILENAME_IRRELEVANT_MAX_SCORE, filename_relevance, validate_filename};
 pub use json_validator::{
     check_source_extraction, extract_list_from_dict, has_item_details, is_valid_list_item,
     name_tokens, names_match, norm_name, validate_detailed_json, validate_json,
@@ -44,7 +44,7 @@ pub use mixed_text::{
     extract_tweet_senders, validate_factual_accuracy, validate_factual_coverage,
     validate_mixed_file_summary, validate_mixed_filename, validate_mixed_summary,
 };
-pub use summary::{validate_summary, MISATTRIBUTION_MAX_SCORE};
+pub use summary::{MISATTRIBUTION_MAX_SCORE, validate_summary};
 pub use taxes_grounded::{
     cents, known_set, prose_amounts, score_prose_amounts, traceable_sums, validate_taxes_qa,
     validate_taxes_slip_qa, validate_taxes_yoy_narrative,

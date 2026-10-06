@@ -1,0 +1,42 @@
+# Dev tooling config for the Python in this repo. The product is Rust; `tools/*.py`
+# are dev gates and run on the stdlib plus pytest only, so nothing here adds a
+# runtime dependency. `ruff` and `pytest` are developer tools.
+#
+# This file is the reason `pytest.mark.sandboxed_server_script` resolves: without a
+# registered marker every run printed PytestUnknownMarkWarning for it, and the test
+# module's comment claimed a guard was enforcing something that did not exist.
+# `filterwarnings` now makes that class of drift fail instead of warn -- a new
+# marker added without being registered here is a build failure, not a warning
+# nobody reads.
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+# E/W pycodestyle · F pyflakes · I import order · UP pyupgrade · B bugbear
+# PLW pylint warnings · BLE blind-except.
+#
+# PLW and BLE are in this list because they are the two that actually bit here, and
+# a selection nobody has seen fail is not a selection: `PLW1510` (subprocess.run
+# with no explicit `check=`) hid three call sites whose exit status decided the
+# assertions, and `BLE001` hid a blanket `except Exception` in the tap upgrader
+# that would have swallowed a failed push.
+#
+# Deliberately NOT selected, rather than triaged away file by file:
+#   * `PLR*` — refactor suggestions. In a test suite they are pure noise
+#     (asserting `== 2` on a table of two rows is the assertion, not a smell).
+#   * `S*` (bandit) — every finding in `tools/` is a subprocess call or a hash
+#     comparison, which is what a lock tool and a release script ARE. Selecting
+#     200 findings and then ignoring them teaches the reader that the list is
+#     decorative.
+# What IS selected is calibrated: every rule here has been seen red on this tree.
+select = ["E", "F", "W", "I", "UP", "B", "PLW", "BLE"]
+
+[tool.pytest.ini_options]
+testpaths = ["tools/tests"]
+markers = [
+    "sandboxed_server_script: this test drives a script that mutates the REAL osaurus server (tools/osaurus_one.sh). Declares that so tools/tests/conftest.py's no_real_server_restart guard can PROVE the sandbox -- machine-reaching commands stubbed on PATH, ZTOOLS_GPU_LOCK_DIR at tmp_path, the machine-wide lock left byte-identical -- instead of assuming it.",
+]
+filterwarnings = [
+    "error::pytest.PytestUnknownMarkWarning",
+]

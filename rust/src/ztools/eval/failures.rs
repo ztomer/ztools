@@ -24,6 +24,10 @@ pub const FAIL_PARSE: &str = "PARSE";
 pub const FAIL_FORMAT: &str = "FORMAT";
 pub const FAIL_CONTENT: &str = "CONTENT";
 pub const FAIL_REASONING: &str = "REASONING";
+/// The prompt certainly cannot fit the model's context window
+/// (`context_fit.rs`): never sent, so NOT MEASURED -- neither an outage that
+/// counts towards abandoning the model nor a quality result.
+pub const FAIL_CONTEXT: &str = "CONTEXT";
 /// No failure. Python uses None; Rust uses an empty category string.
 pub const FAIL_NONE: &str = "";
 
@@ -347,12 +351,13 @@ mod tests {
         assert!(d.evidence.contains("consumed the context window"));
         let d = classify_failure(None, &preamble, "", "stop", Some(&parsed), 70, true);
         assert_eq!(d.category, FAIL_CONTENT);
-        assert!(d
-            .evidence
-            .contains("chars of reasoning before first JSON bracket"));
+        assert!(
+            d.evidence
+                .contains("chars of reasoning before first JSON bracket")
+        );
 
         let d = classify_failure(None, "{\"a\": 1}", "", "stop", Some(&parsed), 40, true);
         assert_eq!(d.category, FAIL_CONTENT);
-        assert!(d.evidence.is_empty());
+        assert_empty!(d.evidence);
     }
 }

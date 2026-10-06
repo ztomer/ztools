@@ -61,11 +61,7 @@ pub fn unsigned(n: u64) -> f64 {
 #[must_use]
 pub fn signed(n: i64) -> f64 {
     let magnitude = unsigned(n.unsigned_abs());
-    if n < 0 {
-        -magnitude
-    } else {
-        magnitude
-    }
+    if n < 0 { -magnitude } else { magnitude }
 }
 
 /// An `f64` as `i64`, truncating toward zero, with the cast's boundaries.

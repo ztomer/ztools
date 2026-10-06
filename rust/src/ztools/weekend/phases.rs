@@ -9,8 +9,8 @@
 use std::cmp;
 
 use super::prompts::{
-    render, CARRY_FIELDS, PHASE_DRAFT_TRANSIENT, PHASE_EXTRACT_EVENTS, PHASE_REFINE,
-    PHASE_STRUCTURE_TRANSIENT_SYSTEM, PHASE_STRUCTURE_USER, PHASE_WEATHER_CONDENSE,
+    CARRY_FIELDS, PHASE_DRAFT_TRANSIENT, PHASE_EXTRACT_EVENTS, PHASE_REFINE,
+    PHASE_STRUCTURE_TRANSIENT_SYSTEM, PHASE_STRUCTURE_USER, PHASE_WEATHER_CONDENSE, render,
 };
 
 pub const WEATHER_PREVIEW_LIMIT: usize = 200;
@@ -84,10 +84,10 @@ pub fn resolve_weekend_model(base_url: &str, preferred_model: &str) -> String {
         ""
     };
 
-    if !family.is_empty() {
-        if let Some(matched) = models.iter().find(|m| m.to_lowercase().contains(family)) {
-            return matched.clone();
-        }
+    if !family.is_empty()
+        && let Some(matched) = models.iter().find(|m| m.to_lowercase().contains(family))
+    {
+        return matched.clone();
     }
 
     models

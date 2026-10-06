@@ -1,4 +1,5 @@
 use super::*;
+use crate::test_env::TestEnv;
 use std::io::Write as _;
 
 fn s(v: &[&str]) -> Vec<String> {
@@ -32,7 +33,10 @@ fn policy_loads_from_the_first_file_with_the_table() {
         dir.path(),
         "[fallback]\nmodels = [\"foundation\", \" spare \"]\npreferred = [\"qwen\"]\n",
     );
-    std::env::remove_var(FALLBACK_MODELS_ENV);
+    // No `unset` call: the sandbox CLEARS every policy knob on construction, so
+    // `FALLBACK_MODELS_ENV` is genuinely absent here and an operator's exported
+    // override cannot decide which file wins.
+    let _env = TestEnv::new();
     let got = load_fallback_policy(&[missing, good]).unwrap();
     assert_eq!(got.models, s(&["foundation", "spare"]));
     assert_eq!(got.preferred, s(&["qwen"]));
@@ -43,7 +47,9 @@ fn policy_loads_from_the_first_file_with_the_table() {
 fn policy_is_required_not_defaulted() {
     let dir = tempfile::tempdir().unwrap();
     let no_table = write_conf(dir.path(), "model = \"x\"\n");
-    std::env::remove_var(FALLBACK_MODELS_ENV);
+    // Same: the override is absent because the sandbox cleared it, so "no table
+    // anywhere" is the file's doing and not an environment accident.
+    let _env = TestEnv::new();
     let err = load_fallback_policy(&[no_table]).unwrap_err().to_string();
     assert!(err.contains("[fallback]"), "{err}");
 }
@@ -56,17 +62,19 @@ fn env_override_replaces_the_models_list_only() {
         dir.path(),
         "[fallback]\nmodels = [\"foundation\"]\npreferred = [\"qwen\"]\n",
     );
-    std::env::set_var(FALLBACK_MODELS_ENV, "alpha, beta,,");
+    let env = TestEnv::new();
+    env.set(FALLBACK_MODELS_ENV, "alpha, beta,,");
     let got = load_fallback_policy(std::slice::from_ref(&good));
-    std::env::remove_var(FALLBACK_MODELS_ENV);
+    // Back to absent before the next case: an empty override is no override.
+    env.unset(FALLBACK_MODELS_ENV);
     let got = got.unwrap();
     assert_eq!(got.models, s(&["alpha", "beta"]));
     assert_eq!(got.preferred, s(&["qwen"]));
-    // An empty override is no override.
-    std::env::set_var(FALLBACK_MODELS_ENV, " , ");
+    env.set(FALLBACK_MODELS_ENV, " , ");
     let got = load_fallback_policy(&[good]);
-    std::env::remove_var(FALLBACK_MODELS_ENV);
+    env.unset(FALLBACK_MODELS_ENV);
     assert_eq!(got.unwrap().models, s(&["foundation"]));
+    drop(env);
 }
 
 #[test]
@@ -80,8 +88,8 @@ fn shipped_conf_carries_a_fallback_policy() {
     let table = val
         .get("fallback")
         .expect("conf/twitter.toml needs [fallback]");
-    assert!(!string_list(table.get("models")).is_empty());
-    assert!(!string_list(table.get("preferred")).is_empty());
+    assert_nonempty!(string_list(table.get("models")));
+    assert_nonempty!(string_list(table.get("preferred")));
 }
 
 #[test]
@@ -109,7 +117,7 @@ fn first_usable_answer_from_the_intended_model_is_primary() {
     assert_eq!(got, "A");
     assert_eq!(prov.tier, Tier::Primary);
     assert!(!prov.degraded());
-    assert!(prov.reasons.is_empty());
+    assert_empty!(&prov.reasons);
     assert_eq!(prov.banner(), "**Model:** a (osaurus, primary)");
 }
 

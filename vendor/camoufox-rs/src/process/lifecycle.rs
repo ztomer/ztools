@@ -57,8 +57,7 @@ pub fn graceful_shutdown(child: &mut Child, timeout: Duration) -> Result<(), Pro
                     "browser process exited with status: {}",
                     status
                         .code()
-                        .map(|c| c.to_string())
-                        .unwrap_or_else(|| "signal".into())
+                        .map_or_else(|| "signal".into(), |c| c.to_string())
                 );
                 return Ok(());
             }
@@ -99,8 +98,7 @@ pub fn graceful_shutdown(child: &mut Child, timeout: Duration) -> Result<(), Pro
                 "browser process killed, status: {}",
                 status
                     .code()
-                    .map(|c| c.to_string())
-                    .unwrap_or_else(|| "signal".into())
+                    .map_or_else(|| "signal".into(), |c| c.to_string())
             );
             Ok(())
         }

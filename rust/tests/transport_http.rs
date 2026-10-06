@@ -3,6 +3,20 @@
 //! Covers the code a unit test cannot reach: the actual wire format of the
 //! blocking call and the SSE stream, the reasoning-overrun abort, and the
 //! wall-clock stream deadline.
+//!
+//! Every `thread::sleep` after a `bind` here used to be a guess about the
+//! serving thread's scheduling; they are `support::await_stub`, which waits for
+//! the condition a client actually needs -- a completed handshake -- with a
+//! deadline that names what never happened. The one remaining sleep was not a
+//! wait at all (see `stream_deadline_enforced_in_wall_clock`), which is the only
+//! reason it survived this long.
+
+#[path = "support/mod.rs"]
+mod support;
+// The support module is shared by ten test binaries that between them use every
+// item in it; one consumer idling on a helper is not a defect, and this
+// re-export at the root is what says so to the dead-code pass.
+pub use support::*;
 
 use std::fmt::Write as _;
 use std::io::{Read, Write};
@@ -10,7 +24,7 @@ use std::net::TcpListener;
 use std::thread;
 
 use ztools::eval::task_loader::ChatMessage;
-use ztools::eval::transport::{call, stream_with_overrun_guard, RequestSpec};
+use ztools::eval::transport::{RequestSpec, call, stream_with_overrun_guard};
 
 fn sse_body(deltas: &[&str]) -> String {
     let mut body = String::new();
@@ -36,12 +50,17 @@ fn serve(response: String) -> (u16, thread::JoinHandle<()>) {
         for stream in listener.incoming() {
             let Ok(mut stream) = stream else { continue };
             let mut buf = [0u8; 8192];
+            // No probe rule here, deliberately: this stub answers every
+            // connection the same way, so `await_stub`'s empty probe costs it
+            // nothing (calibrated: 9/9 green without one). The two stubs whose
+            // behaviour DOES depend on which connection arrived carry the rule,
+            // and there it is load-bearing.
             let _ = stream.read(&mut buf);
             let _ = stream.write_all(response.as_bytes());
             let _ = stream.flush();
         }
     });
-    thread::sleep(std::time::Duration::from_millis(50));
+    await_stub(port);
     (port, handle)
 }
 
@@ -185,18 +204,47 @@ fn overrun_guard_leaves_a_model_that_is_answering_alone() {
 fn stream_deadline_enforced_in_wall_clock() {
     // Server accepts, sends headers, then stalls past the deadline without
     // closing. The guard must return a TIMEOUT error rather than hang.
+    //
+    // WHY THE STALL IS A STALL: the stub sends no `Content-Length` and no
+    // `Transfer-Encoding`, so the HTTP/1.1 body is delimited by connection close
+    // -- which never comes. Calibrated: give the stub a properly framed, complete
+    // SSE answer (`Content-Length`, `[DONE]`, `finish_reason: stop`) and this
+    // test goes red on `error: None, finish_reason: "stop"`, which is the proof
+    // it measures a stall and not merely a body it could not parse.
+    //
+    // The stall used to be `thread::sleep(5s)` in the stub, which was not a wait
+    // for anything: it was an assertion that the client's own 1s deadline fires
+    // first, made by sleeping longer and hoping. Worse, "5s" and "1s" are only
+    // ordered while the machine is healthy, and on a slow machine the wait itself
+    // becomes the thing being measured. The stub now stalls until the test
+    // RELEASES it, so no number has to stay ordered: the client must come back
+    // from a server that has said it will say nothing, ever.
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
-    let _h = thread::spawn(move || {
-        if let Ok(mut stream) = listener.incoming().next().unwrap() {
+    let (release, released) = std::sync::mpsc::channel::<()>();
+    let h = thread::spawn(move || {
+        for stream in listener.incoming().flatten() {
+            let mut stream = stream;
             let mut buf = [0u8; 8192];
-            let _ = stream.read(&mut buf);
+            // `await_stub` connects and closes without sending, and this stub
+            // handles exactly ONE connection before it stops: a probe taken as
+            // that one leaves the client's real request unanswered in the
+            // backlog, so the client times out on a socket nobody is serving and
+            // reports `finish_reason: ""` -- a different failure wearing this
+            // test's name. Calibrated: removing this rule turns the test red on
+            // that exact line.
+            if stream.read(&mut buf).unwrap_or(0) == 0 {
+                continue;
+            }
             let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n\r\n");
             let _ = stream.flush();
-            thread::sleep(std::time::Duration::from_secs(5));
+            // Headers are in; from here the response is silent. One receive, no
+            // timeout: the ONLY thing that ends the stall is the test below.
+            let _ = released.recv();
+            return;
         }
     });
-    thread::sleep(std::time::Duration::from_millis(50));
+    await_stub(port);
     let started = std::time::Instant::now();
     let r = stream_with_overrun_guard(&spec(port, 1000, 1));
     assert!(
@@ -208,6 +256,13 @@ fn stream_deadline_enforced_in_wall_clock() {
         started.elapsed().as_secs() < 4,
         "must not wait out the stall"
     );
+    // Release the stub and WAIT for it. Not what makes the assertions above
+    // bite -- calibrated: with the join dropped the test is still green, because
+    // the client returns on its own deadline while the stub thread sits parked.
+    // It is the teardown half: the thread exits and its socket closes HERE,
+    // rather than outliving the test and being killed at process exit.
+    drop(release);
+    h.join().unwrap();
 }
 
 /// The regime switch reaches the wire on BOTH request paths, blocking and
@@ -224,12 +279,18 @@ fn thinking_flag_reaches_both_wire_shapes() {
                 let Ok(mut stream) = stream else { continue };
                 let mut buf = vec![0u8; 65536];
                 let n = stream.read(&mut buf).unwrap_or(0);
+                // Recording stubs ignore a read of zero bytes, or the readiness
+                // probe is recorded as the first request and every assertion
+                // below parses an empty payload instead of the real one.
+                if n == 0 {
+                    continue;
+                }
                 let _ = tx.send(String::from_utf8_lossy(&buf[..n]).into_owned());
                 let _ = stream.write_all(response.as_bytes());
                 let _ = stream.flush();
             }
         });
-        thread::sleep(std::time::Duration::from_millis(50));
+        await_stub(port);
         (port, rx)
     }
     fn payload_of(wire: &str) -> serde_json::Value {

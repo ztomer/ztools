@@ -12,7 +12,7 @@
 //! in production; "fixing" it here would make the Rust eval measure different
 //! prompts than the reference.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 // Families with a quirk file in `conf/models/`. `qwopus`, `nemotron` and
 // `laguna` were removed 2026-09-19 with their files: no installed model

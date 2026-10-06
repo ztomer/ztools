@@ -25,6 +25,20 @@ pub struct ZtoolsConfig {
     /// The third engine, consulted only when the first two both fail a query.
     #[serde(default = "default_brave_url")]
     pub brave_url: String,
+    /// Where the weekend planner fetches its forecast from — an ORIGIN (scheme,
+    /// host, and any path prefix), with `/v1/forecast` and the window's query
+    /// appended by the client. Configurable for the same reason the three search
+    /// endpoints are, and one degree more urgent: this one used to be a literal
+    /// inside `open_meteo_url`, so no `--config` could redirect it, every
+    /// `cargo test` that ran the planner made a real HTTPS request to a
+    /// third-party host, and `fetch_weather_from` renders a plausible fixed
+    /// forecast when that request fails — so a broken root store, a captive
+    /// portal and an offline machine all read as "Fri 24.5°C clear" with nothing
+    /// to tell them apart. Held as an origin rather than a whole URL so a mirror,
+    /// a proxy or a self-hosted instance substitutes the host and still gets the
+    /// endpoint contract.
+    #[serde(default = "default_weather_url")]
+    pub weather_url: String,
     /// Where the planner keeps the per-run engine walls it learns the engine
     /// order from (`weekend/search_order.rs`). In the config, not an env
     /// var, so a test points it at a temp file without touching the process.
@@ -50,8 +64,8 @@ pub struct ZtoolsConfig {
     pub twitter_cache_path: String,
     /// Project directory holding the Playwright collector the summarizer falls
     /// back to when it has no tweets and no cache. Configurable so a test can
-    /// point it somewhere harmless — it used to be a hardcoded `~/Projects/…`,
-    /// which meant a unit test could launch the operator's real browser
+    /// point it somewhere harmless — it used to be a hardcoded path under the
+    /// operator's home, which meant a unit test could launch the real browser
     /// scraper.
     #[serde(default = "default_twitter_collector_dir")]
     pub twitter_collector_dir: String,
@@ -133,35 +147,53 @@ fn default_bing_url() -> String {
 fn default_brave_url() -> String {
     "https://search.brave.com/search".to_string()
 }
+/// The origin `open_meteo_url` used to inline, kept byte-identical: an operator
+/// with no config file must reach the same forecast they reached before this
+/// became a knob. `config::tests::the_default_weather_endpoint_is_the_host_that_was_hardcoded`
+/// pins it, because the failure mode of editing this line is a silent change of
+/// origin rather than a compile error.
+fn default_weather_url() -> String {
+    "https://api.open-meteo.com".to_string()
+}
 fn default_search_record_path() -> String {
     "~/.config/ztools/search_health.json".to_string()
 }
 fn default_twitter_cache_path() -> String {
     "~/.cache/twitter/debug_tweets.json".to_string()
 }
+
+/// The one directory the summarizer's Playwright fallback collector lives in.
+///
+/// Derived, not typed: `manifest::first_checkout_root` reads the root above the
+/// running binary and falls back to the historical home checkout, so an
+/// install under a Homebrew prefix still works and a checkout-local install
+/// finds the checkout it was built from. See `manifest::checkout_roots_from`
+/// for why the fallback is last rather than gone.
+/// path-ok: the fallback is the subject of the rule being documented, and no
+/// code in this file resolves a path — see `manifest::checkout_roots_from`.
 fn default_twitter_collector_dir() -> String {
-    "~/Projects/ztools".to_string()
+    crate::manifest::first_checkout_root()
 }
+/// `~/.config/ztools/twitter.toml` first -- the operator's own file -- then the
+/// shipped one under each checkout root.
 fn default_twitter_config_paths() -> Vec<String> {
-    vec![
-        "~/.config/ztools/twitter.toml".to_string(),
-        "~/Projects/ztools/conf/twitter.toml".to_string(),
-    ]
+    crate::manifest::config_paths(&["~/.config/ztools/twitter.toml"], "conf/twitter.toml")
 }
+/// The user's `~/.config/ztools` first (it is a per-file overlay: a partial one
+/// must not hide the shipped copies of the files it lacks), then the shipped
+/// `conf/` under each checkout root.
 fn default_eval_conf_dirs() -> Vec<String> {
-    vec![
-        "~/.config/ztools".to_string(),
-        "~/Projects/ztools/conf".to_string(),
-    ]
+    crate::manifest::config_paths(&["~/.config/ztools"], "conf")
 }
+/// No overlay: task snapshots are a shipped corpus, and the first directory
+/// that exists wins (`eval_tasks_dir`).
 fn default_eval_tasks_dirs() -> Vec<String> {
-    vec!["~/Projects/ztools/eval_tasks/data".to_string()]
+    crate::manifest::config_paths(&[], "eval_tasks/data")
 }
+/// The operator's `~/.config/weekend.toml` first, then the shipped
+/// `conf/weekend.toml` under each checkout root.
 fn default_weekend_toml_paths() -> Vec<String> {
-    vec![
-        "~/.config/weekend.toml".to_string(),
-        "~/Projects/ztools/conf/weekend.toml".to_string(),
-    ]
+    crate::manifest::config_paths(&["~/.config/weekend.toml"], "conf/weekend.toml")
 }
 fn default_weekend_exclusions_paths() -> Vec<String> {
     default_weekend_toml_paths()
@@ -266,6 +298,7 @@ impl Default for ZtoolsConfig {
             duckduckgo_url: default_duckduckgo_url(),
             bing_url: default_bing_url(),
             brave_url: default_brave_url(),
+            weather_url: default_weather_url(),
             search_record_path: default_search_record_path(),
             weekend_exclusions_paths: default_weekend_exclusions_paths(),
             weekend_region_paths: default_weekend_region_paths(),
@@ -341,36 +374,36 @@ impl ZtoolsConfig {
     }
 
     /// Attempt to load dynamic `[best_models]` from ztools config if present.
+    ///
+    /// The candidates are the user's `~/.config/ztools/config.toml` and then the
+    /// shipped `conf/config.toml` under each checkout root — the same list, in
+    /// the same order, that `eval_conf_dirs` uses, so "which config.toml did
+    /// the models come from" has one answer in this file rather than two.
     #[must_use]
     pub fn with_ztools_best_models(mut self) -> Self {
-        let candidates = [
-            dirs::home_dir().map(|h| h.join(".config/ztools/config.toml")),
-            dirs::home_dir().map(|h| h.join("Projects/ztools/conf/config.toml")),
-        ];
-        for cand in candidates.into_iter().flatten() {
-            if cand.is_file() {
-                if let Ok(content) = std::fs::read_to_string(cand) {
-                    if let Ok(toml_val) = toml::from_str::<toml::Value>(&content) {
-                        if let Some(best) = toml_val.get("best_models") {
-                            if let Some(m) = best.get("summarize").and_then(|v| v.as_str()) {
-                                self.twitter_model = m.to_string();
-                            }
-                            if let Some(m) = best.get("json").and_then(|v| v.as_str()) {
-                                self.weekend_model = m.to_string();
-                            }
-                            if let Some(m) = best.get("filename").and_then(|v| v.as_str()) {
-                                self.image_renamer_model = m.to_string();
-                            }
-                            if let Some(m) = best.get("vlm").and_then(|v| v.as_str()) {
-                                self.image_renamer_vlm_model = m.to_string();
-                            }
-                            if let Some(m) = best.get("think").and_then(|v| v.as_str()) {
-                                self.think_model = m.to_string();
-                            }
-                            break;
-                        }
+        let candidates =
+            crate::manifest::config_paths(&["~/.config/ztools/config.toml"], "conf/config.toml");
+        for cand in candidates
+            .iter()
+            .map(|p| crate::manifest::expand_tilde(p))
+            .filter(|p| p.is_file())
+        {
+            if let Ok(content) = std::fs::read_to_string(&cand)
+                && let Ok(toml_val) = toml::from_str::<toml::Value>(&content)
+                && let Some(best) = toml_val.get("best_models")
+            {
+                for (key, slot) in [
+                    ("summarize", &mut self.twitter_model),
+                    ("json", &mut self.weekend_model),
+                    ("filename", &mut self.image_renamer_model),
+                    ("vlm", &mut self.image_renamer_vlm_model),
+                    ("think", &mut self.think_model),
+                ] {
+                    if let Some(m) = best.get(key).and_then(|v| v.as_str()) {
+                        *slot = m.to_string();
                     }
                 }
+                break;
             }
         }
         self
@@ -383,13 +416,11 @@ impl ZtoolsConfig {
     /// prompts in exactly one place.
     #[must_use]
     pub fn with_shared_prompts(self) -> Self {
-        let candidates: Vec<std::path::PathBuf> = [
-            dirs::home_dir().map(|h| h.join(".config/ztools/prompts.toml")),
-            dirs::home_dir().map(|h| h.join("Projects/ztools/conf/prompts.toml")),
-        ]
-        .into_iter()
-        .flatten()
-        .collect();
+        let candidates: Vec<std::path::PathBuf> =
+            crate::manifest::config_paths(&["~/.config/ztools/prompts.toml"], "conf/prompts.toml")
+                .iter()
+                .map(|p| crate::manifest::expand_tilde(p))
+                .collect();
         self.with_shared_prompts_from(&candidates)
     }
 
@@ -406,20 +437,19 @@ impl ZtoolsConfig {
     #[must_use]
     pub fn with_shared_prompts_from(mut self, candidates: &[std::path::PathBuf]) -> Self {
         for cand in candidates {
-            if cand.is_file() {
-                if let Ok(content) = std::fs::read_to_string(cand) {
-                    if let Ok(val) = toml::from_str::<toml::Value>(&content) {
-                        if let Some(p) = val
-                            .get("twitter")
-                            .and_then(|t| t.get("summarize"))
-                            .and_then(|s| s.get("instructions"))
-                            .and_then(|v| v.as_str())
-                        {
-                            self.twitter_summarize_prompt = p.to_string();
-                        }
-                        break;
-                    }
+            if cand.is_file()
+                && let Ok(content) = std::fs::read_to_string(cand)
+                && let Ok(val) = toml::from_str::<toml::Value>(&content)
+            {
+                if let Some(p) = val
+                    .get("twitter")
+                    .and_then(|t| t.get("summarize"))
+                    .and_then(|s| s.get("instructions"))
+                    .and_then(|v| v.as_str())
+                {
+                    self.twitter_summarize_prompt = p.to_string();
                 }
+                break;
             }
         }
         self

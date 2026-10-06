@@ -142,7 +142,7 @@ pub struct Connection {
     inner: Arc<Mutex<ConnectionInner>>,
     /// Handle to the reader thread.
     reader_handle: Option<thread::JoinHandle<()>>,
-    /// Shared transport (concurrent read/write via SplitTransport).
+    /// Shared transport (concurrent read/write via `SplitTransport`).
     transport: Arc<SplitTransport>,
     /// Mutex to serialize write operations from multiple caller threads.
     write_lock: Arc<Mutex<()>>,
@@ -181,7 +181,7 @@ impl Connection {
             })
             .expect("failed to spawn reader thread");
 
-        Connection {
+        Self {
             inner,
             reader_handle: Some(reader_handle),
             transport,
@@ -695,7 +695,7 @@ impl Session {
     }
 
     /// Returns the session ID for wire format (`None` for root).
-    pub fn id(&self) -> &SessionId {
+    pub const fn id(&self) -> &SessionId {
         &self.session_id
     }
 }
@@ -717,12 +717,11 @@ fn reader_thread(transport: Arc<SplitTransport>, inner: Arc<Mutex<ConnectionInne
             }
         };
 
-        let incoming = match raw_message.classify() {
-            Some(msg) => msg,
-            None => {
-                log::debug!("reader thread: unclassifiable message, skipping");
-                continue;
-            }
+        let incoming = if let Some(msg) = raw_message.classify() {
+            msg
+        } else {
+            log::debug!("reader thread: unclassifiable message, skipping");
+            continue;
         };
 
         match incoming {
@@ -778,18 +777,18 @@ fn handle_download_created(inner: &Arc<Mutex<ConnectionInner>>, event: &EventMes
         .params
         .get("frameId")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_owned());
+        .map(std::borrow::ToOwned::to_owned);
     let url = event
         .params
         .get("url")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_owned())
+        .map(std::borrow::ToOwned::to_owned)
         .unwrap_or_default();
     let download_id = event
         .params
         .get("uuid")
         .and_then(|v| v.as_str())
-        .map(|s| s.to_owned());
+        .map(std::borrow::ToOwned::to_owned);
 
     let Some(frame_id) = frame_id else {
         log::warn!(
@@ -801,9 +800,7 @@ fn handle_download_created(inner: &Arc<Mutex<ConnectionInner>>, event: &EventMes
     let mut guard = inner.lock().unwrap();
     let Some(pending) = guard.pending_navs.remove(&frame_id) else {
         log::warn!(
-            "Browser.downloadCreated for frame {} has no matching pending navigation (download_id={:?})",
-            frame_id,
-            download_id,
+            "Browser.downloadCreated for frame {frame_id} has no matching pending navigation (download_id={download_id:?})",
         );
         return;
     };
@@ -833,7 +830,7 @@ fn handle_download_created(inner: &Arc<Mutex<ConnectionInner>>, event: &EventMes
 fn close_all_sessions(inner: &Arc<Mutex<ConnectionInner>>) {
     let mut guard = inner.lock().unwrap();
     guard.state = ConnectionState::Closed;
-    for (_key, session) in guard.sessions.iter_mut() {
+    for session in guard.sessions.values_mut() {
         session.state = SessionState::Disposed;
         session.pending.reject_all(ProtocolErrorKind::Closed);
     }
@@ -860,7 +857,7 @@ mod tests {
     /// Mock transport using independent channels for read and write.
     /// `receive()` blocks on `incoming_rx.recv()`.
     /// `send()` pushes to `outgoing_tx`.
-    /// Both are independent, satisfying SplitTransport's safety invariant.
+    /// Both are independent, satisfying `SplitTransport`'s safety invariant.
     struct MockTransport {
         incoming_rx: mpsc::Receiver<RawMessage>,
         outgoing_tx: mpsc::Sender<serde_json::Value>,
@@ -940,18 +937,18 @@ mod tests {
         conn: Connection,
         in_tx: mpsc::Sender<RawMessage>,
         out_rx: mpsc::Receiver<serde_json::Value>,
-        #[allow(dead_code)]
-        closed: Arc<AtomicBool>,
     }
 
     fn setup() -> TestHarness {
-        let (transport, in_tx, out_rx, closed) = MockTransport::new();
+        // `closed` is dropped here: MockTransport holds its own handle on that
+        // flag (it is what `wait_closed` polls), so the harness never needed a
+        // second one. The field it used to carry was unread by every test.
+        let (transport, in_tx, out_rx, _closed) = MockTransport::new();
         let conn = Connection::new(Box::new(transport));
         TestHarness {
             conn,
             in_tx,
             out_rx,
-            closed,
         }
     }
 
@@ -996,7 +993,7 @@ mod tests {
             .expect("timed out waiting for outgoing message")
     }
 
-    /// Clean teardown: drop in_tx to unblock reader, then wait.
+    /// Clean teardown: drop `in_tx` to unblock reader, then wait.
     fn teardown(mut h: TestHarness) {
         drop(h.in_tx);
         h.conn.wait_closed();
@@ -1101,7 +1098,7 @@ mod tests {
         let h = setup();
         let page = h.conn.create_session("page-1".to_owned());
 
-        let page2 = page.clone();
+        let page2 = page;
         let handle = thread::spawn(move || page2.send("Page.navigate", json!({})));
 
         let _sent = recv_out(&h.out_rx);
@@ -1175,9 +1172,9 @@ mod tests {
         let root = h.conn.root_session();
         let page = h.conn.create_session("page-1".to_owned());
 
-        let root2 = root.clone();
+        let root2 = root;
         let h1 = thread::spawn(move || root2.send("Browser.getInfo", json!({})));
-        let page2 = page.clone();
+        let page2 = page;
         let h2 = thread::spawn(move || page2.send("Page.navigate", json!({})));
 
         let _s1 = recv_out(&h.out_rx);
@@ -1343,7 +1340,7 @@ mod tests {
         // Spawn the navigate call in a thread; it must block waiting for a
         // response that will never come (we simulate that by NOT sending a
         // matching Page.navigate response from the responder).
-        let page2 = page.clone();
+        let page2 = page;
         let handle = thread::spawn(move || {
             page2.send_navigate(
                 "Page.navigate",
@@ -1424,7 +1421,7 @@ mod tests {
         let page_b = h.conn.create_session("page-B".to_owned());
 
         // Start nav on frame-A
-        let pa = page_a.clone();
+        let pa = page_a;
         let handle_a = thread::spawn(move || {
             pa.send_navigate(
                 "Page.navigate",
@@ -1437,7 +1434,7 @@ mod tests {
         assert_eq!(sent_a["sessionId"], "page-A");
 
         // Start nav on frame-B
-        let pb = page_b.clone();
+        let pb = page_b;
         let handle_b = thread::spawn(move || {
             pb.send_navigate(
                 "Page.navigate",
@@ -1493,7 +1490,7 @@ mod tests {
         let h = setup();
         let page = h.conn.create_session("page-1".to_owned());
 
-        let p = page.clone();
+        let p = page;
         let handle = thread::spawn(move || {
             p.send_navigate(
                 "Page.navigate",
@@ -1692,7 +1689,7 @@ mod tests {
     }
 
     /// `send` (the default-timeout entry point) also enforces a bound: with
-    /// the constant overridden to a tiny value via send_with_timeout, the
+    /// the constant overridden to a tiny value via `send_with_timeout`, the
     /// same plumbing is exercised. This guards the regression where
     /// `Client::send` used `rx.recv()` with no deadline at all.
     #[test]
@@ -1706,8 +1703,8 @@ mod tests {
     // Browser.getCookies mock-transport tests (G1: cookie export)
     // -----------------------------------------------------------------------
 
-    /// Build a `Browser.getCookies` response RawMessage containing one
-    /// regular cookie and one HttpOnly cookie.
+    /// Build a `Browser.getCookies` response `RawMessage` containing one
+    /// regular cookie and one `HttpOnly` cookie.
     fn get_cookies_response(id: i64) -> RawMessage {
         RawMessage {
             id: Some(id),
@@ -1747,7 +1744,7 @@ mod tests {
     }
 
     /// `Browser.getCookies` round-trip via mock transport: both cookies are
-    /// returned; the HttpOnly flag is preserved on the HttpOnly cookie.
+    /// returned; the `HttpOnly` flag is preserved on the `HttpOnly` cookie.
     #[test]
     fn get_cookies_round_trip_includes_http_only_flag() {
         let h = setup();

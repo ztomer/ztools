@@ -1,10 +1,10 @@
 //! `validate_detailed_json` scoring: detail bands, caps, and failure truncation.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::ztools::eval::validators::json_validator::*;
 
-use super::support::{detailed_items, SRC_FULL, SRC_MED, SRC_NONE};
+use super::support::{SRC_FULL, SRC_MED, SRC_NONE, detailed_items};
 
 #[test]
 fn test_validate_detailed_json_clean_full_score() {

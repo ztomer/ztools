@@ -129,7 +129,7 @@ impl ProtocolError {
         let method = method.into();
         Self {
             kind: ProtocolErrorKind::Timeout,
-            message: format!("Request '{method}' timed out after {:?}", deadline,),
+            message: format!("Request '{method}' timed out after {deadline:?}"),
             method: Some(method),
             data: None,
             source: None,

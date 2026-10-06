@@ -10,8 +10,26 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
-# shellcheck source=/Users/ztomer/Projects/gates_of_heck/tui/lib.sh
-source "$GOH/tui/lib.sh"
+# The output helpers, defined BEFORE the source so a missing tui degrades instead of
+# dying. Sourcing an absent file prints "No such file or directory" and, under
+# `set -e`, exits with nothing named -- fail-closed but unnamed, which is the worst of
+# both: the operator is told the release failed and not why. Same rule tools/gpu_lock.sh
+# states -- a guard that only returns non-zero is not enough, because `return` from a
+# sourced file returns from the SOURCE and the caller carries on -- so the helpers are
+# DEFINED here, not merely checked for.
+for _release_helper in info ok warn err; do
+    declare -F "$_release_helper" >/dev/null 2>&1 || eval "
+        $_release_helper() { printf '%s\n' \"\$*\" >&2; }"
+done
+declare -F die >/dev/null 2>&1 || die() { err "$*"; exit "${2:-1}"; }
+if [ -f "$GOH/tui/lib.sh" ]; then
+    # shellcheck source=/dev/null
+    source "$GOH/tui/lib.sh"
+else
+    warn "no tui/lib.sh under $GOH — output is plain text, no icons or colour."
+    warn "set GOH_DIR to your gates_of_heck checkout (or run its install.sh) for the house TUI style."
+fi
+unset _release_helper
 
 [ $# -ge 1 ] || die "usage: tools/release.sh X.Y.Z [--dry-run]"
 V="${1#v}"; shift

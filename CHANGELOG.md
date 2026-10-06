@@ -6,6 +6,279 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## Unreleased — a reading nobody took is never a score _(2026-10-05/06)_
+
+The theme is one class: a value that was never measured arrived in front of a
+reader looking like one that was. **967 Rust tests, 123 tools tests, clippy
+`-D warnings` clean on stable (1.99) and on the 1.93.1 MSRV, coverage 96.85%
+(16409/16943) with per-file floors enforced.**
+
+### Fixed — things that were wrong, not merely untidy
+- **A model run that measured nothing exited 0 and printed a table of 0.0%.**
+  The transport error was swallowed into per-test scores, so "the server was
+  down" and "the model is bad" produced the same exit code and nearly the same
+  screen; a `--suite full` run against a dead server wrote a 0-mean entry into
+  the history the ranking reads; an over-budget refusal was an `eprintln!` and a
+  `continue`; `--model all` dropped an unreachable model and reported success
+  over the rest. Every one of these is now a `NOT MEASURED` row with the reason
+  in it, `—` where the score would be, no mean averaged over it, and a non-zero
+  exit (`rust/tests/eval_not_measured.rs`).
+- **The verdict on a partly-measured run counted wrong.** It said "0 of N
+  task(s) reached the model" whenever ANY row had missed, so one outage among
+  thirty answers read as a dead server. It now counts what happened.
+- **The eval history averaged unmeasured rows in as zeros.** Every outcome was
+  written to `eval_history.json` with its placeholder `score: 0`, so an outage
+  dragged a model's historical mean down as though it had answered wrong.
+  Unmeasured rows are no longer written.
+- **A prompt that cannot fit the model's context window was sent anyway and
+  scored 0.** Nothing compared a prompt to a window. `eval/context_fit.rs` now
+  refuses, before any request, a prompt whose size alone certainly exceeds a
+  DOCUMENTED window (a token count bounded from below at 5 chars/token, so an
+  error can only err towards measuring). The row is `CONTEXT`: not measured, not
+  an outage that counts towards abandoning the model, not a quality failure, and
+  not a run failure unless nothing else was measured. `foundation`'s ~4.6 KB
+  `summarize` prompt stays measured; the ~22.6 KB file-summary prompt does not.
+- **A dead weather endpoint produced an invented forecast in the saved plan.**
+  The fetcher's failure string was filtered out by the formatter, which then
+  rendered a hardcoded forecast of its own (`Fri 28.2°C (clear), …`): a reading
+  invented in two places, neither of which said so. A failed fetch is now
+  visible in the document, and the fetcher's live failure output is asserted
+  equal to the one constant the formatter recognises
+  (`rust/tests/weather_failure.rs`).
+- **`file_summary` could not tell a description read from the file from one
+  guessed from its name.** The prompt sent seventeen paths and no content, and
+  the scorer counted sentences with a content verb, which a name-based guess
+  produces as readily as a grounded one. The prompt now carries each file's head
+  (40 lines / 1200 B, ~22.6 KB rendered, ceiling pinned at 24,576 B) and the
+  scorer checks two pinned facts per file (`eval/validate_grounding.rs`), each
+  asserted to still occur in the file it describes.
+- **Linux pressure readings were always `None`, so no Linux sample was ever
+  clean.** The reader asked macOS-only questions; `None` failed
+  `machine_is_uncontended()`, so the learned per-model timeout could never exist
+  on Linux. `eval/signals_platform.rs` reads `/proc/meminfo` (swap and
+  `MemAvailable`). Swap-only by design: a PSI stall threshold has to be measured
+  on a Linux box first.
+- **A config test passed under `cargo test` and failed under the coverage
+  build.** The sandbox did not own the EXECUTABLE: every checkout-derived default
+  starts from `current_exe`, and under the gate's `cargo llvm-cov` the test
+  binary lives in `rust/target/llvm-cov/`, inside the real checkout, so every
+  sandboxed default named the operator's `conf/`. `manifest::running_exe()` is
+  now the one seam (`ZTOOLS_EXE`) and `TestEnv` points it at a path with no
+  checkout above it. Reproduced red under the gate's target dir, green with the
+  row.
+- **Five config tests were outside the sandbox, and only a fresh clone showed it.**
+  The audit that forces a `TestEnv` into every test touching config defaults
+  recognised `ZtoolsConfig::default()` and `ZtoolsConfig {` only; `load_config`, a
+  typed `toml::from_str`, and the three `manifest` entry points reach the same
+  defaults. In this checkout the leak was invisible -- the root derived from the
+  test binary IS `~/Projects/ztools`, which the historical default already names --
+  so it took a CI simulation (a clone elsewhere, an empty `HOME`) to fail. The
+  audit now knows all five routes and the five tests take the guard.
+
+### Changed
+- **EXPECTATION SHIFT — `file_summary` and `file_summary_mixed` now measure a
+  different task under the same names.** Every score for them recorded before
+  2026-10-05 was taken without the file contents and graded by the verb
+  heuristic; those history entries and `conf/eval_signals.json` samples describe
+  a task that no longer exists. Nothing was re-baselined. Consequences, none of
+  them measured yet:
+  - `foundation` (4096-token window) is now `NOT MEASURED` on both. It leads
+    `model_fallback_chain` and held 31 file-summary samples; it can no longer
+    run this task at all, by owner decision (2026-10-05) over cutting the file
+    list or the excerpts.
+  - `[best_models].think` (`qwen3.8-27b-jang_6d`) was chosen partly as "the only
+    model above 60 on taxes_audit_readiness and file_summary_mixed together".
+    That half of the justification is unconfirmed until the `think` group is
+    re-swept.
+- **`$HOME` is a sandbox redirect like every other path variable**, after every
+  test that reads `~` was brought under `TestEnv`. `Point::Preserved` is gone.
+- **Three gate steps**, each calibrated red before it was wired: `cargo deny`
+  (`rust/deny.toml`), `tools/shell_lint_extra.sh` (shellcheck over
+  `.githooks/*` and `bin/ab_test`, which `structural.sh` cannot see), and the
+  vendor clippy ratchet (`tools/vendor_lint_ratchet.py`): 208 findings in
+  `vendor/camoufox-rs` under per-lint shrink-only ceilings, after `clippy --fix`
+  (157) and the removal of all 10 suppression sites. The 10-04 entry below and
+  `.gatesrc` both said vendor clippy was ungoverned; both are corrected.
+- **The hooks delegate to the house gate**: `pre-push` runs
+  `$GOH/gates/push_gate.sh`, `pre-commit` routes through `tools/gate.sh --staged`.
+- `rust-toolchain.toml` (channel `stable`, rustfmt + clippy named),
+  `rust-version = "1.93.1"`, and the vendored `camoufox` dependency carries a
+  version.
+- **`docs/ROADMAP.md` rebuilt, and its contract is a gate.** 575 lines → ~300: one
+  phase sequence (L land, G gates, M measurement, R readings) with never-reused item
+  IDs, every item carrying Class / Why now / Done when / Blocked by, and the
+  "Closed 2026-…" history pruned to this file and git. `tools/tests/test_roadmap.py`
+  enforces it: the four fields, no done-annotations, every backticked repo path
+  exists, and every `ROADMAP <ID>` reference elsewhere resolves. Calibrated against
+  the previous file, which it rejects on four of five rules (including the stale
+  `MODEL_QUIRKS.md` pointer to "item 1", now `M4`). A fifth rule, that every item
+  sits under its own phase, was added when an edit dropped a phase heading and moved
+  its items silently.
+- `assert_empty!` / `assert_nonempty!` / `assert_exact!` are `#[macro_export]`ed
+  and proven reachable from integration tests; `rust/tests/transport_http.rs`
+  has no sleeps left.
+
+### Added
+- **Per-file coverage floors, enforced** (`tools/coverage_floors.jsonc`): every file
+  must hold 74.0%, so the 95% aggregate can no longer be met by letting one file
+  fall to zero. One exemption, `twitter/native.rs` (2.7%, the live-browser driver),
+  keyed relative to `rust/` now that gates_of_heck v0.24.0 accepts relative keys.
+  Calibrated on the real lcov parts: exemption removed → exit 1, the key spelled
+  `rust/src/…` → stale, exit 1, missing or unparseable file → exit 2.
+- **The plain `cargo test` gate step is now `cargo test --doc`**: the coverage step
+  already runs every lib, bin and test target and goes red naming a failing test
+  (one planted assertion → exit 1), so the suite ran twice per gate.
+- **CI exists.** `.github/workflows/ci.yml` runs `make ci` -- the same `.gatesrc`
+  step list as the hooks and the release -- on every push to `main` and every pull
+  request, on Apple-silicon macOS, with gates_of_heck cloned at `main` and
+  bootstrapped by its own `install.sh`. Until now a fresh clone had no gate at all.
+  README and ARCHITECTURE said there was no CI; both now point at `.gatesrc` for the
+  step list instead of carrying a copy of it, which is how the README's had gone
+  stale (it still listed `cargo test` and omitted five steps).
+- **The hooks are the stock gates_of_heck hooks** (`install.sh --force`, with
+  install hashes in `.githooks/.goh-installed/`). Nothing was lost: the stock copies
+  already carry this repo's two hook fixes, upstreamed on 2026-10-05.
+- **Release tests the gate's feature set.** `bin/ab_test` ran `cargo test --quiet`,
+  the default features, while every gate step passes `--all-features`; a test now
+  requires every `cargo test` line in it to carry the flag (red first, then fixed).
+- **The vendor secrets step calls `goh.sh secrets`.** It called
+  `checks/check_no_secrets.py` by path, which gates_of_heck retired on 2026-10-06
+  with no forwarder (since restored upstream), so the step failed with "can't open
+  file". It now scans every tracked file rather than `vendor/` alone: a superset of
+  the old scope, in 0.2 s, with no look-ahead pattern to maintain. A token planted
+  in `vendor/` turns it red.
+- **`GOH_EXCLUDE` anchored to `^vendor/`**: the match is `re.search`, so `vendor/`
+  would also have exempted any first-party path containing it, silently.
+- `tools/tests/test_ab_test_comparator.py` (12 tests) for `bin/ab_test`'s
+  comparator.
+
+## Unreleased — dependency currency, and a gate that can fail again _(2026-10-04)_
+
+The audit behind this is `docs/ROADMAP.md` phases A/B/C. The gate of record was
+RED when this started (`clippy -D warnings` exit 101, 72 findings left by the
+previous batch) and is green now: **9/9 steps, 865 Rust tests, 97 tools tests,
+95.81% coverage.**
+
+### Fixed — things that were wrong, not merely untidy
+- **`wait_for_ready` in the vendored camoufox driver contradicted its own spec
+  in six places, and its 7 tests were red.** The code reads **stdout**; every
+  doc comment, `process/mod.rs`, and `docs/PROTOCOL.md` said **stderr**, and the
+  module doc named a sentinel string (`"Juggler pipe initialized"`) that the
+  binary does not emit. Probed the real binary on this machine
+  (`152.0.4-beta.31-7b8d12d6`, streams captured separately): stdout carries
+  `Juggler listening to the pipe`, stderr does not. So the CODE was right and
+  the docs were wrong — "fixing" the code to match them would have broken the
+  live twitter-collect path at `twitter/native.rs:131`. The docs are corrected,
+  the sentinel prose is corrected, `PROTOCOL.md` carries a marked note recording
+  the divergence, and two tests now pin the stream in BOTH directions so nobody
+  can "fix" it either way.
+- **The saved weekend plan never said when an event was.** `WeekendEvent.dates`
+  — the field the whole date-reconciliation effort exists to preserve — was
+  printed nowhere in the markdown, while the terminal table had a `Dates`
+  column. The two renderings of the same data disagreed. Both tables now carry
+  it, in the same position, in the same spelling.
+- **The normal twitter summary's provenance line was glued to the tweets line**
+  (no blank line, so `**Model:**` was lazy continuation of `**Tweets:**`), and
+  `Provenance::banner()` never closed its block quote.
+- **`cargo audit`'s configuration was in a directory the gate never runs from.**
+  It sat at `rust/.cargo/audit.toml`; the gate runs from the repo root and
+  cargo-audit resolves `$CWD/.cargo/` only, so `deny = [warnings, unmaintained,
+  unsound, yanked]` was dead. Moved to `.cargo/audit.toml`, with the placement
+  requirement and its proof recorded in the file. The tree is clean either way
+  today (258 dependencies, zero advisories), so this mattered the day one lands.
+- **The audit gate's ignore list does not ratchet.** `ignore = ["RUSTSEC-2026-9999"]`
+  is accepted silently, so "delete the entry once its advisory stops firing" is
+  on whoever adds it. Stated in the config instead of implied.
+- **The suite wrote into the developer's real `$HOME`.** `model_resolve_http`
+  set `EVAL_SIGNALS_DIR` but not `EVAL_OUTPUT_DIR`, so every run overwrote
+  `~/.config/ztools/outputs/gone-model/t1.txt` (verified on disk). Four twitter
+  tests were reading this checkout's own `conf/twitter.toml` through `$HOME` and
+  passing only because it happens to carry a `[fallback]` table. One test walked
+  the real Firefox profile tree.
+- **`sweep_models.sh` re-introduced the bug it documents fixing.** `grep -c`
+  exits 1 on no match, so `$(grep -c … || echo 0)` produced the two-line string
+  `"0
+0"` and `[ … -gt 0 ]` errored on every all-green sweep. `grep -o` under
+  `set -euo pipefail` aborted `rerun_truncated.sh` outright on an empty log —
+  the exact case that script exists for.
+- **`install.sh` had no platform gate at all**, and its `cargo metadata … ||
+  echo` fallback pointed at a path the machine-wide `build-dir` never writes to.
+  Now a hard failure with an overridable `ZTOOLS_OS`/`ZTOOLS_ARCH` seam (plus
+  `ZTOOLS_PLATFORM_CHECK_ONLY=1`, so a test can drive both directions without
+  building): macOS arm64, Linux x86_64 and Linux aarch64 accepted; macOS Intel,
+  32-bit and unknown OS rejected with the combination named.
+- **The two git hooks that guard everything got no shellcheck** (`*.sh` and
+  `hooks/*` never matched `.githooks/`), and `pre-push` checked for the repo's
+  own `tools/gate.sh` rather than the gates checkout it actually execs — so a
+  missing gates repo failed with a bare `No such file or directory`.
+- **A pytest marker opted out of a guard that did not exist.** `conftest.py`
+  was absent; every run printed `PytestUnknownMarkWarning`. The guard is real now
+  and is itself tested.
+- **A vendored test leaked a process.** `returns_timeout_when_process_hangs`
+  spawned `sh -c "… && sleep 60"` and killed only the shell, so the sleeper
+  outlived the suite. Caught by the house orphan check on the first run of the
+  new gate step.
+
+### Changed
+- **Six direct dependencies moved a major version, and all 787 tests passed on
+  the bump before a line of code changed**: `toml` 0.8 → 1.1, `brotli` 8 → 9,
+  `dirs` 5 → **7** (two majors), `base64` 0.22 → 0.23, `serial_test` 3 → 4.
+  `serial_test` also **collapses `syn` to a single major** in the graph — 3.5.0
+  was the only thing holding 2.x in. `cargo update` alone moved 45 more
+  packages, `winnow` 0.7 → 1.0 among them.
+- **`reqwest` 0.13.1 → 0.13.5.** It had been silently pinned four patch
+  releases back because reqwest **deleted the `webpki-roots` feature** upstream,
+  and cargo treats features as part of the compatibility surface. The tree now
+  takes its root store from `rustls-platform-verifier`. Proven against the real
+  endpoint, not a green suite: `ZTOOLS_TLS_PROBE=1 cargo test --test tls_probe`
+  fetches a real three-day forecast, and the probe is calibrated against an
+  expired certificate so a failure is recognisable.
+- **Edition 2021 → 2024.** 65 sites needed attention (not the 92 the compiler
+  reported first — `cargo check --all-targets` stops after the failing `lib
+  test` target, so the integration binaries were never counted). 61 route
+  through the new shared `TestEnv` guard; **4 `unsafe` blocks** total, each with
+  a `SAFETY:` argument. Edition 2024 also made let-chains available, which
+  surfaced **65 previously-unreportable `collapsible_if` findings** across 25
+  files; all fixed, none suppressed.
+- **One guard for process-global state, and three gates that make it impossible
+  to forget.** `test_env::TestEnv` manages 26 variables, restores them in reverse
+  order while holding a global lock, and **panics on a key it does not manage** —
+  because a variable nothing restores is the defect, not the style. Three audit
+  gates re-derive their expectations from the sources: every env var the crate
+  reads is managed, every hazard test constructs a guard, no test names a fixed
+  directory under the system temp dir.
+- **The gate grew three steps and lost its false claims.** `.gatesrc` said the
+  vendored crate was "still secret-scanned"; it was not — all 53 vendor files
+  skipped every delegated check. Vendor is now secret-scanned by an explicit
+  step, its **own 198 tests run in the gate**, and `ruff check tools/` runs
+  against the `pyproject.toml` rule set instead of being config nobody runs.
+  What vendor was still NOT under on this date: clippy (365 findings across
+  28 files, 35 auto-fixable) and its 10 `#[allow]` sites. Superseded 2026-10-05
+  by the vendor clippy ratchet (see above).
+- **Docs now match the code.** The coverage floor is 95 everywhere (two files
+  said 94); `ARCHITECTURE.md` no longer claims a GitHub CI that does not exist;
+  the file-size rule states that it is enforced per file SUFFIX; `CLAUDE.md`
+  documents that the cookie store is Firefox-family only.
+
+### Added
+- **Byte-level goldens for the two documents a human reads** (weekend plan,
+  twitter summary), in the shape `report_csv.rs` already used, regenerable only
+  via `ZTOOLS_UPDATE_GOLDENS=1` — which still panics, so a plain `cargo test`
+  can never bless a change.
+- **Tests where the property was untested, not merely unasserted:**
+  `args_with_implied_subcommand` (the argv→subcommand path every one of the
+  eight installed symlinks takes), `expand_tilde`, `load_config`, the five
+  built-in smoke tasks row-for-row, `CARRY_FIELDS` preservation,
+  `LiveBrowserCollector::new`'s runner wiring, and a live-TLS probe.
+- **`rust/tests/yoy_regression.rs` deleted.** It read `/tmp/yoy_out.txt` and
+  asserted nothing whenever the file was absent — a golden that is a no-op on
+  every clean machine. The case was already covered by
+  `validator_parity`'s frozen verdicts, which is where the provenance belonged.
+- **`fetch_weather_from(url)`** — the seam that let the weather HTTP path be
+  asserted over a real socket instead of hand-fed JSON.
+- `vendor/camoufox-rs/Cargo.lock`, so a crate with no lock no longer floats its
+  dependencies between builds.
+
 ## v3.2.1 — reqwest 0.13, rusqlite 0.40, no suppression attributes _(2026-09-21)_
 
 ### Fixed

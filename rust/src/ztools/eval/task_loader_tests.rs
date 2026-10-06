@@ -155,7 +155,7 @@ fn load_taxes_tasks_from_missing_dir_is_empty() {
     let temp = tempfile::tempdir().unwrap();
     let missing = temp.path().join("does_not_exist");
     let tasks = load_taxes_tasks_from_dir(&missing).unwrap();
-    assert!(tasks.is_empty());
+    assert_empty!(tasks);
 }
 
 #[test]

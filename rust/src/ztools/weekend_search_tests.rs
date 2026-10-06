@@ -28,7 +28,7 @@ fn parse_snippet_only_markup_yields_body_only_results() {
     let html = "<div><a class=\"result__snippet\">Vaughan Fall Fair returns this weekend</a></div>";
     let results = search::parse_results_from_html(html);
     assert_eq!(results.len(), 1);
-    assert!(results[0].title.is_empty());
+    assert_empty!(&results[0].title);
     assert_eq!(results[0].body, "Vaughan Fall Fair returns this weekend");
 }
 
@@ -108,7 +108,7 @@ fn an_answering_duckduckgo_never_consults_bing() {
 #[test]
 fn unreachable_engines_are_recorded_as_such() {
     let outcome = search::search_engines("kids events", &urls(dead(), dead(), dead()));
-    assert!(outcome.results.is_empty());
+    assert_empty!(&outcome.results);
     assert_eq!(
         outcome.verdicts,
         [

@@ -18,7 +18,16 @@
 set -euo pipefail
 
 GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
-# shellcheck source=/Users/ztomer/Projects/gates_of_heck/tui/lib.sh
+# shellcheck source=/dev/null
+# WHY /dev/null and not a path: the source above is `$GOH/tui/lib.sh`, and the
+# line this used to carry named ONE machine's absolute checkout of gates_of_heck.
+# On any other account shellcheck tried to read a path that does not exist there,
+# so the directive resolved nothing -- and it was a hard-coded home path in a
+# script, the class `GOH_NO_HOME_PATHS` is the gate for. A variable source is not
+# resolvable at all, so the notice is silenced rather than satisfied, exactly as
+# install.sh and tools/*.sh do for their own `$GOH` sources. The functions are
+# still checked: a missing `tui/lib.sh` fails `source` under `set -e` before any
+# of `die`/`section`/`info` is called.
 source "$GOH/tui/lib.sh"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -53,7 +62,7 @@ run_cli_test() {
 
 run_rust_suite() {
     section "Rust suite (unit, integration, frozen-golden parity)"
-    if (cd "$ROOT/rust" && cargo test --quiet); then
+    if (cd "$ROOT/rust" && cargo test --quiet --all-features); then
         ok "Rust ztools unit, integration & parity tests passed"
     else
         err "Rust ztools tests failed"

@@ -109,6 +109,7 @@ pub fn run() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_env::TestEnv;
 
     fn dir_with(files: &[(&str, &str)]) -> (tempfile::TempDir, PathBuf) {
         let td = tempfile::tempdir().unwrap();
@@ -134,10 +135,12 @@ mod tests {
         let s = build_status_in(Path::new("/nonexistent/twitter_summaries"));
         assert_eq!(s["state"], "unknown");
         assert_eq!(s["name"], NAME);
-        assert!(s["summary"]
-            .as_str()
-            .unwrap()
-            .starts_with("no summary directory at /nonexistent"));
+        assert!(
+            s["summary"]
+                .as_str()
+                .unwrap()
+                .starts_with("no summary directory at /nonexistent")
+        );
     }
 
     #[test]
@@ -145,10 +148,12 @@ mod tests {
         let (_td, d) = dir_with(&[("notes.txt", "not a summary")]);
         let s = build_status_in(&d);
         assert_eq!(s["state"], "unknown");
-        assert!(s["summary"]
-            .as_str()
-            .unwrap()
-            .starts_with("no twitter summary found in "));
+        assert!(
+            s["summary"]
+                .as_str()
+                .unwrap()
+                .starts_with("no twitter summary found in ")
+        );
     }
 
     #[test]
@@ -195,14 +200,16 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn output_dir_honours_the_env_override() {
-        let prev = std::env::var("TWITTER_OUTPUT_DIR").ok();
-        std::env::set_var("TWITTER_OUTPUT_DIR", "/tmp/tw_status_probe");
+        // The override is now a per-test directory rather than the fixed
+        // `/tmp/tw_status_probe` this used to point at: `set_path` re-points the
+        // managed variable inside the sandbox, so the assertion is about the
+        // override being honoured and not about a name two concurrent runs
+        // share.
+        let env = TestEnv::new();
+        let probe = env.set_path("TWITTER_OUTPUT_DIR", "probe");
         let got = output_dir();
-        match prev {
-            Some(v) => std::env::set_var("TWITTER_OUTPUT_DIR", v),
-            None => std::env::remove_var("TWITTER_OUTPUT_DIR"),
-        }
-        assert_eq!(got, PathBuf::from("/tmp/tw_status_probe"));
+        assert_eq!(got, probe);
         assert!(twitter_store_dir().ends_with("Documents/twitter_summaries"));
+        drop(env);
     }
 }

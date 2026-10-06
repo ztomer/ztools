@@ -1,0 +1,29 @@
+{
+  "_note": [
+    "A PER-FILE floor, so the 95% aggregate cannot be met by trading a file away.",
+    "Consumed by $GOH_DIR/gates/coverage_gate.sh --lang rust --floors-json, wired in .gatesrc.",
+    "Seeded 2026-10-05 from the gate's own report: 96.79% of coverable lines, 16272/16811,",
+    "126 source files under rust/src, 37 of them below 100%. file_floor is set a whole",
+    "point BELOW the lowest measured non-exempt file (rust/src/cli_ztools_twitter.rs at",
+    "73/98 = 74.4898%), never at or above it: the merger compares 100*cov/tot against this",
+    "number with no rounding, so a floor written from the 74.49 the report PRINTS would sit",
+    "above the file it was measured from and go red on arrival.",
+    "POLICY. Every measured file must hold at least file_floor. It is a FLOOR, not a per-file",
+    "ratchet: the rust mode takes one uniform number (a per-target map is refused, exit 2), so",
+    "a file may drift from 99% to 74.5% silently. Closing that needs per-file values upstream.",
+    "EXEMPTION, exactly one file. rust/src/ztools/twitter/native.rs measures 8/293 = 2.7%: it is",
+    "the camoufox collect and login driver, and testing it means launching a real browser",
+    "against a live session, which no test here may do. The key is RELATIVE TO THE PROJECT THE",
+    "MERGER RUNS IN, which is rust/ (the step's last argument), so it reads src/..., not",
+    "rust/src/...: a key the merger cannot match is reported stale and fails the gate.",
+    "rust/src/main.rs is not exempt: it measures 6/6.",
+    "MECHANICS. tolerance is 0.0: the comparison is exact, and a tolerance would only hide a",
+    "regression. No // comments: the merger reads this with json.load, and an unreadable floors",
+    "file is refused (exit 2) since gates_of_heck 22c8d49 -- loud, but still red."
+  ],
+  "file_floor": 74.0,
+  "tolerance": 0.0,
+  "exempt": {
+    "src/ztools/twitter/native.rs": "8/293 covered: the camoufox collect+login driver. Only a real browser against a live session exercises it, which no test in this repo may launch, so a floor here would be fiction."
+  }
+}

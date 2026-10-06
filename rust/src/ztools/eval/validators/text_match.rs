@@ -67,7 +67,9 @@ mod tests {
         let tokens = tokenize("Revenue rose 40% to $75K. Output was 2.5x");
         assert_eq!(
             tokens,
-            vec!["revenue", "rose", "40%", "to", "$75k", "output", "was", "2.5x"]
+            vec![
+                "revenue", "rose", "40%", "to", "$75k", "output", "was", "2.5x"
+            ]
         );
     }
 

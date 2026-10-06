@@ -35,13 +35,13 @@ impl ConnectionState {
     /// Returns `true` if the connection is in a terminal state.
     #[inline]
     pub fn is_closed(&self) -> bool {
-        *self == ConnectionState::Closed
+        *self == Self::Closed
     }
 
     /// Returns `true` if normal commands can be sent (connection is `Ready`).
     #[inline]
     pub fn is_ready(&self) -> bool {
-        *self == ConnectionState::Ready
+        *self == Self::Ready
     }
 
     /// Attempt a state transition. Returns `Ok(new_state)` on success,
@@ -55,18 +55,18 @@ impl ConnectionState {
     /// - `Connected → Closed` (abnormal: transport died before init)
     /// - `Enabling → Closed` (abnormal: transport died during enable)
     /// - `Ready → Closed` (abnormal: transport died during operation)
-    pub fn transition(self, to: ConnectionState) -> Result<ConnectionState, String> {
+    pub fn transition(self, to: Self) -> Result<Self, String> {
         let valid = match (self, to) {
             // Normal forward transitions
-            (ConnectionState::Connected, ConnectionState::Enabling) => true,
-            (ConnectionState::Enabling, ConnectionState::Ready) => true,
-            (ConnectionState::Ready, ConnectionState::Closing) => true,
-            (ConnectionState::Closing, ConnectionState::Closed) => true,
+            (Self::Connected, Self::Enabling) => true,
+            (Self::Enabling, Self::Ready) => true,
+            (Self::Ready, Self::Closing) => true,
+            (Self::Closing, Self::Closed) => true,
 
             // Abnormal close from any non-terminal state
-            (ConnectionState::Connected, ConnectionState::Closed) => true,
-            (ConnectionState::Enabling, ConnectionState::Closed) => true,
-            (ConnectionState::Ready, ConnectionState::Closed) => true,
+            (Self::Connected, Self::Closed) => true,
+            (Self::Enabling, Self::Closed) => true,
+            (Self::Ready, Self::Closed) => true,
 
             // Everything else is invalid
             _ => false,
@@ -85,11 +85,11 @@ impl ConnectionState {
 impl std::fmt::Display for ConnectionState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConnectionState::Connected => write!(f, "Connected"),
-            ConnectionState::Enabling => write!(f, "Enabling"),
-            ConnectionState::Ready => write!(f, "Ready"),
-            ConnectionState::Closing => write!(f, "Closing"),
-            ConnectionState::Closed => write!(f, "Closed"),
+            Self::Connected => write!(f, "Connected"),
+            Self::Enabling => write!(f, "Enabling"),
+            Self::Ready => write!(f, "Ready"),
+            Self::Closing => write!(f, "Closing"),
+            Self::Closed => write!(f, "Closed"),
         }
     }
 }
@@ -125,19 +125,19 @@ impl SessionState {
     /// Returns `true` if commands can be sent on this session.
     #[inline]
     pub fn is_active(&self) -> bool {
-        *self == SessionState::Active
+        *self == Self::Active
     }
 
     /// Returns `true` if this is a terminal state (`Disposed`).
     #[inline]
     pub fn is_disposed(&self) -> bool {
-        *self == SessionState::Disposed
+        *self == Self::Disposed
     }
 
     /// Returns `true` if the session has crashed.
     #[inline]
     pub fn is_crashed(&self) -> bool {
-        *self == SessionState::Crashed
+        *self == Self::Crashed
     }
 
     /// Attempt a state transition. Returns `Ok(new_state)` on success,
@@ -147,12 +147,10 @@ impl SessionState {
     /// - `Active → Crashed`
     /// - `Active → Disposed`
     /// - `Crashed → Disposed` (crash followed by close)
-    pub fn transition(self, to: SessionState) -> Result<SessionState, String> {
+    pub fn transition(self, to: Self) -> Result<Self, String> {
         let valid = matches!(
             (self, to),
-            (SessionState::Active, SessionState::Crashed)
-                | (SessionState::Active, SessionState::Disposed)
-                | (SessionState::Crashed, SessionState::Disposed)
+            (Self::Active, Self::Crashed | Self::Disposed) | (Self::Crashed, Self::Disposed)
         );
 
         if valid {
@@ -168,9 +166,9 @@ impl SessionState {
 impl std::fmt::Display for SessionState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SessionState::Active => write!(f, "Active"),
-            SessionState::Crashed => write!(f, "Crashed"),
-            SessionState::Disposed => write!(f, "Disposed"),
+            Self::Active => write!(f, "Active"),
+            Self::Crashed => write!(f, "Crashed"),
+            Self::Disposed => write!(f, "Disposed"),
         }
     }
 }
@@ -196,7 +194,7 @@ pub struct IdGenerator {
 
 impl IdGenerator {
     /// Create a new ID generator. First call to `next()` returns 1.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             next: AtomicI64::new(1),
         }

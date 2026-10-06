@@ -38,14 +38,14 @@ fn a_well_formed_array_parses() {
 /// was said, and the caller's fallback sources exist precisely for this.
 #[test]
 fn malformed_input_yields_nothing_rather_than_a_partial_list() {
-    assert!(tweets_from_json("not json").is_empty());
-    assert!(tweets_from_json("").is_empty());
-    assert!(
-        tweets_from_json(r#"[{"screen_name": "a"}]"#).is_empty(),
+    assert_empty!(tweets_from_json("not json"));
+    assert_empty!(tweets_from_json(""));
+    assert_empty!(
+        tweets_from_json(r#"[{"screen_name": "a"}]"#),
         "a tweet missing required fields fails the WHOLE parse"
     );
-    assert!(
-        tweets_from_json(r#"{"tweets": []}"#).is_empty(),
+    assert_empty!(
+        tweets_from_json(r#"{"tweets": []}"#),
         "valid JSON of the wrong shape is still not a tweet list"
     );
 }
@@ -53,9 +53,9 @@ fn malformed_input_yields_nothing_rather_than_a_partial_list() {
 #[test]
 fn an_absent_or_unreadable_file_yields_nothing() {
     let tmp = tempfile::tempdir().unwrap();
-    assert!(tweets_from_file(&tmp.path().join("nope.json")).is_empty());
+    assert_empty!(tweets_from_file(&tmp.path().join("nope.json")));
     // A directory is not a readable file.
-    assert!(tweets_from_file(tmp.path()).is_empty());
+    assert_empty!(tweets_from_file(tmp.path()));
 }
 
 #[test]

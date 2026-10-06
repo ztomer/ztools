@@ -8,7 +8,7 @@
 //! was accurate and useless. These records travel from the fetch into the
 //! rendered plan so the sentence names the cause.
 
-use super::search::{EngineVerdict, QueryOutcome, ENGINES, ENGINE_COUNT};
+use super::search::{ENGINE_COUNT, ENGINES, EngineVerdict, QueryOutcome};
 
 /// Tally of what the search engines said across a run's fan-out.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

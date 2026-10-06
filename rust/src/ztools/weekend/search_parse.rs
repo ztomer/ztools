@@ -165,10 +165,10 @@ pub fn parse_brave_results(html: &str) -> Vec<SearchResult> {
                 Some(strip_tags(&block[text_start..text_end]))
             })
             .unwrap_or_default();
-        if let Some(title) = title.filter(|t| !t.is_empty()) {
-            if href.starts_with("http") {
-                results.push(SearchResult { title, href, body });
-            }
+        if let Some(title) = title.filter(|t| !t.is_empty())
+            && href.starts_with("http")
+        {
+            results.push(SearchResult { title, href, body });
         }
         idx = end;
     }

@@ -125,15 +125,8 @@ pub fn save_output(record: &OutputRecord, eval_dir: Option<&Path>) -> Option<Pat
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn guard(key: &str, value: Option<&std::ffi::OsStr>) -> Option<std::ffi::OsString> {
-        let prev = std::env::var_os(key);
-        match value {
-            Some(v) => std::env::set_var(key, v),
-            None => std::env::remove_var(key),
-        }
-        prev
-    }
+    use crate::test_env::TestEnv;
+    use serial_test::serial;
 
     #[test]
     fn safe_names_strip_path_shaped_characters() {
@@ -142,33 +135,33 @@ mod tests {
         assert_eq!(
             safe("../../etc/passwd"),
             "etc_passwd",
-            "leading dots strip away like Python's .strip(\"._-\")"
+            "leading dots strip away like Python's .strip(\"-_\")"
         );
         assert_eq!(safe("..."), "unnamed");
         assert_eq!(safe("___"), "unnamed");
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial]
     fn saving_is_on_by_default_and_env_can_disable_it() {
-        let prev = guard("EVAL_SAVE_OUTPUTS", None);
+        // The guard CLEARS `EVAL_SAVE_OUTPUTS`, so "on by default" is asserted
+        // against a genuinely absent variable rather than against whatever the
+        // operator's shell exported.
+        let env = TestEnv::new();
         assert!(outputs_enabled());
-        let _ = guard("EVAL_SAVE_OUTPUTS", Some(std::ffi::OsStr::new("0")));
+        env.set("EVAL_SAVE_OUTPUTS", "0");
         assert!(!outputs_enabled());
-        let _ = guard("EVAL_SAVE_OUTPUTS", Some(std::ffi::OsStr::new("no")));
+        env.set("EVAL_SAVE_OUTPUTS", "no");
         assert!(!outputs_enabled());
-        let _ = guard("EVAL_SAVE_OUTPUTS", Some(std::ffi::OsStr::new("1")));
+        env.set("EVAL_SAVE_OUTPUTS", "1");
         assert!(outputs_enabled());
-        let _ = guard("EVAL_SAVE_OUTPUTS", prev.as_deref());
+        drop(env);
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial]
     fn save_output_writes_header_body_and_reasoning_to_the_seamed_dir() {
-        let dir = tempfile::tempdir().unwrap();
-        let prev_out = guard("EVAL_OUTPUT_DIR", Some(dir.path().as_os_str()));
-        let prev_en = guard("EVAL_SAVE_OUTPUTS", None);
-
+        let env = TestEnv::new();
         let path = save_output(
             &OutputRecord {
                 model: "m/1",
@@ -182,11 +175,8 @@ mod tests {
             None,
         );
 
-        let _ = guard("EVAL_OUTPUT_DIR", prev_out.as_deref());
-        let _ = guard("EVAL_SAVE_OUTPUTS", prev_en.as_deref());
-
         let path = path.expect("saved");
-        assert!(path.starts_with(dir.path()));
+        assert!(path.starts_with(env.path("EVAL_OUTPUT_DIR")));
         assert_eq!(path.parent().unwrap().file_name().unwrap(), "m_1");
         assert_eq!(path.file_name().unwrap(), "task_x.txt");
         let text = std::fs::read_to_string(path).unwrap();
@@ -198,6 +188,7 @@ mod tests {
         assert!(text.contains("reasoning_chars: 16\n"));
         assert!(text.contains("---\nthe answer"));
         assert!(text.ends_with("--- reasoning ---\nchain of thought"));
+        drop(env);
     }
 
     fn rec<'a>(
@@ -227,26 +218,59 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial]
     fn nothing_to_save_and_disabled_both_return_none_without_touching_disk() {
-        let dir = tempfile::tempdir().unwrap();
-        let prev_out = guard("EVAL_OUTPUT_DIR", Some(dir.path().as_os_str()));
-
-        let prev_en = guard("EVAL_SAVE_OUTPUTS", None);
+        let env = TestEnv::new();
         let none = rec("m", "t", "", "", None, 0, "").save();
-        let _ = guard("EVAL_SAVE_OUTPUTS", prev_en.as_deref());
         assert!(none.is_none(), "empty everything -> nothing to save");
 
-        let prev_en = guard("EVAL_SAVE_OUTPUTS", Some(std::ffi::OsStr::new("0")));
+        env.set("EVAL_SAVE_OUTPUTS", "0");
         let disabled = rec("m", "t", "content", "", None, 0, "").save();
-        let _ = guard("EVAL_SAVE_OUTPUTS", prev_en.as_deref());
         assert!(disabled.is_none(), "disabled -> not saved");
 
+        // The two refusals above must leave the disk alone, not merely return
+        // None: `save_output` swallows its own I/O errors with `ok()?`, so a
+        // `None` is also what a failed write looks like.
+        assert_eq!(
+            std::fs::read_dir(env.path("EVAL_OUTPUT_DIR")).map_or(0, Iterator::count),
+            0,
+            "neither the empty nor the disabled case wrote a file"
+        );
+
         // An ERROR alone is worth keeping even with no content.
-        let prev_en = guard("EVAL_SAVE_OUTPUTS", None);
+        env.set("EVAL_SAVE_OUTPUTS", "1");
         let err_only = rec("m", "t", "", "", Some("Timeout"), 0, "").save();
-        let _ = guard("EVAL_SAVE_OUTPUTS", prev_en.as_deref());
         assert!(err_only.is_some(), "error-only output is evidence too");
-        let _ = guard("EVAL_OUTPUT_DIR", prev_out.as_deref());
+        assert_eq!(
+            std::fs::read_dir(env.path("EVAL_OUTPUT_DIR")).map_or(0, Iterator::count),
+            1,
+            "and it really landed on disk, so the None above was a refusal"
+        );
+        drop(env);
+    }
+
+    /// The defect this whole change exists for, as a test.
+    ///
+    /// `outputs_dir(None)` falls back to `$HOME/.config/ztools/outputs` unless
+    /// `EVAL_OUTPUT_DIR` says otherwise. A test that sets the signals dir but
+    /// not this one therefore writes into the developer's real config dir --
+    /// which is what `tests/model_resolve_http.rs` did, once per run, forever.
+    #[test]
+    #[serial]
+    fn the_output_dir_falls_back_to_home_and_the_guard_is_what_redirects_it() {
+        let env = TestEnv::new();
+        let redirected = outputs_dir(None);
+        assert!(
+            redirected.starts_with(env.root()),
+            "under the guard the output dir is inside the sandbox: {redirected:?}"
+        );
+        drop(env);
+        // With the guard gone the fallback is `$HOME/.config/ztools/outputs`,
+        // anchored on `dirs::home_dir()` -- which is the path a test must
+        // never be allowed to reach.
+        assert_eq!(
+            outputs_dir(None),
+            crate::ztools::eval::report::default_eval_dir().join("outputs")
+        );
     }
 }

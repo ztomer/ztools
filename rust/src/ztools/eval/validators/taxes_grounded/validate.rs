@@ -9,7 +9,7 @@ use serde_json::Value;
 use std::collections::HashSet;
 
 use super::amounts::{
-    cents, known_set, prose_amounts, score_prose_amounts, traceable_sums, MAX_SCORE,
+    MAX_SCORE, cents, known_set, prose_amounts, score_prose_amounts, traceable_sums,
 };
 use super::grounding::{load_grounding, parse_output};
 

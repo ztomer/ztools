@@ -1,5 +1,21 @@
 use super::*;
 
+use crate::test_env::TestEnv;
+
+/// The config these tests cluster against, and the sandbox it was built under,
+/// as ONE binding.
+///
+/// `ZtoolsConfig::default()` names `~/…` paths — the twitter cache, the
+/// collector checkout, the weekend data files — and resolves them through
+/// `dirs::home_dir()`, which the shared sandbox redirects. A config built
+/// outside the guard would resolve them against the operator's home, and
+/// `cluster_tweets` reads the cache path, so "which config did this test get"
+/// would be a race with every other test in the binary rather than a property
+/// of this one.
+fn sandboxed_config() -> (TestEnv, crate::config::ZtoolsConfig) {
+    (TestEnv::new(), crate::config::ZtoolsConfig::default())
+}
+
 #[test]
 fn test_cosine_similarity() {
     let a = vec![1.0, 0.0, 0.0];
@@ -36,7 +52,7 @@ fn test_cluster_tweets_fallback() {
         },
     ];
 
-    let config = crate::config::ZtoolsConfig::default();
+    let (env, config) = sandboxed_config();
 
     // Using a fake URL so it triggers fallback
     let result = cluster_tweets(&tweets, "http://127.0.0.1:59999", &config).unwrap();
@@ -45,14 +61,16 @@ fn test_cluster_tweets_fallback() {
     assert_eq!(result.len(), 2);
     assert_eq!(result[0].len(), 1);
     assert_eq!(result[1].len(), 1);
+    drop(env);
 }
 
 #[test]
 fn test_cluster_tweets_empty() {
     let tweets: Vec<Tweet> = vec![];
-    let config = crate::config::ZtoolsConfig::default();
+    let (env, config) = sandboxed_config();
     let result = cluster_tweets(&tweets, "http://127.0.0.1:59999", &config).unwrap();
-    assert!(result.is_empty());
+    assert_empty!(result);
+    drop(env);
 }
 
 #[test]
@@ -118,7 +136,7 @@ fn similar_tweets_merge_into_one_cluster_and_distant_ones_start_their_own() {
         r#"{"data":[{"embedding":[1.0,1.0]},{"embedding":[1.0,0.9]},{"embedding":[0.0,1.0]}]}"#;
     let url = serve("HTTP/1.1 200 OK", body);
     let tweets = vec![mock_tweet("t0"), mock_tweet("t1"), mock_tweet("t2")];
-    let config = crate::config::ZtoolsConfig::default();
+    let (env, config) = sandboxed_config();
 
     let result = cluster_tweets(&tweets, &url, &config).unwrap();
 
@@ -133,13 +151,14 @@ fn similar_tweets_merge_into_one_cluster_and_distant_ones_start_their_own() {
     assert_eq!(result[0][1].screen_name, "t1");
     assert_eq!(result[1].len(), 1);
     assert_eq!(result[1][0].screen_name, "t2");
+    drop(env);
 }
 
 #[test]
 fn an_http_error_status_falls_back_to_singletons() {
     let url = serve("HTTP/1.1 500 Internal Server Error", "{}");
     let tweets = vec![mock_tweet("u1"), mock_tweet("u2"), mock_tweet("u3")];
-    let config = crate::config::ZtoolsConfig::default();
+    let (env, config) = sandboxed_config();
 
     let result = cluster_tweets(&tweets, &url, &config).unwrap();
 
@@ -149,6 +168,7 @@ fn an_http_error_status_falls_back_to_singletons() {
         "a failed embedding call must not merge anything"
     );
     assert!(result.iter().all(|c| c.len() == 1));
+    drop(env);
 }
 
 #[test]
@@ -158,10 +178,11 @@ fn an_embedding_count_mismatch_falls_back_to_singletons() {
     let body = r#"{"data":[{"embedding":[1.0,0.0]}]}"#;
     let url = serve("HTTP/1.1 200 OK", body);
     let tweets = vec![mock_tweet("u1"), mock_tweet("u2"), mock_tweet("u3")];
-    let config = crate::config::ZtoolsConfig::default();
+    let (env, config) = sandboxed_config();
 
     let result = cluster_tweets(&tweets, &url, &config).unwrap();
 
     assert_eq!(result.len(), 3);
     assert!(result.iter().all(|c| c.len() == 1));
+    drop(env);
 }

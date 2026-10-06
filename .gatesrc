@@ -1,14 +1,51 @@
 # gates_of_heck configuration. All keys optional; delete what you don't use.
 GOH_MAX_LINES=500                 # file-length cap; unset disables the check
-# vendor/camoufox-rs is a third-party crate carried in-tree (rust/Cargo.toml
+
+# WHAT GOH_EXCLUDE ACTUALLY EXEMPTS (the old comment here claimed vendor was
+# "still secret-scanned by the length/emoji-independent checks". It was not:
+# structural.sh forwards GOH_EXCLUDE to EVERY delegated check, including the
+# secrets one, so all 53 tracked vendor files were skipped by all of them.
+# Measured 2026-10-04.)
+#
+# vendor/camoufox-rs is a third-party crate carried in-tree (a rust/Cargo.toml
 # path dependency; the tap builds from the tarball). Not ours to split or
-# re-glyph; still secret-scanned by the length/emoji-independent checks.
-export GOH_EXCLUDE='vendor/'
+# re-glyph: 6 of its files are over the 500-line cap (the largest by 2,359) and
+# its docs/diagrams carry upstream box-drawing glyphs. So it is exempt from the
+# cap and the emoji scan.
+#
+# It is NOT exempt from the things that matter, which used to be an accident and
+# is now three explicit steps in GOH_CI_STEPS below:
+#   - its own test suite runs in the gate (this is what would have caught the
+#     readiness bug: wait_for_ready read the wrong stream, contradicting its own
+#     spec in six places, while the crate's own 7 tests were red and invisible),
+#   - it is secret-scanned, by the last step: `goh.sh secrets` over EVERY tracked file,
+#     vendor included. It used to be scoped to vendor/ alone with '^(?!vendor/)'; the
+#     whole-tree scan is kept on purpose -- a superset of that scope, in 0.2 s, with no
+#     regex to get wrong. (Calibrated 2026-10-06: a token planted in vendor/ -> exit 1.)
+#   - it is format-checked and dependency-audited (its four non-optional deps are
+#     in rust/Cargo.lock, so `cargo audit` already covered them).
+# Clippy is a RATCHET for it, not the parent's -D warnings gate. At
+# pedantic+nursery it carried 365 findings (2026-10-04); `clippy --fix` and the
+# removal of all 10 #[allow]/#[cfg_attr] sites took that to 208, mostly semantic
+# (must_use_candidate, use_self, missing_errors_doc). Those 208 sit under
+# per-lint shrink-only ceilings in tools/vendor_lint_baseline.jsonc, enforced
+# by the `vendor_lint_ratchet.py` step below: a count may fall, never rise.
+# ANCHORED: the match is re.search, so 'vendor/' was a SUBSTRING test that would also
+# have exempted any first-party path merely containing vendor/, with no output at all
+# (gates_of_heck docs/config.md, measured 2026-10-04).
+export GOH_EXCLUDE='^vendor/'
 # GOH_LINE_EXCLUDE='third_party/'       # length-only alias
 # GOH_SWIFT_MODE=xcode            # or spm
 # GOH_SWIFT_SCHEME=MyAppTests
 # GOH_SWIFT_COV_MIN=95
 # GOH_MAX_SCRATCH_GB=25           # disk-hygiene ceiling (full runs only)
+
+# tools/*.py are dev gates (stdlib + pytest only). pyproject.toml declares the
+# rule set -- line-length 100, and PLW + BLE selected because those are the two
+# classes that actually bit here -- so the formatter's verdict no longer depends
+# on ruff's version or the directory it ran from. Opting in is what makes
+# `ruff format` a gate rather than a config nobody runs.
+GOH_PYTHON_FORMATTED=1
 
 # The gate of record. `tools/gate.sh --full` (the pre-push hook) and `make ci`
 # both delegate to gates/local_ci.sh, which reads this -- ONE list, so the hook
@@ -20,7 +57,30 @@ export GOH_EXCLUDE='vendor/'
 # lock and drives a headless browser against a live model server. It is a
 # ratchet: raise it, never lower it.
 #
+# THREE REPO-LOCAL STEPS (2026-10-05), each calibrated red before it was trusted:
+#   cargo deny        licences, sources and bans (rust/deny.toml); `cargo audit`
+#                     stays as well, because its ignore list is the ratchet the
+#                     house rules name. Red: multiple-versions = "deny" -> exit 2.
+#   shell_lint_extra  bash -n + shellcheck over .githooks/* and bin/ab_test, which
+#                     structural.sh's `*.sh` + `hooks/*` selection cannot see.
+#                     Red: a stray `fi` appended to .githooks/pre-push -> exit 1.
+#   vendor ratchet    shrink-only per-lint clippy ceilings for vendor/camoufox-rs
+#                     (tools/vendor_lint_baseline.jsonc). Red: one ceiling lowered
+#                     below its live count -> exit 1.
+#
+# NO PLAIN `cargo test` STEP (2026-10-06): the coverage step runs every lib, bin and
+# test target with --all-features and goes red, naming the test, when one fails
+# (calibrated: one planted assertion -> exit 1). Running them twice bought nothing.
+# The --doc step stays because llvm-cov does not run doctests; there are none
+# today, so it guards the first one rather than any present one.
+#
+# PER-FILE FLOORS (2026-10-06): tools/coverage_floors.jsonc, passed as "$PWD/..."
+# because the gate cd's into rust/ before the merger reads it -- a relative path is
+# refused there (exit 2). Its one exemption key is relative to rust/ (src/...).
+# Calibrated on the real lcov parts: exemption removed -> exit 1; the key spelled
+# rust/src/... -> stale, exit 1; missing or unparseable floors file -> exit 2.
+#
 # Steps are COLON-separated by the runner, so no step string may contain a
 # colon -- hence $GOH_DIR resolved here.
 export GOH_DIR="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
-GOH_CI_STEPS='"$GOH_DIR/gates/rust_gate.sh" . rust:cargo audit --file rust/Cargo.lock:"$GOH_DIR/gates/structural.sh" --full:cargo test --manifest-path rust/Cargo.toml --all-features:python3 -m pytest tools/tests -q:"$GOH_DIR/gates/coverage_gate.sh" --lang rust --floor 95 rust'
+GOH_CI_STEPS='"$GOH_DIR/gates/rust_gate.sh" . rust:cargo audit --file rust/Cargo.lock:cargo deny --manifest-path rust/Cargo.toml check:tools/shell_lint_extra.sh:python3 tools/vendor_lint_ratchet.py:"$GOH_DIR/gates/structural.sh" --full:cargo test --manifest-path rust/Cargo.toml --all-features --doc:python3 -m pytest tools/tests -q:"$GOH_DIR/gates/coverage_gate.sh" --lang rust --floor 95 --floors-json "$PWD/tools/coverage_floors.jsonc" rust:ruff check tools/:cargo test --manifest-path vendor/camoufox-rs/Cargo.toml --all-features:"$GOH_DIR/gates/goh.sh" secrets'

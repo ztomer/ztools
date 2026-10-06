@@ -255,14 +255,14 @@ pub struct MainFrame {
 
 impl MainFrame {
     /// Internal constructor used by `BrowserContext::new_main_frame`.
-    pub(crate) fn new(
+    pub(crate) const fn new(
         session: Session,
         target_id: String,
         frame_id: String,
         execution_context_id: Arc<Mutex<Option<String>>>,
         connection: Arc<Connection>,
     ) -> Self {
-        MainFrame {
+        Self {
             session,
             target_id,
             frame_id,
@@ -283,12 +283,18 @@ impl MainFrame {
 
     /// Shared handle to the cached execution context id. Updated by the
     /// listener registered in `BrowserContext::new_main_frame`.
-    #[cfg_attr(not(feature = "cli"), allow(dead_code))]
+    ///
+    /// Compiled only with `cli`: its sole reader is the CLI daemon's frame-reset
+    /// path (`cli::instance`). It used to be `pub(crate)` under a
+    /// `cfg_attr(not(feature = "cli"), allow(dead_code))`, which suppressed the
+    /// warning that its only caller is feature-gated; gating the method instead
+    /// means it is absent — not present-and-silenced — in a default build.
+    #[cfg(feature = "cli")]
     pub(crate) fn execution_context_handle(&self) -> Arc<Mutex<Option<String>>> {
         Arc::clone(&self.execution_context_id)
     }
 
-    fn session(&self) -> &Session {
+    const fn session(&self) -> &Session {
         &self.session
     }
 
@@ -312,8 +318,7 @@ impl MainFrame {
                 kind: ProtocolErrorKind::Response,
                 method: Some("Page.navigate".into()),
                 message: format!(
-                    "unsupported --wait-until value {:?}; supported values are: load, domcontentloaded",
-                    other
+                    "unsupported --wait-until value {other:?}; supported values are: load, domcontentloaded"
                 ),
                 data: None,
                 source: None,
@@ -396,8 +401,7 @@ impl MainFrame {
                 kind: ProtocolErrorKind::Timeout,
                 method: Some("Page.navigate".into()),
                 message: format!(
-                    "timed out waiting for lifecycle event {:?} after {:?}",
-                    event_name, timeout
+                    "timed out waiting for lifecycle event {event_name:?} after {timeout:?}"
                 ),
                 data: None,
                 source: None,
@@ -407,8 +411,7 @@ impl MainFrame {
                 kind: ProtocolErrorKind::Closed,
                 method: Some("Page.navigate".into()),
                 message: format!(
-                    "channel disconnected while waiting for lifecycle event {:?}",
-                    event_name
+                    "channel disconnected while waiting for lifecycle event {event_name:?}"
                 ),
                 data: None,
                 source: None,
@@ -509,7 +512,7 @@ impl MainFrame {
         // Handler 1: Network.requestWillBeSent
         let state_rws = Arc::clone(&net_state);
         let nav_id_rws = Arc::clone(&expected_nav_id);
-        let frame_id_rws = frame_id.clone();
+        let frame_id_rws = frame_id;
         let rws_id = self.connection.on_event(
             &session_key,
             "Network.requestWillBeSent",
@@ -530,7 +533,7 @@ impl MainFrame {
                     .params
                     .get("navigationId")
                     .and_then(|v| v.as_str())
-                    .map(|s| s.to_owned());
+                    .map(std::borrow::ToOwned::to_owned);
                 let expected = nav_id_rws.lock().unwrap().clone();
                 // Accept if: nav_id not yet known (speculative), OR nav_ids match,
                 // OR event carries no nav_id (some same-doc navigations).
@@ -603,7 +606,11 @@ impl MainFrame {
                 // respReceived A sets 301, then after the chain advances to B,
                 // respReceived B overwrites to the final 200/404.
                 if st.main_request_id.as_deref() == Some(req_id) {
-                    if let Some(s) = event.params.get("status").and_then(|v| v.as_u64()) {
+                    if let Some(s) = event
+                        .params
+                        .get("status")
+                        .and_then(serde_json::Value::as_u64)
+                    {
                         st.status = u16::try_from(s).ok();
                     }
                 }
@@ -636,7 +643,7 @@ impl MainFrame {
             .get("navigationId")
             .and_then(|v| v.as_str())
             .filter(|s| !s.is_empty())
-            .map(|s| s.to_owned());
+            .map(std::borrow::ToOwned::to_owned);
 
         // Publish the nav_id so the requestWillBeSent handler can validate
         // any speculatively accepted request.
@@ -717,7 +724,7 @@ impl MainFrame {
             .send("Page.goBack", json!({ "frameId": self.frame_id() }))?;
         Ok(result
             .get("success")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false))
     }
 
@@ -735,7 +742,7 @@ impl MainFrame {
             .send("Page.goForward", json!({ "frameId": self.frame_id() }))?;
         Ok(result
             .get("success")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false))
     }
 
@@ -1348,7 +1355,7 @@ impl MainFrame {
             .unwrap_or("");
         let evicted = result
             .get("evicted")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
 
         let body = decode_base64(b64).map_err(|msg| ProtocolError {
@@ -2094,65 +2101,7 @@ mod tests {
         h.closed.store(true, Ordering::SeqCst);
     }
 
-    /// G3 TDD case 3d: IPC serde round-trip — `DaemonRequest::Navigate` with
-    /// `wait_until` field serialises and deserialises correctly.
-    #[test]
-    fn navigate_ipc_wait_until_serde_round_trip() {
-        use crate::cli::ipc::DaemonRequest;
-
-        // With wait_until present.
-        let req = DaemonRequest::Navigate {
-            instance_id: "00000001".into(),
-            page_id: "p1".into(),
-            url: "https://example.com".into(),
-            timeout_secs: 30,
-            wait_until: Some("load".into()),
-        };
-        let json = serde_json::to_string(&req).expect("serialize");
-        let back: DaemonRequest = serde_json::from_str(&json).expect("deserialize");
-        match back {
-            DaemonRequest::Navigate { wait_until, .. } => {
-                assert_eq!(wait_until.as_deref(), Some("load"));
-            }
-            other => panic!("expected Navigate, got {other:?}"),
-        }
-
-        // With wait_until absent — must not appear in serialised JSON.
-        let req_no_wait = DaemonRequest::Navigate {
-            instance_id: "00000001".into(),
-            page_id: "p1".into(),
-            url: "https://example.com".into(),
-            timeout_secs: 30,
-            wait_until: None,
-        };
-        let json_no_wait = serde_json::to_string(&req_no_wait).expect("serialize");
-        assert!(
-            !json_no_wait.contains("wait_until"),
-            "wait_until must be absent from serialised JSON when None: {json_no_wait}"
-        );
-        let back_no_wait: DaemonRequest = serde_json::from_str(&json_no_wait).expect("deserialize");
-        match back_no_wait {
-            DaemonRequest::Navigate { wait_until, .. } => {
-                assert!(wait_until.is_none(), "wait_until must deserialise to None");
-            }
-            other => panic!("expected Navigate, got {other:?}"),
-        }
-
-        // Legacy wire (no wait_until field at all) must deserialise to None.
-        let legacy = r#"{"method":"Navigate","params":{"instance_id":"00000001","page_id":"p1","url":"https://example.com","timeout_secs":30}}"#;
-        let back_legacy: DaemonRequest = serde_json::from_str(legacy).expect("deserialize legacy");
-        match back_legacy {
-            DaemonRequest::Navigate { wait_until, .. } => {
-                assert!(
-                    wait_until.is_none(),
-                    "legacy wire (no wait_until) must deserialise to None"
-                );
-            }
-            other => panic!("expected Navigate, got {other:?}"),
-        }
-    }
-
-    /// G3 TDD case: `wait_until=domcontentloaded` maps to DOMContentLoaded event.
+    /// G3 TDD case: `wait_until=domcontentloaded` maps to `DOMContentLoaded` event.
     #[test]
     fn navigate_wait_until_domcontentloaded_fires_on_dce_event() {
         let h = build_mock_frame("page-E", "frame-5");
@@ -2262,7 +2211,7 @@ mod tests {
         h.closed.store(true, Ordering::SeqCst);
     }
 
-    /// MUST-FIX regression guard: navigate + wait_until is bounded by a SINGLE
+    /// MUST-FIX regression guard: navigate + `wait_until` is bounded by a SINGLE
     /// `timeout`, not 2× it.
     ///
     /// The responder acks the navigate after a delay, then never emits the
@@ -2524,86 +2473,6 @@ mod tests {
         );
 
         h.closed.store(true, Ordering::SeqCst);
-    }
-
-    /// G4 TDD case 3: navigate response IPC serde includes `status_code`.
-    /// Absence is backward-compatible (legacy callers ignore unknown fields).
-    #[test]
-    fn navigate_response_serde_includes_status_code() {
-        use crate::cli::ipc::DaemonResponse;
-
-        // Response WITH status_code.
-        let resp = DaemonResponse::ok(serde_json::json!({
-            "navigation_id": "nav-1",
-            "status_code": 200_u16,
-        }));
-        let serialized = serde_json::to_string(&resp).expect("serialize");
-        assert!(
-            serialized.contains("status_code"),
-            "status_code must appear in JSON: {serialized}"
-        );
-        let back: DaemonResponse = serde_json::from_str(&serialized).expect("deserialize");
-        assert_eq!(
-            back.data
-                .as_ref()
-                .and_then(|d| d.get("status_code"))
-                .and_then(|v| v.as_u64()),
-            Some(200),
-            "status_code round-trips"
-        );
-        assert_eq!(
-            back.data
-                .as_ref()
-                .and_then(|d| d.get("navigation_id"))
-                .and_then(|v| v.as_str()),
-            Some("nav-1"),
-            "navigation_id still present"
-        );
-
-        // Response WITHOUT status_code (legacy / null) must deserialise fine.
-        let legacy = r#"{"ok":true,"data":{"navigation_id":"nav-2"}}"#;
-        let legacy_back: DaemonResponse =
-            serde_json::from_str(legacy).expect("deserialize legacy navigate response");
-        assert!(legacy_back.ok);
-        assert!(
-            legacy_back
-                .data
-                .as_ref()
-                .and_then(|d| d.get("status_code"))
-                .is_none(),
-            "legacy callers without status_code must deserialise fine (field absent is ok)"
-        );
-    }
-
-    /// G4 TDD case 4: `print_response` in human mode prints the status code
-    /// when present.
-    #[test]
-    fn print_response_shows_status_code() {
-        use crate::cli::ipc::DaemonResponse;
-        use crate::cli::output::print_response;
-
-        // This test cannot easily capture stdout, but it exercises the code
-        // path and asserts non-panic. The formatted string is checked by
-        // inspecting the serialised JSON.
-        let resp_with_status = DaemonResponse::ok(serde_json::json!({
-            "navigation_id": "nav-1",
-            "status_code": 404_u16,
-        }));
-        let json_out = serde_json::to_string_pretty(&resp_with_status).expect("serialize");
-        assert!(
-            json_out.contains("404"),
-            "status_code 404 must appear in JSON output: {json_out}"
-        );
-        // print_response must not panic.
-        print_response(&resp_with_status, false);
-        print_response(&resp_with_status, true);
-
-        // Response with null status_code must also not panic.
-        let resp_null_status = DaemonResponse::ok(serde_json::json!({
-            "navigation_id": null,
-            "status_code": null,
-        }));
-        print_response(&resp_null_status, false);
     }
 
     /// G4 TDD case 5: `response_received_msg` with 200 status is captured.

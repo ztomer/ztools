@@ -1,28 +1,43 @@
 //! Shared test scaffolding for `model_resolve`'s disk- and fetch-domain tests.
+//!
+//! `DiskGuard` used to capture and restore `MLX_MODELS_DIR`, `HF_HOME` and
+//! `ZTOOLS_CONF_DIR` under a lock nothing else held, so it raced every test
+//! using the crate's one `TestEnv` and the losing side silently probed the
+//! other's models directory. It is now a THIN VIEW over that guard: the list,
+//! the lock and the restore live in `crate::test_env`, and this adds only the
+//! fixture-file helper the disk tests build.
+//!
+//! `~/MLXModels` and `~/Projects/ztools/conf` BOTH EXIST on a real machine, so
+//! a test that skips the redirect measures whatever the developer has installed
+//! rather than what it set up -- which is what made this pair of guards worth
+//! consolidating rather than keeping as a second implementation.
 
-/// Isolates every disk/config seam from the operator's real machine
-/// (~/`MLXModels` and the checkout's conf/ both exist here) and restores
-/// whatever was set before.
+use std::path::{Path, PathBuf};
+
+use crate::test_env::TestEnv;
+
+/// The one guard, plus the fixture-family files only these tests write.
 pub(super) struct DiskGuard {
-    saved: Vec<(&'static str, Option<std::ffi::OsString>)>,
-    pub(super) dir: tempfile::TempDir,
+    env: TestEnv,
 }
 
 impl DiskGuard {
     pub(super) fn new() -> Self {
-        let keys = ["MLX_MODELS_DIR", "HF_HOME", "ZTOOLS_CONF_DIR"];
-        let saved = keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(dir.path().join("mlx")).unwrap();
-        std::fs::create_dir_all(dir.path().join("conf")).unwrap();
-        std::env::set_var("MLX_MODELS_DIR", dir.path().join("mlx"));
-        std::env::set_var("HF_HOME", dir.path().join("hf"));
-        std::env::set_var("ZTOOLS_CONF_DIR", dir.path().join("conf"));
-        Self { saved, dir }
+        Self {
+            env: TestEnv::new(),
+        }
     }
 
-    pub(super) fn conf_dir(&self) -> std::path::PathBuf {
-        self.dir.path().join("conf")
+    /// The sandbox root. `TestEnv` already points `MLX_MODELS_DIR` at
+    /// `<root>/mlx`, `HF_HOME` at `<root>/hf` and `ZTOOLS_CONF_DIR` at
+    /// `<root>/conf`, all empty and all created, so a fixture tree written
+    /// under `dir()` reads back through the same seams a real install uses.
+    pub(super) fn dir(&self) -> &Path {
+        self.env.root()
+    }
+
+    pub(super) fn conf_dir(&self) -> PathBuf {
+        self.dir().join("conf")
     }
 
     pub(super) fn write_family_toml(&self, family: &str, content: &str) {
@@ -33,15 +48,10 @@ impl DiskGuard {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, content).unwrap();
     }
-}
 
-impl Drop for DiskGuard {
-    fn drop(&mut self) {
-        for (key, prev) in self.saved.drain(..) {
-            match prev {
-                Some(v) => std::env::set_var(key, v),
-                None => std::env::remove_var(key),
-            }
-        }
+    /// The underlying guard, for the handful of tests that must reach past the
+    /// fixture files and remove one of the redirected variables.
+    pub(super) fn env(&self) -> &TestEnv {
+        &self.env
     }
 }

@@ -12,9 +12,9 @@
 
 use std::time::Duration;
 
-use super::enforce::normalize_for_match;
 use super::SearchResult;
-use crate::ztools::weekend_cache::{has_region_evidence, RegionLists};
+use super::enforce::normalize_for_match;
+use crate::ztools::weekend_cache::{RegionLists, has_region_evidence};
 
 /// Phrases that mark a page as a DIRECTORY of activities rather than an
 /// activity. Single source of truth for the weekend pipeline (the report

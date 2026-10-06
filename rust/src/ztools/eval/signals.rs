@@ -6,21 +6,37 @@
 //! into it, `_effective_timeout` sizes request timeouts from it, and the
 //! capability samples feed the median-of-clean estimator (`samples.rs`).
 //!
-//! Contention honesty: a sample is tagged CLEAN only when no foreign GPU-lock
-//! holder exists AND memory pressure is verifiably low. Pressure that cannot be
-//! read marks the sample UNVERIFIED (unclean), never clean -- inventing a
-//! healthy reading is exactly how a contended machine's numbers got enshrined
-//! in the Python original's history.
+//! WHAT THE MACHINE IS DOING lives in the `platform` submodule: which host
+//! published a reading, what each of its fields means, and the macOS/Linux
+//! mapping. It is a module of its own because it is a unit of reasoning the
+//! store is not, and because `signals.rs` was at 427 of the 500-line cap.
+//! Everything the store's consumers need is re-exported below, so
+//! `signals::memory_pressure` and friends keep one name regardless of which file
+//! defines them.
+//!
+//! Contention honesty, in one line: a sample is tagged CLEAN only when no
+//! foreign GPU-lock holder exists AND memory pressure is verifiably low.
+//! Pressure that cannot be read marks the sample UNVERIFIED (unclean), never
+//! clean -- inventing a healthy reading is exactly how a contended machine's
+//! numbers got enshrined in the Python original's history.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::process::Command;
 
 use serde_json::Value;
 
 use crate::units::{count, whole_u64};
-use crate::ztools::eval::gpu_lock::foreign_holder;
-use crate::ztools::eval::samples::{clean_estimate, migrate_sample_history, Sample};
+use crate::ztools::eval::samples::{Sample, clean_estimate, migrate_sample_history};
+
+pub use platform::{
+    MAX_CLEAN_RECLAIM_GB, MAX_CLEAN_SWAP_GB, MemoryPressure, PROC_MEMINFO, PressureSource, SYSCTL,
+    VM_STAT, file_text, machine_is_uncontended, memory_pressure, memory_pressure_from,
+    parse_compressor_gb, parse_meminfo_swap_used_gb, parse_swap_used_gb, thrashing_verdict,
+    tool_output, uncontended_verdict,
+};
+
+#[path = "signals_platform.rs"]
+mod platform;
 
 /// A POLICY ceiling, not an estimate: past this a request is assumed wedged.
 /// Deliberately not derived -- its job is to bound the damage when the
@@ -28,11 +44,6 @@ use crate::ztools::eval::samples::{clean_estimate, migrate_sample_history, Sampl
 pub const MAX_EVAL_TIMEOUT: u64 = 7200;
 
 const TIMEOUT_SAFETY_FACTOR: f64 = 1.5;
-pub const MAX_CLEAN_SWAP_GB: f64 = 8.0;
-pub const MAX_CLEAN_COMPRESSOR_GB: f64 = 15.0;
-const BYTES_PER_GB: f64 = 1024.0 * 1024.0 * 1024.0;
-/// macOS page size on `arm64/x86_64`.
-const PAGE_BYTES: f64 = 16384.0;
 
 fn env_u64(key: &str, default: u64) -> u64 {
     std::env::var(key)
@@ -94,88 +105,6 @@ pub fn save_signals(signals: &SignalStore) {
     }
     if let Ok(text) = serde_json::to_string_pretty(signals) {
         let _ = std::fs::write(signals_path(), text);
-    }
-}
-
-/// (`swap_used_gb`, `compressor_gb`), or None when they cannot be read -- which
-/// every caller must treat as "cannot tell", never as "fine".
-#[must_use]
-pub fn memory_pressure() -> Option<(f64, f64)> {
-    let swap_gb = swap_used_gb()?;
-    let compressor_gb = compressor_gb()?;
-    Some((swap_gb, compressor_gb))
-}
-
-fn swap_used_gb() -> Option<f64> {
-    // `sysctl -n vm.swapusage` -> "total = 4096.00M  used = 512.25M  free = ..."
-    //
-    // The VALUE follows the literal token "used" (and an "=" sign). Grabbing
-    // the token that STARTS WITH "used" grabs "used" itself, whose
-    // `.split('=').nth(1)` is None -- so this function returned None on every
-    // machine, every time, which tagged every capability sample UNVERIFIED,
-    // zeroed derived_timeout, and silently disabled the median-of-clean
-    // estimator's recovery path. Found by coverage work: the happy path was
-    // unreachable.
-    let out = Command::new("sysctl")
-        .arg("-n")
-        .arg("vm.swapusage")
-        .output()
-        .ok()?;
-    let text = String::from_utf8_lossy(&out.stdout);
-    let mut tokens = text.split_whitespace();
-    while let Some(token) = tokens.next() {
-        if token != "used" {
-            continue;
-        }
-        for field in tokens.by_ref() {
-            if field == "=" {
-                continue;
-            }
-            let value: f64 = field.trim_end_matches(['M', 'G']).parse().ok()?;
-            let multiplier = if field.ends_with('G') {
-                1.0
-            } else {
-                1.0 / 1024.0
-            };
-            return Some(value * multiplier);
-        }
-    }
-    None
-}
-
-fn compressor_gb() -> Option<f64> {
-    let out = Command::new("/usr/bin/vm_stat").output().ok()?;
-    let text = String::from_utf8_lossy(&out.stdout);
-    let line = text
-        .lines()
-        .find(|l| l.starts_with("Pages occupied by compressor"))?;
-    let raw = line.split(':').nth(1)?;
-    let pages: f64 = raw.trim().trim_end_matches('.').parse().ok()?;
-    Some(pages * PAGE_BYTES / BYTES_PER_GB)
-}
-
-/// Is the machine quiet enough for a timing to mean anything? False also when
-/// it cannot tell -- an unverifiable sample must not masquerade as clean.
-#[must_use]
-pub fn machine_is_uncontended() -> bool {
-    uncontended_verdict(foreign_holder().is_some(), memory_pressure())
-}
-
-/// The contention rule over one reading of each input.
-///
-/// Pure, so it can be pinned without asking the box what it is doing right
-/// now. `None` pressure means "cannot tell", and an unverifiable sample must
-/// not masquerade as clean.
-#[must_use]
-pub fn uncontended_verdict(foreign_lock_held: bool, pressure: Option<(f64, f64)>) -> bool {
-    if foreign_lock_held {
-        return false;
-    }
-    match pressure {
-        None => false,
-        Some((swap_gb, compressor_gb)) => {
-            swap_gb <= MAX_CLEAN_SWAP_GB && compressor_gb <= MAX_CLEAN_COMPRESSOR_GB
-        }
     }
 }
 
@@ -372,5 +301,5 @@ fn json_p95(v: f64) -> Value {
 }
 
 #[cfg(test)]
-#[path = "signals_tests.rs"]
+#[path = "signals_tests/mod.rs"]
 mod tests;

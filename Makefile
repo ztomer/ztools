@@ -1,4 +1,16 @@
-.PHONY: build test fmt lint gate coverage ci install clean
+.PHONY: build test fmt install clean ci
+
+# The GATE lives in ONE place: .gatesrc (GOH_CI_STEPS), which `make ci` and the
+# pre-push hook both read. Do not re-state any step here — three targets used to
+# duplicate it, and the coverage target re-declared the floor (94 vs 95) as a
+# second writable copy of a number the gate enforces. A target that shadows a
+# gate is a way for the gate to be wrong in two places at once.
+#
+#   make ci      the whole gate of record (what pre-push runs)
+#   make test    just the Rust suite, for a fast inner loop
+#   make fmt     rewrite formatting (the gate CHECKS it; run this first)
+#   make build   debug binary
+#   make install ./install.sh — release build, platform gate, symlinks
 
 build: ## Build the ztools binary
 	cargo build --manifest-path rust/Cargo.toml
@@ -9,19 +21,10 @@ test: ## Run the Rust test suite
 fmt: ## Format all Rust code
 	cargo fmt --manifest-path rust/Cargo.toml --all
 
-lint: ## The shared house Rust gate (fmt + clippy -D warnings + no #[allow])
-	"$${GOH_DIR:-$$HOME/Projects/gates_of_heck}/gates/rust_gate.sh" . rust
-
-gate: ## The structural house gates (emoji, file length, markers, shell lint, secrets)
-	"$${GOH_DIR:-$$HOME/Projects/gates_of_heck}/gates/structural.sh" --full
-
-coverage: ## Enforce the coverage floor
-	"$${GOH_DIR:-$$HOME/Projects/gates_of_heck}/gates/coverage_gate.sh" --lang rust --floor 95 rust
-
 install: ## Build and install the binaries to $(brew --prefix)/bin
 	./install.sh
 
-ci: ## The gate of record -- same list the pre-push hook runs
+ci: ## The gate of record — same list the pre-push hook runs
 	@# Step list lives in .gatesrc (GOH_CI_STEPS); this only delegates.
 	"$${GOH_DIR:-$$HOME/Projects/gates_of_heck}/gates/local_ci.sh" .
 

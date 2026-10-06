@@ -113,12 +113,11 @@ pub fn remove_inline_thinking(content: &str) -> String {
         (None, Some(b)) => b,
         (None, None) => usize::MAX,
     };
-    if first_json > JSON_SEARCH_PREVIEW_LIMIT {
-        if let Some(caps) = compile(BLANK_JSON_START_RE).captures(&c) {
-            if let Some(group) = caps.get(1) {
-                c = c[group.start()..].to_string();
-            }
-        }
+    if first_json > JSON_SEARCH_PREVIEW_LIMIT
+        && let Some(caps) = compile(BLANK_JSON_START_RE).captures(&c)
+        && let Some(group) = caps.get(1)
+    {
+        c = c[group.start()..].to_string();
     }
     c.trim().to_string()
 }
@@ -166,10 +165,10 @@ pub fn extract_content_from_code_blocks(content: &str) -> Option<String> {
 /// code block, else the outermost `[...]`/`{...}` span.
 #[must_use]
 pub fn extract_json(content: &str) -> Option<serde_json::Value> {
-    if let Some(block) = extract_content_from_code_blocks(content) {
-        if let Ok(v) = serde_json::from_str(&block) {
-            return Some(v);
-        }
+    if let Some(block) = extract_content_from_code_blocks(content)
+        && let Ok(v) = serde_json::from_str(&block)
+    {
+        return Some(v);
     }
 
     let starts: Vec<usize> = content

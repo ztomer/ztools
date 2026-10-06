@@ -1,10 +1,10 @@
 //! `validate_json` scoring: count, validity, and source-ratio bands.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::ztools::eval::validators::json_validator::*;
 
-use super::support::{detailed_items, SRC_FULL, SRC_LOW, SRC_MED, SRC_NONE};
+use super::support::{SRC_FULL, SRC_LOW, SRC_MED, SRC_NONE, detailed_items};
 
 #[test]
 fn test_validate_json_scalar_input_has_no_items() {

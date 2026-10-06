@@ -1,7 +1,38 @@
 [package]
 name = "ztools"
 version = "3.2.1"
-edition = "2021"
+edition = "2024"
+# The MSRV, determined rather than guessed. Read it as a FLOOR, which is what
+# it is: cargo enforces nothing below it -- it only tells cargo which dependency
+# versions to prefer when resolving, so a dependency that raises ITS floor gets a
+# version swap in `cargo update` instead of a compile error three weeks later.
+# Nothing warns today, which is the point: without this field the crate has no
+# declared floor at all, so a transitive bump to a 1.95-only release is only ever
+# discovered by whoever happens to be on an older toolchain.
+#
+# HOW THIS NUMBER WAS FOUND, and the direction it errs in. The highest
+# `rust-version` in the resolved graph is the highest any DEPENDENCY needs:
+#   $ cargo metadata --format-version 1 --all-features | ...   # sorted, top rows
+#   1.93.1  serial_test 4.0.1        <- a DEV-dependency
+#   1.85.0  reqwest 0.13.5, hashbrown 0.17.1, jni 0.22.4, ...
+#   1.71.0  aws-lc-rs 1.18.1, base64 0.23.1, log 0.4.34, ...
+# The dev-dependency sets the floor because the GATE builds dev targets
+# (`cargo clippy --all-targets`, `cargo test`), so a value that cleared only the
+# non-dev graph would be a claim the gate breaks on its first run. Edition 2024
+# needs 1.85, which nothing here approaches.
+#
+# A dependency's floor is a FLOOR, NOT A CEILING: it says nothing about language
+# and library features THIS crate's own code uses. So the number was verified by
+# building the whole tree on it, not by trusting the table above:
+#   $ cargo +1.93.1 check --all-targets --all-features     # Finished, 19.79s
+#   $ cargo +1.93.1 test  --all-features                   # 852 passed, 0 failed
+#   $ cargo +1.93.1 clippy --all-targets --all-features -- -D warnings
+# One finding there, and it is the reason this comment is worth reading: the
+# clippy that ships with 1.93.1 flags `assert_eq!` on an f64 as `float_cmp`,
+# which the clippy on current stable does not. A crate that declares an MSRV it
+# does not lint clean on is claiming something it does not honour, so any float
+# equality in a test uses the `assert_exact!` macro instead -- which states the
+# exactness the comparison relies on and does not trip either clippy.
 description = "Native Rust port of ztools: Twitter summarizer, weekend planner, image renamer, model eval."
 license = "MIT"
 
@@ -19,26 +50,33 @@ nursery = { level = "warn", priority = -1 }
 
 [dependencies]
 anyhow = "1"
-base64 = "0.22"
-brotli = "8"
-camoufox = { path = "../vendor/camoufox-rs" }
+base64 = "0.23"
+brotli = "9"
+# The version is declared here as well as on the path, and `cargo deny check`
+# is why: a path-only dependency carries no version REQUIREMENT at all, which
+# cargo-deny reports as a wildcard dependency (`wildcards = "deny"` in
+# `deny.toml`) -- a dependency whose resolved version nothing constrains. Naming
+# the version turns the in-tree crate into an ordinary pinned dependency and
+# makes a vendor refresh that bumps it a loud build failure rather than a silent
+# version change.
+camoufox = { path = "../vendor/camoufox-rs", version = "0.1.0" }
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 clap = { version = "4", features = ["derive"] }
 comfy-table = "8.0.0"
 ctrlc = "3"
-dirs = "5"
+dirs = "7"
 flate2 = "1"
 # The checked float -> integer conversions (`ToPrimitive`): std has no
 # `TryFrom<f64>`, and `as` is the silent one `units` exists to replace.
 num-traits = "0.2"
 png = "0.18.1"
 regex = "1"
-reqwest = { version = "0.13", default-features = false, features = ["rustls", "webpki-roots", "blocking", "json", "query", "form"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "blocking", "json", "query", "form"] }
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
-toml = "0.8"
+toml = "1"
 
 [dev-dependencies]
-serial_test = "3"
+serial_test = "4"

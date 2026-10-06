@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::units::{count, signed};
-use crate::ztools::eval::completeness::{record_is_complete, Completeness};
+use crate::ztools::eval::completeness::{Completeness, record_is_complete};
 use crate::ztools::eval::runner::TaskOutcome;
 
 /// Where eval artefacts live when the caller does not say otherwise.
@@ -112,7 +112,10 @@ pub fn save_historical_results(
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default();
-    for outcome in &run.outcomes {
+    // An unmeasured row holds no score. Writing its placeholder 0 made the
+    // history average an outage, or a prompt the model was never sent, into
+    // the model's mean as though it had answered wrong.
+    for outcome in run.outcomes.iter().filter(|o| o.was_measured()) {
         entry_model.push(HistoryEntry {
             date: chrono::Local::now().format("%Y-%m-%d").to_string(),
             timestamp: now.as_secs_f64(),
@@ -343,6 +346,27 @@ pub(in crate::ztools::eval) mod tests {
         assert!(!stats.contains_key("mock-model"), "{stats:?}");
         assert!(!stats.contains_key("fake-70b"), "{stats:?}");
         assert!(stats.contains_key("real-model"));
+    }
+
+    /// A row the model never answered holds no score, so the history must not
+    /// hold one either: its placeholder 0 used to be averaged into the mean.
+    #[test]
+    fn unmeasured_rows_never_enter_the_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut outage = outcome("down", 0);
+        outage.error = Some("Connection failed".to_string());
+        outage.failure_category = crate::ztools::eval::FAIL_INFRA.to_string();
+        let mut too_big = outcome("big", 0);
+        too_big.error = Some("prompt does not fit".to_string());
+        too_big.failure_category = crate::ztools::eval::FAIL_CONTEXT.to_string();
+        save_historical_results(
+            &run("real-model", vec![outcome("t", 80), outage, too_big], true),
+            Some(dir.path()),
+        )
+        .unwrap();
+        let stats = load_historical_stats(Some(dir.path()));
+        assert_eq!(stats["real-model"].runs, 1, "{stats:?}");
+        assert_exact!(stats["real-model"].mean, 80.0);
     }
 
     #[test]

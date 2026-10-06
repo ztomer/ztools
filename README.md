@@ -72,7 +72,7 @@ twitter --login          # Open browser window to sign in to x.com
 twitter --debug          # Show browser window and verbose output
 ```
 
-- **Session Discovery**: Automatically extracts authenticated `auth_token` and `ct0` cookies from Zen Browser, Firefox, LibreWolf, or Chrome.
+- **Session Discovery**: Reads authenticated `auth_token` and `ct0` from any **Firefox-family** profile — Zen, Firefox, LibreWolf or Waterfox (`rust/src/ztools/twitter/cookies.rs:89`). Chrome is not read: a Chrome-only user is told to run `twitter --login`, not silently downgraded (`rust/src/ztools/twitter/native.rs:382`).
 - **Anti-Detect Headless Scraping**: Launches Camoufox to scroll the Following timeline and capture live GraphQL tweets.
 - **Semantic Clustering**: Clusters related tweets via local embeddings before prompt synthesis to create structured topic categories.
 
@@ -126,7 +126,10 @@ interpreter on the product path; `tools/*.py` are dev gates.
 
 ```bash
 cd rust
-cargo test                          # 750 tests: 677 unit + 73 integration
+cargo test                          # 813 `#[test]` attributes in the tree (739 under src/,
+                                   # 74 under tests/, counted 2026-10-04). The runner's own
+                                   # count is the authority: some sit behind cfg/feature gates,
+                                   # so do not copy a number out of a doc.
 cargo clippy --all-targets -- -D warnings
 make coverage                       # the house coverage gate, floor 95% lines
 ```
@@ -145,23 +148,43 @@ Key suites:
 
 ```bash
 python3 -m pytest tools/tests -q     # tools/gpu_lock.sh, the bash half of the GPU lock
+ruff check tools/                    # PLW + BLE among the selected rules
+ruff format --check tools/
 ```
+
+`pyproject.toml` holds both configs: ruff at line-length 100, and pytest with
+`testpaths = ["tools/tests"]`, the `sandboxed_server_script` marker registered, and
+`filterwarnings = error::pytest.PytestUnknownMarkWarning` so an unregistered marker is
+a failure rather than a warning nobody reads.
+
+A test that drives `tools/osaurus_one.sh` — the script whose job is to stop and
+SIGKILL the real 4-35GB server — must carry `pytest.mark.sandboxed_server_script`.
+That marker is what switches on `tools/tests/conftest.py`'s `no_real_server_restart`
+guard, which makes the sandbox checkable instead of assumed: `osaurus`/`pgrep`/`lsof`/
+`curl` are shadowed by tripwires that must go unused, `mkdir` of the machine-wide GPU
+lock is redirected into the test's `tmp_path`, and the real lock must come out
+byte-identical. A test that forgets its stubs fails instead of reaching the machine.
+
+**`ruff` is configured but not yet a gate.** `.gatesrc`'s step list runs the tools
+pytest and nothing Python-lint-wise, so these two commands are on you until someone
+adds them to `GOH_CI_STEPS`.
 
 ### The gate is ONE list (`.gatesrc`)
 
-`make ci` and `tools/gate.sh --full` — the pre-push hook — both delegate to the
-same runner over the step list declared once in `.gatesrc`, so the hook can
-never be weaker than CI. `tools/release.sh` runs it too, because it pushes with
-`--no-verify` and would otherwise tag something nothing had checked.
+`make ci`, the pre-push hook, GitHub Actions (`.github/workflows/ci.yml`) and
+`tools/release.sh` all delegate to the same runner over the step list declared
+once in `.gatesrc` (`GOH_CI_STEPS`), so none of them can be weaker than another.
+Read the steps there, not here: a second copy of the list is how this one went
+stale. In outline — the house Rust gate (fmt, clippy `-D warnings`, no
+`#[allow]`), `cargo audit` and `cargo deny`, shell lint, the vendor clippy
+ratchet, the structural gate, doctests, the tools pytest, coverage (every test
+target, a 95% floor and per-file floors), ruff, the vendored crate's tests, and a
+secrets scan.
 
-The steps: the house Rust gate (fmt, clippy `-D warnings`, no `#[allow]`)
-· `cargo audit` · the structural gate (native `goh`: emoji, 500-line cap,
-conflict markers, shell lint, secrets; `vendor/` exempt) · `cargo test` · the
-tools pytest · coverage at the 95% floor.
-
-- **Pre-commit** (`.githooks/`): the structural gate over the staged files only.
-
-GitHub Actions CI is disabled — the local gate is the gate of record.
+- **Pre-commit** (`.githooks/`): `tools/gate.sh --staged`.
+- **Pre-push**: the full gate on the commit being pushed, in a clean worktree.
+- **CI**: the full gate on every push to `main` and every pull request, on
+  Apple-silicon macOS.
 
 Eval results live in `~/.config/ztools/` (`eval_results.csv`, `eval_history.json`, `eval_signals.json`, and the raw-answer archive under `outputs/`). To track:
 

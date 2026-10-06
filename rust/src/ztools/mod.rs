@@ -26,14 +26,12 @@ pub fn print_formatted_markdown(content: &str) {
         .args(["-l", "md", "--color", "always", "--style", "plain"])
         .stdin(Stdio::piped())
         .spawn()
+        && let Some(mut stdin) = child.stdin.take()
+        && stdin.write_all(content.as_bytes()).is_ok()
     {
-        if let Some(mut stdin) = child.stdin.take() {
-            if stdin.write_all(content.as_bytes()).is_ok() {
-                drop(stdin);
-                if child.wait().is_ok() {
-                    return;
-                }
-            }
+        drop(stdin);
+        if child.wait().is_ok() {
+            return;
         }
     }
     print!("{content}");

@@ -40,7 +40,7 @@ impl TestBrowser {
     /// Shut down the browser and wait for the child process to exit.
     /// Kills the process if it doesn't exit within 5 seconds.
     fn teardown(self) {
-        let TestBrowser {
+        let Self {
             browser,
             mut child,
             _profile_dir,
@@ -130,7 +130,7 @@ fn create_context_and_page() {
         .new_main_frame()
         .expect("failed to create main frame");
 
-    assert!(!main_frame.frame_id().is_empty());
+    assert_ne!(main_frame.frame_id(), "");
 
     let nav_result = main_frame.navigate(
         "https://example.com",

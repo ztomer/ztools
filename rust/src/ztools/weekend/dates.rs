@@ -47,10 +47,10 @@ fn month_number(run: &str) -> Option<u32> {
 }
 
 fn push_date(found: &mut Vec<NaiveDate>, year: i32, month: u32, day: u32) {
-    if let Some(value) = NaiveDate::from_ymd_opt(year, month, day) {
-        if !found.contains(&value) {
-            found.push(value);
-        }
+    if let Some(value) = NaiveDate::from_ymd_opt(year, month, day)
+        && !found.contains(&value)
+    {
+        found.push(value);
     }
 }
 
@@ -116,34 +116,32 @@ pub fn find_dates_in(value: &str, year: i32) -> Vec<NaiveDate> {
     for k in 0..runs.len() {
         let (text, is_num) = &runs[k];
         // "Aug 15" / "August 15, 2026"
-        if is_month_word(text) {
-            if let Some(next) = runs.get(k + 1) {
-                if is_short_day(next) {
-                    let day = next.0.parse::<u32>().unwrap();
-                    let mut yr = year;
-                    if let Some(yr_run) = runs.get(k + 2) {
-                        if yr_run.1 && yr_run.0.len() == 4 {
-                            yr = yr_run.0.parse::<i32>().unwrap();
-                        }
-                    }
-                    push_date(&mut found, yr, month_number(text).unwrap(), day);
-                }
-            }
+        if is_month_word(text)
+            && let Some(next) = runs.get(k + 1)
+            && is_short_day(next)
+        {
+            let day = next.0.parse::<u32>().unwrap();
+            // The year is the run AFTER the month, and only a
+            // four-digit one is a year; anything else leaves `year`.
+            let yr = runs
+                .get(k + 2)
+                .filter(|yr_run| yr_run.1 && yr_run.0.len() == 4)
+                .map_or(year, |yr_run| yr_run.0.parse::<i32>().unwrap());
+            push_date(&mut found, yr, month_number(text).unwrap(), day);
         }
         // "15 Aug" / "09 Aug 2026" / "Sun 09 Aug"
-        if *is_num && text.len() <= 2 {
-            if let Some(month_run) = runs.get(k + 1) {
-                if !month_run.1 && is_month_word(&month_run.0) {
-                    let day = text.parse::<u32>().unwrap();
-                    let mut yr = year;
-                    if let Some(yr_run) = runs.get(k + 2) {
-                        if yr_run.1 && yr_run.0.len() == 4 {
-                            yr = yr_run.0.parse::<i32>().unwrap();
-                        }
-                    }
-                    push_date(&mut found, yr, month_number(&month_run.0).unwrap(), day);
-                }
-            }
+        if *is_num
+            && text.len() <= 2
+            && let Some(month_run) = runs.get(k + 1)
+            && !month_run.1
+            && is_month_word(&month_run.0)
+        {
+            let day = text.parse::<u32>().unwrap();
+            let yr = runs
+                .get(k + 2)
+                .filter(|yr_run| yr_run.1 && yr_run.0.len() == 4)
+                .map_or(year, |yr_run| yr_run.0.parse::<i32>().unwrap());
+            push_date(&mut found, yr, month_number(&month_run.0).unwrap(), day);
         }
     }
 

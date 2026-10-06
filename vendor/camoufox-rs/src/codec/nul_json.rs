@@ -36,7 +36,7 @@ impl Default for NulJsonCodec {
 
 impl NulJsonCodec {
     /// Create a new codec with default settings (64 KiB write chunk size).
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             buf: Vec::new(),
             scan_pos: 0,
@@ -148,7 +148,7 @@ impl NulJsonCodec {
 
         payload
             .chunks(self.write_chunk_size)
-            .map(|c| c.to_vec())
+            .map(<[u8]>::to_vec)
             .collect()
     }
 

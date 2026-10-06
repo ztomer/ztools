@@ -9,10 +9,10 @@ pub const DEFAULT_MODEL_STALL_SECONDS: u64 = 2400; // 40 minutes
 
 #[must_use]
 pub fn model_stall_duration() -> Duration {
-    if let Ok(val) = std::env::var("EVAL_MODEL_STALL_SECONDS") {
-        if let Ok(secs) = val.parse::<u64>() {
-            return Duration::from_secs(secs);
-        }
+    if let Ok(val) = std::env::var("EVAL_MODEL_STALL_SECONDS")
+        && let Ok(secs) = val.parse::<u64>()
+    {
+        return Duration::from_secs(secs);
     }
     Duration::from_secs(DEFAULT_MODEL_STALL_SECONDS)
 }

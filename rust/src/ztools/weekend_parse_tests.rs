@@ -95,10 +95,12 @@ fn test_parse_llm_events_invalid_returns_none() {
     assert!(
         crate::ztools::weekend::parse_llm_events(&serde_json::json!({"choices": []})).is_none()
     );
-    assert!(crate::ztools::weekend::parse_llm_events(
-        &serde_json::json!({"choices": [{"message": {"content": "not json"}}]})
-    )
-    .is_none());
+    assert!(
+        crate::ztools::weekend::parse_llm_events(
+            &serde_json::json!({"choices": [{"message": {"content": "not json"}}]})
+        )
+        .is_none()
+    );
 }
 
 #[test]
@@ -250,12 +252,12 @@ fn test_compute_score_caps_at_5() {
 #[test]
 fn test_seasonal_keywords_all_months() {
     use crate::ztools::weekend::seasonal_keywords;
-    assert!(!seasonal_keywords("June").is_empty());
-    assert!(!seasonal_keywords("July").is_empty());
-    assert!(!seasonal_keywords("August").is_empty());
-    assert!(!seasonal_keywords("September").is_empty());
-    assert!(!seasonal_keywords("December").is_empty());
-    assert!(!seasonal_keywords("March").is_empty());
+    assert_nonempty!(seasonal_keywords("June"));
+    assert_nonempty!(seasonal_keywords("July"));
+    assert_nonempty!(seasonal_keywords("August"));
+    assert_nonempty!(seasonal_keywords("September"));
+    assert_nonempty!(seasonal_keywords("December"));
+    assert_nonempty!(seasonal_keywords("March"));
 }
 
 #[test]

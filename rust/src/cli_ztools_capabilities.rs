@@ -30,7 +30,7 @@ pub(super) fn print_capabilities(url: &str, model_selector: &str) -> Result<()> 
             || "-".to_string(),
             |b| format!("{:.1}", unsigned(b) / 1024.0 / 1024.0 / 1024.0),
         );
-        let gen = if crate::ztools::eval::is_generative_model(m) {
+        let generative = if crate::ztools::eval::is_generative_model(m) {
             "yes"
         } else {
             "NO"
@@ -45,7 +45,7 @@ pub(super) fn print_capabilities(url: &str, model_selector: &str) -> Result<()> 
             truncate_col(m, 36),
             truncate_col(&family, 12),
             disk_gb,
-            gen,
+            generative,
             truncate_col(&viability, 60)
         );
     }
@@ -95,7 +95,7 @@ mod tests {
     fn asking_for_all_models_without_a_server_is_an_error_not_an_empty_table() {
         let err = print_capabilities("http://127.0.0.1:1", "all")
             .expect_err("an unreachable server cannot be reported as zero models");
-        assert!(!err.to_string().is_empty(), "the failure says something");
+        assert_nonempty!(err.to_string(), "the failure says something");
     }
 
     /// The family chain: a recorded architecture wins, a name match is the

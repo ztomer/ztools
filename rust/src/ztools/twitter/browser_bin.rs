@@ -119,26 +119,32 @@ pub fn resolve() -> Result<PathBuf, BinaryError> {
 mod tests {
     use super::*;
 
-    fn fixture_home(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("ztools-bin-test-{name}"));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    /// A throwaway home, removed with the returned guard.
+    ///
+    /// `tempfile::tempdir()` rather than a named directory under the system
+    /// temp dir: the old fixed name was shared by every `cargo test` run on the
+    /// machine, and it began by `remove_dir_all`-ing whatever was there, so two
+    /// concurrent runs deleted each other's fixture mid-test. The name only has
+    /// to be legible in a failure message now, and the temp dir already is.
+    fn fixture_home(name: &str) -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path().join(name);
+        std::fs::create_dir_all(&home).unwrap();
+        (dir, home)
     }
 
     #[test]
     fn env_override_wins_when_it_exists() {
-        let home = fixture_home("override");
+        let (_dir, home) = fixture_home("override");
         let bin = home.join("my-camoufox");
         std::fs::write(&bin, b"x").unwrap();
         let got = resolve_with(&home, Some(bin.to_str().unwrap())).unwrap();
         assert_eq!(got, bin);
-        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
     fn missing_override_is_reported_not_skipped_silently() {
-        let home = fixture_home("missing-override");
+        let (_dir, home) = fixture_home("missing-override");
         let err = resolve_with(&home, Some("/nonexistent/ztools_no_browser")).unwrap_err();
         assert!(
             err.rejected
@@ -147,12 +153,11 @@ mod tests {
             "override must appear in rejected: {err}"
         );
         assert!(err.to_string().contains("CAMOUFOX_BIN"), "{err}");
-        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
     fn macos_pip_layout_resolves_newest_first() {
-        let home = fixture_home("pip");
+        let (_dir, home) = fixture_home("pip");
         let old = home.join(
             "Library/Caches/camoufox/browsers/official/152.0.4-beta.29-620d3328/Camoufox.app/Contents/MacOS/camoufox",
         );
@@ -165,16 +170,14 @@ mod tests {
         }
         let got = resolve_with(&home, None).unwrap();
         assert_eq!(got, new, "newest version dir must win");
-        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]
     fn empty_machine_errors_naming_everything_tried() {
-        let home = fixture_home("empty");
+        let (_dir, home) = fixture_home("empty");
         let err = resolve_with(&home, None).unwrap_err();
         let text = err.to_string();
         assert!(text.contains(".cache/camoufox/camoufox"), "{text}");
         assert!(text.contains("camoufox fetch"), "{text}");
-        let _ = std::fs::remove_dir_all(&home);
     }
 }

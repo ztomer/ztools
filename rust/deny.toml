@@ -1,0 +1,214 @@
+# Dependency policy for ztools, enforced by `cargo deny`.
+#
+# WHY THIS FILE EXISTS AT ALL. `cargo-deny` was installed on this machine and
+# wired into NOTHING: no config file, no gate step. So licences, duplicate
+# versions, sources and yanked crates were all ungated, and the difference
+# between "the tree is clean" and "nothing ever looked" was invisible. Every
+# section below was written against TODAY's resolved graph, so this is a policy
+# that PASSES now and FAILS on a change that breaks it -- which is the only
+# kind of policy file worth having.
+#
+# Read the calibration at the bottom of this file before trusting it: each
+# section was broken on purpose and watched go red, because a `deny.toml` that
+# has never failed is decoration.
+#
+# The command line the gate uses (steps in `.gatesrc` are colon-separated, so
+# this string contains none):
+#
+#     cargo deny --manifest-path rust/Cargo.toml check
+
+# -----------------------------------------------------------------------------
+# [graph] -- check the SAME dependency set the gate builds.
+# -----------------------------------------------------------------------------
+# Without this, cargo-deny resolves with default features only, so a crate that
+# only appears behind a non-default feature would not be in the graph it audits
+# -- and the gate would be auditing a smaller tree than the one it builds. Every
+# other step in `GOH_CI_STEPS` says `--all-features`, so this one does too.
+[graph]
+all-features = true
+
+# -----------------------------------------------------------------------------
+# [advisories]
+# -----------------------------------------------------------------------------
+# NOT the only advisory gate: `.cargo/audit.toml` already runs `cargo audit`
+# with `deny = ["warnings", "unmaintained", "unsound", "yanked"]`, which is the
+# gate of record. This section is a SECOND, independent implementation over the
+# same RustSec data, kept because a checker that exists in only one place is a
+# checker that is skipped the one time it is inconvenient. Both must pass.
+#
+# `unmaintained` and `unsound` take a SCOPE in cargo-deny 0.20 -- "all",
+# "workspace", "transitive" or "none" -- and "none" is the default, i.e. these
+# two classes are ignored entirely unless asked for. `all` turns both into
+# errors. That is the same reasoning as `deny` in the audit gate: a class that
+# is merely printed is a class nobody reads, and these two are the classes a
+# dependency goes quiet in. MEASURED today: the graph has zero advisories of any
+# kind, so this is not aspirational -- it passes on the present tree and goes red
+# the day someone adds an unmaintained or unsound crate.
+#
+# `ignore` is a RATCHET, and it is EMPTY on purpose: every entry needs the
+# reason it may stand, and an entry whose advisory stops firing is DELETED
+# rather than left to rot. An ignore list that only grows is a suppression list
+# wearing a config file.
+# `vulnerability` and `notice` were REMOVED as separate keys in cargo-deny
+# 0.16 (EmbarkStudios/cargo-deny#611): `unsound`, `unmaintained` and
+# `unsound`/`unmaintained`-by-scope absorbed them, and every advisory is a
+# vulnerability unless its id says otherwise. Writing the removed keys is a hard
+# config error here, not a warning -- cargo-deny would rather refuse a config it
+# cannot honour than run half of it.
+[advisories]
+unmaintained = "all"
+unsound = "all"
+yanked = "deny"
+ignore = []
+
+# -----------------------------------------------------------------------------
+# [licenses] -- the decisions, one by one, with the reason for each.
+# -----------------------------------------------------------------------------
+# The default here is an EMPTY allow list, which is why the first run of
+# `cargo deny check` rejected literally every crate in the tree. That is
+# cargo-deny refusing to have an opinion, not a finding about this repo.
+#
+# THE ALLOWED SET is the standard permissive stack plus two entries that are not
+# stock and are argued for below:
+#
+#   MIT, Apache-2.0, Apache-2.0 WITH LLVM-exception, BSD-2-Clause, BSD-3-Clause,
+#   0BSD, ISC, Zlib, Unlicense, Unicode-3.0   -- permissive, single- or
+#   dual-licensed, and each one already present in the graph. `Unicode-3.0` is
+#   not optional: 19 icu/zerovec-style crates carry it, several as
+#   `(MIT OR Apache-2.0) AND Unicode-3.0`, and an AND means every part must be
+#   allowed or the crate is rejected.
+#
+#   MPL-2.0 -- `option-ext` 0.2.0, via `dirs-sys` <- `dirs`, which is a DIRECT
+#   dependency of this crate, so this licence cannot be wished away and the
+#   alternative would be dropping `dirs`. MPL-2.0 is file-level copyleft: using
+#   it unmodified in a larger work is fine, and this repo modifies none of it
+#   (it is not even a direct dependency we can edit). If anyone ever patches
+#   those files, that patch must be published -- which is why it is listed here
+#   with its reason instead of being quietly absent.
+#
+#   CDLA-Permissive-2.0 -- `webpki-root-certs` 1.0.9, via
+#   `rustls-platform-verifier` <- `reqwest`, the HTTP stack, so it is on every
+#   code path that talks to a model server. CDLA-Permissive-2.0 is Mozilla's
+#   permissive data licence (it covers a set of CA root certificates -- data,
+#   not code) and is FSF/libre-approved. Denying it would deny `reqwest`.
+#
+# NOT allowed, and that is a decision rather than an omission: `GPL-3.0`,
+# `AGPL-3.0`, `LGPL-2.1-or-later`, `SSPL-1.0`, `BUSL-1.1`, `Elastic-2.0`,
+# `Commons-Clause`, and every non-commercial and source-available licence.
+# `LGPL-2.1-or-later` appears once in the graph only as one ALTERNATIVE inside
+# `MIT OR Apache-2.0 OR LGPL-2.1-or-later` (`r-efi`), which the MIT/Apache arm
+# already satisfies; naming it would put a copyleft licence on the allow list
+# for a crate that does not need it.
+#
+# The in-tree path dependency (`vendor/camoufox-rs`) is deliberately NOT
+# exempted via `private.ignore`: it declares `license = "MIT"`, and it is code
+# this project ships, so its licence is one more thing that is checked rather
+# than one more thing that is skipped.
+[licenses]
+version = 2
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "0BSD",
+    "ISC",
+    "Zlib",
+    "Unlicense",
+    "Unicode-3.0",
+    "MPL-2.0",
+    "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.93
+
+# -----------------------------------------------------------------------------
+# [bans] -- the duplicate is real, and denying it would be theatre.
+# -----------------------------------------------------------------------------
+# MEASURED, and the measurement is worth stating because the obvious way to make
+# it is wrong: `cargo tree --duplicates` on this host reports ONE duplicated
+# crate, and cargo-deny reports THREE. cargo tree resolves for the HOST triple
+# only, so it cannot see what a Windows or wasm build pulls in. Three crates are
+# in the lockfile at two versions each:
+#
+#   miniz_oxide  0.8.9 (png 0.18.1)   vs  0.9.1 (flate2 1.1.10)
+#   hashbrown    0.16.1 (rusqlite-vfs) vs 0.17.1 (hashlink, via rusqlite)
+#   syn          2.0.119              vs  3.0.6
+#
+# All three are transitive-to-this-crate and each pair is pinned by a parent's own
+# requirement, so none can be unified without patching `png`, `flate2`,
+# `rusqlite` or a proc-macro crate upstream. `warn` it is, which means all three
+# PRINT on every run and sit in the output a reviewer reads, rather than being
+# silenced by a `skip` entry or made into a permanently-red `deny` for defects
+# that live outside this repo.
+#
+# The case that WOULD be `deny` is a duplicate of a crate this manifest depends on
+# DIRECTLY at two majors: two majors of one crate make the same type not the same
+# type, and the compiler error names the type and never the duplication. None
+# exists today (checked: every entry above is at least two levels below this
+# manifest). A future `deny` entry should name that case, not these three.
+#
+# `wildcards = "deny"` is the other half: `somecrate = "*"` resolves to whatever
+# the index serves that day, which is an unpinned dependency and an unpinned
+# MSRV in one token. None exist today; this says so at the gate.
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = false
+highlight = "all"
+# `skip` is a ratchet like `advisories.ignore`: empty today, each entry needs a
+# reason, and an entry that stops firing is deleted.
+skip = []
+# `deny` is empty on purpose. Naming crates that simply do not appear in this
+# graph would be a policy nobody has checked against anything.
+
+# -----------------------------------------------------------------------------
+# [sources] -- every byte of this build comes from crates.io or from this tree.
+# -----------------------------------------------------------------------------
+# `unknown-git = "deny"` is the one with teeth: a git dependency is a build-time
+# remote code execution surface and an unpinnable supply-chain hop, and this
+# repo has none. The registry is named by its canonical URL because that is how
+# cargo records the source in the lockfile.
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+# -----------------------------------------------------------------------------
+# CALIBRATION -- how each of these was proved able to fail. A `deny.toml` never
+# seen red is a decoration, and the ways to fake one are obvious: copy a config
+# from another repo, add a rule no input can reach, and trust it passes. Each row
+# below is a violation that was introduced on purpose, watched go red with its
+# exit code, and reverted.
+#
+#   bans.deny = ["png", "syn"]
+#       `png` 0.18.1 and `syn` 2.0.119/3.0.6 are both in the graph.
+#       -> error[banned]: crate 'png = 0.18.1' is explicitly banned
+#          EXIT=2      bans FAILED, everything else ok
+#
+#   licences.allow = []
+#       -> 228 error[rejected] blocks, one per crate in the graph.
+#          EXIT=4      licenses FAILED, everything else ok
+#
+#   licences.allow without "CDLA-Permissive-2.0"
+#       -> exactly one crate rejected: webpki-root-certs 1.0.9, naming the
+#          licence it carries. This is the check that the entry is LOAD-BEARING
+#          rather than decorative -- remove the line and the gate goes red on a
+#          real crate. EXIT=4
+#
+#   advisories.db-urls = ["https://advisory-db.invalid/rustsec"]
+#       -> "failed to fetch advisory database ... failed to clone"
+#          EXIT=1      i.e. the section genuinely talks to the RustSec database
+#          and FAILS CLOSED when it cannot reach it, rather than passing on an
+#          empty result set.
+#
+#   sources.unknown-git = "allow"
+#       NOT WITNESSED, and recorded as such rather than claimed: proving that one
+#       needs a git dependency, which means editing the manifest and lockfile --
+#       `rust/Cargo.toml` belongs to a peer during this change, and adding a
+#       git dependency to a security gate to test the gate is a poor trade. The
+#       section is `deny` on both keys and the graph contains only crates.io
+#       plus one in-tree path dependency, so the rules are unreached rather than
+#       unwatched. If a git dependency is ever added, this is the line that
+#       stops it, and the person who adds it is the one who should see it red.

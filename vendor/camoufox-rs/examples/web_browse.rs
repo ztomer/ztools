@@ -4,8 +4,8 @@
 //! navigation, JS evaluation, screenshot.
 //!
 //! Usage:
-//!   cargo run --example web_browse
-//!   cargo run --example web_browse -- --url https://scholar.google.com
+//!   cargo run --example `web_browse`
+//!   cargo run --example `web_browse` -- --url <https://scholar.google.com>
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -112,7 +112,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .evaluate("window.location.href", EVALUATE_TIMEOUT)
             .ok()
             .map(|r| extract_value(&r))
-            .and_then(|v| v.as_str().map(|s| s.to_owned()))
+            .and_then(|v| v.as_str().map(std::borrow::ToOwned::to_owned))
             .unwrap_or_default();
 
         if loc != "about:blank" && !loc.is_empty() {
@@ -120,7 +120,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .evaluate("document.readyState", EVALUATE_TIMEOUT)
                 .ok()
                 .map(|r| extract_value(&r))
-                .and_then(|v| v.as_str().map(|s| s.to_owned()))
+                .and_then(|v| v.as_str().map(std::borrow::ToOwned::to_owned))
                 .unwrap_or_default();
             if state == "complete" {
                 break;
@@ -155,8 +155,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dims = extract_value(
         &main_frame.evaluate("[window.innerWidth, window.innerHeight]", EVALUATE_TIMEOUT)?,
     );
-    let width = dims.get(0).and_then(|v| v.as_f64()).unwrap_or(1280.0);
-    let height = dims.get(1).and_then(|v| v.as_f64()).unwrap_or(720.0);
+    let width = dims
+        .get(0)
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(1280.0);
+    let height = dims
+        .get(1)
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or(720.0);
 
     let screenshot_path = "/tmp/camoufox-screenshot.png";
     let options = ScreenshotOptions {

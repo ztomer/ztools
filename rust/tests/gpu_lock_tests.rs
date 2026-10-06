@@ -6,50 +6,21 @@
 //! `kill(pid, 0)` and `ps -o lstart=` must agree on a genuine process for the
 //! recycled-PID guard to mean anything.
 
+use std::ffi::OsStr;
 use std::process::{Child, Command};
 use std::time::Duration;
 
 use serial_test::serial;
 use tempfile::TempDir;
 use ztools::eval::gpu_lock::{
-    foreign_holder, is_expired, is_owner_alive, lock_dir, read_owner, start_time, GpuLockGuard,
-    DEFAULT_LOCK_DIR, OWNER_ENV,
+    DEFAULT_LOCK_DIR, DIR_ENV, GpuLockGuard, OWNER_ENV, foreign_holder, is_expired, is_owner_alive,
+    lock_dir, read_owner, start_time,
 };
+use ztools::test_env::TestEnv;
 
 /// A pid no process can have: above any sane `pid_max`, below `i32::MAX` so the
 /// `kill(pid as i32, 0)` cast stays positive.
 const IMPOSSIBLE_PID: u32 = 2_000_000_000;
-
-/// Restore an env var (or its absence) when the test ends -- a leaked
-/// `ZTOOLS_GPU_LOCK_OWNER` would make later inherits/failures in THIS binary,
-/// and env vars cross into nothing else, but serial tests share the process.
-struct EnvGuard {
-    name: &'static str,
-    prev: Option<std::ffi::OsString>,
-}
-
-impl EnvGuard {
-    fn set(name: &'static str, value: &str) -> Self {
-        let prev = std::env::var_os(name);
-        std::env::set_var(name, value);
-        Self { name, prev }
-    }
-
-    fn unset(name: &'static str) -> Self {
-        let prev = std::env::var_os(name);
-        std::env::remove_var(name);
-        Self { name, prev }
-    }
-}
-
-impl Drop for EnvGuard {
-    fn drop(&mut self) {
-        match self.prev.take() {
-            Some(v) => std::env::set_var(self.name, v),
-            None => std::env::remove_var(self.name),
-        }
-    }
-}
 
 fn live_child() -> Child {
     Command::new("sleep")
@@ -69,9 +40,11 @@ fn write_owner(dir: &std::path::Path, pid: u32, start: &str, label: &str) {
 #[test]
 #[serial]
 fn lock_dir_defaults_when_env_absent_or_empty() {
-    let _g = EnvGuard::unset(ztools::eval::gpu_lock::DIR_ENV);
-    assert_eq!(lock_dir(), std::path::PathBuf::from(DEFAULT_LOCK_DIR));
-    let _g2 = EnvGuard::set(ztools::eval::gpu_lock::DIR_ENV, "");
+    // Both answers in one binding: absent first, then present-but-empty, which
+    // `lock_dir` treats as absent too.
+    let _env = TestEnv::new()
+        .without(DIR_ENV)
+        .with(DIR_ENV, OsStr::new(""));
     assert_eq!(lock_dir(), std::path::PathBuf::from(DEFAULT_LOCK_DIR));
 }
 
@@ -80,7 +53,7 @@ fn lock_dir_defaults_when_env_absent_or_empty() {
 fn lock_dir_prefers_nonempty_env_value() {
     let tmp = TempDir::new().unwrap();
     let seam = tmp.path().join("seam.lock");
-    let _g = EnvGuard::set(ztools::eval::gpu_lock::DIR_ENV, seam.to_str().unwrap());
+    let _env = TestEnv::new().with(DIR_ENV, OsStr::new(seam.to_str().unwrap()));
     assert_eq!(lock_dir(), seam);
 }
 
@@ -182,14 +155,15 @@ fn is_expired_handles_missing_future_and_stale_mtimes() {
 #[test]
 #[serial]
 fn foreign_holder_is_none_for_missing_dead_and_own_locks() {
-    let _g = EnvGuard::unset(OWNER_ENV);
     let tmp = TempDir::new().unwrap();
     let lock = tmp.path().join("fh.lock");
-    // Redirected BEFORE the first read. This test used to ask the real
-    // `/tmp/mac-osaurus-gpu.lock` for its "nothing there" case, so it went
-    // red whenever a model sweep held the lock -- the one state the lock
-    // exists for, and a unit test must not depend on what the box is doing.
-    let _d = EnvGuard::set(ztools::eval::gpu_lock::DIR_ENV, lock.to_str().unwrap());
+    // Redirected BEFORE the first read, and `OWNER_ENV` absent. This test used
+    // to ask the real `/tmp/mac-osaurus-gpu.lock` for its "nothing there" case,
+    // so it went red whenever a model sweep held the lock -- the one state the
+    // lock exists for, and a unit test must not depend on what the box is doing.
+    let _env = TestEnv::new()
+        .without(OWNER_ENV)
+        .with(DIR_ENV, OsStr::new(lock.to_str().unwrap()));
 
     // Nothing there at all.
     assert_eq!(foreign_holder(), None);
@@ -202,11 +176,24 @@ fn foreign_holder_is_none_for_missing_dead_and_own_locks() {
     let me = std::process::id();
     write_owner(&lock, me, &start_time(me), "me");
     assert_eq!(foreign_holder(), None);
+}
 
-    // An inherited owner matching ZTOOLS_GPU_LOCK_OWNER is also not foreign.
+/// The fourth case of the test above, split out because it needs the opposite
+/// starting state: `OWNER_ENV` PRESENT and naming the holder. Folded into one
+/// test it meant a sandbox mutated half way through, which is the shape
+/// clippy's `significant_drop_tightening` rightly distrusts -- and one claim per
+/// test is easier to read anyway.
+#[test]
+#[serial]
+fn an_inherited_owner_reads_as_self_and_not_as_a_foreign_holder() {
+    let tmp = TempDir::new().unwrap();
+    let lock = tmp.path().join("inherited-owner.lock");
     let mut child = live_child();
     write_owner(&lock, child.id(), &start_time(child.id()), "parent run");
-    let _o = EnvGuard::set(OWNER_ENV, &child.id().to_string());
+    let _env = TestEnv::new()
+        .with(DIR_ENV, OsStr::new(lock.to_str().unwrap()))
+        .with(OWNER_ENV, OsStr::new(&child.id().to_string()));
+
     assert_eq!(
         foreign_holder(),
         None,
@@ -219,11 +206,15 @@ fn foreign_holder_is_none_for_missing_dead_and_own_locks() {
 #[test]
 #[serial]
 fn foreign_holder_names_the_live_foreign_run() {
-    let _g = EnvGuard::unset(OWNER_ENV);
-    let _d_env = EnvGuard::unset(ztools::eval::gpu_lock::DIR_ENV);
     let tmp = TempDir::new().unwrap();
     let lock = tmp.path().join("foreign.lock");
     let mut child = live_child();
+    // `OWNER_ENV` absent is what makes this holder FOREIGN rather than
+    // inherited; `DIR_ENV` is redirected at the same time, so the first
+    // `foreign_holder()` below is already asking about THIS lock.
+    let _env = TestEnv::new()
+        .without(OWNER_ENV)
+        .with(DIR_ENV, OsStr::new(lock.to_str().unwrap()));
 
     // Labeled holder: reported verbatim.
     write_owner(
@@ -232,7 +223,6 @@ fn foreign_holder_names_the_live_foreign_run() {
         &start_time(child.id()),
         "other eval sweep",
     );
-    let _d = EnvGuard::set(ztools::eval::gpu_lock::DIR_ENV, lock.to_str().unwrap());
     assert_eq!(foreign_holder().as_deref(), Some("other eval sweep"));
 
     // Unlabeled holder: reported as unknown rather than an empty string.
@@ -257,7 +247,7 @@ fn acquire_inherits_a_lock_already_held_by_our_own_chain() {
     let mut child = live_child();
     write_owner(&lock, child.id(), &start_time(child.id()), "parent run");
 
-    let _o = EnvGuard::set(OWNER_ENV, &child.id().to_string());
+    let _env = TestEnv::new().with(OWNER_ENV, OsStr::new(&child.id().to_string()));
     let guard = GpuLockGuard::acquire_at(
         &lock,
         "child run",
@@ -288,7 +278,7 @@ fn acquire_ignores_an_inherited_owner_that_matches_nobody_and_falls_through() {
     let me = std::process::id();
     write_owner(&lock, me, &start_time(me), "self-held");
     let mut child = live_child();
-    let _o = EnvGuard::set(OWNER_ENV, &child.id().to_string());
+    let _env = TestEnv::new().with(OWNER_ENV, OsStr::new(&child.id().to_string()));
 
     let err = GpuLockGuard::acquire_at(
         &lock,
@@ -311,7 +301,7 @@ fn acquire_ignores_an_inherited_owner_that_matches_nobody_and_falls_through() {
 #[test]
 #[serial]
 fn acquire_times_out_naming_the_holder_instead_of_stomping_it() {
-    let _g = EnvGuard::unset(OWNER_ENV);
+    let _env = TestEnv::new().without(OWNER_ENV);
     let tmp = TempDir::new().unwrap();
     let lock = tmp.path().join("held.lock");
     let me = std::process::id();
@@ -339,7 +329,7 @@ fn acquire_times_out_naming_the_holder_instead_of_stomping_it() {
 #[test]
 #[serial]
 fn acquire_reclaims_an_expired_lock_even_with_a_live_holder() {
-    let _g = EnvGuard::unset(OWNER_ENV);
+    let _env = TestEnv::new().without(OWNER_ENV);
     let tmp = TempDir::new().unwrap();
     let lock = tmp.path().join("wedged.lock");
     let me = std::process::id();
@@ -391,7 +381,7 @@ fn acquire_fails_hard_when_the_directory_cannot_be_created() {
 #[test]
 #[serial]
 fn drop_leaves_a_lock_whose_owner_file_names_someone_else() {
-    let _g = EnvGuard::unset(OWNER_ENV);
+    let _env = TestEnv::new().without(OWNER_ENV);
     let tmp = TempDir::new().unwrap();
     let lock = tmp.path().join("handoff.lock");
     let guard = GpuLockGuard::acquire_at(
@@ -419,8 +409,9 @@ fn drop_leaves_a_lock_whose_owner_file_names_someone_else() {
 fn acquire_default_path_follows_the_dir_env_seam() {
     let tmp = TempDir::new().unwrap();
     let lock = tmp.path().join("via_seam.lock");
-    let _d = EnvGuard::set(ztools::eval::gpu_lock::DIR_ENV, lock.to_str().unwrap());
-    let _o = EnvGuard::unset(OWNER_ENV);
+    let _env = TestEnv::new()
+        .with(DIR_ENV, OsStr::new(lock.to_str().unwrap()))
+        .without(OWNER_ENV);
 
     let guard = GpuLockGuard::acquire(
         "seam run",

@@ -1,0 +1,132 @@
+// Shrink-only ceiling on clippy findings in vendor/camoufox-rs, the third-party
+// crate carried in-tree as a path dependency of rust/Cargo.toml. Enforced by
+// tools/vendor_lint_ratchet.py, which measures the crate directly and compares
+// these per-lint counts.
+//
+// WHY A RATCHET AND NOT A GATE. Measured 2026-10-04 at -D warnings: clippy::all alone
+// had 1 finding in this crate (now 0, after the sweep and the 10 #[allow] removals),
+// and all+pedantic+nursery had 365 unique findings across 28 files. So the crate CAN
+// meet clippy::all and CANNOT meet the parent's policy. A -D warnings gate on the full
+// policy would be red on arrival; declaring only `all` would be green while the other
+// 208 sit unwatched. Each count below is therefore a CEILING: it may fall, never rise,
+// and a count that rises fails even if the total does not.
+//
+// EVERY ENTRY CARRIES A WHY, and the gate refuses a baseline whose entries do not. An
+// allowlist entry is an argument, and a number with no argument is how a baseline rots
+// into a rubber stamp. Entries are deleted as they are paid, so 'done' is an empty file.
+//
+// WHAT WAS ALREADY FIXED (2026-10-04, so these counts are the floor, not the original
+// 365): 157 findings by `cargo clippy --fix`, the 1 clippy::all finding
+// (clippy::for_kv_map), and all 10 #[allow]/#[cfg_attr] sites. The fix sweep deliberately
+// EXCLUDED clippy::must_use_candidate -- see its entry for the measurement of why.
+//
+// TO RE-SEED after a shrink: tools/vendor_lint_ratchet.py --record, then write the
+// `why` on every FILL IN entry it reports, in the same commit.
+//
+// WHY .jsonc AND NOT .json: .gitignore:143 is a blanket `*.json` (whitelisting only
+// conf/, eval_tasks/, docs/, tests/fixtures/), so a `*.json` baseline here is
+// UNTRACKABLE -- a gate whose ceiling cannot be committed is a local-only artifact
+// that silently re-seeds itself on every clone. The `c` is honest: this file carries
+// real comments above a strict-JSON body. See tools/vendor_lint_ratchet.py's loader.
+
+{
+  "crate": "camoufox",
+  "manifest": "vendor/camoufox-rs/Cargo.toml",
+  "measured": "2026-10-04",
+  "policy": [
+    "clippy::all",
+    "clippy::pedantic",
+    "clippy::nursery"
+  ],
+  "units_compiled": 6,
+  "lints": {
+    "clippy::assigning_clones": {
+      "count": 1,
+      "why": "1 `x = y.clone()` that could reuse an owned value. Local to main_frame.rs, no behaviour change; left only because it is a one-item remainder."
+    },
+    "clippy::cast_possible_truncation": {
+      "count": 2,
+      "why": "2 narrowing casts. Same class as cast_sign_loss: each needs the specific invariant behind it confirmed before it is changed, which is a per-cast argument rather than a sweep."
+    },
+    "clippy::cast_sign_loss": {
+      "count": 3,
+      "why": "3 integer casts that can wrap a negative value. These are the ones worth a real look on their own merits (the checked-conversion campaign the parent crate already did via `units`), but each is a judgement about a specific upstream invariant, and doing 3 unrelated conversions inside a lint sweep is how one of them gets waved through."
+    },
+    "clippy::default_trait_access": {
+      "count": 18,
+      "why": "`Default::default()` spelled out where the type's `Default::default()` would say which type it is. 8 of the 18 are in tests/integration.rs. A readability-only change, and mechanical -- the auto-fix pass could not apply it here because these are argument positions in nested call expressions."
+    },
+    "clippy::ignore_without_reason": {
+      "count": 9,
+      "why": "9 `#[ignore]`s in tests/integration.rs, all live-browser tests that need a real Camoufox. A reason attribute on each is a genuine improvement but is documentation churn on tests this repo does not run in its own gate; the attribute text belongs with the tests upstream."
+    },
+    "clippy::items_after_statements": {
+      "count": 6,
+      "why": "6 declarations that follow a statement inside a block. Purely cosmetic ordering; the auto-fix pass reordered some of these already and the remaining ones sit next to comments that explain the ordering."
+    },
+    "clippy::large_stack_arrays": {
+      "count": 2,
+      "why": "2 stack buffers above clippy's default threshold, both in the unix pipe transport. Heap-allocating them instead is a change to the I/O hot path of code this repo does not own, and the stack cost is bounded and known."
+    },
+    "clippy::manual_let_else": {
+      "count": 3,
+      "why": "3 `if let .. else { return }` shapes that could be `let ... else`. Mechanical, but each is inside error-handling control flow where the reflow changes which branch owns the early return."
+    },
+    "clippy::match_same_arms": {
+      "count": 7,
+      "why": "7 matches with repeated arms. Collapsing them changes control flow in protocol dispatch, where the arms are spelled out because they map one-to-one onto Juggler methods; merging them makes the mapping to PROTOCOL.md harder to check, not easier."
+    },
+    "clippy::missing_errors_doc": {
+      "count": 34,
+      "why": "Documentation only: 34 public fallible fns with no `# Errors` section. Writing them means 34 hand-authored sections describing error variants in third-party prose that a re-vendor throws away, with no behaviour change and no user-visible payoff. Doc debt is the cheapest thing to pay later and the most expensive to review in bulk."
+    },
+    "clippy::missing_panics_doc": {
+      "count": 18,
+      "why": "Documentation only: 18 public fns whose bodies can panic (mostly `.unwrap()` on a mutex lock) with no `# Panics` section. Same reasoning as missing_errors_doc. Note the overlap with the parent's deliberate omission of unwrap_used/expect_used: that is a restriction-lint correctness campaign with its own review, not a doc sweep."
+    },
+    "clippy::must_use_candidate": {
+      "count": 52,
+      "why": "MEASURED, NOT ASSUMED, and the only lint here whose fix is a public API change. cargo clippy --fix applies it as a `#[must_use]` attribute on 54 pub fns; that took `clippy::all` on this crate from 1 finding to 9 (the 9 are unused_must_use at call sites that legitimately discard the value, e.g. the sendMayFail pattern), and it pushes warnings onto every future caller of a third-party API -- including ztools, whose gate runs at -D warnings. rust/src/ztools/twitter/native.rs:141 is the one call site today and it binds the result, so nothing breaks yet; that is luck, not a design. Each of the 52 is an edit to an API we do not own, so the fix was excluded from the sweep (-A clippy::must_use_candidate) and the findings left standing. Zero is reachable: adding the attributes plus `let _ =` at the 9 discarding sites is a self-contained change worth doing as its own commit, reviewed as an API change."
+    },
+    "clippy::needless_continue": {
+      "count": 6,
+      "why": "6 `continue`s that could be restructured. Cosmetic control-flow churn in third-party code; no behaviour difference, and the rewrite is one of those edits that is easy to get subtly wrong in a loop over protocol events."
+    },
+    "clippy::needless_pass_by_value": {
+      "count": 14,
+      "why": "14 params taken by value that the callee only reads. Changing them to references is a signature change across a public API we do not own, and on this crate the values are small (String/JSON handles already behind Arc), so the win is theoretical. The one that mattered -- TestHarness's unread `closed` handle -- was deleted outright (see vendor/camoufox-rs/CHANGELOG.md)."
+    },
+    "clippy::option_if_let_else": {
+      "count": 6,
+      "why": "6 `if let Some(x) = .. else { .. }` that could be `map_or`. Stylistic, and in two cases in protocol_log.rs the branch order carries the severity of the log line, which the map_or rewrite obscures."
+    },
+    "clippy::or_fun_call": {
+      "count": 2,
+      "why": "2 eagerly-evaluated `a.or(expensive())` that could be `or_else`. Behaviour-identical and cheap to fix, kept only because a 2-item remainder is not worth a separate commit against a vendored tree."
+    },
+    "clippy::significant_drop_in_scrutinee": {
+      "count": 1,
+      "why": "1 guard whose drop inside a match scrutinee may be significant. A concurrency judgement in third-party code; same reasoning as significant_drop_tightening, of which this is the singleton."
+    },
+    "clippy::significant_drop_tightening": {
+      "count": 12,
+      "why": "12 MutexGuards held longer than the critical section, mostly in protocol/client.rs where a lock is taken across a match. Shortening the scopes is a correctness-sensitive edit to concurrent third-party code; getting it wrong is a deadlock or a lost update, which is a far worse outcome than 12 warnings."
+    },
+    "clippy::similar_names": {
+      "count": 3,
+      "why": "3 pairs of similarly named locals. Renaming third-party locals for a readability lint adds diff noise against upstream, which is the thing a re-vendor has to reconcile."
+    },
+    "clippy::struct_excessive_bools": {
+      "count": 1,
+      "why": "1 struct with 3+ bool fields (MainFrame's cached state). Collapsing them into an enum is a redesign of a public type in third-party code, for one warning."
+    },
+    "clippy::struct_field_names": {
+      "count": 2,
+      "why": "2 structs whose fields all share a prefix (`frame_id`, `frame_url`, ...). Renaming public fields is an API change; the redundancy is also the reader's cue that the fields belong to one frame."
+    },
+    "clippy::too_many_lines": {
+      "count": 6,
+      "why": "6 fns over clippy's line threshold, the largest being BrowserContext::new_main_frame (src/api/context.rs) which documents a two-layer attach wait with protocol steps interleaved. Splitting a documented protocol sequence into helpers to satisfy a line count trades traceability for tidiness, in a file already over the 500-line cap."
+    }
+  }
+}

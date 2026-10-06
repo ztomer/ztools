@@ -542,7 +542,7 @@ mod tests {
     #[test]
     fn debug_impl() {
         let (transport, _bw, _br) = make_test_transport();
-        let debug_str = format!("{:?}", transport);
+        let debug_str = format!("{transport:?}");
         assert!(debug_str.contains("PipeTransport"));
         assert!(debug_str.contains("closed: false"));
     }

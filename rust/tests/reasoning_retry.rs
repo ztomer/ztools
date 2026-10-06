@@ -6,6 +6,19 @@
 //! a model that streams `reasoning_content` with empty content is NOT a format
 //! failure -- it never stopped thinking, so the retry gets MORE room (bounded),
 //! and grinding at the original budget must not be read as quality.
+//!
+//! The `thread::sleep` each mock used to take after `bind` was a guess about the
+//! serving thread's scheduling; it is now `support::await_stub`, which waits for
+//! the condition a client actually needs -- a completed handshake -- under a
+//! deadline that names what never happened. Both stubs also stop RECORDING a
+//! connection that carried no request: `await_stub` opens one and sends nothing,
+//! and a phantom request would have been counted as an attempt at some budget.
+
+#[path = "support/mod.rs"]
+mod support;
+// See `eval_runner.rs`: the shared module's items are reachable API of this
+// test binary, so one consumer not needing one is not dead code.
+pub use support::*;
 
 use std::fmt::Write as _;
 use std::io::{Read, Write};
@@ -13,12 +26,8 @@ use std::net::TcpListener;
 use std::sync::Arc;
 use std::thread;
 
-use ztools::eval::runner::{run_eval, RunnerConfig};
+use ztools::eval::runner::{RunnerConfig, run_eval};
 use ztools::eval::task_loader::{Check, EvalTask};
-
-fn take_lock<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
-}
 
 /// SSE stream: plenty of `reasoning_content`, NO content, clean finish.
 fn reasoning_only_sse() -> String {
@@ -66,6 +75,11 @@ fn serve_stubborn(escalated_budget: u32) -> StubbornThinker {
             let Ok(mut stream) = stream else { continue };
             let mut buf = vec![0u8; 65_536];
             let n = stream.read(&mut buf).unwrap_or(0);
+            // A connection carrying no request never reached the model, so it is
+            // not an attempt at any budget.
+            if n == 0 {
+                continue;
+            }
             let request = String::from_utf8_lossy(&buf[..n]).to_string();
             let marker = format!("\"max_tokens\":{escalated_budget}");
             let response = if request.contains(&marker) {
@@ -78,7 +92,7 @@ fn serve_stubborn(escalated_budget: u32) -> StubbornThinker {
             let _ = stream.flush();
         }
     });
-    thread::sleep(std::time::Duration::from_millis(50));
+    await_stub(port);
     StubbornThinker {
         port,
         _handle: handle,
@@ -149,6 +163,9 @@ fn serve_expands_to_fill() -> FillsWhateverItGets {
             let Ok(mut stream) = stream else { continue };
             let mut buf = vec![0u8; 65_536];
             let n = stream.read(&mut buf).unwrap_or(0);
+            if n == 0 {
+                continue;
+            }
             let request = String::from_utf8_lossy(&buf[..n]).to_string();
             // Whatever budget it was handed, spend past the guard's line for it.
             let budget: u32 = request
@@ -159,12 +176,16 @@ fn serve_expands_to_fill() -> FillsWhateverItGets {
                         .next()
                         .and_then(|d| d.parse().ok())
                 })
-                .unwrap_or(2048);
+                // A request that named no budget is not an attempt at one: the
+                // default here would put a phantom call in the record the
+                // escalation test counts.
+                .unwrap_or(0);
             take_lock(&seen_clone).push(budget);
             let chars = (budget as usize) * 3 + 64; // past 0.75 * budget * CHARS_PER_TOKEN
             let reasoning = "x".repeat(chars);
             let mut body = String::new();
-            let _ = write!(body,
+            let _ = write!(
+                body,
                 "data: {{\"choices\":[{{\"delta\":{{\"reasoning_content\":\"{reasoning}\"}}}}]}}\n\n"
             );
             body.push_str("data: [DONE]\n\n");
@@ -176,7 +197,7 @@ fn serve_expands_to_fill() -> FillsWhateverItGets {
             let _ = stream.flush();
         }
     });
-    thread::sleep(std::time::Duration::from_millis(50));
+    await_stub(port);
     FillsWhateverItGets {
         port,
         _handle: handle,

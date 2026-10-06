@@ -15,17 +15,17 @@ use anyhow::{Context, Result};
 use std::path::Path;
 
 use super::graded::Graded;
+use super::prompts::file_summary;
 use super::prompts::{
-    CONTRADICTION_PHRASE, FALSEHOOD_PHRASES, FILENAME_INJECTION_KEYWORDS,
-    FILENAME_INJECTION_MARKERS, FILENAME_INJECTION_PROMPT, FILE_SUMMARY_PROMPT,
-    FILE_SUMMARY_PROMPT_MIXED, IMAGE_RENAME_PROMPT, IMAGE_RENAME_PROMPT_MIXED, KEY_FACTS,
-    RENAME_PROMPT, RENAME_PROMPT_MIXED, RENAME_TEXT_SLOT, SUMMARIZE_INJECTION_KEYWORDS,
-    SUMMARIZE_INJECTION_MARKERS, TWITTER_PROMPT, TWITTER_PROMPT_ACCURACY,
-    TWITTER_PROMPT_CONTRADICTION, TWITTER_PROMPT_INJECTION, TWITTER_PROMPT_MISATTRIBUTION,
-    TWITTER_PROMPT_MIXED, WEEKEND_FABRICATION_LURES, WEEKEND_FABRICATION_PROMPT,
-    WEEKEND_INJECTION_KEYWORDS, WEEKEND_INJECTION_MARKERS, WEEKEND_INJECTION_PROMPT,
-    WEEKEND_SYS_FIXED, WEEKEND_SYS_TRANSIENT, WEEKEND_USR_FIXED, WEEKEND_USR_FIXED_MIXED,
-    WEEKEND_USR_TRANSIENT, WEEKEND_USR_TRANSIENT_MIXED,
+    CONTRADICTION_PHRASE, FALSEHOOD_PHRASES, FILE_SUMMARY_PROMPT, FILE_SUMMARY_PROMPT_MIXED,
+    FILENAME_INJECTION_KEYWORDS, FILENAME_INJECTION_MARKERS, FILENAME_INJECTION_PROMPT,
+    IMAGE_RENAME_PROMPT, IMAGE_RENAME_PROMPT_MIXED, KEY_FACTS, RENAME_PROMPT, RENAME_PROMPT_MIXED,
+    RENAME_TEXT_SLOT, SUMMARIZE_INJECTION_KEYWORDS, SUMMARIZE_INJECTION_MARKERS, TWITTER_PROMPT,
+    TWITTER_PROMPT_ACCURACY, TWITTER_PROMPT_CONTRADICTION, TWITTER_PROMPT_INJECTION,
+    TWITTER_PROMPT_MISATTRIBUTION, TWITTER_PROMPT_MIXED, WEEKEND_FABRICATION_LURES,
+    WEEKEND_FABRICATION_PROMPT, WEEKEND_INJECTION_KEYWORDS, WEEKEND_INJECTION_MARKERS,
+    WEEKEND_INJECTION_PROMPT, WEEKEND_SYS_FIXED, WEEKEND_SYS_TRANSIENT, WEEKEND_USR_FIXED,
+    WEEKEND_USR_FIXED_MIXED, WEEKEND_USR_TRANSIENT, WEEKEND_USR_TRANSIENT_MIXED,
 };
 use super::task_loader::{ChatMessage, Check, EvalTask};
 
@@ -126,9 +126,52 @@ fn weekend_tasks() -> Vec<EvalTask> {
     ]
 }
 
+/// The file-summary prompts with every listed file's own content spliced in.
+///
+/// The prompt instructs the model to rely ONLY on provided content and never to
+/// infer from a name; until 2026-10-05 no content was provided, so the rule was
+/// unfollowable and `validate_file_summary` graded name guesses. Rendering here —
+/// at roster build time, where `filename_prompt_for` already renders the one
+/// other data-driven prompt — is the existing seam, so the same `EvalTask` shape,
+/// the same transport and the same validator see a prompt that can be obeyed.
+///
+/// # Errors
+///
+/// When a listed file cannot be read, or a template lost its content slot: both
+/// would ship a prompt that names files and explains none of them, which is the
+/// defect. Failing is the honest outcome; there is no degraded form to fall back
+/// to, because a path-only prompt is exactly what this replaced.
+fn file_summary_tasks() -> Result<Vec<EvalTask>> {
+    let (plain, mixed) = file_summary::render_both(FILE_SUMMARY_PROMPT, FILE_SUMMARY_PROMPT_MIXED)?;
+    Ok(vec![
+        system_task(
+            "file_summary",
+            FILE_SUMMARY_SYSTEM,
+            &plain,
+            Graded::FileSummary,
+        )
+        .json(),
+        system_task(
+            "file_summary_mixed",
+            FILE_SUMMARY_SYSTEM,
+            &mixed,
+            Graded::MixedFileSummary {
+                source: mixed.clone(),
+            },
+        ),
+    ])
+}
+
 /// Rows 5-13: filename, image-rename, summarize and file-summary, plain and
 /// mixed, in the table's interleaved order.
-fn text_tasks(filename_input: &str, filename_prompt: &str) -> Vec<EvalTask> {
+///
+/// Built by pushing rather than by one `vec![]` literal because the two
+/// file-summary rows come from [`file_summary_tasks`], which renders file
+/// contents and can fail. The table's ORDER is pinned by `tasks_tests.rs`, and it
+/// is the Python table's order — the two file-summary rows are NOT adjacent there
+/// (`rename_mixed` and `summarize_mixed` sit between them), so they are placed
+/// by index rather than by being written next to each other.
+fn text_tasks(filename_input: &str, filename_prompt: &str) -> Result<Vec<EvalTask>> {
     let mixed_filename = |name: &str, prompt: &str| {
         user_task(
             name,
@@ -137,7 +180,7 @@ fn text_tasks(filename_input: &str, filename_prompt: &str) -> Vec<EvalTask> {
         )
         .json()
     };
-    vec![
+    let mut tasks = vec![
         user_task(
             "filename",
             filename_prompt,
@@ -149,13 +192,14 @@ fn text_tasks(filename_input: &str, filename_prompt: &str) -> Vec<EvalTask> {
             TWITTER_PROMPT,
             src(|source| Graded::Summary { source }, TWITTER_PROMPT),
         ),
-        system_task(
-            "file_summary",
-            FILE_SUMMARY_SYSTEM,
-            FILE_SUMMARY_PROMPT,
-            Graded::FileSummary,
-        )
-        .json(),
+    ];
+    let mut file_summary = file_summary_tasks()?.into_iter();
+    tasks.push(
+        file_summary
+            .next()
+            .expect("file_summary_tasks yields the plain row first"),
+    );
+    tasks.extend([
         mixed_filename("rename_mixed", RENAME_PROMPT_MIXED),
         user_task(
             "summarize_mixed",
@@ -165,18 +209,26 @@ fn text_tasks(filename_input: &str, filename_prompt: &str) -> Vec<EvalTask> {
                 TWITTER_PROMPT_MIXED,
             ),
         ),
-        system_task(
-            "file_summary_mixed",
-            FILE_SUMMARY_SYSTEM,
-            FILE_SUMMARY_PROMPT_MIXED,
-            src(
-                |source| Graded::MixedFileSummary { source },
-                FILE_SUMMARY_PROMPT_MIXED,
-            ),
-        ),
+    ]);
+    tasks.push(
+        file_summary
+            .next()
+            .expect("file_summary_tasks yields the mixed row second"),
+    );
+    tasks.extend([
         mixed_filename("filename_mixed", RENAME_PROMPT_MIXED),
         mixed_filename("image_rename_mixed", IMAGE_RENAME_PROMPT_MIXED),
-    ]
+    ]);
+    // Two rows, two slots: the iterator is exhausted on purpose, so the surplus
+    // is checked rather than dropped -- a third row added to
+    // `file_summary_tasks` would otherwise vanish from the roster silently.
+    let surplus: Vec<EvalTask> = file_summary.collect();
+    assert!(
+        surplus.is_empty(),
+        "a file-summary row with no slot in the pinned order: {:?}",
+        surplus.iter().map(|t| t.name.as_str()).collect::<Vec<_>>()
+    );
+    Ok(tasks)
 }
 
 /// Rows 14-22: the faithfulness, vision and adversarial probes.
@@ -244,7 +296,7 @@ fn probe_tasks(filename_prompt: &str, images: Vec<String>) -> Vec<EvalTask> {
                 key_facts: strs(KEY_FACTS),
             },
         ),
-        // Each slot's own injection gate (ROADMAP Phase 1, 2026-09-19):
+        // Each slot's own injection gate (2026-09-19):
         // `filename_injection` had been the proxy for tools that read tweets
         // and search snippets, and it measured a different shape.
         user_task(
@@ -303,7 +355,7 @@ pub fn roster(files: &RosterInputs) -> Result<Vec<EvalTask>> {
     let images = super::vision::fixture_images(&vision)?;
 
     let mut tasks = weekend_tasks();
-    tasks.extend(text_tasks(&filename_input, &filename_prompt));
+    tasks.extend(text_tasks(&filename_input, &filename_prompt)?);
     tasks.extend(probe_tasks(&filename_prompt, images));
     // The table's aliases: `json` is weekend_transient, `detailed_json` is
     // weekend_fixed, under the names the model slots are measured by.
@@ -315,6 +367,10 @@ pub fn roster(files: &RosterInputs) -> Result<Vec<EvalTask>> {
     tasks.push(detailed_alias);
     Ok(tasks)
 }
+
+#[cfg(test)]
+#[path = "tasks_file_summary_tests.rs"]
+mod file_summary_render_tests;
 
 #[cfg(test)]
 #[path = "tasks_tests.rs"]

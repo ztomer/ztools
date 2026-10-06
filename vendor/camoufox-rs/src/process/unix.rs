@@ -131,15 +131,7 @@ pub fn spawn(config: &LaunchConfig) -> Result<LaunchedProcess, ProcessError> {
             // no-op (the fd survives but O_CLOEXEC remains set, which we must
             // clear so the fd survives exec).
 
-            if child_read != CHILD_READ_FD {
-                if libc::dup2(child_read, CHILD_READ_FD) == -1 {
-                    return Err(std::io::Error::last_os_error());
-                }
-                // Close the original since we have a copy on fd 3 now.
-                // (It has O_CLOEXEC so exec would close it anyway, but
-                // closing early is cleaner.)
-                libc::close(child_read);
-            } else {
+            if child_read == CHILD_READ_FD {
                 // child_read IS already fd 3. Clear O_CLOEXEC so it
                 // survives exec.
                 let flags = libc::fcntl(child_read, libc::F_GETFD);
@@ -149,14 +141,17 @@ pub fn spawn(config: &LaunchConfig) -> Result<LaunchedProcess, ProcessError> {
                 if libc::fcntl(child_read, libc::F_SETFD, flags & !libc::FD_CLOEXEC) == -1 {
                     return Err(std::io::Error::last_os_error());
                 }
-            }
-
-            if child_write != CHILD_WRITE_FD {
-                if libc::dup2(child_write, CHILD_WRITE_FD) == -1 {
+            } else {
+                if libc::dup2(child_read, CHILD_READ_FD) == -1 {
                     return Err(std::io::Error::last_os_error());
                 }
-                libc::close(child_write);
-            } else {
+                // Close the original since we have a copy on fd 3 now.
+                // (It has O_CLOEXEC so exec would close it anyway, but
+                // closing early is cleaner.)
+                libc::close(child_read);
+            }
+
+            if child_write == CHILD_WRITE_FD {
                 // child_write IS already fd 4. Clear O_CLOEXEC.
                 let flags = libc::fcntl(child_write, libc::F_GETFD);
                 if flags == -1 {
@@ -165,6 +160,11 @@ pub fn spawn(config: &LaunchConfig) -> Result<LaunchedProcess, ProcessError> {
                 if libc::fcntl(child_write, libc::F_SETFD, flags & !libc::FD_CLOEXEC) == -1 {
                     return Err(std::io::Error::last_os_error());
                 }
+            } else {
+                if libc::dup2(child_write, CHILD_WRITE_FD) == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                libc::close(child_write);
             }
 
             Ok(())
@@ -219,11 +219,11 @@ mod tests {
         // Write through the pipe and read back.
         let msg = b"hello pipe";
         // SAFETY: r and w are valid fds from create_pipe.
-        let written = unsafe { libc::write(w, msg.as_ptr() as *const libc::c_void, msg.len()) };
+        let written = unsafe { libc::write(w, msg.as_ptr().cast::<libc::c_void>(), msg.len()) };
         assert_eq!(written as usize, msg.len());
 
         let mut buf = [0u8; 64];
-        let read_n = unsafe { libc::read(r, buf.as_mut_ptr() as *mut libc::c_void, buf.len()) };
+        let read_n = unsafe { libc::read(r, buf.as_mut_ptr().cast::<libc::c_void>(), buf.len()) };
         assert_eq!(read_n as usize, msg.len());
         assert_eq!(&buf[..msg.len()], msg);
 

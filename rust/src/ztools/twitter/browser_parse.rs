@@ -57,10 +57,9 @@ pub fn parse_tweets_from_response(data: &serde_json::Value) -> Vec<Tweet> {
 
             if tweet_result.get("__typename").and_then(|t| t.as_str())
                 == Some(TWITTER_TYPENAME_VISIBILITY)
+                && let Some(inner) = tweet_result.get("tweet")
             {
-                if let Some(inner) = tweet_result.get("tweet") {
-                    tweet_result = inner;
-                }
+                tweet_result = inner;
             }
 
             let Some(legacy) = tweet_result.get("legacy") else {

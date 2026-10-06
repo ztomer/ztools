@@ -98,10 +98,10 @@ pub(crate) fn compute_score(ev: &WeekendEvent, weather_str: &str, age_range: &st
                     cur.clear();
                 }
             }
-            if !cur.is_empty() {
-                if let Ok(n) = cur.parse() {
-                    v.push(n);
-                }
+            if !cur.is_empty()
+                && let Ok(n) = cur.parse()
+            {
+                v.push(n);
             }
             v.sort_unstable();
             v.dedup();
@@ -162,11 +162,7 @@ pub(crate) fn compute_score(ev: &WeekendEvent, weather_str: &str, age_range: &st
     }
 
     let final_score = score / 2.0;
-    if final_score > 5.0 {
-        5.0
-    } else {
-        final_score
-    }
+    if final_score > 5.0 { 5.0 } else { final_score }
 }
 
 #[derive(serde::Deserialize, Default)]

@@ -146,35 +146,52 @@ enum Cmd {
     },
 }
 
-/// Parse the CLI, resolve config, and dispatch to the tool handlers.
+/// The subcommand a program's own NAME implies, if any.
 ///
-/// # Errors
+/// `install.sh` symlinks these names at the one binary, so for an installed
+/// user `argv[0]` is the ONLY thing that distinguishes `oeval` from `ztools`:
+/// the table below is the whole feature. `cli_tests.rs` pins every name the
+/// installer creates, in both directions (a symlink that resolves, and a name
+/// that must NOT acquire a subcommand).
+fn implied_subcommand(prog: &str) -> Option<&'static str> {
+    match prog {
+        "weekend" | "weekend-plan" => Some("weekend-plan"),
+        "twitter" | "twitter-summarize" => Some("twitter-summarize"),
+        "image-renamer" | "rename_images" | "rename-images" => Some("image-renamer"),
+        "model-eval" | "oeval" => Some("model-eval"),
+        _ => None,
+    }
+}
+
+/// The argv rewrite as a PURE function, for the tests.
 ///
-/// When an explicitly named config cannot be read or parsed, and from
-/// whichever subcommand was dispatched -- each states its own reason.
-/// The argv with the subcommand implied by the program's own name inserted:
-/// a `weekend` symlink runs `ztools weekend-plan`, and so on.
-fn args_with_implied_subcommand() -> Vec<std::ffi::OsString> {
-    let mut args: Vec<std::ffi::OsString> = std::env::args_os().collect();
+/// Nothing here reads the process: `args_with_implied_subcommand` is the only
+/// caller that does, and it owns nothing but collecting `argv`.
+fn argv_with_implied_subcommand(mut args: Vec<std::ffi::OsString>) -> Vec<std::ffi::OsString> {
     if let Some(first) = args.first() {
+        // The file name, not the whole argv[0]: the installer links
+        // `/opt/homebrew/bin/weekend`, and only the last component is the name
+        // the table is keyed on.
         let prog = std::path::Path::new(first)
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("");
-        let subcommand = match prog {
-            "weekend" | "weekend-plan" => Some("weekend-plan"),
-            "twitter" | "twitter-summarize" => Some("twitter-summarize"),
-            "image-renamer" | "rename_images" | "rename-images" => Some("image-renamer"),
-            "model-eval" | "oeval" => Some("model-eval"),
-            _ => None,
-        };
-        if let Some(sub) = subcommand {
-            if args.len() == 1 || args.get(1).and_then(|s| s.to_str()) != Some(sub) {
-                args.insert(1, sub.into());
-            }
+        // Explicit wins and is never duplicated: `weekend weekend-plan` already
+        // says which subcommand to run, and `weekend --location X` needs the
+        // one inserted in front of the flag.
+        if let Some(sub) = implied_subcommand(prog)
+            && (args.len() == 1 || args.get(1).and_then(|s| s.to_str()) != Some(sub))
+        {
+            args.insert(1, sub.into());
         }
     }
     args
+}
+
+/// The argv with the subcommand implied by the program's own name inserted:
+/// a `weekend` symlink runs `ztools weekend-plan`, and so on.
+fn args_with_implied_subcommand() -> Vec<std::ffi::OsString> {
+    argv_with_implied_subcommand(std::env::args_os().collect())
 }
 
 /// The configuration a run uses.
@@ -293,3 +310,7 @@ pub fn run() -> Result<()> {
         ),
     }
 }
+
+#[cfg(test)]
+#[path = "cli_tests.rs"]
+mod tests;

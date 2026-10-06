@@ -131,7 +131,7 @@ The low-level lifecycle is:
 
 1. Build `LaunchConfig`
 2. Spawn process (`process::unix::spawn`)
-3. Wait readiness sentinel on stderr
+3. Wait readiness sentinel on stdout (`"Juggler listening to the pipe"` — see `src/process/readiness.rs`; PROTOCOL.md says stderr, the patched build writes stdout)
 4. Build `PipeTransport`
 5. Build `Connection` + root session
 6. `Browser::connect(...)`

@@ -16,8 +16,9 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use ztools::eval::gpu_lock::{
-    foreign_holder, is_owner_alive, read_owner, GpuLockGuard, DEFAULT_LOCK_DIR, DIR_ENV,
+    DEFAULT_LOCK_DIR, DIR_ENV, GpuLockGuard, foreign_holder, is_owner_alive, read_owner,
 };
+use ztools::test_env::TestEnv;
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -85,9 +86,12 @@ fn the_shell_half_can_read_a_rust_owner_file() {
         eprintln!("SKIP: gates_of_heck not checked out; shell lock lib unavailable");
         return;
     };
-    let td = tempfile::tempdir().unwrap();
-    let lock = td.path().join("gpu.lock");
-    std::env::set_var(DIR_ENV, &lock);
+    // The sandbox already redirects `DIR_ENV` at a path that does NOT exist --
+    // an existing lock directory IS a held lock, so `Point::Absent` is what
+    // makes this a free one. That is the whole reason the lock path needs no
+    // temp dir of its own and no `set_var`: the redirect and the "not there
+    // yet" are the same fact.
+    let (_env, lock) = TestEnv::new().at(DIR_ENV);
     let guard = GpuLockGuard::acquire(
         "eval from rust",
         Duration::from_secs(5),
@@ -96,7 +100,6 @@ fn the_shell_half_can_read_a_rust_owner_file() {
     .expect("fresh lock acquires");
     let out = sh(&goh, "gpu_lock_holder", &lock);
     drop(guard);
-    std::env::remove_var(DIR_ENV);
     assert!(out.contains("eval from rust"), "shell saw: {out:?}");
 }
 
@@ -107,8 +110,9 @@ fn rust_can_read_a_shell_owner_file() {
         eprintln!("SKIP: gates_of_heck not checked out; shell lock lib unavailable");
         return;
     };
-    let td = tempfile::tempdir().unwrap();
-    let lock = td.path().join("gpu.lock");
+    // Same sandbox redirect as the test above, and the bash child is handed the
+    // identical path so the two halves are arguing about one directory.
+    let (_env, lock) = TestEnv::new().at(DIR_ENV);
     // A live holder written by bash: keep the bash process alive while Rust
     // reads it, or the liveness check would correctly call it dead.
     let mut child = Command::new("bash")
@@ -128,11 +132,9 @@ fn rust_can_read_a_shell_owner_file() {
     while !lock.join("owner").exists() && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(50));
     }
-    std::env::set_var(DIR_ENV, &lock);
     let owner = read_owner(&lock);
     let alive = is_owner_alive(&lock);
     let foreign = foreign_holder();
-    std::env::remove_var(DIR_ENV);
     // Release the bash holder before asserting, so a failure cannot leak it.
     child.stdin.take().unwrap().write_all(b"\n").unwrap();
     let _ = child.wait();

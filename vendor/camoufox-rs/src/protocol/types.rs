@@ -52,7 +52,7 @@ pub struct ErrorData {
     pub data: Option<String>,
 }
 
-/// Discriminated message type after parsing a RawMessage.
+/// Discriminated message type after parsing a `RawMessage`.
 #[derive(Debug, Clone)]
 pub enum IncomingMessage {
     /// A response to a prior request (has `id`).

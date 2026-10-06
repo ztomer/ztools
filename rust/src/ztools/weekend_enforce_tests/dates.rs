@@ -2,8 +2,8 @@
 
 use super::support::{d, event};
 use crate::ztools::weekend::{
-    drop_events_outside_window, drop_unsourced_rows, find_dates_in, parse_any_date,
-    reconcile_day_with_dates, row_is_sourced, window_overlap, WeekendEvent,
+    WeekendEvent, drop_events_outside_window, drop_unsourced_rows, find_dates_in, parse_any_date,
+    reconcile_day_with_dates, row_is_sourced, window_overlap,
 };
 
 fn dated(name: &str, start_date: &str, end_date: &str) -> WeekendEvent {
@@ -27,7 +27,7 @@ fn dates_parse_across_the_supported_shapes() {
         Some(d(2019, 7, 1))
     );
     // Durations are not dates.
-    assert!(find_dates_in("2-3 hours", 2026).is_empty());
+    assert_empty!(find_dates_in("2-3 hours", 2026));
     // The shared parse is what window_overlap uses.
     assert_eq!(
         window_overlap(
@@ -165,5 +165,5 @@ fn unnamed_rows_and_empty_corpus_are_never_dropped() {
 
     let (kept, notes) = drop_unsourced_rows(vec![event("X", "Y")], "");
     assert_eq!(kept.len(), 1);
-    assert!(notes.is_empty());
+    assert_empty!(notes);
 }

@@ -14,17 +14,17 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use chrono::{DateTime, FixedOffset, Utc};
 
+use super::Tweet;
 use super::browser_bin;
 use super::capture::{
-    collected_wrong_feed, drain_responses, record_request, record_response, CaptureState,
+    CaptureState, collected_wrong_feed, drain_responses, record_request, record_response,
 };
 use super::collect::{
-    collect_dedup, is_logged_out, resolve_since, ScrollLimits, ScrollObservation, ScrollState,
+    ScrollLimits, ScrollObservation, ScrollState, collect_dedup, is_logged_out, resolve_since,
 };
 use super::cookies::{self, Cookie};
 use super::endpoints::load_endpoint_markers;
 use super::session;
-use super::Tweet;
 
 /// Timeline page, wait bounds, and scroll pacing from `browser.py`.
 pub const TWITTER_HOME_URL: &str = "https://x.com/home";

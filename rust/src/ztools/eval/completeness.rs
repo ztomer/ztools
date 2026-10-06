@@ -17,6 +17,7 @@
 //! the tasks that reported back; a future abandon path is covered the day it
 //! is written, without knowing this module exists.
 
+use crate::ztools::eval::FAIL_CONTEXT;
 use crate::ztools::eval::runner::TaskOutcome;
 
 /// The verdict that travels with a run: `complete` is what every consumer
@@ -101,6 +102,60 @@ pub const fn record_is_complete(completeness: Option<&Completeness>) -> bool {
         None => true,
         Some(c) => c.complete,
     }
+}
+
+/// Why a full-suite run must file as NOT MEASURED, or `None` when it need not.
+///
+/// `Some` for an EMPTY outcome list is deliberate and is the dangerous edge: the
+/// runner abandons a model after `max_consecutive_infra` transport failures and
+/// a stall, and an empty list is what a run that never got a single task out of
+/// the server looks like. Treating it as "nothing went wrong" is how a dead
+/// server printed an empty table and exited 0.
+///
+/// Any OUTAGE row fails the run, so a sweep re-runs it, and the sentence counts
+/// what really happened: it used to say "0 of N reached the model" whenever ANY
+/// row had missed. A `CONTEXT` refusal does not fail the run on its own -- the
+/// prompt will never fit that model, so a re-run cannot change it, and its row
+/// already says why -- unless it leaves nothing measured at all.
+///
+/// The sentence carries no `NOT MEASURED` marker of its own: both callers add it,
+/// and a message that says it twice reads as two separate problems.
+#[must_use]
+pub fn tasks_unmeasured_reason(outcomes: &[TaskOutcome]) -> Option<String> {
+    if outcomes.is_empty() {
+        return Some("no task reported back at all".to_string());
+    }
+    let why = |o: &&TaskOutcome| -> String {
+        o.error
+            .clone()
+            .unwrap_or_else(|| o.failure_category.clone())
+    };
+    let missed: Vec<&TaskOutcome> = outcomes.iter().filter(|o| !o.was_measured()).collect();
+    let causes = |rows: &[&TaskOutcome]| -> String {
+        let unique: std::collections::BTreeSet<String> = rows.iter().map(why).collect();
+        unique.into_iter().collect::<Vec<_>>().join(", ")
+    };
+    if missed.len() == outcomes.len() {
+        return Some(format!(
+            "0 of {} task(s) reached the model, so this run holds no score for it ({})",
+            outcomes.len(),
+            causes(&missed)
+        ));
+    }
+    let outages: Vec<&TaskOutcome> = missed
+        .into_iter()
+        .filter(|o| o.failure_category != FAIL_CONTEXT)
+        .collect();
+    if outages.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "{} of {} task(s) never reached the model ({}); the other {} hold its scores",
+        outages.len(),
+        outcomes.len(),
+        causes(&outages),
+        outcomes.len() - outages.len()
+    ))
 }
 
 #[cfg(test)]

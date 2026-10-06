@@ -4,9 +4,9 @@
 //! seam is the one the loop already had -- `run_task` is what the loop calls
 //! per task, and everything below it is how one task is answered.
 
-use super::{outcome_from, score_output, status_for, RunnerConfig, TaskOutcome};
+use super::{RunnerConfig, TaskOutcome, outcome_from, score_output, status_for};
 use crate::ztools::eval::failures::{
-    classify_failure, reasoning_overrun_was_guard_aborted, reasoning_retry_budget, FAIL_REASONING,
+    FAIL_REASONING, classify_failure, reasoning_overrun_was_guard_aborted, reasoning_retry_budget,
 };
 use crate::ztools::eval::signals::effective_timeout;
 use crate::ztools::eval::task_loader::EvalTask;
@@ -102,11 +102,11 @@ pub(super) fn run_task(
         // A scored attempt always outranks the error/empty placeholder in
         // `best`, even at 0 -- otherwise the placeholder's blank status
         // leaks into the result. Ties take the later attempt.
-        if let Some(b) = best.as_mut() {
-            if b.error.is_some() || attempt.score >= b.score {
-                b.score = attempt.score;
-                b.status = status_for(attempt.score).to_string();
-            }
+        if let Some(b) = best.as_mut()
+            && (b.error.is_some() || attempt.score >= b.score)
+        {
+            b.score = attempt.score;
+            b.status = status_for(attempt.score).to_string();
         }
         if best.as_ref().is_some_and(|b| b.score >= 90) {
             break;

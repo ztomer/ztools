@@ -2,17 +2,33 @@
 //!
 //! Prove-fail note: the infra-abort and retry tests were verified to fail by
 //! breaking the loop conditions before being trusted green.
+//!
+//! The `thread::sleep` after each `bind` used to be a guess about the serving
+//! thread's scheduling; it is now `support::await_stub`, which waits for the
+//! condition a client actually needs -- a completed handshake -- with a deadline
+//! that names what never happened.
+
+#[path = "support/mod.rs"]
+mod support;
+// The support module is shared by seven test binaries that between them use
+// every item in it; one consumer idling on a helper is not a defect, and this
+// re-export at the root is what says so to the dead-code pass.
+pub use support::*;
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 
-use ztools::eval::runner::{run_eval, RunnerConfig};
+use ztools::eval::runner::{RunnerConfig, run_eval};
 use ztools::eval::task_loader::{Check, EvalTask};
 
 /// Server that answers every connection with `response`.
+///
+/// A connection that carried no request is not counted as one: `await_stub`
+/// opens one and sends nothing, and a connection that consumed the scripted
+/// failure budget would make these tests pass for the wrong reason.
 fn serve(response: String) -> (u16, thread::JoinHandle<()>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -20,12 +36,14 @@ fn serve(response: String) -> (u16, thread::JoinHandle<()>) {
         for stream in listener.incoming() {
             let Ok(mut stream) = stream else { continue };
             let mut buf = [0u8; 8192];
-            let _ = stream.read(&mut buf);
+            if stream.read(&mut buf).unwrap_or(0) == 0 {
+                continue;
+            }
             let _ = stream.write_all(response.as_bytes());
             let _ = stream.flush();
         }
     });
-    thread::sleep(std::time::Duration::from_millis(50));
+    await_stub(port);
     (port, handle)
 }
 
@@ -39,14 +57,18 @@ fn serve_then(first: String, rest: String, first_n: usize) -> (u16, thread::Join
         for stream in listener.incoming() {
             let Ok(mut stream) = stream else { continue };
             let mut buf = [0u8; 8192];
-            let _ = stream.read(&mut buf);
+            // Counted on a request, never on a connection: the readiness probe
+            // must not spend the failure budget the next test depends on.
+            if stream.read(&mut buf).unwrap_or(0) == 0 {
+                continue;
+            }
             let n = count.fetch_add(1, Ordering::SeqCst);
             let reply = if n < first_n { &first } else { &rest };
             let _ = stream.write_all(reply.as_bytes());
             let _ = stream.flush();
         }
     });
-    thread::sleep(std::time::Duration::from_millis(50));
+    await_stub(port);
     (port, handle)
 }
 

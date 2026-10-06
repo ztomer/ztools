@@ -7,7 +7,7 @@
 use std::io::Write as _;
 use std::path::Path;
 
-use super::report::{status_word, ModelRun};
+use super::report::{ModelRun, status_word};
 
 /// Export one row per (model, task): the shape downstream sheets expect.
 ///

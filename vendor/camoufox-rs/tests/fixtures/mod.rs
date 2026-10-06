@@ -23,9 +23,6 @@ const MAIN_DELAY: Duration = Duration::from_millis(50);
 pub struct FixtureServer {
     /// `http://127.0.0.1:<main_port>/`
     pub main_url: String,
-    /// `http://127.0.0.1:<iframe_port>/`
-    #[allow(dead_code)]
-    pub iframe_url: String,
     _main_server: Arc<Server>,
     _iframe_server: Arc<Server>,
 }
@@ -43,6 +40,9 @@ impl FixtureServer {
         let iframe_url = format!("http://127.0.0.1:{iframe_port}/");
 
         // Main page: 50 ms delay, then HTML with the iframe URL substituted.
+        // The iframe URL is substituted into the page and served from there;
+        // it used to also be a `pub iframe_url` field that no test read, so it
+        // is not carried on the struct.
         let main_html = MAIN_HTML_TEMPLATE.replace("__IFRAME_URL__", &iframe_url);
         let main_server_clone = Arc::clone(&main_server);
         thread::spawn(move || {
@@ -83,9 +83,8 @@ impl FixtureServer {
             }
         });
 
-        FixtureServer {
+        Self {
             main_url,
-            iframe_url,
             _main_server: main_server,
             _iframe_server: iframe_server,
         }
@@ -112,7 +111,6 @@ impl AttachmentServer {
     /// Start the server on an ephemeral port. Every request to `/file.pdf`
     /// (or any path) gets back a minimal, valid PDF with
     /// `Content-Disposition: attachment` set.
-    #[allow(dead_code)]
     pub fn start() -> Self {
         let server = Arc::new(Server::http("127.0.0.1:0").expect("bind attachment server"));
         let port = server.server_addr().to_ip().unwrap().port();
@@ -143,7 +141,7 @@ impl AttachmentServer {
             }
         });
 
-        AttachmentServer {
+        Self {
             url,
             _server: server,
         }
@@ -158,7 +156,7 @@ impl Drop for AttachmentServer {
 /// cookie via `Set-Cookie` response headers, then returns a minimal HTML page.
 ///
 /// This fixture is used by the `cookies_command_returns_http_only_cookies`
-/// integration test to verify that `Browser.getCookies` surfaces HttpOnly
+/// integration test to verify that `Browser.getCookies` surfaces `HttpOnly`
 /// cookies alongside ordinary cookies.
 pub struct CookieServer {
     /// URL of the page that sets the cookies.
@@ -170,7 +168,6 @@ impl CookieServer {
     /// Start the server on an ephemeral port. Every request receives a 200
     /// response with two `Set-Cookie` headers: one plain cookie and one
     /// `HttpOnly` cookie.
-    #[allow(dead_code)]
     pub fn start() -> Self {
         let server = Arc::new(Server::http("127.0.0.1:0").expect("bind cookie server"));
         let port = server.server_addr().to_ip().unwrap().port();
@@ -203,7 +200,7 @@ impl CookieServer {
             }
         });
 
-        CookieServer {
+        Self {
             url,
             _server: server,
         }
@@ -236,7 +233,6 @@ pub struct LifecycleServer {
 
 impl LifecycleServer {
     /// Start on an ephemeral port.
-    #[allow(dead_code)]
     pub fn start() -> Self {
         let server = Arc::new(Server::http("127.0.0.1:0").expect("bind lifecycle server"));
         let port = server.server_addr().to_ip().unwrap().port();
@@ -258,12 +254,12 @@ impl LifecycleServer {
         );
 
         // slow.js inserts the marker that proves load has fired.
-        const SLOW_JS: &str = r#"
+        const SLOW_JS: &str = r"
 var d = document.createElement('div');
 d.id = 'load-marker';
 d.textContent = 'loaded';
 document.body.appendChild(d);
-"#;
+";
 
         let main_html_bytes = main_html.into_bytes();
         let slow_js_bytes = SLOW_JS.as_bytes().to_vec();
@@ -305,7 +301,7 @@ document.body.appendChild(d);
             }
         });
 
-        LifecycleServer {
+        Self {
             url,
             _server: server,
         }
@@ -327,9 +323,6 @@ impl Drop for LifecycleServer {
 /// (`navigate_reports_main_document_status_code`,
 /// `navigate_reports_final_status_after_redirect`).
 pub struct StatusServer {
-    /// Base URL: `http://127.0.0.1:<port>/`
-    #[allow(dead_code)]
-    pub base_url: String,
     /// URL that returns 200.
     pub url_200: String,
     /// URL that returns 404.
@@ -341,11 +334,9 @@ pub struct StatusServer {
 
 impl StatusServer {
     /// Start on an ephemeral port.
-    #[allow(dead_code)]
     pub fn start() -> Self {
         let server = Arc::new(Server::http("127.0.0.1:0").expect("bind status server"));
         let port = server.server_addr().to_ip().unwrap().port();
-        let base_url = format!("http://127.0.0.1:{port}/");
         let url_200 = format!("http://127.0.0.1:{port}/200");
         let url_404 = format!("http://127.0.0.1:{port}/404");
         let url_redirect = format!("http://127.0.0.1:{port}/redirect");
@@ -395,8 +386,7 @@ impl StatusServer {
             }
         });
 
-        StatusServer {
-            base_url,
+        Self {
             url_200,
             url_404,
             url_redirect,

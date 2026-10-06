@@ -52,7 +52,7 @@ impl CamoufoxInfo {
                     .and_then(|major| major.parse::<u32>().ok())
             });
 
-        CamoufoxInfo {
+        Self {
             user_agent: user_agent.to_owned(),
             version: version.to_owned(),
             is_camoufox,
@@ -63,7 +63,7 @@ impl CamoufoxInfo {
     /// Returns the parsed major version number, if available.
     ///
     /// For example, version `"Firefox/128.0"` returns `Some(128)`.
-    pub fn major_version(&self) -> Option<u32> {
+    pub const fn major_version(&self) -> Option<u32> {
         self.major_version
     }
 
@@ -276,7 +276,7 @@ mod tests {
         let info = CamoufoxInfo::default();
         assert!(!info.is_camoufox);
         assert_eq!(info.major_version(), None);
-        assert!(info.user_agent.is_empty());
-        assert!(info.version.is_empty());
+        assert_eq!(info.user_agent, "");
+        assert_eq!(info.version, "");
     }
 }

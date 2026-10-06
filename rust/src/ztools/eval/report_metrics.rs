@@ -16,7 +16,7 @@ use crate::units::{count, unsigned};
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::completeness::record_is_complete;
-use super::discrimination::{is_gate, ranking_mean, EvalResult};
+use super::discrimination::{EvalResult, is_gate, ranking_mean};
 use super::report::ModelRun;
 
 /// Aggregate statistics for one model's run.
@@ -40,6 +40,7 @@ pub struct ScoreStats {
 /// One failure category across runs: how many, and the sorted deduped models
 /// and tasks behind it. Sorted (not hash order) so repeated runs print
 /// identically.
+#[derive(Debug)]
 pub struct FailureGroup {
     pub count: usize,
     pub models: Vec<String>,
@@ -179,7 +180,13 @@ pub fn compute_error_rates(runs: &[ModelRun]) -> BTreeMap<String, ErrorRates> {
         let mut infra = 0usize;
         let mut quality = 0usize;
         let mut success = 0usize;
-        for outcome in &run.outcomes {
+        // A CONTEXT refusal is neither: no request went out, so it is not an
+        // outage, and no answer came back, so it is not a quality failure.
+        for outcome in run
+            .outcomes
+            .iter()
+            .filter(|o| o.failure_category != crate::ztools::eval::FAIL_CONTEXT)
+        {
             let has_error = outcome.error.as_deref().is_some_and(|e| !e.is_empty());
             if has_error || outcome.failure_category == "INFRA" {
                 infra += 1;
@@ -363,7 +370,7 @@ mod tests {
             run("m1", &["t1"], vec![outcome("t1", 95, "INFRA", None)]),
             run("m2", &["t2"], vec![outcome("t2", 90, "FORMAT", None)]),
         ];
-        assert!(categorize_failures(&runs).is_empty());
+        assert_empty!(categorize_failures(&runs));
     }
 
     #[test]
@@ -393,6 +400,25 @@ mod tests {
         let runs = vec![run("m1", &["t1"], vec![outcome("t1", 30, "", None)])];
         let cats = categorize_failures(&runs);
         assert_eq!(cats["UNKNOWN"].count, 1);
+    }
+
+    /// No request went out, so not an outage; no answer came back, so not a
+    /// quality failure. Counted as either, it skews the rate it lands in.
+    #[test]
+    fn a_context_refusal_is_neither_an_outage_nor_a_quality_failure() {
+        let runs = vec![run(
+            "m1",
+            &["t1", "t2"],
+            vec![
+                outcome("t1", 100, "", None),
+                outcome("t2", 0, "CONTEXT", Some("prompt does not fit")),
+            ],
+        )];
+        let rates = compute_error_rates(&runs);
+        assert_eq!(
+            (rates["m1"].success, rates["m1"].infra, rates["m1"].quality),
+            (1, 0, 0)
+        );
     }
 
     #[test]
@@ -458,7 +484,7 @@ mod tests {
         let lines = render_verbosity(&v);
         assert_eq!(lines.len(), 3);
         assert!(lines[2].starts_with("m "), "{}", lines[2]);
-        assert!(compute_verbosity(&[]).is_empty());
-        assert!(render_verbosity(&BTreeMap::new()).is_empty());
+        assert_empty!(compute_verbosity(&[]));
+        assert_empty!(render_verbosity(&BTreeMap::new()));
     }
 }

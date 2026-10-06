@@ -13,7 +13,7 @@ use crate::units::count;
 use serde::{Deserialize, Serialize};
 
 use super::health::SearchHealth;
-use super::search::{ENGINES, ENGINE_COUNT};
+use super::search::{ENGINE_COUNT, ENGINES};
 
 /// One run's per-engine walls, as the record stores them.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -208,9 +208,10 @@ mod tests {
             runs: vec![run([16, 0, 0]), run([16, 0, 0])],
         };
         assert_eq!(rec.order(&DemotionPolicy::default()), [0, 1, 2]);
-        assert!(rec
-            .describe(&DemotionPolicy::default(), &[0, 1, 2])
-            .is_none());
+        assert!(
+            rec.describe(&DemotionPolicy::default(), &[0, 1, 2])
+                .is_none()
+        );
     }
 
     #[test]

@@ -31,10 +31,10 @@ fn load_rubric(task_name: &str) -> Value {
         },
     );
 
-    if let Ok(content) = std::fs::read_to_string(&candidate) {
-        if let Ok(val) = serde_json::from_str::<Value>(&content) {
-            return val.get("rubric").cloned().unwrap_or(Value::Null);
-        }
+    if let Ok(content) = std::fs::read_to_string(&candidate)
+        && let Ok(val) = serde_json::from_str::<Value>(&content)
+    {
+        return val.get("rubric").cloned().unwrap_or(Value::Null);
     }
     Value::Null
 }

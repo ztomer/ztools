@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-fn default_timeout() -> u64 {
+const fn default_timeout() -> u64 {
     30
 }
 
@@ -77,7 +77,7 @@ pub enum DaemonRequest {
     /// Shut down the daemon and all instances.
     Shutdown,
 
-    /// Export all cookies for a browser instance (including HttpOnly).
+    /// Export all cookies for a browser instance (including `HttpOnly`).
     Cookies { instance_id: String },
 }
 
@@ -97,8 +97,8 @@ pub struct DaemonResponse {
 
 impl DaemonResponse {
     /// Create a success response with data.
-    pub fn ok(data: Value) -> Self {
-        DaemonResponse {
+    pub const fn ok(data: Value) -> Self {
+        Self {
             ok: true,
             error: None,
             data: Some(data),
@@ -106,8 +106,8 @@ impl DaemonResponse {
     }
 
     /// Create a success response with no data.
-    pub fn ok_empty() -> Self {
-        DaemonResponse {
+    pub const fn ok_empty() -> Self {
+        Self {
             ok: true,
             error: None,
             data: None,
@@ -116,7 +116,7 @@ impl DaemonResponse {
 
     /// Create an error response.
     pub fn err(message: impl Into<String>) -> Self {
-        DaemonResponse {
+        Self {
             ok: false,
             error: Some(message.into()),
             data: None,
@@ -150,7 +150,7 @@ mod tests {
         }
     }
 
-    /// A cookies response carrying an HttpOnly cookie round-trips through
+    /// A cookies response carrying an `HttpOnly` cookie round-trips through
     /// `DaemonResponse` without losing the `httpOnly` flag.
     #[test]
     fn cookies_response_preserves_http_only_flag() {
@@ -193,5 +193,116 @@ mod tests {
         assert!(!back.ok);
         assert_eq!(back.error.as_deref(), Some("instance not found"));
         assert!(back.data.is_none());
+    }
+
+    // The two tests below cover the `navigate` feature (G3 `wait_until`, G4
+    // `status_code`) at the wire level. They live here rather than in
+    // `api::main_frame`'s test module because what they assert is the serde
+    // shape of `DaemonRequest`/`DaemonResponse` — and because `cli` is behind
+    // the `cli` feature, a test in `api` could not name these types under
+    // default features at all (`cargo check --all-targets` failed with E0433).
+
+    /// G3 TDD case 3d: IPC serde round-trip — `DaemonRequest::Navigate` with
+    /// `wait_until` field serialises and deserialises correctly.
+    #[test]
+    fn navigate_ipc_wait_until_serde_round_trip() {
+        // With wait_until present.
+        let req = DaemonRequest::Navigate {
+            instance_id: "00000001".into(),
+            page_id: "p1".into(),
+            url: "https://example.com".into(),
+            timeout_secs: 30,
+            wait_until: Some("load".into()),
+        };
+        let serialized = serde_json::to_string(&req).expect("serialize");
+        let back: DaemonRequest = serde_json::from_str(&serialized).expect("deserialize");
+        match back {
+            DaemonRequest::Navigate { wait_until, .. } => {
+                assert_eq!(wait_until.as_deref(), Some("load"));
+            }
+            other => panic!("expected Navigate, got {other:?}"),
+        }
+
+        // With wait_until absent — must not appear in serialised JSON.
+        let req_no_wait = DaemonRequest::Navigate {
+            instance_id: "00000001".into(),
+            page_id: "p1".into(),
+            url: "https://example.com".into(),
+            timeout_secs: 30,
+            wait_until: None,
+        };
+        let serialized_no_wait = serde_json::to_string(&req_no_wait).expect("serialize");
+        assert!(
+            !serialized_no_wait.contains("wait_until"),
+            "wait_until must be absent from serialised JSON when None: {serialized_no_wait}"
+        );
+        let back_no_wait: DaemonRequest =
+            serde_json::from_str(&serialized_no_wait).expect("deserialize");
+        match back_no_wait {
+            DaemonRequest::Navigate { wait_until, .. } => {
+                assert!(wait_until.is_none(), "wait_until must deserialise to None");
+            }
+            other => panic!("expected Navigate, got {other:?}"),
+        }
+
+        // Legacy wire (no wait_until field at all) must deserialise to None.
+        let legacy = r#"{"method":"Navigate","params":{"instance_id":"00000001","page_id":"p1","url":"https://example.com","timeout_secs":30}}"#;
+        let back_legacy: DaemonRequest = serde_json::from_str(legacy).expect("deserialize legacy");
+        match back_legacy {
+            DaemonRequest::Navigate { wait_until, .. } => {
+                assert!(
+                    wait_until.is_none(),
+                    "legacy wire (no wait_until) must deserialise to None"
+                );
+            }
+            other => panic!("expected Navigate, got {other:?}"),
+        }
+    }
+
+    /// G4 TDD case 3: navigate response IPC serde includes `status_code`.
+    /// Absence is backward-compatible (legacy callers ignore unknown fields).
+    #[test]
+    fn navigate_response_serde_includes_status_code() {
+        // Response WITH status_code.
+        let resp = DaemonResponse::ok(json!({
+            "navigation_id": "nav-1",
+            "status_code": 200_u16,
+        }));
+        let serialized = serde_json::to_string(&resp).expect("serialize");
+        assert!(
+            serialized.contains("status_code"),
+            "status_code must appear in JSON: {serialized}"
+        );
+        let back: DaemonResponse = serde_json::from_str(&serialized).expect("deserialize");
+        assert_eq!(
+            back.data
+                .as_ref()
+                .and_then(|d| d.get("status_code"))
+                .and_then(serde_json::Value::as_u64),
+            Some(200),
+            "status_code round-trips"
+        );
+        assert_eq!(
+            back.data
+                .as_ref()
+                .and_then(|d| d.get("navigation_id"))
+                .and_then(|v| v.as_str()),
+            Some("nav-1"),
+            "navigation_id still present"
+        );
+
+        // Response WITHOUT status_code (legacy / null) must deserialise fine.
+        let legacy = r#"{"ok":true,"data":{"navigation_id":"nav-2"}}"#;
+        let legacy_back: DaemonResponse =
+            serde_json::from_str(legacy).expect("deserialize legacy navigate response");
+        assert!(legacy_back.ok);
+        assert!(
+            legacy_back
+                .data
+                .as_ref()
+                .and_then(|d| d.get("status_code"))
+                .is_none(),
+            "legacy callers without status_code must deserialise fine (field absent is ok)"
+        );
     }
 }

@@ -175,16 +175,20 @@ mod tests {
     #[test]
     fn test_validate_attribution_faithful_bullets() {
         let source = "[@TechCrunch | Aug 10 14:30]: OpenAI releases new model weights\n[@Reuters | Aug 10 15:00]: Markets rally on tech earnings";
-        let summary = json!("- OpenAI released weights for their latest model (@TechCrunch | Aug 10 14:30)\n- Tech earnings sparked market rallies (@Reuters | Aug 10 15:00).");
+        let summary = json!(
+            "- OpenAI released weights for their latest model (@TechCrunch | Aug 10 14:30)\n- Tech earnings sparked market rallies (@Reuters | Aug 10 15:00)."
+        );
         let (score, reason) = validate_attribution(&summary, source);
         assert_eq!(score, 100);
-        assert!(reason.is_empty());
+        assert_empty!(reason);
     }
 
     #[test]
     fn test_validate_attribution_catches_swapped_author() {
         let source = "[@TechCrunch | Aug 10 14:30]: OpenAI releases new model weights\n[@Reuters | Aug 10 15:00]: Markets rally on tech earnings";
-        let summary = json!("- Tech earnings sparked market rallies (@TechCrunch | Aug 10 14:30)\n- OpenAI released weights (@Reuters | Aug 10 15:00)");
+        let summary = json!(
+            "- Tech earnings sparked market rallies (@TechCrunch | Aug 10 14:30)\n- OpenAI released weights (@Reuters | Aug 10 15:00)"
+        );
         let (score, reason) = validate_attribution(&summary, source);
         assert_eq!(score, 0);
         assert!(reason.contains("misattributed 2/2"), "got: {reason}");

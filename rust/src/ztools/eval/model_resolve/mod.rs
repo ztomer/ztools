@@ -21,11 +21,12 @@ mod disk;
 mod fetch;
 mod roster;
 
+pub(crate) use disk::documented_context_window;
 pub use disk::{disk_corroborated, is_generative_model, model_config_path};
 pub use fetch::fetch_roster;
 pub use roster::{
-    default_fallback_chain, is_missing_model_error, parameter_billions, substitute_model,
-    RosterEntry, MISSING_MODEL_MARKERS,
+    MISSING_MODEL_MARKERS, RosterEntry, default_fallback_chain, is_missing_model_error,
+    parameter_billions, substitute_model,
 };
 
 #[cfg(test)]

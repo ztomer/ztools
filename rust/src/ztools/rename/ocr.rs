@@ -71,11 +71,7 @@ impl OcrEngine for TesseractEngine {
         }
 
         let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if text.is_empty() {
-            None
-        } else {
-            Some(text)
-        }
+        if text.is_empty() { None } else { Some(text) }
     }
 }
 
@@ -157,9 +153,11 @@ mod tests {
     #[test]
     fn test_extract_text_returns_none_for_missing_image() {
         let engine = TesseractEngine::new(Some(PathBuf::from("/bin/echo")));
-        assert!(engine
-            .extract_text(Path::new("/nonexistent/ztools_img.png"))
-            .is_none());
+        assert!(
+            engine
+                .extract_text(Path::new("/nonexistent/ztools_img.png"))
+                .is_none()
+        );
     }
 
     #[test]

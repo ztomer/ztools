@@ -4,11 +4,19 @@
 //! prove the corpus-building and monolithic-fallback paths without ever
 //! touching `DuckDuckGo` or a real model endpoint. The snippet parser is pure
 //! string work and is fed synthetic HTML directly.
+//!
+//! Every test that builds a `ZtoolsConfig` takes the shared sandbox
+//! ([`crate::test_env::TestEnv`]) first: that type's defaults name `~/…` paths,
+//! so a config constructed without the guard resolves them against the
+//! operator's real home.
 
 use super::*;
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+
+use crate::test_env::TestEnv;
+use serial_test::serial;
 
 fn ctx() -> PlanContext {
     PlanContext {
@@ -20,13 +28,61 @@ fn ctx() -> PlanContext {
     }
 }
 
-/// A throwaway record file per test process: the fetch appends this run's
-/// engine walls to it, and a unit test must not write the operator's.
-fn record_path() -> String {
-    std::env::temp_dir()
-        .join(format!("ztools-search-record-{}.json", std::process::id()))
+/// THIS CHECKOUT's `conf/weekend.toml`, resolved at compile time rather than
+/// through `~/Projects/ztools/…`.
+///
+/// The region and exclusion lists are DATA these tests assert against — the
+/// corpus test's whole claim is that a snippet survives `has_region_evidence` —
+/// so they cannot be emptied. What they can stop doing is being found through
+/// `$HOME`: the default resolved them on whichever machine ran the suite, so a
+/// test's verdict depended on where the checkout happened to sit.
+fn checkout_weekend_toml() -> String {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("the crate is inside the checkout")
+        .join("conf/weekend.toml")
         .to_string_lossy()
         .into_owned()
+}
+
+/// A closed loopback port: refused immediately, so an engine that is
+/// supposed to be dead costs no wall clock and cannot reach the internet.
+const DEAD: &str = "http://127.0.0.1:1";
+
+/// The config these tests share, pointing every operator-visible location
+/// somewhere harmless.
+///
+/// Built here rather than per test because there are three of them and they
+/// were drifting: the engine walls landed in ONE pid-keyed file shared by all
+/// three, so one test's recorded demotions decided the next test's engine
+/// order. Each sandbox now gets its own record, inside a directory that is
+/// removed when the guard drops.
+fn sandboxed_config(
+    env: &TestEnv,
+    search: &str,
+    osaurus: &str,
+    weather: &str,
+) -> crate::config::ZtoolsConfig {
+    crate::config::ZtoolsConfig {
+        duckduckgo_url: search.to_string(),
+        bing_url: DEAD.to_string(),
+        brave_url: DEAD.to_string(),
+        osaurus_url: osaurus.to_string(),
+        weather_url: weather.to_string(),
+        search_record_path: env
+            .root()
+            .join("search_health.json")
+            .to_string_lossy()
+            .into_owned(),
+        weekend_exclusions_paths: vec![checkout_weekend_toml()],
+        weekend_region_paths: vec![checkout_weekend_toml()],
+        // One second on both LLM phases: none of these three tests is about a
+        // model answering, and 900 is the default the warm-up would otherwise
+        // wait out against a closed port.
+        llm_timeout_secs: 1,
+        llm_warmup_timeout_secs: 1,
+        ..crate::config::ZtoolsConfig::default()
+    }
 }
 
 fn window() -> (chrono::NaiveDate, chrono::NaiveDate) {
@@ -121,18 +177,10 @@ const SNIPPETS_HTML: &str = "<html><body>\
 </body></html>";
 
 #[test]
+#[serial]
 fn corpus_building_dedupes_keeps_only_region_backed_snippets_and_counts_them() {
-    let ddg = serve_html(SNIPPETS_HTML);
-    let config = crate::config::ZtoolsConfig {
-        duckduckgo_url: ddg,
-        bing_url: "http://127.0.0.1:1/".into(),
-        brave_url: "http://127.0.0.1:1/".into(),
-        search_record_path: record_path(),
-        osaurus_url: "http://127.0.0.1:1".into(),
-        llm_timeout_secs: 1,
-        llm_warmup_timeout_secs: 1,
-        ..crate::config::ZtoolsConfig::default()
-    };
+    let env = TestEnv::new();
+    let config = sandboxed_config(&env, &serve_html(SNIPPETS_HTML), DEAD, DEAD);
 
     // Every one of the fan-out queries hits the same mock, so the duplicates
     // arrive many times over; dedup is on the TITLE alone (the Python
@@ -156,25 +204,19 @@ fn corpus_building_dedupes_keeps_only_region_backed_snippets_and_counts_them() {
         !corpus.contains("Aspen"),
         "a snippet without region evidence must not enter the corpus: {corpus}"
     );
-    assert!(
-        events.is_empty(),
+    assert_empty!(
+        events,
         "with the model dead the pipeline must yield no invented events"
     );
+    drop(env);
 }
 
 #[test]
+#[serial]
 fn a_dead_draft_phase_falls_back_to_the_monolithic_prompt_and_parses_real_events() {
+    let env = TestEnv::new();
     let monolithic_json = r#"{"transient_events":[{"name":"Maple Syrup Festival","location":"Vaughan","target_ages":"All ages","price":"By donation","start_date":"2026-08-08","end_date":"2026-08-08","day":"Saturday","weather":"Clear","duration":"All day","description":"Sap to syrup demos"}]}"#;
-    let osaurus = serve_chat(monolithic_json);
-    let config = crate::config::ZtoolsConfig {
-        duckduckgo_url: "http://127.0.0.1:1/".into(),
-        bing_url: "http://127.0.0.1:1/".into(),
-        brave_url: "http://127.0.0.1:1/".into(),
-        search_record_path: record_path(),
-        osaurus_url: osaurus,
-        llm_timeout_secs: 1,
-        ..crate::config::ZtoolsConfig::default()
-    };
+    let config = sandboxed_config(&env, DEAD, &serve_chat(monolithic_json), DEAD);
 
     let (events, corpus, _health) =
         fetch_duckduckgo_events("Vaughan", window().0, window().1, "sunny", &ctx(), &config);
@@ -185,6 +227,7 @@ fn a_dead_draft_phase_falls_back_to_the_monolithic_prompt_and_parses_real_events
     assert_eq!(events[0].price, "By donation");
     assert_eq!(events[0].day, "Saturday");
     assert!(events[0].is_transient);
+    drop(env);
 }
 
 /// The fan-out runs and yields nothing when neither the search nor the model
@@ -192,24 +235,17 @@ fn a_dead_draft_phase_falls_back_to_the_monolithic_prompt_and_parses_real_events
 /// not depend on `DuckDuckGo` being up -- this test used to hit the live site
 /// thirteen times, and whether it answered moved the coverage number.
 #[test]
+#[serial]
 fn test_fetch_duckduckgo_events() {
-    let config = crate::config::ZtoolsConfig {
-        duckduckgo_url: "http://127.0.0.1:1/".into(),
-        bing_url: "http://127.0.0.1:1/".into(),
-        brave_url: "http://127.0.0.1:1/".into(),
-        search_record_path: record_path(),
-        osaurus_url: "http://127.0.0.1:1".into(),
-        llm_timeout_secs: 1,
-        llm_warmup_timeout_secs: 1,
-        ..crate::config::ZtoolsConfig::default()
-    };
+    let env = TestEnv::new();
+    let config = sandboxed_config(&env, DEAD, DEAD, DEAD);
     let (events, corpus, health) =
         fetch_duckduckgo_events("Vaughan", window().0, window().1, "sunny", &ctx(), &config);
     assert!(
         events.is_empty(),
         "unreachable search and model must yield nothing, not invented events: {events:?}"
     );
-    assert!(corpus.is_empty());
+    assert_empty!(corpus);
     assert!(
         !health.model.is_ready(),
         "a model that never answered the warm-up must be recorded as unavailable: {health:?}"
@@ -222,6 +258,33 @@ fn test_fetch_duckduckgo_events() {
         "every query must record every engine unreachable: {:?}",
         health.search
     );
+    drop(env);
+}
+
+/// A dead endpoint yields the DOCUMENTED fallback, and this pins it as a literal
+/// rather than against `fallback_forecast` because the point is what a reader is
+/// TOLD when the forecast could not be fetched: a test comparing the function to
+/// its own constant would keep passing if somebody rewrote the forecast to say
+/// something else.
+///
+/// The endpoint is [`DEAD`] — a closed loopback port — so the failure is immediate
+/// and local: no five-second stall, and no way to reach the internet even if the
+/// config were ignored, because the config IS the input under test. It is a
+/// fetch-path test rather than a URL-builder one, which is why it sits here and
+/// not beside `open_meteo_url`.
+#[test]
+#[serial]
+fn a_dead_endpoint_yields_the_documented_fixed_forecast() {
+    let env = TestEnv::new();
+    let config = sandboxed_config(&env, DEAD, DEAD, DEAD);
+    assert_eq!(
+        fetch_weather("2026-08-07", "2026-08-09", &config),
+        "Daily Forecast: Friday: 24.5°C Clear, Saturday: 26.0°C Clear, \
+         Sunday: 23.0°C Clear",
+        "a refused connection must render the documented fallback, not an \
+         empty forecast and not an invented one"
+    );
+    drop(env);
 }
 
 // --- parse_snippets_from_html: pure parsing of synthetic DDG markup ---
@@ -263,41 +326,51 @@ fn a_snippet_terminated_by_either_tag_ends_at_the_first_closer() {
 fn malformed_snippets_are_skipped_and_scanning_still_advances() {
     // Class attribute never closed by '>': advance past the pattern.
     let unclosed_attr = r#"<p class="result__snippet trailing"#;
-    assert!(parse_snippets_from_html(unclosed_attr).is_empty());
+    assert_empty!(parse_snippets_from_html(unclosed_attr));
 
     // Text with no </a>/</td> terminator: not extractable, scan continues.
     let unterminated = r#"<td class="result__snippet">dangling text with no closer at all"#;
-    assert!(parse_snippets_from_html(unterminated).is_empty());
+    assert_empty!(parse_snippets_from_html(unterminated));
 
     // Whitespace-only snippet is dropped but a later good one still lands.
     let mixed = r#"<td class="result__snippet">   </td><td class="result__snippet">Real</td>"#;
     assert_eq!(parse_snippets_from_html(mixed), vec!["Real"]);
 
     // No pattern anywhere at all.
-    assert!(parse_snippets_from_html("<html><body>nothing here</body></html>").is_empty());
+    assert_empty!(parse_snippets_from_html(
+        "<html><body>nothing here</body></html>"
+    ));
 }
 
 #[test]
 fn test_build_search_queries_derives_month_from_target_friday() {
     let sep_friday = chrono::NaiveDate::from_ymd_opt(2026, 9, 4).unwrap();
     let queries = build_search_queries(sep_friday);
-    assert!(!queries.is_empty());
-    assert!(queries
-        .iter()
-        .any(|q| q.contains("September") && q.contains("2026")));
-    assert!(queries
-        .iter()
-        .any(|q| q.contains("harvest festival farm pumpkin")));
+    assert_nonempty!(&queries);
+    assert!(
+        queries
+            .iter()
+            .any(|q| q.contains("September") && q.contains("2026"))
+    );
+    assert!(
+        queries
+            .iter()
+            .any(|q| q.contains("harvest festival farm pumpkin"))
+    );
     assert!(!queries.iter().any(|q| q.contains("August")));
 
     let jan_friday = chrono::NaiveDate::from_ymd_opt(2027, 1, 1).unwrap();
     let jan_queries = build_search_queries(jan_friday);
-    assert!(jan_queries
-        .iter()
-        .any(|q| q.contains("January") && q.contains("2027")));
-    assert!(jan_queries
-        .iter()
-        .any(|q| q.contains("winter festival holiday lights")));
+    assert!(
+        jan_queries
+            .iter()
+            .any(|q| q.contains("January") && q.contains("2027"))
+    );
+    assert!(
+        jan_queries
+            .iter()
+            .any(|q| q.contains("winter festival holiday lights"))
+    );
 }
 
 #[test]

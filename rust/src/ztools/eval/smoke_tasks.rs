@@ -2,7 +2,8 @@
 //!
 //! Five offline, fixture-only tasks that prove a model answers at all, before
 //! the full roster (`super::tasks`) is spent on it. Split out of
-//! `task_loader.rs` for the 500-line cap.
+//! `task_loader.rs` for the 500-line cap. Pinned row for row by
+//! `smoke_tasks_tests.rs`.
 
 use super::task_loader::{Check, EvalTask};
 
@@ -60,3 +61,7 @@ pub fn get_built_in_smoke_tasks() -> Vec<EvalTask> {
         ),
     ]
 }
+
+#[cfg(test)]
+#[path = "smoke_tasks_tests.rs"]
+mod tests;

@@ -25,13 +25,13 @@ use std::time::Instant;
 
 use serde::Serialize;
 
+use crate::ztools::eval::SignalStore;
 use crate::ztools::eval::model_resolve::is_generative_model;
 use crate::ztools::eval::prefill::{measure_prefill_rate, record_prefill_rate};
 use crate::ztools::eval::signals::{load_signals, record_signal, save_signals};
-use crate::ztools::eval::task_loader::{check_graded_score, run_check, EvalTask};
+use crate::ztools::eval::task_loader::{EvalTask, check_graded_score, run_check};
 use crate::ztools::eval::transport;
 use crate::ztools::eval::watchdog::{is_stalled, model_stall_duration};
-use crate::ztools::eval::SignalStore;
 
 #[path = "runner_task.rs"]
 mod task;
@@ -112,6 +112,29 @@ impl Default for RunnerConfig {
             allow_model_substitution: true,
             thinking: false,
             record_signals: false,
+        }
+    }
+}
+
+impl TaskOutcome {
+    /// Did the model get to answer? A transport error, an `INFRA` category or
+    /// a `CONTEXT` refusal all mean no score was taken, and every consumer --
+    /// the table, the mean, the history -- asks this one question.
+    #[must_use]
+    pub fn was_measured(&self) -> bool {
+        self.error.is_none()
+            && self.failure_category != crate::ztools::eval::FAIL_INFRA
+            && self.failure_category != crate::ztools::eval::FAIL_CONTEXT
+    }
+
+    /// The row for a task whose prompt was never sent because it cannot fit.
+    fn context_refused(task: &str, why: String) -> Self {
+        Self {
+            task: task.to_string(),
+            status: "fail".to_string(),
+            error: Some(why),
+            failure_category: crate::ztools::eval::FAIL_CONTEXT.to_string(),
+            ..Default::default()
         }
     }
 }
@@ -257,6 +280,16 @@ fn run_eval_inner(
             break;
         }
 
+        // Before the budget, the retries and the signals: a prompt that cannot
+        // fit is not an attempt, so it neither counts towards abandoning the
+        // model as an outage nor records a timing (eval/context_fit.rs).
+        let prompt_bytes = task.messages.iter().map(|m| m.content.len()).sum();
+        if let Some(why) = crate::ztools::eval::context_fit::context_refusal(model, prompt_bytes) {
+            eprintln!("  ✗ NOT MEASURED {model} / {}: {why}", task.name);
+            outcomes.push(TaskOutcome::context_refused(&task.name, why));
+            continue;
+        }
+
         let budget = task_budget(model, task, cfg);
         let (outcome, attempts_used) =
             run_task(model, task, cfg, &budget, &mut reasoning_escalation_futile);
@@ -295,10 +328,14 @@ mod drain_tests {
     use crate::ztools::eval::task_loader::EvalTask;
 
     /// A Ctrl-C request is honoured between tasks: nothing further is started
-    /// and what ran is returned. Serial with nothing -- the flag is
-    /// process-wide, so this test sets and clears it itself and no other test
-    /// reads it.
+    /// and what ran is returned.
+    ///
+    /// The flag is process-wide, so the request is a SCOPE
+    /// (`drain::DrainRequest`), not a set-then-clear: unwinding out of this
+    /// test used to leave the flag set for the rest of the binary, and every
+    /// later eval loop would then stop after zero tasks without failing.
     #[test]
+    #[serial_test::serial]
     fn a_drain_request_stops_the_loop_between_tasks() {
         let tasks: Vec<EvalTask> = (0..3)
             .map(|i| EvalTask::new(format!("t{i}"), "hi", Vec::new()))
@@ -310,12 +347,34 @@ mod drain_tests {
             max_retries: 0,
             ..Default::default()
         };
-        super::super::drain::request_for_test();
+        let _request = super::super::drain::DrainRequest::raise();
         let outcomes = run_eval("m", &tasks, &cfg);
-        super::super::drain::reset_for_test();
         assert!(
             outcomes.is_empty(),
             "requested before the first task: none run: {outcomes:?}"
         );
+    }
+
+    /// The scope clears the flag even when the body unwinds -- the leak this
+    /// replaces, asserted rather than asserted-by-comment.
+    #[test]
+    #[serial_test::serial]
+    fn a_drain_request_is_cleared_by_unwinding_out_of_the_scope() {
+        let result = std::panic::catch_unwind(|| {
+            let _request = super::super::drain::DrainRequest::raise();
+            assert!(super::super::drain::requested());
+            panic!("unwind with the drain flag raised");
+        });
+        assert!(result.is_err(), "the closure must have panicked");
+        assert!(
+            !super::super::drain::requested(),
+            "a panic inside the scope must not leave the process-wide drain flag \
+             set: every later eval loop would stop after zero tasks and still \
+             pass"
+        );
+        // And raising again is possible, which is the loud half: a leaked flag
+        // now fails the NEXT test instead of quietly short-circuiting it.
+        let _request = super::super::drain::DrainRequest::raise();
+        assert!(super::super::drain::requested());
     }
 }

@@ -15,7 +15,7 @@ mod tests {
         fs::write(model_dir.join("model-00001.safetensors"), b"weights_data").unwrap();
 
         let defects = probe_model_dir_defects(&model_dir);
-        assert!(defects.is_empty(), "Clean model should have no defects");
+        assert_empty!(defects, "Clean model should have no defects");
 
         let res = assess_viability("CleanModel", Some(15.0), Some(temp.path()));
         assert!(res.is_ok());
@@ -141,6 +141,6 @@ mod tests {
     #[test]
     fn test_probe_model_defects_non_existent_returns_empty() {
         let defects = probe_model_defects("NonExistentModel999", None);
-        assert!(defects.is_empty());
+        assert_empty!(defects);
     }
 }

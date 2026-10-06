@@ -32,10 +32,10 @@ fn test_extract_list_from_dict_handles_non_objects_and_arrays() {
         extract_list_from_dict(&json!([1, 2])),
         vec![json!(1), json!(2)]
     );
-    assert!(extract_list_from_dict(&json!("plain")).is_empty());
-    assert!(extract_list_from_dict(&json!(42)).is_empty());
-    assert!(extract_list_from_dict(&json!(null)).is_empty());
-    assert!(extract_list_from_dict(&json!({"a": 1, "b": "two"})).is_empty());
+    assert_empty!(extract_list_from_dict(&json!("plain")));
+    assert_empty!(extract_list_from_dict(&json!(42)));
+    assert_empty!(extract_list_from_dict(&json!(null)));
+    assert_empty!(extract_list_from_dict(&json!({"a": 1, "b": "two"})));
 }
 
 #[test]

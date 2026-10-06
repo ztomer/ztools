@@ -103,10 +103,10 @@ fn recorded_architecture(model: &str) -> Option<String> {
 #[must_use]
 pub fn config_family(model: &str) -> Option<String> {
     let _ = recorded_architecture;
-    if let Some(architecture) = recorded_architecture(model) {
-        if let Some(mapped) = config_family_for(&architecture) {
-            return Some(mapped);
-        }
+    if let Some(architecture) = recorded_architecture(model)
+        && let Some(mapped) = config_family_for(&architecture)
+    {
+        return Some(mapped);
     }
     let family = crate::ztools::eval::quirks::get_model_family(model);
     if family == "default" {
@@ -134,13 +134,17 @@ fn family_config(model: &str) -> Option<toml::Value> {
 /// `max_tokens`, overridden by its `[models."<id>"]` section when present.
 fn model_cap(model: &str) -> Option<u32> {
     let cfg = family_config(model)?;
-    let mut cap = cfg.get("max_tokens").and_then(toml::Value::as_integer);
-    if let Some(section) = cfg.get("models").and_then(|m| m.get(model)) {
-        if let Some(per_model) = section.get("max_tokens").and_then(toml::Value::as_integer) {
-            cap = Some(per_model);
-        }
-    }
-    cap.filter(|c| *c > 0)
+    // The per-model section WINS over the family cap, so it is the `or` operand's
+    // left side; `None` from either is the same answer, and the positivity filter
+    // below is what rejects a zero or negative cap whichever side it came from.
+    let per_model = cfg
+        .get("models")
+        .and_then(|m| m.get(model))
+        .and_then(|section| section.get("max_tokens"))
+        .and_then(toml::Value::as_integer);
+    per_model
+        .or_else(|| cfg.get("max_tokens").and_then(toml::Value::as_integer))
+        .filter(|c| *c > 0)
         .map(|c| u32::try_from(c).unwrap_or(u32::MAX))
 }
 
@@ -166,58 +170,47 @@ pub fn max_tokens_for_task(task: &str, model: &str) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_env::TestEnv;
     use serial_test::serial;
     use std::fs;
 
-    struct ConfDir(tempfile::TempDir);
-
-    impl ConfDir {
-        fn new() -> Self {
-            Self(tempfile::tempdir().unwrap())
-        }
-        fn write(&self, rel: &str, content: &str) {
-            let path = self.0.path().join(rel);
+    /// A conf root and signals store inside one sandbox, holding `files`.
+    ///
+    /// This replaces a hand-rolled `ConfEnvGuard` that captured and restored
+    /// `ZTOOLS_CONF_DIR` and `EVAL_SIGNALS_DIR` itself, under `#[serial]` and
+    /// no shared lock -- so it excluded itself from the other `#[serial]` tests
+    /// and from nothing else, and a panic between the set and the restore left
+    /// both variables pointing at a deleted temp dir. `TestEnv` is the same
+    /// guarantee with the lock included, and it holds for the whole test rather
+    /// than for the window between the two writes.
+    ///
+    /// The fixtures are written HERE rather than through a `write` method called
+    /// afterwards, and that is not a style choice. A guard whose last use is a
+    /// `write` is one clippy's `significant_drop_tightening` asks to fold into
+    /// that call -- which would drop the sandbox, releasing the lock and
+    /// restoring the operator's paths, before the test had asserted anything.
+    /// Passing `&[]` is the empty conf root: no `config.toml`, no `models/`, so
+    /// a model with no entry finds nothing HERE rather than in the operator's.
+    fn conf_sandbox(files: &[(&str, &str)]) -> TestEnv {
+        // Both variables at ONE fixture path, as before: recorded-architecture
+        // family resolution reads the signals store out of the same directory the
+        // conf files live in, and a test that writes both expects one root.
+        let (env, root) = TestEnv::new().fixture("ZTOOLS_CONF_DIR", "conf-fixture");
+        let _signals = env.set_path("EVAL_SIGNALS_DIR", "conf-fixture");
+        for (rel, content) in files {
+            let path = root.join(rel);
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(path, content).unwrap();
         }
-        fn guard(&self) -> ConfEnvGuard {
-            let prev_conf = std::env::var_os("ZTOOLS_CONF_DIR");
-            std::env::set_var("ZTOOLS_CONF_DIR", self.0.path());
-            // Isolate the signals store too: the recorded-architecture family
-            // resolution reads it, and the operator's real file must not
-            // decide a test's outcome.
-            let prev_signals = std::env::var_os("EVAL_SIGNALS_DIR");
-            std::env::set_var("EVAL_SIGNALS_DIR", self.0.path());
-            ConfEnvGuard {
-                prev_conf,
-                prev_signals,
-            }
-        }
-    }
-
-    struct ConfEnvGuard {
-        prev_conf: Option<std::ffi::OsString>,
-        prev_signals: Option<std::ffi::OsString>,
-    }
-
-    impl Drop for ConfEnvGuard {
-        fn drop(&mut self) {
-            match self.prev_conf.take() {
-                Some(v) => std::env::set_var("ZTOOLS_CONF_DIR", v),
-                None => std::env::remove_var("ZTOOLS_CONF_DIR"),
-            }
-            match self.prev_signals.take() {
-                Some(v) => std::env::set_var("EVAL_SIGNALS_DIR", v),
-                None => std::env::remove_var("EVAL_SIGNALS_DIR"),
-            }
-        }
+        env
     }
 
     #[test]
     #[serial]
     fn untabled_task_and_uncapped_model_get_the_documented_fallback() {
-        let dir = ConfDir::new();
-        let _g = dir.guard();
+        // The empty conf root IS the fixture: a model with no entry must find
+        // nothing, and the sandbox is what guarantees it finds nothing HERE.
+        let _env = conf_sandbox(&[]);
         assert_eq!(
             max_tokens_for_task("taxes_slip_qa", "gemma-4-e2b-it-8bit"),
             DEFAULT_MAX_TOKENS
@@ -227,9 +220,7 @@ mod tests {
     #[test]
     #[serial]
     fn the_task_table_beats_the_fallback_and_only_narrows() {
-        let dir = ConfDir::new();
-        dir.write("config.toml", "[max_tokens]\nsummarize = 8000\n");
-        let _g = dir.guard();
+        let _dir = conf_sandbox(&[("config.toml", "[max_tokens]\nsummarize = 8000\n")]);
         assert_eq!(
             max_tokens_for_task("summarize", "gemma-4-e2b-it-8bit"),
             8000
@@ -241,12 +232,10 @@ mod tests {
     fn a_family_top_level_cap_narrows_the_budget() {
         // foundation.toml carries max_tokens = 3000 at top level: the whole
         // point of the mechanism (its window covers prompt + OUTPUT).
-        let dir = ConfDir::new();
-        dir.write(
+        let _dir = conf_sandbox(&[(
             "models/foundation.toml",
             "name = \"foundation\"\ncontext_window = 4096\nmax_tokens = 3000\n",
-        );
-        let _g = dir.guard();
+        )]);
         assert_eq!(max_tokens_for_task("think", "foundation"), 3000);
         assert_eq!(
             max_tokens_for_task("think", "foundation-something-else"),
@@ -257,12 +246,10 @@ mod tests {
     #[test]
     #[serial]
     fn a_per_model_section_narrows_below_the_family() {
-        let dir = ConfDir::new();
-        dir.write(
+        let _dir = conf_sandbox(&[(
             "models/gemma_versions.toml",
             "name = \"gemma\"\nmax_tokens = 16000\n\n[models.\"gemma-4-tiny-test\"]\nmax_tokens = 512\n",
-        );
-        let _g = dir.guard();
+        )]);
         assert_eq!(max_tokens_for_task("json", "gemma-4-e2b-it-8bit"), 16000);
         assert_eq!(max_tokens_for_task("json", "gemma-4-tiny-test"), 512);
     }
@@ -272,10 +259,10 @@ mod tests {
     fn a_widening_cap_is_never_applied() {
         // Only ever NARROWS: a per-model entry larger than the task's own
         // limit must not silently override it.
-        let dir = ConfDir::new();
-        dir.write("config.toml", "[max_tokens]\nfilename = 1000\n");
-        dir.write("models/qwen.toml", "name = \"qwen\"\nmax_tokens = 32000\n");
-        let _g = dir.guard();
+        let _dir = conf_sandbox(&[
+            ("config.toml", "[max_tokens]\nfilename = 1000\n"),
+            ("models/qwen.toml", "name = \"qwen\"\nmax_tokens = 32000\n"),
+        ]);
         assert_eq!(max_tokens_for_task("filename", "qwen3.8-27b-8bit"), 1000);
     }
 
@@ -286,13 +273,13 @@ mod tests {
         // carries no family substring, so name matching sends it nowhere --
         // but `ev` recorded its architecture, and trimming qwen3_5_moe ->
         // qwen3_5 -> qwen lands on the file written for it.
-        let dir = ConfDir::new();
-        dir.write("models/qwen.toml", "name = \"qwen\"\nmax_tokens = 8000\n");
-        dir.write(
-            "eval_signals.json",
-            r#"{"bonsai-27b": {"_capabilities": {"family": "qwen3_5_moe"}}}"#,
-        );
-        let _g = dir.guard();
+        let _dir = conf_sandbox(&[
+            ("models/qwen.toml", "name = \"qwen\"\nmax_tokens = 8000\n"),
+            (
+                "eval_signals.json",
+                r#"{"bonsai-27b": {"_capabilities": {"family": "qwen3_5_moe"}}}"#,
+            ),
+        ]);
         // Name matching alone would find no family ("bonsai" matches nothing);
         // the recorded architecture must.
         assert_eq!(
@@ -306,8 +293,9 @@ mod tests {
     #[serial]
     fn default_family_models_get_the_plain_budget() {
         // A name containing no known family has no conf/models file to consult.
-        let dir = ConfDir::new();
-        let _g = dir.guard();
+        // The empty conf root IS the fixture: a model with no entry must find
+        // nothing, and the sandbox is what guarantees it finds nothing HERE.
+        let _env = conf_sandbox(&[]);
         assert_eq!(
             max_tokens_for_task("json", "totally-unknown-model"),
             DEFAULT_MAX_TOKENS

@@ -1,7 +1,22 @@
 //! Unit tests for Rust Weekend Planner module.
 
 use super::*;
+use crate::test_env::TestEnv;
 use crate::ztools::weekend_cache::RegionLists;
+
+/// The config these tests resolve `~/…` defaults through, and the sandbox it
+/// was built under, as ONE binding.
+///
+/// `ZtoolsConfig::default()` names `~/…` for the weekend exclusion list, the
+/// region-evidence lists, the collector checkout and the eval inputs, and
+/// resolves them through `dirs::home_dir()`. `load_exclusions` and
+/// `load_cached_activities` READ that list, so a config built outside the guard
+/// would decide this test's exclusions from whatever home happened to be
+/// current — the exact defect `weekend_fetch_tests::checkout_weekend_toml`
+/// documents, one layer up.
+fn sandboxed_config() -> (TestEnv, crate::config::ZtoolsConfig) {
+    (TestEnv::new(), crate::config::ZtoolsConfig::default())
+}
 
 /// Region lists for title-cleaning tests: inline test data with the tokens
 /// these fixtures rely on. The shipped file's contents are pinned by
@@ -124,7 +139,7 @@ fn test_flag_constant_columns() {
 
     // Same constant, but no suspect value configured: NOT the C4 defect.
     let none: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
-    assert!(flag_constant_columns(&events, &none).is_empty());
+    assert_empty!(flag_constant_columns(&events, &none));
 }
 
 #[test]
@@ -179,16 +194,19 @@ fn test_clean_venue_or_event_title() {
 
 #[test]
 fn test_load_exclusions() {
-    let excl = load_exclusions(&crate::config::ZtoolsConfig::default());
-    assert!(!excl.is_empty());
-    assert!(excl
-        .iter()
-        .any(|e| e.contains("Zoo") || e.contains("Wonderland")));
+    let (_env, config) = sandboxed_config();
+    let excl = load_exclusions(&config);
+    assert_nonempty!(&excl);
+    assert!(
+        excl.iter()
+            .any(|e| e.contains("Zoo") || e.contains("Wonderland"))
+    );
 }
 
 #[test]
 fn test_load_cached_activities() {
-    let (transient, fixed) = load_cached_activities(&crate::config::ZtoolsConfig::default());
+    let (_env, config) = sandboxed_config();
+    let (transient, fixed) = load_cached_activities(&config);
     assert!(!transient.is_empty() || !fixed.is_empty());
 }
 
@@ -197,24 +215,20 @@ fn test_load_cached_activities() {
 /// whether the developer happened to have `~/.config/weekend.toml`.
 #[test]
 fn cached_activities_load_with_no_exclusion_file_configured() {
-    let config = crate::config::ZtoolsConfig {
-        weekend_exclusions_paths: vec![],
-        ..crate::config::ZtoolsConfig::default()
-    };
+    let (_env, mut config) = sandboxed_config();
+    config.weekend_exclusions_paths = vec![];
     let (_, fixed) = load_cached_activities(&config);
-    assert!(!fixed.is_empty());
+    assert_nonempty!(fixed);
 }
 
 /// A configured exclusion file is read, and what it names is removed.
 #[test]
 fn a_configured_exclusion_file_filters_the_curated_list() {
+    let (_env, mut config) = sandboxed_config();
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("weekend.toml");
     std::fs::write(&path, "exclude_places = [\n  \"Kortright\",\n]\n").unwrap();
-    let config = crate::config::ZtoolsConfig {
-        weekend_exclusions_paths: vec![path.to_string_lossy().into_owned()],
-        ..crate::config::ZtoolsConfig::default()
-    };
+    config.weekend_exclusions_paths = vec![path.to_string_lossy().into_owned()];
     let excl = load_exclusions(&config);
     assert_eq!(excl, vec!["Kortright".to_string()]);
     let (_, fixed) = load_cached_activities(&config);

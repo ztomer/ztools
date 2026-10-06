@@ -148,7 +148,7 @@ impl EventRouter {
     /// Returns the total number of handler registrations (all keys + globals).
     #[cfg(test)]
     fn handler_count(&self) -> usize {
-        let specific: usize = self.handlers.values().map(|v| v.len()).sum();
+        let specific: usize = self.handlers.values().map(std::vec::Vec::len).sum();
         specific + self.global_handlers.len()
     }
 
@@ -158,8 +158,7 @@ impl EventRouter {
     pub fn handler_count_for(&self, session_key: &str, method: &str) -> usize {
         self.handlers
             .get(&(session_key.to_owned(), method.to_owned()))
-            .map(|v| v.len())
-            .unwrap_or(0)
+            .map_or(0, std::vec::Vec::len)
     }
 }
 
@@ -195,7 +194,7 @@ mod tests {
         EventMessage {
             method: method.to_owned(),
             params: json!({}),
-            session_id: session_id.map(|s| s.to_owned()),
+            session_id: session_id.map(std::borrow::ToOwned::to_owned),
         }
     }
 

@@ -11,7 +11,7 @@
 //! model or the network, so a dashboard tab can open on it without ever
 //! re-running the pipeline.
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -262,13 +262,18 @@ mod tests {
         assert_eq!(got.file_name().unwrap().to_str().unwrap(), "summary.md");
     }
 
+    /// A path INSIDE this test's own temp dir that nothing creates, so the
+    /// "directory is missing" branch is reached without naming a fixed path
+    /// under the system temp dir — which two `cargo test` runs, or two agent
+    /// sessions on one Mac, would share.
     #[test]
     fn newest_md_states_why_when_directory_is_missing_or_empty() {
-        let missing = std::env::temp_dir().join("ztools_store_no_such_dir");
+        let td = tempfile::tempdir().unwrap();
+        let missing = td.path().join("no_such_dir");
         let e = newest_md(&missing).unwrap_err().to_string();
         assert!(e.contains("not readable"), "got: {e}");
 
-        let (_td, d) = dir_with(&[]);
+        let (_td2, d) = dir_with(&[]);
         let e = newest_md(&d).unwrap_err().to_string();
         assert!(e.contains("no stored summaries"), "got: {e}");
     }
@@ -294,7 +299,8 @@ mod tests {
 
     #[test]
     fn clean_folder_reports_a_missing_directory_without_failing() {
-        let missing = std::env::temp_dir().join("ztools_store_no_such_dir_for_clean");
+        let td = tempfile::tempdir().unwrap();
+        let missing = td.path().join("no_such_dir");
         let report = clean_folder(&missing);
         assert_eq!(report.deleted, 0);
         assert_eq!(report.warnings.len(), 1);

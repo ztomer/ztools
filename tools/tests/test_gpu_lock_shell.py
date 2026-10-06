@@ -24,9 +24,16 @@ from pathlib import Path
 
 import pytest
 
-#: Drives the real tools/osaurus_one.sh against a stubbed PATH and a tmp lock.
-#: Opts out of conftest's no_real_server_restart gate, which matches on the script
-#: name and cannot tell a sandboxed invocation from a live one.
+#: This module drives the real tools/osaurus_one.sh -- the script whose job is to
+#: stop and SIGKILL a 4-35GB server -- so it DECLARES that here. The declaration is
+#: what switches on conftest.py's `no_real_server_restart` fixture, which proves
+#: the sandbox instead of assuming it: `osaurus`/`pgrep`/`lsof`/`curl` are
+#: shadowed by tripwires that must go unused, `ZTOOLS_GPU_LOCK_DIR` is forced at
+#: tmp_path, and the machine-wide lock must come out byte-identical. Without the
+#: marker the fixture is inert; with it, a test here that forgot its PATH stubs
+#: fails instead of reaching whatever the machine happens to be running. (The
+#: marker used to claim it was opting out of a guard that did not exist -- there
+#: was no conftest.py in the repo and every run warned about the unknown mark.)
 pytestmark = pytest.mark.sandboxed_server_script
 
 REPO = Path(__file__).resolve().parent.parent.parent  # tools/tests/ -> repo root
@@ -42,11 +49,10 @@ def sh(body, lock_dir, extra_env=None, cwd=None):
     env.pop("ZTOOLS_GPU_LOCK_OWNER", None)
     env.update(extra_env or {})
     goh = os.environ.get("GOH_DIR", Path.home() / "Projects" / "gates_of_heck")
-    script = (
-        f'source "{goh}/tui/lib.sh"\n'
-        f'source "{REPO}/tools/gpu_lock.sh"\n'
-        f"{body}\n"
-    )
+    script = f'source "{goh}/tui/lib.sh"\nsource "{REPO}/tools/gpu_lock.sh"\n{body}\n'
+    # check=False, and deliberately: the snippet's exit status IS the observation
+    # (a refusal must FAIL), so callers assert on returncode rather than letting
+    # run() raise before the assertion can read what happened.
     # BOUNDED. Without a timeout a snippet that fails to terminate hangs the
     # whole suite with no indication of where: gpu_lock_acquire spun forever
     # once `die` was undefined, and this helper waited for it at 0% CPU until
@@ -54,8 +60,13 @@ def sh(body, lock_dir, extra_env=None, cwd=None):
     # test of a lock.
     try:
         return subprocess.run(
-            ["bash", "-c", script], capture_output=True, text=True,
-            env=env, cwd=str(cwd or REPO), timeout=SHELL_TIMEOUT,
+            ["bash", "-c", script],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=str(cwd or REPO),
+            timeout=SHELL_TIMEOUT,
+            check=False,
         )
     except subprocess.TimeoutExpired as expired:
         raise AssertionError(
@@ -71,8 +82,15 @@ def write_owner(lock_dir, pid, start, label):
 
 
 def live_start_time(pid):
-    out = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)],
-                         capture_output=True, text=True).stdout
+    # check=True, and the opposite decision from sh(): there is no exit status
+    # worth reading here, only the string `ps` printed. A non-zero exit means the
+    # "live peer" this function exists to describe is NOT alive, and returning an
+    # empty string would hand the caller a start time of "" -- which reads as a
+    # RECYCLED pid, so the test would go on to prove the wrong thing about lock
+    # reclamation, quietly.
+    out = subprocess.run(
+        ["ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True, check=True
+    ).stdout
     return " ".join(out.split())
 
 
@@ -94,8 +112,7 @@ class TestTheShellHalfExcludes:
         lock = tmp_path / "gpu.lock"
         peer = os.getppid()
         write_owner(lock, peer, live_start_time(peer), "peer eval")
-        r = sh('gpu_lock_acquire "mine"; echo REACHED', lock,
-               {"GPU_LOCK_TIMEOUT": "0"})
+        r = sh('gpu_lock_acquire "mine"; echo REACHED', lock, {"GPU_LOCK_TIMEOUT": "0"})
         assert r.returncode != 0
         assert "REACHED" not in r.stdout
 
@@ -114,9 +131,7 @@ class TestTheShellHalfExcludes:
     def test_the_trap_releases_on_a_signal(self, tmp_path):
         """Release #1. A killed run must not wedge every eval on the machine."""
         lock = tmp_path / "gpu.lock"
-        sh('trap "gpu_lock_release" EXIT INT TERM\n'
-           'gpu_lock_acquire "mine"\n'
-           'kill -TERM $$', lock)
+        sh('trap "gpu_lock_release" EXIT INT TERM\ngpu_lock_acquire "mine"\nkill -TERM $$', lock)
         assert not lock.exists()
 
 
@@ -125,8 +140,7 @@ class TestTheShellHalfReclaims:
         """Release #2: SIGKILL and crashes run no trap at all."""
         lock = tmp_path / "gpu.lock"
         write_owner(lock, dead_pid(), "Mon Jan 1 00:00:00 2020", "killed run")
-        r = sh('gpu_lock_acquire "mine" && echo ACQUIRED', lock,
-               {"GPU_LOCK_TIMEOUT": "0"})
+        r = sh('gpu_lock_acquire "mine" && echo ACQUIRED', lock, {"GPU_LOCK_TIMEOUT": "0"})
         assert "ACQUIRED" in r.stdout
 
     def test_a_recycled_pid_cannot_impersonate_the_owner(self, tmp_path):
@@ -136,8 +150,7 @@ class TestTheShellHalfReclaims:
         wrong start time."""
         lock = tmp_path / "gpu.lock"
         write_owner(lock, os.getppid(), "Mon Jan 1 00:00:00 2020", "ghost")
-        r = sh('gpu_lock_acquire "mine" && echo ACQUIRED', lock,
-               {"GPU_LOCK_TIMEOUT": "0"})
+        r = sh('gpu_lock_acquire "mine" && echo ACQUIRED', lock, {"GPU_LOCK_TIMEOUT": "0"})
         assert "ACQUIRED" in r.stdout
 
     def test_a_lock_with_no_owner_file_is_stale(self, tmp_path):
@@ -145,8 +158,7 @@ class TestTheShellHalfReclaims:
         alive can ever release."""
         lock = tmp_path / "gpu.lock"
         lock.mkdir()
-        r = sh('gpu_lock_acquire "mine" && echo ACQUIRED', lock,
-               {"GPU_LOCK_TIMEOUT": "0"})
+        r = sh('gpu_lock_acquire "mine" && echo ACQUIRED', lock, {"GPU_LOCK_TIMEOUT": "0"})
         assert "ACQUIRED" in r.stdout
 
     def test_a_live_but_silent_owner_is_reclaimed(self, tmp_path):
@@ -156,8 +168,11 @@ class TestTheShellHalfReclaims:
         write_owner(lock, peer, live_start_time(peer), "wedged peer")
         old = time.time() - 100
         os.utime(lock, (old, old))
-        r = sh('gpu_lock_acquire "mine" && echo ACQUIRED', lock,
-               {"GPU_LOCK_TIMEOUT": "0", "GPU_LOCK_MAX_IDLE": "10"})
+        r = sh(
+            'gpu_lock_acquire "mine" && echo ACQUIRED',
+            lock,
+            {"GPU_LOCK_TIMEOUT": "0", "GPU_LOCK_MAX_IDLE": "10"},
+        )
         assert "ACQUIRED" in r.stdout
 
     def test_a_heartbeat_keeps_a_healthy_long_run_alive(self, tmp_path):
@@ -165,12 +180,15 @@ class TestTheShellHalfReclaims:
         but still holding, because it is still finishing tasks. Without this an
         honest 6-hour eval loses its lock to a peer that then restarts osaurus."""
         lock = tmp_path / "gpu.lock"
-        r = sh('gpu_lock_acquire "mine"\n'
-               f'touch -t 202001010000 "{lock}"\n'
-               '_gpu_lock_expired && echo EXPIRED_BEFORE\n'
-               'gpu_lock_heartbeat\n'
-               '_gpu_lock_expired || echo ALIVE_AFTER', lock,
-               {"GPU_LOCK_MAX_IDLE": "10"})
+        r = sh(
+            'gpu_lock_acquire "mine"\n'
+            f'touch -t 202001010000 "{lock}"\n'
+            "_gpu_lock_expired && echo EXPIRED_BEFORE\n"
+            "gpu_lock_heartbeat\n"
+            "_gpu_lock_expired || echo ALIVE_AFTER",
+            lock,
+            {"GPU_LOCK_MAX_IDLE": "10"},
+        )
         assert "EXPIRED_BEFORE" in r.stdout
         assert "ALIVE_AFTER" in r.stdout
 
@@ -198,8 +216,9 @@ class TestTheShellHalfReportsForeignHolders:
 
     def test_our_own_hold_is_not_foreign(self, tmp_path):
         lock = tmp_path / "gpu.lock"
-        r = sh('gpu_lock_acquire "mine" >/dev/null\n'
-               'printf "[%s]" "$(gpu_lock_foreign_holder)"', lock)
+        r = sh(
+            'gpu_lock_acquire "mine" >/dev/null\nprintf "[%s]" "$(gpu_lock_foreign_holder)"', lock
+        )
         assert r.stdout.strip().endswith("[]")
 
     def test_an_inherited_hold_is_not_foreign(self, tmp_path):
@@ -207,8 +226,9 @@ class TestTheShellHalfReportsForeignHolders:
         lock = tmp_path / "gpu.lock"
         peer = os.getppid()
         write_owner(lock, peer, live_start_time(peer), "parent run")
-        r = sh('printf "[%s]" "$(gpu_lock_foreign_holder)"', lock,
-               {"ZTOOLS_GPU_LOCK_OWNER": str(peer)})
+        r = sh(
+            'printf "[%s]" "$(gpu_lock_foreign_holder)"', lock, {"ZTOOLS_GPU_LOCK_OWNER": str(peer)}
+        )
         assert r.stdout.strip() == "[]"
 
     def test_an_unlabelled_owner_still_reports_as_a_holder(self, tmp_path):
@@ -249,8 +269,8 @@ def stubbed_tools(tmp_path):
     # and killed the pytest process itself (exit 143). A test fixture must not hand
     # the code under test a weapon aimed at the test runner.
     victim = subprocess.Popen(["sleep", "600"])
-    stub("pgrep", f'echo {victim.pid}')
-    stub("lsof", f'echo {victim.pid}')
+    stub("pgrep", f"echo {victim.pid}")
+    stub("lsof", f"echo {victim.pid}")
     stub("curl", "exit 0")
     stub("osaurus", "exit 0")
     try:
@@ -269,9 +289,16 @@ def run_osaurus_one(args, lock_dir, stubs, extra_env=None):
     }
     env.pop("ZTOOLS_GPU_LOCK_OWNER", None)
     env.update(extra_env or {})
+    # check=False: this helper's whole job is to hand back the exit status -- 0 for
+    # a free server, 1 for --check's refusal under a peer, non-zero for a refused
+    # restart -- and three tests assert on exactly those values.
     return subprocess.run(
         ["bash", str(REPO / "tools" / "osaurus_one.sh"), *args],
-        capture_output=True, text=True, env=env, cwd=str(REPO),
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(REPO),
+        check=False,
     )
 
 
@@ -306,16 +333,14 @@ class TestOsaurusOneMutationTakesTheLock:
         assert r.returncode == 0, r.stdout + r.stderr
         assert not lock.exists(), "the lock outlived the run that took it"
 
-    def test_it_refuses_to_touch_a_server_a_peer_is_measuring_on(
-            self, tmp_path, stubbed_tools):
+    def test_it_refuses_to_touch_a_server_a_peer_is_measuring_on(self, tmp_path, stubbed_tools):
         """The headline case. Restarting the single healthy server another
         session is mid-measurement against corrupts that run's numbers just as
         thoroughly as starting a second server would."""
         lock = tmp_path / "gpu.lock"
         peer = os.getppid()
         write_owner(lock, peer, live_start_time(peer), "peer eval")
-        r = run_osaurus_one(["--restart"], lock, stubbed_tools,
-                            {"GPU_LOCK_TIMEOUT": "0"})
+        r = run_osaurus_one(["--restart"], lock, stubbed_tools, {"GPU_LOCK_TIMEOUT": "0"})
         assert r.returncode != 0
         assert "peer eval" in r.stdout + r.stderr
         assert "restart requested" not in r.stdout

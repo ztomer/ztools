@@ -1,6 +1,6 @@
 //! Constant-column (mandated-placeholder) detection.
 
-use crate::ztools::weekend::{flag_constant_columns, WeekendEvent};
+use crate::ztools::weekend::{WeekendEvent, flag_constant_columns};
 use std::collections::HashMap;
 
 use super::support::event;
@@ -58,10 +58,10 @@ fn the_shipped_duration_and_price_constants_are_flagged() {
 /// A constant column that is NOT a configured value is ordinary, not C4.
 #[test]
 fn a_constant_that_is_not_a_configured_value_is_not_flagged() {
-    assert!(
-        flag_constant_columns(&rows_with(4, "target_ages", "all ages"), &suspects("6-13"))
-            .is_empty()
-    );
+    assert_empty!(flag_constant_columns(
+        &rows_with(4, "target_ages", "all ages"),
+        &suspects("6-13")
+    ));
 }
 
 /// A column that varies is not flagged -- a shared word is not the defect.
@@ -70,29 +70,36 @@ fn a_column_that_varies_is_not_flagged() {
     let mut rows = rows_with(3, "target_ages", "6-13");
     rows[1].target_ages = "all ages".into();
     rows[2].target_ages = "8+".into();
-    assert!(flag_constant_columns(&rows, &suspects("6-13")).is_empty());
+    assert_empty!(flag_constant_columns(&rows, &suspects("6-13")));
 }
 
 /// An empty cell is an honest 'unknown'. The guard is load-bearing only when a
 /// suspect list itself contains the empty string.
 #[test]
 fn empty_cells_are_not_a_constant_column() {
-    assert!(flag_constant_columns(&rows_with(4, "target_ages", ""), &suspects("6-13")).is_empty());
+    assert_empty!(flag_constant_columns(
+        &rows_with(4, "target_ages", ""),
+        &suspects("6-13")
+    ));
     let mut pathological = suspects("6-13");
     pathological.insert(
         "Target Age(s)".to_string(),
         vec!["6-13".to_string(), String::new()],
     );
-    assert!(flag_constant_columns(&rows_with(4, "target_ages", ""), &pathological).is_empty());
+    assert_empty!(flag_constant_columns(
+        &rows_with(4, "target_ages", ""),
+        &pathological
+    ));
 }
 
 /// A single row is trivially constant; flagging it would be noise.
 #[test]
 fn one_row_is_never_a_constant_column() {
-    assert!(
-        flag_constant_columns(&rows_with(1, "target_ages", "6-13"), &suspects("6-13")).is_empty()
-    );
-    assert!(flag_constant_columns(&[], &suspects("6-13")).is_empty());
+    assert_empty!(flag_constant_columns(
+        &rows_with(1, "target_ages", "6-13"),
+        &suspects("6-13")
+    ));
+    assert_empty!(flag_constant_columns(&[], &suspects("6-13")));
 }
 
 /// Matching is case and space insensitive: "6-13 " and "2-3 Hours" are the same

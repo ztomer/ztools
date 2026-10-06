@@ -58,13 +58,13 @@ pub fn find_profile_dbs_under(home: &Path) -> Vec<PathBuf> {
         .join("Firefox")
         .join("Profiles");
 
-    if profiles_dir.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(profiles_dir) {
-            for entry in entries.filter_map(std::result::Result::ok) {
-                let cookie_path = entry.path().join("cookies.sqlite");
-                if cookie_path.is_file() {
-                    dbs.push(cookie_path);
-                }
+    if profiles_dir.is_dir()
+        && let Ok(entries) = std::fs::read_dir(profiles_dir)
+    {
+        for entry in entries.filter_map(std::result::Result::ok) {
+            let cookie_path = entry.path().join("cookies.sqlite");
+            if cookie_path.is_file() {
+                dbs.push(cookie_path);
             }
         }
     }

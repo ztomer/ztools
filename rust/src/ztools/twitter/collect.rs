@@ -8,8 +8,8 @@
 
 use chrono::{DateTime, FixedOffset, Utc};
 
-use super::browser_parse::TWITTER_DATE_FORMAT;
 use super::Tweet;
+use super::browser_parse::TWITTER_DATE_FORMAT;
 
 /// Preview widths from `browser.py` — CHARACTER counts, never byte counts.
 /// Slicing a `text` with multi-byte characters by bytes panics; [`take_chars`]
@@ -47,12 +47,11 @@ impl ScrollLimits {
     #[must_use]
     pub fn from_env_or_default() -> Self {
         let mut limits = Self::default();
-        if let Ok(raw) = std::env::var("TWITTER_MAX_RUNTIME_S") {
-            if let Ok(secs) = raw.trim().parse::<f64>() {
-                if secs > 0.0 {
-                    limits.max_runtime_secs = secs;
-                }
-            }
+        if let Ok(raw) = std::env::var("TWITTER_MAX_RUNTIME_S")
+            && let Ok(secs) = raw.trim().parse::<f64>()
+            && secs > 0.0
+        {
+            limits.max_runtime_secs = secs;
         }
         limits
     }
@@ -107,10 +106,10 @@ impl ScrollState {
         }
         self.scrolls += 1;
 
-        if let Some(oldest) = obs.oldest_seen {
-            if oldest < *since {
-                return Some("reached the requested time window".to_owned());
-            }
+        if let Some(oldest) = obs.oldest_seen
+            && oldest < *since
+        {
+            return Some("reached the requested time window".to_owned());
         }
 
         let moved = match (obs.offset, self.last_offset) {
@@ -148,12 +147,12 @@ pub fn take_chars(s: &str, n: usize) -> &str {
 /// Strip an `RT @user: ` prefix the way `RT_PREFIX_RE` does.
 #[must_use]
 pub fn strip_rt_prefix(text: &str) -> &str {
-    if let Some(rest) = text.strip_prefix("RT @") {
-        if let Some(pos) = rest.find(':') {
-            let handle = &rest[..pos];
-            if !handle.is_empty() && handle.chars().all(|c| c.is_alphanumeric() || c == '_') {
-                return rest[pos + 1..].trim_start();
-            }
+    if let Some(rest) = text.strip_prefix("RT @")
+        && let Some(pos) = rest.find(':')
+    {
+        let handle = &rest[..pos];
+        if !handle.is_empty() && handle.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            return rest[pos + 1..].trim_start();
         }
     }
     text
@@ -233,10 +232,10 @@ pub fn resolve_since(since: Option<&str>, now: DateTime<Utc>) -> DateTime<FixedO
             return naive.and_utc().fixed_offset();
         }
     }
-    if let Ok(date) = chrono::NaiveDate::parse_from_str(raw, "%Y-%m-%d") {
-        if let Some(midnight) = date.and_hms_opt(0, 0, 0) {
-            return midnight.and_utc().fixed_offset();
-        }
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(raw, "%Y-%m-%d")
+        && let Some(midnight) = date.and_hms_opt(0, 0, 0)
+    {
+        return midnight.and_utc().fixed_offset();
     }
     fallback.fixed_offset()
 }
@@ -295,12 +294,14 @@ mod tests {
         };
         let since = dt(SINCE);
         let mut st = ScrollState::default();
-        assert!(st
-            .step(&obs(true, Some(100.0)), &since, 0.0, &limits)
-            .is_none());
-        assert!(st
-            .step(&obs(true, Some(200.0)), &since, 1.0, &limits)
-            .is_none());
+        assert!(
+            st.step(&obs(true, Some(100.0)), &since, 0.0, &limits)
+                .is_none()
+        );
+        assert!(
+            st.step(&obs(true, Some(200.0)), &since, 1.0, &limits)
+                .is_none()
+        );
         let reason = st
             .step(&obs(true, Some(300.0)), &since, 2.0, &limits)
             .unwrap();
@@ -312,9 +313,10 @@ mod tests {
         let limits = ScrollLimits::default();
         let since = dt(SINCE);
         let mut st = ScrollState::default();
-        assert!(st
-            .step(&obs(true, Some(1.0)), &since, 0.0, &limits)
-            .is_none());
+        assert!(
+            st.step(&obs(true, Some(1.0)), &since, 0.0, &limits)
+                .is_none()
+        );
         let reason = st
             .step(&obs(true, Some(2.0)), &since, 400.0, &limits)
             .unwrap();
@@ -344,21 +346,26 @@ mod tests {
         let since = dt(SINCE);
         let mut st = ScrollState::default();
         // Two stagnant, then growth resets, then three stagnant stop.
-        assert!(st
-            .step(&obs(false, Some(50.0)), &since, 0.0, &limits)
-            .is_none());
-        assert!(st
-            .step(&obs(false, Some(50.0)), &since, 1.0, &limits)
-            .is_none());
-        assert!(st
-            .step(&obs(true, Some(50.0)), &since, 2.0, &limits)
-            .is_none());
-        assert!(st
-            .step(&obs(false, Some(50.0)), &since, 3.0, &limits)
-            .is_none());
-        assert!(st
-            .step(&obs(false, Some(50.0)), &since, 4.0, &limits)
-            .is_none());
+        assert!(
+            st.step(&obs(false, Some(50.0)), &since, 0.0, &limits)
+                .is_none()
+        );
+        assert!(
+            st.step(&obs(false, Some(50.0)), &since, 1.0, &limits)
+                .is_none()
+        );
+        assert!(
+            st.step(&obs(true, Some(50.0)), &since, 2.0, &limits)
+                .is_none()
+        );
+        assert!(
+            st.step(&obs(false, Some(50.0)), &since, 3.0, &limits)
+                .is_none()
+        );
+        assert!(
+            st.step(&obs(false, Some(50.0)), &since, 4.0, &limits)
+                .is_none()
+        );
         let reason = st
             .step(&obs(false, Some(50.0)), &since, 5.0, &limits)
             .unwrap();
@@ -425,7 +432,7 @@ mod tests {
     fn dedup_unparseable_created_at_is_dropped() {
         let since = dt(SINCE);
         let bad = tweet("a", "hello", "not a date");
-        assert!(collect_dedup(&[bad], &since).is_empty());
+        assert_empty!(collect_dedup(&[bad], &since));
     }
 
     #[test]

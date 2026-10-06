@@ -1,7 +1,9 @@
 //! Unit tests for Rust Image Renamer module.
 
 use super::*;
+use crate::test_env::TestEnv;
 use crate::ztools::rename::vlm;
+use serial_test::serial;
 
 #[test]
 fn test_clean_filename_basic() {
@@ -79,39 +81,45 @@ fn test_is_non_human_readable() {
     assert!(!is_non_human_readable("apple_receipt_august"));
 }
 
+/// The temp dir used to be `temp_dir().join("ztools_test_images")` -- a FIXED
+/// name under the shared system temp dir, so two overlapping `cargo test` runs
+/// on one Mac (and several agent sessions share it) walked each other's
+/// images. `tempfile` makes the name unique by construction.
 #[test]
+#[serial]
 fn test_scan_and_rename() {
-    let temp_dir = std::env::temp_dir().join("ztools_test_images");
-    let _ = std::fs::create_dir_all(&temp_dir);
-    let img_path = temp_dir.join("IMG 9999.png");
-    let _ = std::fs::write(&img_path, b"dummy png");
+    let env = TestEnv::new();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let img_path = temp_dir.path().join("IMG 9999.png");
+    std::fs::write(&img_path, b"dummy png").unwrap();
 
     let config = crate::config::ZtoolsConfig {
         image_renamer_vlm_model: String::new(),
         image_renamer_model: String::new(),
         ..Default::default()
     };
-    let candidates = scan_and_rename(&temp_dir, "*.png", false, 10, &config).unwrap();
+    let candidates = scan_and_rename(temp_dir.path(), "*.png", false, 10, &config).unwrap();
     assert_eq!(candidates.len(), 1);
     assert!(candidates[0].changed);
 
-    let candidates_applied = scan_and_rename(&temp_dir, "*.png", true, 10, &config).unwrap();
+    let candidates_applied = scan_and_rename(temp_dir.path(), "*.png", true, 10, &config).unwrap();
     assert_eq!(candidates_applied.len(), 1);
     assert!(candidates_applied[0].new_path.exists());
 
     let non_exist =
         scan_and_rename(Path::new("/non/existent/dir"), "*", false, 10, &config).unwrap();
-    assert!(non_exist.is_empty());
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
+    assert_empty!(non_exist);
+    drop(env);
 }
 
 #[test]
+#[serial]
 fn test_query_llm_filename_mock_server() {
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::thread;
 
+    let env = TestEnv::new();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
     let base_url = format!("http://{addr}");
@@ -134,17 +142,21 @@ fn test_query_llm_filename_mock_server() {
     let res = query_llm_filename(&base_url, "gemma-4", "Sample Receipt Text", &config);
     assert!(res.is_ok());
     assert_eq!(res.unwrap(), "apple_store_receipt_2026");
+    drop(env);
 }
 
 #[test]
+#[serial]
 fn test_query_vlm_for_filename_mock_server_sends_data_uri() {
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::thread;
 
-    let temp_dir = std::env::temp_dir().join(format!("ztools_vlm_test_{}", std::process::id()));
-    std::fs::create_dir_all(&temp_dir).unwrap();
-    let image_path = temp_dir.join("sample.png");
+    let env = TestEnv::new();
+    // A pid suffix was the workaround for the fixed-name collision; tempfile
+    // is the fix, and it also cleans up.
+    let temp_dir = tempfile::tempdir().unwrap();
+    let image_path = temp_dir.path().join("sample.png");
     std::fs::write(&image_path, b"\x89PNG\r\n\x1a\nfakepngbytes").unwrap();
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -176,8 +188,7 @@ fn test_query_vlm_for_filename_mock_server_sends_data_uri() {
     assert!(payload.contains("llava-test"));
     assert!(payload.contains("data:image/png;base64,"));
     assert!(payload.contains("iVBORw0KGgp")); // base64 of the PNG header
-
-    let _ = std::fs::remove_dir_all(&temp_dir);
+    drop(env);
 }
 
 // Mutant tests for renamer robustness
@@ -357,7 +368,9 @@ fn test_dedupe_path_falls_back_to_input_after_exhaustion() {
 }
 
 #[test]
+#[serial]
 fn test_scan_and_rename_skips_directories() {
+    let env = TestEnv::new();
     let dir = tempfile::tempdir().unwrap();
     std::fs::create_dir(dir.path().join("subdir")).unwrap();
     std::fs::write(dir.path().join("IMG 9999.png"), b"png-ish bytes").unwrap();
@@ -371,6 +384,7 @@ fn test_scan_and_rename_skips_directories() {
 
     assert_eq!(candidates.len(), 1);
     assert_eq!(candidates[0].original, dir.path().join("IMG 9999.png"));
+    drop(env);
 }
 
 /// Serve one canned OpenAI-style chat completion, as the other LLM-layer mocks do.
@@ -401,7 +415,9 @@ fn spawn_single_shot_server(body: &'static str) -> String {
 }
 
 #[test]
+#[serial]
 fn test_name_image_uses_vlm_branch_for_unmeaningful_stem() {
+    let env = TestEnv::new();
     let base_url = spawn_single_shot_server(
         r#"{"choices": [{"message": {"content": "Here is the filename: White Goose Grass"}}]}"#,
     );
@@ -422,10 +438,13 @@ fn test_name_image_uses_vlm_branch_for_unmeaningful_stem() {
     let named = name_image(&img_path, "IMG_9999", 30, &config);
 
     assert_eq!(named, "white_goose_grass");
+    drop(env);
 }
 
 #[test]
+#[serial]
 fn test_name_image_falls_back_to_cleaned_stem_when_vlm_unreachable() {
+    let env = TestEnv::new();
     // Port 1 is unreachable in tests (connection refused, fast): the VLM error
     // must degrade to the plain clean of the stem.
     let config = crate::config::ZtoolsConfig {
@@ -446,4 +465,5 @@ fn test_name_image_falls_back_to_cleaned_stem_when_vlm_unreachable() {
     );
 
     assert_eq!(named, "img_9999");
+    drop(env);
 }

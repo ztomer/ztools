@@ -134,7 +134,7 @@ impl Graded {
 mod tests {
     use super::*;
     use crate::ztools::eval::prompts::{CONTRADICTION_PHRASE, FALSEHOOD_PHRASES};
-    use crate::ztools::eval::task_loader::{check_graded_score, run_check, Check};
+    use crate::ztools::eval::task_loader::{Check, check_graded_score, run_check};
 
     fn strs(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| (*s).to_string()).collect()

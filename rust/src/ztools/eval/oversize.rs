@@ -16,10 +16,23 @@
 //! is unambiguous by comparison -- it describes a machine ALREADY paying for
 //! memory it does not have -- so it is disqualifying on its own, and headroom
 //! is measured against what is RECLAIMABLE.
+//!
+//! BOTH READERS, ON BOTH SUPPORTED PLATFORMS. Headroom used to come from
+//! `vm_stat` alone, so on Linux -- which standing policy still supports -- it
+//! returned `Err` and every measurement on that platform was refused with
+//! "cannot read memory headroom". That is the safe direction, but it is still
+//! the class this module keeps hitting: a supported platform reading nothing.
+//! Linux's `MemAvailable` is the honest counterpart (see
+//! [`meminfo_available_gb_in`]), and `signals_platform` carries the same
+//! argument for the pressure half.
+
+use std::path::Path;
 
 use crate::units::{unsigned, whole_u64};
 use crate::ztools::eval::model_resolve::model_config_path;
-use crate::ztools::eval::signals::{memory_pressure, MAX_CLEAN_COMPRESSOR_GB, MAX_CLEAN_SWAP_GB};
+use crate::ztools::eval::signals::{
+    PROC_MEMINFO, VM_STAT, file_text, memory_pressure, thrashing_verdict, tool_output,
+};
 
 /// Escape hatch for the deliberate case: measuring whether an oversize model
 /// can run here AT ALL is a legitimate experiment; the refusal must not make
@@ -48,17 +61,13 @@ pub fn model_disk_bytes(model: &str) -> Option<u64> {
     let mut total: u64 = 0;
     for entry in std::fs::read_dir(directory).ok()?.flatten() {
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) == Some("safetensors") {
-            if let Ok(meta) = path.metadata() {
-                total += meta.len();
-            }
+        if path.extension().and_then(|e| e.to_str()) == Some("safetensors")
+            && let Ok(meta) = path.metadata()
+        {
+            total += meta.len();
         }
     }
-    if total == 0 {
-        None
-    } else {
-        Some(total)
-    }
+    if total == 0 { None } else { Some(total) }
 }
 
 /// Memory a model needs, in GB, from its weight files where they can be found.
@@ -80,19 +89,16 @@ pub fn estimate_model_memory_gb(model: &str) -> u64 {
             .take_while(char::is_ascii_digit)
             .collect::<String>()
     });
-    if let Some(digits) = start {
-        if let Ok(n) = digits.chars().rev().collect::<String>().parse::<u64>() {
-            return n.max(1);
-        }
+    if let Some(digits) = start
+        && let Ok(n) = digits.chars().rev().collect::<String>().parse::<u64>()
+    {
+        return n.max(1);
     }
     4
 }
 
-fn vm_stat_pages(label: &str) -> Option<f64> {
-    let out = std::process::Command::new("/usr/bin/vm_stat")
-        .output()
-        .ok()?;
-    let text = String::from_utf8_lossy(&out.stdout);
+/// One page counter out of one `vm_stat` reading. Pure over the text.
+fn vm_stat_pages_in(text: &str, label: &str) -> Option<f64> {
     text.lines()
         .find(|l| l.starts_with(label))?
         .split(':')
@@ -112,26 +118,111 @@ fn vm_stat_pages(label: &str) -> Option<f64> {
 /// subtracts and therefore UNDERSTATES reclaimable memory: the safe direction
 /// for a gate whose failure mode is producing a wrong number.
 ///
-/// Returns Err rather than degrading when `vm_stat` cannot be read: "`vm_stat` is
-/// broken" must not become a number that looks fine and is simply wrong.
+/// Returns Err rather than degrading when no headroom reader is available:
+/// "cannot read memory" must not become a number that looks fine and is simply
+/// wrong.
 ///
 /// # Errors
 ///
-/// When `vm_stat` cannot be run, or its output is missing any of the five
-/// page counters this sums. The message names the missing line, because a
-/// changed `vm_stat` format is the likely cause and guessing at it would
-/// report a plausible-looking wrong number instead.
+/// When neither reader on this host could be read, or the one that answered is
+/// missing the fields it needs. The message names what was tried, because the
+/// likely causes are different per platform and guessing at one is how a
+/// refusal becomes an outage nobody can diagnose.
 pub fn reclaimable_available_gb() -> Result<f64, String> {
-    let free = vm_stat_pages("Pages free")
-        .ok_or_else(|| "vm_stat: cannot read 'Pages free'".to_string())?;
-    let inactive = vm_stat_pages("Pages inactive")
-        .ok_or_else(|| "vm_stat: cannot read 'Pages inactive'".to_string())?;
-    let speculative = vm_stat_pages("Pages speculative")
-        .ok_or_else(|| "vm_stat: cannot read 'Pages speculative'".to_string())?;
-    let purgeable = vm_stat_pages("Pages purgeable")
-        .ok_or_else(|| "vm_stat: cannot read 'Pages purgeable'".to_string())?;
-    let file_backed = vm_stat_pages("File-backed pages")
-        .ok_or_else(|| "vm_stat: cannot read 'File-backed pages'".to_string())?;
+    reclaimable_available_gb_from(Path::new(VM_STAT), Path::new(PROC_MEMINFO))
+}
+
+/// [`reclaimable_available_gb`] from injected paths, in the pressure reader's precedence.
+///
+/// `/proc/meminfo` when it exists -- it is a stat, not a spawn, and macOS has no
+/// `/proc` at all, so the order cannot misclassify a real host -- else
+/// `vm_stat`.
+///
+/// # Errors
+///
+/// When the chosen reader is unreadable, or the chosen reader's output is
+/// missing a field. The message names that reader AND says which the other one
+/// is, so a reader on the wrong platform is not left guessing.
+pub fn reclaimable_available_gb_from(vm_stat: &Path, meminfo: &Path) -> Result<f64, String> {
+    if meminfo.exists() {
+        let text = file_text(meminfo).ok_or_else(|| {
+            headroom_read_error(PROC_MEMINFO, &format!("{VM_STAT} (macOS; not this host)"))
+        })?;
+        return meminfo_available_gb_in(&text);
+    }
+    let text = tool_output(vm_stat, &[]).ok_or_else(|| {
+        headroom_read_error(VM_STAT, &format!("{PROC_MEMINFO} (Linux; not this host)"))
+    })?;
+    reclaimable_available_gb_in(&text)
+}
+
+/// The refusal text for a headroom reader that could not be read.
+///
+/// It names the reader that answered `None` AND the one that was not tried
+/// because it does not exist here. A message naming only one of them is the
+/// shape that sends the next reader to the wrong platform.
+fn headroom_read_error(tried: &str, not_here: &str) -> String {
+    format!(
+        "cannot read memory headroom from {tried} on this machine ({not_here} does not exist here)"
+    )
+}
+
+/// Linux headroom: `MemAvailable`, in GiB.
+///
+/// The honest analogue, and the reason this is not a second refusal on a
+/// supported platform: proc(5) defines `MemAvailable` as "an estimate of how much
+/// memory is available for starting new applications, WITHOUT SWAPPING",
+/// computed from `MemFree` plus reclaimable page cache and slab. That is
+/// exactly the quantity the macOS arithmetic above APPROXIMATES by hand -- and
+/// it is the kernel's own figure rather than a sum this repo guesses at, so it
+/// does not inherit the over-subtraction caveat above.
+///
+/// Its limit, stated rather than hidden: it is an ESTIMATE, computed from a
+/// recent-reading watermark and a fraction of page cache, so a box under
+/// pressure can still report more headroom than it can honour. The direction of
+/// that error is toward measuring a model as fitting that does not, which is
+/// the same exposure the thrashing gate exists to catch -- so both are read
+/// together and neither is trusted alone.
+///
+/// # Errors
+///
+/// When `text` has no readable `MemAvailable`, which is a kernel older than 3.14
+/// (the line arrived there) or a truncated read. Named rather than guessed at:
+/// substituting `MemFree` would silently turn "headroom including reclaimable
+/// cache" into "headroom excluding it", understating by gigabytes.
+pub fn meminfo_available_gb_in(text: &str) -> Result<f64, String> {
+    let kib = text
+        .lines()
+        .find_map(|line| line.strip_prefix("MemAvailable:"))
+        .and_then(|rest| rest.split_whitespace().next())
+        .and_then(|value| value.parse::<f64>().ok())
+        .ok_or_else(|| {
+            headroom_read_error(PROC_MEMINFO, &format!("{VM_STAT} (macOS; not this host)"))
+        })?;
+    Ok(kib / (1024.0 * 1024.0))
+}
+
+/// [`reclaimable_available_gb`]'s arithmetic over ONE reading.
+///
+/// It used to spawn `vm_stat` FIVE times, once per page counter, so the five
+/// numbers came from five different moments and their sum described no instant
+/// at all. One reading, one sum.
+///
+/// # Errors
+///
+/// When `text` is missing any of the five page counters this sums. The message
+/// names the missing line, because a changed `vm_stat` format is the likely
+/// cause and guessing at it would report a plausible-looking wrong number
+/// instead.
+pub fn reclaimable_available_gb_in(text: &str) -> Result<f64, String> {
+    let page = |label: &str| {
+        vm_stat_pages_in(text, label).ok_or_else(|| format!("vm_stat: cannot read '{label}'"))
+    };
+    let free = page("Pages free")?;
+    let inactive = page("Pages inactive")?;
+    let speculative = page("Pages speculative")?;
+    let purgeable = page("Pages purgeable")?;
+    let file_backed = page("File-backed pages")?;
 
     let available = (free + inactive + speculative) * PAGE_BYTES / BYTES_PER_GB;
     let active_file_backed =
@@ -144,8 +235,7 @@ pub fn reclaimable_available_gb() -> Result<f64, String> {
 /// "cannot tell", which is not evidence of thrashing either way.
 #[must_use]
 pub fn is_thrashing() -> Option<bool> {
-    let (swap_gb, compressor_gb) = memory_pressure()?;
-    Some(swap_gb > MAX_CLEAN_SWAP_GB || compressor_gb > MAX_CLEAN_COMPRESSOR_GB)
+    thrashing_verdict(memory_pressure())
 }
 
 /// Why this model must not be measured here, or "" to proceed.
@@ -163,14 +253,25 @@ pub fn oversize_refusal(
         return String::new();
     }
 
-    let thrashing = thrashing.unwrap_or_else(|| is_thrashing().unwrap_or_default());
+    // ONE reading, used for BOTH the verdict and the detail. It used to call
+    // `is_thrashing()` and then `memory_pressure()` again: two spawns of
+    // `sysctl` and `vm_stat` each, and a swap figure that crossed
+    // MAX_CLEAN_SWAP_GB between them produced a message describing a state the
+    // machine was never in. An INJECTED verdict needs no reading at all.
+    let injected = thrashing;
+    let pressure = if injected.is_some() {
+        None
+    } else {
+        memory_pressure()
+    };
+    let thrashing = injected.unwrap_or_else(|| thrashing_verdict(pressure).unwrap_or_default());
     if thrashing {
-        let detail = match memory_pressure() {
-            Some((swap, compressor)) => {
-                format!(" (swap {swap:.1}GB, compressor {compressor:.1}GB)")
-            }
-            None => String::new(),
-        };
+        // The reading names its own platform, and a Linux reading says in the
+        // message that swap was the only quantity that gated it. A detail that
+        // read "swap 9.0GB" on both platforms would present a one-signal
+        // conclusion as the two-signal one the macOS message is.
+        let detail =
+            pressure.map_or_else(String::new, |reading| format!(" ({})", reading.describe()));
         return format!(
             "the machine is already paging{detail}. A timing taken here would \
              describe the paging, not the model. Wait for it to settle, or set \
@@ -205,245 +306,5 @@ pub fn oversize_refusal(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use serial_test::serial;
-
-    /// Isolates every disk-seam env var from the operator's real machine and
-    /// restores whatever was there before.
-    struct DiskEnvGuard {
-        saved: Vec<(&'static str, Option<std::ffi::OsString>)>,
-    }
-
-    impl DiskEnvGuard {
-        /// `prev_must_exist` pins one restore branch per test so both arms of
-        /// a save/restore pair are exercised across the suite.
-        fn new(prev_must_exist: bool) -> Self {
-            let keys = ["MLX_MODELS_DIR", "HF_HOME"];
-            if prev_must_exist {
-                for k in keys {
-                    if std::env::var_os(k).is_none() {
-                        std::env::set_var(k, "/nonexistent-previous-value");
-                    }
-                }
-            }
-            let saved = keys.iter().map(|k| (*k, std::env::var_os(k))).collect();
-            Self { saved }
-        }
-
-        fn point_at_empty(dir: &tempfile::TempDir) {
-            std::env::set_var("MLX_MODELS_DIR", dir.path().join("MLXModels"));
-            std::env::set_var("HF_HOME", dir.path().join("hf"));
-        }
-    }
-
-    impl Drop for DiskEnvGuard {
-        fn drop(&mut self) {
-            for (key, prev) in self.saved.drain(..) {
-                match prev {
-                    Some(v) => std::env::set_var(key, v),
-                    None => std::env::remove_var(key),
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn oversize_headroom_branches_are_exact() {
-        // Fits comfortably under the 80% line.
-        assert_eq!(oversize_refusal(10.0, Some(50.0), false, Some(false)), "");
-        // Needs more than 80% of reclaimable.
-        let r = oversize_refusal(28.0, Some(31.0), false, Some(false));
-        assert!(r.contains("needs ~28GB against 31GB reclaimable"), "{r}");
-        assert!(r.contains("limit 80%"), "{r}");
-        // Thrashing disqualifies on its own, regardless of headroom.
-        let r = oversize_refusal(1.0, Some(500.0), false, Some(true));
-        assert!(r.contains("already paging"), "{r}");
-        assert!(
-            !r.contains("cannot read memory headroom"),
-            "injected headroom must not be replaced by a real read"
-        );
-        // `None` is NOT "cannot tell" -- it is "read this machine", and a
-        // unit test must not assert what the box is doing right now: this
-        // line used to say `""` and went red the moment a model sweep was
-        // paging in the background. The cannot-tell branch is
-        // `is_thrashing() == None -> false`, inside the reader, and is the
-        // reader's own test to write.
-        // The deliberate escape hatch wins over everything.
-        assert_eq!(oversize_refusal(28.0, Some(31.0), true, Some(true)), "");
-    }
-
-    /// Sets `key` to `value`, returning the previous value for
-    /// [`restore_env`] -- one shared restore site so both of its arms are
-    /// exercised across the suite.
-    fn replace_env(key: &'static str, value: &str) -> Option<std::ffi::OsString> {
-        let prev = std::env::var_os(key);
-        std::env::set_var(key, value);
-        prev
-    }
-
-    fn restore_env(key: &'static str, prev: Option<std::ffi::OsString>) {
-        match prev {
-            Some(v) => std::env::set_var(key, v),
-            None => std::env::remove_var(key),
-        }
-    }
-
-    #[test]
-    #[serial]
-    fn the_env_override_matches_the_explicit_allow() {
-        std::env::set_var(OVERSIZE_OVERRIDE_ENV, "/nonexistent-sentinel");
-        let prev = replace_env(OVERSIZE_OVERRIDE_ENV, "1");
-        let r = oversize_refusal(28.0, Some(31.0), false, Some(false));
-        restore_env(OVERSIZE_OVERRIDE_ENV, prev);
-        assert_eq!(r, "");
-    }
-
-    #[test]
-    #[serial]
-    fn the_env_override_restore_handles_a_variable_that_was_never_set() {
-        std::env::remove_var(OVERSIZE_OVERRIDE_ENV);
-        let prev = replace_env(OVERSIZE_OVERRIDE_ENV, "1");
-        assert!(prev.is_none(), "the variable was removed above");
-        assert_eq!(oversize_refusal(28.0, Some(31.0), false, Some(false)), "");
-        restore_env(OVERSIZE_OVERRIDE_ENV, prev);
-        assert!(
-            std::env::var_os(OVERSIZE_OVERRIDE_ENV).is_none(),
-            "teardown must leave the operator's environment untouched"
-        );
-    }
-
-    #[test]
-    fn name_fallback_estimates_from_the_parameter_count_not_the_whole_name() {
-        assert_eq!(estimate_model_memory_gb("totally-unknown-model"), 4);
-        // "27b-4bit" and "27b-mxfp8" are BOTH 27 by name; the disk path is what
-        // tells them apart, and this fallback is only for models with no disk.
-        assert_eq!(estimate_model_memory_gb("qwen3.8-27b-4bit-nodisk"), 27);
-        assert_eq!(estimate_model_memory_gb("4m-embedding"), 4);
-        // Uppercase names resolve identically to lowercase ones.
-        assert_eq!(estimate_model_memory_gb("ORNITH-1.0-35B-MXFP8"), 35);
-    }
-
-    #[test]
-    #[serial]
-    fn disk_bytes_come_from_weight_shards_only() {
-        let dir = tempfile::tempdir().unwrap();
-        // models_dir/hf layout via MLX_MODELS_DIR env seam.
-        let models_root = dir.path().join("MLXModels/TestOrg/TestModel-2b");
-        std::fs::create_dir_all(&models_root).unwrap();
-        std::fs::write(models_root.join("config.json"), "{}").unwrap();
-        std::fs::write(models_root.join("model-a.safetensors"), vec![0u8; 1000]).unwrap();
-        std::fs::write(models_root.join("tokenizer.json"), b"noise").unwrap();
-
-        let prev = std::env::var_os("MLX_MODELS_DIR");
-        std::env::set_var("MLX_MODELS_DIR", dir.path().join("MLXModels"));
-        let bytes = model_disk_bytes("testmodel-2b");
-        restore_env("MLX_MODELS_DIR", prev);
-        assert_eq!(bytes, Some(1000), "tokenizers are excluded");
-    }
-
-    #[test]
-    #[serial]
-    fn unknown_models_and_shardless_directories_measure_nothing() {
-        // Removed BEFORE the guard captures, so this test's teardown covers
-        // the never-set restore arm.
-        std::env::remove_var("MLX_MODELS_DIR");
-        std::env::remove_var("HF_HOME");
-        let dir = tempfile::tempdir().unwrap();
-        let guard = DiskEnvGuard::new(false);
-        DiskEnvGuard::point_at_empty(&dir);
-
-        assert_eq!(model_disk_bytes("no-such-model"), None);
-
-        // A directory that exists but holds no weight shards is also nothing:
-        // configs and tokenizers do not make a model loadable.
-        let shardless = dir.path().join("MLXModels/Org/BareModel");
-        std::fs::create_dir_all(&shardless).unwrap();
-        std::fs::write(shardless.join("config.json"), "{}").unwrap();
-        std::fs::write(shardless.join("tokenizer.json"), b"noise").unwrap();
-        assert_eq!(model_disk_bytes("baremodel"), None);
-        assert_eq!(model_disk_bytes("org/baremodel/nested-deeper"), None);
-        drop(guard);
-    }
-
-    #[test]
-    #[serial]
-    fn disk_estimates_round_up_and_never_report_less_than_one_gb() {
-        let dir = tempfile::tempdir().unwrap();
-        let guard = DiskEnvGuard::new(true);
-        DiskEnvGuard::point_at_empty(&dir);
-        let model_dir = dir.path().join("MLXModels/Org/TinyModel");
-        std::fs::create_dir_all(&model_dir).unwrap();
-        std::fs::write(model_dir.join("config.json"), "{}").unwrap();
-        std::fs::write(model_dir.join("w.safetensors"), vec![0u8; 1000]).unwrap();
-        assert_eq!(
-            estimate_model_memory_gb("tinymodel"),
-            1,
-            "1000 bytes rounds up to at least 1GB"
-        );
-
-        let big_dir = dir.path().join("MLXModels/Org/BigModel");
-        std::fs::create_dir_all(&big_dir).unwrap();
-        std::fs::write(big_dir.join("config.json"), "{}").unwrap();
-        std::fs::write(
-            big_dir.join("w1.safetensors"),
-            vec![0u8; 2 * 1024 * 1024 * 1024 + 1],
-        )
-        .unwrap();
-        std::fs::write(
-            big_dir.join("w2.safetensors"),
-            vec![0u8; 1024 * 1024 * 1024],
-        )
-        .unwrap();
-        assert_eq!(
-            estimate_model_memory_gb("bigmodel"),
-            4,
-            "2GiB+1 plus 1GiB sums to just over 3GB and rounds UP"
-        );
-        drop(guard);
-    }
-
-    #[test]
-    fn vm_stat_pages_parses_real_labels_and_rejects_unknown_ones() {
-        let free = vm_stat_pages("Pages free").expect("vm_stat is readable on macOS");
-        assert!(free.is_finite() && free >= 0.0);
-        assert_eq!(vm_stat_pages("No Such Label Exists"), None);
-    }
-
-    #[test]
-    fn reclaimable_available_gb_is_positive_finite_and_sane_on_this_machine() {
-        let gb = reclaimable_available_gb().expect("vm_stat arithmetic must not degrade");
-        assert!(gb.is_finite());
-        assert!(
-            gb > 0.0,
-            "a live machine always has some reclaimable memory"
-        );
-        assert!(
-            gb < 1_000_000.0,
-            "{gb} GB is beyond any real Mac's memory map"
-        );
-    }
-
-    #[test]
-    fn thrashing_verdict_matches_the_live_pressure_reading() {
-        // Wiring check against the public seam: the verdict must be exactly
-        // the threshold comparison applied to whatever memory_pressure sees --
-        // never invented, never defaulted past a None reading.
-        let expected = memory_pressure().map(|(swap, compressor)| {
-            swap > MAX_CLEAN_SWAP_GB || compressor > MAX_CLEAN_COMPRESSOR_GB
-        });
-        assert_eq!(is_thrashing(), expected);
-    }
-
-    #[test]
-    fn refusal_with_uninjected_headroom_measures_the_real_machine() {
-        // A tiny model against this box's actual reclaimable memory must fit;
-        // this exercises the Ok branch of the reclaimable read inside the
-        // refusal itself rather than through an injected value.
-        assert_eq!(
-            oversize_refusal(0.001, None, false, Some(false)),
-            "",
-            "1MB trivially fits any real machine's headroom"
-        );
-    }
-}
+#[path = "oversize_tests.rs"]
+mod tests;

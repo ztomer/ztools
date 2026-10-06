@@ -4,8 +4,9 @@
 //!
 //! 1. **Spawning** ([`unix::spawn`]): Launch the browser with fd 3/4 pipe
 //!    transport configured via `pre_exec` + `dup2`.
-//! 2. **Readiness** ([`readiness::wait_for_ready`]): Watch stderr for the
-//!    `"Juggler listening to the pipe"` sentinel string.
+//! 2. **Readiness** ([`readiness::wait_for_ready`]): Watch stdout for the
+//!    `"Juggler listening to the pipe"` sentinel string. (PROTOCOL.md says
+//!    stderr; the patched build writes stdout — see [`readiness`].)
 //! 3. **Lifecycle** ([`lifecycle::graceful_shutdown`]): Gracefully shut down
 //!    the browser, falling back to `kill` on timeout.
 //!
@@ -33,15 +34,15 @@ pub enum ProcessError {
 
     /// The process exited before the readiness signal was detected.
     ///
-    /// `code` is the exit code (if available), and `stderr` contains any
-    /// output captured from the child's stderr stream before exit.
-    ExitedBeforeReady { code: Option<i32>, stderr: String },
+    /// `code` is the exit code (if available), and `captured` contains any
+    /// output collected from the child's stdout stream before exit.
+    ExitedBeforeReady { code: Option<i32>, captured: String },
 
     /// The readiness timeout expired before the sentinel string appeared.
     ///
-    /// `timeout` is the configured duration and `stderr` contains whatever
-    /// was captured from stderr up to that point.
-    Timeout { timeout: Duration, stderr: String },
+    /// `timeout` is the configured duration and `captured` contains whatever
+    /// was captured from stdout up to that point.
+    Timeout { timeout: Duration, captured: String },
 
     /// Failed to send a kill signal to the process.
     KillFailed(std::io::Error),
@@ -54,24 +55,24 @@ impl fmt::Display for ProcessError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::SpawnFailed(e) => write!(f, "failed to spawn browser process: {e}"),
-            Self::ExitedBeforeReady { code, stderr } => {
+            Self::ExitedBeforeReady { code, captured } => {
                 write!(f, "browser process exited before becoming ready")?;
                 if let Some(c) = code {
                     write!(f, " (exit code {c})")?;
                 }
-                if !stderr.is_empty() {
-                    write!(f, "\nstderr:\n{stderr}")?;
+                if !captured.is_empty() {
+                    write!(f, "\nstdout:\n{captured}")?;
                 }
                 Ok(())
             }
-            Self::Timeout { timeout, stderr } => {
+            Self::Timeout { timeout, captured } => {
                 write!(
                     f,
                     "browser did not become ready within {:.1}s",
                     timeout.as_secs_f64()
                 )?;
-                if !stderr.is_empty() {
-                    write!(f, "\nstderr:\n{stderr}")?;
+                if !captured.is_empty() {
+                    write!(f, "\nstdout:\n{captured}")?;
                 }
                 Ok(())
             }

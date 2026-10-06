@@ -21,7 +21,7 @@
 use std::io::{BufRead, BufReader};
 use std::time::{Duration, Instant};
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::units::{unsigned, whole_u64};
 use crate::ztools::eval::clean::{clean_model_output, extract_json};
@@ -389,10 +389,10 @@ pub fn stream_with_overrun_guard(spec: &RequestSpec) -> TransportResult {
             .get("reasoning_content")
             .and_then(|c| c.as_str())
             .unwrap_or("");
-        if let Some(fr) = choice.get("finish_reason").and_then(|c| c.as_str()) {
-            if !fr.is_empty() {
-                result.finish_reason = fr.to_string();
-            }
+        if let Some(fr) = choice.get("finish_reason").and_then(|c| c.as_str())
+            && !fr.is_empty()
+        {
+            result.finish_reason = fr.to_string();
         }
 
         // The only abort condition.

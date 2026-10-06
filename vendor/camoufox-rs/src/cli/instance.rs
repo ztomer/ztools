@@ -95,7 +95,7 @@ impl Instance {
         *mp.main_frame.execution_context_handle().lock().unwrap() = None;
 
         let options = NavigateOptions {
-            wait_until: wait_until.map(|s| s.to_owned()),
+            wait_until: wait_until.map(std::borrow::ToOwned::to_owned),
             ..Default::default()
         };
 
@@ -158,13 +158,19 @@ impl Instance {
                 .and_then(|r| r.get("value"))
                 .or_else(|| dims.get("value"))
                 .unwrap_or(&dims);
-            let w = arr.get(0).and_then(|v| v.as_f64()).unwrap_or(1280.0);
-            let h = arr.get(1).and_then(|v| v.as_f64()).unwrap_or(720.0);
+            let w = arr
+                .get(0)
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(1280.0);
+            let h = arr
+                .get(1)
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(720.0);
             (w, h)
         };
 
         let mime = match format {
-            Some("jpeg") | Some("jpg") => "image/jpeg",
+            Some("jpeg" | "jpg") => "image/jpeg",
             _ => "image/png",
         };
 
@@ -206,7 +212,7 @@ impl Instance {
 
     /// Shut down this instance.
     pub fn stop(self) -> Result<(), String> {
-        let Instance {
+        let Self {
             browser, mut child, ..
         } = self;
         let _ = browser.close();
@@ -245,7 +251,7 @@ pub struct InstanceManager {
 
 impl InstanceManager {
     pub fn new() -> Self {
-        InstanceManager {
+        Self {
             instances: HashMap::new(),
             contexts: HashMap::new(),
             counter: 0,
@@ -263,9 +269,7 @@ impl InstanceManager {
 
         let config = LaunchConfig {
             executable: PathBuf::from(
-                executable
-                    .map(|s| s.to_owned())
-                    .unwrap_or_else(default_executable),
+                executable.map_or_else(default_executable, std::borrow::ToOwned::to_owned),
             ),
             profile_dir: Some(profile_dir.path().to_owned()),
             headless: headless.unwrap_or(true),
@@ -286,7 +290,7 @@ impl InstanceManager {
         let browser = Browser::connect(conn, session, BrowserOptions::default())
             .map_err(|e| format!("bootstrap failed: {e}"))?;
 
-        let version = browser.version().map(|s| s.to_owned());
+        let version = browser.version().map(std::borrow::ToOwned::to_owned);
 
         // Create a default context.
         let context = browser
@@ -407,10 +411,10 @@ impl InstanceManager {
         inst.screenshot(page_id, format, quality, path, timeout)
     }
 
-    /// Export all cookies for an instance's browser context (including HttpOnly).
+    /// Export all cookies for an instance's browser context (including `HttpOnly`).
     ///
     /// Calls `Browser.getCookies` on the root session with the instance's
-    /// `browserContextId`. HttpOnly cookies are included — the Juggler protocol
+    /// `browserContextId`. `HttpOnly` cookies are included — the Juggler protocol
     /// returns them in the same array as ordinary cookies.
     pub fn cookies(&self, instance_id: &str) -> Result<Vec<serde_json::Value>, String> {
         let ctx = self

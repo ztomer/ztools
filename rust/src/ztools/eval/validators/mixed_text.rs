@@ -40,8 +40,24 @@ const COMMON: &[&str] = &[
 ];
 
 /// Split a mixed prompt into (signal, noise) on the `NOISE` marker.
+///
+/// The marker is matched LINE-ANCHORED, not as a bare substring. The file-summary
+/// prompts now carry seventeen files' own text above their noise block, and
+/// `docs/MODEL_QUIRKS.md` says "clearly-labeled NOISE into the" in prose and
+/// "SNIPPETS/NOISE sections" in a sentence — both inside the signal half. A
+/// substring split would cut at whichever came first, moving every real file into
+/// the noise half and quietly reporting ~0 recall for every model. Every shipped
+/// marker is a line of its own beginning `NOISE (`, so this is the same split on
+/// the same text; it is asserted by the pinned Python-verdict controls in
+/// `mixed_text_tests.rs`, which are unchanged.
 fn split_signal_noise(source_text: &str) -> (&str, &str) {
-    source_text.split_once("NOISE").unwrap_or((source_text, ""))
+    let line_anchored = source_text
+        .match_indices('\n')
+        .find_map(|(i, _)| source_text[i + 1..].starts_with("NOISE").then_some(i + 1));
+    line_anchored.map_or_else(
+        || source_text.split_once("NOISE").unwrap_or((source_text, "")),
+        |at| source_text.split_at(at),
+    )
 }
 
 /// `@sender` handles from `[@Sender | time]:` tweet lines, lowercased.

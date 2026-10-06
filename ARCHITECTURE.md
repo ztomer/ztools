@@ -42,32 +42,62 @@ The project began as Python utilities and is now a single native Rust binary (`z
 
 ```
 ztools/
-├── bin/                    # ab_test — smoke + parity harness for the installed binary
-├── conf/                   # Shared prompt templates and benchmark configs
-│   ├── config.toml         # Benchmark rankings and model slots ([best_models])
-│   ├── prompts.toml        # Canonical LLM prompts across tools
-│   └── weekend.toml        # Excluded venues and default activity seeds
-├── docs/                   # Developer documentation and quality specs
-│   ├── PORT_PARITY.md      # Parity ledger and benchmark comparisons
-│   ├── ROADMAP.md          # Forward-looking backlog (port complete; open items: none)
-│   └── MODEL_QUIRKS.md     # Observed model quirks and workarounds
-├── tests/fixtures/         # Parity fixtures + the frozen Python verdicts the Rust goldens assert
-├── rust/                   # Native Rust crate (ztools)
-│   ├── Cargo.toml          # Rust dependencies (reqwest, serde, clap, chrono, etc.)
-│   └── src/
-│       ├── main.rs         # Application entry point
-│       ├── cli.rs          # Clap CLI definitions
-│       ├── cli_ztools.rs   # Subcommand dispatch logic
-│       ├── config.rs       # Dynamic TOML config loader & model fallbacks
-│       └── ztools/         # Tool subsystem implementations
-│           ├── twitter/    # Browser scraping, embedding clustering, summarization
-│           ├── weekend/    # Weather API, DDG→Bing→Brave search, 4-phase LLM pipeline
-│           ├── rename/     # OCR sanitization, prompt injection defense, VLM naming
-│           ├── eval/       # GPU locks, benchmark runners, validation suites
-│           ├── embeddings.rs # Semantic embedding vector calculations
-│           ├── model_eval.rs # Quality evaluation test cases
-│           └── weekend_cache.rs # Exclusion rules and cached GTA venues
-└── .githooks/              # Local quality gates (pre-commit & pre-push)
+├── .gatesrc                 # THE gate step list (GOH_CI_STEPS); coverage floor 95
+├── .githooks/               # Local quality gates (pre-commit & pre-push)
+├── bin/                     # ab_test — smoke + parity harness for the installed binary
+├── conf/                    # Shared prompt templates, benchmark config, learned signals
+│   ├── config.toml          # Benchmark rankings and model slots ([best_models])
+│   ├── prompts.toml         # Canonical LLM prompts across tools
+│   ├── weekend.toml         # Excluded venues and default activity seeds
+│   ├── eval_inputs.toml, eval_vision.toml, rename.toml, twitter.toml
+│   ├── eval_signals.json    # Per-model learned rates (JSON: outside the 500-line cap)
+│   └── models/<family>.toml # Per-model caps, resolved from eval_signals
+├── docs/                    # Developer documentation and quality specs
+│   ├── TESTING.md           # Test patterns, mock infrastructure, coverage rules
+│   ├── MODEL_QUIRKS.md      # Observed model quirks and workarounds
+│   ├── ROADMAP.md           # Forward-looking backlog: phases L, G, M, R by
+│   │                        # item ID; contract gated by tools/tests/test_roadmap.py
+│   ├── PORT_PARITY.md       # Parity ledger and benchmark comparisons
+│   └── BUGS_twitter_llm_fallback.md, EVALUATION_WORKFLOW.md,
+│       LLM_GUIDANCE_AND_TEACHER_EVAL.md, DEEP_MODEL_VS_GEMINI_EVALUATION.md,
+│       REPORT_WEAKNESS_CLASSES.md, eval_calibration_2026-07-11.md,
+│       eval_baseline.json
+├── eval_tasks/data/         # Task corpora (the taxes snapshots)
+├── pyproject.toml           # ruff (line-length 100) + pytest: testpaths, the
+│                            # sandboxed_server_script marker, unknown marks fatal
+├── routines.toml            # Routine/pipeline definitions (+ routines-twitter.toml)
+├── tests/fixtures/          # Parity fixtures + the frozen Python verdicts the Rust
+│                            # goldens assert: collect_parity, validator_parity,
+│                            # weekend_parity
+├── tools/                   # Dev gates only; nothing here ships
+│   ├── gate.sh              # Declares the toolchains, delegates — holds no gate logic
+│   ├── gpu_lock.sh          # The bash half of the machine-wide GPU lock
+│   ├── osaurus_one.sh       # Enforce exactly one server, under that lock
+│   ├── release.sh           # This repo's release specifics; the kit owns sequencing
+│   ├── sweep_models.sh      # The long model sweep
+│   ├── rerun_truncated.sh   # Resume a truncated sweep
+│   ├── upgrade_tap.py       # Manual/local tap bump (the kit owns the release one)
+│   └── tests/               # pytest over the shell tooling; conftest.py guards it
+├── rust/                    # Native Rust crate (ztools)
+│   ├── Cargo.toml           # THE version source (reqwest, serde, clap, chrono, ...)
+│   ├── src/
+│   │   ├── main.rs          # Application entry point
+│   │   ├── lib.rs
+│   │   ├── cli.rs           # Clap CLI definitions
+│   │   ├── cli_ztools.rs    # Subcommand dispatch logic
+│   │   ├── config.rs        # Dynamic TOML config loader & model fallbacks
+│   │   ├── manifest.rs      # Path helpers
+│   │   ├── units.rs         # Narrowing conversions that are decisions, not incidents
+│   │   └── ztools/          # Tool subsystem implementations
+│   │       ├── twitter/     # Browser scraping, cookie stores, embedding clustering
+│   │       ├── weekend/     # Weather API, DDG→Bing→Brave search, 4-phase LLM pipeline
+│   │       ├── rename/      # OCR sanitization, prompt injection defense, VLM naming
+│   │       ├── eval/        # GPU locks, benchmark runners, validators, watchdog
+│   │       ├── store.rs     # Store directories and read-side access
+│   │       ├── status.rs    # Status for the `routines` harness
+│   │       └── embeddings.rs, model_eval.rs, model_health.rs, llm.rs, weekend_cache.rs
+│   └── tests/               # Integration suites, incl. gpu_lock_shell_parity.rs
+└── vendor/camoufox-rs/      # Third-party crate carried in-tree (excluded from the gate)
 ```
 
 ---
@@ -80,7 +110,7 @@ The Twitter summarizer scrapes your authenticated Following timeline, extracts k
 
 ```
  [User Session Discovery]
-   (Zen / Firefox / Chrome SQLite Cookie Stores)
+   (Firefox-family SQLite cookie stores: Zen / Firefox / LibreWolf / Waterfox)
              │
              ↓
  [Live Browser Collector (browser.rs)]
@@ -103,7 +133,13 @@ The Twitter summarizer scrapes your authenticated Following timeline, extracts k
    (~/Documents/twitter_summaries/YYYY-MM-DD_HHMM_summary.md)
 ```
 
-- **Session Discovery**: Automatically extracts active `auth_token` and `ct0` cookies from Zen Browser, Firefox, LibreWolf, or Google Chrome.
+- **Session Discovery**: Reads `auth_token` and `ct0` from any **Firefox-family** profile
+  under `~/Library/Application Support` — `cookies.rs:89-96` lists `zen`/`Zen`,
+  `Firefox`, `LibreWolf`/`librewolf` and `Waterfox`/`waterfox`, in that preference
+  order. **Chrome is NOT read**: the port dropped that fallback deliberately
+  (`cookies.rs:251-254`) and a Chrome-only user gets a refusal naming
+  `twitter --login` (`native.rs:382`), never a silent downgrade. An earlier version
+  of this doc claimed Chrome support, which the code has never had.
 - **Headless Camoufox Scraping**: Runs an anti-detect Firefox instance to scroll the timeline and intercept live GraphQL tweet batches.
 - **Semantic Clustering**: Clusters related tweets using local embeddings before prompt synthesis to ensure high topical coherence.
 - **Resilience**: Features character-safe UTF-8 signature trimming, 3-second embedding timeouts, non-blocking stdin handling, and `--use-cache` replay.
@@ -170,12 +206,23 @@ Automates regression testing and leaderboard scoring of local LLMs against 30 ch
 
 ## Quality Gates & Git Hooks
 
-Local verification is enforced before code reaches GitHub CI:
+**One step list is the gate of record** — `GOH_CI_STEPS` in `.gatesrc`, run by
+`tools/gate.sh --full`, `make ci`, `tools/release.sh`, the pre-push hook, and
+GitHub Actions (`.github/workflows/ci.yml`, macOS on Apple silicon, every push to
+`main` and every pull request; it clones gates_of_heck at `main` exactly as the
+hooks delegate to it). The step list is in `.gatesrc` and nowhere else:
 
-- **`.githooks/pre-commit`** delegates to `gates_of_heck/gates/structural.sh` (emoji
-  gate with the Kare icon set, 500-line cap for every tracked `.py`/`.rs` with no
-  exemption for tests, conflict markers, shell lint, secrets).
-- **`.githooks/pre-push`** runs `tools/gate.sh --full`, the ONE step list in `.gatesrc`:
-  the house Rust gate (fmt, clippy `-D warnings`, no `#[allow]`), `cargo audit`, emoji,
-  file length, `cargo test`, the tools pytest, and the Rust coverage floor
-  (`cargo llvm-cov --fail-under-lines 94`).
+- **`.githooks/pre-commit`** delegates to `gates_of_heck/gates/structural.sh --staged`
+  (emoji gate with the Kare icon set, 500-line cap for tracked files whose suffix is
+  one of `.rs .py .swift .c .h .cpp .hpp .cc .m .mm .kt .java .go .ts .tsx .js .jsx
+  .sh .bash .rb` — so markdown/JSON/TOML are outside it, conflict markers, shell lint,
+  secrets).
+- **`.githooks/pre-push`** runs the full step list on the commit being pushed, in a
+  clean worktree (`$GOH_DIR/gates/push_gate.sh`). The Rust suite runs once, inside the
+  coverage step (every lib, bin and test target, `--all-features`), which applies a
+  95% floor and per-file floors (`tools/coverage_floors.jsonc`). Not
+  `cargo llvm-cov --fail-under-lines`: the house
+  gate takes ONE lcov export PER TEST TARGET and unions them with a CGU-normalising
+  merger (`gates_of_heck/gates/coverage_gate.sh:212`), because a plain
+  `cargo llvm-cov` emits one record per generic instantiation and reads several
+  points lower (95.65% merged vs ~92% plain, 2026-09-14).

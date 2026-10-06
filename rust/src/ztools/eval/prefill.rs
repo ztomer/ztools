@@ -16,9 +16,9 @@
 use std::time::Instant;
 
 use crate::units::count;
-use crate::ztools::eval::signals::{default_eval_timeout, record_capability_sample, SignalStore};
+use crate::ztools::eval::signals::{SignalStore, default_eval_timeout, record_capability_sample};
 use crate::ztools::eval::task_loader::ChatMessage;
-use crate::ztools::eval::transport::{call, RequestSpec};
+use crate::ztools::eval::transport::{RequestSpec, call};
 
 pub const PREFILL_PROBE_CHARS: usize = 20_000;
 /// Sits above every genuine reading measured on the host (fastest real model

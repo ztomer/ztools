@@ -5,7 +5,7 @@
 use std::time::Duration;
 
 use super::disk::disk_corroborated;
-use super::roster::{RosterEntry, API_TAGS, ROSTER_TIMEOUT_SECS};
+use super::roster::{API_TAGS, ROSTER_TIMEOUT_SECS, RosterEntry};
 
 /// Remove roster entries with nothing on disk behind them.
 ///
@@ -19,11 +19,7 @@ pub(super) fn drop_uncorroborated(entries: Vec<RosterEntry>) -> Vec<RosterEntry>
         .filter(|e| disk_corroborated(&e.model))
         .cloned()
         .collect();
-    if kept.is_empty() {
-        entries
-    } else {
-        kept
-    }
+    if kept.is_empty() { entries } else { kept }
 }
 
 /// Return `/api/tags` entries, or `[]` if the server cannot be asked.

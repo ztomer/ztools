@@ -269,14 +269,14 @@ pub fn correct_weather_labels(mut events: Vec<WeekendEvent>) -> (Vec<WeekendEven
                     ev.name
                 ));
             }
-        } else if weather == "indoor" {
-            if let Some(marker) = OUTDOOR_MARKERS.iter().find(|m| text.contains(*m)) {
-                ev.weather = "outdoor".to_string();
-                notes.push(format!(
-                    "corrected '{}' from 'indoor' to 'outdoor' (name contains {marker:?})",
-                    ev.name
-                ));
-            }
+        } else if weather == "indoor"
+            && let Some(marker) = OUTDOOR_MARKERS.iter().find(|m| text.contains(*m))
+        {
+            ev.weather = "outdoor".to_string();
+            notes.push(format!(
+                "corrected '{}' from 'indoor' to 'outdoor' (name contains {marker:?})",
+                ev.name
+            ));
         }
     }
     (events, notes)

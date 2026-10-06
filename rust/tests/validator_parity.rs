@@ -13,6 +13,14 @@
 //! A change to a validator that moves one of these numbers is a change to the
 //! reference behaviour; if that is intended, regenerate the golden from the
 //! new Rust output deliberately and say so in the diff.
+//!
+//! The `taxes_yoy_narrative` entry is also what pins the SIGNED traceable
+//! match (a real parity defect: abs-ing the reported deltas scored every
+//! honest tax-decrease answer 0/4 against Python's 4/4). Its frozen reason
+//! string is byte-identical to the verdict a one-off `yoy_regression.rs`
+//! pinned for a `/tmp` answer nobody committed, so that test was a no-op on a
+//! clean machine and this fixture already covers it: re-abs the deltas and
+//! `traceable` drops to 0/4 here too.
 
 use serde_json::Value;
 use std::collections::BTreeMap;

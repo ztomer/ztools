@@ -5,6 +5,17 @@
 //! surface the substitution instead of swallowing it, re-derive quirks for the
 //! substitute (a different family), and stay silent when there is no evidence
 //! (non-404, unmarked 404) or when the caller disabled substitution.
+//!
+//! The `thread::sleep` the mock used to take after `bind` was a guess about the
+//! serving thread's scheduling; it is now `support::await_stub`, which waits for
+//! the condition a client actually needs -- a completed handshake -- under a
+//! deadline that names what never happened.
+
+#[path = "support/mod.rs"]
+mod support;
+// See `eval_runner.rs`: the shared module's items are reachable API of this
+// test binary, so one consumer not needing one is not dead code.
+pub use support::*;
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
@@ -12,14 +23,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use ztools::eval::runner::{run_eval, run_eval_with_signals, RunnerConfig};
+use ztools::eval::runner::{RunnerConfig, run_eval, run_eval_with_signals};
 use ztools::eval::task_loader::{Check, EvalTask};
-
-/// A poisoned mutex must not kill a server thread: that turns one failed
-/// request into every subsequent connection hanging out its full timeout.
-fn take_lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
-}
+use ztools::test_env::TestEnv;
 
 const MISSING_BODY: &str = r#"{"error":{"message":"Model 'gone-model' is not installed or registered with any provider."}}"#;
 
@@ -101,7 +107,7 @@ fn serve(
             let _ = stream.flush();
         }
     });
-    thread::sleep(std::time::Duration::from_millis(50));
+    await_stub(port);
     MockServer {
         port,
         _handle: handle,
@@ -272,11 +278,14 @@ fn an_unmarked_404_is_not_evidence_of_a_missing_model() {
 #[test]
 #[serial_test::serial]
 fn the_learning_path_records_signals_and_answers_through_a_substitute() {
-    // Point EVAL_SIGNALS_DIR at a fresh tmp dir so conf/eval_signals.json
-    // (the tracked store) is never dirtied by a test.
-    let dir = tempfile::tempdir().unwrap();
-    let prev = std::env::var_os("EVAL_SIGNALS_DIR");
-    std::env::set_var("EVAL_SIGNALS_DIR", dir.path());
+    // THE GUARD IS THE POINT. This test used to point `EVAL_SIGNALS_DIR` at a
+    // temp dir and leave `EVAL_OUTPUT_DIR` alone, which is the whole defect:
+    // `outputs_dir(None)` falls back to `default_eval_dir()` -- `$HOME/
+    // .config/ztools` -- so `record_signals: true` wrote
+    // `~/.config/ztools/outputs/gone-model/t1.txt` on every suite run,
+    // containing this test's own stub answer. Verified on disk before the fix;
+    // verified ABSENT after it (see the report).
+    let env = TestEnv::new();
 
     // Every dead-tag request fails forever (the substitute always answers):
     // the learning path's prefill probe hits the dead tag BEFORE the evaluated
@@ -298,11 +307,6 @@ fn the_learning_path_records_signals_and_answers_through_a_substitute() {
 
     let outcome = run_eval_with_signals("gone-model", &[task("t1")], &cfg);
 
-    match prev {
-        Some(v) => std::env::set_var("EVAL_SIGNALS_DIR", v),
-        None => std::env::remove_var("EVAL_SIGNALS_DIR"),
-    }
-
     let o = &outcome[0];
     assert_eq!(o.error, None, "substitute should have answered: {o:?}");
     assert_eq!(o.substituted_to.as_deref(), Some("qwen3.8-27b-8bit"));
@@ -311,10 +315,34 @@ fn the_learning_path_records_signals_and_answers_through_a_substitute() {
     // ORIGINAL model name -- the sweep was FOR gone-model; its timings belong
     // to that name even though a stand-in answered (matching Python, which
     // records under the configured key).
-    let text = std::fs::read_to_string(dir.path().join("eval_signals.json")).unwrap();
+    let text = std::fs::read_to_string(env.path("EVAL_SIGNALS_DIR").join("eval_signals.json"))
+        .expect("the signals file is written inside the sandbox");
     let store: serde_json::Value = serde_json::from_str(&text).unwrap();
     assert!(
         store.get("gone-model").is_some(),
         "signals recorded under the configured name: {store}"
     );
+
+    // The half of the fix that would otherwise be invisible: the raw OUTPUT
+    // also lands in the sandbox, under the substituted model's own directory,
+    // and nowhere else. This is the assertion that goes red if `EVAL_OUTPUT_DIR`
+    // ever drops out of the guard -- and, without it, the guard would have to
+    // be re-derived by reading the list again.
+    let output_dir = env.path("EVAL_OUTPUT_DIR");
+    let saved = output_dir.join("gone-model").join("t1.txt");
+    assert!(
+        saved.is_file(),
+        "the raw answer must be saved under the sandboxed output dir, not $HOME: {}",
+        saved.display()
+    );
+    let body = std::fs::read_to_string(&saved).unwrap();
+    assert!(
+        body.starts_with("model: gone-model\ntask: t1\n"),
+        "the saved output carries the model, task and verdict header: {body}"
+    );
+    assert!(
+        body.contains("the answer"),
+        "the stub's answer is what was recorded: {body}"
+    );
+    drop(env);
 }
