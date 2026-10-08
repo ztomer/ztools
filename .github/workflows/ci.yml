@@ -32,9 +32,14 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 60
     env:
-      GOH_DIR: ${{ runner.temp }}/gates_of_heck
       CARGO_TERM_COLOR: never
     steps:
+      # GOH_DIR is set here, not in the job's env: the `runner` context is not
+      # available at job level, and a runner.temp expression there made GitHub reject
+      # the whole file ("workflow file issue", run 37854474001, 2026-10-08).
+      - name: GOH_DIR under the runner's temp
+        run: echo "GOH_DIR=$RUNNER_TEMP/gates_of_heck" >> "$GITHUB_ENV"
+
       # persist-credentials: false on EVERY checkout in this file: by default
       # checkout leaves the job token in git config (http.<host>.extraheader),
       # readable by every later step and refused by the gates_of_heck structural
