@@ -35,7 +35,13 @@ jobs:
       GOH_DIR: ${{ runner.temp }}/gates_of_heck
       CARGO_TERM_COLOR: never
     steps:
+      # persist-credentials: false on EVERY checkout in this file: by default
+      # checkout leaves the job token in git config (http.<host>.extraheader),
+      # readable by every later step and refused by the gates_of_heck structural
+      # gate's no-credential-in-git-config check (2026-10-08).
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Rust toolchain from rust-toolchain.toml
         run: |
