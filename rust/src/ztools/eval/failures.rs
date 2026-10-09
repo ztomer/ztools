@@ -121,6 +121,13 @@ fn transport_failure(error: &str) -> Option<Diagnosis> {
             evidence: "Model did not respond within the task timeout".to_string(),
         });
     }
+    if error.contains("no local vision runtime") {
+        return Some(Diagnosis {
+            category: FAIL_CONTEXT,
+            reason: error.to_string(),
+            evidence: "The model architecture has no vision runtime".to_string(),
+        });
+    }
     None
 }
 
@@ -359,5 +366,12 @@ mod tests {
         let d = classify_failure(None, "{\"a\": 1}", "", "stop", Some(&parsed), 40, true);
         assert_eq!(d.category, FAIL_CONTENT);
         assert_empty!(d.evidence);
+    }
+
+    #[test]
+    fn vision_runtime_error_is_classified_as_context_capability_refusal() {
+        let err = "HTTP 400: {\"error\":{\"message\":\"Request is blocked by local MLX runtime policy: The configured architecture has no local vision runtime.\"}}";
+        let d = diag(Some(err), "", "", 0);
+        assert_eq!(d.category, FAIL_CONTEXT);
     }
 }

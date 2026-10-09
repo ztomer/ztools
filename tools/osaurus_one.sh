@@ -107,10 +107,12 @@ require_commands osaurus lsof pgrep
 #
 # Matched on the app binary path so this does not catch the `osaurus` CLI wrapper
 # or a grep of its own command line.
-OSAURUS_BIN="/Applications/osaurus.app/Contents/MacOS/osaurus"
+OSAURUS_BIN_LOWER="/Applications/osaurus.app/Contents/MacOS/osaurus"
+OSAURUS_BIN_UPPER="/Applications/Osaurus.app/Contents/MacOS/osaurus"
 
 server_pids() {
-  pgrep -f "$OSAURUS_BIN" 2>/dev/null | sort -u || true
+  { pgrep -f "$OSAURUS_BIN_UPPER" 2>/dev/null || true;
+    pgrep -f "$OSAURUS_BIN_LOWER" 2>/dev/null || true; } | sort -u
 }
 
 # The subset that is actually serving, which is a different question.
