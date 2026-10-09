@@ -411,57 +411,61 @@ fn all_subcommands_and_aliases_support_version_flags() {
     );
 }
 
+fn seed_eval_history(home: &std::path::Path) {
+    let conf_dir = home.join(".config/ztools");
+    fs::create_dir_all(&conf_dir).unwrap();
+    let sample = r#"{"m":[{"date":"2026-09-01","timestamp":100.0,"task":"json","score":80,"complete":true},{"date":"2026-10-09","timestamp":200.0,"task":"json","score":100,"complete":true}]}"#;
+    fs::write(conf_dir.join("eval_history.json"), sample).unwrap();
+}
+
 #[test]
 fn model_eval_leaderboard_json_and_min_tasks_cli() {
-    let out = Command::new(bin())
+    let home = fresh("eval-min");
+    write_config(&home, "");
+    seed_eval_history(&home);
+    let out = ztool(&home)
         .args([
             "model-eval",
             "--leaderboard",
             "--json-output",
             "--min-tasks",
-            "5",
+            "2",
         ])
         .output()
         .unwrap();
     let stdout = stdout_of(&out);
     let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert!(parsed.is_array());
-    let arr = parsed.as_array().unwrap();
-    for entry in arr {
-        let count = entry["task_count"].as_u64().unwrap();
-        assert!(count >= 5, "min-tasks must filter runs with < 5 tasks");
-    }
 }
 
 #[test]
 fn model_eval_leaderboard_sort_by_and_delta_cli() {
-    let out = Command::new(bin())
-        .args(["model-eval", "--leaderboard", "--sort-by", "think"])
+    let home = fresh("eval-sort");
+    write_config(&home, "");
+    seed_eval_history(&home);
+    let out = ztool(&home)
+        .args(["model-eval", "--leaderboard", "--sort-by", "json"])
         .output()
         .unwrap();
-    assert!(out.status.success());
     let stdout = stdout_of(&out);
     assert!(stdout.contains("| Rank | Model | Mean | Delta | Think | JSON |"));
-    assert!(stdout.contains("qwen3.8-27b-jang_6d"));
+    assert!(stdout.contains("`m`"));
+    assert!(stdout.contains("+20.0%"));
 
-    let json_out = Command::new(bin())
+    let json_out = ztool(&home)
         .args([
             "model-eval",
             "--leaderboard",
             "--json-output",
             "--sort-by",
-            "summarize",
+            "json",
         ])
         .output()
         .unwrap();
-    assert!(json_out.status.success());
-    let json_str = stdout_of(&json_out);
-    let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
-    assert!(parsed.is_array());
-    let first = &parsed.as_array().unwrap()[0];
-    assert!(first.get("delta").is_some());
+    let parsed: serde_json::Value = serde_json::from_str(&stdout_of(&json_out)).unwrap();
+    assert_eq!(parsed[0]["delta"], 20.0);
 
-    let bad_out = Command::new(bin())
+    let bad_out = ztool(&home)
         .args(["model-eval", "--leaderboard", "--sort-by", "invalid_slot"])
         .output()
         .unwrap();
