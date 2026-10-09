@@ -1,5 +1,5 @@
 name = "qwen"
-timeout = 120
+timeout = 300
 best_for = ["think", "reasoning", "taxes_audit", "fallback"]
 
 [field_mapping]

@@ -177,8 +177,10 @@ pub fn eval_model(
         Duration::from_secs(DEFAULT_MAX_IDLE_SECS),
     );
 
+    let timeout_secs = crate::ztools::eval::model_timeout(model_name)
+        .map_or(config.llm_timeout_secs, |t| t.max(config.llm_timeout_secs));
     let client = Client::builder()
-        .timeout(Duration::from_secs(config.llm_timeout_secs))
+        .timeout(Duration::from_secs(timeout_secs))
         .build()?;
     let url = format!("{}/v1/chat/completions", base_url.trim_end_matches('/'));
 

@@ -190,6 +190,22 @@ pub fn model_best_for(model: &str) -> Vec<String> {
     })
 }
 
+/// The configured timeout for one model: its `[models."<id>"].timeout` section when
+/// present, else the family config's top-level `timeout`.
+#[must_use]
+pub fn model_timeout(model: &str) -> Option<u64> {
+    let cfg = family_config(model)?;
+    let per_model = cfg
+        .get("models")
+        .and_then(|m| m.get(model))
+        .and_then(|section| section.get("timeout"))
+        .and_then(toml::Value::as_integer);
+    per_model
+        .or_else(|| cfg.get("timeout").and_then(toml::Value::as_integer))
+        .filter(|t| *t > 0)
+        .and_then(|t| u64::try_from(t).ok())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -338,5 +354,17 @@ mod tests {
         );
         assert_eq!(model_best_for("qwen-other"), vec!["family_tag".to_string()]);
         assert_eq!(model_best_for("unknown-model"), Vec::<String>::new());
+    }
+
+    #[test]
+    #[serial]
+    fn model_timeout_prefers_specific_model_over_family_default() {
+        let _env = conf_sandbox(&[(
+            "models/qwen.toml",
+            "name = \"qwen\"\ntimeout = 300\n\n[models.\"qwen-fast\"]\ntimeout = 60\n",
+        )]);
+        assert_eq!(model_timeout("qwen-fast"), Some(60));
+        assert_eq!(model_timeout("qwen-other"), Some(300));
+        assert_eq!(model_timeout("unknown-model"), None);
     }
 }

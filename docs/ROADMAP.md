@@ -38,8 +38,8 @@ checked by a gate, so re-derive it before editing it:
 `git log --oneline origin/main..main`, `gh run list --limit 3`,
 `tools/gate.sh --full`, and `"$GOH_DIR/gates/goh.sh" home-paths --exclude ^vendor/`.
 
-- `origin/main` is at commit `64d67f3` in lockstep with local `main`.
-- CI run 37965046457 passed in 8m44s on macOS arm64 (`make ci` clean across all 12 steps).
+- `origin/main` is at commit `2a4b47c` in lockstep with local `main`.
+- CI run 37970396013 passed in 3m21s on macOS arm64 (`make ci` clean across all 12 steps).
   Item `L2` is closed and deleted.
 - Landed today, each proven by a test made to fail first:
   **`L2`** (green CI gate of record on GitHub Actions),
@@ -50,11 +50,11 @@ checked by a gate, so re-derive it before editing it:
   **`M5`** (smoke prompts fit all documented windows), **`G2`** (307 files clean
   under `GOH_NO_HOME_PATHS=1`), **`G3`** (toolchain header cleaned), **`G4`** (CI gate
   tool manifest dynamic install + pinned tsv), **`R1`** (provenance ledger reading).
-- Local verification on commit `64d67f3`:
+- Local verification on commit `2a4b47c`:
   `tools/gate.sh --full` passes all 12 CI steps (coverage floor 95%, clippy, cargo audit,
   cargo deny, structural, pytest, ruff, camoufox tests, and secrets scan),
   `python3 -m pytest tools/tests -q` green (136 passed),
-  `cargo test --manifest-path rust/Cargo.toml --all-features --lib` passes 893 lib tests.
+  `cargo test --manifest-path rust/Cargo.toml --all-features --lib` passes 896 lib tests.
 - All temporary agent sessions (OpenCode and Claude worktrees/caches) are purged.
 
 ## Phase M — what the eval records must mean what it says
