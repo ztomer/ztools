@@ -107,6 +107,13 @@ fn transport_failure(error: &str) -> Option<Diagnosis> {
             evidence: "Server unreachable".to_string(),
         });
     }
+    if error.contains("no local vision runtime") || error.contains("cannot accept image inputs") {
+        return Some(Diagnosis {
+            category: FAIL_CONTEXT,
+            reason: error.to_string(),
+            evidence: "The model architecture has no vision runtime".to_string(),
+        });
+    }
     if is_server_error(error) {
         return Some(Diagnosis {
             category: FAIL_INFRA,
@@ -119,13 +126,6 @@ fn transport_failure(error: &str) -> Option<Diagnosis> {
             category: FAIL_TIMEOUT,
             reason: error.to_string(),
             evidence: "Model did not respond within the task timeout".to_string(),
-        });
-    }
-    if error.contains("no local vision runtime") {
-        return Some(Diagnosis {
-            category: FAIL_CONTEXT,
-            reason: error.to_string(),
-            evidence: "The model architecture has no vision runtime".to_string(),
         });
     }
     None
@@ -373,5 +373,9 @@ mod tests {
         let err = "HTTP 400: {\"error\":{\"message\":\"Request is blocked by local MLX runtime policy: The configured architecture has no local vision runtime.\"}}";
         let d = diag(Some(err), "", "", 0);
         assert_eq!(d.category, FAIL_CONTEXT);
+
+        let err_foundation = "HTTP 500: {\"error\":{\"message\":\"Foundation Models is text-only and cannot accept image inputs. Use an MLX VLM (e.g. Qwen3.5-VL) or a remote provider with vision support.\",\"type\":\"internal_error\"}}";
+        let d2 = diag(Some(err_foundation), "", "", 0);
+        assert_eq!(d2.category, FAIL_CONTEXT);
     }
 }

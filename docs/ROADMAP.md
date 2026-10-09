@@ -38,19 +38,23 @@ checked by a gate, so re-derive it before editing it:
 `git log --oneline origin/main..main`, `gh run list --limit 3`,
 `tools/gate.sh --full`, and `"$GOH_DIR/gates/goh.sh" home-paths --exclude ^vendor/`.
 
-- `origin/main` is at commit `2a4b47c` in lockstep with local `main`.
-- CI run 37970396013 passed in 3m21s on macOS arm64 (`make ci` clean across all 12 steps).
-  Item `L2` is closed and deleted.
+- `origin/main` is at commit `00bf4a1` in lockstep with local `main`.
+- CI run 37979289198 passed in 3m27s on macOS arm64 (`make ci` clean across all 12 steps).
+  Items `L2`, `M4`, and `M6` are closed and deleted.
 - Landed today, each proven by a test made to fail first:
   **`L2`** (green CI gate of record on GitHub Actions),
   **`M1`** (repo-relative file_summary checkout rows), **`M2`** (task identity
   fingerprinting and set-aside history aggregation), **`M3`** (production context-fit
   guard in `rust/src/ztools/llm.rs`, fallback skip down `model_fallback_chain`, and
   live Osaurus 8k window overflow probe documented in `docs/MODEL_QUIRKS.md`),
-  **`M5`** (smoke prompts fit all documented windows), **`G2`** (307 files clean
-  under `GOH_NO_HOME_PATHS=1`), **`G3`** (toolchain header cleaned), **`G4`** (CI gate
-  tool manifest dynamic install + pinned tsv), **`R1`** (provenance ledger reading).
-- Local verification on commit `2a4b47c`:
+  **`M4`** (full-roster sweep across all installed models on 32-task fingerprinted roster,
+  architectural vision refusal diagnosis, `[best_models]` confirmed and cited in `conf/config.toml`,
+  and embedded slot defaults drift test passing),
+  **`M5`** (smoke prompts fit all documented windows),
+  **`M6`** (eval signals re-baselined with fresh task fingerprints in `conf/eval_signals.json`),
+  **`G2`** (307 files clean under `GOH_NO_HOME_PATHS=1`), **`G3`** (toolchain header cleaned),
+  **`G4`** (CI gate tool manifest dynamic install + pinned tsv), **`R1`** (provenance ledger reading).
+- Local verification on commit `00bf4a1`:
   `tools/gate.sh --full` passes all 12 CI steps (coverage floor 95%, clippy, cargo audit,
   cargo deny, structural, pytest, ruff, camoufox tests, and secrets scan),
   `python3 -m pytest tools/tests -q` green (136 passed),
@@ -60,31 +64,30 @@ checked by a gate, so re-derive it before editing it:
 ## Phase M — what the eval records must mean what it says
 
 Depends on nothing. The class for the whole phase: **a stored number that no longer
-describes the thing its name says it describes.** `M1`, `M2`, and `M3` landed together
-on 2026-10-08/09, so what is left is re-running the eval sweep against the tasks as
-they now stand and measuring model injection resistance on the tasks they actually run.
+describes the thing its name says it describes.** `M1` through `M6` landed on
+2026-10-08/09 (task fingerprinting, context guards, full-roster sweeps, and signal
+re-baselining); what remains is managing accumulated superseded samples and automating
+cross-model leaderboard comparisons.
 
-### M4 — Re-sweep, and re-derive `[best_models]`
-- **Class:** a slot winner measured on a task that has since changed.
-- **Why now:** `[best_models].think` (`qwen3.8-27b-jang_6d`) was chosen partly as "the
-  only model above 60 on taxes_audit_readiness and file_summary_mixed together"; that
-  half is unconfirmed. `foundation` is now NOT MEASURED on both file-summary tasks.
-  `docs/MODEL_QUIRKS.md` points here for re-deriving its tables.
-- **Done when:** a full-roster sweep under the final tasks is in the history with
-  current fingerprints, `conf/config.toml`'s slot table and comments cite it, and the
-  embedded-defaults drift test passes against the new slots.
-- **Blocked by:** idle GPU (runs serially through `tools/osaurus_one.sh`).
+### M7 — Prune superseded task samples from eval signals store
+- **Class:** unbounded accumulation of historical sample data.
+- **Why now:** `conf/eval_signals.json` accumulates samples over successive task iterations;
+  now that task fingerprinting isolates active prompt versions, superseded fingerprint
+  samples accumulate indefinitely without contributing to active estimates.
+- **Done when:** `ztools eval-signals --prune` strips records whose fingerprints do not match
+  current task definitions in `eval_tasks/data/`, and a unit test confirms pruned JSON files
+  retain only active task fingerprints.
+- **Blocked by:** nothing.
 
-### M6 — Re-baseline eval signals from the fingerprinted task roster
-- **Class:** learned model timeouts derived from superseded prompt definitions.
-- **Why now:** `conf/eval_signals.json` holds historical samples taken before file
-  contents were included in `file_summary` prompts (`M1`). With `M2` task
-  fingerprinting now filtering mismatched histories, signal samples should be
-  re-accumulated from fresh fingerprinted runs.
-- **Done when:** a full-roster eval run generates fresh samples in
-  `conf/eval_signals.json` matching current task fingerprints, and historical
-  aggregation drift assertions pass.
-- **Blocked by:** `M4`.
+### M8 — Comparative multi-model leaderboard output in model-eval
+- **Class:** manual cross-run aggregation of disjoint eval tables.
+- **Why now:** `ztools model-eval` scores individual models into separate markdown logs;
+  comparing all installed models on the latest fingerprinted roster requires manual
+  inspection of multiple log files.
+- **Done when:** `ztools model-eval --leaderboard` formats the latest clean run of each model
+  into a comparative markdown table ranking overall means and slot scores, covered by a
+  test in `rust/src/ztools/model_eval_tests.rs`.
+- **Blocked by:** nothing.
 
 ## Phase G — gates that still cannot fail
 

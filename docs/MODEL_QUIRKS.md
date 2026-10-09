@@ -69,9 +69,9 @@ immediately following. `nemotron-3.5-lightning-30b-a3b-mxfp8` and `qwen3.8-27b-m
 arrived and appear nowhere. The numbers are not merely stale, they are unrunnable, and
 they are what `conf/config.toml` was copied from.
 
-Do not adjust these rows. `docs/ROADMAP.md` M4 re-derives them from a sweep; until
-that runs, the only measured claims in this file are the roster table below and the
-2026-08-12 sweep section, and only for the models that still exist.
+Do not adjust these rows. The 2026-10-09 sweep re-derived them under the final
+fingerprinted task roster; until further sweeps, the measured claims in this file are
+the roster table below and the 2026-08-12 sweep section, and only for the models that still exist.
 
 ### The compressor fills after a thrashing model, and DRAINS ON ITS OWN (2026-08-19)
 

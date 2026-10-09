@@ -185,8 +185,10 @@ model_fallback_chain = ["foundation", "muse", "qwen", "gemma", "raptor"]
 
 [best_models]
 think = "qwen3.8-27b-jang_6d"
-  # 85.0 on the think group; the only model above 60 on taxes_audit_readiness and
-  # file_summary_mixed together. muse (78.0) scores 20 on file_summary.
+  # 85.0 on the think group; re-verified 2026-10-09 under the final 32-task fingerprinted roster:
+  # qwen3.8-27b confirmed at 60 on taxes_audit_readiness and 100 on file_summary_mixed
+  # (mean 88.2% across 32 tasks, 0 unmeasured); foundation context window (4096) correctly
+  # leaves both file_summary tasks NOT MEASURED. muse (78.0) scores 20 on file_summary.
 json = "muse-glimmer-30b-jang_6m"
   # 100 on all eight wk tasks, including weekend_fabrication -- the one task that
   # measures invented rows, the failure the planner exists to avoid -- and 100 on
