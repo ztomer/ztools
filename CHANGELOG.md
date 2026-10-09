@@ -6,12 +6,12 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
-## Unreleased — a reading nobody took is never a score _(2026-10-05/09)_
+## v3.3.0 — a reading nobody took is never a score _(2026-10-09)_
 
 The theme is one class: a value that was never measured arrived in front of a
-reader looking like one that was. **967 Rust tests, 123 tools tests, clippy
-`-D warnings` clean on stable (1.99) and on the 1.93.1 MSRV, coverage 96.85%
-(16409/16943) with per-file floors enforced.**
+reader looking like one that was. **896 Rust lib tests, 136 tools tests, clippy
+`-D warnings` clean on stable and on the 1.93.1 MSRV, coverage >= 95%
+with per-file floors enforced.**
 
 ### Fixed — things that were wrong, not merely untidy
 - **A model run that measured nothing exited 0 and printed a table of 0.0%.**
@@ -160,8 +160,20 @@ reader looking like one that was. **967 Rust tests, 123 tools tests, clippy
   would also have exempted any first-party path containing it, silently.
 - `tools/tests/test_ab_test_comparator.py` (12 tests) for `bin/ab_test`'s
   comparator.
+- **Model family `best_for` tags and capability probing.** All model configurations
+  under `conf/models/` declare descriptive `best_for` metadata tags plumbed to
+  `model_best_for()` and surfaced via `ztools model-eval --capabilities` to inspect
+  the model matrix without running tasks.
+- **Architectural vision refusal classification.** Evaluator transport diagnosis
+  in `rust/src/ztools/eval/failures.rs` classifies MLX and Apple Foundation Models
+  image rejections as `FAIL_CONTEXT` capability refusals, allowing text-only models
+  to sweep the 32-task suite cleanly without registering spurious infra outages.
+- **Full-roster sweeps on fingerprinted task suite (`M4`) and signals re-baselining (`M6`).**
+  All installed Osaurus models swept under `tools/sweep_models.sh`, re-confirming
+  `[best_models]` slot winners in `conf/config.toml` and populating
+  `conf/eval_signals.json` with fresh samples matching active task fingerprints.
 
-## Unreleased — dependency currency, and a gate that can fail again _(2026-10-04)_
+### Dependency currency, and a gate that can fail again _(2026-10-04)_
 
 The audit behind this is `docs/ROADMAP.md` phases A/B/C. The gate of record was
 RED when this started (`clippy -D warnings` exit 101, 72 findings left by the
