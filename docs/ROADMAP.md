@@ -38,8 +38,8 @@ checked by a gate, so re-derive it before editing it:
 `git log --oneline origin/main..main`, `gh run list --limit 3`,
 `tools/gate.sh --full`, and `"$GOH_DIR/gates/goh.sh" home-paths --exclude ^vendor/`.
 
-- `origin/main` is at commit `00bf4a1` in lockstep with local `main`.
-- CI run 37979289198 passed in 3m27s on macOS arm64 (`make ci` clean across all 12 steps).
+- `origin/main` is at commit `ef5cab2` in lockstep with local `main`.
+- CI run 37991205689 passed in 3m23s on macOS arm64 (`make ci` clean across all 12 steps).
   Items `L2`, `M4`, and `M6` are closed and deleted.
 - Landed today, each proven by a test made to fail first:
   **`L2`** (green CI gate of record on GitHub Actions),
