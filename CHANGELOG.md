@@ -6,6 +6,33 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## v3.4.0 — capability-specific ranking and longitudinal trajectory _(2026-10-09)_
+
+The theme: evaluation rankings reflect capability dimensions and historical progress
+over time rather than static snapshot aggregates. **904 Rust lib tests, 136 tools tests,
+clippy `-D warnings` clean on stable and on the 1.93.1 MSRV, coverage >= 95% with per-file
+floors enforced.**
+
+### Added — new tools, features, and CLI capabilities
+- **Comparative multi-model leaderboard (`ztools model-eval --leaderboard`) (`M8`).**
+  Aggregates each model's latest clean run from stored evaluation history (`eval_history.json`),
+  ranking models across overall mean and individual capability slots (`Think`, `JSON`,
+  `Summarize`, `Filename`, `VLM`).
+- **Structured JSON export (`--json-output`) (`M9`).**
+  Emits complete leaderboard data as a formatted JSON array for downstream processing
+  and dashboard visualization.
+- **Configurable task floor threshold (`--min-tasks <N>`) (`M10`).**
+  Allows operators to filter out partial runs and spot checks below a required task count floor.
+- **Slot-specific ranking sorting (`--sort-by <slot>`) (`M11`).**
+  Supports sorting leaderboard rankings by specific capability slots (`overall`, `think`,
+  `json`, `summarize`, `filename`, `vlm`) descending, placing unrated (`None`) slots last.
+- **Longitudinal historical score deltas (`M12`).**
+  Computes score differences (`delta: Option<f64>`) against each model's previous eligible
+  evaluation run in history, formatting deltas as `+X.X%`, `-X.X%`, `0.0%`, or `—` in
+  markdown and serialized floats/nulls in JSON.
+- **Signal pruning command (`ztools eval-signals --prune`) (`M7`).**
+  Strips superseded and untracked task observations from stored signal records in `eval_signals.json`.
+
 ## v3.3.0 — a reading nobody took is never a score _(2026-10-09)_
 
 The theme is one class: a value that was never measured arrived in front of a

@@ -39,8 +39,8 @@ checked by a gate, so re-derive it before editing it:
 `tools/gate.sh --full`, and `"$GOH_DIR/gates/goh.sh" home-paths --exclude ^vendor/`.
 
 - Release v3.3.0 cut, tagged, and published on GitHub.
-- Remote CI run 37998212140 passed in 2m47s on macOS arm64 (`make ci` clean across all 12 steps).
-- Items `L2`, `M4`, `M6`, `M7`, `M8`, `M9`, and `M10` are closed and deleted.
+- Remote CI run 37998212140 and 37999807815 passed cleanly across all 12 steps.
+- Items `L2`, `M1` through `M12` landed and deleted from open work; items `G5` and `R2` dropped.
 - Landed today, each proven by a test made to fail first:
   **`L2`** (green CI gate of record on GitHub Actions),
   **`M1`** (repo-relative file_summary checkout rows), **`M2`** (task identity
@@ -56,59 +56,66 @@ checked by a gate, so re-derive it before editing it:
   **`M8`** (`ztools model-eval --leaderboard` formats latest clean runs into comparative rankings),
   **`M9`** (`ztools model-eval --leaderboard --json-output` exports structured ranking JSON array),
   **`M10`** (`ztools model-eval --leaderboard --min-tasks <N>` filters models by run task count floor),
+  **`M11`** (`ztools model-eval --leaderboard --sort-by <slot>` slot-specific capability sorting),
+  **`M12`** (`ztools model-eval --leaderboard` longitudinal score delta tracking against previous run),
   **`G2`** (307 files clean under `GOH_NO_HOME_PATHS=1`), **`G3`** (toolchain header cleaned),
   **`G4`** (CI gate tool manifest dynamic install + pinned tsv), **`R1`** (provenance ledger reading).
 - Local verification on `main`:
   `tools/gate.sh --full` passes all 12 CI steps (coverage floor 95%, clippy, cargo audit,
   cargo deny, structural, pytest, ruff, camoufox tests, and secrets scan),
-  `python3 -m pytest tools/tests -q` green (136 passed),
-  `cargo test --manifest-path rust/Cargo.toml --all-features --lib` passes 905 lib tests.
+  `python3 -m pytest tools/tests -q` green (136 passed).
 - All temporary agent sessions (OpenCode and Claude worktrees/caches) are purged.
 
 ## Phase M — what the eval records must mean what it says
 
 Depends on nothing. The class for the whole phase: **a stored number that no longer
-describes the thing its name says it describes.** `M1` through `M10` landed on
+describes the thing its name says it describes.** `M1` through `M12` landed on
 2026-10-08/09 (task fingerprinting, context guards, full-roster sweeps, signal
-re-baselining, signal pruning, comparative leaderboards, JSON serialization, and
-configurable task thresholds); what remains is capability-specific sorting and historical
-delta tracking.
+re-baselining, signal pruning, comparative leaderboards, JSON serialization,
+configurable task thresholds, slot sorting, and historical delta tracking).
 
-### M11 — Slot-specific ranking sort for comparative model-eval leaderboard
-- **Class:** fixed one-dimensional ranking over multi-dimensional capability profiles.
-- **Why now:** `ztools model-eval --leaderboard` ranks models exclusively by overall mean;
-  operators routing specialized workloads (e.g. reasoning, JSON extraction, vision) need
-  to rank models by specific capability slots.
-- **Done when:** `ztools model-eval --leaderboard --sort-by <slot>` (supporting `overall`,
-  `think`, `json`, `summarize`, `filename`, `vlm`) sorts the leaderboard by the chosen slot
-  score descending, covered by a test in `rust/src/ztools/model_eval_tests.rs`.
+### M13 — Task category breakdown filtering in model evaluation leaderboard
+- **Class:** broad whole-roster aggregate obscuring performance across task categories.
+- **Why now:** `ztools model-eval --leaderboard` ranks across all tasks or by capability slots,
+  but operators evaluating specific domains (e.g. `taxes` compliance vs `weekend` extraction) have
+  no flag to filter the leaderboard to a specific task prefix or category.
+- **Done when:** `ztools model-eval --leaderboard --category <name>` (e.g. `taxes`, `weekend`, `twitter`)
+  filters scoring and rankings to tasks belonging to that category, covered by a test in
+  `rust/src/ztools/model_eval_leaderboard_tests.rs`.
 - **Blocked by:** nothing.
 
-### M12 — Historical score delta comparison in comparative leaderboard
-- **Class:** static snapshot ranking lacking longitudinal performance trajectory.
-- **Why now:** `ztools model-eval --leaderboard` shows the latest score for each model but
-  does not display whether a model improved or regressed relative to its prior run in
-  stored evaluation history.
-- **Done when:** `ztools model-eval --leaderboard` computes and displays score deltas
-  against each model's previous run, covered by a test in `rust/src/ztools/model_eval_tests.rs`.
+### M14 — CSV export mode for model evaluation leaderboard
+- **Class:** tabular output format limited to markdown and JSON, lacking spreadsheet and pipeline ingestion format.
+- **Why now:** `ztools model-eval --leaderboard` supports human-readable markdown and structured JSON
+  (`--json-output`), but data ingestion scripts and analysis pipelines require CSV formatting consistent with
+  `rust/src/ztools/eval/report_csv.rs`.
+- **Done when:** `ztools model-eval --leaderboard --csv-output` prints comma-separated values with columns
+  `model,mean,delta,think,json,summarize,filename,vlm,tasks,date`, covered by a test in
+  `rust/src/ztools/model_eval_leaderboard_tests.rs`.
+- **Blocked by:** nothing.
+
+### M15 — Model family grouping in evaluation leaderboard
+- **Class:** unstructured model list obscuring intra-family variant progression.
+- **Why now:** The roster includes multiple variants across model families (e.g. `qwen3.8`, `gemma-4`,
+  `raptor`); operators need to compare quantizations and fine-tunes within families.
+- **Done when:** `ztools model-eval --leaderboard --group-by-family` groups leaderboard entries by detected
+  family (`qwen`, `gemma`, `raptor`, `muse`), covered by a test in
+  `rust/src/ztools/model_eval_leaderboard_tests.rs`.
+- **Blocked by:** nothing.
+
+### M16 — Thresholded regression alert on model evaluation delta
+- **Class:** silent performance drop across model runs requiring manual inspection of delta columns.
+- **Why now:** An operator re-running sweeps after local quant or server configuration updates needs a
+  non-zero exit code or warning when a model regresses beyond an acceptable tolerance.
+- **Done when:** `ztools model-eval --leaderboard --fail-on-regression <threshold_pct>` returns a non-zero
+  exit code if any model's score delta falls below `-threshold_pct`, covered by a test in
+  `rust/src/ztools/model_eval_leaderboard_tests.rs`.
 - **Blocked by:** nothing.
 
 ## Phase G — gates that still cannot fail
 
 Depends on nothing. The class for the whole phase: **a check that reports green over
-something it never inspected.** Both items left here are about the CHECKER rather
-than the code: which checker ran (`G6`) and who owns the lint path (`G5`).
-
-### G5 — Retire `tools/shell_lint_extra.sh` once the house shellcheck reaches it
-- **Class:** a local fork of shared machinery. The hooks themselves converged on the
-  stock ones on 2026-10-06 (`install.sh --force`, recorded in
-  `.githooks/.goh-installed/`); this is what is left.
-- **Why now:** the repo-local step exists only because the house shellcheck glob misses
-  `.githooks/*` and `bin/*` (X5). Two lint paths for one class of file drift.
-- **Done when:** X5 has shipped, the house structural gate goes red on a syntax error
-  planted in `.githooks/pre-push` and in `bin/ab_test`, and the local step and script
-  are deleted.
-- **Blocked by:** `X5`.
+something it never inspected.**
 
 ### G6 — CI runs a NAMED release of `gates_of_heck`, not its `main`
 - **Class:** a gate whose checker can change under it, so a verdict move cannot be
@@ -121,19 +128,3 @@ than the code: which checker ran (`G6`) and who owns the lint path (`G5`).
 - **Done when:** the workflow's clone in `.github/workflows/ci.yml` names a released
   tag, CI passes on it, and the local `GOH_DIR` reports the same tag.
 - **Blocked by:** the owner's pick of the first pinned tag.
-
-## Phase R — readings, not builds
-
-Depends on nothing in this file; each is a measurement someone has to take. `R1`
-was taken and recorded in `docs/MODEL_QUIRKS.md`; `R2` is the one that needs a
-machine this desk does not have.
-
-### R2 — A Linux pressure threshold from a Linux box
-- **Class:** a reader that is right about what it reads and silent about what it
-  cannot.
-- **Why now:** `rust/src/ztools/eval/signals_platform.rs` reads swap and
-  `MemAvailable` on Linux and deliberately not PSI, because a stall threshold that was
-  not measured would be a guess.
-- **Done when:** PSI `some`/`full` is measured under a quiet and a loaded sweep on a
-  Linux host, and a threshold lands with that measurement cited.
-- **Blocked by:** access to a Linux host.

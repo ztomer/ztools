@@ -432,3 +432,43 @@ fn model_eval_leaderboard_json_and_min_tasks_cli() {
         assert!(count >= 5, "min-tasks must filter runs with < 5 tasks");
     }
 }
+
+#[test]
+fn model_eval_leaderboard_sort_by_and_delta_cli() {
+    let out = Command::new(bin())
+        .args(["model-eval", "--leaderboard", "--sort-by", "think"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stdout = stdout_of(&out);
+    assert!(stdout.contains("| Rank | Model | Mean | Delta | Think | JSON |"));
+    assert!(stdout.contains("qwen3.8-27b-jang_6d"));
+
+    let json_out = Command::new(bin())
+        .args([
+            "model-eval",
+            "--leaderboard",
+            "--json-output",
+            "--sort-by",
+            "summarize",
+        ])
+        .output()
+        .unwrap();
+    assert!(json_out.status.success());
+    let json_str = stdout_of(&json_out);
+    let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+    assert!(parsed.is_array());
+    let first = &parsed.as_array().unwrap()[0];
+    assert!(first.get("delta").is_some());
+
+    let bad_out = Command::new(bin())
+        .args(["model-eval", "--leaderboard", "--sort-by", "invalid_slot"])
+        .output()
+        .unwrap();
+    assert!(!bad_out.status.success());
+    let stderr = String::from_utf8_lossy(&bad_out.stderr);
+    assert!(
+        stderr.contains("invalid sort slot 'invalid_slot'"),
+        "{stderr}"
+    );
+}

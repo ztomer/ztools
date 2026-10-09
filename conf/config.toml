@@ -88,25 +88,21 @@ llm_url = "http://localhost:1337"
 # bad number permanent.
 #
 # Re-derive after any roster change and stamp the date, so it invalidates visibly.
-# RE-DERIVED 2026-09-19 from the first complete sweep under the PRODUCTION regime
-# (thinking OFF -- `model-eval` default since v3.1.0; every earlier number in this file
-# and in docs/MODEL_QUIRKS.md was measured with reasoning on, and is not comparable).
-# All ten rankable installed models, 30 tasks each, one quiet box (the browser that
-# had it paging was quit first). Scores in ~/.config/ztools/eval_history.json.
+# RE-DERIVED 2026-10-09 from the 32-task fingerprinted roster under the PRODUCTION regime
+# (thinking OFF). Historical score delta comparison tracking enabled (M12). Scores in
+# ~/.config/ztools/eval_history.json.
 #
-#     model                          mean zeros  json  summ  fname think  vlm  inject  time
-#     muse-glimmer-30b-jang_6m       90.0   1    100   79.3   100   78.0  100   100   2302s
-#     qwen3.8-27b-jang_6d            88.1   2     96.9  64.7   100   85.0  100   100   1968s
-#     qwen3.8-27b-jang_6d-crack      87.1   2     96.9  64.7   100   81.2  100   100   1654s
-#     gemma-4-e4b-it-8bit            86.0   2     87.5  79.3   100   81.9  100    50    345s
-#     raptor-v0.5-8b-a1b-jang_6m     85.8   2    100    92.8   100   77.0   67     0    132s
-#     bonsai-2-27b-crack-ternary     82.3   2     96.9  53.5   100   78.0  100    50   1081s
-#     raptor-v1-26b-a4b-vl-jang      82.0   3     87.5  88.8   100   65.8  100     0    425s
-#     gemma-4-12b-it-mxfp8           80.0   4     87.5  81.3   100   64.1  100     0    768s
-#     foundation                     74.9   3     86.1  84.2   100   57.4   64     0    359s
-#     lfm2.5-350m-optiq-4bit         28.7  15     18.8  33.0    35   32.6   37     0     11s
-#     lfm2.5-2.6b-4bit               could not load ("Unhandled keys [language_model]
-#                                    in LFM2Model"); deleted 2026-09-19
+#     Rank  Model                             Mean   Delta  Think   JSON   Summ  Fname    VLM  Tasks
+#        1  muse-glimmer-30b-jang_6m         90.0%       —  78.0% 100.0%  79.3% 100.0% 100.0%     30
+#        2  qwen3.8-27b-jang_6d-crack        88.2%   +1.1%  82.5%  97.2%  69.7% 100.0% 100.0%     32
+#        3  qwen3.8-27b-jang_6d              88.1%       —  85.0%  96.9%  64.7% 100.0% 100.0%     30
+#        4  raptor-v0.5-8b-a1b-jang_6m       85.9%   -1.5%  66.0% 100.0%  90.7%  80.0% 100.0%     31
+#        5  gemma-4-e4b-it-8bit              84.2%   -1.8%  83.5%  88.9%  68.0%  90.0% 100.0%     32
+#        6  bonsai-2-27b-crack-ternary-jang  82.3%       —  78.0%  96.9%  53.5%  90.0% 100.0%     30
+#        7  raptor-v1-26b-a4b-vl-jang        82.0%       —  65.8%  87.5%  88.8%  80.0% 100.0%     30
+#        8  foundation                       77.6%    0.0%  61.5%  76.0%  86.4%  80.0%  96.5%     29
+#        9  gemma-4-12b-it-mxfp8             76.5%   -3.5%  66.0%  77.8%  74.4%  80.0% 100.0%     32
+#       10  lfm2.5-350m-optiq-4bit           27.8%   -0.9%  32.6%  16.7%  28.3%  28.0%  56.0%     31
 #
 # HOW THESE ARE CHOSEN (unchanged rule). Each slot is scored ONLY over the eval tasks
 # its own consumer exercises:

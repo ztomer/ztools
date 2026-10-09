@@ -1,12 +1,12 @@
-//! Unit tests for multi-model leaderboard generation and ranking (`M8`).
+//! Unit tests for multi-model leaderboard generation, slot sorting, and delta tracking (`M8`, `M11`, `M12`).
 
 use crate::ztools::eval::leaderboard::{format_leaderboard, generate_leaderboard, task_slot};
 use crate::ztools::eval::report::HistoryEntry;
 use std::collections::BTreeMap;
 
-fn model_a_history() -> Vec<HistoryEntry> {
+fn model_a_prior_runs() -> Vec<HistoryEntry> {
     vec![
-        // Older clean run (should NOT be picked)
+        // Older clean run (single task spot check, timestamp 100.0)
         HistoryEntry {
             date: "2026-09-01".to_string(),
             timestamp: 100.0,
@@ -16,7 +16,58 @@ fn model_a_history() -> Vec<HistoryEntry> {
             complete: true,
             fingerprint: None,
         },
-        // Latest clean run (timestamp 200.0, 5 tasks)
+        // Previous multi-task clean run (timestamp 150.0, 5 tasks at 80% = 80.0% mean)
+        HistoryEntry {
+            date: "2026-09-15".to_string(),
+            timestamp: 150.0,
+            task: "weekend_transient".to_string(),
+            score: 80,
+            time: Some(2.0),
+            complete: true,
+            fingerprint: Some("fp0".to_string()),
+        },
+        HistoryEntry {
+            date: "2026-09-15".to_string(),
+            timestamp: 150.0,
+            task: "summarize".to_string(),
+            score: 80,
+            time: Some(4.0),
+            complete: true,
+            fingerprint: Some("fp0".to_string()),
+        },
+        HistoryEntry {
+            date: "2026-09-15".to_string(),
+            timestamp: 150.0,
+            task: "filename".to_string(),
+            score: 80,
+            time: Some(0.5),
+            complete: true,
+            fingerprint: Some("fp0".to_string()),
+        },
+        HistoryEntry {
+            date: "2026-09-15".to_string(),
+            timestamp: 150.0,
+            task: "file_summary".to_string(),
+            score: 80,
+            time: Some(6.0),
+            complete: true,
+            fingerprint: Some("fp0".to_string()),
+        },
+        HistoryEntry {
+            date: "2026-09-15".to_string(),
+            timestamp: 150.0,
+            task: "image_real".to_string(),
+            score: 80,
+            time: Some(3.0),
+            complete: true,
+            fingerprint: Some("fp0".to_string()),
+        },
+    ]
+}
+
+fn model_a_latest_runs() -> Vec<HistoryEntry> {
+    vec![
+        // Latest clean run (timestamp 200.0, 5 tasks, mean = 94.0%)
         HistoryEntry {
             date: "2026-10-09".to_string(),
             timestamp: 200.0,
@@ -75,10 +126,16 @@ fn model_a_history() -> Vec<HistoryEntry> {
     ]
 }
 
+fn model_a_history() -> Vec<HistoryEntry> {
+    let mut out = model_a_prior_runs();
+    out.extend(model_a_latest_runs());
+    out
+}
+
 fn sample_history() -> BTreeMap<String, Vec<HistoryEntry>> {
     let mut history: BTreeMap<String, Vec<HistoryEntry>> = BTreeMap::new();
 
-    // Model A: older run, clean latest run, and newer incomplete run
+    // Model A: older run, previous multi-task run, clean latest run, and newer incomplete run
     history.insert("model_a".to_string(), model_a_history());
 
     // Model B: latest clean run (timestamp 250.0, 4 tasks, no VLM)
@@ -143,13 +200,14 @@ fn sample_history() -> BTreeMap<String, Vec<HistoryEntry>> {
 
 pub fn verify_leaderboard_ranking() {
     let history = sample_history();
-    let rows = generate_leaderboard(&history, None);
+    let rows = generate_leaderboard(&history, None, None).unwrap();
     assert_eq!(rows.len(), 2, "only models with complete runs are ranked");
 
-    // Rank 1: Model A (mean = (100+80+100+90+100)/5 = 94.0%)
+    // Rank 1: Model A (mean = (100+80+100+90+100)/5 = 94.0%, delta = +14.0%)
     let first = &rows[0];
     assert_eq!(first.model, "model_a");
     assert!((first.overall_mean - 94.0).abs() < 0.01);
+    assert_eq!(first.delta, Some(14.0));
     assert_eq!(first.task_count, 5);
     assert_eq!(first.json_score, Some(100.0));
     assert_eq!(first.summarize_score, Some(80.0));
@@ -157,10 +215,11 @@ pub fn verify_leaderboard_ranking() {
     assert_eq!(first.think_score, Some(90.0));
     assert_eq!(first.vlm_score, Some(100.0));
 
-    // Rank 2: Model B (mean = (80+70+90+60)/4 = 75.0%)
+    // Rank 2: Model B (mean = (80+70+90+60)/4 = 75.0%, delta = None)
     let second = &rows[1];
     assert_eq!(second.model, "model_b");
     assert!((second.overall_mean - 75.0).abs() < 0.01);
+    assert_eq!(second.delta, None);
     assert_eq!(second.task_count, 4);
     assert_eq!(second.json_score, Some(80.0));
     assert_eq!(second.summarize_score, Some(70.0));
@@ -171,11 +230,116 @@ pub fn verify_leaderboard_ranking() {
     // Format table
     let table = format_leaderboard(&rows);
     assert!(table.contains(
-        "| 1 | `model_a` | 94.0% | 90.0% | 100.0% | 80.0% | 100.0% | 100.0% | 5 | 2026-10-09 |"
+        "| 1 | `model_a` | 94.0% | +14.0% | 90.0% | 100.0% | 80.0% | 100.0% | 100.0% | 5 | 2026-10-09 |"
     ));
     assert!(table.contains(
-        "| 2 | `model_b` | 75.0% | 60.0% | 80.0% | 70.0% | 90.0% | — | 4 | 2026-10-09 |"
+        "| 2 | `model_b` | 75.0% | — | 60.0% | 80.0% | 70.0% | 90.0% | — | 4 | 2026-10-09 |"
     ));
+}
+
+pub fn verify_leaderboard_slot_sorting() {
+    let mut history = sample_history();
+    history.insert(
+        "model_f".to_string(),
+        vec![
+            HistoryEntry {
+                date: "2026-10-09".to_string(),
+                timestamp: 260.0,
+                task: "file_summary".to_string(),
+                score: 98,
+                time: Some(2.0),
+                complete: true,
+                fingerprint: None,
+            },
+            HistoryEntry {
+                date: "2026-10-09".to_string(),
+                timestamp: 260.0,
+                task: "taxes_anomalies".to_string(),
+                score: 98,
+                time: Some(2.0),
+                complete: true,
+                fingerprint: None,
+            },
+            HistoryEntry {
+                date: "2026-10-09".to_string(),
+                timestamp: 260.0,
+                task: "weekend_transient".to_string(),
+                score: 40,
+                time: Some(1.0),
+                complete: true,
+                fingerprint: None,
+            },
+            HistoryEntry {
+                date: "2026-10-09".to_string(),
+                timestamp: 260.0,
+                task: "summarize".to_string(),
+                score: 40,
+                time: Some(1.0),
+                complete: true,
+                fingerprint: None,
+            },
+            HistoryEntry {
+                date: "2026-10-09".to_string(),
+                timestamp: 260.0,
+                task: "filename".to_string(),
+                score: 49,
+                time: Some(1.0),
+                complete: true,
+                fingerprint: None,
+            },
+        ],
+    );
+
+    let overall_rows = generate_leaderboard(&history, None, Some("overall")).unwrap();
+    assert_eq!(overall_rows[0].model, "model_a");
+    assert_eq!(overall_rows[1].model, "model_f");
+    assert_eq!(overall_rows[2].model, "model_b");
+
+    let think_rows = generate_leaderboard(&history, None, Some("think")).unwrap();
+    assert_eq!(think_rows[0].model, "model_f");
+    assert_eq!(think_rows[1].model, "model_a");
+    assert_eq!(think_rows[2].model, "model_b");
+
+    let vlm_rows = generate_leaderboard(&history, None, Some("vlm")).unwrap();
+    assert_eq!(vlm_rows[0].model, "model_a");
+    assert_eq!(vlm_rows[1].model, "model_f");
+
+    assert!(generate_leaderboard(&history, None, Some("unsupported")).is_err());
+}
+
+pub fn verify_leaderboard_deltas() {
+    let mut history = BTreeMap::new();
+    history.insert(
+        "model_regress".to_string(),
+        vec![
+            HistoryEntry {
+                date: "2026-09-01".to_string(),
+                timestamp: 100.0,
+                task: "json".to_string(),
+                score: 90,
+                time: Some(1.0),
+                complete: true,
+                fingerprint: None,
+            },
+            HistoryEntry {
+                date: "2026-10-01".to_string(),
+                timestamp: 200.0,
+                task: "json".to_string(),
+                score: 80,
+                time: Some(1.0),
+                complete: true,
+                fingerprint: None,
+            },
+        ],
+    );
+    let rows = generate_leaderboard(&history, Some(1), None).unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].delta, Some(-10.0));
+    let table = format_leaderboard(&rows);
+    assert!(
+        table.contains("-10.0%"),
+        "negative delta formatted as -X.X%: {table}"
+    );
 }
 
 #[test]
@@ -193,7 +357,7 @@ fn test_task_slot_mapping() {
 #[test]
 fn test_empty_leaderboard() {
     let history = BTreeMap::new();
-    let rows = generate_leaderboard(&history, None);
+    let rows = generate_leaderboard(&history, None, None).unwrap();
     assert_eq!(rows.len(), 0);
     let table = format_leaderboard(&rows);
     assert!(table.contains("No complete model eval runs found in history"));
@@ -203,32 +367,31 @@ fn test_empty_leaderboard() {
 fn test_min_tasks_filtering() {
     let history = sample_history();
 
-    // Default (None): includes model_a (5 tasks) and model_b (4 tasks)
-    let default_rows = generate_leaderboard(&history, None);
+    let default_rows = generate_leaderboard(&history, None, None).unwrap();
     assert_eq!(default_rows.len(), 2);
 
-    // min_tasks = 5: includes model_a (5 tasks), excludes model_b (4 tasks)
-    let min5_rows = generate_leaderboard(&history, Some(5));
+    let min5_rows = generate_leaderboard(&history, Some(5), None).unwrap();
     assert_eq!(min5_rows.len(), 1);
     assert_eq!(min5_rows[0].model, "model_a");
     assert_eq!(min5_rows[0].task_count, 5);
 
-    // min_tasks = 6: neither model has 6 tasks
-    let min6_rows = generate_leaderboard(&history, Some(6));
+    let min6_rows = generate_leaderboard(&history, Some(6), None).unwrap();
     assert_eq!(min6_rows.len(), 0);
 }
 
 #[test]
 fn test_leaderboard_json_serialization() {
     let history = sample_history();
-    let rows = generate_leaderboard(&history, None);
+    let rows = generate_leaderboard(&history, None, None).unwrap();
     let json_str = serde_json::to_string_pretty(&rows).unwrap();
     let parsed: Vec<serde_json::Value> = serde_json::from_str(&json_str).unwrap();
     assert_eq!(parsed.len(), 2);
     assert_eq!(parsed[0]["model"], "model_a");
     assert_eq!(parsed[0]["task_count"], 5);
     assert_eq!(parsed[0]["json_score"], 100.0);
+    assert_eq!(parsed[0]["delta"], 14.0);
     assert_eq!(parsed[1]["model"], "model_b");
     assert_eq!(parsed[1]["task_count"], 4);
+    assert!(parsed[1]["delta"].is_null());
     assert!(parsed[1]["vlm_score"].is_null());
 }

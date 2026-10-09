@@ -481,4 +481,6 @@ mod leaderboard_tests;
 #[test]
 fn test_leaderboard_ranking_overall_means_and_slot_scores() {
     leaderboard_tests::verify_leaderboard_ranking();
+    leaderboard_tests::verify_leaderboard_slot_sorting();
+    leaderboard_tests::verify_leaderboard_deltas();
 }

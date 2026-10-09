@@ -149,6 +149,9 @@ enum Cmd {
         /// Minimum task count required for leaderboard inclusion.
         #[arg(long)]
         min_tasks: Option<usize>,
+        /// Slot to sort the leaderboard by (overall, think, json, summarize, filename, vlm).
+        #[arg(long)]
+        sort_by: Option<String>,
     },
     /// Manage stored eval signals (inspect or prune superseded task observations).
     #[command(version)]
@@ -327,8 +330,9 @@ pub fn run() -> Result<()> {
             thinking,
             leaderboard,
             min_tasks,
+            sort_by,
         } => {
-            let action = if leaderboard {
+            let action = if leaderboard || sort_by.is_some() {
                 crate::cli_ztools::EvalAction::Leaderboard
             } else if capabilities {
                 crate::cli_ztools::EvalAction::Capabilities
@@ -346,6 +350,7 @@ pub fn run() -> Result<()> {
                     thinking,
                     action,
                     min_tasks,
+                    sort_by: sort_by.as_deref(),
                 },
             )
         }
