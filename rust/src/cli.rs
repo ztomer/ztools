@@ -143,6 +143,25 @@ enum Cmd {
         /// the pre-2026-09-19 regime for comparison with older sweeps.
         #[arg(long)]
         thinking: bool,
+        /// Format comparative markdown leaderboard of latest clean runs across evaluated models.
+        #[arg(long)]
+        leaderboard: bool,
+    },
+    /// Manage stored eval signals (inspect or prune superseded task observations).
+    #[command(version)]
+    EvalSignals {
+        /// Prune task records whose fingerprints do not match current task definitions.
+        #[arg(long)]
+        prune: bool,
+        /// Explicit path to eval signals JSON file (default: `conf/eval_signals.json`).
+        #[arg(long)]
+        path: Option<PathBuf>,
+        /// Directory containing task definitions (defaults to `conf/` and `eval_tasks/data`).
+        #[arg(long)]
+        tasks_dir: Option<PathBuf>,
+        /// Show what would be pruned without modifying the file.
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -220,6 +239,53 @@ fn load_config(explicit: Option<PathBuf>) -> Result<ZtoolsConfig> {
     )
 }
 
+fn dispatch_twitter(config: &ZtoolsConfig, cmd: Cmd) -> Result<()> {
+    use crate::cli_ztools_twitter::{TweetSource, TwitterCommand, TwitterSummarizeOpts};
+
+    let Cmd::TwitterSummarize {
+        json,
+        model,
+        md_out,
+        use_cache,
+        fetch_only,
+        debug,
+        since,
+        login,
+        clean,
+        fetch_latest,
+        last_updated,
+    } = cmd
+    else {
+        return Ok(());
+    };
+    // The precedence the command has always applied: the read-only
+    // queries, then login, then clean, then a run whose source is
+    // `--json`, else the cache, else live.
+    let command = if fetch_latest || last_updated {
+        TwitterCommand::Latest { last_updated }
+    } else if login {
+        TwitterCommand::Login
+    } else if clean {
+        TwitterCommand::Clean
+    } else {
+        let source = match json {
+            Some(path_or_dash) => TweetSource::Json(path_or_dash),
+            None if use_cache => TweetSource::Cache,
+            None => TweetSource::Live {
+                since,
+                debug,
+                fetch_only,
+            },
+        };
+        TwitterCommand::Summarize(TwitterSummarizeOpts {
+            source,
+            model,
+            md_out,
+        })
+    };
+    crate::cli_ztools_twitter::twitter_summarize(config, command)
+}
+
 /// Parse the CLI, resolve config, and dispatch to the tool handlers.
 ///
 /// # Errors
@@ -230,47 +296,7 @@ pub fn run() -> Result<()> {
     let cli = Cli::parse_from(args_with_implied_subcommand());
     let config = load_config(cli.config)?;
     match cli.cmd {
-        Cmd::TwitterSummarize {
-            json,
-            model,
-            md_out,
-            use_cache,
-            fetch_only,
-            debug,
-            since,
-            login,
-            clean,
-            fetch_latest,
-            last_updated,
-        } => {
-            use crate::cli_ztools_twitter::{TweetSource, TwitterCommand, TwitterSummarizeOpts};
-            // The precedence the command has always applied: the read-only
-            // queries, then login, then clean, then a run whose source is
-            // `--json`, else the cache, else live.
-            let command = if fetch_latest || last_updated {
-                TwitterCommand::Latest { last_updated }
-            } else if login {
-                TwitterCommand::Login
-            } else if clean {
-                TwitterCommand::Clean
-            } else {
-                let source = match json {
-                    Some(path_or_dash) => TweetSource::Json(path_or_dash),
-                    None if use_cache => TweetSource::Cache,
-                    None => TweetSource::Live {
-                        since,
-                        debug,
-                        fetch_only,
-                    },
-                };
-                TwitterCommand::Summarize(TwitterSummarizeOpts {
-                    source,
-                    model,
-                    md_out,
-                })
-            };
-            crate::cli_ztools_twitter::twitter_summarize(&config, command)
-        }
+        Cmd::TwitterSummarize { .. } => dispatch_twitter(&config, cli.cmd),
         Cmd::WeekendPlan {
             location,
             ages,
@@ -296,17 +322,39 @@ pub fn run() -> Result<()> {
             json_output,
             capabilities,
             thinking,
-        } => crate::cli_ztools::model_eval(
+            leaderboard,
+        } => {
+            let action = if leaderboard {
+                crate::cli_ztools::EvalAction::Leaderboard
+            } else if capabilities {
+                crate::cli_ztools::EvalAction::Capabilities
+            } else {
+                crate::cli_ztools::EvalAction::Run
+            };
+            crate::cli_ztools::model_eval(
+                &config,
+                &model,
+                &crate::cli_ztools::EvalOptions {
+                    suite: &suite,
+                    tasks_dir: tasks_dir.as_deref(),
+                    task_filter: task.as_deref(),
+                    json_output,
+                    thinking,
+                    action,
+                },
+            )
+        }
+        Cmd::EvalSignals {
+            prune,
+            path,
+            tasks_dir,
+            dry_run,
+        } => crate::ztools::eval::cli_eval_signals(
             &config,
-            &model,
-            &crate::cli_ztools::EvalOptions {
-                suite: &suite,
-                tasks_dir: tasks_dir.as_deref(),
-                task_filter: task.as_deref(),
-                json_output,
-                capabilities,
-                thinking,
-            },
+            path.as_deref(),
+            tasks_dir.as_deref(),
+            prune,
+            dry_run,
         ),
     }
 }

@@ -379,6 +379,7 @@ fn all_subcommands_and_aliases_support_version_flags() {
         "weekend-plan",
         "image-renamer",
         "model-eval",
+        "eval-signals",
     ];
     let expected_version = env!("CARGO_PKG_VERSION");
 

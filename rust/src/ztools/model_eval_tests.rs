@@ -474,3 +474,11 @@ fn the_full_suite_mean_covers_only_the_tasks_that_reached_the_model() {
         "a dead server must not print a mean at all: {dead_report}"
     );
 }
+
+#[path = "model_eval_leaderboard_tests.rs"]
+mod leaderboard_tests;
+
+#[test]
+fn test_leaderboard_ranking_overall_means_and_slot_scores() {
+    leaderboard_tests::verify_leaderboard_ranking();
+}

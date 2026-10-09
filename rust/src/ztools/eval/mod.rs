@@ -13,6 +13,7 @@ pub mod drain;
 pub mod failures;
 pub mod gpu_lock;
 pub mod graded;
+pub mod leaderboard;
 pub mod model_resolve;
 pub mod outputs;
 pub mod oversize;
@@ -35,6 +36,7 @@ pub mod runner;
 pub mod samples;
 pub mod scoring_math;
 pub mod signals;
+pub mod signals_prune;
 pub mod smoke_tasks;
 pub mod task_fingerprint;
 pub mod task_loader;
@@ -60,6 +62,9 @@ pub use failures::{
 };
 pub use gpu_lock::{
     DEFAULT_LOCK_DIR, DEFAULT_MAX_IDLE_SECS, GpuLockGuard, foreign_holder, lock_dir,
+};
+pub use leaderboard::{
+    ModelLeaderboardEntry, cli_leaderboard, format_leaderboard, generate_leaderboard,
 };
 pub use model_resolve::{
     MISSING_MODEL_MARKERS, RosterEntry, default_fallback_chain, disk_corroborated, fetch_roster,
@@ -91,6 +96,7 @@ pub use signals::{
     load_signals, machine_is_uncontended, memory_pressure, record_capability_sample, record_signal,
     record_task_signal, save_signals, series_fingerprint, signals_path, superseded_samples,
 };
+pub use signals_prune::{PruneReport, cli_eval_signals, prune_signals};
 pub use task_fingerprint::{
     Standing, TaskIdentities, current_task_fingerprint, current_task_identities,
     remember_current_tasks, standing_of, task_fingerprint,

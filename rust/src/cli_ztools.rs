@@ -10,7 +10,6 @@ use chrono::Local;
 use std::path::{Path, PathBuf};
 
 use crate::config::ZtoolsConfig;
-use crate::units::unsigned;
 
 /// Whether a task name is selected by a `--task` filter.
 ///
@@ -23,7 +22,7 @@ use crate::units::unsigned;
 /// A filter that quietly matches nothing is the failure worth catching here:
 /// the caller turns that into a refusal rather than running the full suite as
 /// though no filter had been given.
-fn task_matches_filter(task_name: &str, filter: &str) -> bool {
+pub(crate) fn task_matches_filter(task_name: &str, filter: &str) -> bool {
     filter
         .split(',')
         .map(str::trim)
@@ -238,8 +237,11 @@ use capabilities::print_capabilities;
 // one change — a table that renders scores for a run which measured nothing is
 // the defect, and it is fixed in both places or in neither.
 #[path = "cli_ztools_eval_report.rs"]
-mod eval_report;
-use eval_report::{note_unmeasured, print_outcomes, report_suite};
+pub(crate) mod eval_report;
+
+#[path = "cli_ztools_eval_runner.rs"]
+mod eval_runner;
+use eval_runner::run_full_suite;
 
 /// `ztools status`: the harness's view of this project, as JSON.
 ///
@@ -254,6 +256,14 @@ pub(crate) fn status() -> Result<()> {
     crate::ztools::status::run()
 }
 
+/// The action to perform for `ztools model-eval`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum EvalAction {
+    Run,
+    Capabilities,
+    Leaderboard,
+}
+
 /// `ztools model-eval`: a native-Rust quality benchmark.
 ///
 /// The `model-eval` switches that are not the model: which suite, where the
@@ -263,141 +273,26 @@ pub(crate) struct EvalOptions<'a> {
     pub tasks_dir: Option<&'a std::path::Path>,
     pub task_filter: Option<&'a str>,
     pub json_output: bool,
-    pub capabilities: bool,
     pub thinking: bool,
+    pub action: EvalAction,
 }
 
 pub(crate) fn model_eval(config: &ZtoolsConfig, model: &str, opts: &EvalOptions<'_>) -> Result<()> {
-    let EvalOptions {
-        suite,
-        tasks_dir,
-        task_filter,
-        json_output,
-        capabilities,
-        thinking,
-    } = *opts;
-    let url = &config.osaurus_url;
-    if capabilities {
-        return print_capabilities(url, model);
-    }
-    if suite == "full" {
-        let tasks = load_suite_tasks(config, tasks_dir, task_filter)?;
-        let (host, port) = crate::ztools::model_eval::parse_osaurus_url(url);
-        // The GPU and the single healthy server are held under a machine-wide
-        // lock: several sessions measure against this box, and a second
-        // concurrent measurement corrupts both. Same contract as the Python
-        // eval entry point.
-        let _gpu = crate::ztools::eval::GpuLockGuard::acquire(
-            "ztools model-eval --suite full",
-            std::time::Duration::from_secs(5),
-            std::time::Duration::from_secs(crate::ztools::eval::DEFAULT_MAX_IDLE_SECS),
-        )
-        .map_err(|e| anyhow::anyhow!("GPU lock unavailable: {e}"))?;
-        let expected_tasks: Vec<String> = tasks.iter().map(|t| t.name.clone()).collect();
-        let mut runs: Vec<crate::ztools::eval::ModelRun> = Vec::new();
-        // Every model this command declined to measure, with the reason. Held
-        // to the end so the refusal can be BOTH printed next to the table and
-        // turned into a non-zero exit: the old `continue` after
-        // `eprintln!("✗ Skipping …")` exited 0, which made "I refused to
-        // measure this" indistinguishable from "I measured it and it scored
-        // nothing" — and a sweep files a 0 as a model it never ran.
-        let mut not_measured: Vec<String> = Vec::new();
-        // Ctrl-C drains rather than kills (eval/drain.rs): the task in flight
-        // finishes, the outcomes are recorded, the lock guard releases.
-        crate::ztools::eval::drain::install();
-        // Everything the history holds from before this instant is "the last
-        // run" for the delta table printed at the end.
-        let started_at = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0.0, |d| d.as_secs_f64());
-        for model_name in resolve_models(url, model, config)? {
-            // A drained run stops at the model boundary too: the next model
-            // is not started once the operator has asked to stop.
-            if crate::ztools::eval::drain::requested() {
-                break;
-            }
-            // Refuse to measure what cannot fit or would thrash: a timing
-            // taken under memory pressure describes the pressure, and it
-            // hardens into config exactly like a real number. Same gate as
-            // the Python eval (eval/cli_runtime.py::oversize_refusal).
-            let model_gb = unsigned(crate::ztools::eval::estimate_model_memory_gb(&model_name));
-            let refusal = crate::ztools::eval::oversize_refusal(model_gb, None, false, None);
-            if !refusal.is_empty() {
-                not_measured.push(format!("{model_name}: {refusal}"));
-                note_unmeasured(&model_name, &refusal, json_output);
-                continue;
-            }
-            // The banner is human progress, not data: under --json-output it
-            // must not precede the JSON on stdout.
-            if json_output {
-                eprintln!(
-                    "Testing {model_name} (full suite, {} tasks)...",
-                    tasks.len()
-                );
+    match opts.action {
+        EvalAction::Leaderboard => crate::ztools::eval::cli_leaderboard(None),
+        EvalAction::Capabilities => print_capabilities(&config.osaurus_url, model),
+        EvalAction::Run => {
+            if opts.suite == "full" {
+                run_full_suite(config, model, opts)
             } else {
-                println!(
-                    "Testing {model_name} (full suite, {} tasks)...",
-                    tasks.len()
-                );
+                run_spot_eval(config, model)
             }
-            let cfg = crate::ztools::eval::RunnerConfig {
-                host: host.clone(),
-                port,
-                record_signals: true,
-                thinking,
-                ..Default::default()
-            };
-            // The learning path: prefill/cold-start/decode measurement, learned
-            // per-task timeouts, p95 signal recording, raw-output archival,
-            // stall watchdog. Loaded from and saved back to conf/eval_signals.json.
-            let outcomes = crate::ztools::eval::run_eval_with_signals(&model_name, &tasks, &cfg);
-
-            // A server that is down does not fail any task, it never lets one
-            // START: every outcome comes back `INFRA` with score 0, and the
-            // completeness check above is happy — it counts tasks that reported,
-            // and a dead server's tasks all report. That is the run that printed
-            // "mean score 0.0" and wrote a 0 into the history a ranking reads.
-            // The verdict belongs here, where the outcomes are still in hand.
-            if let Some(why) = crate::ztools::model_eval::tasks_unmeasured_reason(&outcomes) {
-                not_measured.push(format!("{model_name}: {why}"));
-                note_unmeasured(&model_name, &why, json_output);
-            }
-
-            // Completeness is DERIVED by diffing expected vs reported -- no
-            // abandon path can forget to set a flag. A truncated run says so
-            // out loud here AND carries the verdict into its history entries,
-            // which load_historical_stats refuses to average (the bonsai 62%
-            // vs 79% class of misread).
-            runs.push(record_run(
-                &model_name,
-                &expected_tasks,
-                &outcomes,
-                json_output,
-            )?);
         }
-        report_suite(&runs, started_at);
-        // Recorded and reported; now say the run was cut, with the exit code
-        // a sweep files as FAILED so --resume runs this model again.
-        if crate::ztools::eval::drain::requested() {
-            anyhow::bail!(
-                "interrupted by Ctrl-C after {} model run(s); outcomes recorded as truncated",
-                runs.len()
-            );
-        }
-        // After the tables, never before: everything that WAS measured is still
-        // written and printed, and the run still files as FAILED. The message
-        // names each model and its cause, because a non-zero exit that does not
-        // say why is a refusal with no diagnosis.
-        if !not_measured.is_empty() {
-            anyhow::bail!(
-                "{} model run(s) were {} — nothing was measured for them: {}",
-                not_measured.len(),
-                crate::ztools::model_eval::NOT_MEASURED,
-                not_measured.join(" | ")
-            );
-        }
-        return Ok(());
     }
+}
+
+fn run_spot_eval(config: &ZtoolsConfig, model: &str) -> Result<()> {
+    let url = &config.osaurus_url;
     let results = if model == "all" {
         crate::ztools::model_eval::eval_all_models(url, config)?
     } else {
@@ -416,62 +311,7 @@ pub(crate) fn model_eval(config: &ZtoolsConfig, model: &str, opts: &EvalOptions<
     Ok(())
 }
 
-/// One model's full-suite run, recorded and printed.
-///
-/// Completeness is DERIVED by diffing expected vs reported -- no abandon path
-/// can forget to set a flag. A truncated run says so out loud here AND carries
-/// the verdict into its history entry, which `load_historical_stats` refuses to
-/// average (the bonsai 62% vs 79% class of misread).
-///
-/// Extracted from the dispatch loop so the loop's own shape is the refusal
-/// policy: one `continue` for a model it declined to measure, one push per run,
-/// and one verdict at the end.
-fn record_run(
-    model_name: &str,
-    expected_tasks: &[String],
-    outcomes: &[crate::ztools::eval::TaskOutcome],
-    json_output: bool,
-) -> Result<crate::ztools::eval::ModelRun> {
-    let run_record =
-        crate::ztools::eval::ModelRun::new(model_name, expected_tasks, outcomes.to_vec());
-    if let Some(c) = &run_record.completeness
-        && !c.complete
-    {
-        eprintln!("⚠ {} (partial): {}", model_name, c.reason);
-    }
-    if let Err(e) = crate::ztools::eval::save_historical_results(&run_record, None) {
-        eprintln!("⚠ could not write eval history: {e}");
-    }
-    print_outcomes(outcomes, json_output)?;
-    Ok(run_record)
-}
-
-/// "all" expands to every servable model on the server; any other value is
-/// taken literally.
-/// The full suite's tasks: the roster's inputs from `--tasks-dir` (or the
-/// configured directory), narrowed by `--task`.
-fn load_suite_tasks(
-    config: &ZtoolsConfig,
-    tasks_dir: Option<&Path>,
-    task_filter: Option<&str>,
-) -> Result<Vec<crate::ztools::eval::EvalTask>> {
-    let default_tasks_dir = config.eval_tasks_dir();
-    let tasks_dir = tasks_dir.or(default_tasks_dir.as_deref());
-    let mut tasks =
-        crate::ztools::eval::load_all_eval_tasks(&config.eval_roster_inputs()?, tasks_dir)?;
-    if let Some(filter) = task_filter {
-        tasks.retain(|t| task_matches_filter(&t.name, filter));
-        if tasks.is_empty() {
-            anyhow::bail!("--task filter {filter} matched no loaded tasks");
-        }
-    }
-    if tasks.is_empty() {
-        anyhow::bail!("no eval tasks found (pass --tasks-dir pointing at task snapshots)");
-    }
-    Ok(tasks)
-}
-
-fn resolve_models(url: &str, model: &str, config: &ZtoolsConfig) -> Result<Vec<String>> {
+pub(super) fn resolve_models(url: &str, model: &str, config: &ZtoolsConfig) -> Result<Vec<String>> {
     if model != "all" {
         return Ok(vec![model.to_string()]);
     }
