@@ -1,6 +1,9 @@
 # gates_of_heck configuration. All keys optional; delete what you don't use.
 GOH_MAX_LINES=500                 # file-length cap; unset disables the check
 
+# Tag-version verification source for ztools (Cargo manifest is under rust/):
+export GOH_TAG_VERSION_SOURCES='cargo:rust/Cargo.toml'
+
 # WHAT GOH_EXCLUDE ACTUALLY EXEMPTS (the old comment here claimed vendor was
 # "still secret-scanned by the length/emoji-independent checks". It was not:
 # structural.sh forwards GOH_EXCLUDE to EVERY delegated check, including the
