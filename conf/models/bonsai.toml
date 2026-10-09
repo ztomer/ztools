@@ -1,0 +1,14 @@
+name = "bonsai"
+timeout = 120
+best_for = ["ternary", "experimental"]
+
+[field_mapping]
+activity = "name"
+event_name = "name"
+venue = "location"
+
+[models."bonsai-2-27b-crack-ternary"]
+best_for = ["ternary", "experimental"]
+
+[prompts]
+json = "Output JSON now. Use EXACT schema."

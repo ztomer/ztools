@@ -47,6 +47,7 @@ pub mod watchdog;
 
 pub use budgets::config_family;
 pub use budgets::max_tokens_for_task;
+pub use budgets::model_best_for;
 pub use clean::{clean_model_output, extract_content_from_code_blocks, extract_json};
 pub use completeness::{Completeness, record_is_complete};
 pub use discrimination::{

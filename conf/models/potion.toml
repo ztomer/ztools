@@ -1,0 +1,14 @@
+name = "potion"
+timeout = 10
+best_for = ["embedding", "base"]
+
+[field_mapping]
+activity = "name"
+event_name = "name"
+venue = "location"
+
+[models."potion-base-4m"]
+best_for = ["embedding", "base"]
+
+[prompts]
+json = "Output JSON now. Use EXACT schema."

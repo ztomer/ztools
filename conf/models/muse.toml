@@ -1,0 +1,14 @@
+name = "muse"
+timeout = 120
+best_for = ["json", "no_fabrication", "filename", "vlm"]
+
+[field_mapping]
+activity = "name"
+event_name = "name"
+venue = "location"
+
+[models."muse-glimmer-30b-jang_6m"]
+best_for = ["json", "no_fabrication", "filename", "vlm", "injection_resistant"]
+
+[prompts]
+json = "Output JSON now. Use EXACT schema."

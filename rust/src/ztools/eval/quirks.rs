@@ -14,10 +14,17 @@
 
 use serde_json::{Value, json};
 
-// Families with a quirk file in `conf/models/`. `qwopus`, `nemotron` and
-// `laguna` were removed 2026-09-19 with their files: no installed model
-// belongs to them, and a family list that names ghosts reads as support.
-pub const MODEL_FAMILIES: &[&str] = &["qwen", "gemma", "foundation"];
+// Families with a quirk/config file in `conf/models/`.
+pub const MODEL_FAMILIES: &[&str] = &[
+    "qwen",
+    "gemma",
+    "foundation",
+    "muse",
+    "raptor",
+    "bonsai",
+    "lfm",
+    "potion",
+];
 const QWEN_FAMILY: &str = "qwen";
 const GEMMA4_FAMILY: &str = "gemma4";
 

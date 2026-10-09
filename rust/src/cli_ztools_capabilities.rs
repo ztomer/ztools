@@ -23,7 +23,9 @@ pub(super) fn print_capabilities(url: &str, model_selector: &str) -> Result<()> 
         println!("no models found");
         return Ok(());
     }
-    println!("Model                               Family        Disk GB   Gen?  Viability");
+    println!(
+        "Model                               Family        Disk GB   Gen?  Best For                       Viability"
+    );
     for m in &models {
         let family = recorded_family_or_name(m);
         let disk_gb = crate::ztools::eval::model_disk_bytes(m).map_or_else(
@@ -40,13 +42,20 @@ pub(super) fn print_capabilities(url: &str, model_selector: &str) -> Result<()> 
             Ok(()) => "ok".to_string(),
             Err(reason) => reason,
         };
+        let tags = crate::ztools::eval::model_best_for(m);
+        let best_for = if tags.is_empty() {
+            "-".to_string()
+        } else {
+            tags.join(", ")
+        };
         println!(
-            "{:<36} {:<12} {:>9} {:>6}  {}",
+            "{:<36} {:<12} {:>9} {:>6}  {:<30} {}",
             truncate_col(m, 36),
             truncate_col(&family, 12),
             disk_gb,
             generative,
-            truncate_col(&viability, 60)
+            truncate_col(&best_for, 30),
+            truncate_col(&viability, 50)
         );
     }
     Ok(())
@@ -142,5 +151,27 @@ mod tests {
     fn a_width_narrower_than_the_ellipsis_does_not_underflow() {
         assert_eq!(truncate_col("abcdef", 2), "...");
         assert_eq!(truncate_col("abcdef", 0), "...");
+    }
+
+    #[test]
+    fn known_models_resolve_best_for_tags() {
+        let shipped_conf = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("CARGO_MANIFEST_DIR is <repo>/rust")
+            .join("conf");
+        let (qwen_tags, raptor_tags) = {
+            let env = crate::test_env::TestEnv::new();
+            env.set_managed("ZTOOLS_CONF_DIR", shipped_conf.as_os_str());
+            let qwen = crate::ztools::eval::model_best_for("qwen3.8-27b-jang_6d");
+            let raptor = crate::ztools::eval::model_best_for("raptor-v0.5-8b-a1b-jang_6m");
+            drop(env);
+            (qwen, raptor)
+        };
+
+        assert_nonempty!(&qwen_tags, "qwen model must have best_for tags");
+        assert!(qwen_tags.contains(&"think".to_string()));
+
+        assert_nonempty!(&raptor_tags, "raptor model must have best_for tags");
+        assert!(raptor_tags.contains(&"summarize".to_string()));
     }
 }

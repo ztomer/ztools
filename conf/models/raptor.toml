@@ -1,0 +1,17 @@
+name = "raptor"
+timeout = 90
+best_for = ["summarize", "timeline", "fast_distillation"]
+
+[field_mapping]
+activity = "name"
+event_name = "name"
+venue = "location"
+
+[models."raptor-v0.5-8b-a1b-jang_6m"]
+best_for = ["summarize", "timeline", "fast_distillation"]
+
+[models."raptor-v1-26b-a4b-vl-jang"]
+best_for = ["vlm", "multimodal", "summarize"]
+
+[prompts]
+json = "Output JSON now. Use EXACT schema."

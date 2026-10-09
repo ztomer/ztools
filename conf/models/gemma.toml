@@ -1,10 +1,17 @@
 name = "gemma"
 timeout = 120
+best_for = ["fast_json", "structured_extraction", "lightweight"]
 
 [field_mapping]
 activity = "name"
 event_name = "name"
 venue = "location"
+
+[models."gemma-4-12b-it-mxfp8"]
+best_for = ["structured_extraction", "general_reasoning"]
+
+[models."gemma-4-e4b-it-8bit"]
+best_for = ["fast_json", "lightweight", "low_latency"]
 
 [prompts]
 json = "Output JSON now. Use EXACT schema."

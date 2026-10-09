@@ -167,6 +167,29 @@ pub fn max_tokens_for_task(task: &str, model: &str) -> u32 {
     model_cap(model).map_or(budget, |cap| budget.min(cap))
 }
 
+/// The `best_for` tags for one model: its `[models."<id>"].best_for` section when
+/// present, else the family config's top-level `best_for`.
+#[must_use]
+pub fn model_best_for(model: &str) -> Vec<String> {
+    let Some(cfg) = family_config(model) else {
+        return Vec::new();
+    };
+    let per_model = cfg
+        .get("models")
+        .and_then(|m| m.get(model))
+        .and_then(|section| section.get("best_for"))
+        .and_then(toml::Value::as_array);
+
+    let arr = per_model.or_else(|| cfg.get("best_for").and_then(toml::Value::as_array));
+    arr.map_or_else(Vec::new, |items| {
+        items
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .map(str::to_string)
+            .collect()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -300,5 +323,20 @@ mod tests {
             max_tokens_for_task("json", "totally-unknown-model"),
             DEFAULT_MAX_TOKENS
         );
+    }
+
+    #[test]
+    #[serial]
+    fn model_best_for_prefers_specific_model_tags_over_family_tags() {
+        let _env = conf_sandbox(&[(
+            "models/qwen.toml",
+            "name = \"qwen\"\nbest_for = [\"family_tag\"]\n\n[models.\"qwen-special\"]\nbest_for = [\"specific_tag\"]\n",
+        )]);
+        assert_eq!(
+            model_best_for("qwen-special"),
+            vec!["specific_tag".to_string()]
+        );
+        assert_eq!(model_best_for("qwen-other"), vec!["family_tag".to_string()]);
+        assert_eq!(model_best_for("unknown-model"), Vec::<String>::new());
     }
 }

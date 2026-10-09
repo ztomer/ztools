@@ -1,5 +1,6 @@
 name = "gemma"
 timeout = 120
+best_for = ["fast_json", "structured_extraction", "lightweight"]
 
 [field_mapping]
 activity = "name"
@@ -10,6 +11,7 @@ venue = "location"
 [models."gemma-4-26b-a4b-it-mxfp4"]
 internal_name = "gemma_26b"
 timeout = 120
+best_for = ["structured_data", "high_capacity_json"]
 
 [models."gemma-4-26b-a4b-it-mxfp4".field_mapping]
 activity = "name"
@@ -45,6 +47,7 @@ pattern = "Output JSON now."
 [models."gemma-4-31b-it-jang_4m"]
 internal_name = "gemma_31b"
 timeout = 90
+best_for = ["fast_extraction", "medium_context"]
 
 [models."gemma-4-31b-it-jang_4m".field_mapping]
 activity = "name"
@@ -73,6 +76,7 @@ pattern = "Output JSON now."
 [models."gemma-4-e2b-it-8bit"]
 internal_name = "gemma_2b"
 timeout = 60
+best_for = ["ultra_fast", "lightweight_extraction"]
 
 [models."gemma-4-e2b-it-8bit".field_mapping]
 activity = "name"

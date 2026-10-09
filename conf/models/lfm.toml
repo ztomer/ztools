@@ -1,0 +1,14 @@
+name = "lfm"
+timeout = 30
+best_for = ["edge", "mobile", "ultra_lightweight"]
+
+[field_mapping]
+activity = "name"
+event_name = "name"
+venue = "location"
+
+[models."lfm2.5-350m-optiq-4bit"]
+best_for = ["edge", "mobile", "ultra_lightweight"]
+
+[prompts]
+json = "Output JSON now. Use EXACT schema."

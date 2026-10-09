@@ -1,5 +1,6 @@
 name = "qwen"
 timeout = 120
+best_for = ["think", "reasoning", "taxes_audit", "fallback"]
 
 [field_mapping]
 category = "target_ages"
@@ -7,6 +8,12 @@ context_highlight = "price"
 type = "weather"
 event_date = "day"
 end_date = "end_date"
+
+[models."qwen3.8-27b-jang_6d"]
+best_for = ["think", "reasoning", "taxes_audit", "synthesis"]
+
+[models."qwen3.8-27b-jang_6d-crack"]
+best_for = ["fast_reasoning", "taxes_audit"]
 
 [prompts]
 json = "Output JSON now. Use EXACT schema."
