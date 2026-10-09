@@ -1,0 +1,30 @@
+# The tools ONLY THIS REPO'S OWN steps need, one per line.
+#
+# THE RULE: every non-comment line must be a step in `.gatesrc`'s `GOH_CI_STEPS`.
+# A name is here because a step in that list runs it, and nothing else may put one
+# here -- a tool no step needs is one the runner installs for nothing, which is
+# the same drift in the opposite direction. `tools/tests/test_ci_tools.py` goes
+# red, naming the line, when a name here stops being a step there.
+#
+# WHY THIS IS SEPARATE FROM THE GATE'S MANIFEST. `"$GOH_DIR/gates/required_tools.py"
+# --repo . --install` names the tools its own gates REFUSE without -- measured
+# 2026-10-08: cargo-machete, cargo-llvm-cov, ruff, shellcheck. It cannot name
+# these two, because `cargo audit --file rust/Cargo.lock` and `cargo deny
+# --manifest-path rust/Cargo.toml check` are steps THIS repo added to GOH_CI_STEPS
+# (2026-10-05: licences, sources and bans -- the audit ignore list is the ratchet
+# the house rules name, so `cargo audit` stays alongside `cargo deny`). A shared
+# manifest has no way to know a consumer grew a step, which is exactly how the
+# hand-copied list rotted: run 37855122727 died at step 1/12 with
+# `cargo-machete is not installed, and this gate does not pass without the step it
+# runs`. So the workflow consumes the manifest for its half and reads this file
+# for the rest, and neither half is copied by hand.
+#
+# HOW IT IS READ: ci.yml's install step strips `#` comments, drops the lines left
+# empty, and joins what is left with commas for taiki-e/install-action's `tool:`
+# input. A line that survives that read is a tool the runner will install.
+#
+# NOT a .txt. `.gitignore:149` ignores `*.txt` (only `tests/fixtures/**/*.txt` is
+# excepted), so this file as a .txt would be untrackable -- invisible to the gate
+# AND to CI, which read it and installed nothing while the step passed.
+cargo-audit
+cargo-deny

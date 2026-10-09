@@ -188,3 +188,33 @@ fn an_empty_chain_is_its_own_error() {
         .to_string();
     assert!(err.contains("chain is empty"), "{err}");
 }
+
+#[test]
+#[serial_test::serial]
+fn a_model_refusing_oversized_prompt_is_skipped_down_the_chain() {
+    let env = TestEnv::new();
+    let shipped_conf = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("CARGO_MANIFEST_DIR is <repo>/rust")
+        .join("conf");
+    env.set_managed("ZTOOLS_CONF_DIR", shipped_conf.as_os_str());
+
+    let chain = s(&["foundation", "qwen3.8"]);
+    let huge_prompt = "x".repeat(25_000);
+    let ((), prov) = run_chain(&chain, "foundation", |candidate| {
+        crate::ztools::eval::context_fit::context_refusal(candidate, huge_prompt.len())
+            .map_or_else(|| Ok(Some(())), |reason| Err(anyhow::anyhow!("{reason}")))
+    })
+    .unwrap();
+
+    assert_eq!(prov.tier, Tier::Fallback);
+    assert_eq!(prov.model, "qwen3.8");
+    assert!(
+        prov.reasons
+            .iter()
+            .any(|r| r.contains("prompt does not fit") && r.contains("foundation")),
+        "expected reason describing foundation's window overflow: {:?}",
+        prov.reasons
+    );
+    drop(env);
+}

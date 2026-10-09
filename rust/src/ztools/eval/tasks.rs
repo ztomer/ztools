@@ -135,14 +135,21 @@ fn weekend_tasks() -> Vec<EvalTask> {
 /// other data-driven prompt — is the existing seam, so the same `EvalTask` shape,
 /// the same transport and the same validator see a prompt that can be obeyed.
 ///
+/// THE CHECKOUT IS A PARAMETER, RESOLVED ONCE IN [`roster`]. The rows are
+/// repo-relative, so the renderer needs a root; resolving it here (rather than
+/// inside the renderer) is what makes ONE resolution serve both rows AND the
+/// scorer's copy of the prompt — see the `source` invariant below.
+///
 /// # Errors
 ///
-/// When a listed file cannot be read, or a template lost its content slot: both
-/// would ship a prompt that names files and explains none of them, which is the
-/// defect. Failing is the honest outcome; there is no degraded form to fall back
-/// to, because a path-only prompt is exactly what this replaced.
-fn file_summary_tasks() -> Result<Vec<EvalTask>> {
-    let (plain, mixed) = file_summary::render_both(FILE_SUMMARY_PROMPT, FILE_SUMMARY_PROMPT_MIXED)?;
+/// When no checkout holds every listed row, or when a row cannot be read, or a
+/// template lost its content slot: all three would ship a prompt that names files
+/// and explains none of them, or explains a DIFFERENT checkout's files, which is
+/// the defect. Failing is the honest outcome; there is no degraded form to fall
+/// back to, because a path-only prompt is exactly what this replaced.
+fn file_summary_tasks(checkout: &Path) -> Result<Vec<EvalTask>> {
+    let (plain, mixed) =
+        file_summary::render_both_from(checkout, FILE_SUMMARY_PROMPT, FILE_SUMMARY_PROMPT_MIXED)?;
     Ok(vec![
         system_task(
             "file_summary",
@@ -156,6 +163,10 @@ fn file_summary_tasks() -> Result<Vec<EvalTask>> {
             FILE_SUMMARY_SYSTEM,
             &mixed,
             Graded::MixedFileSummary {
+                // The rendered bytes, not the bytes the files hold now. The
+                // validator reads its signal set OUT of this text, so a
+                // re-read at score time would grade the model against a prompt
+                // it was never shown.
                 source: mixed.clone(),
             },
         ),
@@ -171,7 +182,11 @@ fn file_summary_tasks() -> Result<Vec<EvalTask>> {
 /// is the Python table's order — the two file-summary rows are NOT adjacent there
 /// (`rename_mixed` and `summarize_mixed` sit between them), so they are placed
 /// by index rather than by being written next to each other.
-fn text_tasks(filename_input: &str, filename_prompt: &str) -> Result<Vec<EvalTask>> {
+fn text_tasks(
+    filename_input: &str,
+    filename_prompt: &str,
+    checkout: &Path,
+) -> Result<Vec<EvalTask>> {
     let mixed_filename = |name: &str, prompt: &str| {
         user_task(
             name,
@@ -193,7 +208,7 @@ fn text_tasks(filename_input: &str, filename_prompt: &str) -> Result<Vec<EvalTas
             src(|source| Graded::Summary { source }, TWITTER_PROMPT),
         ),
     ];
-    let mut file_summary = file_summary_tasks()?.into_iter();
+    let mut file_summary = file_summary_tasks(checkout)?.into_iter();
     tasks.push(
         file_summary
             .next()
@@ -344,18 +359,28 @@ impl RosterInputs {
 
 /// The roster, in the Python table's order, plus its two aliases.
 ///
+/// THE FILE-SUMMARY CHECKOUT IS RESOLVED ONCE, HERE, ABOVE EVERY ROW THAT NEEDS
+/// IT. `file_summary::live_root` asks the checkout derivation which candidate
+/// actually holds every listed row; doing it once rather than inside the renderer
+/// is what lets the SAME root render both the plain and the mixed prompt and
+/// hand the mixed bytes to the scorer as its source — a second resolution could
+/// only return a different answer, and then the validator would read its signal
+/// set out of a prompt the model was never shown.
+///
 /// # Errors
 ///
 /// When the filename input or the vision fixtures cannot be loaded — both
-/// are data this roster refuses to guess.
+/// are data this roster refuses to guess — when no checkout holds every file the
+/// file-summary prompts list, or when one of them cannot be read.
 pub fn roster(files: &RosterInputs) -> Result<Vec<EvalTask>> {
+    let checkout = file_summary::live_root()?;
     let filename_input = eval_input(&files.inputs, "filename")?;
     let filename_prompt = filename_prompt_for(&filename_input);
     let vision = super::vision::load_vision_spec(&files.vision)?;
     let images = super::vision::fixture_images(&vision)?;
 
     let mut tasks = weekend_tasks();
-    tasks.extend(text_tasks(&filename_input, &filename_prompt)?);
+    tasks.extend(text_tasks(&filename_input, &filename_prompt, &checkout)?);
     tasks.extend(probe_tasks(&filename_prompt, images));
     // The table's aliases: `json` is weekend_transient, `detailed_json` is
     // weekend_fixed, under the names the model slots are measured by.

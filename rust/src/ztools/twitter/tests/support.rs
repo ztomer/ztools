@@ -9,14 +9,13 @@ use crate::config::ZtoolsConfig;
 
 /// A `ZtoolsConfig` whose EVERY filesystem default points inside `root`.
 ///
-/// Not decoration. `ZtoolsConfig::default()` reads
-/// `~/.cache/twitter/debug_tweets.json`, `~/Projects/ztools` and
-/// `~/Projects/ztools/conf/twitter.toml`, so a default config in a unit test
-/// is three ways to touch the operator's disk — and the `[fallback]` table it
-/// needs came from this checkout, so the tests passed only while a developer
-/// had the right repo in the right place. Every path field is replaced, not
-/// just the two the current call happens to reach, so the next caller added
-/// here cannot pick up a `~` by accident.
+/// Not decoration. `ZtoolsConfig::default()` reads a cache file, the Playwright
+/// collector's checkout and that checkout's `conf/twitter.toml`, so a default
+/// config in a unit test is three ways to touch the operator's disk — and the
+/// `[fallback]` table it needs came from this checkout, so the tests passed
+/// only while a developer had the right repo in the right place. Every path
+/// field is replaced, not just the two the current call happens to reach, so
+/// the next caller added here cannot pick up a `~` by accident.
 pub(super) fn sandboxed_config(root: &Path) -> ZtoolsConfig {
     let conf = root.join("conf");
     std::fs::create_dir_all(&conf).unwrap();

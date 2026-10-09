@@ -26,9 +26,11 @@ use std::time::Instant;
 use serde::Serialize;
 
 use crate::ztools::eval::SignalStore;
+use crate::ztools::eval::context_fit;
+use crate::ztools::eval::context_fit::context_refusal;
 use crate::ztools::eval::model_resolve::is_generative_model;
 use crate::ztools::eval::prefill::{measure_prefill_rate, record_prefill_rate};
-use crate::ztools::eval::signals::{load_signals, record_signal, save_signals};
+use crate::ztools::eval::signals::{load_signals, record_task_signal, save_signals};
 use crate::ztools::eval::task_loader::{EvalTask, check_graded_score, run_check};
 use crate::ztools::eval::transport;
 use crate::ztools::eval::watchdog::{is_stalled, model_stall_duration};
@@ -283,8 +285,8 @@ fn run_eval_inner(
         // Before the budget, the retries and the signals: a prompt that cannot
         // fit is not an attempt, so it neither counts towards abandoning the
         // model as an outage nor records a timing (eval/context_fit.rs).
-        let prompt_bytes = task.messages.iter().map(|m| m.content.len()).sum();
-        if let Some(why) = crate::ztools::eval::context_fit::context_refusal(model, prompt_bytes) {
+        let prompt_bytes = context_fit::prompt_bytes(&task.messages);
+        if let Some(why) = context_refusal(model, prompt_bytes) {
             eprintln!("  ✗ NOT MEASURED {model} / {}: {why}", task.name);
             outcomes.push(TaskOutcome::context_refused(&task.name, why));
             continue;
@@ -296,10 +298,10 @@ fn run_eval_inner(
 
         if cfg.record_signals {
             let is_parse_failure = outcome.failure_category == "PARSE";
-            record_signal(
+            record_task_signal(
                 signals,
                 model,
-                &task.name,
+                task,
                 outcome.time_secs,
                 attempts_used > 1,
                 is_parse_failure,

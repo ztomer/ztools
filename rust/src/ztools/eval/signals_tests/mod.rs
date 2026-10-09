@@ -5,6 +5,12 @@
 //! (`paths`), WHAT the machine is doing (`pressure` and `pressure_tools`), and
 //! WHAT gets learned from it (`learning`).
 //!
+//! `identity` is the fourth, and the only one about the store's memory rather
+//! than its arithmetic: what a per-task series does when the task under its
+//! name is replaced. It is separate because it is the one place where a stored
+//! number is deliberately DISCARDED, and the rule for that needs a file to be
+//! wrong in.
+//!
 //! Every test that touches the environment constructs [`crate::test_env::TestEnv`]
 //! and nothing else. The `EnvGuard` and `Fixture` that used to live here each
 //! re-implemented the same save/restore loop over their own variable list,
@@ -22,6 +28,7 @@
 //! per file is a fixture that drifts, and a drift between those two would look
 //! exactly like a reader bug.
 
+mod identity;
 mod learning;
 mod paths;
 mod pressure;

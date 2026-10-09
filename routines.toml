@@ -1,5 +1,5 @@
 # routines manifest — how this project joins a scheduled routine.
-# See ~/Projects/routines/docs/STATUS_CONTRACT.md
+# See the `routines` harness's docs/STATUS_CONTRACT.md
 
 name = "ztools-weekend"
 description = "weekend planner: scrape, filter to the home region, draft with a local model"
@@ -15,7 +15,16 @@ description = "weekend planner: scrape, filter to the home region, draft with a 
 # The native binary; the `uv run --frozen wk` Python entry point was retired
 # 2026-09-13 with the rest of the Python runtime. Absolute path because the
 # routines runner's PATH has no /opt/homebrew.
-command = "/opt/homebrew/bin/ztools weekend-plan --md-out /Users/ztomer/Documents/weekend_plans/weekend_plan_latest.md"
+#
+# THE OUTPUT PATH IS DERIVED, NOT TYPED. `--md-out` takes the extra `_latest`
+# copy the tab reads, and it used to name one account's Documents folder
+# outright -- a path that worked on the machine it was written on and nowhere
+# else, and one the runner's `sh -c` had no way to vary. It is now the same
+# seam `store::weekend_output_dir()` resolves: `WEEKEND_OUTPUT_DIR` when the
+# operator has set it, else the documented store directory. The runner spawns
+# every command through `sh -c`, so the expansion happens where the reader
+# already looks, and the two halves cannot disagree about where plans live.
+command = "/opt/homebrew/bin/ztools weekend-plan --md-out \"${WEEKEND_OUTPUT_DIR:-$HOME/Documents/weekend_plans}/weekend_plan_latest.md\""
 schedule = "weekly on mon at 08:00"
 # A full run scrapes the web and drives a 35B model; the 120s default would
 # kill it and report a false failure.
@@ -35,11 +44,12 @@ timeout_ms = 30000
 # `weekend-plan --fetch-latest` reads the newest stored plan back (the same
 # discovery the status line uses), so opening the tab never re-plans. Absolute
 # path because the menubar is a GUI process whose PATH has no /opt/homebrew.
-# See ~/Projects/routines/docs/STATUS_CONTRACT.md
+# See the `routines` harness's docs/STATUS_CONTRACT.md
 # `refresh` re-plans on demand (the same scrape + model pipeline `run` uses)
 # into the same store the read side reads, so a refreshed tab shows the plan
-# that was actually generated, not a stale one.
+# that was actually generated, not a stale one. The output path is derived
+# (see `[run]`): the refresh writes where the status command reads.
 id = "ztools-weekend"
 title = "Weekend Plan"
 command = "/opt/homebrew/bin/ztools weekend-plan --fetch-latest"
-refresh = "/opt/homebrew/bin/ztools weekend-plan --md-out /Users/ztomer/Documents/weekend_plans/weekend_plan_latest.md"
+refresh = "/opt/homebrew/bin/ztools weekend-plan --md-out \"${WEEKEND_OUTPUT_DIR:-$HOME/Documents/weekend_plans}/weekend_plan_latest.md\""

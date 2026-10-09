@@ -172,12 +172,47 @@ pub fn validate_mixed_summary(data: &Value, source_text: &str) -> (i64, String) 
     (score, failures.join("; "))
 }
 
-/// Absolute paths listed one per line (`/lib/parser.py ...`).
+/// One listed row, in EITHER spelling: absolute (`/lib/parser.py …`) or
+/// repo-relative (`rust/src/manifest.rs`).
+///
+/// SHAPE, NOT SPELLING. The file-summary prompts used to name every file with an
+/// absolute prefix, so the scorer read its signal set by "line starts with `/`".
+/// The rows are repo-relative now (a row is a name, and the bytes behind it are
+/// resolved from the checkout — see `file_summary_content::live_root`), and had
+/// the predicate gone unchanged it would have read ZERO rows out of the signal
+/// half and hit the empty-signal arm of `validate_mixed_file_summary`, where
+/// `recall` is 1.0: every model would have scored full marks for a summary that
+/// described nothing, because the question would have looked empty. So a row is
+/// recognised by its SHAPE — a trimmed line with no interior whitespace, not
+/// starting `-`, `|` or `#`, and carrying a `.` or a `/` — and the two spellings
+/// are equal under it, which is why a model may answer in either.
+///
+/// The three leading exclusions are what make the loosened predicate safe, and
+/// they are structural rather than careful:
+///
+///   * `|` — the content block prefixes EVERY excerpt line, so no file's own
+///     text can impersonate a listed row (see `file_summary_content`'s header);
+///   * `-` — the prompts' bullet lines (`- Bad: "a python library"`) and the
+///     `--- BEGIN <row> ---` / `--- END <row> ---` fences around each excerpt;
+///   * `#` — a `## path: summary` markdown header is the ANSWER's shape, and it
+///     must never be read back as a row of the question.
+///
+/// A line with no interior whitespace is a row because a row IS one token: the
+/// old predicate's `split_whitespace().next()` was there to take the first token
+/// of `- Bad: "a python library"`, and that defence now lives in the `-`
+/// exclusion, where it also covers the fences.
+fn is_listed_row(line: &str) -> bool {
+    !line.is_empty()
+        && !line.starts_with(['-', '|', '#'])
+        && line.split_whitespace().nth(1).is_none()
+        && (line.contains('.') || line.contains('/'))
+}
+
+/// The rows the prompt lists, one per line, whatever spelling it spells them in.
 fn extract_file_paths(text: &str) -> Vec<String> {
     text.lines()
         .map(str::trim)
-        .filter(|line| line.starts_with('/') && (line.contains('.') || line.contains('/')))
-        .filter_map(|line| line.split_whitespace().next())
+        .filter(|line| is_listed_row(line))
         .map(str::to_string)
         .collect()
 }

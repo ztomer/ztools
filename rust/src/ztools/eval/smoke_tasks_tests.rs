@@ -15,8 +15,20 @@
 //! singular — makes a task impossible to pass, so the model is reported as
 //! broken when the PROMPT is wrong) and still DISCRIMINATING (a check list that
 //! a refusal passes is not measuring anything).
+//!
+//! The third half pins M5: that every prompt this suite sends fits every
+//! context window `conf/models/*.toml` documents. The smoke path sends its
+//! prompts without consulting `eval/context_fit.rs`, and "these are small" is a
+//! claim about numbers nobody wrote down — the same claim that let
+//! `file_summary` grow past `foundation`'s window and score a 0 the model never
+//! earned.
 
 use super::*;
+use crate::test_env::TestEnv;
+use crate::ztools::eval::context_fit::MAX_CHARS_PER_TOKEN;
+use crate::ztools::eval::context_fit::{context_refusal, prompt_bytes, tokens_at_least};
+use crate::ztools::eval::model_resolve::documented_context_window;
+use std::path::Path;
 
 /// `(name, checks)` — the smoke roster row for row. Each check is rendered as
 /// its `Debug` form, which names the `run_check` arm that grades it, so this
@@ -163,4 +175,104 @@ fn a_non_answer_cannot_pass_any_smoke_task() {
             task.name
         );
     }
+}
+
+/// M5: every smoke prompt fits every DOCUMENTED context window, the smallest
+/// included.
+///
+/// The smoke path never consults `eval/context_fit.rs`: `model_eval::eval_model`
+/// (`--suite smoke`, the default suite) serialises `case.messages` and sends them,
+/// because these prompts are small. That was once said of `file_summary` too, and
+/// its prompt grew to ~22.6 KB against `foundation`'s 4096-token window — nothing
+/// compared the two, the request could not succeed, and the task landed in the
+/// table as a 0 reading "this model summarises files badly" when the model was
+/// never shown the files (`context_fit.rs`'s header). A belief nobody measures is
+/// a belief that decays. This is the measurement, and it runs on every gate
+/// rather than inside a sweep nobody schedules.
+///
+/// The bytes counted are the ones the runner REFUSES on:
+/// `context_fit::prompt_bytes` over the task's own messages — the same call
+/// `run_eval_inner` makes before the budget and the retries, and the same text
+/// `eval_model` puts in the request body. Not a re-implementation: that sum has
+/// one definition and both paths call it.
+///
+/// The windows scanned are the ones `conf/models/*.toml` DOCUMENTS. A file stem
+/// is the model-family name `documented_context_window` matches a served id
+/// against, so `foundation.toml`'s window is what a request for `foundation` is
+/// refused on. A family that documents no window is never refused for anything,
+/// so it is not a window this gate can claim to have covered.
+#[test]
+fn every_smoke_prompt_fits_every_documented_context_window() {
+    // Sandboxed, so a peer's sandbox cannot redirect the conf read underneath
+    // us: with `ZTOOLS_CONF_DIR` unpointed, a concurrent `TestEnv` could make
+    // `documented_context_window` answer `None`, and this test would pass by
+    // finding no windows at all. Pointed at the SHIPPED conf, so the windows are
+    // the real ones this repo ships.
+    let env = TestEnv::new();
+    let shipped_conf = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("CARGO_MANIFEST_DIR is <repo>/rust")
+        .join("conf");
+    env.set_managed("ZTOOLS_CONF_DIR", shipped_conf.as_os_str());
+
+    let mut windows: Vec<(String, u64)> = Vec::new();
+    let models_dir = shipped_conf.join("models");
+    for entry in std::fs::read_dir(&models_dir).expect("the shipped conf/models dir is readable") {
+        let path = entry.expect("a dir entry is readable").path();
+        if path.extension().and_then(|e| e.to_str()) != Some("toml") {
+            continue;
+        }
+        // Owned, because the outlives-the-loop list is the scan's own result and
+        // `path` dies with the iteration it came from.
+        let Some(family) = path.file_stem().and_then(|s| s.to_str()).map(str::to_owned) else {
+            continue;
+        };
+        if let Some(window) = documented_context_window(&family) {
+            windows.push((family, window));
+        }
+    }
+    windows.sort_unstable();
+    assert!(
+        !windows.is_empty(),
+        "no conf/models/*.toml documents a context_window, so this gate scanned \
+         nothing and would pass whatever the smoke prompts grow into"
+    );
+
+    let tasks = get_built_in_smoke_tasks();
+    assert!(!tasks.is_empty(), "the smoke roster is empty");
+    for task in &tasks {
+        // The bytes that WILL be sent: what the runner refuses on, and what
+        // `eval_model` serialises into the request body.
+        let bytes = prompt_bytes(&task.messages);
+        let tokens = tokens_at_least(u64::try_from(bytes).unwrap_or(u64::MAX));
+        for (family, window) in &windows {
+            let why = context_refusal(family, bytes);
+            assert!(
+                why.is_none(),
+                "{} sends {bytes} bytes, which is at least {tokens} tokens at \
+                 {MAX_CHARS_PER_TOKEN} chars/token -- {family} documents a \
+                 {window}-token window, so the runner would refuse this task \
+                 instead of measuring it: {why:?}",
+                task.name
+            );
+        }
+    }
+
+    // And with room to spare, stated as ONE number so a failure names the
+    // margin rather than only the boundary: the LARGEST smoke prompt against the
+    // SMALLEST documented window.
+    let largest = tasks
+        .iter()
+        .map(|t| prompt_bytes(&t.messages))
+        .max()
+        .expect("the smoke roster is non-empty");
+    let largest_tokens = tokens_at_least(u64::try_from(largest).unwrap_or(u64::MAX));
+    let smallest = windows.iter().map(|(_, w)| *w).min().expect("non-empty");
+    assert!(
+        largest_tokens < smallest,
+        "the largest smoke prompt is {largest} bytes ({largest_tokens} tokens at \
+         {MAX_CHARS_PER_TOKEN} chars/token) and the smallest documented window is \
+         {smallest} tokens: a prompt that grows now has no headroom at all"
+    );
+    drop(env);
 }

@@ -1,9 +1,9 @@
 # The gate of record, on every push and pull request.
 #
-# WHY THIS EXISTS (ROADMAP G6, decided 2026-10-06). The gate used to run only
-# from a pre-push hook, and `core.hooksPath` is local config: a fresh clone had
-# no gate at all, and nothing outside this machine ever checked a commit. This
-# job runs the SAME step list -- `make ci` -> gates_of_heck's local_ci.sh ->
+# WHY THIS EXISTS (ROADMAP Phase L, item L2 -- decided 2026-10-06). The gate used
+# to run only from a pre-push hook, and `core.hooksPath` is local config: a fresh
+# clone had no gate at all, and nothing outside this machine ever checked a commit.
+# This job runs the SAME step list -- `make ci` -> gates_of_heck's local_ci.sh ->
 # .gatesrc GOH_CI_STEPS -- so CI cannot be weaker or stronger than the hook.
 #
 # macOS on Apple silicon, because that is the platform this tool ships for:
@@ -11,7 +11,9 @@
 #
 # gates_of_heck is cloned at its main HEAD, exactly what the local hooks
 # delegate to at runtime. Its install.sh is the documented bootstrap: it builds
-# the native `goh` binary the structural layer execs.
+# the native `goh` binary the structural layer execs. PINNING that clone to a
+# NAMED release is ROADMAP G6, a separate owner decision -- deliberately left
+# open here, so a `main` checkout is an unforced error and not a hidden one.
 name: ci
 
 on:
@@ -61,24 +63,76 @@ jobs:
             rust
             vendor/camoufox-rs
 
-      - name: Gate tools
-        uses: taiki-e/install-action@v2
+      # THE TOOLS ONLY THIS REPO'S OWN STEPS NEED (ROADMAP G4). `cargo audit
+      # --file rust/Cargo.lock` and `cargo deny --manifest-path rust/Cargo.toml
+      # check` are steps .gatesrc added (2026-10-05), and gates_of_heck's manifest
+      # cannot name them: it lists the tools ITS gates refuse without, and it has
+      # no way to know a consumer grew a step. So they are named once, in
+      # tools/ci_tools.tsv, and this step READS them rather than spelling them
+      # here -- one place, checked in, and the gate can see it.
+      #
+      # WHY THE READ IS `set -euo pipefail` WITH AN EMPTINESS CHECK. An empty tool
+      # list installs nothing and passes having done nothing, which is the failure
+      # G4 exists to remove arriving by the back door. A missing file, an
+      # all-comments file and a whitespace-only file each fail the read itself
+      # (sed exits non-zero, and `grep -v` exits 1 when it keeps no line, which
+      # `pipefail` propagates out of the command substitution), and the message
+      # names the file so the runner says which line to fix.
+      - name: Gate tools this repo's own steps need
+        id: ci_tools
+        run: |
+          set -euo pipefail
+          tools="$(sed -e 's/#.*//' -e 's/[[:space:]]*$//' tools/ci_tools.tsv | grep -v '^[[:space:]]*$' | paste -sd, -)"
+          [ -n "$tools" ] || { echo "::error::tools/ci_tools.tsv names no tools"; exit 1; }
+          echo "tools=$tools" >> "$GITHUB_OUTPUT"
+
+      - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-audit,cargo-deny,cargo-llvm-cov
+          tool: ${{ steps.ci_tools.outputs.tools }}
 
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
 
+      # pytest is what `python3 -m pytest tools/tests -q` -- a .gatesrc step --
+      # runs, and the gate's manifest does not name it: the manifest lists the
+      # tools its gates REFUSE without, and a missing pytest fails loudly at the
+      # step that needs it rather than at a gate that declines to run.
+      # ruff and shellcheck are NOT installed here any more. The manifest step
+      # below names both (measured 2026-10-08), so installing them twice in one
+      # job is two paths for one tool -- the drift G4 is about, in miniature.
       - name: Python and shell tools
         run: |
-          python -m pip install --upgrade ruff pytest
-          brew install shellcheck
+          python -m pip install --upgrade pytest
 
       - name: gates_of_heck
         run: |
           git clone --depth 1 https://github.com/ztomer/gates_of_heck "$GOH_DIR"
           "$GOH_DIR/install.sh" "$GITHUB_WORKSPACE"
+
+      # THE GATE'S OWN MANIFEST, NOT A COPY OF IT (ROADMAP G4). Run 37855122727
+      # died at step 1/12 with `cargo-machete is not installed, and this gate
+      # does not pass without the step it runs`, because .gatesrc's rust step
+      # needs it and this workflow's hand-copied tool list did not have it. The
+      # gate ships required_tools.py precisely so a consumer never copies that
+      # list: its own help cites antiknub's first CI run going red on v0.20.0 for
+      # exactly this, with shellcheck. Read from it, so the day a gate gains a
+      # requirement the runner gains the install with it.
+      #
+      # CAPTURED, THEN PIPED, NOT eval'd. `eval "$(...)"` of a command that failed
+      # runs nothing and the step passes having installed nothing -- the defect
+      # this step removes, arriving by the back door. So the output is captured
+      # under `set -euo pipefail`, the `#` lines (the names it cannot name, like
+      # `needs cargo: rustup`) are dropped, and what is left goes to `bash -eux`,
+      # where a failed `brew install` or `cargo install` fails the step.
+      #
+      # AFTER the clone, because it runs the manifest: $GOH_DIR is where the
+      # clone puts it, and it is set at the top of this job.
+      - name: Gate tools from the gate's manifest
+        run: |
+          set -euo pipefail
+          cmds="$(python3 "$GOH_DIR/gates/required_tools.py" --repo . --install)"
+          grep -v '^#' <<<"$cmds" | bash -eux
 
       - name: make ci
         run: make ci

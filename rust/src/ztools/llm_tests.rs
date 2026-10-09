@@ -121,3 +121,33 @@ fn an_unreachable_host_is_an_error() {
     let err = chat(&request("http://127.0.0.1:1"), &budget()).unwrap_err();
     assert!(err.to_string().contains("Failed to send request"), "{err}");
 }
+
+#[test]
+fn a_prompt_that_overflows_documented_window_is_refused_before_wire() {
+    let env = crate::test_env::TestEnv::new();
+    let shipped_conf = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("CARGO_MANIFEST_DIR is <repo>/rust")
+        .join("conf");
+    env.set_managed("ZTOOLS_CONF_DIR", shipped_conf.as_os_str());
+
+    let huge_user = "a".repeat(25_000);
+    let req = ChatRequest {
+        base_url: "http://127.0.0.1:1", // unreachable, must not even be dialed
+        model: "foundation",
+        system: None,
+        user: &huge_user,
+        json: false,
+    };
+    let err = chat(&req, &budget()).unwrap_err();
+    assert!(
+        err.to_string().contains("prompt does not fit"),
+        "expected context refusal, got: {err}"
+    );
+    assert!(
+        err.to_string()
+            .contains("foundation's whole context window is 4096"),
+        "expected window mentioned, got: {err}"
+    );
+    drop(env);
+}

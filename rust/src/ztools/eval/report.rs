@@ -4,7 +4,7 @@
 //! (per-model history with truncated-run quarantine), and the metric halves of
 //! `report_metrics.py` (winners, score stats, CSV export, historical trends).
 //!
-//! Two rules carried over verbatim:
+//! Three rules carried over verbatim:
 //!
 //! - **Test doubles never enter the production leaderboard**: a `mock-model`
 //!   once sat at mean 100 atop the trend table.
@@ -15,6 +15,12 @@
 //!   refuses to average them; writing them to a separate quarantine FILE was
 //!   the first design and was wrong (a second store is a second thing
 //!   consumers forget to read).
+//! - **A row is identified by its task AND the task's fingerprint.** The name
+//!   alone was enough until a task was replaced under it: `file_summary` on
+//!   2026-10-08 began asking a different question (M1), and every row stored
+//!   under that name before then describes the other one. An entry written
+//!   before fingerprints existed carries none, and absence means UNKNOWN --
+//!   never current -- so no aggregate averages it with the new ones.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -24,6 +30,7 @@ use serde::{Deserialize, Serialize};
 use crate::units::{count, signed};
 use crate::ztools::eval::completeness::{Completeness, record_is_complete};
 use crate::ztools::eval::runner::TaskOutcome;
+use crate::ztools::eval::task_fingerprint::{TaskIdentities, current_task_identities, standing_of};
 
 /// Where eval artefacts live when the caller does not say otherwise.
 #[must_use]
@@ -64,7 +71,13 @@ impl ModelRun {
 ///
 /// `complete` is ABSENT on records written before truncation tracking existed,
 /// and absence means COMPLETE -- defaulting old entries to incomplete would
-/// retroactively disqualify real measurements.
+/// retroactively disqualify real measurements. The opposite rule holds for
+/// `fingerprint`: it is ABSENT on every record written before 2026-10-08, which
+/// is every record on disk, and absence means UNKNOWN. Reading an absent
+/// fingerprint as the current one is precisely how the pre-M1 `file_summary`
+/// rows would be averaged with the post-M1 rows. Old entries stay on disk
+/// untouched; an aggregate that can see they are not the task it is being asked
+/// about simply does not average them, and says how many it set aside.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryEntry {
     pub date: String,
@@ -75,6 +88,13 @@ pub struct HistoryEntry {
     pub time: Option<f64>,
     #[serde(default = "default_true")]
     pub complete: bool,
+    // `fingerprint` on the wire, the same key the per-task signal series in
+    // `conf/eval_signals.json` files its identity under, so one word means one
+    // thing across both stores. `default` is load-bearing: every entry on disk
+    // today omits it, and an omitted key deserialises to None rather than
+    // failing or defaulting to the current task.
+    #[serde(default)]
+    pub fingerprint: Option<String>,
 }
 
 const fn default_true() -> bool {
@@ -89,7 +109,9 @@ fn history_path(eval_dir: Option<&Path>) -> PathBuf {
 /// Append this run's per-task scores to `eval_history.json`, keyed by model.
 ///
 /// Test doubles are skipped entirely; entries from an incomplete run carry
-/// `complete: false` so [`load_historical_stats`] can refuse to average them.
+/// `complete: false` so [`load_historical_stats`] can refuse to average them,
+/// and every entry carries the fingerprint of the task it was taken against so
+/// a run against a REPLACED task is not averaged with the runs before it.
 ///
 /// # Errors
 ///
@@ -112,6 +134,25 @@ pub fn save_historical_results(
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default();
+    // Which task each name currently IS, as this process loaded it. A measured
+    // task absent from the set would write a row no aggregate can ever average,
+    // and the run would look perfectly healthy while doing it, so the names are
+    // named rather than left to be inferred from a zeroed trend table.
+    let identities = current_task_identities();
+    let unresolved: Vec<&str> = run
+        .outcomes
+        .iter()
+        .filter(|o| o.was_measured())
+        .map(|o| o.task.as_str())
+        .filter(|task| !identities.contains_key(*task))
+        .collect();
+    if !unresolved.is_empty() {
+        eprintln!(
+            "⚠ no task fingerprint registered for {}, so their history entries will not be averaged: \
+             the loader registers every task it hands out",
+            unresolved.join(", ")
+        );
+    }
     // An unmeasured row holds no score. Writing its placeholder 0 made the
     // history average an outage, or a prompt the model was never sent, into
     // the model's mean as though it had answered wrong.
@@ -127,6 +168,7 @@ pub fn save_historical_results(
                 None
             },
             complete: record_is_complete(run.completeness.as_ref()),
+            fingerprint: identities.get(&outcome.task).cloned(),
         });
     }
 
@@ -159,19 +201,48 @@ fn load_history(eval_dir: Option<&Path>) -> BTreeMap<String, Vec<HistoryEntry>> 
 /// time rather than write time; `excluded` is surfaced because a model whose
 /// history is mostly truncated runs has a `runs` count that no longer matches
 /// its entry count, and that discrepancy is itself the finding.
+///
+/// `superseded` and `incomplete` are the two reasons an entry lands in
+/// `excluded`, and they overlap (a truncated run of a replaced task is both).
+/// A model whose ENTIRE history is one or the other keeps a row with `runs: 0`
+/// rather than vanishing: "no history" and "history none of which is about this
+/// task" are different findings, and only one of them is true here.
 #[derive(Debug, Clone, Serialize)]
 pub struct ModelStats {
     pub mean: f64,
     pub median: f64,
     pub stdev: f64,
+    /// 0 when nothing is countable. That is the absence of a value, NOT a score
+    /// of zero, and `render_trends` prints a dash for it.
     pub min: i64,
     pub max: i64,
     pub runs: usize,
+    /// Every entry not averaged, for any reason.
     pub excluded: usize,
+    /// Of those, how many were taken against a task that is not the task it is
+    /// now: fingerprint absent or different.
+    pub superseded: usize,
+    /// Of those, how many came from a truncated run.
+    pub incomplete: usize,
 }
 
+/// The aggregate against the fingerprints this process loaded.
 #[must_use]
 pub fn load_historical_stats(eval_dir: Option<&Path>) -> BTreeMap<String, ModelStats> {
+    historical_stats(eval_dir, &current_task_identities())
+}
+
+/// The aggregate, against an explicit set of current fingerprints.
+///
+/// Pure, so the rule is pinned without the process-wide registry and without a
+/// file the test cannot control. An entry is COUNTABLE when its run was
+/// complete AND the task it names is the task it is now; everything else is set
+/// aside and counted, never dropped and never rewritten.
+#[must_use]
+pub fn historical_stats(
+    eval_dir: Option<&Path>,
+    current: &TaskIdentities,
+) -> BTreeMap<String, ModelStats> {
     let mut stats = BTreeMap::new();
     for (model, entries) in load_history(eval_dir) {
         if entries.is_empty() {
@@ -179,16 +250,36 @@ pub fn load_historical_stats(eval_dir: Option<&Path>) -> BTreeMap<String, ModelS
         }
         // Absent `complete` field deserializes to true (serde default), so
         // legacy entries are trusted exactly like Python's `.get(..., True)`.
-        let countable: Vec<&HistoryEntry> = entries.iter().filter(|e| e.complete).collect();
-        let excluded = entries.len() - countable.len();
-        let mut scores: Vec<i64> = countable.iter().map(|e| e.score).collect();
-        if scores.is_empty() {
-            continue;
+        // An absent `fingerprint` deserializes to None, which is the opposite
+        // default and for the opposite reason: see `HistoryEntry`.
+        let mut scores: Vec<i64> = Vec::new();
+        let mut excluded = 0usize;
+        let mut superseded = 0usize;
+        let mut incomplete = 0usize;
+        for entry in &entries {
+            let standing = standing_of(entry.fingerprint.as_deref(), current, &entry.task);
+            if !entry.complete {
+                incomplete += 1;
+            }
+            if !standing.counts() {
+                superseded += 1;
+            }
+            if entry.complete && standing.counts() {
+                scores.push(entry.score);
+            } else {
+                excluded += 1;
+            }
         }
         scores.sort_unstable();
         let n = scores.len();
-        let mean = signed(scores.iter().sum::<i64>()) / count(n);
-        let median = if n % 2 == 1 {
+        let mean = if n == 0 {
+            0.0
+        } else {
+            signed(scores.iter().sum::<i64>()) / count(n)
+        };
+        let median = if n == 0 {
+            0.0
+        } else if n % 2 == 1 {
             signed(scores[n / 2])
         } else {
             signed(scores[n / 2 - 1] + scores[n / 2]) / 2.0
@@ -212,10 +303,12 @@ pub fn load_historical_stats(eval_dir: Option<&Path>) -> BTreeMap<String, ModelS
                 mean,
                 median,
                 stdev,
-                min: scores[0],
-                max: scores[n - 1],
+                min: scores.first().copied().unwrap_or(0),
+                max: scores.last().copied().unwrap_or(0),
                 runs: n,
                 excluded,
+                superseded,
+                incomplete,
             },
         );
     }
@@ -250,39 +343,114 @@ pub(super) const fn status_word(score: u8) -> &'static str {
     }
 }
 
-/// Render the historical trends table (mean/median/stdev/runs/excluded per
-/// model, best first, matching the Python report's ordering). Empty when no
-/// history exists yet.
+/// Render the historical trends table: mean/median/stdev/min/max/runs/excluded
+/// per model.
+///
+/// Countable models first and best of those first, matching the Python report's
+/// ordering. Empty when no history exists at all.
 #[must_use]
 pub fn render_historical_trends(eval_dir: Option<&Path>) -> Vec<String> {
-    let stats = load_historical_stats(eval_dir);
+    render_trends(eval_dir, &current_task_identities())
+}
+
+/// The trend table against an explicit set of current fingerprints: pure, so
+/// the set-aside rule is pinned without the registry.
+#[must_use]
+pub fn render_trends(eval_dir: Option<&Path>, current: &TaskIdentities) -> Vec<String> {
+    let stats = historical_stats(eval_dir, current);
     if stats.is_empty() {
         return Vec::new();
     }
     let mut rows: Vec<(&String, &ModelStats)> = stats.iter().collect();
-    rows.sort_by(|(_, a), (_, b)| b.mean.total_cmp(&a.mean));
+    // Countable models first, best mean of those first. A model with nothing
+    // countable sorts LAST rather than by its zeroed mean, where a model whose
+    // entire history is superseded would otherwise read as the worst model ever
+    // measured instead of the one nobody has measured on this task yet.
+    rows.sort_by(|(a_name, a), (b_name, b)| {
+        b.runs
+            .min(1)
+            .cmp(&a.runs.min(1))
+            .then_with(|| b.mean.total_cmp(&a.mean))
+            .then_with(|| a_name.cmp(b_name))
+    });
 
     let mut lines = vec![
-        "Historical Trends (countable runs only; truncated entries excluded)".to_string(),
+        "Historical Trends (only entries whose task fingerprint is the current task's)".to_string(),
         format!(
-            "{:<36} {:>6} {:>6} {:>7} {:>5} {:>5} {:>5} {:>9}",
-            "Model", "Mean", "Median", "Stdev", "Min", "Max", "Runs", "Excluded"
+            "{:<36} {:>6} {:>6} {:>7} {:>5} {:>5} {:>5} {:>9} {:>9}",
+            "Model", "Mean", "Median", "Stdev", "Min", "Max", "Runs", "Excluded", "Superseded"
         ),
     ];
     for (name, s) in rows {
+        // A model with nothing countable still gets its row -- with dashes
+        // where its statistics would be, because a 0 there would be a score of
+        // zero, which is a different claim.
+        let row = if s.runs == 0 {
+            format!(
+                "{:<36} {:>6} {:>6} {:>7} {:>5} {:>5} {:>5} {:>9} {:>9}",
+                truncate_name(name),
+                "—",
+                "—",
+                "—",
+                "—",
+                "—",
+                s.runs,
+                s.excluded,
+                s.superseded
+            )
+        } else {
+            format!(
+                "{:<36} {:>6.0} {:>6.0} {:>7.1} {:>5} {:>5} {:>5} {:>9} {:>9}",
+                truncate_name(name),
+                s.mean,
+                s.median,
+                s.stdev,
+                s.min,
+                s.max,
+                s.runs,
+                s.excluded,
+                s.superseded
+            )
+        };
+        lines.push(row);
+    }
+    // The set-aside count, with its reasons: a mean that quietly ignores half
+    // the file is the defect this table exists to make visible. The TOTAL is
+    // `excluded` and the reasons are a BREAKDOWN, never a sum -- a truncated run
+    // of a replaced task is both, so adding the two clauses would claim more
+    // entries were set aside than the file holds. Each clause is stated only
+    // when it is non-zero, and the overlap is said out loud when it is possible.
+    let excluded: usize = stats.values().map(|s| s.excluded).sum();
+    let superseded: usize = stats.values().map(|s| s.superseded).sum();
+    let incomplete: usize = stats.values().map(|s| s.incomplete).sum();
+    if excluded > 0 {
+        let mut why: Vec<String> = Vec::new();
+        if superseded > 0 {
+            why.push(format!(
+                "{superseded} against a superseded task (fingerprint absent or different)"
+            ));
+        }
+        if incomplete > 0 {
+            why.push(format!("{incomplete} from a truncated run"));
+        }
+        let overlap = superseded > 0 && incomplete > 0;
         lines.push(format!(
-            "{:<36} {:>6.0} {:>6.0} {:>7.1} {:>5} {:>5} {:>5} {:>9}",
-            truncate_name(name),
-            s.mean,
-            s.median,
-            s.stdev,
-            s.min,
-            s.max,
-            s.runs,
-            s.excluded
+            "Set aside: {} {} not averaged — {}{}",
+            excluded,
+            entries_word(excluded),
+            why.join(", "),
+            if overlap {
+                "; a truncated run of a replaced task is both"
+            } else {
+                ""
+            }
         ));
     }
     lines
+}
+
+const fn entries_word(n: usize) -> &'static str {
+    if n == 1 { "entry" } else { "entries" }
 }
 
 pub(super) fn truncate_name(name: &str) -> String {
@@ -294,180 +462,5 @@ pub(super) fn truncate_name(name: &str) -> String {
 }
 
 #[cfg(test)]
-pub(in crate::ztools::eval) mod tests {
-
-    use super::*;
-    use serde_json::json;
-
-    pub(in crate::ztools::eval) fn outcome(task: &str, score: u8) -> TaskOutcome {
-        TaskOutcome {
-            task: task.to_string(),
-            score,
-            status: if score >= 90 { "ok" } else { "fail" }.to_string(),
-            ..Default::default()
-        }
-    }
-
-    pub(in crate::ztools::eval) fn run(
-        model: &str,
-        outcomes: Vec<TaskOutcome>,
-        complete: bool,
-    ) -> ModelRun {
-        let mut r = ModelRun::new(model, &[], outcomes);
-        if let Some(c) = r.completeness.as_mut() {
-            c.complete = complete;
-            if !complete {
-                c.missing = vec!["never-ran".to_string()];
-                c.reason = "test".to_string();
-            }
-        }
-        r
-    }
-
-    #[test]
-    fn test_models_never_enter_the_leaderboard() {
-        let dir = tempfile::tempdir().unwrap();
-        save_historical_results(
-            &run("mock-model", vec![outcome("t", 100)], true),
-            Some(dir.path()),
-        )
-        .unwrap();
-        save_historical_results(
-            &run("fake-70b", vec![outcome("t", 100)], true),
-            Some(dir.path()),
-        )
-        .unwrap();
-        save_historical_results(
-            &run("real-model", vec![outcome("t", 80)], true),
-            Some(dir.path()),
-        )
-        .unwrap();
-        let stats = load_historical_stats(Some(dir.path()));
-        assert!(!stats.contains_key("mock-model"), "{stats:?}");
-        assert!(!stats.contains_key("fake-70b"), "{stats:?}");
-        assert!(stats.contains_key("real-model"));
-    }
-
-    /// A row the model never answered holds no score, so the history must not
-    /// hold one either: its placeholder 0 used to be averaged into the mean.
-    #[test]
-    fn unmeasured_rows_never_enter_the_history() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut outage = outcome("down", 0);
-        outage.error = Some("Connection failed".to_string());
-        outage.failure_category = crate::ztools::eval::FAIL_INFRA.to_string();
-        let mut too_big = outcome("big", 0);
-        too_big.error = Some("prompt does not fit".to_string());
-        too_big.failure_category = crate::ztools::eval::FAIL_CONTEXT.to_string();
-        save_historical_results(
-            &run("real-model", vec![outcome("t", 80), outage, too_big], true),
-            Some(dir.path()),
-        )
-        .unwrap();
-        let stats = load_historical_stats(Some(dir.path()));
-        assert_eq!(stats["real-model"].runs, 1, "{stats:?}");
-        assert_exact!(stats["real-model"].mean, 80.0);
-    }
-
-    #[test]
-    fn truncated_entries_are_written_marked_and_excluded_from_averages() {
-        // MARKED, not dropped: the individual scores exist on disk...
-        let dir = tempfile::tempdir().unwrap();
-        save_historical_results(
-            &run("ornith-test", vec![outcome("easy", 100)], false),
-            Some(dir.path()),
-        )
-        .unwrap();
-        let raw: BTreeMap<String, Vec<HistoryEntry>> = serde_json::from_str(
-            &std::fs::read_to_string(dir.path().join("eval_history.json")).unwrap(),
-        )
-        .unwrap();
-        assert!(
-            !raw["ornith-test"][0].complete,
-            "verdict travels with the entry"
-        );
-
-        // ...but no aggregate ever averages them, and the discrepancy between
-        // runs and entry count is surfaced rather than hidden.
-        let stats = load_historical_stats(Some(dir.path()));
-        assert!(
-            !stats.contains_key("ornith-test"),
-            "nothing countable -> no stats: {stats:?}"
-        );
-
-        save_historical_results(
-            &run("ornith-test", vec![outcome("easy", 60)], true),
-            Some(dir.path()),
-        )
-        .unwrap();
-        let stats = load_historical_stats(Some(dir.path()))
-            .get("ornith-test")
-            .unwrap()
-            .clone();
-        assert_eq!((stats.runs, stats.excluded), (1, 1));
-        assert_exact!(stats.mean, 60.0, "the unclean 100 must not be averaged");
-    }
-
-    #[test]
-    fn legacy_records_without_the_complete_field_are_trusted() {
-        let dir = tempfile::tempdir().unwrap();
-        let legacy = json!({
-            "old-model": [
-                {"date": "2026-01-01", "timestamp": 1_767_225_600.0, "task": "t",
-                 "score": 90, "time": 1.0}
-            ]
-        });
-        std::fs::write(dir.path().join("eval_history.json"), legacy.to_string()).unwrap();
-        let stats = load_historical_stats(Some(dir.path()));
-        assert_eq!(stats["old-model"].runs, 1, "absent complete means complete");
-        assert_eq!(stats["old-model"].excluded, 0);
-    }
-
-    #[test]
-    fn zero_scores_count_toward_the_mean() {
-        // `if e.get("score")` falsy-for-zero once made a model that scored 0
-        // on half its runs look identical to one that never failed.
-        let dir = tempfile::tempdir().unwrap();
-        save_historical_results(
-            &run("m", vec![outcome("a", 100), outcome("b", 0)], true),
-            Some(dir.path()),
-        )
-        .unwrap();
-        let stats = load_historical_stats(Some(dir.path())).remove("m").unwrap();
-        assert_eq!((stats.runs, stats.min, stats.max), (2, 0, 100));
-        assert_exact!(stats.mean, 50.0);
-    }
-
-    #[test]
-    fn winners_take_the_best_score_per_task_across_runs() {
-        let runs = vec![
-            run("a", vec![outcome("t1", 90), outcome("t2", 40)], true),
-            run("b", vec![outcome("t1", 95), outcome("t2", 40)], true),
-        ];
-        let winners = compute_task_winners(&runs);
-        assert_eq!(winners["t1"].0, "b");
-        assert_eq!(winners["t2"].0, "a", "tie keeps the first winner seen");
-    }
-
-    #[test]
-    fn trends_render_worst_first_with_an_excluded_column() {
-        let dir = tempfile::tempdir().unwrap();
-        save_historical_results(
-            &run("slow-model", vec![outcome("t", 40)], true),
-            Some(dir.path()),
-        )
-        .unwrap();
-        save_historical_results(
-            &run("fast-model", vec![outcome("t", 90)], true),
-            Some(dir.path()),
-        )
-        .unwrap();
-        let lines = render_historical_trends(Some(dir.path()));
-        assert!(lines[0].starts_with("Historical Trends"));
-        assert!(lines[2].contains("fast-model"), "{lines:?}");
-        assert!(
-            lines[3].contains("slow-model"),
-            "sorted worst-first: {lines:?}"
-        );
-    }
-}
+#[path = "report_tests.rs"]
+pub(in crate::ztools::eval) mod tests;

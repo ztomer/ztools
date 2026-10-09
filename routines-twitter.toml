@@ -1,5 +1,5 @@
 # routines manifest — Twitter summarizer
-# See ~/Projects/routines/docs/STATUS_CONTRACT.md
+# See the `routines` harness's docs/STATUS_CONTRACT.md
 
 name = "ztools-twitter"
 description = "twitter summarizer: scrape feeds, summarize topics with local model"

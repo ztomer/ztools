@@ -6,6 +6,15 @@
 //! into it, `_effective_timeout` sizes request timeouts from it, and the
 //! capability samples feed the median-of-clean estimator (`samples.rs`).
 //!
+//! TWO KINDS OF SERIES LIVE IN ONE FILE, and they take OPPOSITE lessons from a
+//! task being replaced. A per-(model, task) series — p95 latency, retries,
+//! parse failures — is a running aggregate over how the model answered one
+//! question, so it restarts when the question changes (`record_observation`).
+//! A `_capabilities` sample is a measurement of the MODEL's speed, which no
+//! prompt can change, so it is never fingerprinted and never restarts. Read
+//! [`record_task_signal`] for why the distinction is drawn there and not
+//! here.
+//!
 //! WHAT THE MACHINE IS DOING lives in the `platform` submodule: which host
 //! published a reading, what each of its fields means, and the macOS/Linux
 //! mapping. It is a module of its own because it is a unit of reasoning the
@@ -27,6 +36,8 @@ use serde_json::Value;
 
 use crate::units::{count, whole_u64};
 use crate::ztools::eval::samples::{Sample, clean_estimate, migrate_sample_history};
+use crate::ztools::eval::task_fingerprint::{current_task_fingerprint, task_fingerprint};
+use crate::ztools::eval::task_loader::EvalTask;
 
 pub use platform::{
     MAX_CLEAN_RECLAIM_GB, MAX_CLEAN_SWAP_GB, MemoryPressure, PROC_MEMINFO, PressureSource, SYSCTL,
@@ -185,7 +196,16 @@ pub fn derived_timeout(model: &str, prompt_chars: usize, max_tokens: u32) -> u64
 /// per-model/task value, the per-task CONFIGURED timeout from
 /// `conf/config.toml [timeouts]` (fallback 600, `lib/llm/constants.py
 /// DEFAULT_TIMEOUT`), the documented floor, and the derived estimate.
-#[must_use]
+///
+/// The learned term is a PERFORMANCE estimate and is read across task
+/// fingerprints on purpose: how long this model takes on a task of this shape
+/// is evidence about the model's speed, not about its answer quality, and a
+/// prompt change does not make a previously measured latency wrong. Refusing to
+/// learn a timeout here — returning the floor because the fingerprint does not
+/// match — would remove the very ceiling that stops a wedged server idling.
+/// Quality-shaped fields (p95 of the CURRENT series, retries, parse failures)
+/// are the ones that restart with the task, in [`record_observation`].
+///
 /// # Panics
 ///
 /// If the configured timeouts cannot be ordered -- which requires a NaN in
@@ -225,6 +245,12 @@ pub fn effective_timeout(
 
 /// Record one completed task observation: p95 latency (EMA weighted toward
 /// recent), retry/parse counters, and the learned timeout derived from them.
+///
+/// The task's fingerprint comes from the registry — what this process loaded
+/// under `task_name` — because a caller that only has a NAME cannot compute the
+/// digest. A caller holding the [`EvalTask`] itself should prefer
+/// [`record_task_signal`].
+///
 /// # Panics
 ///
 /// If an existing signal or per-task entry is not a JSON object; see
@@ -233,6 +259,78 @@ pub fn record_signal(
     signals: &mut SignalStore,
     model: &str,
     task_name: &str,
+    time_taken: f64,
+    had_retries: bool,
+    is_parse_failure: bool,
+) {
+    let fingerprint = current_task_fingerprint(task_name);
+    record_observation(
+        signals,
+        model,
+        task_name,
+        fingerprint.as_deref(),
+        time_taken,
+        had_retries,
+        is_parse_failure,
+    );
+}
+
+/// [`record_signal`] for a caller holding the TASK, which is the honest
+/// direction: the digest comes from the task that was actually run rather than
+/// from whatever a loader registered under its name.
+///
+/// # Panics
+///
+/// If an existing signal or per-task entry is not a JSON object; see
+/// [`record_capability_sample`].
+pub fn record_task_signal(
+    signals: &mut SignalStore,
+    model: &str,
+    task: &EvalTask,
+    time_taken: f64,
+    had_retries: bool,
+    is_parse_failure: bool,
+) {
+    record_observation(
+        signals,
+        model,
+        &task.name,
+        Some(&task_fingerprint(task)),
+        time_taken,
+        had_retries,
+        is_parse_failure,
+    );
+}
+
+/// The store holds a RUNNING AGGREGATE per (model, task), not a list of
+/// samples, so "do not average samples taken under a different prompt" can only
+/// mean one thing here: START A NEW SERIES when the task's identity changes. A
+/// p95 read while the model worked through the OLD prompt would otherwise be
+/// blended into the new one as though it had answered the new question in that
+/// time — and the learned timeout derived from it would then size every later
+/// request against a prompt nobody sent. The observations set aside are counted
+/// on the series, so the loss is visible rather than silent.
+///
+/// The same rule is what makes `effective_timeout` and `derived_timeout` safe:
+/// they are PERFORMANCE estimates, not quality scores, and a timeout must never
+/// refuse to be learned because the fingerprint is unknown or different. A
+/// series that restarts has no learned timeout for its first observation, which
+/// falls back to the configured value, the DERIVED estimate (still available,
+/// because `_capabilities` is model speed and never resets) and the documented
+/// floor — so the ceiling that cuts a wedged server off is still there. That is
+/// why `_capabilities` is deliberately NOT fingerprinted: prefill rate, decode
+/// rate and cold start are properties of the MODEL and the box, and a prompt
+/// change does not make a previously measured rate wrong.
+///
+/// Two UNKNOWN identities accumulate as before (both absent). That is the
+/// un-registered path — `record_signal` with a name no loader registered — and
+/// there is nothing to compare against; treating it as a change would reset
+/// every series on every observation.
+fn record_observation(
+    signals: &mut SignalStore,
+    model: &str,
+    task_name: &str,
+    fingerprint: Option<&str>,
     time_taken: f64,
     had_retries: bool,
     is_parse_failure: bool,
@@ -250,6 +348,37 @@ pub fn record_signal(
         .entry(task_name.to_string())
         .or_insert_with(|| Value::Object(serde_json::Map::default()));
     let task = per_task.as_object_mut().expect("task entry is an object");
+
+    // Absent and null are the same state here: UNKNOWN. Every entry the store
+    // holds today is in it, which is why the first fingerprinted observation
+    // supersedes the series rather than joining it.
+    let stored = task.get(FINGERPRINT_KEY).and_then(Value::as_str);
+    if stored != fingerprint {
+        let discarded = task.get("samples").and_then(Value::as_u64).unwrap_or(0);
+        if discarded > 0 {
+            let already = task
+                .get(SUPERSEDED_KEY)
+                .and_then(Value::as_u64)
+                .unwrap_or(0);
+            task.insert(
+                SUPERSEDED_KEY.to_string(),
+                serde_json::json!(already + discarded),
+            );
+        }
+        for key in [
+            FINGERPRINT_KEY,
+            "p95_latency",
+            "samples",
+            "total_retries",
+            "parse_failures",
+            "timeout",
+        ] {
+            task.remove(key);
+        }
+    }
+    if let Some(fingerprint) = fingerprint {
+        task.insert(FINGERPRINT_KEY.to_string(), serde_json::json!(fingerprint));
+    }
 
     let samples = task
         .get("samples")
@@ -294,6 +423,43 @@ pub fn record_signal(
             task.insert("timeout".to_string(), serde_json::json!(new_timeout));
         }
     }
+}
+
+/// The key a per-task series files its identity under. Written only when the
+/// identity is known: an absent key is the same UNKNOWN state as a null one,
+/// and that is what every entry on disk today is.
+const FINGERPRINT_KEY: &str = "fingerprint";
+
+/// The key counting the observations a series discarded because the task under
+/// its name was replaced. Visible in `conf/eval_signals.json` itself, which is
+/// what makes the set-aside count auditable without a printer.
+const SUPERSEDED_KEY: &str = "superseded_samples";
+
+/// How many observations this (model, task) series has set aside because the
+/// task was replaced under the same name.
+///
+/// There is no printer for it in the CLI's report: no table there summarises
+/// the store, and inventing one would put a second rendering of the same fact on
+/// screen. The count lives on the series, next to the numbers it explains.
+#[must_use]
+pub fn superseded_samples(signals: &SignalStore, model: &str, task_name: &str) -> u64 {
+    signals
+        .get(model)
+        .and_then(|m| m.get(task_name))
+        .and_then(|t| t.get(SUPERSEDED_KEY))
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0)
+}
+
+/// Which task a per-(model, task) series was accumulated against, if any.
+#[must_use]
+pub fn series_fingerprint(signals: &SignalStore, model: &str, task_name: &str) -> Option<String> {
+    signals
+        .get(model)
+        .and_then(|m| m.get(task_name))
+        .and_then(|t| t.get(FINGERPRINT_KEY))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string)
 }
 
 fn json_p95(v: f64) -> Value {

@@ -210,8 +210,8 @@ fn conf_models_root_prefers_env_then_the_checkout_then_a_relative_path() {
         assert_eq!(conf_models_root(), conf.join("models"), "the env seam wins");
 
         // Without the env seam, a checkout under HOME is the next branch -- and
-        // it is the branch a real developer hits, because every
-        // `~/Projects/ztools` layout has one.
+        // it is the branch a real developer hits, because every home checkout
+        // layout has one.
         env.unset("ZTOOLS_CONF_DIR");
         assert_eq!(conf_models_root(), home.join("Projects/ztools/conf/models"));
 

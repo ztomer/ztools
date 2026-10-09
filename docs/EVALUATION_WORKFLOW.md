@@ -16,7 +16,7 @@ Whenever an evaluation run is conducted:
      - **Attribution Format**: Presence of bracket attributions `(@username | Mon DD HH:MM)`.
      - **Geographic & Semantic Accuracy**: Real GTA locations, correct indoor/outdoor weather classification.
      - **Sentinel Honesty**: Use of `""` / `"—"` for missing values instead of prompt-ordered constant placeholders (`$18-35`, `2-3 hours`).
-3. **Record Findings**: Document the comparative evaluation in [`docs/DEEP_MODEL_VS_GEMINI_EVALUATION.md`](file:///Users/ztomer/Projects/ztools/docs/DEEP_MODEL_VS_GEMINI_EVALUATION.md) and update [`walkthrough.md`](file:///Users/ztomer/.gemini/antigravity/brain/77973c1a-8269-410d-813d-7dc536d0c853/walkthrough.md).
+3. **Record Findings**: Document the comparative evaluation in [`docs/DEEP_MODEL_VS_GEMINI_EVALUATION.md`](DEEP_MODEL_VS_GEMINI_EVALUATION.md) and update [`walkthrough.md`]($HOME/.gemini/antigravity/brain/77973c1a-8269-410d-813d-7dc536d0c853/walkthrough.md).
 
 ---
 
@@ -33,7 +33,7 @@ Based on qualitative evaluation of historic and recent model runs, use these 4 t
 - **Problem**: Models occasionally label High Park or Nature Walks as `"indoor"`.
 - **Intervention**:
   - **Prompt Anchor**: Emphasize `"Venues with park, trail, nature, walk, garden, or festival in their name MUST be labeled 'outdoor'."`
-  - **Code Enforcement**: `correct_weather_labels` in [`weekend/enforce.py`](file:///Users/ztomer/Projects/ztools/weekend/enforce.py#L172) checks both `INDOOR_MARKERS` and `OUTDOOR_MARKERS` to automatically correct inverted labels.
+  - **Code Enforcement**: `correct_weather_labels` in [`weekend/enforce.rs`](../rust/src/ztools/weekend/enforce.rs) checks both `INDOOR_MARKERS` and `OUTDOOR_MARKERS` to automatically correct inverted labels.
 
 ### Action 3: Prevent Vague Placeholders in Location Cells
 - **Problem**: Models emit generic strings (`"Indoor venue"`, `"Outdoor venue"`, `"Park"`) when street addresses are omitted.

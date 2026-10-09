@@ -276,8 +276,11 @@ pub fn format_weekend_plan(
             );
         }
     }
-    // The run's own ledger, every run: what the gates dropped is the reading
-    // a week of plans is compared on (ROADMAP R1).
+    // The run's own ledger, every run: what the gates dropped is the reading a
+    // week of plans is compared on. That comparison has been taken and recorded
+    // in `docs/MODEL_QUIRKS.md` ("The weekend provenance ledger, read 2026-10-08"),
+    // and its finding is why this line stays: `unsourced` reads 0 whenever
+    // `extracted` does, so the line is only a reading once something was extracted.
     out.push_str(&health.provenance.line());
     out.push('\n');
 

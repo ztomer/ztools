@@ -6,9 +6,8 @@
 //! stub both share.
 //!
 //! WHAT THE SANDBOX IS FOR. `ZtoolsConfig::default()` names three paths on the
-//! developer's disk: `~/.cache/twitter/debug_tweets.json`,
-//! `~/Projects/ztools` (the Playwright collector) and
-//! `~/Projects/ztools/conf/twitter.toml`. Four of these tests passed the
+//! developer's disk: a cache file, the Playwright collector's checkout and
+//! that checkout's `conf/twitter.toml`. Four of these tests passed the
 //! default and were safe only because `run_summary` reads the cache
 //! EXCLUSIVELY when handed no tweets — one reorder and they wrote the
 //! operator's real cache. The third had already leaked in a quieter way: the

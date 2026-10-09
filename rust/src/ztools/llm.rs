@@ -72,6 +72,12 @@ enum Event {
 /// nor a chat completion. The raw body is included in a parse error, because
 /// the usual cause is a server answering something other than the API.
 pub fn chat(req: &ChatRequest<'_>, budget: &ChatBudget) -> Result<String> {
+    let prompt_bytes = req.system.map_or(0, str::len) + req.user.len();
+    if let Some(reason) = crate::ztools::eval::context_fit::context_refusal(req.model, prompt_bytes)
+    {
+        anyhow::bail!("{reason}");
+    }
+
     let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(budget.cap_secs))
         .build()?;

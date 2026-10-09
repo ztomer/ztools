@@ -11,6 +11,15 @@
 //! `TaskOutcome` does not carry — porting the math would mean extending the
 //! outcome record and plumbing content through the runner, a serialization
 //! decision, not a math port. If content capture lands, these two follow.
+//!
+//! WHY NOTHING HERE IS FINGERPRINTED (`task_fingerprint`): every function in
+//! this file aggregates over ONE run's outcomes — a `&[ModelRun]` built from a
+//! single roster load, in memory, seconds after that roster was built. There is
+//! no way for two task identities to reach one of these aggregates, so a
+//! fingerprint filter here would be theatre. The aggregates that DO span runs
+//! read the history FILE and live in `report.rs` (`historical_stats`) and
+//! `report_diff.rs` (`deltas_since`), which is where the fingerprints are
+//! checked. Recording this so the next reader does not have to re-derive it.
 
 use crate::units::{count, unsigned};
 use std::collections::{BTreeMap, BTreeSet};

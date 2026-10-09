@@ -1,10 +1,10 @@
 //! Emit the twitter summarizer's status for the `routines` harness.
 //!
-//! Port of `routines_twitter_status.py`, honouring
-//! `~/Projects/routines/docs/STATUS_CONTRACT.md`. READ-ONLY: it reads back the
-//! newest stored summary and makes no network call and runs no model — a
-//! status command that summarised would turn every daily report into a
-//! browser session plus an inference run.
+//! Port of `routines_twitter_status.py`, honouring the `routines` harness's
+//! `docs/STATUS_CONTRACT.md`. READ-ONLY: it reads back the newest stored
+//! summary and makes no network call and runs no model — a status command that
+//! summarised would turn every daily report into a browser session plus an
+//! inference run.
 //!
 //! Discovery is by mtime over every `*.md` in the store, through the same
 //! [`crate::ztools::store::newest_md`] the `--fetch-latest` tab uses. The

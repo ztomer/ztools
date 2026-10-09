@@ -219,6 +219,7 @@ fn child(home: &Path, gpu: &Path, port: u16) -> Command {
         // And the two directories the learning path writes.
         .env("EVAL_SIGNALS_DIR", home.join("signals"))
         .env("EVAL_OUTPUT_DIR", home.join("outputs"))
+        .env("EVAL_ALLOW_OVERSIZE", "1")
         .arg("--config")
         .arg(home.join("ztools.toml"))
         .args([

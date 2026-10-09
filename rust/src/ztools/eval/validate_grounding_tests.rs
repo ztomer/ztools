@@ -13,7 +13,11 @@ use super::*;
 use crate::ztools::eval::prompts::file_summary::FILE_SUMMARY_FILE_LIST;
 use serde_json::json;
 
-/// The listed paths, verbatim, as a model would echo them back.
+/// The listed rows, verbatim, repo-relative, as a model would echo them back.
+///
+/// The prompt spells them relatively too (the bytes behind a row are resolved from
+/// the checkout, `file_summary_content::live_root`), so "as a model echoes them"
+/// is now the row ITSELF rather than a longer spelling of it.
 fn listed() -> Vec<&'static str> {
     FILE_SUMMARY_FILE_LIST.lines().collect()
 }
@@ -260,18 +264,17 @@ fn a_filename_echo_never_reaches_a_grounded_description_score() {
 /// with no pinned truth has nothing to be graded against and would silently fall
 /// back to the verb heuristic; a pinned row that left the list is dead weight in
 /// the scorer and a lie in the header.
+///
+/// Compared directly, row for row and in order, because both tables are
+/// repo-relative now: the rows stopped being spelled with an absolute prefix when
+/// the renderer started resolving a checkout behind them
+/// (`file_summary_content::live_root`), so a prefix strip left here would have
+/// been a copy of the very thing this change removed.
 #[test]
 fn the_pinned_truth_covers_the_listed_rows_exactly() {
     assert_eq!(
         pinned_rows(),
-        listed()
-            .iter()
-            .map(|p| {
-                p.rsplit_once("/Users/ztomer/Projects/ztools/")
-                    .unwrap_or_else(|| panic!("{p} is not repo-absolute"))
-                    .1
-            })
-            .collect::<Vec<_>>(),
+        listed(),
         "FILE_SUMMARY_GROUND_TRUTH must be the file list, row for row and in order"
     );
     assert_eq!(pinned_rows().len(), 17);
@@ -382,27 +385,37 @@ fn grounding_is_lexical_and_therefore_blind_to_a_contradiction() {
 
 /// The lookup, pinned shape by shape.
 ///
-/// The roster's prompt lists ABSOLUTE paths, but what comes back is whatever the
-/// model chose to echo: the listed path, a repo-relative one, a bare basename, or
-/// the same with `./` and a trailing colon from a `## path: summary` header. A
-/// resolution rule that quietly stopped accepting any of those would leave every
-/// listed row falling back to the verb heuristic — and because the fallback still
-/// produces a score, nothing would go red. Calibrated: removing the bare-basename
-/// arm leaves every other control in this file green, which is why it is asserted
-/// here.
+/// The rows in the prompt are repo-relative now — a row is a name, and the bytes
+/// behind it are resolved from the checkout (`file_summary_content::live_root`).
+/// What comes back is still whatever the model chose to echo: the listed path, an
+/// ABSOLUTE spelling into the repo it was shown, a repo-relative one, a bare
+/// basename, or the same with `./` and a trailing colon from a
+/// `## path: summary` header. A resolution rule that quietly stopped accepting
+/// any of those would leave every listed row falling back to the verb heuristic —
+/// and because the fallback still produces a score, nothing would go red.
+/// Calibrated: removing the bare-basename arm leaves every other control in this
+/// file green, which is why it is asserted here.
+///
+/// The absolute spelling is the one that has to be asserted most carefully, and
+/// for the opposite reason to its doc comment's old claim: it is no longer what
+/// the prompt lists, so the ONLY thing keeping a model that answers in absolute
+/// paths scoreable is this arm. It is a real answer shape — models echo the paths
+/// they were shown, and a prompt read from any checkout no longer spells one.
+/// path-ok: an answer shape a model produces, not this repo's path.
 ///
 /// An UNLISTED path and an empty path must both resolve to nothing, for the same
 /// reason: `Check::FileSummary` and the smoke fixtures name other repos' files.
 #[test]
 fn a_row_resolves_from_every_shape_a_model_echoes_and_from_nothing_else() {
     for spelled in [
-        "/Users/ztomer/Projects/ztools/rust/src/units.rs",
         "rust/src/units.rs",
         "./rust/src/units.rs",
         "units.rs",
         "UNITS.RS",
-        "/Users/ztomer/Projects/ztools/rust/src/units.rs:",
+        "rust/src/units.rs:",
         "  rust/src/units.rs  ",
+        "/Users/ztomer/Projects/ztools/rust/src/units.rs", // path-ok: an answer shape a model echoes, not this repo's path
+        "/Users/ztomer/Projects/ztools/rust/src/units.rs:", // path-ok: the same shape inside a `## path: summary` header
     ] {
         assert_eq!(
             facts_for(spelled),

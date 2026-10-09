@@ -1298,3 +1298,91 @@ What this means in practice:
 - ABSOLUTE scores are not a prediction of production quality.
 - Re-validate the winning model at temperature 0.1 before writing it into
   `best_models`, since that is the setting it will actually run under.
+
+
+## The weekend provenance ledger, read 2026-10-08
+
+Read every `_Provenance: ..._` line in `~/Documents/weekend_plans/` (221 files,
+read-only). This is the whole ledger: **5 readings across 4 distinct plans**,
+2026-09-19 to 2026-10-05.
+
+What the four numbers count, and where:
+
+| number | gate that produced it | code |
+|---|---|---|
+| `extracted` | transient rows the model emitted before ANY gate | `rust/src/cli_ztools.rs:147` |
+| `unsourced` | rows dropped because >=60% of the name's significant words are not substrings of the fetched corpus | `cli_ztools.rs:150` -> `weekend/enforce.rs:453` (`drop_unsourced_rows`), `:431` (`row_is_sourced`), threshold `PROVENANCE_MIN_COVERAGE: f64 = 0.6` at `enforce.rs:415` |
+| `outside the window` | dated rows whose dates do not overlap the plan's Friday..Sunday | `cli_ztools.rs:167` -> `enforce.rs:314` (`drop_events_outside_window`) |
+| `excluded` | rows matching the operator's `exclude_places` (seasonal-event exception aside) | `cli_ztools.rs:158` -> `enforce.rs:224` (`drop_excluded_places`) |
+
+The footer itself is written at `weekend/health.rs:115` (`Provenance::line`), and
+`ztools status` reads the same four numbers back (`status.rs:172-177`). Order
+matters: the provenance gate runs FIRST, so a fabricated row is never judged on
+its dates or its exclusion match — `outside_window` and `excluded` therefore
+describe only rows that traced to something we fetched.
+
+The five readings, with each plan's own table row count as the consistency
+check:
+
+| plan weekend | written | extracted | unsourced | outside window | excluded | rows in its own table |
+|---|---|---|---|---|---|---|
+| Sep 18-20 2026 | 2026-09-19 21:50 | 4 | 0 | 0 | 0 | 4 |
+| Sep 25-27 2026 | 2026-09-26 09:05 | 3 | 0 | 0 | 0 | 3 |
+| Oct 02-04 2026 | 2026-09-29 13:44 | 0 | 0 | 0 | 0 | 0 |
+| Oct 09-11 2026 | 2026-10-05 14:59 | 0 | 0 | 0 | 0 | 0 |
+| `weekend_plan_latest.md` | 2026-10-05 14:58 | 0 | 0 | 0 | 0 | 0 |
+
+Every footer agrees with its own plan (extracted == rows listed, no plan claims
+more than it shows). `weekend_plan_latest.md` is byte-identical to the Oct 09-11
+plan, so it is not a fifth observation.
+
+**Week over week.** Totals per plan weekend, oldest first: 4/0/0/0, 3/0/0/0,
+0/0/0/0, 0/0/0/0. Across all five readings: **7 extracted, 0 unsourced, 0
+outside the window, 0 excluded.**
+
+**`unsourced` does not climb. It is 0 in all five readings (0 of 7 rows).** The
+number that moves is `extracted`: 4, then 3, then 0, then 0. Two consecutive
+weekends extracted nothing at all, so both plans fell back to the year-round
+fixed-venue list and printed the degraded warning — and that warning named no
+cause ("No live transient events found for this weekend (search/extraction
+yielded 0 events)"), which per `weekend/health.rs:52-74` means every query was
+answered and no engine was bot-walled. So `0 unsourced` here reads as "the gate
+never had a row to judge", not "nothing was invented".
+
+Two things this reading could NOT answer, stated rather than guessed:
+
+- A literal "most recent 7 calendar days" comparison does not exist. Of the 10
+  distinct calendar days carrying a plan file, the newest 7 are 2026-08-07
+  through 2026-10-05, and every August plan (213 files, named
+  `2026-08-06..08_*_plan.md`) has NO footer at all — the footer landed on
+  2026-09-19 in commit `e6b6124`. The only comparable unit is 4 consecutive
+  planned weekends.
+- The roadmap's "first reading was 5 extracted, 0 dropped" cannot be located.
+  The earliest reading persisted in the store is Sep 18-20 with **4** extracted,
+  0 dropped; the writer keys the file by weekend name and overwrites it, so an
+  earlier same-day run would not survive. Not reconstructed.
+
+**Lever decision: neither named lever is the fix, and this reading does not need
+one.** "The region list" filters CORPUS entries, not rows: `fetch.rs:174` calls
+`clean_search_results`, which drops any result whose `"{title} {body}"` lacks
+in-region evidence (`weekend_cache.rs:159` `has_region_evidence`). A per-engine
+result cap would sit at `search.rs:181-184` (`results = found; break;`) or at
+`fetch.rs:158` (`all_results.extend(outcome.results)`), truncating what a leg
+returns. Both SHRINK the corpus — and `row_is_sourced` judges a row by whether
+its name's words appear as substrings IN that corpus
+(`enforce.rs:436-440`), so a smaller corpus can only make MORE rows unsourced.
+Turning either knob while `extracted == 0` changes nothing the ledger can see,
+and if `unsourced` ever climbs it would move it the wrong way. The live problem
+is upstream of both counts: the extraction produced nothing, so the honest next
+reading is a week where `extracted > 0` again — otherwise the ledger stays a
+row of zeros that reports the fallback, not the weekend.
+
+## M3: Production Context Window Probe & Refusal Guard (2026-10-09)
+
+Measured against the live Osaurus server (`http://127.0.0.1:1337/v1/chat/completions`):
+- **On-device Foundation Model limit:** Probing with a 75KB (~16,083-token) prompt revealed that Osaurus reports:
+  `"prompt exceeds the Foundation Model context window (Content contains 16083 tokens, which exceeds the maximum allowed context size of 8192.)"` (HTTP 500 `internal_error`).
+  The actual server-side context capacity is 8,192 tokens. It does not silently truncate; it returns an error on overflow.
+- **Accuracy within context:** Needle-in-a-haystack prompts at ~7,100 tokens (needle at the end) and ~9,500 tokens (needle at the beginning) succeeded with exact recall, confirming that Foundation preserves full prefix and suffix context within its supported window.
+- **In-repo static guard:** `rust/src/ztools/llm.rs` checks `crate::ztools::eval::context_fit::context_refusal` before sending any request to the wire. Prompts whose lower-bound token estimate exceeds documented context windows (e.g. 4,096 in `conf/models/foundation.toml`) are refused immediately, allowing `model_fallback_chain` to skip the candidate with a logged reason rather than sending an overflow request across the wire.
+

@@ -371,3 +371,38 @@ the whole binary, both golden tests and the audit alike, and a green audit line 
 an all-clear on bytes that are still moving. Two habits make it safe: run the rewrite as
 its own invocation (`ZTOOLS_UPDATE_GOLDENS=1 cargo test --lib format_golden`), then
 re-run the whole binary **without** the variable before believing anything it said.
+
+## A test whose verdict depends on state another test writes (2026-10-08)
+
+`eval::task_fingerprint` keeps a process-wide registry — the tasks this process
+loaded, name to digest — because the history and signal writers reach those
+stores by task NAME and neither signature can be widened from their side. That
+registry is exactly the shape that makes a test's verdict a function of test
+ORDER: `signals_tests::learning` recorded a sample under the task name `t`,
+`report_tests` registered a different `t`, and the resulting reset made the
+p95-blending case fail only when the two ran in the same binary.
+
+The rule, which is the same rule as the golden-fixture one above over a
+different shared object: **a test that reads or writes process-wide state must
+either take names no other test uses, or reach the same decision through a
+path that takes the state as an argument.** Both halves are now true here —
+the aggregates have pure twins (`historical_stats`, `render_trends`,
+`deltas_since`) that take the identity set explicitly, and the signal-learning
+cases record through `record_task_signal` with a task they built themselves.
+`record_signal` (the name path) is pinned once, in
+`signals_tests::identity.rs`, against a name no other file uses.
+
+## A box that is paging fails tests about a quiet box (2026-10-08)
+
+`oversize::tests::an_uninjected_thrashing_verdict_reads_the_machine_and_still_answers`
+and, through the same refusal, `eval_not_measured`'s full-suite case and all
+three `drain_signal` cases, assert what happens when nothing is wrong: the
+oversize gate must return an empty refusal, so the run proceeds to make
+requests the stub is waiting for. On a machine that is already swapping
+(measured 2026-10-08: swap 1.9GB, compressor 17.7GB) the gate refuses for a
+real reason and those four go red with no code change involved.
+
+Isolate before debugging: `git stash push -- rust/src/ && cargo test --no-fail-fast
+--lib oversize` on clean HEAD is the same four failures, or it is your bug. The
+environment-dependent half cannot be fixed from the test — it is the machine —
+so the discipline is `regression-isolate`, then re-run when the box settles.

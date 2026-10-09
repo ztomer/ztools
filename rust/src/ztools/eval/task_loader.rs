@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
+use crate::ztools::eval::task_fingerprint::remember_current_tasks;
 use crate::ztools::eval::validate_file_summary;
 
 /// One chat message.
@@ -432,16 +433,26 @@ pub fn load_taxes_tasks_from_dir(dir: &Path) -> Result<Vec<EvalTask>> {
 
 pub use super::smoke_tasks::get_built_in_smoke_tasks;
 
+// Beside the task definition, because a task's NAME is not its identity: the
+// digest of what it asks and how it is scored is. Re-exported so the name is
+// reachable where `EvalTask` is.
+pub use super::task_fingerprint::{TaskIdentities, current_task_fingerprint, task_fingerprint};
+
 /// Load the full eval task set.
 ///
 /// The roster (`super::tasks`, the Python `TASKS` table) is built from
 /// `files`; the taxes snapshots come from `eval_tasks_data_dir` (a
 /// `taxes/` subdir wins over a flat dir) when given.
 ///
+/// Every loaded task is REGISTERED as this process's current version of its
+/// name (`super::task_fingerprint`): the history and signal writers reach those
+/// stores by name, and a name nobody registered writes rows no aggregate can
+/// ever average.
+///
 /// # Errors
 ///
-/// When the roster's inputs (`eval_inputs.toml`, `eval_vision.toml`) cannot
-/// be read: the eval refuses to run a partial table silently.
+/// When the roster's inputs (`eval_inputs.toml`, `eval_vision.toml`) cannot be
+/// read: the eval refuses to run a partial table silently.
 pub fn load_all_eval_tasks(
     files: &super::tasks::RosterInputs,
     eval_tasks_data_dir: Option<&Path>,
@@ -458,6 +469,7 @@ pub fn load_all_eval_tasks(
             tasks.extend(loaded);
         }
     }
+    remember_current_tasks(&tasks);
     Ok(tasks)
 }
 

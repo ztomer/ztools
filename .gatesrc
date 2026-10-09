@@ -40,6 +40,30 @@ export GOH_EXCLUDE='^vendor/'
 # GOH_SWIFT_COV_MIN=95
 # GOH_MAX_SCRATCH_GB=25           # disk-hygiene ceiling (full runs only)
 
+# GOH_NO_HOME_PATHS: refuse any TRACKED file that hard-codes a location under
+# someone's HOME. The four shapes are spelled out in the checker
+# (`$GOH_DIR/crates/goh/src/homepaths.rs`), and each one is one machine at one
+# moment. A `${VAR:-default}` expansion is a derivation, not a literal, and
+# passes -- which is why the five config defaults in `manifest.rs` and the
+# `routines.toml` plan path now resolve through `WEEKEND_OUTPUT_DIR` or the
+# executable instead of naming a checkout.
+#
+# It measured 84 findings on 2026-10-06, 51 of them in one eval-prompt file
+# (`M1`); closing the rest is `G2`. The tree is at ZERO as of that item landing,
+# so the key is ON rather than held off until "later" -- a gate that is opted
+# into while its tree is green is a gate that can be trusted on the day it
+# finds something. Calibrated: one planted home-checkout literal -> exit 1
+# naming the line; plant removed -> exit 0.
+#
+# THE ESCAPE HATCH IS A REASON, NOT A LIST. A path that genuinely must stand --
+# `CHANGELOG.md`'s record of a removed defect, a literal that is the subject of
+# a test -- carries `path-ok: <reason>` on its line or the one above. The two
+# `CHANGELOG.md` stanzas are the only ones today. Do not reach for
+# `GOH_EXCLUDE` here: that exempts a file from length, emoji, secrets and this
+# check at once, which is how 53 vendor files went unpoliced by all of them
+# (measured 2026-10-04, see the GOH_EXCLUDE note above).
+GOH_NO_HOME_PATHS=1
+
 # tools/*.py are dev gates (stdlib + pytest only). pyproject.toml declares the
 # rule set -- line-length 100, and PLW + BLE selected because those are the two
 # classes that actually bit here -- so the formatter's verdict no longer depends

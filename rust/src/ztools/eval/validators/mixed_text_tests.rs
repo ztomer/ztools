@@ -1,15 +1,47 @@
 //! Pinned against the Python validators' verdicts on the SAME shared prompts
 //! (`eval::prompts`), computed on their last run, 2026-09-13. Every expected
 //! tuple below is a Python output, not a Rust output copied back.
+//!
+//! THE 2026-10-08 RE-PIN, AND WHAT IT DELIBERATELY DID NOT MOVE. The
+//! file-summary rows became repo-relative and the renderer started reading them
+//! through a checkout seam (`file_summary_content::live_root`), which forced
+//! `extract_file_paths` to stop recognising a row by "line starts with `/`" and
+//! start recognising it by SHAPE. Every tuple below was re-derived and re-run
+//! for that change, and every one of them came out IDENTICAL — which is a
+//! property worth writing down, because it is not obvious and it is what makes
+//! the loosened predicate safe:
+//!
+//!   * the row COUNT is unchanged (17 signal, 6 noise — pinned by
+//!     `the_rendered_prompt_yields_seventeen_signal_rows_and_six_noise_rows`),
+//!     because the content block's `| ` prefix keeps every excerpt line out of
+//!     the row shape, and
+//!   * `prefix_overlap` matches a row against an answer by containment in EITHER
+//!     direction, so an answer spelled `/Users/…/README.md` still resolves
+//!     against the row `README.md` exactly as it resolved against the absolute
+//!     row before.
+//!
+//! What the change PREVENTS is also pinned, because it is the reason the
+//! predicate had to move at all: had the predicate stayed `starts_with('/')`, the
+//! relative rows would have read as ZERO signal paths, `recall` would have hit
+//! its `signal_paths.is_empty()` arm of 1.0, and every model would have scored
+//! full marks for describing nothing. Measured: the one-real-plus-one-noise arm
+//! below scores 75 under that defect and 27 under the shape predicate — a 48
+//! point inflation, silent, on every model in the table.
 
 use super::*;
 use crate::ztools::eval::prompts::file_summary;
 use crate::ztools::eval::prompts::{
-    FALSEHOOD_PHRASES, FILE_SUMMARY_FILE_LIST, FILE_SUMMARY_PROMPT_MIXED, KEY_FACTS,
-    RENAME_PROMPT_MIXED, TWITTER_PROMPT, TWITTER_PROMPT_MIXED,
+    FALSEHOOD_PHRASES, FILE_SUMMARY_FILE_LIST, FILE_SUMMARY_PROMPT, FILE_SUMMARY_PROMPT_MIXED,
+    KEY_FACTS, RENAME_PROMPT_MIXED, TWITTER_PROMPT, TWITTER_PROMPT_MIXED,
 };
 use serde_json::json;
 
+/// A model's answer spelling: an absolute path into the repo it was shown.
+///
+/// The rows in the prompt are repo-relative now, so this is a spelling the model
+/// produces and the prompt no longer contains — which is the point.
+/// `prefix_overlap` resolves it to its row, and these tests pin that it must.
+// path-ok: a model echo's shape, not this repo's path.
 const ROOT: &str = "/Users/ztomer/Projects/ztools";
 
 fn strs(v: &[&str]) -> Vec<String> {
@@ -206,16 +238,69 @@ fn factual_coverage_matches_python_on_the_controls() {
 
 // — file summary, with the content block spliced in —
 
-/// The mixed variant's prompt is no longer a constant: it now carries seventeen
-/// files' excerpts above its noise block. `validate_mixed_file_summary` finds its
-/// signal set by "line starts with `/`", so an excerpt line beginning `/` — a
-/// comment, a path in prose — would be counted as a file the model was never asked
-/// about and depress recall for every model equally. The fences are `| `-prefixed
-/// for exactly that reason, and this is the assertion that they still are.
+/// THE COUNT, read out of the RENDERED prompt rather than out of the constant.
 ///
-/// The two pins below are the Python verdicts on the same answer; if the content
-/// block moved a single path between the signal and noise halves, they would move
-/// with it, which is why the expected numbers are the untouched 2026-09-13 ones.
+/// The signal set is read by SHAPE (see `extract_file_paths`), so the two numbers
+/// that make the mixed variant mean anything are properties of the rendered text:
+/// seventeen rows above the noise marker, six below. Both directions are pinned
+/// because both fail silently. A predicate that read sixteen signal rows would
+/// quietly inflate every model's recall by a row it was never asked about; one
+/// that read eighteen would depress it by the same. A row read out of the NOISE
+/// half — an excerpt line that escaped its `| ` prefix — costs precision instead,
+/// and a signal row read as noise does both.
+///
+/// The plain prompt is pinned too, because it is the same seventeen rows and it
+/// must not gain a single one: its content block is the same block, and a line in
+/// it that looked like a row would move a path between the halves of a task the
+/// plain variant does not even have.
+#[test]
+fn the_rendered_prompt_yields_seventeen_signal_rows_and_six_noise_rows() {
+    let rendered_mixed = file_summary::render(FILE_SUMMARY_PROMPT_MIXED).expect("renders");
+    let (signal_part, noise_part) = split_signal_noise(&rendered_mixed);
+    assert_eq!(
+        extract_file_paths(signal_part).len(),
+        17,
+        "the mixed prompt's signal half must list exactly the seventeen rows, read by shape: \
+         {:?}",
+        extract_file_paths(signal_part)
+    );
+    assert_eq!(
+        extract_file_paths(noise_part).len(),
+        6,
+        "the noise half must be exactly the six decoys"
+    );
+    // Every row the prompt lists is one of them: a row that the shape predicate
+    // reads as something else is a row the scorer cannot score.
+    let rows: Vec<String> = extract_file_paths(signal_part);
+    for row in FILE_SUMMARY_FILE_LIST.lines() {
+        assert!(
+            rows.iter().any(|r| r == row),
+            "{row} is listed but not read as a signal row"
+        );
+    }
+    let rendered_plain = file_summary::render(FILE_SUMMARY_PROMPT).expect("renders");
+    assert_eq!(
+        extract_file_paths(&rendered_plain).len(),
+        17,
+        "the plain prompt carries the same seventeen rows and no noise block at all"
+    );
+}
+
+/// The mixed variant's prompt is no longer a constant: it now carries seventeen
+/// files' excerpts above its noise block, and those rows are REPO-RELATIVE and
+/// read from the checkout `file_summary::live_root` resolves. An excerpt line
+/// beginning `/` — a comment, a TOML value, a path in prose — read as a row would
+/// be counted as a file the model was never asked about and depress recall for
+/// every model equally; the fences and every excerpt line are `| `-prefixed for
+/// exactly that reason, and `the_rendered_prompt_yields_seventeen_signal_rows_and_
+/// six_noise_rows` is the assertion that they still are.
+///
+/// The three pins below are the Python verdicts on the same answers, and the
+/// 2026-10-08 re-pin left them IDENTICAL: the row count did not move (the count
+/// test above), and `prefix_overlap` resolves an absolutely-spelled answer
+/// against a relative row by containment in either direction. If either of those
+/// stops being true they move with it, which is why they are pinned here rather
+/// than trusted.
 #[test]
 fn the_content_block_does_not_move_a_single_path() {
     let rendered = file_summary::render(FILE_SUMMARY_PROMPT_MIXED).expect("renders");
@@ -272,6 +357,16 @@ fn a_noise_word_in_prose_does_not_become_the_marker() {
 /// These are the arms a name-guesser, a hallucinator and a lazy model produce, and
 /// they are the evidence the task kept its discriminative power after the prompt
 /// grew by twenty kilobytes.
+///
+/// RE-PINNED 2026-10-08 (see the module header): the three tuples are UNCHANGED,
+/// because the seventeen rows are still read as seventeen rows and the answer's
+/// absolute spelling still resolves against them. The ordering pins below are
+/// therefore re-derived rather than rebuilt — and they are the reason this test
+/// exists at all, so they are worth stating in the failure direction: under the
+/// defect the re-pin was defending against, `recall` collapses to 1.0, the lazy
+/// arm's 61 becomes 100, and it TIES the good answer. A lazy model that drops
+/// thirteen of seventeen files must lose to one that answers all of them, and the
+/// only thing that keeps it losing is that the signal set is read by shape.
 #[test]
 fn the_mixed_variant_still_separates_guessing_inventing_and_dropping() {
     let rendered = file_summary::render(FILE_SUMMARY_PROMPT_MIXED).expect("renders");

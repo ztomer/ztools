@@ -23,8 +23,10 @@ pub mod report;
 pub mod report_csv;
 pub mod report_diff;
 pub mod report_metrics;
+pub use report::{historical_stats, render_trends};
 pub use report_csv::export_csv;
 pub use report_diff::render_diff_from_last_run;
+pub use report_diff::{DeltaReport, TaskDelta, deltas_since, render_deltas};
 pub use report_metrics::{
     categorize_failures, compute_error_rates, compute_score_stats, compute_verbosity,
     render_verbosity,
@@ -34,6 +36,7 @@ pub mod samples;
 pub mod scoring_math;
 pub mod signals;
 pub mod smoke_tasks;
+pub mod task_fingerprint;
 pub mod task_loader;
 pub mod tasks;
 pub mod transport;
@@ -84,7 +87,11 @@ pub use samples::{SAMPLE_WINDOW, Sample, add_sample, clean_estimate, estimate_fr
 pub use signals::{
     MAX_EVAL_TIMEOUT, SignalStore, default_eval_timeout, derived_timeout, effective_timeout,
     load_signals, machine_is_uncontended, memory_pressure, record_capability_sample, record_signal,
-    save_signals, signals_path,
+    record_task_signal, save_signals, series_fingerprint, signals_path, superseded_samples,
+};
+pub use task_fingerprint::{
+    Standing, TaskIdentities, current_task_fingerprint, current_task_identities,
+    remember_current_tasks, standing_of, task_fingerprint,
 };
 pub use task_loader::{
     ChatMessage, Check, EvalTask, get_built_in_smoke_tasks, load_all_eval_tasks,

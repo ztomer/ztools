@@ -1,21 +1,24 @@
-# The toolchain this repo's gates run on, pinned.
+# The CHANNEL and components this repo's gates run on.
 #
-# WHY THIS FILE EXISTS. Every Rust gate in `.gatesrc` -- fmt, clippy at
-# `-D warnings`, no-`#[allow]`, audit, tests, the 95% coverage floor -- asks
-# `cargo` to build, and `cargo` builds with whatever `rustup` currently calls
-# `stable`. A background `rustup update` therefore rewrites every one of those
-# verdicts without touching this repo: a new lint in clippy turns a green gate
-# red on a commit that changed nothing, and a new edition or feature gate in
-# rustc turns a build green-to-red the same way. A gate whose input is not
-# pinned is a gate whose failures cannot be attributed.
+# WHAT THIS FILE DOES AND DOES NOT DO. It guarantees two things: the channel is
+# `stable` — "always the newest stable", which is the house rule — and the named
+# components below are installed. It does NOT pin the toolchain. A background
+# `rustup update stable` moves the compiler and `cargo`, and `cargo` (reading
+# this file) simply picks the newer stable up, so a new lint in clippy or a new
+# edition gate in rustc can still turn a green gate red on a commit that changed
+# nothing. Which of those two things happened — a defect, or a toolchain move —
+# is not ATTRIBUTED by anything here: `gates/rust_gate.sh` prints no `rustc -V`
+# (measured 2026-10-08), so a red gate cannot say which compiler produced it.
+# That mechanism is `X6` in `docs/ROADMAP.md`, and `rust/src/ztools` is not
+# involved in it.
 #
 # `stable` and not a point release, deliberately. Point-pinning (`1.99.0`) would
 # freeze the toolchain harder, but it also means the pin itself rots: the next
 # `rustup update` is a no-op, the component list below is never re-verified, and
-# a CVE in the pinned compiler is not something anyone notices. What this file
-# actually guarantees is the CHANNEL -- "always the newest stable", which is the
-# house rule -- and it guarantees that a `rustup update` reaches this repo
-# deliberately, in a commit that says so, instead of by background.
+# a CVE in the pinned compiler is not something anyone notices. So the CHANNEL is
+# the guarantee: the newest stable reaches this repo whenever the operator
+# updates, which is deliberately rather than never, and the components are
+# re-verified because they are named.
 #
 # The components are named because every one of them is used by the gate and
 # none of them is guaranteed to be present: rustfmt for `cargo fmt --check`,
@@ -25,9 +28,11 @@
 # failure at the point of the change rather than in a `rust-toolchain` error
 # halfway through a push.
 #
-# Shape matched from `~/Projects/gates_of_heck/rust-toolchain.toml`, so one edit
-# (a background `rustup update` + this file) keeps every repo on the same
-# channel and the same components.
+# The gate steps themselves are not restated here; `.gatesrc`'s `GOH_CI_STEPS`
+# is the list of record, and it is what `tools/gate.sh --full` and `make ci` run.
+#
+# Shape matched from `$GOH_DIR/rust-toolchain.toml`, so one edit keeps every repo
+# on the same channel and the same components.
 [toolchain]
 channel = "stable"
 components = ["rustfmt", "clippy"]

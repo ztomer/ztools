@@ -7,7 +7,7 @@
 //! the lock and the restore live in `crate::test_env`, and this adds only the
 //! fixture-file helper the disk tests build.
 //!
-//! `~/MLXModels` and `~/Projects/ztools/conf` BOTH EXIST on a real machine, so
+//! `$HOME/MLXModels` and the checkout's `conf/` BOTH EXIST on a real machine, so
 //! a test that skips the redirect measures whatever the developer has installed
 //! rather than what it set up -- which is what made this pair of guards worth
 //! consolidating rather than keeping as a second implementation.

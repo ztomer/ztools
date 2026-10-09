@@ -37,11 +37,35 @@
 //! budget is [`FILE_SUMMARY_EXCERPT_LINES`] / [`FILE_SUMMARY_EXCERPT_BYTES`],
 //! and the rows' TRUTH is [`FILE_SUMMARY_GROUND_TRUTH`] — the scorer grades a
 //! description against what its file says, so it needs to know what that is.
+//!
+//! THE ROWS ARE REPO-RELATIVE, AND THE BYTES COME THROUGH A SEAM (2026-10-08).
+//! Until then every row was spelled with an absolute prefix naming one machine's
+//! checkout, and [`content::excerpts`] opened those absolute paths as written, so
+//! an eval run from any other checkout — a worktree, a CI runner — read the HOME
+//! checkout's bytes and graded the model against a prompt nobody sent it. A row is
+//! a name, not a location: the location is resolved ONCE per run, at roster build
+//! time, by [`content::live_root`], which asks the checkout derivation in
+//! `manifest::checkout_roots_from` which of its candidates actually holds every
+//! listed row. That is why [`content::excerpts_from`] takes a root and the
+//! `*_from` twins exist at all — the renderer is a pure function of (root,
+//! template) that a fixture checkout can drive, and [`content::live_root`] is the
+//! one impure call.
+//!
+//! WHY RELATIVE ROWS ARE SAFE FOR THE SCORER. `validate_mixed_file_summary`
+//! reads its signal set out of the prompt by SHAPE (see
+//! `validators::mixed_text::extract_file_paths`), and it matches rows against a
+//! model's answer by containment in EITHER direction — so `README.md`,
+//! `rust/src/units.rs` and the absolute spelling all resolve to the same row,
+//! exactly as they already did for [`FILE_SUMMARY_GROUND_TRUTH`], which has been
+//! keyed repo-relative since before the content block existed.
 
 #[path = "file_summary_content.rs"]
 mod content;
 
-pub use content::{excerpt, excerpts, render, render_both, substitute};
+pub use content::{
+    excerpt, excerpts, excerpts_from, live_root, live_root_from, render, render_both,
+    render_both_from, render_from, substitute,
+};
 
 /// Where the per-file content block goes, in both templates.
 ///
@@ -157,23 +181,23 @@ what each file DOES.
 
 Use ## headers for each file (e.g., ## filename: summary).
 
-/Users/ztomer/Projects/ztools/README.md
-/Users/ztomer/Projects/ztools/CLAUDE.md
-/Users/ztomer/Projects/ztools/conf/config.toml
-/Users/ztomer/Projects/ztools/conf/weekend.toml
-/Users/ztomer/Projects/ztools/conf/twitter.toml
-/Users/ztomer/Projects/ztools/conf/rename.toml
-/Users/ztomer/Projects/ztools/conf/models/foundation.toml
-/Users/ztomer/Projects/ztools/conf/models/gemma.toml
-/Users/ztomer/Projects/ztools/conf/models/qwen.toml
-/Users/ztomer/Projects/ztools/docs/MODEL_QUIRKS.md
-/Users/ztomer/Projects/ztools/docs/TESTING.md
-/Users/ztomer/Projects/ztools/rust/src/manifest.rs
-/Users/ztomer/Projects/ztools/rust/src/units.rs
-/Users/ztomer/Projects/ztools/rust/src/ztools/image_renamer.rs
-/Users/ztomer/Projects/ztools/rust/src/ztools/store.rs
-/Users/ztomer/Projects/ztools/rust/src/ztools/twitter/mod.rs
-/Users/ztomer/Projects/ztools/rust/src/ztools/weekend/format.rs
+README.md
+CLAUDE.md
+conf/config.toml
+conf/weekend.toml
+conf/twitter.toml
+conf/rename.toml
+conf/models/foundation.toml
+conf/models/gemma.toml
+conf/models/qwen.toml
+docs/MODEL_QUIRKS.md
+docs/TESTING.md
+rust/src/manifest.rs
+rust/src/units.rs
+rust/src/ztools/image_renamer.rs
+rust/src/ztools/store.rs
+rust/src/ztools/twitter/mod.rs
+rust/src/ztools/weekend/format.rs
 
 Skip .git, __pycache__, benchmarks/, and pycache directories.
 
@@ -189,23 +213,23 @@ what each file DOES.
 
 Use ## headers for each file (e.g., ## filename: summary).
 
-/Users/ztomer/Projects/ztools/README.md
-/Users/ztomer/Projects/ztools/CLAUDE.md
-/Users/ztomer/Projects/ztools/conf/config.toml
-/Users/ztomer/Projects/ztools/conf/weekend.toml
-/Users/ztomer/Projects/ztools/conf/twitter.toml
-/Users/ztomer/Projects/ztools/conf/rename.toml
-/Users/ztomer/Projects/ztools/conf/models/foundation.toml
-/Users/ztomer/Projects/ztools/conf/models/gemma.toml
-/Users/ztomer/Projects/ztools/conf/models/qwen.toml
-/Users/ztomer/Projects/ztools/docs/MODEL_QUIRKS.md
-/Users/ztomer/Projects/ztools/docs/TESTING.md
-/Users/ztomer/Projects/ztools/rust/src/manifest.rs
-/Users/ztomer/Projects/ztools/rust/src/units.rs
-/Users/ztomer/Projects/ztools/rust/src/ztools/image_renamer.rs
-/Users/ztomer/Projects/ztools/rust/src/ztools/store.rs
-/Users/ztomer/Projects/ztools/rust/src/ztools/twitter/mod.rs
-/Users/ztomer/Projects/ztools/rust/src/ztools/weekend/format.rs
+README.md
+CLAUDE.md
+conf/config.toml
+conf/weekend.toml
+conf/twitter.toml
+conf/rename.toml
+conf/models/foundation.toml
+conf/models/gemma.toml
+conf/models/qwen.toml
+docs/MODEL_QUIRKS.md
+docs/TESTING.md
+rust/src/manifest.rs
+rust/src/units.rs
+rust/src/ztools/image_renamer.rs
+rust/src/ztools/store.rs
+rust/src/ztools/twitter/mod.rs
+rust/src/ztools/weekend/format.rs
 
 Skip .git, __pycache__, benchmarks/, and pycache directories.
 
@@ -230,20 +254,33 @@ NOISE FILES (Ignore - test your filtering):
 /// deleted Python tree, and nothing noticed for a month. It is now also every
 /// row [`FILE_SUMMARY_GROUND_TRUTH`] covers, because a row with no truth has
 /// nothing to be graded against.
-pub const FILE_SUMMARY_FILE_LIST: &str = r"/Users/ztomer/Projects/ztools/README.md
-/Users/ztomer/Projects/ztools/CLAUDE.md
-/Users/ztomer/Projects/ztools/conf/config.toml
-/Users/ztomer/Projects/ztools/conf/weekend.toml
-/Users/ztomer/Projects/ztools/conf/twitter.toml
-/Users/ztomer/Projects/ztools/conf/rename.toml
-/Users/ztomer/Projects/ztools/conf/models/foundation.toml
-/Users/ztomer/Projects/ztools/conf/models/gemma.toml
-/Users/ztomer/Projects/ztools/conf/models/qwen.toml
-/Users/ztomer/Projects/ztools/docs/MODEL_QUIRKS.md
-/Users/ztomer/Projects/ztools/docs/TESTING.md
-/Users/ztomer/Projects/ztools/rust/src/manifest.rs
-/Users/ztomer/Projects/ztools/rust/src/units.rs
-/Users/ztomer/Projects/ztools/rust/src/ztools/image_renamer.rs
-/Users/ztomer/Projects/ztools/rust/src/ztools/store.rs
-/Users/ztomer/Projects/ztools/rust/src/ztools/twitter/mod.rs
-/Users/ztomer/Projects/ztools/rust/src/ztools/weekend/format.rs";
+///
+/// REPO-RELATIVE, and that is the row's whole contract. A row is a NAME: the
+/// bytes behind it are read through [`content::live_root`], which resolves the
+/// checkout from the running executable, so the same constant renders a prompt
+/// naming files that exist in whatever checkout the binary came from. Spelling
+/// the rows absolutely instead pinned the roster to ONE machine's path — an eval
+/// from a worktree read the home checkout's bytes and graded answers against
+/// content the model was never shown — and bought nothing the scorer needed,
+/// because `prefix_overlap` matches a row against an answer by containment in
+/// either direction and had already accepted the absolute spelling.
+///
+/// The noise rows the mixed prompt appends stay absolute: they must not resolve
+/// to anything, in any checkout.
+pub const FILE_SUMMARY_FILE_LIST: &str = r"README.md
+CLAUDE.md
+conf/config.toml
+conf/weekend.toml
+conf/twitter.toml
+conf/rename.toml
+conf/models/foundation.toml
+conf/models/gemma.toml
+conf/models/qwen.toml
+docs/MODEL_QUIRKS.md
+docs/TESTING.md
+rust/src/manifest.rs
+rust/src/units.rs
+rust/src/ztools/image_renamer.rs
+rust/src/ztools/store.rs
+rust/src/ztools/twitter/mod.rs
+rust/src/ztools/weekend/format.rs";

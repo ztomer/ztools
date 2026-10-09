@@ -130,7 +130,7 @@ The "parallel reimplementation" failure mode is addressed by:
    filenames, and prompt payloads. Catches divergence the day it happens.
 
 3. **Rust quality gates** — `cargo clippy --all-targets -D warnings` and the 500-line
-   cap per file in `~/Projects/ztools/rust` prevent code rot in the primary
+   cap per file in `rust/` prevent code rot in the primary
    implementation.
 ## Test-debt triage (Phase 4 item 7) — closed 2026-09-13
 

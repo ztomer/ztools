@@ -1,12 +1,12 @@
 //! The end-to-end `run_summary` path, against a loopback stub.
 //!
-//! Every test here used to run `ZtoolsConfig::default()`, which named
-//! `~/.cache/twitter/debug_tweets.json`, `~/Projects/ztools` and
-//! `~/Projects/ztools/conf/twitter.toml` -- and which read the `[fallback]`
-//! table from THIS CHECKOUT, so the suite only passed on a developer machine
-//! with the repo in the expected place. Two tests also wrote to fixed
-//! directories under the system temp dir, which collide between two `cargo
-//! test` runs on the same Mac -- and several agent sessions share it.
+//! Every test here used to run `ZtoolsConfig::default()`, which named three
+//! paths on the developer's disk -- a cache file, the Playwright collector's
+//! checkout and that checkout's `conf/twitter.toml` -- and which read the
+//! `[fallback]` table from THIS CHECKOUT, so the suite only passed on a
+//! developer machine with the repo in the expected place. Two tests also wrote
+//! to fixed directories under the system temp dir, which collide between two
+//! `cargo test` runs on the same Mac -- and several agent sessions share it.
 
 use std::path::PathBuf;
 
@@ -113,7 +113,7 @@ fn test_run_summary_cache_reading() {
 ///
 /// This test used to DELETE the developer's real
 /// `~/.cache/twitter/debug_tweets.json` without restoring it, then shell out to
-/// their actual Playwright scraper in `~/Projects/ztools` -- and assert
+/// their actual Playwright scraper in the home checkout -- and assert
 /// `res.is_err() || res.is_ok()`, which is true of every possible outcome.
 fn test_run_summary_empty_fallback() {
     let env = TestEnv::new();

@@ -116,9 +116,7 @@ fn sandbox_with_roster(name: &str) -> std::path::PathBuf {
     home
 }
 
-/// The binary with `HOME` sandboxed, the GPU lock redirected, the learning-path
-/// directories inside the sandbox, and the oversize override cleared.
-fn run_eval(home: &Path, args: &[&str]) -> Output {
+fn run_eval_cmd(home: &Path, args: &[&str]) -> Command {
     let gpu = home.join("gpu-lock");
     fs::create_dir_all(&gpu).unwrap();
     let mut cmd = Command::new(bin());
@@ -126,11 +124,19 @@ fn run_eval(home: &Path, args: &[&str]) -> Output {
         .env("ZTOOLS_GPU_LOCK_DIR", &gpu)
         .env("EVAL_SIGNALS_DIR", home.join("signals"))
         .env("EVAL_OUTPUT_DIR", home.join("outputs"))
-        .env_remove("EVAL_ALLOW_OVERSIZE")
         .arg("--config")
         .arg(home.join("ztools.toml"))
         .args(args);
-    cmd.output().expect("run the binary under test")
+    cmd
+}
+
+/// The binary with `HOME` sandboxed, the GPU lock redirected, the learning-path
+/// directories inside the sandbox, and the oversize override cleared.
+fn run_eval(home: &Path, args: &[&str]) -> Output {
+    run_eval_cmd(home, args)
+        .env_remove("EVAL_ALLOW_OVERSIZE")
+        .output()
+        .expect("run the binary under test")
 }
 
 /// A config pointing at `port` with fast timeouts, and the roster on `home`.
@@ -204,7 +210,7 @@ fn a_full_suite_eval_against_a_dead_server_fails_and_prints_no_mean() {
     let port = closed_loopback_port();
     config_for(&home, port);
 
-    let out = run_eval(
+    let out = run_eval_cmd(
         &home,
         &[
             "model-eval",
@@ -215,7 +221,10 @@ fn a_full_suite_eval_against_a_dead_server_fails_and_prints_no_mean() {
             "--task",
             "json",
         ],
-    );
+    )
+    .env("EVAL_ALLOW_OVERSIZE", "1")
+    .output()
+    .expect("run the binary under test");
 
     assert_refused(
         "a full-suite eval against an inference server that is not listening",

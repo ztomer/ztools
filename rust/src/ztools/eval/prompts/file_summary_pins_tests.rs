@@ -6,13 +6,23 @@
 //! Split out of `mod.rs` for the house 500-line cap. It was one test there; it
 //! is three files' worth of property now, because a row-for-row pin is not
 //! enough on its own — see `every_listed_path_is_a_file_a_fresh_clone_has`.
+//!
+//! THE ROWS ARE RELATIVE AND THE BYTES COME THROUGH A SEAM (2026-10-08). The
+//! rows used to be absolute paths into one machine's checkout and the renderer
+//! opened them as written, so a run from anywhere else read that checkout's
+//! bytes. They are repo-relative now and the root is a parameter: every render
+//! here goes through `*_from` against either the REAL checkout (for the pins
+//! about the shipped prompt) or a fixture checkout (for the pins about WHERE the
+//! bytes come from), and `excerpts()` / `render()` / `render_both()` — the live
+//! wrappers, which resolve the root themselves — are used only where the point
+//! is that the live path still works.
 
 use std::collections::HashSet;
 use std::path::PathBuf;
 
 use super::file_summary::{
     FILE_SUMMARY_CONTENTS_SLOT, FILE_SUMMARY_EXCERPT_LINES, FILE_SUMMARY_GROUND_TRUTH, excerpt,
-    excerpts, render, render_both,
+    excerpts, excerpts_from, render, render_both, render_from,
 };
 use super::{FILE_SUMMARY_FILE_LIST, FILE_SUMMARY_PROMPT, FILE_SUMMARY_PROMPT_MIXED};
 
@@ -39,8 +49,8 @@ fn tracked_paths() -> HashSet<String> {
     text.lines().map(str::to_string).collect()
 }
 
-/// The rows, repo-relative. The list is absolute and rooted at one repo, so it
-/// is pinned by the tail: the machine prefix is not a property of the prompt.
+/// The rows, repo-relative — the spelling the constant itself uses, so this is
+/// the row and not the tail of a path.
 const LISTED: &[&str] = &[
     "README.md",
     "CLAUDE.md",
@@ -72,16 +82,15 @@ const NOISE: &[&str] = &[
 
 /// One list, wrapped by both prompts, plus the noise block only the mixed one
 /// carries.
+///
+/// The rows are compared DIRECTLY against [`LISTED`] — no prefix strip. They used
+/// to be spelled absolutely and this test stripped one machine's prefix to get at
+/// the part that mattered, which meant the pin agreed with any checkout path the
+/// constant happened to carry and said nothing about the spelling. The rows are
+/// repo-relative now precisely so that spelling is not a variable.
 #[test]
 fn the_file_summary_prompts_wrap_one_pinned_file_list() {
-    let listed: Vec<&str> = FILE_SUMMARY_FILE_LIST
-        .lines()
-        .map(|line| {
-            line.rsplit_once("/Users/ztomer/Projects/ztools/")
-                .unwrap_or_else(|| panic!("{line:?} is not a repo-absolute path"))
-                .1
-        })
-        .collect();
+    let listed: Vec<&str> = FILE_SUMMARY_FILE_LIST.lines().collect();
     assert_eq!(listed, LISTED, "FILE_SUMMARY_FILE_LIST, row for row");
     // Both prompts must wrap THAT list verbatim — the single-source property
     // that makes the rows above worth pinning once.
@@ -163,6 +172,107 @@ fn every_listed_path_is_a_file_a_fresh_clone_has() {
     }
 }
 
+/// A fixture checkout: both markers `manifest` accepts, and every listed row
+/// written with text that occurs nowhere in this repo.
+///
+/// The markers are there because `live_root` accepts nothing without them — one
+/// marker is satisfied by an unrelated `conf/`, which is exactly the false
+/// positive the checkout derivation refuses (see `manifest::checkout_roots_from`).
+fn fixture_checkout() -> tempfile::TempDir {
+    let tmp = tempfile::tempdir().expect("a fixture temp dir is creatable");
+    std::fs::create_dir_all(tmp.path().join("rust")).expect("a fixture marker directory");
+    std::fs::create_dir_all(tmp.path().join("conf")).expect("a fixture marker directory");
+    std::fs::write(tmp.path().join("rust/Cargo.toml"), "[package]\n").expect("a marker");
+    std::fs::write(tmp.path().join("conf/config.toml"), "[best_models]\n").expect("a marker");
+    for row in LISTED {
+        let path = tmp.path().join(row);
+        std::fs::create_dir_all(path.parent().expect("every row has a parent"))
+            .expect("a fixture row's directory");
+        std::fs::write(
+            &path,
+            format!("fixture line one of {row}\nfixture line two of {row}\n"),
+        )
+        .expect("a fixture row");
+    }
+    tmp
+}
+
+/// The `| `-prefixed body between a row's BEGIN and END fences.
+fn fence_body(rendered: &str, row: &str) -> String {
+    let begin = format!("--- BEGIN {row}");
+    rendered
+        .lines()
+        .skip_while(|l| !l.starts_with(&begin))
+        .skip(1)
+        .take_while(|l| !l.starts_with("--- END "))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// THE SEAM, pinned against a FIXTURE: the prompt carries the content of the
+/// checkout it was GIVEN, and of nothing else.
+///
+/// Until 2026-10-08 the rows were absolute paths into one machine's checkout and
+/// the renderer opened them as written, so a run from a worktree or a CI runner
+/// read the home checkout's bytes and graded answers against a prompt nobody was
+/// shown. Every other pin in this file renders against the LIVE checkout, which
+/// cannot see that failure at all: the live root IS the checkout the test binary
+/// sits in, so a renderer that ignored its root would still render the right
+/// files here. Rendering against a fixture is what makes the root load-bearing —
+/// if the renderer ever reads the working tree again, the fences below carry the
+/// real repo's text and this goes RED.
+#[test]
+fn the_rendered_prompt_carries_the_content_of_the_checkout_it_was_given() {
+    let fixture = fixture_checkout();
+    let rendered = render_from(fixture.path(), FILE_SUMMARY_PROMPT).expect("the fixture renders");
+    for row in LISTED {
+        assert_eq!(
+            fence_body(&rendered, row),
+            format!("| fixture line one of {row}\n| fixture line two of {row}"),
+            "{row} was fenced with something other than the fixture's own text"
+        );
+    }
+    // The other half of the seam: the live checkout holds different bytes, and a
+    // renderer that walked up to the working tree from either root would still
+    // produce this and fail the per-row comparison above.
+    let live = excerpts_from(&repo_root()).expect("the real rows are readable");
+    assert!(
+        !live.contains("fixture line one of"),
+        "the fixture's text appeared in the live block, so one of the two roots is not \
+         being used"
+    );
+}
+
+/// A row the given checkout does not have is a HARD ERROR naming the row.
+///
+/// The alternative — skipping it and sending the path anyway — is a prompt that
+/// names eighteen files and explains seventeen, which is the defect the content
+/// block exists to fix, and which arrives on the wire looking exactly like a
+/// working task. So the failure names the row AND the root, because the row is the
+/// constant and the root is what differed between the two machines that hit this.
+#[test]
+fn a_fixture_row_that_is_missing_is_an_error_naming_the_row_not_a_shorter_prompt() {
+    let fixture = fixture_checkout();
+    std::fs::remove_file(fixture.path().join("docs/TESTING.md")).expect("a fixture row to remove");
+    let err = render_from(fixture.path(), FILE_SUMMARY_PROMPT)
+        .expect_err("a row the checkout does not have must not render")
+        .to_string();
+    assert!(
+        err.contains("listed file docs/TESTING.md"),
+        "the error must name the row: {err}"
+    );
+    assert!(
+        err.contains(fixture.path().to_str().expect("a utf-8 temp path")),
+        "the error must name the root it looked in: {err}"
+    );
+    // Not a silently shorter prompt: the block is not produced at all, so the
+    // seventeen other rows are not sent as if they were the whole list.
+    assert!(
+        excerpts_from(fixture.path()).is_err(),
+        "the block was produced anyway"
+    );
+}
+
 /// THE FIX, pinned: the prompt says "Rely ONLY on provided content context ...
 /// DO NOT infer functionality from file names", so the content has to be IN it.
 ///
@@ -189,15 +299,8 @@ fn the_rendered_prompt_carries_the_files_own_content() {
             block.contains(&format!("--- BEGIN {row} ")),
             "the content block does not fence {row}"
         );
-        let body: String = block
-            .lines()
-            .skip_while(|l| !l.starts_with(&format!("--- BEGIN {row} ")))
-            .skip(1)
-            .take_while(|l| !l.starts_with("--- END "))
-            .collect::<Vec<_>>()
-            .join("\n");
         assert!(
-            body.chars().count() > 20,
+            fence_body(&block, row).chars().count() > 20,
             "{row} got a fence and no text: the model is back to guessing"
         );
     }
@@ -226,11 +329,17 @@ fn the_rendered_prompt_carries_the_files_own_content() {
 /// `LISTED.len() * FILE_SUMMARY_EXCERPT_BYTES + 4096`, which is a gate that
 /// cannot fail: raising `FILE_SUMMARY_EXCERPT_BYTES` tenfold moved the ceiling
 /// with it and this stayed green (calibrated). A budget derived from the knob it
-/// polices measures nothing. The measured prompt is 23,150 bytes at the shipped
-/// bounds, and 24,576 is the ceiling — about 5.8k tokens.
+/// polices measures nothing. The rendered prompt measured 22,147 bytes on
+/// 2026-10-08 — 1,479 fewer than the 23,150 measured when this ceiling was
+/// written, which is exactly the prefix the rows stopped carrying — and 24,576 is
+/// the ceiling, about 5.8k tokens.
 ///
 /// So a listed file that grows, a row added to the list, or a loosened constant
 /// all go RED here rather than quietly costing every model its context window.
+///
+/// The measured number is hand-typed, not derived, and that leaks: it goes stale
+/// every time a listed file grows. It says how close the tree is to the ceiling;
+/// the CEILING is what enforces the bound.
 #[test]
 fn the_rendered_prompt_stays_inside_its_stated_budget() {
     const CEILING_BYTES: usize = 24_576;
@@ -254,13 +363,18 @@ fn the_rendered_prompt_stays_inside_its_stated_budget() {
 /// The truncation is SAID, not silent: a model told it is seeing a head of the
 /// file can hedge honestly, and one told nothing will guess at the rest. The
 /// smallest listed file is whole, so the note must not be a blanket lie.
+///
+/// Each row is re-read from the REAL checkout — a row is relative, so the read
+/// needs a root, and it is the same one the renderer resolved.
 #[test]
 fn truncation_is_stated_and_short_files_are_not_announced_as_cut() {
     let block = excerpts().expect("the listed files are readable");
+    let root = repo_root();
     let mut saw_cut = false;
     let mut saw_whole = false;
     for (i, row) in FILE_SUMMARY_FILE_LIST.lines().enumerate() {
-        let text = std::fs::read_to_string(row.trim()).unwrap_or_else(|e| panic!("{row}: {e}"));
+        let text =
+            std::fs::read_to_string(root.join(row.trim())).unwrap_or_else(|e| panic!("{row}: {e}"));
         let (_, shown, total) = excerpt(&text);
         let note = format!("--- BEGIN {row} (showing {shown} of {total} lines)");
         let has_note = block.contains(&note);
@@ -355,6 +469,13 @@ fn the_content_block_sits_above_the_noise_marker() {
 /// carry the same slot and the same block, so that is asserted rather than
 /// assumed — a template that drifted would otherwise render a different prompt
 /// from `render_both` than from `render`, silently.
+///
+/// The OTHER way this pair can fail — a template that lost its slot, and a row the
+/// given checkout does not have — is asserted in `tasks_file_summary_tests.rs`,
+/// beside the roster build that resolves the checkout. It lived here until
+/// 2026-10-08 and moved because a row is relative now, which made the missing-row
+/// case reachable from a fixture and therefore worth pinning beside the one that
+/// is.
 #[test]
 fn one_content_block_serves_both_prompts() {
     let (plain, mixed) =
@@ -366,19 +487,4 @@ fn one_content_block_serves_both_prompts() {
     let occurrences = |text: &str| text.matches("--- BEGIN ").count();
     assert_eq!(occurrences(&plain), LISTED.len());
     assert_eq!(occurrences(&mixed), LISTED.len());
-}
-
-/// `render_both` refuses a template that lost its slot rather than shipping a
-/// prompt that names files and explains none of them.
-#[test]
-fn a_template_without_its_slot_is_an_error_not_a_silent_path_only_prompt() {
-    let stripped = FILE_SUMMARY_PROMPT.replace(FILE_SUMMARY_CONTENTS_SLOT, "");
-    let err = render_both(&stripped, FILE_SUMMARY_PROMPT_MIXED)
-        .expect_err("a slotless template must not render")
-        .to_string();
-    assert!(err.contains(FILE_SUMMARY_CONTENTS_SLOT), "{err}");
-    let err = render_both(FILE_SUMMARY_PROMPT, &stripped)
-        .expect_err("a slotless template must not render")
-        .to_string();
-    assert!(err.contains("mixed"), "{err}");
 }

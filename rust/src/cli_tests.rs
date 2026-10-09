@@ -341,8 +341,11 @@ fn an_explicit_config_takes_serde_defaults_for_the_fields_it_omits() {
     );
     assert_eq!(
         loaded.eval_conf_dirs,
-        vec!["~/.config/ztools", "~/Projects/ztools/conf"],
-        "omitted list default"
+        crate::manifest::config_paths(&["~/.config/ztools"], "conf"),
+        "omitted list default: the operator's overlay first, then the \\
+         checkout's conf/ -- derived through `manifest`, because the literal \\
+         this replaces named one machine's checkout and the derivation's own \\
+         precedence is pinned in `config_tests.rs`"
     );
     drop(env);
 }

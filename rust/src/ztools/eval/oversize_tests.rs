@@ -367,7 +367,10 @@ fn an_unreadable_headroom_reader_names_itself_and_the_platform_it_is_not_on() {
 fn an_uninjected_thrashing_verdict_reads_the_machine_and_still_answers() {
     let env = TestEnv::new();
     let r = oversize_refusal(0.001, Some(50.0), false, None);
-    assert_eq!(r, "", "a tiny model fits any real machine: {r}");
+    assert!(
+        r.is_empty() || r.contains("the machine is already paging"),
+        "uninjected thrashing read either permits a tiny model or names live paging: {r}"
+    );
     drop(env);
 }
 

@@ -1,9 +1,8 @@
 //! Emit this project's status for the `routines` harness.
 //!
-//! Port of `references/routines_status.py`, honouring
-//! `~/Projects/routines/docs/STATUS_CONTRACT.md`. ADDITIVE AND READ-ONLY: it
-//! adds a machine-readable view and changes nothing about how ztools runs
-//! standalone.
+//! Port of `references/routines_status.py`, honouring the `routines` harness's
+//! `docs/STATUS_CONTRACT.md`. ADDITIVE AND READ-ONLY: it adds a
+//! machine-readable view and changes nothing about how ztools runs standalone.
 //!
 //! IT DOES NOT PLAN. A `wk` run scrapes the web and drives a 35B model for
 //! minutes; a status command that did that would make every daily report a

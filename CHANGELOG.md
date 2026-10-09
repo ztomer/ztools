@@ -6,7 +6,7 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
-## Unreleased — a reading nobody took is never a score _(2026-10-05/06)_
+## Unreleased — a reading nobody took is never a score _(2026-10-05/09)_
 
 The theme is one class: a value that was never measured arrived in front of a
 reader looking like one that was. **967 Rust tests, 123 tools tests, clippy
@@ -38,6 +38,14 @@ reader looking like one that was. **967 Rust tests, 123 tools tests, clippy
   an outage that counts towards abandoning the model, not a quality failure, and
   not a run failure unless nothing else was measured. `foundation`'s ~4.6 KB
   `summarize` prompt stays measured; the ~22.6 KB file-summary prompt does not.
+- **Production `llm::chat` calls guard against context overflows before sending wire requests (`M3`).**
+  `llm.rs` checks `context_refusal` against the documented window before dispatching;
+  overflowing requests refuse immediately without wire latency, and fallback chains
+  skip down to the next model (`rust/src/ztools/llm.rs`, `rust/src/ztools/twitter/chain_tests.rs`).
+- **Integration and unit tests are resilient to host paging pressure.**
+  `oversize_tests.rs`, `drain_signal.rs`, and `eval_not_measured.rs` now execute
+  cleanly on machines under real-world developer memory pressure, preventing
+  spurious test timeouts or harness panics from active swap.
 - **A dead weather endpoint produced an invented forecast in the saved plan.**
   The fetcher's failure string was filtered out by the formatter, which then
   rendered a hardcoded forecast of its own (`Fri 28.2°C (clear), …`): a reading
@@ -71,6 +79,7 @@ reader looking like one that was. **967 Rust tests, 123 tools tests, clippy
   recognised `ZtoolsConfig::default()` and `ZtoolsConfig {` only; `load_config`, a
   typed `toml::from_str`, and the three `manifest` entry points reach the same
   defaults. In this checkout the leak was invisible -- the root derived from the
+  <!-- path-ok: historical record — the released stanza quotes the defect verbatim -->
   test binary IS `~/Projects/ztools`, which the historical default already names --
   so it took a CI simulation (a clone elsewhere, an empty `HOME`) to fail. The
   audit now knows all five routes and the five tests take the guard.
@@ -463,6 +472,7 @@ Python verdicts frozen as goldens the Rust tests assert — or explicitly retire
   markers, shell lint, secrets) instead of two hand-picked Python checks.
 - **`build.sh` and the `bin/` launcher shims are gone.** They were a third
   install door (after `brew` and `install.sh`) that resolved the build via
+  <!-- path-ok: historical record — names the removed defect, not a live path -->
   `cargo metadata` + `jq` on every launch and hardcoded `~/Projects/ztools`.
   Dev builds run with `cargo run --manifest-path rust/Cargo.toml -- <cmd>`.
 

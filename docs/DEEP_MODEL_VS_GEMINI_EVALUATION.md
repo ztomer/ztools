@@ -158,4 +158,4 @@ The 4 universal prompt steering rules were propagated across all 7 model configu
 
 Empirical evaluation (`task-899`) confirms that the combination of **strict prompt context-bounding**, **executive summary & narrative verb prompt structures**, and **code-side post-processing enforcements** successfully elevates `summarize`, `file_summary`, `filename`, and `weekend` tasks to **EXCELLENT** quality standards (`91.6% – 98.5%`).
 
-Per the mandatory evaluation policy in [`docs/EVALUATION_WORKFLOW.md`](file:///Users/ztomer/Projects/ztools/docs/EVALUATION_WORKFLOW.md), every future eval run will be inspected directly and recorded in this document.
+Per the mandatory evaluation policy in [`docs/EVALUATION_WORKFLOW.md`](EVALUATION_WORKFLOW.md), every future eval run will be inspected directly and recorded in this document.

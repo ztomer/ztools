@@ -29,7 +29,7 @@ fn ctx() -> PlanContext {
 }
 
 /// THIS CHECKOUT's `conf/weekend.toml`, resolved at compile time rather than
-/// through `~/Projects/ztools/…`.
+/// through a home-relative checkout path.
 ///
 /// The region and exclusion lists are DATA these tests assert against — the
 /// corpus test's whole claim is that a snippet survives `has_region_evidence` —

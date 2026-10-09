@@ -1,6 +1,6 @@
 # Report weakness classes — `tw` and `wk`
 
-**Stage 0 of G3** (`~/Projects/routines/AUTOMATION_PLAN.md` §3 G3, backlog item 9).
+**Stage 0 of G3** (the `routines` harness's `AUTOMATION_PLAN.md` §3 G3, backlog item 9).
 Catalogued 2026-08-02 against real, dated outputs. Nothing here is hypothetical: every
 class is anchored to a quote from a shipped report and a root cause in the source.
 
