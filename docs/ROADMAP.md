@@ -39,8 +39,8 @@ checked by a gate, so re-derive it before editing it:
 `tools/gate.sh --full`, and `"$GOH_DIR/gates/goh.sh" home-paths --exclude ^vendor/`.
 
 - Release v3.3.0 cut, tagged, and published on GitHub.
-- Remote CI run 37993907710 passed in 3m40s on macOS arm64 (`make ci` clean across all 12 steps).
-- Items `L2`, `M4`, `M6`, `M7`, and `M8` are closed and deleted.
+- Remote CI run 37998212140 passed in 2m47s on macOS arm64 (`make ci` clean across all 12 steps).
+- Items `L2`, `M4`, `M6`, `M7`, `M8`, `M9`, and `M10` are closed and deleted.
 - Landed today, each proven by a test made to fail first:
   **`L2`** (green CI gate of record on GitHub Actions),
   **`M1`** (repo-relative file_summary checkout rows), **`M2`** (task identity
@@ -54,39 +54,43 @@ checked by a gate, so re-derive it before editing it:
   **`M6`** (eval signals re-baselined with fresh task fingerprints in `conf/eval_signals.json`),
   **`M7`** (`ztools eval-signals --prune` strips unrecorded and superseded task observations),
   **`M8`** (`ztools model-eval --leaderboard` formats latest clean runs into comparative rankings),
+  **`M9`** (`ztools model-eval --leaderboard --json-output` exports structured ranking JSON array),
+  **`M10`** (`ztools model-eval --leaderboard --min-tasks <N>` filters models by run task count floor),
   **`G2`** (307 files clean under `GOH_NO_HOME_PATHS=1`), **`G3`** (toolchain header cleaned),
   **`G4`** (CI gate tool manifest dynamic install + pinned tsv), **`R1`** (provenance ledger reading).
 - Local verification on `main`:
   `tools/gate.sh --full` passes all 12 CI steps (coverage floor 95%, clippy, cargo audit,
   cargo deny, structural, pytest, ruff, camoufox tests, and secrets scan),
   `python3 -m pytest tools/tests -q` green (136 passed),
-  `cargo test --manifest-path rust/Cargo.toml --all-features --lib` passes 902 lib tests.
+  `cargo test --manifest-path rust/Cargo.toml --all-features --lib` passes 905 lib tests.
 - All temporary agent sessions (OpenCode and Claude worktrees/caches) are purged.
 
 ## Phase M — what the eval records must mean what it says
 
 Depends on nothing. The class for the whole phase: **a stored number that no longer
-describes the thing its name says it describes.** `M1` through `M8` landed on
+describes the thing its name says it describes.** `M1` through `M10` landed on
 2026-10-08/09 (task fingerprinting, context guards, full-roster sweeps, signal
-re-baselining, signal pruning, and comparative leaderboards); what remains is machine-readable
-leaderboard serialization and configurable task floor filtering.
+re-baselining, signal pruning, comparative leaderboards, JSON serialization, and
+configurable task thresholds); what remains is capability-specific sorting and historical
+delta tracking.
 
-### M9 — JSON export mode for comparative model-eval leaderboard
-- **Class:** tooling integration boundary lacking machine-readable format.
-- **Why now:** `ztools model-eval --leaderboard` formats rankings as terminal markdown;
-  external CI monitoring pipelines and routine hooks require machine-readable JSON tables.
-- **Done when:** `ztools model-eval --leaderboard --json-output` outputs a structured JSON array
-  of ranked models with overall means and slot scores, covered by a test in
-  `rust/src/ztools/model_eval_tests.rs`.
+### M11 — Slot-specific ranking sort for comparative model-eval leaderboard
+- **Class:** fixed one-dimensional ranking over multi-dimensional capability profiles.
+- **Why now:** `ztools model-eval --leaderboard` ranks models exclusively by overall mean;
+  operators routing specialized workloads (e.g. reasoning, JSON extraction, vision) need
+  to rank models by specific capability slots.
+- **Done when:** `ztools model-eval --leaderboard --sort-by <slot>` (supporting `overall`,
+  `think`, `json`, `summarize`, `filename`, `vlm`) sorts the leaderboard by the chosen slot
+  score descending, covered by a test in `rust/src/ztools/model_eval_tests.rs`.
 - **Blocked by:** nothing.
 
-### M10 — Configurable minimum task threshold for leaderboard inclusion
-- **Class:** uncalibrated aggregation over sparse spot checks.
-- **Why now:** `ztools model-eval --leaderboard` defaults to separating multi-task sweeps from
-  single-task spot checks at 5 tasks; operators sweeping custom task subsets require an explicit
-  configurable threshold.
-- **Done when:** `ztools model-eval --leaderboard --min-tasks <N>` filters models whose latest
-  clean run holds fewer than N tasks, covered by a test in `rust/src/ztools/model_eval_tests.rs`.
+### M12 — Historical score delta comparison in comparative leaderboard
+- **Class:** static snapshot ranking lacking longitudinal performance trajectory.
+- **Why now:** `ztools model-eval --leaderboard` shows the latest score for each model but
+  does not display whether a model improved or regressed relative to its prior run in
+  stored evaluation history.
+- **Done when:** `ztools model-eval --leaderboard` computes and displays score deltas
+  against each model's previous run, covered by a test in `rust/src/ztools/model_eval_tests.rs`.
 - **Blocked by:** nothing.
 
 ## Phase G — gates that still cannot fail

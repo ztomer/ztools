@@ -146,6 +146,9 @@ enum Cmd {
         /// Format comparative markdown leaderboard of latest clean runs across evaluated models.
         #[arg(long)]
         leaderboard: bool,
+        /// Minimum task count required for leaderboard inclusion.
+        #[arg(long)]
+        min_tasks: Option<usize>,
     },
     /// Manage stored eval signals (inspect or prune superseded task observations).
     #[command(version)]
@@ -323,6 +326,7 @@ pub fn run() -> Result<()> {
             capabilities,
             thinking,
             leaderboard,
+            min_tasks,
         } => {
             let action = if leaderboard {
                 crate::cli_ztools::EvalAction::Leaderboard
@@ -341,6 +345,7 @@ pub fn run() -> Result<()> {
                     json_output,
                     thinking,
                     action,
+                    min_tasks,
                 },
             )
         }

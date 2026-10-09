@@ -143,7 +143,7 @@ fn sample_history() -> BTreeMap<String, Vec<HistoryEntry>> {
 
 pub fn verify_leaderboard_ranking() {
     let history = sample_history();
-    let rows = generate_leaderboard(&history);
+    let rows = generate_leaderboard(&history, None);
     assert_eq!(rows.len(), 2, "only models with complete runs are ranked");
 
     // Rank 1: Model A (mean = (100+80+100+90+100)/5 = 94.0%)
@@ -193,8 +193,42 @@ fn test_task_slot_mapping() {
 #[test]
 fn test_empty_leaderboard() {
     let history = BTreeMap::new();
-    let rows = generate_leaderboard(&history);
+    let rows = generate_leaderboard(&history, None);
     assert_eq!(rows.len(), 0);
     let table = format_leaderboard(&rows);
     assert!(table.contains("No complete model eval runs found in history"));
+}
+
+#[test]
+fn test_min_tasks_filtering() {
+    let history = sample_history();
+
+    // Default (None): includes model_a (5 tasks) and model_b (4 tasks)
+    let default_rows = generate_leaderboard(&history, None);
+    assert_eq!(default_rows.len(), 2);
+
+    // min_tasks = 5: includes model_a (5 tasks), excludes model_b (4 tasks)
+    let min5_rows = generate_leaderboard(&history, Some(5));
+    assert_eq!(min5_rows.len(), 1);
+    assert_eq!(min5_rows[0].model, "model_a");
+    assert_eq!(min5_rows[0].task_count, 5);
+
+    // min_tasks = 6: neither model has 6 tasks
+    let min6_rows = generate_leaderboard(&history, Some(6));
+    assert_eq!(min6_rows.len(), 0);
+}
+
+#[test]
+fn test_leaderboard_json_serialization() {
+    let history = sample_history();
+    let rows = generate_leaderboard(&history, None);
+    let json_str = serde_json::to_string_pretty(&rows).unwrap();
+    let parsed: Vec<serde_json::Value> = serde_json::from_str(&json_str).unwrap();
+    assert_eq!(parsed.len(), 2);
+    assert_eq!(parsed[0]["model"], "model_a");
+    assert_eq!(parsed[0]["task_count"], 5);
+    assert_eq!(parsed[0]["json_score"], 100.0);
+    assert_eq!(parsed[1]["model"], "model_b");
+    assert_eq!(parsed[1]["task_count"], 4);
+    assert!(parsed[1]["vlm_score"].is_null());
 }

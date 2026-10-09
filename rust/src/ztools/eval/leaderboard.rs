@@ -4,6 +4,7 @@
 //! comparative markdown table ranking overall means and per-slot scores.
 
 use anyhow::Result;
+use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::Path;
@@ -12,7 +13,7 @@ use crate::units::{count, signed};
 use crate::ztools::eval::report::HistoryEntry;
 
 /// A model's ranking row on the leaderboard.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ModelLeaderboardEntry {
     pub model: String,
     pub date: String,
@@ -59,11 +60,17 @@ fn slot_mean(entries: &[&HistoryEntry], slot: &str) -> Option<f64> {
 }
 
 /// Aggregates each model's latest clean run from history and ranks by overall mean descending.
+///
+/// When `min_tasks` is specified (`Some(min)`), models whose latest clean run holds fewer
+/// than `min` tasks are filtered out. When `None`, the default threshold (5) is used to prioritize
+/// multi-task sweeps over spot checks without excluding spot checks.
 #[must_use]
 pub fn generate_leaderboard(
     history: &BTreeMap<String, Vec<HistoryEntry>>,
+    min_tasks: Option<usize>,
 ) -> Vec<ModelLeaderboardEntry> {
     let mut rows = Vec::new();
+    let threshold = min_tasks.unwrap_or(5);
 
     for (model, entries) in history {
         // Only clean (complete: true) entries participate in leaderboard
@@ -85,23 +92,26 @@ pub fn generate_leaderboard(
             }
         }
 
-        // Prefer multi-task runs (>= 5 tasks) over single-task spot checks,
-        // selecting the latest run timestamp in that category.
-        let multi_task_runs: Vec<&Vec<&HistoryEntry>> =
-            runs.iter().filter(|g| g.len() >= 5).collect();
-        let chosen_run = if multi_task_runs.is_empty() {
-            runs.iter().max_by(|a, b| {
-                a[0].timestamp
-                    .partial_cmp(&b[0].timestamp)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
+        // Prefer multi-task runs (>= threshold tasks) over single-task spot checks,
+        // selecting the latest run timestamp in that category. If min_tasks is explicitly
+        // set, filter out runs with fewer tasks entirely.
+        let eligible_runs: Vec<&Vec<&HistoryEntry>> = if min_tasks.is_some() {
+            runs.iter().filter(|g| g.len() >= threshold).collect()
         } else {
-            multi_task_runs.into_iter().max_by(|a, b| {
-                a[0].timestamp
-                    .partial_cmp(&b[0].timestamp)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
+            let multi_task: Vec<&Vec<&HistoryEntry>> =
+                runs.iter().filter(|g| g.len() >= threshold).collect();
+            if multi_task.is_empty() {
+                runs.iter().collect()
+            } else {
+                multi_task
+            }
         };
+
+        let chosen_run = eligible_runs.into_iter().max_by(|a, b| {
+            a[0].timestamp
+                .partial_cmp(&b[0].timestamp)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         let Some(run_entries) = chosen_run else {
             continue;
@@ -130,11 +140,11 @@ pub fn generate_leaderboard(
         });
     }
 
-    // Rank multi-task evaluations first (>= 5 tasks) by overall mean descending,
-    // followed by spot checks (< 5 tasks), breaking ties by task count descending, then model name.
+    // Rank multi-task evaluations first (>= threshold tasks) by overall mean descending,
+    // followed by spot checks (< threshold tasks), breaking ties by task count descending, then model name.
     rows.sort_by(|a, b| {
-        let a_full = a.task_count >= 5;
-        let b_full = b.task_count >= 5;
+        let a_full = a.task_count >= threshold;
+        let b_full = b.task_count >= threshold;
         b_full
             .cmp(&a_full)
             .then_with(|| {
@@ -192,10 +202,18 @@ pub fn format_leaderboard(entries: &[ModelLeaderboardEntry]) -> String {
 ///
 /// # Errors
 ///
-/// Returns an error if loading history fails.
-pub fn cli_leaderboard(eval_dir: Option<&Path>) -> Result<()> {
+/// Returns an error if loading history fails or JSON serialization fails.
+pub fn cli_leaderboard(
+    eval_dir: Option<&Path>,
+    json_output: bool,
+    min_tasks: Option<usize>,
+) -> Result<()> {
     let history = crate::ztools::eval::report::load_history_entries(eval_dir);
-    let entries = generate_leaderboard(&history);
-    println!("{}", format_leaderboard(&entries));
+    let entries = generate_leaderboard(&history, min_tasks);
+    if json_output {
+        println!("{}", serde_json::to_string_pretty(&entries)?);
+    } else {
+        println!("{}", format_leaderboard(&entries));
+    }
     Ok(())
 }

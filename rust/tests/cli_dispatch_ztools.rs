@@ -410,3 +410,25 @@ fn all_subcommands_and_aliases_support_version_flags() {
         "ztools --version failed: {top_stdout}"
     );
 }
+
+#[test]
+fn model_eval_leaderboard_json_and_min_tasks_cli() {
+    let out = Command::new(bin())
+        .args([
+            "model-eval",
+            "--leaderboard",
+            "--json-output",
+            "--min-tasks",
+            "5",
+        ])
+        .output()
+        .unwrap();
+    let stdout = stdout_of(&out);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert!(parsed.is_array());
+    let arr = parsed.as_array().unwrap();
+    for entry in arr {
+        let count = entry["task_count"].as_u64().unwrap();
+        assert!(count >= 5, "min-tasks must filter runs with < 5 tasks");
+    }
+}
