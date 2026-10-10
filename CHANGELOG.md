@@ -19,6 +19,12 @@ This file starts at v2.2.0 — earlier history is in git.
   the label up from the kind; a kind the table does not know keeps the model's
   label, and "unknown" keeps none (neutral in the score, "—" in the report).
   On the three saved batches no real event is left with a wrong label.
+- **The fallback path dropped the weather label entirely.** When the draft
+  phase gets no answer the plan comes from one monolithic prompt, which carried
+  its own inline copy of the event schema without the weather rule: a
+  2026-10-10 run that fell back drew "—" for every event. It now sends the
+  structure phase's own system prompt (`phases::structure_system`) and the
+  activity rule, so the two cannot drift.
 - **The fixed table's weather column was blank.** The curated venues were
   built with an empty label. Each now states where it happens (a required
   field), so a trampoline park reads indoor and a conservation area outdoor.

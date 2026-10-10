@@ -439,10 +439,7 @@ pub fn structure_to_json(
     config: &crate::config::ZtoolsConfig,
     log: &PhaseLog,
 ) -> Option<Vec<super::WeekendEvent>> {
-    let sys = render(
-        PHASE_STRUCTURE_TRANSIENT_SYSTEM,
-        &[("year", &year.to_string()), ("weather_rule", WEATHER_RULE)],
-    );
+    let sys = structure_system(year);
     let rows = extracted_rows(text);
     let batches: Vec<String> = if rows.is_empty() {
         vec![text.to_string()]
@@ -469,6 +466,17 @@ pub fn structure_to_json(
         }
     }
     events
+}
+
+/// The schema and field rules every JSON event answer is asked under: the
+/// structure phase and the monolithic fallback both send this, so neither
+/// can drift from the other (the fallback's own inline copy once lacked the
+/// weather rule, and every event it produced came back unlabelled).
+pub(crate) fn structure_system(year: i32) -> String {
+    render(
+        PHASE_STRUCTURE_TRANSIENT_SYSTEM,
+        &[("year", &year.to_string()), ("weather_rule", WEATHER_RULE)],
+    )
 }
 
 /// The answer text inside the completion shape [`call_llm_json`] returns.

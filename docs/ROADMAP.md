@@ -122,9 +122,34 @@ each one makes wrong.
   10" returned about 80 rows on a 2026-10-10 replay, nav labels included; the listing gate
   and structure batching absorb it, at the cost of prompt size and time.
 - **Why now:** every extra row costs a structure batch on a shared GPU, three runs a weekend.
+  The other direction too: on a later 2026-10-10 run the draft prompt reached 29,490 chars
+  and got no answer on either attempt, so the plan came from the monolithic fallback.
 - **Done when:** the cause is measured (followed pages kept in order, or the prompt) and
   the draft's row count on a saved corpus is recorded before and after the change.
 - **Blocked by:** a free slot on the GPU lock for the measurement.
+
+### W4 — adult nightlife reaches a family plan
+
+- **Class:** a suitability judgement nobody is asked. The 2026-10-10 17:17 run (monolithic
+  fallback) planned "BAESHARAM BOLLYWOOD AFTER DARK" (10:30 PM, a bar), "BARBIE NIGHT @
+  FICTION" (a club) and an R&B brunch party for kids 6, 11 and 14. `suitability.rs` reads
+  stated age ranges; these state none, so they pass.
+- **Why now:** it is the one defect a parent reading the plan notices first.
+- **Done when:** the structure schema asks the model whether the activity is for families
+  (its judgement, with the reason), the plan drops a "no", and a replay of the 17:17 corpus
+  drops those three while keeping Kidchella and the Woodbridge Fall Fair.
+- **Blocked by:** a free slot on the GPU lock for the replay.
+
+### W5 — model-eval scores a weekend prompt production no longer sends
+
+- **Class:** a parallel copy of a prompt (engineering rule 9). `conf/models/*.toml`
+  `weekend_transient` / `weekend_fixed` carry their own event schema with the old weather
+  rule; production now asks for `place_kind` and labels from it (`weekend/setting.rs`).
+  Rankings for the weekend slots measure the old prompt.
+- **Why now:** the slot defaults in `[best_models]` are chosen by those rankings.
+- **Done when:** the eval tasks render the production structure prompt
+  (`phases::structure_system`) instead of a copy, and a test fails if they differ.
+- **Blocked by:** nothing.
 
 ## Phase M — what the eval records must mean what it says
 

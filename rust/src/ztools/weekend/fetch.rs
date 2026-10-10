@@ -1,4 +1,4 @@
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 
 use super::WeekendEvent;
 use super::{DemotionPolicy, SearchRecord};
@@ -201,17 +201,13 @@ fn monolithic_transient(
         d1.format("%Y-%m-%d").to_string(),
         d2.format("%Y-%m-%d").to_string(),
     );
+    let sys = super::phases::structure_system(d1.year());
+    let activity_rule = super::prompts::ACTIVITY_RULE;
     let prompt = format!(
-        "You are an expert family activity planner. Extract up to 10 time-limited events happening STRICTLY this weekend (between {d1_str} and {d2_str}) in {location} from the text below.\n\
-        Output JSON now. Use EXACT schema:\n\
-        {{\"transient_events\": [{{\"name\": \"str\", \"location\": \"str\", \"target_ages\": \"str\", \"price\": \"str\", \"start_date\": \"str\", \"end_date\": \"str\", \"duration\": \"str\", \"weather\": \"str\", \"day\": \"str\", \"description\": \"str\"}}]}}\n\n\
-        Rules for every field:\n\
-        - Suggest up to 10 specific weekend activities. Do NOT stop after just 1 or 2 events. Find as many as you can.\n\
+        "You are an expert family activity planner. Extract up to 10 time-limited events happening STRICTLY this weekend (between {d1_str} and {d2_str}) in {location} from the text below, in the schema above.\n\n\
+        {activity_rule}\n\n\
+        - Find as many as you can, up to 10. Do NOT stop after just 1 or 2 events.\n\
         - Only extract events that occur within or overlap with the dates {d1_str} to {d2_str}. Discard events from past or future weekends.\n\
-        - Copy values from the source text. NEVER invent one.\n\
-        - If the source does not state a value, output an empty string \"\".\n\
-        - start_date / end_date: ISO YYYY-MM-DD\n\
-        - description: 1-2 sentence short summary of what makes it appealing for kids.\n\
         - Lines prefixed [THIS WEEKEND] definitely happen in the plan window; prefer them.\n\
         \n\
         Search results:\n\
@@ -219,10 +215,10 @@ fn monolithic_transient(
         \n\
         Output ONLY JSON."
     );
-    let resp = super::phases::call_llm_json(None, &prompt, config);
+    let resp = super::phases::call_llm_json(Some(&sys), &prompt, config);
     log.record(
         "monolithic",
-        &prompt,
+        &format!("{sys}\n\n{prompt}"),
         resp.as_ref().and_then(super::phases::answer_content),
     );
     resp.and_then(|r| super::parse_llm_events(&r))

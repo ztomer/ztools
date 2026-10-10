@@ -263,6 +263,16 @@ fn a_dead_draft_phase_falls_back_to_the_monolithic_prompt_and_parses_real_events
         "{transcript}"
     );
     assert!(transcript.contains(monolithic_json), "{transcript}");
+    // The fallback asks under the SAME schema and field rules as the structure
+    // phase: its own inline copy never got the weather rule, and a 2026-10-10
+    // run that fell back drew "—" for every event.
+    let fallback = after_draft.split("=== monolithic: prompt ").nth(1).unwrap();
+    for rule in [
+        crate::ztools::weekend::WEATHER_RULE,
+        crate::ztools::weekend::ACTIVITY_RULE,
+    ] {
+        assert!(fallback.contains(rule), "{fallback}");
+    }
     drop(env);
 }
 
