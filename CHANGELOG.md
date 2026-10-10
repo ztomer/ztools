@@ -6,7 +6,7 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
-## Unreleased — twitter summary quality
+## Unreleased — twitter summary quality, and a weekend plan for these kids
 
 ### Fixed
 - **Repetition loops were saved as primary summaries.** The quality gate rejected an answer
@@ -23,9 +23,38 @@ This file starts at v2.2.0 — earlier history is in git.
   all, is a refusal rather than a "Please provide the timeline" document.
 - **A whole-chain failure now names its cause**: every model is served by the one Osaurus
   server (ROADMAP T1), exit 1.
+- **A cut answer was saved as complete.** Live on 2026-10-10, 45 tweets came back as 8 bullets
+  ending mid-citation (`(@AION2Official | Sat Oct 10 336:51 +...`) and passed every rule.
+  `llm.rs` now refuses `finish_reason: length` and a stream that ends with neither `[DONE]`
+  nor a finish reason; the quality gate rejects a last bullet that opens a citation it never
+  closes, which catches a cut the server does not report.
 - **`**Period:**` printed local time labelled "UTC"**; it now carries the real offset.
 - **Tests that resolve `~` or render the live file-summary prompt** must take `TestEnv`
   (audit gate 2).
+
+### Fixed — weekend planner
+- **An uninstalled model was silently replaced by the server's first model**, so every
+  scheduled plan through 2026-10-09 had 0 live events. An unresolvable model is now
+  `ModelHealth::NotInstalled`: no chat call, and the degraded banner names the model and
+  what the server does have (`weekend/phases.rs`, `weekend/health.rs`). The same silent
+  `models.first()` fallback is gone from `twitter/fallback.rs`.
+- **The children's ages were a hardcoded CLI default (`13,10,6`)** while the config's
+  `[[children]]` birthdays were never read. Ages now come from the birthdays on the plan's
+  Friday (`weekend/family.rs`); `--ages` is removed.
+- **Age is a filter, not a bonus.** Target ages, name and description are read for an age
+  range; a row that fits none of the children ("Baby and Me (birth to 12 months)",
+  "French Meetup for Adults") is dropped and counted as unsuitable. The fit score is age
+  fit plus weather; filled-in fields and a price no longer earn points
+  (`weekend/suitability.rs`, `weekend/score.rs`).
+- **Listing-page titles accepted as venues** ("Vaughan Events This Weekend & Things to Do -
+  Oct 2026") are rejected, and a transient row that only restates a fixed venue is dropped.
+- **Holiday Mondays were ignored.** An Ontario statutory-holiday table (`province = "ON"` in
+  `conf/weekend.toml`) extends the window: Thanksgiving 2026 plans Oct 9-12
+  (`weekend/holidays.rs`, `weekend/dates.rs`).
+- **`routines.toml` said "Thursday evening" and scheduled Monday 08:00**; it is now
+  `weekly on thu at 18:00`.
+- The plan's provenance line gained a fifth count, `N unsuitable`, so every dropped row is
+  still accounted for; older plans parse as 0.
 
 ## v3.5.0 — evaluation leaderboard category filtering, CSV export, family grouping, and regression alerts _(2026-10-09)_
 

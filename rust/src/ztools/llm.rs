@@ -246,15 +246,21 @@ fn read_sse(
 ) -> Result<String> {
     let mut content = String::new();
     let mut line = first.to_string();
+    let mut finished: Option<String> = None;
+    let mut done = false;
     loop {
         if let Some(data) = line.trim().strip_prefix("data:") {
             let data = data.trim();
             if data == "[DONE]" {
+                done = true;
                 break;
             }
             if let Ok(event) = serde_json::from_str::<serde_json::Value>(data) {
                 if let Some(delta) = event["choices"][0]["delta"]["content"].as_str() {
                     content.push_str(delta);
+                }
+                if let Some(reason) = event["choices"][0]["finish_reason"].as_str() {
+                    finished = Some(reason.to_string());
                 }
                 // A server that streams an error mid-way says so here rather
                 // than in an HTTP status the client has already sent.
@@ -267,6 +273,28 @@ fn read_sse(
             Some(next) => line = next,
             None => break,
         }
+    }
+    // A stream that simply stopped -- no `[DONE]`, no finish reason -- was
+    // cut, and what arrived is a fragment, not an answer.
+    if !done && finished.is_none() {
+        anyhow::bail!(
+            "Osaurus stream ended mid-answer after {} chars (no [DONE], no finish_reason)",
+            content.chars().count()
+        );
+    }
+    complete(content, finished.as_deref())
+}
+
+/// An answer the server stopped at the token limit is cut, whatever it looks
+/// like: on 2026-10-10 a cut summary ending mid-citation was saved as
+/// complete because nothing read `finish_reason`. Every caller wants a whole
+/// answer -- a cut JSON extract and a cut summary are both wrong.
+fn complete(content: String, finish_reason: Option<&str>) -> Result<String> {
+    if finish_reason == Some("length") {
+        anyhow::bail!(
+            "answer cut at max_tokens after {} chars (finish_reason: length)",
+            content.chars().count()
+        );
     }
     Ok(content)
 }
@@ -284,7 +312,10 @@ fn parse_completion(raw: &str) -> Result<String> {
         .ok_or_else(|| {
             anyhow::anyhow!("Failed to parse Osaurus server response JSON: no choices[0].message.content, raw: {raw}")
         })?;
-    Ok(content.to_string())
+    complete(
+        content.to_string(),
+        value["choices"][0]["finish_reason"].as_str(),
+    )
 }
 
 #[cfg(test)]

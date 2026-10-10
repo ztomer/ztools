@@ -192,3 +192,23 @@ fn bullets_with_zero_input_tweets_are_rejected() {
     let q = check_summary_quality(&doc(&[cited(0)]), 0);
     assert!(q.rejected(), "{q:?}");
 }
+
+/// The live shape of 2026-10-10: a healthy-looking answer whose LAST bullet
+/// stops mid-citation. Every other rule passes it (7 of 8 cited, no repeats,
+/// fewer bullets than tweets), so only the truncation rule can reject it.
+#[test]
+fn an_answer_cut_off_mid_citation_is_rejected() {
+    let mut lines: Vec<String> = (0..7).map(cited).collect();
+    lines.push(
+        "- A game announcement was posted on Steam. (@AION2Official | Sat Oct 10 336:51 +..."
+            .into(),
+    );
+    let q = check_summary_quality(&doc(&lines), 45);
+    assert_eq!(q.rejections.len(), 1, "{q:?}");
+    assert!(q.rejections[0].contains("cut off"), "{q:?}");
+
+    // A complete last bullet that merely mentions an ellipsis is not cut.
+    let mut whole: Vec<String> = (0..7).map(cited).collect();
+    whole.push("- He said \"wait...\" and left. (@someone | 09:00)".into());
+    assert!(!check_summary_quality(&doc(&whole), 45).rejected());
+}

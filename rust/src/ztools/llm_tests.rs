@@ -184,3 +184,33 @@ fn chat_with_sends_its_temperature_and_frequency_penalty() {
     assert_eq!(payload["temperature"], 0.25);
     assert_eq!(payload["frequency_penalty"], 0.5);
 }
+
+/// A cut answer is not an answer. On 2026-10-10 a summary of 45 tweets came
+/// back as 8 bullets ending mid-citation (`(@AION2Official | Sat Oct 10
+/// 336:51 +...`) and was saved as complete, because nothing here read
+/// `finish_reason` or noticed a stream that ended without `[DONE]`.
+#[test]
+fn an_answer_stopped_by_the_token_limit_is_an_error() {
+    const CUT: &str = "data: {\"choices\":[{\"delta\":{\"content\":\"- one (@a | t\"}}]}\n\n\
+data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\n\
+data: [DONE]\n\n";
+    let (url, _rx) = serve(CUT, "text/event-stream", Duration::ZERO);
+    let err = chat(&request(&url), &budget()).unwrap_err().to_string();
+    assert!(err.contains("max_tokens"), "{err}");
+
+    let (url, _rx) = serve(
+        r#"{"choices":[{"message":{"content":"- one (@a | t"},"finish_reason":"length"}]}"#,
+        "application/json",
+        Duration::ZERO,
+    );
+    let err = chat(&request(&url), &budget()).unwrap_err().to_string();
+    assert!(err.contains("max_tokens"), "{err}");
+}
+
+#[test]
+fn a_stream_that_ends_without_done_or_a_finish_reason_is_an_error() {
+    const DROPPED: &str = "data: {\"choices\":[{\"delta\":{\"content\":\"- one (@a | t\"}}]}\n\n";
+    let (url, _rx) = serve(DROPPED, "text/event-stream", Duration::ZERO);
+    let err = chat(&request(&url), &budget()).unwrap_err().to_string();
+    assert!(err.contains("ended mid-answer"), "{err}");
+}

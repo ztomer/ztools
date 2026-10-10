@@ -134,8 +134,8 @@ pub fn duplicate_bullets(bullets: &[String]) -> usize {
 ///
 /// Rejects (see the module's invariant): an empty answer; one with neither a
 /// `##` header nor a bullet; more than [`MAX_DUPLICATE_BULLETS`] repeated
-/// bullets; more bullets than input tweets; and bullets that mostly lack the
-/// `(@handle | timestamp)` citation.
+/// bullets; more bullets than input tweets; an answer cut off mid-citation;
+/// and bullets that mostly lack the `(@handle | timestamp)` citation.
 #[must_use]
 pub fn check_summary_quality(summary: &str, input_tweets: usize) -> Quality {
     let mut quality = Quality::default();
@@ -181,6 +181,19 @@ pub fn check_summary_quality(summary: &str, input_tweets: usize) -> Quality {
             "{} bullets for {input_tweets} input tweets: more bullets than tweets",
             bullets.len()
         ));
+    }
+    // The model stopped mid-sentence: the last bullet opens a citation it
+    // never closes. Seen live 2026-10-10 -- 8 bullets for 45 tweets ending
+    // `(@AION2Official | Sat Oct 10 336:51 +...` -- and every other rule
+    // passed it. `llm::complete` refuses a token-limit stop; this catches a cut
+    // the server did not report.
+    if bullets.last().is_some_and(|last| {
+        last.rfind("(@")
+            .is_some_and(|open| !last[open..].contains(')'))
+    }) {
+        quality.rejections.push(
+            "the last bullet is cut off mid-citation: the answer stops before it ends".to_string(),
+        );
     }
     let unattributed = bullets.iter().filter(|b| !is_attributed(b)).count();
     if unattributed * 2 > bullets.len() {
