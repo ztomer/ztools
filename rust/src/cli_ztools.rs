@@ -150,7 +150,9 @@ pub(crate) fn weekend_plan(
 /// The row gates, in order, each one's drop count going into the plan's own
 /// ledger line: provenance first (a row that traces to nothing we fetched is
 /// invention, and there is no point judging an invented row's dates or
-/// weather label), then the exclusion list, then C3 (a dated transient event
+/// weather label), then same-event merging (`weekend/dedup.rs`; after
+/// provenance, so a sourced row is never folded into an unsourced twin that
+/// is then dropped), then the exclusion list, then C3 (a dated transient event
 /// outside the plan's weekend is dropped and each survivor's `day` reconciled
 /// with its own dates), then suitability (`gate_suitability`), then the
 /// weather labels on both lists.
@@ -167,11 +169,21 @@ fn gate_rows(
     Vec<crate::ztools::weekend::WeekendEvent>,
     Vec<crate::ztools::weekend::WeekendEvent>,
 ) {
+    use chrono::Datelike;
     health.provenance.extracted = transient.len();
     let (transient, provenance_notes) =
         crate::ztools::weekend::drop_unsourced_rows(transient, corpus);
     health.provenance.unsourced = health.provenance.extracted - transient.len();
     for note in &provenance_notes {
+        println!("→ {note}");
+    }
+    // The same event scraped from two results is one row: merged before any
+    // gate judges it, so a merged twin's fields reach every later gate.
+    let before = transient.len();
+    let (transient, twin_notes) =
+        crate::ztools::weekend::merge_duplicate_events(transient, friday.year());
+    health.provenance.duplicate = before - transient.len();
+    for note in &twin_notes {
         println!("→ {note}");
     }
     let exclusions = crate::ztools::weekend::load_exclusions(config);
@@ -194,7 +206,9 @@ fn gate_rows(
         println!("→ {note}");
     }
 
-    let (fixed, transient) = gate_suitability(fixed, transient, ages, health);
+    let region = crate::ztools::weekend_cache::load_region_lists(&config.weekend_region_paths);
+    let places: Vec<String> = region.cities.into_iter().chain(region.in_region).collect();
+    let (fixed, transient) = gate_suitability(fixed, transient, ages, &places, health);
 
     let (fixed, weather_notes) = crate::ztools::weekend::correct_weather_labels(fixed);
     let (transient, weather_notes_t) = crate::ztools::weekend::correct_weather_labels(transient);
@@ -213,6 +227,7 @@ fn gate_suitability(
     fixed: Vec<crate::ztools::weekend::WeekendEvent>,
     transient: Vec<crate::ztools::weekend::WeekendEvent>,
     ages: &[u32],
+    places: &[String],
     health: &mut crate::ztools::weekend::PlanHealth,
 ) -> (
     Vec<crate::ztools::weekend::WeekendEvent>,
@@ -220,7 +235,7 @@ fn gate_suitability(
 ) {
     use crate::ztools::weekend::suitability as fit;
     let before = transient.len();
-    let (transient, listing_notes, _) = fit::reject_listing_page_titles(transient);
+    let (transient, listing_notes, _) = fit::reject_listing_page_titles(transient, places);
     let (transient, age_notes) = fit::drop_unsuitable_for_ages(transient, ages);
     let (fixed, fixed_notes) = fit::drop_unsuitable_for_ages(fixed, ages);
     let (transient, twin_notes) = fit::drop_duplicates_of_fixed(transient, &fixed);

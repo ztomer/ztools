@@ -241,7 +241,7 @@ fn weekend_plan_renders_and_writes_the_markdown() {
     assert!(!doc.contains("Baby and Me"), "{doc}");
     assert!(stdout.contains("fits none of the children (9)"), "{stdout}");
     assert!(!doc.contains("Things to Do - Oct 2026"), "{doc}");
-    assert!(doc.contains("1 unsuitable._"), "{doc}");
+    assert!(doc.contains("1 unsuitable, 0 duplicate._"), "{doc}");
 }
 
 #[test]
@@ -382,7 +382,7 @@ fn weekend_plan_says_so_when_nothing_is_on() {
     assert!(
         doc.contains(
             "_Provenance: 0 extracted, 0 unsourced, 0 outside the window, 0 excluded, \
-             0 unsuitable._"
+             0 unsuitable, 0 duplicate._"
         ),
         "every plan carries its provenance ledger, zeros included: {doc}"
     );

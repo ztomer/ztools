@@ -10,7 +10,7 @@ use std::cmp;
 
 use super::PhaseLog;
 use super::prompts::{
-    ACTIVITY_RULE, CARRY_FIELDS, PHASE_DRAFT_TRANSIENT, PHASE_EXTRACT_EVENTS, PHASE_REFINE,
+    ACTIVITY_RULE, CARRY_FIELDS, PHASE_DRAFT_TRANSIENT, PHASE_EXTRACT_EVENTS,
     PHASE_STRUCTURE_TRANSIENT_SYSTEM, PHASE_STRUCTURE_USER, PHASE_WEATHER_CONDENSE, WEATHER_RULE,
     render,
 };
@@ -302,22 +302,20 @@ pub fn extract_sources(
     config: &crate::config::ZtoolsConfig,
     log: &PhaseLog,
 ) -> String {
-    let raw_lines: Vec<&str> = raw_text
+    // In CORPUS ORDER, which `prioritise_in_window` already set: in-window
+    // search results first, each followed page's lines together. This used to
+    // float every marked line again here, which split a listing page's entry
+    // from its own name a second time even once the corpus kept it whole.
+    let lines: Vec<&str> = raw_text
         .lines()
         .filter(|l| {
             let t = l.trim_start();
-            t.starts_with("- ") || t.starts_with("[THIS WEEKEND]")
+            t.starts_with("- ") || t.starts_with(super::IN_WINDOW_MARK)
         })
         .collect();
-    if raw_lines.is_empty() {
+    if lines.is_empty() {
         return raw_text.to_string();
     }
-
-    let (marked, general): (Vec<&str>, Vec<&str>) = raw_lines
-        .into_iter()
-        .partition(|l| l.trim_start().starts_with("[THIS WEEKEND]"));
-    let mut lines = marked;
-    lines.extend(general);
 
     let mut results = Vec::new();
     let mut batch_size = DEFAULT_BATCH_SIZE;
@@ -412,20 +410,24 @@ pub fn draft_activities(
     answer
 }
 
-/// Phase 3: merge near-duplicates, keep the best, sort by appeal.
-#[must_use]
-pub fn refine_draft(
-    draft_text: &str,
-    config: &crate::config::ZtoolsConfig,
-    log: &PhaseLog,
-) -> String {
-    let prompt = render(PHASE_REFINE, &[("draft_text", draft_text)]);
-    let answer = call_llm_text(&prompt, config);
-    log.record("refine", &prompt, answer.as_deref());
-    answer.unwrap_or_else(|| draft_text.to_string())
-}
+/// Rows per structure call.
+///
+/// A structure answer is about 350 chars a row, and one call over every row is
+/// a call whose size the draft decides: on a replay
+/// of 2026-10-10 the draft returned ~80 rows, the structure prompt was 13.8K
+/// chars, and the call produced nothing within its budget on either attempt --
+/// every event lost at the last phase. Refine's old "keep the best 8" had been
+/// bounding this by accident; its cap is gone (`refine.rs`), so the bound is
+/// here, where the size matters.
+pub const STRUCTURE_BATCH: usize = 10;
 
-/// Phase 4: structure the refined draft into the transient-event JSON schema.
+/// Phase 4: structure the refined rows into the transient-event JSON schema,
+/// [`STRUCTURE_BATCH`] rows per call.
+///
+/// A REFORMAT, like extract: a batch whose call fails loses only its own rows,
+/// says so on the operator's channel, and is in the phase transcript; the
+/// other batches' events still reach the plan. `None` only when no batch
+/// answered. Text with no pipe rows goes in one call, as it is.
 ///
 /// Takes no forecast: the weather LABEL is a fact about where the activity
 /// happens ([`WEATHER_RULE`]), and a forecast in this prompt is what turned a
@@ -441,14 +443,32 @@ pub fn structure_to_json(
         PHASE_STRUCTURE_TRANSIENT_SYSTEM,
         &[("year", &year.to_string()), ("weather_rule", WEATHER_RULE)],
     );
-    let usr = render(PHASE_STRUCTURE_USER, &[("draft_text", text)]);
-    let resp = call_llm_json(Some(&sys), &usr, config);
-    log.record(
-        "structure",
-        &format!("{sys}\n\n{usr}"),
-        resp.as_ref().and_then(answer_content),
-    );
-    super::parse_llm_events(&resp?)
+    let rows = extracted_rows(text);
+    let batches: Vec<String> = if rows.is_empty() {
+        vec![text.to_string()]
+    } else {
+        rows.chunks(STRUCTURE_BATCH).map(|c| c.join("\n")).collect()
+    };
+    let total = batches.len();
+    let mut events: Option<Vec<super::WeekendEvent>> = None;
+    for (n, batch) in batches.iter().enumerate() {
+        let usr = render(PHASE_STRUCTURE_USER, &[("draft_text", batch)]);
+        let resp = call_llm_json(Some(&sys), &usr, config);
+        log.record(
+            &format!("structure batch {} of {total}", n + 1),
+            &format!("{sys}\n\n{usr}"),
+            resp.as_ref().and_then(answer_content),
+        );
+        match resp.as_ref().and_then(super::parse_llm_events) {
+            Some(found) => events.get_or_insert_with(Vec::new).extend(found),
+            None => eprintln!(
+                "\u{26a0} structure batch {} of {total}: no usable answer; its {} row(s) are lost",
+                n + 1,
+                batch.lines().count()
+            ),
+        }
+    }
+    events
 }
 
 /// The answer text inside the completion shape [`call_llm_json`] returns.

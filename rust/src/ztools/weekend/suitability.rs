@@ -23,6 +23,8 @@ use regex::Regex;
 
 use super::WeekendEvent;
 
+pub use super::listing::{is_listing_page_title, names_no_event, reject_listing_page_titles};
+
 /// The top of an open range ("18+", "adults").
 pub const OPEN_END: u32 = 120;
 
@@ -228,68 +230,6 @@ pub fn drop_unsuitable_for_ages(
         })
         .collect();
     (kept, notes)
-}
-
-/// Phrases only a listing or aggregator page title carries.
-const LISTING_PHRASES: &[&str] = &[
-    "things to do",
-    "events this weekend",
-    "events & activities",
-    "events and activities",
-    "what's on",
-    "what’s on",
-    "events calendar",
-    "event calendar",
-    "calendar of events",
-    "upcoming events",
-    "events near",
-    "events in ",
-    "best things",
-    "top 10",
-    "guide to",
-];
-
-/// "- Oct 2026", "(October 2026)": a page dated by month, which a venue never is.
-static MONTH_YEAR: LazyLock<Regex> = LazyLock::new(|| {
-    re(r"(?i)\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+20\d\d\b")
-});
-
-/// A2: is this the title of a listing page rather than a venue or an event?
-#[must_use]
-pub fn is_listing_page_title(text: &str) -> bool {
-    let lower = text.to_lowercase();
-    LISTING_PHRASES.iter().any(|p| lower.contains(p)) || MONTH_YEAR.is_match(text)
-}
-
-/// A2: a row NAMED by a listing page is dropped; a row whose VENUE is one keeps
-/// its event and loses the venue, so the renderer prints the missing-value
-/// sentinel instead of a page title.
-#[must_use]
-pub fn reject_listing_page_titles(
-    events: Vec<WeekendEvent>,
-) -> (Vec<WeekendEvent>, Vec<String>, usize) {
-    let mut notes = Vec::new();
-    let mut dropped = 0;
-    let mut kept = Vec::new();
-    for mut ev in events {
-        if is_listing_page_title(&ev.name) {
-            notes.push(format!(
-                "dropped '{}' — a listing page, not an event",
-                ev.name
-            ));
-            dropped += 1;
-            continue;
-        }
-        if is_listing_page_title(&ev.location) {
-            notes.push(format!(
-                "'{}': venue {:?} is a listing page's title — cleared",
-                ev.name, ev.location
-            ));
-            ev.location.clear();
-        }
-        kept.push(ev);
-    }
-    (kept, notes, dropped)
 }
 
 /// A3: drop a transient row that is only a fixed venue under another heading.

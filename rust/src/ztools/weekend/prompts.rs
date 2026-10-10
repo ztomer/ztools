@@ -84,8 +84,11 @@ NAME | LOCATION | DATES | PRICE | AGES | short description
   If the only date on the page is a publication or \"last updated\" date, that is
   not an event date -- write \"unknown\".
 - A result marked [THIS WEEKEND] already mentions a date inside the weekend
-  being planned, so prefer those -- they are listed first. This is a hint about
-  where to look, NOT a restriction: extract from the unmarked results too. Never
+  being planned, so prefer those -- search results so marked are listed first.
+  A line from a followed page (\"- [page title] ...\") is marked where it stands:
+  its event's name is often on a neighbouring line, so read the lines around
+  it. This is a hint about where to look, NOT a restriction: extract from the
+  unmarked results too. Never
   invent an event to fill the list, and never move an event's dates to make it
   fit the weekend. Fewer real events beats more invented ones.
 
@@ -120,16 +123,28 @@ NAME | LOCATION | DATES | PRICE | AGES | description (highlight themes/appeal)
 a suggestion naming one is dropped after the fact, wasting a slot that could
 have held a real option: {exclusions}";
 
+/// Refine judges which entries are events and which are the same event.
+///
+/// It never caps or ranks (the scorer ranks), and it must name every removal
+/// with a reason, because `refine::merge_refined` restores any draft row its
+/// answer neither keeps nor drops with one. It used to say "keep the best 8
+/// ... and sort by overall appeal", and its answer replaced the draft.
 pub const PHASE_REFINE: &str = "\
 Here are activity suggestions:
 
 {draft_text}
 
-Merge any near-duplicates, keep the best 8, remove low-quality or irrelevant
-ones, and sort by overall appeal.
+Merge entries that are the same event into one, and remove any entry that is
+not a specific event a family can attend (a web page's title, a website's
+name, a bare place name). Keep every other entry: do not cut the list to a
+number, and do not reorder it.
 
 Output the refined list in the SAME pipe-separated format you received:
 NAME | LOCATION | DATES | PRICE | AGES | short description
+
+Then, for EVERY input entry you did not output -- removed, or merged into
+another -- output one line saying why, in this format:
+DROPPED | NAME | reason
 
 Carry DATES, PRICE, AGES and LOCATION through unchanged from the input. Merging
 two entries keeps the more specific value, never \"unknown\" over a real one.";
@@ -181,49 +196,6 @@ Rules for every field:
   output \"\".
 - price: the actual price as written in the source, else \"\".
 - description: the input's short description of the activity, copied, else \"\".
-{weather_rule}
-
-Output ONLY JSON.";
-
-pub const PHASE_EXTRACT_VENUES: &str = "\
-Extract family-friendly venues from the search results below. For each venue,
-list its name, location, price if available, and what it offers for kids.
-Ignore irrelevant search results, ads, and navigation text.
-
-Search results:
-{raw_text}
-
-List each relevant venue with key details, one per line.";
-
-pub const PHASE_DRAFT_FIXED: &str = "\
-You are an expert family activity planner. Suggest 10 specific weekend activities for
-families with kids ages {age_range} in {location}. Include a diverse mix of
-year-round venues, outdoor seasonal places (parks, conservation areas, farms),
-and indoor family spots. The year is {year}; the weekend is {date_range}.
-
-Weather: {weather_condensed}
-Prefer outdoor activities when clear/warm, and indoor venues when precipitation is expected.
-
-Available venues:
-{cleaned_sources}
-
-Output one line per suggestion in this EXACT format:
-NAME | LOCATION | DATES | PRICE | AGES | description (highlight features/exhibits)
-
-{carry}DO NOT suggest any of these places -- the family has already ruled them out, and
-a suggestion naming one is dropped after the fact, wasting a slot that could
-have held a real option: {exclusions}";
-
-pub const PHASE_STRUCTURE_FIXED_SYSTEM: &str = "\
-Output JSON now. Use EXACT schema:
-{\"fixed_activities\": [{\"name\": \"str\", \"location\": \"str\",
-\"target_ages\": \"str\", \"price\": \"str\", \"weather\": \"str\"}]}
-
-Rules for every field:
-- Copy values from the source text. NEVER invent one.
-- If the source does not state a value, output an empty string \"\" for it.
-  An empty field is CORRECT and expected. Do not guess a typical price or age
-  range, and do not repeat a value from another row.
 {weather_rule}
 
 Output ONLY JSON.";
@@ -308,10 +280,6 @@ mod tests {
             PHASE_STRUCTURE_TRANSIENT_SYSTEM,
             &[("year", "2026"), ("weather_rule", WEATHER_RULE)],
         );
-        assert_renders_clean(
-            PHASE_STRUCTURE_FIXED_SYSTEM,
-            &[("weather_rule", WEATHER_RULE)],
-        );
         assert_renders_clean(PHASE_STRUCTURE_USER, &[("draft_text", "draft")]);
     }
 
@@ -338,23 +306,79 @@ mod tests {
                 .unwrap_or_else(|| panic!("missing [weekend.{k}].instructions"))
         };
 
-        assert_eq!(PHASE_WEATHER_CONDENSE, get_inst("weather_condense"));
-        assert_eq!(CARRY_FIELDS, get_inst("carry_fields"));
-        assert_eq!(ACTIVITY_RULE, get_inst("activity_rule"));
-        assert_eq!(WEATHER_RULE, get_inst("weather_rule"));
-        assert_eq!(PHASE_EXTRACT_EVENTS, get_inst("extract_events"));
-        assert_eq!(PHASE_EXTRACT_VENUES, get_inst("extract_venues"));
-        assert_eq!(PHASE_DRAFT_TRANSIENT, get_inst("draft_transient"));
-        assert_eq!(PHASE_DRAFT_FIXED, get_inst("draft_fixed"));
-        assert_eq!(PHASE_REFINE, get_inst("refine"));
-        assert_eq!(
+        for (key, text) in SHARED {
+            assert_eq!(*text, get_inst(key), "[weekend.{key}] drifted");
+        }
+        // Both directions: a [weekend.*] entry no constant mirrors is a prompt
+        // nobody sends, kept in step with nothing.
+        let mut in_conf: Vec<&str> = wk
+            .as_table()
+            .expect("[weekend] is a table")
+            .keys()
+            .map(String::as_str)
+            .collect();
+        let mut mirrored: Vec<&str> = SHARED.iter().map(|(k, _)| *k).collect();
+        in_conf.sort_unstable();
+        mirrored.sort_unstable();
+        assert_eq!(in_conf, mirrored, "[weekend.*] entries and SHARED disagree");
+    }
+
+    /// Every prompt this file holds, beside its `conf/prompts.toml` key.
+    const SHARED: &[(&str, &str)] = &[
+        ("weather_condense", PHASE_WEATHER_CONDENSE),
+        ("carry_fields", CARRY_FIELDS),
+        ("activity_rule", ACTIVITY_RULE),
+        ("weather_rule", WEATHER_RULE),
+        ("extract_events", PHASE_EXTRACT_EVENTS),
+        ("draft_transient", PHASE_DRAFT_TRANSIENT),
+        ("refine", PHASE_REFINE),
+        (
+            "structure_transient_system",
             PHASE_STRUCTURE_TRANSIENT_SYSTEM,
-            get_inst("structure_transient_system")
+        ),
+        ("structure_user", PHASE_STRUCTURE_USER),
+    ];
+
+    /// REACHABILITY: every `pub const` prompt here is SENT by some non-test
+    /// code. `PHASE_EXTRACT_VENUES`, `PHASE_DRAFT_FIXED` and
+    /// `PHASE_STRUCTURE_FIXED_SYSTEM` were each drift-gated against
+    /// `conf/prompts.toml` and referenced by nothing else: three prompts kept
+    /// in lockstep for a phase that did not exist. A `pub` const is invisible
+    /// to `dead_code`, so the reference is looked for in the source itself.
+    #[test]
+    fn every_prompt_constant_is_sent_by_some_phase() {
+        let src = env!("CARGO_MANIFEST_DIR");
+        let root = std::path::Path::new(src).join("src");
+        let mut corpus = String::new();
+        let mut stack = vec![root];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("src is readable").flatten() {
+                let path = entry.path();
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if path.is_dir() {
+                    stack.push(path);
+                } else if path.extension().is_some_and(|e| e == "rs")
+                    && !name.ends_with("_tests.rs")
+                    && !path.ends_with("weekend/prompts.rs")
+                {
+                    corpus.push_str(&std::fs::read_to_string(&path).unwrap_or_default());
+                }
+            }
+        }
+        let decl = regex::Regex::new(r"(?m)^pub const ([A-Z_]+): &str").expect("static regex");
+        let own = include_str!("prompts.rs");
+        let names: Vec<&str> = decl
+            .captures_iter(own)
+            .filter_map(|c| c.get(1).map(|m| m.as_str()))
+            .collect();
+        assert!(
+            names.len() >= SHARED.len(),
+            "control: the scan found {names:?}"
         );
-        assert_eq!(
-            PHASE_STRUCTURE_FIXED_SYSTEM,
-            get_inst("structure_fixed_system")
+        let unsent: Vec<&&str> = names.iter().filter(|n| !corpus.contains(**n)).collect();
+        assert!(
+            unsent.is_empty(),
+            "prompt constants no phase sends: {unsent:?}"
         );
-        assert_eq!(PHASE_STRUCTURE_USER, get_inst("structure_user"));
     }
 }

@@ -20,10 +20,12 @@
 //!     default-value rules, the `Find 8 activities.` trap over six venues, and
 //!     the lure/marker pairs;
 //!   * `only_the_twitter_family_is_shared_with_production` — non-containment
-//!     against `[weekend.structure_transient_system]` and
-//!     `[weekend.structure_fixed_system]` in BOTH directions, beside a positive
-//!     control, so the absence of a drift gate here is a decision on the record
-//!     rather than an oversight.
+//!     against `[weekend.structure_transient_system]` in BOTH directions,
+//!     beside a positive control, so the absence of a drift gate here is a
+//!     decision on the record rather than an oversight. The fixed-venue system
+//!     prompt has no production counterpart at all: production never drafted
+//!     fixed venues with the model, and its dead `[weekend.structure_fixed_system]`
+//!     was deleted on 2026-10-10.
 
 pub const WEEKEND_USR_FIXED: &str = r"
 Current Context for the upcoming weekend:

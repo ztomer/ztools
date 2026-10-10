@@ -323,17 +323,18 @@ fn test_apply_scores_sorts_by_score() {
             score: 0.0,
             start_date: String::new(),
             end_date: String::new(),
-            weather: String::new(),
+            weather: "outdoor".into(),
             duration: String::new(),
         },
     ];
-    // A states 6-12 and fits both children (3.0) but its description says
-    // nothing about weather (0.0); B states no range (1.5, unjudged) and is
-    // an outdoor event under a clear forecast (2.0). Sorted best first.
+    // A states 6-12 and fits both children (3.0) but carries no weather label
+    // (1.0, unjudged); B states no range (1.5, unjudged) and is labelled
+    // outdoor under a clear forecast (2.0). Sorted best first.
+    events.reverse();
     crate::ztools::weekend::apply_scores(&mut events, "sunny clear warm", &[10, 7]);
-    assert_eq!(events[0].name, "B");
-    ztools_assert_close(events[0].score, 3.5);
-    ztools_assert_close(events[1].score, 3.0);
+    assert_eq!(events[0].name, "A");
+    ztools_assert_close(events[0].score, 4.0);
+    ztools_assert_close(events[1].score, 3.5);
 }
 
 #[test]
@@ -353,10 +354,10 @@ fn test_apply_scores_empty_ages() {
         weather: String::new(),
         duration: String::new(),
     }];
-    // No family ages: age fit cannot be judged and earns half marks; an
-    // empty description earns no weather points.
+    // No family ages: age fit cannot be judged and earns half marks; no
+    // weather label cannot be judged either, and earns the neutral 1.0.
     crate::ztools::weekend::apply_scores(&mut events, "rain", &[]);
-    ztools_assert_close(events[0].score, 1.5);
+    ztools_assert_close(events[0].score, 2.5);
 }
 
 fn ztools_assert_close(actual: f32, expected: f32) {

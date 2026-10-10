@@ -98,8 +98,11 @@ NAME | LOCATION | DATES | PRICE | AGES | short description
   If the only date on the page is a publication or "last updated" date, that is
   not an event date -- write "unknown".
 - A result marked [THIS WEEKEND] already mentions a date inside the weekend
-  being planned, so prefer those -- they are listed first. This is a hint about
-  where to look, NOT a restriction: extract from the unmarked results too. Never
+  being planned, so prefer those -- search results so marked are listed first.
+  A line from a followed page ("- [page title] ...") is marked where it stands:
+  its event's name is often on a neighbouring line, so read the lines around
+  it. This is a hint about where to look, NOT a restriction: extract from the
+  unmarked results too. Never
   invent an event to fill the list, and never move an event's dates to make it
   fit the weekend. Fewer real events beats more invented ones.
 
@@ -111,17 +114,6 @@ Search results:
 Output ONLY event lines, one per line, in the pipe-separated format above. No
 explanations, no notes about what you left out: when no result names an event,
 output nothing."""
-
-[weekend.extract_venues]
-instructions = """\
-Extract family-friendly venues from the search results below. For each venue,
-list its name, location, price if available, and what it offers for kids.
-Ignore irrelevant search results, ads, and navigation text.
-
-Search results:
-{raw_text}
-
-List each relevant venue with key details, one per line."""
 
 [weekend.draft_transient]
 instructions = """\
@@ -146,37 +138,23 @@ NAME | LOCATION | DATES | PRICE | AGES | description (highlight themes/appeal)
 a suggestion naming one is dropped after the fact, wasting a slot that could
 have held a real option: {exclusions}"""
 
-[weekend.draft_fixed]
-instructions = """\
-You are an expert family activity planner. Suggest 10 specific weekend activities for
-families with kids ages {age_range} in {location}. Include a diverse mix of
-year-round venues, outdoor seasonal places (parks, conservation areas, farms),
-and indoor family spots. The year is {year}; the weekend is {date_range}.
-
-Weather: {weather_condensed}
-Prefer outdoor activities when clear/warm, and indoor venues when precipitation is expected.
-
-Available venues:
-{cleaned_sources}
-
-Output one line per suggestion in this EXACT format:
-NAME | LOCATION | DATES | PRICE | AGES | description (highlight features/exhibits)
-
-{carry}DO NOT suggest any of these places -- the family has already ruled them out, and
-a suggestion naming one is dropped after the fact, wasting a slot that could
-have held a real option: {exclusions}"""
-
 [weekend.refine]
 instructions = """\
 Here are activity suggestions:
 
 {draft_text}
 
-Merge any near-duplicates, keep the best 8, remove low-quality or irrelevant
-ones, and sort by overall appeal.
+Merge entries that are the same event into one, and remove any entry that is
+not a specific event a family can attend (a web page's title, a website's
+name, a bare place name). Keep every other entry: do not cut the list to a
+number, and do not reorder it.
 
 Output the refined list in the SAME pipe-separated format you received:
 NAME | LOCATION | DATES | PRICE | AGES | short description
+
+Then, for EVERY input entry you did not output -- removed, or merged into
+another -- output one line saying why, in this format:
+DROPPED | NAME | reason
 
 Carry DATES, PRICE, AGES and LOCATION through unchanged from the input. Merging
 two entries keeps the more specific value, never "unknown" over a real one."""
@@ -212,21 +190,6 @@ Rules for every field:
   output "".
 - price: the actual price as written in the source, else "".
 - description: the input's short description of the activity, copied, else "".
-{weather_rule}
-
-Output ONLY JSON."""
-
-[weekend.structure_fixed_system]
-instructions = """\
-Output JSON now. Use EXACT schema:
-{"fixed_activities": [{"name": "str", "location": "str",
-"target_ages": "str", "price": "str", "weather": "str"}]}
-
-Rules for every field:
-- Copy values from the source text. NEVER invent one.
-- If the source does not state a value, output an empty string "" for it.
-  An empty field is CORRECT and expected. Do not guess a typical price or age
-  range, and do not repeat a value from another row.
 {weather_rule}
 
 Output ONLY JSON."""

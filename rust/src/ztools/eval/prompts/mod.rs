@@ -184,7 +184,6 @@ mod tests {
                 "structure_transient_system",
                 WEEKEND_SYS_TRANSIENT,
             ),
-            ("weekend", "structure_fixed_system", WEEKEND_SYS_FIXED),
             ("rename", "filename", RENAME_PROMPT),
         ] {
             let production = shared(table, key);

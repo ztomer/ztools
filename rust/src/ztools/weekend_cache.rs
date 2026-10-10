@@ -46,7 +46,9 @@ pub fn is_directory_or_list_page(title: &str) -> bool {
         "upcoming kids events",
     ];
 
-    if keywords.iter().any(|kw| lower.contains(kw)) {
+    if keywords.iter().any(|kw| lower.contains(kw))
+        || crate::ztools::weekend::suitability::is_listing_page_title(title)
+    {
         return true;
     }
 
@@ -193,7 +195,15 @@ pub fn clean_venue_or_event_title(raw_title: &str, region: &RegionLists) -> Opti
         }
     }
 
-    if is_directory_or_list_page(&cleaned) {
+    let places: Vec<String> = region
+        .cities
+        .iter()
+        .chain(region.in_region.iter())
+        .cloned()
+        .collect();
+    if is_directory_or_list_page(&cleaned)
+        || crate::ztools::weekend::suitability::names_no_event(&cleaned, &places)
+    {
         return None;
     }
 

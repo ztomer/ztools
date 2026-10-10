@@ -14,8 +14,16 @@
 //!   admits (see `suitability.rs`, which reads the field, the name and the
 //!   description). A row that states no range cannot be judged and gets half
 //!   marks — honest about not knowing, and ranked below a row known to fit.
-//! - **Weather, 0-2:** an indoor row is weather-proof; an outdoor one fits a
-//!   clear forecast and not a wet one.
+//! - **Weather, 0-2:** read from the row's weather LABEL (indoor / outdoor /
+//!   both, set by the structure phase under `WEATHER_RULE`) against the
+//!   forecast. An outdoor row fits a clear forecast (2) and not a wet one (0);
+//!   "both" fits a clear one (2) and survives a wet one (1); an indoor row is
+//!   weather-proof (1). A row with no label, or a forecast that is missing or
+//!   mixed, cannot be judged and gets the neutral 1 -- the same honesty as an
+//!   unjudged age range. The port used to read the DESCRIPTION here, contrary
+//!   to this doc and to the Python original (`item["weather"]`): "sunny
+//!   picnic" earned the clear-sky bonus and an "outdoor"-labelled fair whose
+//!   blurb never said "outdoor" earned nothing.
 //!
 //! Price is deliberately absent: a price is not a fit, and free is never worse.
 
@@ -54,36 +62,50 @@ pub fn age_points(ev: &WeekendEvent, ages: &[u32]) -> f32 {
     })
 }
 
-/// Weather fit, 0 to 2.
+/// Weather fit when it cannot be judged: no label, or no clear verdict from
+/// the forecast.
+pub const WEATHER_NEUTRAL: f32 = 1.0;
+
+/// What the plan's forecast says, as far as the score can use it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Forecast {
+    Clear,
+    Wet,
+    /// Missing (`WEATHER_UNAVAILABLE` carries none of the words), or clear on
+    /// some days and wet on others -- which day a row is on is not read here.
+    Unknown,
+}
+
+fn forecast_of(weather_str: &str) -> Forecast {
+    let w = weather_str.to_lowercase();
+    let clear = ["sunny", "clear", "warm"].iter().any(|k| w.contains(k));
+    let wet = [
+        "cloudy",
+        "rain",
+        "precipitation",
+        "overcast",
+        "snow",
+        "storm",
+    ]
+    .iter()
+    .any(|k| w.contains(k));
+    match (clear, wet) {
+        (true, false) => Forecast::Clear,
+        (false, true) => Forecast::Wet,
+        _ => Forecast::Unknown,
+    }
+}
+
+/// Weather fit, 0 to 2, from the row's LABEL and the forecast. Anything but
+/// "indoor", "outdoor" or "both" is an unknown label and scores
+/// [`WEATHER_NEUTRAL`], as does an unknown forecast.
 #[must_use]
 pub fn weather_points(ev: &WeekendEvent, weather_str: &str) -> f32 {
-    let desc_lower = ev.description.to_lowercase();
-    let is_outdoor = desc_lower.contains("outdoor");
-    let is_indoor = desc_lower.contains("indoor");
-    let is_sunny =
-        desc_lower.contains("sunny") || desc_lower.contains("clear") || desc_lower.contains("warm");
-    let is_cloudy = desc_lower.contains("cloudy")
-        || desc_lower.contains("rain")
-        || desc_lower.contains("overcast");
-
-    let w_lower = weather_str.to_lowercase();
-    let forecast_sunny =
-        w_lower.contains("sunny") || w_lower.contains("clear") || w_lower.contains("warm");
-    let forecast_cloudy =
-        w_lower.contains("cloudy") || w_lower.contains("rain") || w_lower.contains("precipitation");
-
-    if is_indoor {
-        1.0
-    } else if is_outdoor && forecast_sunny {
-        2.0
-    } else if is_outdoor && forecast_cloudy {
-        0.0
-    } else if (is_cloudy && forecast_cloudy) || (is_sunny && forecast_sunny) {
-        2.0
-    } else if is_sunny || is_cloudy {
-        1.0
-    } else {
-        0.0
+    let label = ev.weather.trim().to_lowercase();
+    match (label.as_str(), forecast_of(weather_str)) {
+        ("outdoor" | "both", Forecast::Clear) => 2.0,
+        ("outdoor", Forecast::Wet) => 0.0,
+        _ => WEATHER_NEUTRAL,
     }
 }
 

@@ -178,6 +178,7 @@ fn populated_case() -> String {
                 outside_window: 1,
                 excluded: 1,
                 unsuitable: 2,
+                duplicate: 1,
             },
         },
     )
@@ -222,6 +223,7 @@ fn degraded_case() -> String {
                 outside_window: 0,
                 excluded: 0,
                 unsuitable: 0,
+                duplicate: 0,
             },
         },
     )

@@ -214,6 +214,23 @@ fn take60(url: &str) -> String {
     url.chars().take(60).collect()
 }
 
+/// A followed page's line opens with `- [<page title>] `: these two halves.
+const FOLLOWED_OPEN: &str = "- [";
+const FOLLOWED_CLOSE: &str = "] ";
+
+/// The title of the followed listing page `line` came from, or `None` for a
+/// line that is not one (a search result is `- <title>: <body>`).
+///
+/// The reader of the shape [`as_candidate_lines`] writes, kept beside it so
+/// the two cannot drift. A page's lines are ONE source: a listing entry spans
+/// several of them ("Woodbridge Fall Fair" / "Oct 10Sat+2 dates"), so anything
+/// that reorders lines must keep a page's lines together (`supply.rs`).
+#[must_use]
+pub fn followed_page_of(line: &str) -> Option<&str> {
+    let rest = line.trim_start().strip_prefix(FOLLOWED_OPEN)?;
+    rest.find(FOLLOWED_CLOSE).map(|end| &rest[..end])
+}
+
 /// Render fetched page text as one `- ` candidate per line.
 ///
 /// The source title is carried on every line so a row can still be traced back
@@ -228,7 +245,7 @@ pub fn as_candidate_lines(text: &str, title: &str) -> String {
         if line.chars().count() < MIN_CANDIDATE_CHARS {
             continue;
         }
-        lines.push(format!("- [{title}] {line}"));
+        lines.push(format!("{FOLLOWED_OPEN}{title}{FOLLOWED_CLOSE}{line}"));
         if lines.len() >= MAX_LINES_PER_PAGE {
             break;
         }
