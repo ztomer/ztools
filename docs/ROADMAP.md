@@ -96,17 +96,6 @@ All Phase W items (`W1` through `W6`) landed on 2026-10-10. No open work remains
 `M1` through `M16` landed. Found while landing W5 (2026-10-10), when the weekend eval rows
 started sending the planner's own prompts:
 
-### M18 — config tables nothing reads
-
-- **Class:** inert config that reads like live config (Rust rule 6). `conf/models/*.toml`
-  `[field_mapping]`, `[key_mappings]`, `[top_keys]`, `[[quirks]]`, and `conf/config.toml`
-  `[eval_inputs]`, are read by no Rust code (W5 found and deleted the `[prompts]` tables).
-- **Why now:** an operator editing them changes nothing and is not told.
-- **Done when:** each is confirmed unread and deleted (or wired, if a reader is missing by
-  mistake), a test fails if a deleted table returns, and `file_summary`'s pinned ground
-  truth no longer names a deleted block.
-- **Blocked by:** nothing.
-
 ### M19 — the json slot's default was measured on retired rows
 
 - **Class:** a derived value left standing after its inputs changed (`half-derived-model`).

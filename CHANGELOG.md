@@ -108,6 +108,23 @@ This file starts at v2.2.0 — earlier history is in git.
   The delta column had the same defect one column over and now compares only
   tasks current in both runs. The CSV gains a `not_current` column; JSON rows
   carry `not_current` and a nullable `overall_mean`.
+- **Config tables nothing read are gone, and a gate keeps the class out (M18).**
+  `conf/models/*.toml` carried `[field_mapping]`, `[key_mappings]`,
+  `[top_keys]`, `[[quirks]]` (family and per-model), `internal_name`, `name`
+  and `quirks = []`; `conf/config.toml` carried `[eval_inputs]` and a second
+  `[prompts]` that W5's sweep missed. No Rust code read any of them: key aliases
+  live in `weekend::ALT_KEYS`, the parser reads `transient_events` only, and the
+  qwen JSON trigger is a constant in `eval/quirks.rs` (the gemma "Output JSON
+  now." quirk the config claimed was never applied). The per-name W5 test is
+  replaced by an allowlist gate (`eval/conf_keys_tests.rs`): every key in the
+  shipped conf must be one a reader fetches, every allowlisted key must be
+  fetched somewhere in `src/`, and no source may fetch a deleted one. Four
+  top-level `conf/config.toml` keys are also unread (`llm_url`,
+  `default_model`, `filename_models`, `model_fallback_chain`); they record owner
+  decisions, so they stand as a ratchet list with reasons instead of being
+  silently dropped or wired. `file_summary` embeds `gemma.toml` and `qwen.toml`,
+  so its prompt and fingerprint change; its pinned truth for those rows no
+  longer names the deleted `field_mapping` block.
 
 ## v3.6.0 — twitter summary quality, and a weekend plan for these kids _(2026-10-10)_
 
