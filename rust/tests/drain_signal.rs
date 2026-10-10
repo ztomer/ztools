@@ -195,11 +195,15 @@ fn sandbox(name: &str) -> (PathBuf, PathBuf) {
 
 /// The `ztools model-eval --suite full` child, wired to the stub and sandbox.
 ///
-/// `--task json` narrows the run to ONE task, and that is what makes the drain
-/// observable: the first Ctrl-C arrives while that task is in flight, the task
-/// finishes, and the next boundary is where the run stops -- so "after 1 task(s)"
-/// is a statement about a known number rather than about however many of two dozen
-/// the stub happened to have answered.
+/// `--task weekend_transient,json` narrows the run to TWO tasks, and that is what
+/// makes the drain observable: the first Ctrl-C arrives while the first task is in
+/// flight, it finishes, and the boundary before the second is where the run stops
+/// -- so "after 1 task(s)" is a statement about a known number rather than about
+/// however many of two dozen the stub happened to have answered. A run of ONE task
+/// has no next boundary and cannot show a drain at all. This read `--task json`,
+/// which said "ONE task" and matched two by suffix (`json` and `detailed_json`);
+/// `detailed_json` was retired with the fixed-venue rows (W5), and the second task
+/// is now named rather than matched by accident.
 fn child(home: &Path, gpu: &Path, port: u16) -> Command {
     support::write_config(
         home,
@@ -229,7 +233,7 @@ fn child(home: &Path, gpu: &Path, port: u16) -> Command {
             "--model",
             MODEL,
             "--task",
-            "json",
+            "weekend_transient,json",
         ]);
     cmd
 }

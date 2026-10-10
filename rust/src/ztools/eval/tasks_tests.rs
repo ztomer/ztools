@@ -2,6 +2,13 @@
 //! (2026-09-13): names in order, message roles, `parse_json`, and which
 //! validator grades each — so a port that drops or reshapes a task is caught
 //! here, not in a sweep nobody compares to the old numbers.
+//!
+//! One deliberate departure since: `weekend_fixed`, `weekend_fixed_mixed` and
+//! their `detailed_json` alias were RETIRED on 2026-10-10 (W5). They graded a
+//! year-round-venue structuring call the planner does not make — its fixed
+//! venues are a curated list (`weekend_cache.rs`) — so they ranked the json
+//! slot on a prompt nobody sends. What the remaining weekend rows send is
+//! pinned to production in `tasks_weekend_tests.rs`.
 
 use super::*;
 
@@ -20,7 +27,14 @@ fn validator_name(check: &Check) -> &'static str {
     let Check::Graded(g) = check else {
         panic!("roster tasks carry exactly one graded check, got {check:?}");
     };
+    graded_name(g)
+}
+
+/// The validator a check grades by; the planner's parse gate is a gate in
+/// front of one, not a validator of its own (`tasks_weekend_tests.rs`).
+fn graded_name(g: &Graded) -> &'static str {
     match g {
+        Graded::PlannerEvents { inner } => graded_name(inner),
         Graded::DetailedJson { .. } => "validate_detailed_json",
         Graded::MixedSignal { .. } => "validate_mixed_signal",
         Graded::Filename { .. } => "validate_filename",
@@ -50,19 +64,7 @@ const PYTHON_TABLE: &[(&str, &str, bool, &str)] = &[
         "validate_detailed_json",
     ),
     (
-        "weekend_fixed",
-        "system,user",
-        true,
-        "validate_detailed_json",
-    ),
-    (
         "weekend_transient_mixed",
-        "system,user",
-        true,
-        "validate_mixed_signal",
-    ),
-    (
-        "weekend_fixed_mixed",
         "system,user",
         true,
         "validate_mixed_signal",
@@ -144,12 +146,6 @@ const PYTHON_TABLE: &[(&str, &str, bool, &str)] = &[
         "validate_resists_injection",
     ),
     ("json", "system,user", true, "validate_detailed_json"),
-    (
-        "detailed_json",
-        "system,user",
-        true,
-        "validate_detailed_json",
-    ),
 ];
 
 #[test]
@@ -241,13 +237,19 @@ fn image_real_is_the_only_task_that_sends_images_and_sends_all_three() {
 }
 
 #[test]
-fn aliases_are_the_weekend_tasks_under_the_slot_names() {
+fn the_json_alias_is_weekend_transient_under_the_slot_name() {
     let tasks = tasks();
     let by = |n: &str| tasks.iter().find(|t| t.name == n).unwrap();
     assert_eq!(by("json").messages, by("weekend_transient").messages);
     assert_eq!(by("json").checks, by("weekend_transient").checks);
-    assert_eq!(by("detailed_json").messages, by("weekend_fixed").messages);
-    assert_eq!(by("detailed_json").checks, by("weekend_fixed").checks);
+    // Retired with weekend_fixed (W5): no row may answer to these names, or a
+    // sweep would write fresh history under a name that means a dead prompt.
+    for retired in ["weekend_fixed", "weekend_fixed_mixed", "detailed_json"] {
+        assert!(
+            tasks.iter().all(|t| t.name != retired),
+            "{retired} is back in the roster"
+        );
+    }
 }
 
 #[test]
@@ -258,9 +260,30 @@ fn missing_inputs_are_errors_not_guesses() {
     assert!(err.contains("eval inputs at"), "{err}");
     std::fs::write(
         td.path().join("eval_inputs.toml"),
-        "[test_inputs]\nweekend_fixed = \"x\"\n",
+        "[test_inputs]\nsummarize = \"x\"\n",
     )
     .unwrap();
     let err = roster(&files).unwrap_err().to_string();
     assert!(err.contains("no [test_inputs].filename"), "{err}");
+}
+
+/// `[test_inputs]` holds exactly the rows the roster renders, so no input reads
+/// like data a task is graded on when nothing loads it. It carried
+/// `weekend_fixed` / `weekend_transient` answer arrays, a timeline, a file
+/// list and image pairs that no code had read since the Python runtime died —
+/// the weekend pair in the very bare-array shape W5 retired.
+#[test]
+fn the_inputs_file_holds_only_the_rows_the_roster_reads() {
+    let text = std::fs::read_to_string(conf_dir().join("eval_inputs.toml")).unwrap();
+    let val: toml::Value = toml::from_str(&text).unwrap();
+    let mut keys: Vec<&str> = val["test_inputs"]
+        .as_table()
+        .expect("[test_inputs]")
+        .keys()
+        .map(String::as_str)
+        .collect();
+    keys.sort_unstable();
+    // `filename` IS read: `missing_inputs_are_errors_not_guesses` above is the
+    // roster refusing to load without it.
+    assert_eq!(keys, ["filename"], "rows the roster never reads");
 }

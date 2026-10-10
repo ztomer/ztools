@@ -21,8 +21,20 @@ use super::validators;
 pub enum Graded {
     /// `validate_detailed_json(parsed, source)`.
     DetailedJson { source: String },
-    /// `validate_mixed_signal(parsed, source)`.
-    MixedSignal { source: String },
+    /// `validate_mixed_signal(parsed, source, signal, noise)`.
+    ///
+    /// `signal` / `noise` name what a correct answer keeps and drops. A source
+    /// shaped like production's has no `NOISE` section to read them out of --
+    /// a search engine labels nothing -- so a production-shaped row states
+    /// them. Both empty is the older form: read from the source's `NOISE`
+    /// split, which is what a task file written before 2026-10-10 still means.
+    MixedSignal {
+        source: String,
+        #[serde(default)]
+        signal: Vec<String>,
+        #[serde(default)]
+        noise: Vec<String>,
+    },
     /// `validate_filename(text, source)`.
     Filename { source: String },
     /// `validate_mixed_filename(parsed, source)`.
@@ -59,6 +71,21 @@ pub enum Graded {
         markers: Vec<String>,
         keywords: Vec<String>,
     },
+    /// The weekend planner's parse gate around another check: 0 when
+    /// `weekend::parse_llm_events` would DROP the answer, else `inner`'s
+    /// verdict. The validators read any list out of any JSON, so without this a
+    /// bare array or a `null` field graded on content alone, while the planner
+    /// threw the whole batch away.
+    PlannerEvents { inner: Box<Self> },
+}
+
+/// Whether the weekend planner's own parser keeps `answer`: the eval's parse
+/// when it made one, else the cleaned text, in the completion shape
+/// `parse_llm_events` reads.
+fn planner_parses(cleaned: &str, parsed: Option<&Value>) -> bool {
+    let content = parsed.map_or_else(|| cleaned.to_string(), Value::to_string);
+    let wire = serde_json::json!({"choices": [{"message": {"content": content}}]});
+    crate::ztools::weekend::parse_llm_events(&wire).is_some()
 }
 
 /// The parsed answer when the task asked for JSON, else the raw text as a
@@ -77,8 +104,18 @@ impl Graded {
             Self::DetailedJson { source } => {
                 validators::validate_detailed_json(&value_of(cleaned, parsed), source)
             }
-            Self::MixedSignal { source } => {
-                validators::validate_mixed_signal(&value_of(cleaned, parsed), source, None, None)
+            Self::MixedSignal {
+                source,
+                signal,
+                noise,
+            } => {
+                let stated = !(signal.is_empty() && noise.is_empty());
+                validators::validate_mixed_signal(
+                    &value_of(cleaned, parsed),
+                    source,
+                    stated.then_some(signal.as_slice()),
+                    stated.then_some(noise.as_slice()),
+                )
             }
             Self::Filename { source } => validators::validate_filename(cleaned, source),
             Self::MixedFilename { source } => {
@@ -126,6 +163,18 @@ impl Graded {
                 markers,
                 keywords,
             ),
+            Self::PlannerEvents { inner } => {
+                if planner_parses(cleaned, parsed) {
+                    inner.score(cleaned, parsed)
+                } else {
+                    (
+                        0,
+                        "the planner's parser drops this answer (it reads \
+                         {\"transient_events\": [...]} with string fields)"
+                            .to_string(),
+                    )
+                }
+            }
         }
     }
 }

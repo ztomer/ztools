@@ -12,6 +12,3 @@ best_for = ["summarize", "timeline", "fast_distillation"]
 
 [models."raptor-v1-26b-a4b-vl-jang"]
 best_for = ["vlm", "multimodal", "summarize"]
-
-[prompts]
-json = "Output JSON now. Use EXACT schema."

@@ -9,7 +9,7 @@ Automated evaluation scripts (`eval/validate.py`, `eval/report.py`) provide roug
 ## 1. Required Evaluation Steps for Future Runs
 
 Whenever an evaluation run is conducted:
-1. **Inspect Raw Artifacts**: Read `eval_results.json` directly to review exact text/JSON emitted by local LLMs across tasks (`weekend_transient`, `weekend_fixed`, `twitter_summarize`, `filename`, `file_summary`).
+1. **Inspect Raw Artifacts**: Read `eval_results.json` directly to review exact text/JSON emitted by local LLMs across tasks (`weekend_transient`, `weekend_transient_mixed`, `twitter_summarize`, `filename`, `file_summary`).
 2. **Perform Line-by-Line Qualitative Comparison**:
    - Compare local model outputs against Gemini's ideal production standards on 4 key dimensions:
      - **Truthfulness & Provenance**: No invented names (e.g. Osaurus = dinosaurs), no fake prices/dates.

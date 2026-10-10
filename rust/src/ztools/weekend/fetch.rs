@@ -187,23 +187,20 @@ fn fetch_events_corpus(
     (marked_text, health)
 }
 
-/// The monolithic single-shot extraction used as a fallback when the 4-phase
-/// pipeline stalls. The Python original falls back to this when a draft fails.
-fn monolithic_transient(
-    corpus: &str,
-    location: &str,
-    d1: NaiveDate,
-    d2: NaiveDate,
-    config: &crate::config::ZtoolsConfig,
-    log: &PhaseLog,
-) -> Vec<WeekendEvent> {
+/// The user message of the monolithic fallback: the raw corpus, the window and
+/// the activity rule in one JSON call under [`super::phases::structure_system`].
+///
+/// A renderer of its own because the model eval sends it too (the
+/// `weekend_transient_mixed` row), so the json slot's signal-from-noise score
+/// is taken on the one production JSON call that has to filter.
+#[must_use]
+pub fn monolithic_user(corpus: &str, location: &str, d1: NaiveDate, d2: NaiveDate) -> String {
     let (d1_str, d2_str) = (
         d1.format("%Y-%m-%d").to_string(),
         d2.format("%Y-%m-%d").to_string(),
     );
-    let sys = super::phases::structure_system(d1.year());
     let activity_rule = super::prompts::ACTIVITY_RULE;
-    let prompt = format!(
+    format!(
         "You are an expert family activity planner. Extract up to 10 time-limited events happening STRICTLY this weekend (between {d1_str} and {d2_str}) in {location} from the text below, in the schema above.\n\n\
         {activity_rule}\n\n\
         - Find as many as you can, up to 10. Do NOT stop after just 1 or 2 events.\n\
@@ -214,7 +211,21 @@ fn monolithic_transient(
         {corpus}\n\
         \n\
         Output ONLY JSON."
-    );
+    )
+}
+
+/// The monolithic single-shot extraction used as a fallback when the 4-phase
+/// pipeline stalls. The Python original falls back to this when a draft fails.
+fn monolithic_transient(
+    corpus: &str,
+    location: &str,
+    d1: NaiveDate,
+    d2: NaiveDate,
+    config: &crate::config::ZtoolsConfig,
+    log: &PhaseLog,
+) -> Vec<WeekendEvent> {
+    let sys = super::phases::structure_system(d1.year());
+    let prompt = monolithic_user(corpus, location, d1, d2);
     let resp = super::phases::call_llm_json(Some(&sys), &prompt, config);
     log.record(
         "monolithic",

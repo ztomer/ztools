@@ -89,19 +89,7 @@ plan anymore; this file is.
 
 ## Phase W — the weekend plan must read right to a parent
 
-Found while fixing the weather labels (2026-10-10). Ranked by how much of the plan
-each one makes wrong.
-
-### W5 — model-eval scores a weekend prompt production no longer sends
-
-- **Class:** a parallel copy of a prompt (engineering rule 9). `conf/models/*.toml`
-  `weekend_transient` / `weekend_fixed` carry their own event schema with the old weather
-  rule; production now asks for `place_kind` and labels from it (`weekend/setting.rs`).
-  Rankings for the weekend slots measure the old prompt.
-- **Why now:** the slot defaults in `[best_models]` are chosen by those rankings.
-- **Done when:** the eval tasks render the production structure prompt
-  (`phases::structure_system`) instead of a copy, and a test fails if they differ.
-- **Blocked by:** nothing.
+All Phase W items (`W1` through `W6`) landed on 2026-10-10. No open work remains in this phase.
 
 ## Phase M — what the eval records must mean what it says
 

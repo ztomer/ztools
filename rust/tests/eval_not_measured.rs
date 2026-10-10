@@ -218,8 +218,11 @@ fn a_full_suite_eval_against_a_dead_server_fails_and_prints_no_mean() {
             "full",
             "--model",
             "probe-full-model",
+            // Two named tasks, so "0 of 2" counts a refusal over more than one.
+            // This was `--task json`, which matched `json` AND `detailed_json`
+            // by suffix; the latter was retired with the fixed-venue rows (W5).
             "--task",
-            "json",
+            "weekend_transient,json",
         ],
     )
     .env("EVAL_ALLOW_OVERSIZE", "1")

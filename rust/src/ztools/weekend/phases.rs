@@ -357,7 +357,7 @@ pub fn structure_to_json(
     let total = batches.len();
     let mut events: Option<Vec<super::WeekendEvent>> = None;
     for (n, batch) in batches.iter().enumerate() {
-        let usr = render(PHASE_STRUCTURE_USER, &[("draft_text", batch)]);
+        let usr = structure_user(batch);
         let resp = call_llm_json(Some(&sys), &usr, config);
         log.record(
             &format!("structure batch {} of {total}", n + 1),
@@ -376,11 +376,14 @@ pub fn structure_to_json(
     events
 }
 
-/// The schema and field rules every JSON event answer is asked under: the
-/// structure phase and the monolithic fallback both send this, so neither
+/// The schema and field rules every JSON event answer is asked under.
+///
+/// The structure phase and the monolithic fallback both send this, so neither
 /// can drift from the other (the fallback's own inline copy once lacked the
-/// weather rule, and every event it produced came back unlabelled).
-pub(crate) fn structure_system(year: i32) -> String {
+/// weather rule, and every event it produced came back unlabelled). The model
+/// eval sends it too (`eval::tasks`), so the json slot is ranked on this text.
+#[must_use]
+pub fn structure_system(year: i32) -> String {
     render(
         PHASE_STRUCTURE_TRANSIENT_SYSTEM,
         &[
@@ -389,6 +392,17 @@ pub(crate) fn structure_system(year: i32) -> String {
             ("family_rule", FAMILY_RULE),
         ],
     )
+}
+
+/// The user message of one structure batch.
+///
+/// `rows` are pipe rows, `NAME | LOCATION | DATES | PRICE | AGES | description`.
+/// One renderer for the
+/// phase and the model eval, so the eval cannot rank a wording this phase
+/// stopped sending.
+#[must_use]
+pub fn structure_user(rows: &str) -> String {
+    render(PHASE_STRUCTURE_USER, &[("draft_text", rows)])
 }
 
 /// The answer text inside the completion shape [`call_llm_json`] returns.

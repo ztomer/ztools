@@ -112,9 +112,9 @@ oeval                    # Run full model benchmark
 oeval --model qwen3.8-27b-8bit
 ```
 
-**Tasks:** `weekend_transient`, `weekend_fixed`, `summarize`, `filename`, `file_summary`, `taxes_anomalies`, `taxes_audit_readiness`, `taxes_synthesis`, `taxes_yoy_narrative`, `taxes_qa`, `taxes_slip_qa`, plus the mixed-signal, adversarial and vision variants — 30 in total; oeval prints the count it loaded.
+**Tasks:** `weekend_transient` (the planner's own structure prompt), `summarize`, `filename`, `file_summary`, `taxes_anomalies`, `taxes_audit_readiness`, `taxes_synthesis`, `taxes_yoy_narrative`, `taxes_qa`, `taxes_slip_qa`, plus the mixed-signal, adversarial and vision variants — 29 in total; oeval prints the count it loaded.
 
-- Evaluates models against 30 automated task suites (financial analysis, adversarial resistance, JSON extraction, entity grounding).
+- Evaluates models against 29 automated task suites (financial analysis, adversarial resistance, JSON extraction, entity grounding).
 - Uses kernel-level GPU locking (`gpu_lock`) to synchronize access across concurrent tasks.
 
 ---

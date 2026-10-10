@@ -813,13 +813,8 @@ Give a short 2-4 word summary of: {text}
 Max 35 chars, extract first 4-6 words.
 
 ### Weekend Tasks
-```yaml
-weekend_fixed: |
-  Output JSON now. Schema: {"fixed_activities": [...]}
-  {prompt}
-  CRITICAL: Only use: target_ages, price, weather
-  Output ONLY JSON.
-```
+The planner's prompts are `conf/prompts.toml` `[weekend.*]`; the eval's `weekend_transient`
+rows send them verbatim. There is no fixed-venue prompt: fixed venues are a curated list.
 
 ---
 
@@ -848,6 +843,12 @@ weekend_fixed: |
 
 ## Universal Model Steering Directives (August 2026)
 
+> **Retired 2026-10-10 (W5).** Per-model prompts lived in `conf/models/*.toml` `[prompts]`, which
+> nothing has loaded since the Rust cutover; the tables are deleted, and
+> `budgets.rs::no_family_config_carries_or_reads_a_prompts_table` keeps them gone. The planner's
+> prompts are `conf/prompts.toml` `[weekend.*]`, and the eval's weekend rows send them
+> (`rust/src/ztools/eval/tasks_weekend_tests.rs`). What follows is the historical record.
+
 All 7 model configs (`foundation.toml`, `gemma.toml`, `gemma_versions.toml`, `laguna.toml`, `nemotron.toml`, `qwen.toml`, `qwopus.toml`) now incorporate 4 universal prompt steering rules:
 
 1. **Context Bounding (`file_summary`)**:
@@ -867,6 +868,12 @@ All 7 model configs (`foundation.toml`, `gemma.toml`, `gemma_versions.toml`, `la
 ---
 
 ## The Working Prompt Pattern (April 2026)
+
+> **Retired 2026-10-10 (W5).** Per-model prompts lived in `conf/models/*.toml` `[prompts]`, which
+> nothing has loaded since the Rust cutover; the tables are deleted, and
+> `budgets.rs::no_family_config_carries_or_reads_a_prompts_table` keeps them gone. The planner's
+> prompts are `conf/prompts.toml` `[weekend.*]`, and the eval's weekend rows send them
+> (`rust/src/ztools/eval/tasks_weekend_tests.rs`). What follows is the historical record.
 
 **CRITICAL**: For weekend tasks, prompts must use RUNTIME PLACEHOLDERS, not {}. The model generates data with specified values.
 
@@ -921,18 +928,12 @@ Known aliases:
 
 ---
 
-## Pre-Generated Baseline Data (2026)
+## Eval Inputs
 
-**Approach**: Task is "extract from provided JSON context" not "generate events".
-
-- Test data in `conf/eval_inputs.toml` (`[test_inputs]`)
-- Pre-generated JSON with proper structure
-- Models score on accurate extraction, not generation
-- Consistent baseline across runs
-- Avoids "refuses to generate fictional events" problem
-
-### Test Data Locations:
-- `conf/eval_inputs.toml`: `[test_inputs]` dict
+`conf/eval_inputs.toml` `[test_inputs]` holds one row, `filename`, the text the filename
+prompts are rendered with. The pre-generated weekend/summarize/file-summary JSON it once
+carried was read by nothing after the Rust cutover and was deleted 2026-10-10 (W5); each
+task's data lives beside its prompt in `rust/src/ztools/eval/prompts/`.
 
 ---
 
@@ -1042,27 +1043,9 @@ after. Re-run that single task per model rather than reasoning across the bounda
 
 ## Model-Specific Prompts
 
-All prompts in `conf/models/{model}.toml` must include:
-
-```toml
-# Required for JSON output
-weekend_fixed: |
-  Output JSON now. CRITICAL: Use EXACT schema: {schema}
-  
-  REQUIRED fields for EACH item:
-  - name: str
-  - location: str
-  ...
-
-  Output ONLY JSON. No extra text.
-
-filename: |
-  Output JSON now. Schema: {"filename": "str"}
-  Output ONLY JSON.
-
-summarize: |
-  Output the summary in bullet points. Use ## headers.
-```
+None. `conf/models/*.toml` carries budgets, timeouts, `best_for` tags and context windows;
+its `[prompts]` tables were inert and are deleted (W5, 2026-10-10). Every family is sent the
+same prompt, and `eval/quirks.rs` is the only per-family rewrite.
 
 ---
 

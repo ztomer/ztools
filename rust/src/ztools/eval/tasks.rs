@@ -4,7 +4,14 @@
 //! ONE graded validator carrying the source it judges against. Names, prompt
 //! composition, `parse_json` flags and validator arguments follow the Python
 //! table row for row, so a sweep measures the same thing it measured before
-//! the port. `json` and `detailed_json` are the aliases the table also carried.
+//! the port. `json` is the alias the table also carried.
+//!
+//! THE WEEKEND ROWS ARE THE EXCEPTION TO "THE PYTHON TABLE" (W5, 2026-10-10):
+//! they rank the `json` slot, which is the model the planner runs on, so they
+//! send the planner's own prompts through its own renderers -- see
+//! [`weekend_tasks`]. `weekend_fixed`, `weekend_fixed_mixed` and their
+//! `detailed_json` alias were retired with that change: they asked for a
+//! year-round venue list production has never structured with a model.
 //!
 //! The single non-constant input is the filename task's text, read from
 //! `conf/eval_inputs.toml [test_inputs].filename` — data, like the Python
@@ -12,6 +19,7 @@
 //! `conf/eval_vision.toml` at load time (see [`super::vision`]).
 
 use anyhow::{Context, Result};
+use chrono::Datelike;
 use std::path::Path;
 
 use super::graded::Graded;
@@ -22,10 +30,10 @@ use super::prompts::{
     IMAGE_RENAME_PROMPT, IMAGE_RENAME_PROMPT_MIXED, KEY_FACTS, RENAME_PROMPT, RENAME_PROMPT_MIXED,
     RENAME_TEXT_SLOT, SUMMARIZE_INJECTION_KEYWORDS, SUMMARIZE_INJECTION_MARKERS, TWITTER_PROMPT,
     TWITTER_PROMPT_ACCURACY, TWITTER_PROMPT_CONTRADICTION, TWITTER_PROMPT_INJECTION,
-    TWITTER_PROMPT_MISATTRIBUTION, TWITTER_PROMPT_MIXED, WEEKEND_FABRICATION_LURES,
-    WEEKEND_FABRICATION_PROMPT, WEEKEND_INJECTION_KEYWORDS, WEEKEND_INJECTION_MARKERS,
-    WEEKEND_INJECTION_PROMPT, WEEKEND_SYS_FIXED, WEEKEND_SYS_TRANSIENT, WEEKEND_USR_FIXED,
-    WEEKEND_USR_FIXED_MIXED, WEEKEND_USR_TRANSIENT, WEEKEND_USR_TRANSIENT_MIXED,
+    TWITTER_PROMPT_MISATTRIBUTION, TWITTER_PROMPT_MIXED, WEEKEND_EVAL_LOCATION,
+    WEEKEND_FABRICATION_LURES, WEEKEND_FABRICATION_PROMPT, WEEKEND_INJECTION_KEYWORDS,
+    WEEKEND_INJECTION_MARKERS, WEEKEND_INJECTION_PROMPT, WEEKEND_NOISE_RESULTS,
+    WEEKEND_SEARCH_RESULTS, WEEKEND_SIGNAL_EVENTS, WEEKEND_STRUCTURE_ROWS, weekend_eval_window,
 };
 use super::task_loader::{ChatMessage, Check, EvalTask};
 
@@ -83,44 +91,66 @@ fn src(g: impl Fn(String) -> Graded, source: &str) -> Graded {
     g(source.to_string())
 }
 
-/// Rows 1-4: weekend extraction, plain and mixed.
+/// `check` behind the planner's parse gate: an answer the weekend planner
+/// would drop scores 0 whatever its content.
+fn planner(check: Graded) -> Graded {
+    Graded::PlannerEvents {
+        inner: Box::new(check),
+    }
+}
+
+/// One structure batch exactly as `weekend::phases::structure_to_json` sends it:
+/// `(system, user)`.
+fn weekend_structure_prompt() -> (String, String) {
+    let (start, _) = weekend_eval_window();
+    (
+        crate::ztools::weekend::structure_system(start.year()),
+        crate::ztools::weekend::structure_user(WEEKEND_STRUCTURE_ROWS),
+    )
+}
+
+/// The monolithic fallback exactly as `weekend::fetch` sends it: the search
+/// results floated and marked by `prioritise_in_window`, as
+/// `fetch_events_corpus` hands them on, under the same system prompt.
+fn weekend_monolithic_prompt() -> (String, String) {
+    let (start, end) = weekend_eval_window();
+    let corpus = crate::ztools::weekend::prioritise_in_window(WEEKEND_SEARCH_RESULTS, start, end);
+    (
+        crate::ztools::weekend::structure_system(start.year()),
+        crate::ztools::weekend::monolithic_user(&corpus, WEEKEND_EVAL_LOCATION, start, end),
+    )
+}
+
+/// Rows 1-2: the planner's two JSON calls.
+///
+/// `weekend_transient` is one structure batch -- a reformat of ten carried
+/// rows, graded for count, detail, distinct names, grounding in the rows, and
+/// the placeholder caps (generic location, constant column, near duplicate).
+/// `weekend_transient_mixed` is the monolithic fallback over search results with
+/// noise among them -- the one production JSON call that must FILTER, graded
+/// for precision and recall against the stated signal and noise.
 fn weekend_tasks() -> Vec<EvalTask> {
+    let (system, rows) = weekend_structure_prompt();
+    let (mono_system, search) = weekend_monolithic_prompt();
     vec![
         system_task(
             "weekend_transient",
-            WEEKEND_SYS_TRANSIENT,
-            WEEKEND_USR_TRANSIENT,
-            src(
-                |source| Graded::DetailedJson { source },
-                WEEKEND_USR_TRANSIENT,
-            ),
-        )
-        .json(),
-        system_task(
-            "weekend_fixed",
-            WEEKEND_SYS_FIXED,
-            WEEKEND_USR_FIXED,
-            src(|source| Graded::DetailedJson { source }, WEEKEND_USR_FIXED),
+            &system,
+            &rows,
+            planner(Graded::DetailedJson {
+                source: rows.clone(),
+            }),
         )
         .json(),
         system_task(
             "weekend_transient_mixed",
-            WEEKEND_SYS_TRANSIENT,
-            WEEKEND_USR_TRANSIENT_MIXED,
-            src(
-                |source| Graded::MixedSignal { source },
-                WEEKEND_USR_TRANSIENT_MIXED,
-            ),
-        )
-        .json(),
-        system_task(
-            "weekend_fixed_mixed",
-            WEEKEND_SYS_FIXED,
-            WEEKEND_USR_FIXED_MIXED,
-            src(
-                |source| Graded::MixedSignal { source },
-                WEEKEND_USR_FIXED_MIXED,
-            ),
+            &mono_system,
+            &search,
+            planner(Graded::MixedSignal {
+                source: search.clone(),
+                signal: strs(WEEKEND_SIGNAL_EVENTS),
+                noise: strs(WEEKEND_NOISE_RESULTS),
+            }),
         )
         .json(),
     ]
@@ -173,7 +203,7 @@ fn file_summary_tasks(checkout: &Path) -> Result<Vec<EvalTask>> {
     ])
 }
 
-/// Rows 5-13: filename, image-rename, summarize and file-summary, plain and
+/// Rows 3-11: filename, image-rename, summarize and file-summary, plain and
 /// mixed, in the table's interleaved order.
 ///
 /// Built by pushing rather than by one `vec![]` literal because the two
@@ -246,16 +276,17 @@ fn text_tasks(
     Ok(tasks)
 }
 
-/// Rows 14-22: the faithfulness, vision and adversarial probes.
+/// Rows 12-22: the faithfulness, vision and adversarial probes.
 fn probe_tasks(filename_prompt: &str, images: Vec<String>) -> Vec<EvalTask> {
+    let (system, rows) = weekend_structure_prompt();
     vec![
         system_task(
             "weekend_transient_schema",
-            WEEKEND_SYS_TRANSIENT,
-            WEEKEND_USR_TRANSIENT,
-            Graded::StrictSchema {
+            &system,
+            &rows,
+            planner(Graded::StrictSchema {
                 kind: "json".to_string(),
-            },
+            }),
         ),
         user_task(
             "summarize_contradiction",
@@ -357,7 +388,7 @@ impl RosterInputs {
     }
 }
 
-/// The roster, in the Python table's order, plus its two aliases.
+/// The roster, in the Python table's order, plus its `json` alias.
 ///
 /// THE FILE-SUMMARY CHECKOUT IS RESOLVED ONCE, HERE, ABOVE EVERY ROW THAT NEEDS
 /// IT. `file_summary::live_root` asks the checkout derivation which candidate
@@ -382,14 +413,11 @@ pub fn roster(files: &RosterInputs) -> Result<Vec<EvalTask>> {
     let mut tasks = weekend_tasks();
     tasks.extend(text_tasks(&filename_input, &filename_prompt, &checkout)?);
     tasks.extend(probe_tasks(&filename_prompt, images));
-    // The table's aliases: `json` is weekend_transient, `detailed_json` is
-    // weekend_fixed, under the names the model slots are measured by.
+    // The table's alias: `json` is weekend_transient under the slot's name.
+    // `detailed_json` was weekend_fixed's, and went with it (W5).
     let mut json_alias = tasks[0].clone();
     json_alias.name = "json".to_string();
-    let mut detailed_alias = tasks[1].clone();
-    detailed_alias.name = "detailed_json".to_string();
     tasks.push(json_alias);
-    tasks.push(detailed_alias);
     Ok(tasks)
 }
 
@@ -400,3 +428,7 @@ mod file_summary_render_tests;
 #[cfg(test)]
 #[path = "tasks_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tasks_weekend_tests.rs"]
+mod weekend_parity_tests;

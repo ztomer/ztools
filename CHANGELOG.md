@@ -63,6 +63,41 @@ This file starts at v2.2.0 — earlier history is in git.
   built with an empty label. Each now states where it happens (a required
   field), so a trampoline park reads indoor and a conservation area outdoor.
 
+### Fixed — model eval
+- **The json slot was ranked on a prompt the planner does not send.** The
+  weekend rows sent a private bare-array schema whose system prompt ORDERED
+  defaults (`weather: "indoor"`, `price: $20-30 or Free`, `target_ages:
+  "6-13 years"`) -- the placeholder class the planner removed -- so a model was
+  picked for `weekend_model` by how faithfully it emitted them. The rows now send
+  the planner's own prompts through its own renderers: `weekend_transient`,
+  `_schema` and `json` are one structure batch (`structure_system` +
+  `structure_user` over ten carried pipe rows), and `weekend_transient_mixed` is
+  the monolithic fallback (`monolithic_user`) over search results with the noise
+  interleaved and the window marked as `prioritise_in_window` marks it. A test
+  fails if any of them sends a different prompt. Their history starts fresh (new
+  task fingerprints); the json default in `[best_models]` was measured on the old
+  rows and needs the next sweep.
+- **An answer the planner throws away scored full marks.** The validators read
+  any list out of any JSON, so a bare array, or a keyed list with one `null`
+  field, graded on content while `parse_llm_events` dropped the whole batch.
+  Every weekend JSON row now scores 0 for an answer the planner's parser
+  rejects.
+- **Noise rows were never matched as noise.** `weekend_transient_mixed` read its
+  noise list out of a `NOISE` section as category labels ("Spam", "Hallucinated
+  venue") no answer would echo, so keeping a noise row cost nothing. The row now
+  states its signal and noise by the names an answer would give them.
+- **Retired: `weekend_fixed`, `weekend_fixed_mixed` and the `detailed_json`
+  alias.** They graded a year-round-venue structuring call production has never
+  made -- fixed venues are a curated list (`weekend_cache.rs`). The roster is 23
+  rows.
+- **Inert config deleted:** every `[prompts]` table in `conf/models/*.toml`
+  (per-model weekend/summarize/filename prompts nothing has loaded since the Rust
+  cutover; a test keeps them gone and keeps the code from reading one), and every
+  `[test_inputs]` row but `filename` in `conf/eval_inputs.toml`. The
+  `file_summary` task embeds `gemma.toml` and `qwen.toml`, so its prompt and
+  fingerprint change with them; its pinned truth for those rows moved off the
+  deleted block.
+
 ## v3.6.0 — twitter summary quality, and a weekend plan for these kids _(2026-10-10)_
 
 ### Added

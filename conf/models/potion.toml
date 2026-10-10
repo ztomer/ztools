@@ -9,6 +9,3 @@ venue = "location"
 
 [models."potion-base-4m"]
 best_for = ["embedding", "base"]
-
-[prompts]
-json = "Output JSON now. Use EXACT schema."
