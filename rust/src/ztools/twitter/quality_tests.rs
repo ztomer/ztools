@@ -251,3 +251,32 @@ fn prose_inside_a_topic_section_is_rejected() {
     let healthy: Vec<String> = (0..6).map(cited).collect();
     assert!(!check_summary_quality(&doc(&healthy), 10).rejected());
 }
+
+/// Live on 2026-10-10 one tweet came back as three bullets (two identical) and
+/// two more as two each -- too few repeats to read as a loop, so the gate
+/// passed them. A bullet whose every citation names a tweet an earlier bullet
+/// already cited adds no source the reader lacks: it is dropped, and a topic
+/// left with no bullets loses its header. A bullet that cites one new tweet
+/// alongside a cited one stays.
+#[test]
+fn bullets_that_only_recite_cited_tweets_are_dropped() {
+    let answer = "## Executive Summary\nPolicy and transit (@a | 1).\n\n\
+                  ## Policy\n- policy fact (@a | 1)\n- transit fact (@b | 2)\n\n\
+                  ## Transit\n- transit fact, retold\n  (@b | 2)\n- merged (@b | 2) (@c | 3)\n\n\
+                  ## Other\n- policy fact (@a | 1)\n";
+    let (kept, dropped) = drop_recited(answer);
+    assert_eq!(dropped, 2, "{kept}");
+    assert_eq!(
+        kept,
+        "## Executive Summary\nPolicy and transit (@a | 1).\n\n\
+         ## Policy\n- policy fact (@a | 1)\n- transit fact (@b | 2)\n\n\
+         ## Transit\n- merged (@b | 2) (@c | 3)\n"
+    );
+}
+
+/// Nothing repeated: the answer is returned byte for byte.
+#[test]
+fn an_answer_with_no_recited_tweet_is_unchanged() {
+    let answer = "## Topic\n- one (@a | 1)\n- two (@b | 2)\n- uncited\n";
+    assert_eq!(drop_recited(answer), (answer.to_string(), 0));
+}

@@ -77,6 +77,75 @@ pub fn unmatched_citations(summary: &str, sources: &[(String, String)]) -> Optio
     })
 }
 
+/// The answer with every bullet dropped whose citations ALL name tweets an
+/// earlier bullet already cited, and how many were dropped.
+///
+/// Such a bullet adds no source the reader lacks -- it is the same tweet told
+/// twice, which the prompt forbids and the loop rule tolerates up to
+/// [`MAX_DUPLICATE_BULLETS`]. Whether two tweets say the same thing is a
+/// judgement and stays the model's; whether two bullets cite the same tweet
+/// is not. A topic left with no bullets loses its header. Unchanged, byte for
+/// byte, when nothing is dropped.
+#[must_use]
+pub fn drop_recited(summary: &str) -> (String, usize) {
+    // Blocks: a bullet with its indented continuation lines, or one other line.
+    let mut blocks: Vec<(String, bool)> = Vec::new();
+    for line in summary.split_inclusive('\n') {
+        let trimmed = line.trim();
+        let continues = blocks.last().is_some_and(|(_, bullet)| *bullet)
+            && !trimmed.is_empty()
+            && line.starts_with(char::is_whitespace);
+        if continues {
+            if let Some((text, _)) = blocks.last_mut() {
+                text.push_str(line);
+            }
+        } else {
+            let bullet = trimmed.starts_with("- ") || trimmed.starts_with("* ");
+            blocks.push((line.to_string(), bullet));
+        }
+    }
+    let mut seen: HashSet<(String, String)> = HashSet::new();
+    let mut dropped = 0;
+    let mut kept: Vec<&str> = Vec::new();
+    // Per section: where its header sits in `kept`, and whether it lost a bullet.
+    let mut section: Option<(usize, bool)> = None;
+    let close = |kept: &mut Vec<&str>, section: Option<(usize, bool)>| {
+        if let Some((at, lost)) = section
+            && lost
+            && kept[at + 1..].iter().all(|l| l.trim().is_empty())
+        {
+            kept.truncate(at);
+        }
+    };
+    for (text, bullet) in &blocks {
+        if text.trim_start().starts_with("##") {
+            close(&mut kept, section);
+            section = Some((kept.len(), false));
+        } else if *bullet {
+            let cites: Vec<(String, String)> = CITATION
+                .captures_iter(text)
+                .map(|c| (c[1].to_string(), c[2].trim().to_string()))
+                .collect();
+            if !cites.is_empty() && cites.iter().all(|c| seen.contains(c)) {
+                dropped += 1;
+                if let Some((_, lost)) = section.as_mut() {
+                    *lost = true;
+                }
+                continue;
+            }
+            seen.extend(cites);
+        }
+        kept.push(text);
+    }
+    close(&mut kept, section);
+    if dropped == 0 {
+        return (summary.to_string(), 0);
+    }
+    let mut out = kept.concat().trim_end().to_string();
+    out.push('\n');
+    (out, dropped)
+}
+
 /// Non-bullet prose under a topic header: the model talking to itself
 /// ("Actually wait - I realize I've been overthinking this"). Prose is the
 /// Executive Summary's alone.

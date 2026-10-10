@@ -19,7 +19,7 @@ pub use browser_parse::parse_tweets_from_response;
 pub use cookies::{
     Cookie, DEFAULT_DOMAINS, SESSION_COOKIE_NAME, find_firefox_profile_dbs, has_session_cookie,
 };
-pub use quality::{Quality, check_summary_quality, unmatched_citations};
+pub use quality::{Quality, check_summary_quality, drop_recited, unmatched_citations};
 
 use std::collections::HashSet;
 use std::fs;
@@ -394,6 +394,7 @@ pub fn handle_model_output(
     if quality.rejected() {
         return Err(quality.rejections.join("; "));
     }
+    let (body, _) = drop_recited(&body);
     Ok((merge_thinking_with_summary(&thinking, &body), processed))
 }
 

@@ -218,6 +218,16 @@ fn test_handle_model_output_refuses_citations_of_tweets_it_was_not_given() {
     assert!(why.contains("2 of 3 citations"), "{why}");
 }
 
+/// What is saved is the answer with its recited bullets dropped.
+#[test]
+fn test_handle_model_output_saves_no_bullet_that_only_recites() {
+    let answer = "## Topic\n- fact (@a | 1)\n- other (@b | 2)\n- fact again (@a | 1)\n";
+    let (saved, _) =
+        handle_model_output(answer, &given(&[("a", "1"), ("b", "2"), ("c", "3")])).unwrap();
+    assert!(!saved.contains("fact again"), "{saved}");
+    assert!(saved.contains("- other (@b | 2)"), "{saved}");
+}
+
 /// The sandbox config really is self-contained.
 ///
 /// The assertion that makes it a config rather than a hope: every path field

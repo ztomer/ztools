@@ -35,6 +35,11 @@ This file starts at v2.2.0 — earlier history is in git.
   well-formed. It now matches every `(@handle | timestamp)` against the tweets the model was
   given and rejects an answer when more than 1 in 10 name none of them
   (`unmatched_citations`) -- the garbled timestamps above, and handles the model made up.
+- **One tweet was told three times.** Live run 3 on 2026-10-10 passed every rule with one
+  tweet as three bullets (two identical) and two more as two each -- too few to read as a
+  loop. A bullet whose every citation names a tweet an earlier bullet already cited is now
+  dropped before saving (`drop_recited`), and a topic it empties loses its header. Whether
+  two DIFFERENT tweets say the same thing stays the model's call.
 - **The model talking to itself was saved as the summary.** The second live run put prose
   ("Wait, let me check...") between bullets inside topic sections. Topic sections are
   bullets only; prose there is a rejection. 59 of the 60 summaries in the store already
