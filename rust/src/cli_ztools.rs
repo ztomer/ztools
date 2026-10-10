@@ -33,7 +33,6 @@ pub(crate) fn task_matches_filter(task_name: &str, filter: &str) -> bool {
 pub(crate) fn weekend_plan(
     config: &ZtoolsConfig,
     location: &str,
-    ages: &str,
     md_out: Option<PathBuf>,
     fetch_latest: bool,
     last_updated: bool,
@@ -46,8 +45,23 @@ pub(crate) fn weekend_plan(
 
     let now = Local::now().naive_local().date();
 
-    // The same window `ztools status` checks the stored plan against.
-    let (friday, sunday) = crate::ztools::weekend::plan_window(now);
+    // The same window `ztools status` checks the stored plan against: Friday
+    // to Sunday, or to Monday when the province observes that Monday.
+    let province = crate::ztools::weekend::holidays::load_province(&config.weekend_region_paths)
+        .map_err(anyhow::Error::msg)?;
+    let (friday, sunday) = crate::ztools::weekend::plan_window(now, province);
+    if let Some(holiday) = province.holiday_on(sunday) {
+        println!(
+            "→ {} on {sunday}: the plan covers the long weekend",
+            holiday.name
+        );
+    }
+
+    // The family's ages on the plan's first day, from the config's birthdays
+    // -- the one source; there is no default list to drift from them.
+    let ages = crate::ztools::weekend::family::family_ages(&config.weekend_region_paths, friday)
+        .map_err(anyhow::Error::msg)?;
+    let ages_label = crate::ztools::weekend::family::ages_label(&ages);
 
     let d1 = friday.format("%Y-%m-%d").to_string();
     let d2 = sunday.format("%Y-%m-%d").to_string();
@@ -69,7 +83,7 @@ pub(crate) fn weekend_plan(
     };
     let ctx = crate::ztools::weekend::PlanContext {
         location: location.to_string(),
-        ages: ages.to_string(),
+        ages: ages_label.clone(),
         date_range: dates_str.clone(),
         year,
         exclusions: exclusions_str,
@@ -83,18 +97,24 @@ pub(crate) fn weekend_plan(
         &ctx,
         config,
     );
-    let (mut fixed, mut transient) =
-        gate_rows(transient, &corpus, config, friday, sunday, &mut health);
-    report_constant_columns(&fixed, &transient, ages);
+    let (mut fixed, mut transient) = gate_rows(
+        transient,
+        &corpus,
+        config,
+        (friday, sunday),
+        &ages,
+        &mut health,
+    );
+    report_constant_columns(&fixed, &transient, &ages_label);
 
-    crate::ztools::weekend::apply_scores(&mut fixed, &weather_str, ages);
-    crate::ztools::weekend::apply_scores(&mut transient, &weather_str, ages);
+    crate::ztools::weekend::apply_scores(&mut fixed, &weather_str, &ages);
+    crate::ztools::weekend::apply_scores(&mut transient, &weather_str, &ages);
 
     let md_str = crate::ztools::weekend::format_weekend_plan(
         &transient,
         &fixed,
         location,
-        ages,
+        &ages_label,
         &dates_str,
         &weather_str,
         &health,
@@ -129,15 +149,16 @@ pub(crate) fn weekend_plan(
 /// invention, and there is no point judging an invented row's dates or
 /// weather label), then the exclusion list, then C3 (a dated transient event
 /// outside the plan's weekend is dropped and each survivor's `day` reconciled
-/// with its own dates), then the weather labels on both lists.
+/// with its own dates), then suitability (`gate_suitability`), then the
+/// weather labels on both lists.
 ///
 /// Returns `(fixed, transient)`.
 fn gate_rows(
     transient: Vec<crate::ztools::weekend::WeekendEvent>,
     corpus: &str,
     config: &ZtoolsConfig,
-    friday: chrono::NaiveDate,
-    sunday: chrono::NaiveDate,
+    (friday, sunday): (chrono::NaiveDate, chrono::NaiveDate),
+    ages: &[u32],
     health: &mut crate::ztools::weekend::PlanHealth,
 ) -> (
     Vec<crate::ztools::weekend::WeekendEvent>,
@@ -170,9 +191,41 @@ fn gate_rows(
         println!("→ {note}");
     }
 
+    let (fixed, transient) = gate_suitability(fixed, transient, ages, health);
+
     let (fixed, weather_notes) = crate::ztools::weekend::correct_weather_labels(fixed);
     let (transient, weather_notes_t) = crate::ztools::weekend::correct_weather_labels(transient);
     for note in weather_notes.iter().chain(weather_notes_t.iter()) {
+        println!("→ {note}");
+    }
+    (fixed, transient)
+}
+
+/// The suitability gates (`weekend/suitability.rs`), after the window: a
+/// listing page's title is no venue and no event, a row that fits none of the
+/// children is not recommended in either half, and a transient row that is
+/// only a fixed venue repeated is dropped. Every drop is counted as
+/// `unsuitable` in the plan's ledger and named on the operator's channel.
+fn gate_suitability(
+    fixed: Vec<crate::ztools::weekend::WeekendEvent>,
+    transient: Vec<crate::ztools::weekend::WeekendEvent>,
+    ages: &[u32],
+    health: &mut crate::ztools::weekend::PlanHealth,
+) -> (
+    Vec<crate::ztools::weekend::WeekendEvent>,
+    Vec<crate::ztools::weekend::WeekendEvent>,
+) {
+    use crate::ztools::weekend::suitability as fit;
+    let before = transient.len();
+    let (transient, listing_notes, _) = fit::reject_listing_page_titles(transient);
+    let (transient, age_notes) = fit::drop_unsuitable_for_ages(transient, ages);
+    let (fixed, fixed_notes) = fit::drop_unsuitable_for_ages(fixed, ages);
+    let (transient, twin_notes) = fit::drop_duplicates_of_fixed(transient, &fixed);
+    health.provenance.unsuitable = before - transient.len();
+    for note in [listing_notes, age_notes, fixed_notes, twin_notes]
+        .iter()
+        .flatten()
+    {
         println!("→ {note}");
     }
     (fixed, transient)
@@ -252,8 +305,8 @@ use eval_runner::run_full_suite;
 /// # Errors
 ///
 /// Only when the status JSON cannot be written to stdout.
-pub(crate) fn status() -> Result<()> {
-    crate::ztools::status::run()
+pub(crate) fn status(config: &ZtoolsConfig) -> Result<()> {
+    crate::ztools::status::run(config)
 }
 
 /// The action to perform for `ztools model-eval`.

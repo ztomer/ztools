@@ -1,12 +1,16 @@
 pub mod constants;
 pub mod dates;
 pub mod enforce;
+pub mod family;
 pub mod fetch;
 pub mod format;
 pub mod health;
+pub mod holidays;
 pub mod phases;
 pub mod prompts;
 pub mod report;
+pub mod score;
+pub mod suitability;
 pub mod supply;
 pub use constants::*;
 pub use dates::*;
@@ -16,6 +20,7 @@ pub use format::*;
 pub use health::*;
 pub use phases::*;
 pub use prompts::*;
+pub use score::{apply_scores, compute_score};
 /// Native Rust Weekend Planner module.
 use serde::{Deserialize, Serialize};
 
@@ -53,117 +58,6 @@ pub struct WeekendEvent {
 pub use super::weekend_cache::{
     clean_venue_or_event_title, is_directory_or_list_page, load_cached_activities, load_exclusions,
 };
-
-/// Fetch Open-Meteo weather forecast for Vaughan / GTA (lat 43.8361, lon -79.4982).
-/// Clean weather string display for CLI header panel matching Python _`format_weather_display`.
-pub fn apply_scores(events: &mut [WeekendEvent], weather_str: &str, age_range: &str) {
-    for ev in events.iter_mut() {
-        ev.score = compute_score(ev, weather_str, age_range);
-    }
-    // Sort descending by score
-    events.sort_by(|a, b| {
-        b.score
-            .partial_cmp(&a.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-}
-
-pub(crate) fn compute_score(ev: &WeekendEvent, weather_str: &str, age_range: &str) -> f32 {
-    let mut score = 0.0;
-
-    // Populated fields
-    let fields = [
-        &ev.name,
-        &ev.location,
-        &ev.price,
-        &ev.target_ages,
-        &ev.description,
-    ];
-    let populated =
-        f32::from(u8::try_from(fields.iter().filter(|f| !f.is_empty()).count()).unwrap_or(u8::MAX));
-    score = (populated / 5.0).mul_add(3.0, score);
-
-    // Ages overlap
-    if !age_range.is_empty() && !ev.target_ages.is_empty() {
-        let parse_nums = |s: &str| -> Vec<i32> {
-            let mut v = Vec::new();
-            let mut cur = String::new();
-            for c in s.chars() {
-                if c.is_ascii_digit() {
-                    cur.push(c);
-                } else if !cur.is_empty() {
-                    if let Ok(n) = cur.parse() {
-                        v.push(n);
-                    }
-                    cur.clear();
-                }
-            }
-            if !cur.is_empty()
-                && let Ok(n) = cur.parse()
-            {
-                v.push(n);
-            }
-            v.sort_unstable();
-            v.dedup();
-            v
-        };
-        let age_nums = parse_nums(age_range);
-        let target_nums = parse_nums(&ev.target_ages);
-
-        if !age_nums.is_empty() && !target_nums.is_empty() {
-            let max_min = std::cmp::max(age_nums[0], target_nums[0]);
-            let min_max = std::cmp::min(*age_nums.last().unwrap(), *target_nums.last().unwrap());
-            if min_max >= max_min {
-                let overlap = min_max - max_min + 1;
-                if overlap >= 2 {
-                    score += 3.0;
-                } else if overlap == 1 {
-                    score += 1.5;
-                }
-            }
-        }
-    }
-
-    // Weather
-    let desc_lower = ev.description.to_lowercase();
-    let is_outdoor = desc_lower.contains("outdoor");
-    let is_indoor = desc_lower.contains("indoor");
-    let is_sunny =
-        desc_lower.contains("sunny") || desc_lower.contains("clear") || desc_lower.contains("warm");
-
-    let w_lower = weather_str.to_lowercase();
-    let forecast_sunny =
-        w_lower.contains("sunny") || w_lower.contains("clear") || w_lower.contains("warm");
-    let forecast_cloudy =
-        w_lower.contains("cloudy") || w_lower.contains("rain") || w_lower.contains("precipitation");
-    let is_cloudy = desc_lower.contains("cloudy")
-        || desc_lower.contains("rain")
-        || desc_lower.contains("overcast");
-
-    if is_indoor {
-        score += 1.0;
-    } else if is_outdoor && forecast_sunny {
-        score += 2.0;
-    } else if is_outdoor && forecast_cloudy {
-        // pass
-    } else if (is_cloudy && forecast_cloudy) || (is_sunny && forecast_sunny) {
-        score += 2.0;
-    } else if is_sunny || is_cloudy {
-        score += 1.0;
-    }
-
-    // Other bonuses
-    let p_lower = ev.price.to_lowercase();
-    if !p_lower.is_empty() && p_lower != "free" && p_lower != "n/a" && p_lower != "tbd" {
-        score += 0.5;
-    }
-    if ev.location.len() > 5 {
-        score += 0.5;
-    }
-
-    let final_score = score / 2.0;
-    if final_score > 5.0 { 5.0 } else { final_score }
-}
 
 #[derive(serde::Deserialize, Default)]
 struct LlmResponse {

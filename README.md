@@ -80,14 +80,16 @@ twitter --debug          # Show browser window and verbose output
 
 ```bash
 weekend
-weekend --location "Vaughan/Toronto" --ages "13,10,6"
+weekend --location "Vaughan/Toronto"
 weekend --md-out ~/Documents/weekend_plan.md
 ```
 
-- **Weather-Aware**: Fetches 3-day forecasts from Open-Meteo REST API.
+- **Family from config**: the children's ages are derived from the `[[children]]` birthdays in `conf/weekend.toml` on the plan's first day; there is no `--ages` flag to drift from them.
+- **Long weekends**: the window runs Friday to Sunday, or to Monday when that Monday is a statutory holiday in `[location] province` (Ontario's table is in `rust/src/ztools/weekend/holidays.rs`).
+- **Weather-Aware**: Fetches forecasts for the plan window from Open-Meteo REST API.
 - **Dual-Source Scraping**: Scrapes seasonal festivals and activities through a three-engine search (DuckDuckGo, then Bing, then Brave); the plan states when a bot wall starved the corpus instead of calling the weekend quiet.
 - **4-Phase LLM Pipeline**: Condenses weather → Extracts candidate snippets → Drafts itinerary → Structures validated JSON.
-- **Rule Enforcement**: Drops unsourced rows, ensures in-window dates, and applies venue exclusions from `conf/weekend.toml`.
+- **Rule Enforcement**: Drops unsourced rows, ensures in-window dates, and applies venue exclusions from `conf/weekend.toml`; drops rows that fit none of the children (read from the age field, the name and the description), listing-page titles posing as events or venues, and transient rows that only repeat a fixed venue. The configured model is used verbatim: one the server does not list is named in the plan, never substituted.
 
 ### 3. Image Renamer (`rename_images`)
 

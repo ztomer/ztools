@@ -72,9 +72,6 @@ enum Cmd {
         /// Location string (e.g. "Vaughan/Toronto").
         #[arg(long, default_value = "Vaughan/Toronto")]
         location: String,
-        /// Target family ages, comma separated (e.g. "13,10,6").
-        #[arg(long, default_value = "13,10,6")]
-        ages: String,
         /// Optional path to write markdown plan.
         #[arg(long)]
         md_out: Option<PathBuf>,
@@ -317,20 +314,14 @@ pub fn run() -> Result<()> {
         Cmd::TwitterSummarize { .. } => dispatch_twitter(&config, cli.cmd),
         Cmd::WeekendPlan {
             location,
-            ages,
             md_out,
             fetch_latest,
             last_updated,
-        } => crate::cli_ztools::weekend_plan(
-            &config,
-            &location,
-            &ages,
-            md_out,
-            fetch_latest,
-            last_updated,
-        ),
+        } => {
+            crate::cli_ztools::weekend_plan(&config, &location, md_out, fetch_latest, last_updated)
+        }
         Cmd::ImageRenamer { dir, apply } => crate::cli_ztools::image_renamer(&config, &dir, apply),
-        Cmd::Status => crate::cli_ztools::status(),
+        Cmd::Status => crate::cli_ztools::status(&config),
         Cmd::TwitterStatus => crate::ztools::twitter_status::run(),
         Cmd::ModelEval {
             model,

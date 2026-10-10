@@ -81,6 +81,12 @@ pub enum ModelHealth {
     Ready { model: String, secs: u64 },
     /// Warm-up did not answer; no phase was attempted.
     Unavailable { model: String, reason: String },
+    /// The server's roster does not list the configured model, so no call was
+    /// made at all. Never substituted (see `phases::resolve_weekend_model`).
+    NotInstalled {
+        model: String,
+        installed: Vec<String>,
+    },
 }
 
 impl ModelHealth {
@@ -106,6 +112,10 @@ pub struct Provenance {
     pub outside_window: usize,
     /// Dropped by the operator's exclusion list.
     pub excluded: usize,
+    /// Dropped as unfit to recommend (`suitability.rs`): fits none of the
+    /// children, is a listing page rather than an event, or is a fixed venue
+    /// repeated as an event.
+    pub unsuitable: usize,
 }
 
 impl Provenance {
@@ -114,8 +124,9 @@ impl Provenance {
     #[must_use]
     pub fn line(&self) -> String {
         format!(
-            "_Provenance: {} extracted, {} unsourced, {} outside the window, {} excluded._",
-            self.extracted, self.unsourced, self.outside_window, self.excluded
+            "_Provenance: {} extracted, {} unsourced, {} outside the window, {} excluded, \
+             {} unsuitable._",
+            self.extracted, self.unsourced, self.outside_window, self.excluded, self.unsuitable
         )
     }
 
@@ -128,12 +139,21 @@ impl Provenance {
             .filter(|s| !s.is_empty())
             .filter_map(|s| s.parse().ok())
             .collect();
+        // A plan written before the `unsuitable` count existed carries four
+        // numbers; it reads back as zero unsuitable rather than as no ledger.
         match nums[..] {
-            [extracted, unsourced, outside_window, excluded, ..] => Some(Self {
+            [
                 extracted,
                 unsourced,
                 outside_window,
                 excluded,
+                ref rest @ ..,
+            ] => Some(Self {
+                extracted,
+                unsourced,
+                outside_window,
+                excluded,
+                unsuitable: rest.first().copied().unwrap_or(0),
             }),
             _ => None,
         }
@@ -168,10 +188,16 @@ impl PlanHealth {
     #[must_use]
     pub fn degraded_reason(&self) -> String {
         let mut causes = Vec::new();
-        if let ModelHealth::Unavailable { model, reason } = &self.model {
-            causes.push(format!(
+        match &self.model {
+            ModelHealth::Unavailable { model, reason } => causes.push(format!(
                 "the model `{model}` did not answer ({reason}), so nothing was extracted"
-            ));
+            )),
+            ModelHealth::NotInstalled { model, installed } => causes.push(format!(
+                "the configured model `{model}` is not installed (the server lists {}), \
+                 so nothing was extracted; set `weekend_model` to an installed model",
+                installed.join(", ")
+            )),
+            ModelHealth::Ready { .. } => {}
         }
         if self.search.bot_walled() {
             causes.push(format!(
@@ -290,6 +316,31 @@ mod tests {
         assert!(reason.starts_with("No live transient events:"), "{reason}");
     }
 
+    /// The class this variant closes: a model that is not installed is NAMED
+    /// in the plan, with what the server does have, and never stands in for a
+    /// model the server never said it lacked.
+    #[test]
+    fn degraded_reason_names_a_model_that_is_not_installed() {
+        let health = PlanHealth {
+            search: SearchHealth::default(),
+            model: ModelHealth::NotInstalled {
+                model: "raptor-v0.5".into(),
+                installed: vec!["qwen3.8-27b".into(), "embed-small".into()],
+            },
+            provenance: Provenance::default(),
+        };
+        assert!(!health.model.is_ready());
+        let reason = health.degraded_reason();
+        assert!(
+            reason.contains(
+                "the configured model `raptor-v0.5` is not installed (the server lists \
+                 qwen3.8-27b, embed-small)"
+            ),
+            "{reason}"
+        );
+        assert!(reason.contains("set `weekend_model`"), "{reason}");
+    }
+
     #[test]
     fn the_provenance_line_round_trips_zeros_included() {
         let p = Provenance {
@@ -297,13 +348,21 @@ mod tests {
             unsourced: 3,
             outside_window: 0,
             excluded: 1,
+            unsuitable: 4,
         };
         let plan = format!("# Weekend Plan\n\n| a |\n\n{}\n", p.line());
         assert_eq!(Provenance::parse(&plan), Some(p));
         assert_eq!(Provenance::parse("# Weekend Plan\n"), None);
         assert_eq!(
             Provenance::default().line(),
-            "_Provenance: 0 extracted, 0 unsourced, 0 outside the window, 0 excluded._"
+            "_Provenance: 0 extracted, 0 unsourced, 0 outside the window, 0 excluded, \
+             0 unsuitable._"
+        );
+        // A plan from before the count existed still reads, as zero unsuitable.
+        let old = "_Provenance: 5 extracted, 1 unsourced, 0 outside the window, 2 excluded._";
+        assert_eq!(
+            Provenance::parse(old).map(|p| (p.excluded, p.unsuitable)),
+            Some((2, 0))
         );
     }
 

@@ -266,6 +266,13 @@ pub fn fetch_duckduckgo_events(
         ModelHealth::Unavailable { model, reason } => {
             eprintln!("\u{26a0} Model {model} unavailable: {reason}; skipping extraction");
         }
+        ModelHealth::NotInstalled { model, installed } => {
+            eprintln!(
+                "\u{26a0} Model {model} is not installed (server lists: {}); \
+                 skipping extraction -- set weekend_model to an installed model",
+                installed.join(", ")
+            );
+        }
     }
     let health = PlanHealth {
         search,

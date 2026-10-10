@@ -17,4 +17,4 @@
 
 *No transient events scheduled for this weekend.*
 
-_Provenance: 0 extracted, 0 unsourced, 0 outside the window, 0 excluded._
+_Provenance: 0 extracted, 0 unsourced, 0 outside the window, 0 excluded, 0 unsuitable._

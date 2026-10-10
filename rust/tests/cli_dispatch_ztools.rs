@@ -84,7 +84,30 @@ fn stub_server(body: &'static str) -> u16 {
 
 const LLM_TEXT: &str = r###"{"choices":[{"message":{"content":"## Highlights\n- one thing happened\n- another thing happened\n- a third thing happened"}}]}"###;
 
-const LLM_EVENTS: &str = r#"{"choices":[{"message":{"content":"{\"transient_events\":[{\"name\":\"Rib Fest\",\"location\":\"Vaughan Park\",\"target_ages\":\"6-12\",\"price\":\"Free\",\"day\":\"Saturday\",\"description\":\"An outdoor festival for kids\"},{\"name\":\"Bare Listing\",\"location\":\"Vaughan\",\"target_ages\":\"all\",\"price\":\"Free\",\"day\":\"Sunday\",\"description\":\"\"}]}"}}]}"#;
+const LLM_EVENTS: &str = r#"{"choices":[{"message":{"content":"{\"transient_events\":[{\"name\":\"Rib Fest\",\"location\":\"Vaughan Park\",\"target_ages\":\"6-12\",\"price\":\"Free\",\"day\":\"Saturday\",\"description\":\"An outdoor festival for kids\"},{\"name\":\"Bare Listing\",\"location\":\"Vaughan\",\"target_ages\":\"all\",\"price\":\"Free\",\"day\":\"Sunday\",\"description\":\"\"},{\"name\":\"Baby and Me (birth to 12 months)\",\"location\":\"Vaughan Events This Weekend & Things to Do - Oct 2026\",\"target_ages\":\"\",\"price\":\"Free\",\"day\":\"Sunday\",\"description\":\"\"}]}"}}]}"#;
+
+/// The family the planner plans for, written into the sandbox: one child aged
+/// 9 on any day of the plan window, and the province whose holidays extend it.
+/// Returns the config lines pointing the planner at it.
+fn write_weekend_family(home: &std::path::Path) -> String {
+    let birthday = chrono::Local::now().date_naive()
+        - chrono::Months::new(9 * 12)
+        - chrono::Duration::days(30);
+    let path = home.join("weekend.toml");
+    fs::write(
+        &path,
+        format!(
+            "[location]\ncity = \"Vaughan\"\nprovince = \"ON\"\n\n\
+             [[children]]\nbirthday = \"{}\"\n",
+            birthday.format("%Y-%m-%d")
+        ),
+    )
+    .unwrap();
+    format!(
+        "weekend_region_paths = [\"{0}\"]\nweekend_exclusions_paths = [\"{0}\"]\n",
+        path.display()
+    )
+}
 
 /// The planner's other real outcome: the model found nothing for this weekend.
 const LLM_NO_EVENTS: &str = r#"{"choices":[{"message":{"content":"{\"transient_events\":[]}"}}]}"#;
@@ -205,15 +228,14 @@ fn weekend_plan_renders_and_writes_the_markdown() {
     // same stub through `weather_url` -- before that endpoint was config, this
     // test made a real HTTPS request to api.open-meteo.com on every run.
     let port = stub_server(LLM_EVENTS);
-    write_config(&home, &weekend_config(port, port, &home));
+    let family = write_weekend_family(&home);
+    write_config(&home, &(weekend_config(port, port, &home) + &family));
 
     let md_out = home.join("weekend.md");
     let out = ztool(&home)
         .arg("weekend-plan")
         .arg("--location")
         .arg("Vaughan")
-        .arg("--ages")
-        .arg("6,12")
         .arg("--md-out")
         .arg(&md_out)
         .output()
@@ -230,6 +252,14 @@ fn weekend_plan_renders_and_writes_the_markdown() {
         doc.contains("Rib Fest"),
         "the extracted event should reach the plan: {doc}"
     );
+    // The ages come from the configured birthday, not from a flag or a default.
+    assert!(doc.contains("**Target Ages:** 9\n"), "{doc}");
+    // An infant event is not recommended to a nine-year-old, and the operator
+    // is told why; a listing page's title never stands as a venue.
+    assert!(!doc.contains("Baby and Me"), "{doc}");
+    assert!(stdout.contains("fits none of the children (9)"), "{stdout}");
+    assert!(!doc.contains("Things to Do - Oct 2026"), "{doc}");
+    assert!(doc.contains("1 unsuitable._"), "{doc}");
 }
 
 #[test]
@@ -352,7 +382,8 @@ fn model_eval_all_evaluates_every_discovered_model() {
 fn weekend_plan_says_so_when_nothing_is_on() {
     let home = fresh("weekend-empty");
     let port = stub_server(LLM_NO_EVENTS);
-    write_config(&home, &weekend_config(port, port, &home));
+    let family = write_weekend_family(&home);
+    write_config(&home, &(weekend_config(port, port, &home) + &family));
     let md_out = home.join("weekend.md");
     let out = ztool(&home)
         .arg("weekend-plan")
@@ -367,7 +398,10 @@ fn weekend_plan_says_so_when_nothing_is_on() {
         "an empty weekend must be stated: {doc}"
     );
     assert!(
-        doc.contains("_Provenance: 0 extracted, 0 unsourced, 0 outside the window, 0 excluded._"),
+        doc.contains(
+            "_Provenance: 0 extracted, 0 unsourced, 0 outside the window, 0 excluded, \
+             0 unsuitable._"
+        ),
         "every plan carries its provenance ledger, zeros included: {doc}"
     );
 }

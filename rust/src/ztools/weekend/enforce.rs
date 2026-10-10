@@ -19,7 +19,7 @@ use super::WeekendEvent;
 
 /// Connector words carry no identifying signal, so requiring them would make a
 /// config entry miss a re-worded venue ("The Art of the Brick" vs "Art of Brick").
-const CONNECTORS: &[&str] = &["of", "the", "and", "at", "in", "a", "an", "on", "for"];
+pub(crate) const CONNECTORS: &[&str] = &["of", "the", "and", "at", "in", "a", "an", "on", "for"];
 
 /// Words that mark a specific, time-limited seasonal event as an exception to
 /// an excluded venue (C8).
