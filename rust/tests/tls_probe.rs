@@ -173,7 +173,15 @@ fn live_forecast_over_https_returns_the_weekend_the_planner_asked_for() {
     // Hardcoding dates here would rot into a false failure the day they aged
     // out of the endpoint's forecast horizon, or quietly probe a range the
     // product never requests.
-    let (friday, sunday) = ztools::weekend::plan_window(Local::now().naive_local().date());
+    let shipped = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("the crate lives in <repo>/rust")
+        .join("conf/weekend.toml");
+    let province =
+        ztools::weekend::holidays::load_province(&[shipped.to_string_lossy().into_owned()])
+            .expect("the shipped weekend config names a supported province");
+    let (friday, sunday) =
+        ztools::weekend::plan_window(Local::now().naive_local().date(), province);
     let dates = [friday, friday + chrono::Duration::days(1), sunday];
     let iso = dates.map(|d| d.format("%Y-%m-%d").to_string());
 

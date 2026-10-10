@@ -8,20 +8,23 @@
 //! `conf/twitter.toml [fallback]`; nothing here names a model.
 
 /// Pick a model from a roster by preference-substring match, case-insensitive.
-/// First preference wins; with no match the first listed model wins; an empty
-/// roster selects nothing.
+/// First preference wins; with no match NOTHING is selected.
+///
+/// It used to return `models.first()` on a miss: whatever the server happened
+/// to list first, an embedding model as readily as a chat one. The weekend
+/// planner had the same fallback, and every one of its scheduled plans through
+/// 2026-10-09 was drafted by that arbitrary model and came out empty. A
+/// substitute must be one the operator NAMED (`conf/twitter.toml [fallback]`),
+/// never the roster's order.
 #[must_use]
 pub fn select_best_model(models: &[String], preferred: &[String]) -> Option<String> {
-    if models.is_empty() {
-        return None;
-    }
-    for pref in preferred {
+    preferred.iter().find_map(|pref| {
         let needle = pref.to_lowercase();
-        if let Some(hit) = models.iter().find(|m| m.to_lowercase().contains(&needle)) {
-            return Some(hit.clone());
-        }
-    }
-    models.first().cloned()
+        models
+            .iter()
+            .find(|m| m.to_lowercase().contains(&needle))
+            .cloned()
+    })
 }
 
 /// Ordered deduped fallback chain: the target first, then the extra names.
@@ -52,8 +55,13 @@ pub fn fallback_chain(
     chain
 }
 
-/// Resolve which model to try first: a served target is kept; a missing one
-/// resolves through [`select_best_model`]; with no roster the target stands.
+/// Resolve which model to try first.
+///
+/// A served target is kept; a missing one resolves through
+/// [`select_best_model`]; with no roster, or no preferred model served, the
+/// target stands — and [`fallback_chain`] then drops it as
+/// unserved, so the chain is the operator's named fallbacks or, when none is
+/// served, empty and refused with a stated reason by `run_chain`.
 #[must_use]
 pub fn resolve_target_model(target: &str, available: &[String], preferred: &[String]) -> String {
     if !available.is_empty() && !available.iter().any(|m| m == target) {
@@ -90,13 +98,13 @@ mod tests {
         );
     }
 
+    /// The class: no preferred model served means no pick, never the
+    /// roster's first entry. (Calibrated: the old `models.first()` returned
+    /// "embed-small" here.)
     #[test]
-    fn no_match_falls_back_to_first_listed() {
-        let models = vec!["m2".to_string(), "m3".to_string()];
-        assert_eq!(
-            select_best_model(&models, &["qwen".to_string()]),
-            Some("m2".to_string())
-        );
+    fn no_match_selects_nothing_rather_than_the_first_listed() {
+        let models = vec!["embed-small".to_string(), "m3".to_string()];
+        assert_eq!(select_best_model(&models, &["qwen".to_string()]), None);
     }
 
     #[test]
@@ -138,12 +146,16 @@ mod tests {
     }
 
     #[test]
-    fn missing_target_without_match_resolves_to_first_listed() {
+    fn missing_target_without_match_stays_the_target_and_is_not_chained() {
         let available = vec!["m2".to_string()];
+        let target = resolve_target_model("m1", &available, &["qwen".to_string()]);
+        assert_eq!(target, "m1".to_string());
+        // Unserved, so the chain drops it: only a named, served fallback remains.
         assert_eq!(
-            resolve_target_model("m1", &available, &["qwen".to_string()]),
-            "m2".to_string()
+            fallback_chain(&target, &available, &["foundation".to_string()]),
+            vec!["foundation".to_string()]
         );
+        crate::assert_empty!(fallback_chain(&target, &available, &[]));
     }
 
     #[test]

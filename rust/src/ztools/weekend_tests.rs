@@ -327,11 +327,13 @@ fn test_apply_scores_sorts_by_score() {
             duration: String::new(),
         },
     ];
-    // Event B has more populated fields (outdoor description) and matching ages.
-    crate::ztools::weekend::apply_scores(&mut events, "sunny clear warm", "6-12");
-    // Scores should be computed and sorted descending.
-    assert!(events[0].score >= events[1].score);
-    assert!(events.iter().all(|e| e.score > 0.0));
+    // A states 6-12 and fits both children (3.0) but its description says
+    // nothing about weather (0.0); B states no range (1.5, unjudged) and is
+    // an outdoor event under a clear forecast (2.0). Sorted best first.
+    crate::ztools::weekend::apply_scores(&mut events, "sunny clear warm", &[10, 7]);
+    assert_eq!(events[0].name, "B");
+    ztools_assert_close(events[0].score, 3.5);
+    ztools_assert_close(events[1].score, 3.0);
 }
 
 #[test]
@@ -351,9 +353,17 @@ fn test_apply_scores_empty_ages() {
         weather: String::new(),
         duration: String::new(),
     }];
-    // Empty age range: no age bonus, but populated fields still score.
-    crate::ztools::weekend::apply_scores(&mut events, "rain", "");
-    assert!(events[0].score > 0.0);
+    // No family ages: age fit cannot be judged and earns half marks; an
+    // empty description earns no weather points.
+    crate::ztools::weekend::apply_scores(&mut events, "rain", &[]);
+    ztools_assert_close(events[0].score, 1.5);
+}
+
+fn ztools_assert_close(actual: f32, expected: f32) {
+    assert!(
+        (actual - expected).abs() < 0.001,
+        "expected {expected}, got {actual}"
+    );
 }
 
 fn sample_event(name: &str, location: &str, score: f32) -> crate::ztools::weekend::WeekendEvent {
@@ -379,6 +389,8 @@ mod weekend_parse_tests;
 mod weekend_filter_tests;
 
 mod weekend_phases_tests;
+
+mod weekend_model_tests;
 
 mod weekend_fetch_tests;
 

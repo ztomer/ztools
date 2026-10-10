@@ -178,8 +178,14 @@ fn tweets() -> Vec<Tweet> {
 /// operator's real cache must not be read.
 fn config(base_url: &str, tmp: &std::path::Path) -> crate::config::ZtoolsConfig {
     let fallback = tmp.join("twitter.toml");
-    std::fs::write(&fallback, "[fallback]\nmodels = []\npreferred = []\n")
-        .expect("writing the test's own fallback policy");
+    // The degraded document's stand-in is one the policy NAMES. It used to be
+    // reached through `select_best_model`'s `models.first()` with an empty
+    // preference list -- the arbitrary pick that no longer exists.
+    std::fs::write(
+        &fallback,
+        "[fallback]\nmodels = []\npreferred = [\"small-fallback\"]\n",
+    )
+    .expect("writing the test's own fallback policy");
     crate::config::ZtoolsConfig {
         twitter_model: "golden-model".to_string(),
         twitter_config_paths: vec![fallback.to_string_lossy().into_owned()],

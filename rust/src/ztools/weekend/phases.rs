@@ -37,28 +37,39 @@ pub struct PlanContext {
     pub exclusions: String,
 }
 
-/// Resolve the weekend model against the active Osaurus roster if needed.
-#[must_use]
-pub fn resolve_weekend_model(base_url: &str, preferred_model: &str) -> String {
+/// The configured weekend model, checked against the server's roster.
+///
+/// THERE IS NO SUBSTITUTE. This used to fall back, silently, to a model of the
+/// same "family", then to any raptor/qwen/gemma, then to `models.first()` —
+/// whatever the server happened to list first. When the configured model was
+/// not installed, every scheduled plan through 2026-10-09 was drafted by that
+/// arbitrary model, extracted nothing, and said only "Plan Degraded" with no
+/// hint why. A model that is not installed is now a stated failure the plan
+/// names; the fix is a config change, and the plan says which.
+///
+/// `Ok(model)` when the roster lists it — or when the roster cannot be read
+/// at all, since then nothing is known to be absent and the warm-up call will
+/// say whether the server answers.
+///
+/// # Errors
+///
+/// [`super::ModelHealth::NotInstalled`] when the roster is readable and does
+/// not list the configured model.
+pub fn resolve_weekend_model(
+    base_url: &str,
+    configured: &str,
+) -> Result<String, super::ModelHealth> {
     let url = format!("{}/v1/models", base_url.trim_end_matches('/'));
-    let Ok(client) = reqwest::blocking::Client::builder()
+    let roster = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(2))
         .build()
-    else {
-        return preferred_model.to_string();
-    };
-
-    let resp = match client.get(&url).send() {
-        Ok(r) if r.status().is_success() => r.json::<serde_json::Value>().ok(),
-        _ => None,
-    };
-
-    let Some(json) = resp else {
-        return preferred_model.to_string();
-    };
-
-    let models: Vec<String> = json
-        .get("data")
+        .ok()
+        .and_then(|client| client.get(&url).send().ok())
+        .filter(|r| r.status().is_success())
+        .and_then(|r| r.json::<serde_json::Value>().ok());
+    let installed: Vec<String> = roster
+        .as_ref()
+        .and_then(|json| json.get("data"))
         .and_then(|d| d.as_array())
         .map(|arr| {
             arr.iter()
@@ -66,43 +77,13 @@ pub fn resolve_weekend_model(base_url: &str, preferred_model: &str) -> String {
                 .collect()
         })
         .unwrap_or_default();
-
-    if models.is_empty() || models.iter().any(|m| m == preferred_model) {
-        return preferred_model.to_string();
+    if installed.is_empty() || installed.iter().any(|m| m == configured) {
+        return Ok(configured.to_string());
     }
-
-    let pref_lower = preferred_model.to_lowercase();
-    let family = if pref_lower.contains("qwen") {
-        "qwen"
-    } else if pref_lower.contains("gemma") {
-        "gemma"
-    } else if pref_lower.contains("muse") {
-        "muse"
-    } else if pref_lower.contains("raptor") {
-        "raptor"
-    } else {
-        ""
-    };
-
-    if !family.is_empty()
-        && let Some(matched) = models.iter().find(|m| m.to_lowercase().contains(family))
-    {
-        return matched.clone();
-    }
-
-    for fallback_family in &["raptor", "qwen", "gemma"] {
-        if let Some(matched) = models
-            .iter()
-            .find(|m| m.to_lowercase().contains(fallback_family))
-        {
-            return matched.clone();
-        }
-    }
-
-    models
-        .first()
-        .cloned()
-        .unwrap_or_else(|| preferred_model.to_string())
+    Err(super::ModelHealth::NotInstalled {
+        model: configured.to_string(),
+        installed,
+    })
 }
 
 /// Wake the weekend model with one tiny request, waiting the LOADING budget.
@@ -114,7 +95,10 @@ pub fn resolve_weekend_model(base_url: &str, preferred_model: &str) -> String {
 /// warm-up budget, before any phase, turns that livelock into one wait.
 #[must_use]
 pub fn warm_model(config: &crate::config::ZtoolsConfig) -> super::ModelHealth {
-    let model = resolve_weekend_model(&config.osaurus_url, &config.weekend_model);
+    let model = match resolve_weekend_model(&config.osaurus_url, &config.weekend_model) {
+        Ok(model) => model,
+        Err(not_installed) => return not_installed,
+    };
     let started = std::time::Instant::now();
     // The stall guard IS the budget here: no token until the model has
     // loaded is the expected shape of a cold start, not a stalled server.
@@ -200,12 +184,14 @@ fn with_retries<T>(what: &str, retries: u32, mut call: impl FnMut() -> Option<T>
 /// per `phase_retries`.
 #[must_use]
 pub fn call_llm_text(prompt: &str, config: &crate::config::ZtoolsConfig) -> Option<String> {
-    let model = resolve_weekend_model(&config.osaurus_url, &config.weekend_model);
+    // The configured model, verbatim: `warm_model` checked it against the
+    // roster before any phase ran, and no phase runs when it is missing.
+    let model = &config.weekend_model;
     let retries = phase_retries(&config.weekend_region_paths);
     with_retries("llm text call", retries, || {
         crate::ztools::twitter::call_osaurus(
             &config.osaurus_url,
-            &model,
+            model,
             prompt,
             config.llm_extended_timeout_secs,
             config,
@@ -225,13 +211,13 @@ pub(crate) fn call_llm_json(
     user: &str,
     config: &crate::config::ZtoolsConfig,
 ) -> Option<serde_json::Value> {
-    let model = resolve_weekend_model(&config.osaurus_url, &config.weekend_model);
+    let model = &config.weekend_model;
     let retries = phase_retries(&config.weekend_region_paths);
     let content = with_retries("llm json call", retries, || {
         crate::ztools::llm::chat(
             &crate::ztools::llm::ChatRequest {
                 base_url: &config.osaurus_url,
-                model: &model,
+                model,
                 system,
                 user,
                 json: true,

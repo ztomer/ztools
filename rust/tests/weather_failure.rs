@@ -314,9 +314,9 @@ fn a_failed_forecast_scores_no_row_better_than_a_clear_one_does_not() {
     let mut under_clear = vec![event("Union Summer", sunny)];
     let mut under_nothing = vec![event("Union Summer", sunny)];
 
-    ztools::weekend::apply_scores(&mut under_failure, &failure_display, "6-12");
-    ztools::weekend::apply_scores(&mut under_clear, "Fri 30.0°C (clear)", "6-12");
-    ztools::weekend::apply_scores(&mut under_nothing, "", "6-12");
+    ztools::weekend::apply_scores(&mut under_failure, &failure_display, &[10]);
+    ztools::weekend::apply_scores(&mut under_clear, "Fri 30.0°C (clear)", &[10]);
+    ztools::weekend::apply_scores(&mut under_nothing, "", &[10]);
 
     assert!(
         under_failure[0].score < under_clear[0].score,

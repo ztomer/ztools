@@ -169,6 +169,11 @@ The weekend planner generates family weekend itineraries tailored for kids, comb
    • Exclusion Gate (filters venues from conf/weekend.toml)
    • Region Evidence Gate (positive GTA token matching)
    • Weather Consistency Gate (Indoor/Outdoor label checks)
+   • Suitability Gate (suitability.rs: ages from [[children]],
+     listing-page titles, fixed venues repeated as events)
+                           │
+                           ↓
+               [Fit Score (score.rs): age share + weather]
                            │
                            ↓
                [Formatted Console & Markdown Table (format.rs)]
@@ -176,7 +181,9 @@ The weekend planner generates family weekend itineraries tailored for kids, comb
 
 - **Dual-Source Scraping**: Queries Open-Meteo REST API for precise weekend weather and a three-engine search (DuckDuckGo, then Bing, then Brave — each consulted only when the one before walls or empties the query) for local events. Every engine's verdict per query is recorded and the plan says when a bot wall starved it.
 - **4-Phase LLM Pipeline**: Progressively refines raw search text into validated JSON items, falling back to monolithic extraction if any phase stalls.
-- **Enforcement Rules**: Drops unsourced rows (anti-hallucination), reconciles day names with ISO dates, and enforces user exclusion lists.
+- **Enforcement Rules**: Drops unsourced rows (anti-hallucination), reconciles day names with ISO dates, enforces user exclusion lists, and drops rows unfit for the family (`suitability.rs`).
+- **Window**: Friday to Sunday, extended to a statutory Monday from the `[location] province` rule table (`holidays.rs`); the planner and `ztools status` share `plan_window`.
+- **Model**: the configured `weekend_model`, verbatim. A model the server's roster does not list is `ModelHealth::NotInstalled`, named in the plan's degraded banner; there is no family or first-listed substitute.
 
 ---
 

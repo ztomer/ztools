@@ -3,22 +3,40 @@
 
 use chrono::{Datelike, NaiveDate};
 
-/// The Friday-to-Sunday a plan should cover, seen from `today`.
+/// The days a plan should cover, seen from `today`: Friday to Sunday, or to
+/// Monday when that Monday is a holiday in `province`.
 ///
 /// During a weekend the answer is *this* one, not the next: a plan for the
 /// days you are living through is current, not stale. Monday = 0 ... Friday
 /// = 4, Saturday = 5, Sunday = 6, so Saturday and Sunday step BACK to their
-/// own Friday.
+/// own Friday — and so does a holiday Monday, which is still that weekend.
 ///
 /// ONE definition, used by both the planner and the status page. They used
 /// to disagree — the planner walked forward to the next Friday, so a Saturday
 /// refresh planned the FOLLOWING weekend while the status page kept saying
 /// this one was "not planned" — and the two only agreed Monday to Friday.
+///
+/// The Monday is the point of the province: the window was always Friday
+/// plus two days, so the Thanksgiving 2026 plan stopped on Sunday Oct 11 and
+/// never looked at Monday Oct 12 (see `holidays.rs`).
 #[must_use]
-pub fn plan_window(today: NaiveDate) -> (NaiveDate, NaiveDate) {
+pub fn plan_window(
+    today: NaiveDate,
+    province: super::holidays::Province,
+) -> (NaiveDate, NaiveDate) {
     let weekday = i64::from(today.weekday().num_days_from_monday());
-    let friday = today - chrono::Duration::days(weekday - 4);
-    (friday, friday + chrono::Duration::days(2))
+    let friday = if weekday == 0 && province.holiday_on(today).is_some() {
+        today - chrono::Duration::days(3)
+    } else {
+        today - chrono::Duration::days(weekday - 4)
+    };
+    let monday = friday + chrono::Duration::days(3);
+    let end = if province.holiday_on(monday).is_some() {
+        monday
+    } else {
+        friday + chrono::Duration::days(2)
+    };
+    (friday, end)
 }
 
 /// Full month names, in order. Three-letter prefixes are the matching stems.

@@ -317,7 +317,7 @@ pub const FORECAST_FETCH_FAILED: &str =
 /// an outdoor row +2.0 for the fabricated "clear" it used to be handed.
 ///
 /// It also must not contain any word `compute_score` matches (see
-/// `weekend/mod.rs::compute_score`): "sunny", "clear", "warm", "cloudy",
+/// `weekend/score.rs::weather_points`): "sunny", "clear", "warm", "cloudy",
 /// "rain", "precipitation". A failure that scores rows is a failure that
 /// invents a fit.
 pub const WEATHER_UNAVAILABLE: &str = "⚠ Forecast unavailable";
