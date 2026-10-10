@@ -64,8 +64,8 @@ From a checkout, `bin/ab_test` is the smoke + parity harness over the *installed
 ### 1. Twitter Summarizer (`twitter`)
 
 ```bash
-twitter                  # Scrape live timeline & summarize
-twitter --use-cache      # Summarize cached tweets from last run
+twitter                  # Scrape live timeline & summarize (the only run that writes the store)
+twitter --use-cache      # Summarize cached tweets from last run (to a scratch dir, not the store)
 twitter --since 24h      # Fetch tweets from the last 24 hours
 twitter --fetch-only     # Collect and cache tweets without summarizing
 twitter --login          # Open browser window to sign in to x.com
@@ -75,6 +75,8 @@ twitter --debug          # Show browser window and verbose output
 - **Session Discovery**: Reads authenticated `auth_token` and `ct0` from any **Firefox-family** profile — Zen, Firefox, LibreWolf or Waterfox (`rust/src/ztools/twitter/cookies.rs:89`). Chrome is not read: a Chrome-only user is told to run `twitter --login`, not silently downgraded (`rust/src/ztools/twitter/native.rs:382`).
 - **Anti-Detect Headless Scraping**: Launches Camoufox to scroll the Following timeline and capture live GraphQL tweets.
 - **Semantic Clustering**: Clusters related tweets via local embeddings before prompt synthesis to create structured topic categories.
+- **Quality Gate**: An answer with repeated bullets, more bullets than tweets, or bullets mostly lacking the `(@handle | timestamp)` citation is rejected and the next model in the chain is tried (`rust/src/ztools/twitter/quality.rs`). Every model in the chain is served by the one Osaurus server, so with it down the run exits 1 and says so (`docs/ROADMAP.md T1`).
+- **Production vs scratch**: only a live fetch writes `~/Documents/twitter_summaries` (or `TWITTER_OUTPUT_DIR`), which the dashboard reads newest-first. `--json` and `--use-cache` runs write a fresh scratch directory and print where; `--md-out` still copies anywhere.
 
 ### 2. Weekend Planner (`weekend`)
 

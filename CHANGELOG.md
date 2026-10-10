@@ -6,6 +6,27 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## Unreleased — twitter summary quality
+
+### Fixed
+- **Repetition loops were saved as primary summaries.** The quality gate rejected an answer
+  only with no header AND no bullet. It now also rejects more than 2 exact-or-near duplicate
+  bullets, more bullets than input tweets, and bullets mostly lacking `(@handle | timestamp)`;
+  a rejected answer falls to the next model with the reason recorded
+  (`rust/src/ztools/twitter/quality.rs`).
+- **The summarizer decoded greedily.** It now sends temperature 0.1 and `frequency_penalty`
+  0.3 (`SUMMARY_SAMPLING`); every other call stays greedy (`llm::chat_with`). The prompt asks
+  for related tweets to be merged and no bullet repeated. Live effect unmeasured: ROADMAP T2.
+- **`--json` / `--use-cache` runs wrote the production store**, so a fixture run became the
+  dashboard's summary. Only a live fetch writes it now; the writer honours
+  `TWITTER_OUTPUT_DIR` like the readers. A `--json` source with no tweets, or no tweets at
+  all, is a refusal rather than a "Please provide the timeline" document.
+- **A whole-chain failure now names its cause**: every model is served by the one Osaurus
+  server (ROADMAP T1), exit 1.
+- **`**Period:**` printed local time labelled "UTC"**; it now carries the real offset.
+- **Tests that resolve `~` or render the live file-summary prompt** must take `TestEnv`
+  (audit gate 2).
+
 ## v3.5.0 — evaluation leaderboard category filtering, CSV export, family grouping, and regression alerts _(2026-10-09)_
 
 The theme: precision leaderboard filtering, standard data pipeline export, and automated CI regression enforcement.

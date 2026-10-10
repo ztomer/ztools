@@ -1281,8 +1281,10 @@ the case the escalation exists to serve.
 
 ## Decoding policy for the eval: greedy, decided 2026-08-12
 
-`ev` pins temperature to 0 (`EVAL_TEMPERATURE`). Production runs at 0.1, so this
-is deliberately NOT production-identical, and the reason is comparability: with
+`ev` pins temperature to 0 (`EVAL_TEMPERATURE`). The twitter summarizer runs at 0.1
+(see "Decoding policy for production" below; until 2026-10-10 this line claimed 0.1
+while `llm.rs` sent 0.0 on every production call), so this is deliberately NOT
+production-identical, and the reason is comparability: with
 sampling on, ornith scored 100% and then 0% on an unchanged `image_rename`
 across two runs, and a leaderboard built on that ranks the sampler.
 
@@ -1298,6 +1300,33 @@ What this means in practice:
 - ABSOLUTE scores are not a prediction of production quality.
 - Re-validate the winning model at temperature 0.1 before writing it into
   `best_models`, since that is the setting it will actually run under.
+
+
+## Decoding policy for production, decided 2026-10-10
+
+Every production call goes through `rust/src/ztools/llm.rs`. `chat` is greedy
+(`Sampling::GREEDY`: temperature 0, no penalty key on the wire); `chat_with` takes a
+per-task `Sampling`, and only the twitter summarizer uses it (`SUMMARY_SAMPLING` in
+`rust/src/ztools/twitter/mod.rs`: temperature 0.1, `frequency_penalty` 0.3).
+
+Why the summarizer differs: at temperature 0 the ~1B-active summarize model looped. One
+October run turned 43 tweets into 58 bullets, 35 of them duplicates, and it was saved
+as primary output because the old quality gate only rejected an answer with no header
+AND no bullet. The gate now rejects loops (`twitter/quality.rs`), so a loop costs a
+fallback rather than a bad summary; the sampling only makes one less likely.
+
+What the server accepts, read from the Osaurus 0.25.20 binary's strings (2026-10-10,
+no live request -- the GPU lock was held by peers): the OpenAI-path request decodes
+`temperature`, `top_p`, `top_k`, `min_p`, `frequency_penalty`, `presence_penalty`,
+`seed`, `stop`, `response_format`. `repetition_penalty` appears only as a
+`generation_config.json` field, NOT as a request key, so sending it would be silently
+dropped (the same failure mode as the Ollama `images` key above). The sampler carries
+`frequencyContextSize`/`presenceContextSize` beside the penalties, i.e. the penalty is
+windowed over recent tokens (mlx-swift-lm's default window is 20), which is why a small
+value does not fight the `(@handle | timestamp)` tokens every bullet repeats. The
+speculative (DFlash) path carries a "frequency_penalty needs per-step logits" string;
+whether that falls back to ordinary decoding or refuses was not measured.
+`docs/ROADMAP.md T2` is the live measurement.
 
 
 ## The weekend provenance ledger, read 2026-10-08

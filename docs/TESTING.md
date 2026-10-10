@@ -37,6 +37,11 @@ the lints.
   the repo, and a test that read one would be reading the developer's real profile.
 - **Outputs stay in `tmp`.** Every writer takes its directory (or honours
   `TWITTER_OUTPUT_DIR` / `WEEKEND_OUTPUT_DIR`), both of which `TestEnv` redirects.
+  `twitter::run_summary` takes its output directory as a REQUIRED argument: the only
+  production write is the CLI's `Destination::Production`, chosen for a live fetch
+  alone (`cli_ztools_twitter::destination_for`). `--json` and `--use-cache` write a
+  fresh scratch directory, never the store the dashboard reads newest-first -- a
+  two-tweet `--json` fixture run once became the summary it showed (2026-10-09).
 - **Data files the binary refuses to guess** (`conf/twitter.toml [fallback]`,
   `conf/eval_inputs.toml`, `conf/eval_vision.toml`) are passed to the code **by path**,
   resolved at compile time from `env!("CARGO_MANIFEST_DIR")` — never through `$HOME`. A
@@ -50,8 +55,17 @@ the lints.
      makes "you cannot add a path-reading variable without `TestEnv` knowing" a property
      of the system rather than of whoever writes the next test.
   2. `every_hazard_test_constructs_a_test_env` — a test that builds a `ZtoolsConfig` or
-     sets `record_signals: true` (both of whose defaults name `~/…`) must construct the
-     guard **in its own body**. Seams do not count, deliberately: a guard reached through
+     sets `record_signals: true` (both of whose defaults name `~/…`), that calls a
+     function RESOLVING the home (`dirs::home_dir()`, `twitter_store_dir()`,
+     `twitter_output_dir()`, `weekend_store_dir()`, `weekend_output_dir()`,
+     `debug_cache_path()`), or that renders the LIVE file-summary prompt (`live_root()`,
+     `excerpts()`, `render(FILE_SUMMARY_PROMPT…)`) must construct the guard **in its own
+     body**. The home resolvers joined the list on 2026-10-10 after a retired test was
+     found to have left `{"screen_name":"u","text":"t"}` in the real
+     `~/.twitter_summary_debug_cache.json`. The live render joined it the same day: it
+     resolves the home checkout while no peer sandbox is live and this checkout while one
+     is, so in a worktree whose listed files differ from the home checkout's, two renders
+     inside one test disagreed -- invisible in the home checkout, where both are the same. Seams do not count, deliberately: a guard reached through
      a helper is a guard the next test can call without.
   3. `no_test_names_a_fixed_directory_under_the_system_temp_dir` — `temp_dir().join(...)`
      with a fixed literal, which two `cargo test` runs on one Mac (or two agent sessions)
