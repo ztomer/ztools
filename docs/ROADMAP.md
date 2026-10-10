@@ -127,17 +127,6 @@ each one makes wrong.
   drops those three while keeping Kidchella and the Woodbridge Fall Fair.
 - **Blocked by:** a free slot on the GPU lock for the replay.
 
-### W5 — model-eval scores a weekend prompt production no longer sends
-
-- **Class:** a parallel copy of a prompt (engineering rule 9). `conf/models/*.toml`
-  `weekend_transient` / `weekend_fixed` carry their own event schema with the old weather
-  rule; production now asks for `place_kind` and labels from it (`weekend/setting.rs`).
-  Rankings for the weekend slots measure the old prompt.
-- **Why now:** the slot defaults in `[best_models]` are chosen by those rankings.
-- **Done when:** the eval tasks render the production structure prompt
-  (`phases::structure_system`) instead of a copy, and a test fails if they differ.
-- **Blocked by:** nothing.
-
 ## Phase M — what the eval records must mean what it says
 
 All Phase M items (`M1` through `M16`) have landed. No open work remains in this phase.

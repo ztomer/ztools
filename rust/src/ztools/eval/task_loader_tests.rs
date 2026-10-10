@@ -1,9 +1,10 @@
 use super::*;
 
 /// The Python table's 24 non-taxes rows plus the two added since
-/// (`summarize_injection`, `weekend_injection`, 2026-09-19). One number,
-/// three assertions.
-const ROSTER_ROWS: usize = 26;
+/// (`summarize_injection`, `weekend_injection`, 2026-09-19), less the three
+/// retired with the fixed-venue prompt (`weekend_fixed`, `weekend_fixed_mixed`,
+/// `detailed_json`, W5 2026-10-10). One number, three assertions.
+const ROSTER_ROWS: usize = 23;
 
 #[test]
 fn test_run_check_primitives() {
@@ -235,7 +236,7 @@ fn load_all_eval_tasks_without_dir_returns_the_roster_only() {
     assert_eq!(
         tasks.len(),
         ROSTER_ROWS,
-        "the Python TASKS table had 24 non-taxes rows; summarize_injection joined 2026-09-19"
+        "24 Python rows, +2 injection gates (2026-09-19), -3 fixed-venue rows (W5)"
     );
     assert_eq!(tasks[0].name, "weekend_transient");
     assert!(!tasks.iter().any(|t| t.name.starts_with("taxes_")));

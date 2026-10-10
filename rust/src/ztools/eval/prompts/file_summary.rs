@@ -143,9 +143,9 @@ pub const FILE_SUMMARY_GROUND_TRUTH: &[(&str, &[&str])] = &[
     ),
     (
         "conf/models/gemma.toml",
-        &["field mapping", "prompt schema"],
+        &["field mapping", "structured extraction"],
     ),
-    ("conf/models/qwen.toml", &["field mapping", "prompt schema"]),
+    ("conf/models/qwen.toml", &["field mapping", "taxes audit"]),
     ("docs/MODEL_QUIRKS.md", &["duckduckgo", "search engines"]),
     ("docs/TESTING.md", &["golden parity", "structural gates"]),
     ("rust/src/manifest.rs", &["leading tilde", "home directory"]),

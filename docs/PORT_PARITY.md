@@ -199,7 +199,7 @@ weekend store) or reclassified with the reason in the row. Only `test_llm.py`,
 | test_eval_run_integration_3.py | COVERED | tests/eval_runner.rs::consecutive_infra_failures_abandon_the_model_early |
 | test_eval_server_restart.py | DELETE | osaurus_one.sh/osascript restart plumbing retired, no Rust counterpart |
 | test_eval_task_sources.py | COVERED 2026-09-13 — `tasks_tests::the_source_is_the_prompt_the_model_was_shown` pins that every source-gated validator (summary, mixed summary, attribution, fabrication, injection) is fed the prompt as its source; `filename` is fed the raw input |
-| test_eval_tasks_core.py | COVERED 2026-09-13 — the task table is `eval/tasks.rs` (24 rows incl. `json`/`detailed_json` aliases), pinned row-for-row to the Python table (name, roles, `parse_json`, validator) by `tasks_tests.rs`; `_extract_items_from_text` (table/bullet fallback parser) was a `run_validate`-only helper with no roster consumer — retired |
+| test_eval_tasks_core.py | COVERED 2026-09-13 — the task table is `eval/tasks.rs`, pinned row-for-row to the Python table (name, roles, `parse_json`, validator) by `tasks_tests.rs` — less `weekend_fixed`, `weekend_fixed_mixed` and the `detailed_json` alias, retired 2026-10-10 (W5) with the fixed-venue prompt production never sends; the weekend rows now send the planner's own prompts (`tasks_weekend_tests.rs`); `_extract_items_from_text` (table/bullet fallback parser) was a `run_validate`-only helper with no roster consumer — retired |
 | test_eval_validate.py | COVERED | eval/validate.rs::all_detailed_scores_100 |
 | test_eval_watchdog.py | COVERED | eval/watchdog.rs::test_watchdog_detects_stall |
 | test_adversarial_tasks.py | COVERED | validators/adversarial.rs::test_validate_no_fabrication_catches_lures |

@@ -104,6 +104,10 @@ pub fn check_regression(
 }
 
 /// Categorizes an eval task name into its corresponding slot.
+///
+/// It classifies HISTORY, not the roster: `detailed_json` (and the
+/// `weekend_fixed*` rows the prefix catches) were retired in W5 but stay in
+/// `eval_history.json`, and an old run's json mean still has to be its json mean.
 #[must_use]
 pub fn task_slot(task: &str) -> Option<&'static str> {
     if task.starts_with("weekend_") || task == "json" || task == "detailed_json" {

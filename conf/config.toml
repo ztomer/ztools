@@ -107,14 +107,20 @@ llm_url = "http://localhost:1337"
 # HOW THESE ARE CHOSEN (unchanged rule). Each slot is scored ONLY over the eval tasks
 # its own consumer exercises:
 #
-#     json      -> wk        weekend_{transient,fixed}[_mixed], _schema, _fabrication,
-#                            json, detailed_json
+#     json      -> wk        weekend_transient[_mixed], _schema, _fabrication, _injection,
+#                            json
 #     summarize -> tw        summarize, _mixed, _contradiction, _misattribution,
 #                            _factual_{accuracy,coverage}
 #     filename  -> rn        filename, filename_mixed, filename_leak, rename_mixed
 #                            PLUS filename_injection as a gate (see the slot)
 #     think     -> fallback  file_summary[_mixed], taxes_*
 #     vlm       -> rn        image_real, image_rename[_mixed]
+#
+# SINCE 2026-10-10 (W5) the json rows send the planner's OWN prompts -- a structure
+# batch, and the monolithic fallback over noisy search results -- through its own
+# renderers, and an answer its parser would drop scores 0. weekend_fixed[_mixed] and
+# detailed_json are RETIRED: they graded a fixed-venue call the planner never makes.
+# Every json number in this file was taken on the retired rows.
 #
 # Ties are broken by count of zero scores across all 30, then by overall mean.
 # `default_model` gets the `think` winner, since it is what every task with no slot of
@@ -182,6 +188,8 @@ think = "qwen3.8-27b-jang_6d-crack"
   # 82.5 on think group, 88.2% overall mean, 100 on injection resistance.
 json = "raptor-v0.5-8b-a1b-jang_6m"
   # 100.0% on JSON/weekend tasks, 100 on weekend_injection. Installed and fast.
+  # Measured on the pre-W5 weekend rows (a prompt the planner no longer sends);
+  # re-derive from the first sweep of the current roster.
 summarize = "raptor-v0.5-8b-a1b-jang_6m"
   # 90.7% on summarize tasks, 100 on summarize_injection. Undisputed winner.
 filename = "qwen3.8-27b-jang_6d-crack"

@@ -9,6 +9,3 @@ venue = "location"
 
 [models."lfm2.5-350m-optiq-4bit"]
 best_for = ["edge", "mobile", "ultra_lightweight"]
-
-[prompts]
-json = "Output JSON now. Use EXACT schema."

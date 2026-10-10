@@ -9,6 +9,3 @@ venue = "location"
 
 [models."bonsai-2-27b-crack-ternary"]
 best_for = ["ternary", "experimental"]
-
-[prompts]
-json = "Output JSON now. Use EXACT schema."
