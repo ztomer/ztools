@@ -406,3 +406,18 @@ Isolate before debugging: `git stash push -- rust/src/ && cargo test --no-fail-f
 --lib oversize` on clean HEAD is the same four failures, or it is your bug. The
 environment-dependent half cannot be fixed from the test — it is the machine —
 so the discipline is `regression-isolate`, then re-run when the box settles.
+
+## A pin that renders through the live root and re-reads through another (2026-10-10)
+
+`file_summary_pins_tests.rs` rendered the content block through the LIVE
+wrappers (`excerpts()`, `render()`, `render_both()`), which resolve their root
+per call with `$HOME`'s checkout first, then re-read the rows from
+`CARGO_MANIFEST_DIR`. In the home checkout the two roots hold the same bytes, so
+the mismatch was invisible. From a git worktree whose listed files differ (here
+`conf/weekend.toml`), the truncation pin went red deterministically and the
+dedup pin intermittently -- a peer test's `TestEnv` redirects `$HOME` mid-run,
+so two live renders in one test can resolve different roots. The class: an
+assertion that compares two values read through two root resolutions. Both pins
+now render with `*_from(&repo_root())`, one root per test, as the file's own
+header says every non-live pin must.
+

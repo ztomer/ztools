@@ -22,7 +22,7 @@ use std::path::PathBuf;
 
 use super::file_summary::{
     FILE_SUMMARY_CONTENTS_SLOT, FILE_SUMMARY_EXCERPT_LINES, FILE_SUMMARY_GROUND_TRUTH, excerpt,
-    excerpts, excerpts_from, render, render_both, render_from,
+    excerpts, excerpts_from, render, render_both_from, render_from,
 };
 use super::{FILE_SUMMARY_FILE_LIST, FILE_SUMMARY_PROMPT, FILE_SUMMARY_PROMPT_MIXED};
 
@@ -368,8 +368,9 @@ fn the_rendered_prompt_stays_inside_its_stated_budget() {
 /// needs a root, and it is the same one the renderer resolved.
 #[test]
 fn truncation_is_stated_and_short_files_are_not_announced_as_cut() {
-    let block = excerpts().expect("the listed files are readable");
+    // ONE root for the block and the re-read (docs/TESTING.md, 2026-10-10).
     let root = repo_root();
+    let block = excerpts_from(&root).expect("the listed files are readable");
     let mut saw_cut = false;
     let mut saw_whole = false;
     for (i, row) in FILE_SUMMARY_FILE_LIST.lines().enumerate() {
@@ -478,10 +479,18 @@ fn the_content_block_sits_above_the_noise_marker() {
 /// is.
 #[test]
 fn one_content_block_serves_both_prompts() {
+    // ONE root for all three renders (docs/TESTING.md, 2026-10-10).
+    let root = repo_root();
     let (plain, mixed) =
-        render_both(FILE_SUMMARY_PROMPT, FILE_SUMMARY_PROMPT_MIXED).expect("renders");
-    assert_eq!(plain, render(FILE_SUMMARY_PROMPT).expect("renders"));
-    assert_eq!(mixed, render(FILE_SUMMARY_PROMPT_MIXED).expect("renders"));
+        render_both_from(&root, FILE_SUMMARY_PROMPT, FILE_SUMMARY_PROMPT_MIXED).expect("renders");
+    assert_eq!(
+        plain,
+        render_from(&root, FILE_SUMMARY_PROMPT).expect("renders")
+    );
+    assert_eq!(
+        mixed,
+        render_from(&root, FILE_SUMMARY_PROMPT_MIXED).expect("renders")
+    );
     // The block is identical, and each prompt keeps exactly one copy of it: two
     // copies would mean the same files read and paid for twice in the request.
     let occurrences = |text: &str| text.matches("--- BEGIN ").count();
