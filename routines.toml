@@ -25,7 +25,10 @@ description = "weekend planner: scrape, filter to the home region, draft with a 
 # every command through `sh -c`, so the expansion happens where the reader
 # already looks, and the two halves cannot disagree about where plans live.
 command = "/opt/homebrew/bin/ztools weekend-plan --md-out \"${WEEKEND_OUTPUT_DIR:-$HOME/Documents/weekend_plans}/weekend_plan_latest.md\""
-schedule = "weekly on mon at 08:00"
+# Thursday 18:00, as the comment above states. It read `weekly on mon at
+# 08:00` while this block said Thursday evening; the two are now pinned
+# together by rust/tests/routines_manifest.rs.
+schedule = "weekly on thu at 18:00"
 # A full run scrapes the web and drives a 35B model; the 120s default would
 # kill it and report a false failure.
 timeout_ms = 1800000
