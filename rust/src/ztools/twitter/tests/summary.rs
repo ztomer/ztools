@@ -151,7 +151,7 @@ fn test_run_summary_empty_fallback() {
 fn test_run_summary_merges_thinking_into_analysis_section() {
     let env = TestEnv::new();
     let base_url = stub_server(
-        r###"{"choices": [{"message": {"content": "## Executive Summary\nKey point<thinking>why it matters</thinking>"}}]}"###,
+        r###"{"choices": [{"message": {"content": "## Executive Summary\nKey point\n\n## Topic\n- a point (@routine_user | 14:00)<thinking>why it matters</thinking>"}}]}"###,
     );
     let output = tempfile::tempdir().unwrap();
     let cfg = sandboxed_config(&env.root().join("cfg"));

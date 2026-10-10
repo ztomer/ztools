@@ -14,7 +14,7 @@ pub mod native;
 pub mod quality;
 mod rejected;
 pub mod repair;
-pub use repair::{Answer, MIN_REPAIRED_BULLETS, handle_model_output};
+pub use repair::{Answer, MIN_BULLETS, handle_model_output};
 pub mod session;
 
 pub use browser::{BrowserCollector, CamoufoxConfig, MockBrowserCollector};

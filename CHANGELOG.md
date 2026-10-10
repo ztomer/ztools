@@ -17,10 +17,19 @@ This file starts at v2.2.0 — earlier history is in git.
   the gate judges it: a shortened citation resolves to the one tweet it names and is
   rewritten in full; bullets citing nothing given and a loop's recited repeats are
   dropped; an answer cut at the length limit keeps its whole lines. More than a third
-  of citations naming nothing is still a rejection (the model is inventing), and a
-  repaired answer must keep 5 verified bullets (or half the tweets, if fewer). The
+  of citations naming nothing is still a rejection (the model is inventing). The
   saved summary says what was repaired. The loop-rate measurement is in
   `docs/MODEL_QUIRKS.md`.
+- **A citation in brackets is a citation.** The live run's answer led every bullet
+  with `**[@handle | stamp]**` and was rejected whole ("69 of 69 bullets lack the
+  attribution"); the fallback mixed `[@h | ts)`. The repair rewrites any bracketing to
+  `(@handle | timestamp)`. Replayed on the day's six rejected answers, five are
+  recovered (7 to 39 verified bullets each).
+- **A run-on bullet goes, and every answer has a floor.** A bullet citing more than 3
+  tweets is unrelated claims run together (no accepted summary of 300+ cites more
+  than 3; the fallback's one bullet cited 19), and is dropped. Every answer, repaired
+  or not, must keep 5 bullets, or as many as could cite every tweet 3 at a time when
+  that is fewer: one bullet for 43 tweets was being saved as a summary.
 - **`TWITTER_TEMPERATURE`** overrides the summary's temperature for one run, and the
   weekend planner's text phases decode on their own constant instead of borrowing the
   summary's.

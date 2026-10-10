@@ -186,7 +186,15 @@ fn too_few_verified_bullets_is_still_a_rejection() {
     for _ in 0..10 {
         s.push_str(&bullet("alice", "Sat Oct 10 09:46:22 +0000 2026", "fact"));
     }
-    let why = crate::ztools::twitter::handle_model_output(&s, &given(), false).unwrap_err();
+    // Eighteen tweets: the floor is five, where the eight of `given` make it three.
+    let mut sources = given();
+    sources.extend((0..10).map(|i| {
+        (
+            format!("extra{i}"),
+            format!("Sat Oct 10 11:{i:02}:00 +0000 2026"),
+        )
+    }));
+    let why = crate::ztools::twitter::handle_model_output(&s, &sources, false).unwrap_err();
     assert!(why.contains("3 verified bullet"), "{why}");
 }
 
@@ -200,4 +208,71 @@ fn a_cut_answer_is_saved_saying_it_was_cut() {
         "{:?}",
         answer.repairs
     );
+}
+
+/// A citation in brackets is a citation. On 2026-10-10 raptor led every bullet
+/// with `**[@handle | stamp]** --` and lost the whole answer to "69 of 69
+/// bullets lack the attribution"; the fallback mixed `[@h | ts)`. Each names a
+/// given tweet, so the repair writes it in the one form the gate reads.
+#[test]
+fn a_bracketed_citation_is_rewritten_not_rejected() {
+    let g = given();
+    let answer = "## Topic\n\n\
+        - **[@alice | Sat Oct 10 09:46:22 +0000 2026]** -- a thing happened\n\
+        - [@bob | Sat Oct 10 10:32) said another\n\
+        - Carol noted it (@carol | Sat Oct 10 13:30:45 +0000 2026)\n";
+    let fixed = repair(answer, &g).expect("every citation names a given tweet");
+    assert!(
+        fixed
+            .body
+            .contains("- (@alice | Sat Oct 10 09:46:22 +0000 2026) -- a thing happened"),
+        "{}",
+        fixed.body
+    );
+    assert!(
+        fixed
+            .body
+            .contains("- (@bob | Sat Oct 10 10:32:00 +0000 2026) said another"),
+        "{}",
+        fixed.body
+    );
+    assert_empty!(fixed.notes);
+    let bullets = super::super::quality::bullets(&fixed.body);
+    assert!(
+        bullets
+            .iter()
+            .all(|b| super::super::quality::is_attributed(b)),
+        "{bullets:?}"
+    );
+}
+
+/// A bullet citing more than three tweets is several unrelated claims run
+/// together (the fallback's 19-citation single bullet); no accepted summary of
+/// 300+ cites more than three in one bullet. It goes, and the note says so.
+#[test]
+fn a_run_on_bullet_is_dropped() {
+    let g = given();
+    let answer = "## Topic\n\n\
+        - one (@alice | Sat Oct 10 09:46:22 +0000 2026)\n\
+        - two (@bob | Sat Oct 10 10:32:00 +0000 2026), (@carol | Sat Oct 10 13:30:45 +0000 2026), \
+          (@dave | Sat Oct 10 14:02:53 +0000 2026)\n\
+        - run on (@erin | Fri Oct 09 22:51); then (@frank | Sat Oct 10 00:49); \
+          then (@grace | Sat Oct 10 07:54:52 +0000 2026); then (@grace | Sat Oct 10 07:54:59 +0000 2026)\n";
+    let fixed = repair(answer, &g).expect("every citation names a given tweet");
+    assert!(!fixed.body.contains("run on"), "{}", fixed.body);
+    assert!(fixed.body.contains("- two"), "three citations is a bullet");
+    assert_eq!(
+        fixed.notes,
+        vec!["dropped 1 bullet(s) citing more than 3 tweets (unrelated claims run together)"]
+    );
+}
+
+/// The floor is the timeline's, not the repair's: one clean bullet for eight
+/// tweets is not a summary of them, repaired or not.
+#[test]
+fn one_clean_bullet_for_many_tweets_is_rejected() {
+    let g = given();
+    let answer = "## Topic\n\n- one (@alice | Sat Oct 10 09:46:22 +0000 2026)\n";
+    let why = handle_model_output(answer, &g, false).expect_err("one bullet for eight tweets");
+    assert!(why.contains("too few"), "{why}");
 }

@@ -15,12 +15,29 @@
 //! given is inventing, and is rejected rather than trimmed.
 
 use std::collections::HashSet;
+use std::sync::LazyLock;
 
-use super::quality::{CITATION, drop_bullets, drop_recited};
+use regex::Regex;
+
+use super::quality::{drop_bullets, drop_recited};
+
+/// A citation in any bracketing the models write: `(@h | ts)`, `[@h | ts]`,
+/// either mixed (`[@h | ts)`), optionally bold. The repair rewrites each to the
+/// one form the gate reads, `(@h | ts)`.
+static ANY_CITATION: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?:\*\*)?[\[(]@([A-Za-z0-9_]+)\s*\|\s*([^)\]\n]+?)\s*[)\]](?:\*\*)?")
+        .expect("valid regex")
+});
 
 /// The shortest timestamp prefix that still names a tweet: down to the minute
 /// (`Sat Oct 10 09:46`).
 const MIN_STAMP_PREFIX: usize = 16;
+
+/// Most tweets one bullet may cite.
+///
+/// More is unrelated claims run together: across 300+ accepted summaries (2026-07 to 2026-10) no bullet cited more
+/// than three, and the fallback's rejected blob cited 19 in one.
+pub const MAX_CITES_PER_BULLET: usize = 3;
 
 /// What survives a repair, and what the repair did.
 #[derive(Debug)]
@@ -63,13 +80,13 @@ pub fn resolve<'a>(handle: &str, stamp: &str, sources: &'a [(String, String)]) -
 pub fn repair(summary: &str, sources: &[(String, String)]) -> Result<Repaired, String> {
     let mut total = 0usize;
     let mut unresolved = 0usize;
-    let body = CITATION
+    let body = ANY_CITATION
         .replace_all(summary, |cap: &regex::Captures<'_>| {
             total += 1;
             resolve(&cap[1], &cap[2], sources).map_or_else(
                 || {
                     unresolved += 1;
-                    cap[0].to_string()
+                    format!("(@{} | {})", &cap[1], cap[2].trim())
                 },
                 |full| format!("(@{} | {full})", &cap[1]),
             )
@@ -92,6 +109,13 @@ pub fn repair(summary: &str, sources: &[(String, String)]) -> Result<Repaired, S
             "dropped {invented} bullet(s) citing no tweet the model was given"
         ));
     }
+    let (body, run_on) = drop_bullets(&body, |cites| cites.len() <= MAX_CITES_PER_BULLET);
+    if run_on > 0 {
+        notes.push(format!(
+            "dropped {run_on} bullet(s) citing more than {MAX_CITES_PER_BULLET} tweets \
+             (unrelated claims run together)"
+        ));
+    }
     let (body, recited) = drop_recited(&body);
     if recited > 0 {
         notes.push(format!(
@@ -110,20 +134,21 @@ pub struct Answer {
     pub repairs: Vec<String>,
 }
 
-/// Fewest verified bullets a REPAIRED answer may keep: this many, or half the
-/// tweets it was given when that is fewer.
+/// Fewest verified bullets an answer may keep: this many, or the fewest that
+/// could cite every tweet it was given ([`MAX_CITES_PER_BULLET`] each).
 ///
-/// An answer that needed no repair is judged by the gate alone: a quiet
-/// timeline can honestly make three bullets. One that looped lost the
-/// timeline's tail, and seven verified bullets is what the 2026-10-10 loops
-/// kept.
-pub const MIN_REPAIRED_BULLETS: usize = 5;
+/// A quiet timeline makes few bullets, and the second bound allows for that.
+/// No accepted summary since 2026-08-20 has fewer than seven; seven verified
+/// bullets is what the 2026-10-10 loops kept after repair. One clean bullet
+/// for 43 tweets (the fallback's run-on blob) is not a summary of them.
+pub const MIN_BULLETS: usize = 5;
 
 /// One model attempt's post-call branch: split thinking, repair, gate, merge.
 ///
 /// The repair (`repair.rs`) removes only what is verifiably wrong -- a bullet
-/// whose citation names no given tweet, a bullet re-citing tweets already
-/// cited (a loop's repeats) -- and rewrites shortened citations to their full
+/// whose citation names no given tweet, one citing more than
+/// [`MAX_CITES_PER_BULLET`], one re-citing tweets already cited (a loop's
+/// repeats) -- and rewrites shortened citations to their full
 /// form. The gate then judges the REPAIRED body; an appended `## Analysis`
 /// never faces it. `cut` says the server stopped the answer at the token limit
 /// and the caller kept only its whole lines. Port of `_summarize_with_model`'s
@@ -159,10 +184,14 @@ pub fn handle_model_output(
         return Err(quality.rejections.join("; "));
     }
     let kept = super::quality::bullets(&repaired.body).len();
-    if !repairs.is_empty() && kept < MIN_REPAIRED_BULLETS.min(processed.div_ceil(2)) {
+    if kept < MIN_BULLETS.min(processed.div_ceil(MAX_CITES_PER_BULLET)) {
+        let after = if repairs.is_empty() {
+            String::new()
+        } else {
+            format!(" after repair ({})", repairs.join("; "))
+        };
         return Err(format!(
-            "{kept} verified bullet(s) left after repair ({}): too few to stand for the timeline",
-            repairs.join("; ")
+            "{kept} verified bullet(s){after} for {processed} tweets: too few to stand for the timeline"
         ));
     }
     Ok(Answer {
