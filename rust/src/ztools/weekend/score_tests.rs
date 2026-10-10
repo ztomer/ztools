@@ -162,3 +162,62 @@ fn a_perfect_row_scores_exactly_the_ceiling() {
     perfect.weather = "outdoor".into();
     close(compute_score(&perfect, "sunny clear", FAMILY), MAX_SCORE);
 }
+
+const SAT_CLEAR_SUN_WET: &str = "Daily Forecast:\n\
+2026-10-09: 19.2°C, Clear (0.0mm)\n\
+2026-10-10: 15.2°C, Clear (0.0mm)\n\
+2026-10-11: 16.7°C, Precipitation (4.1mm)\n\
+2026-10-12: 22.0°C, Clear (0.0mm)";
+
+fn on(day: &str, start: &str, end: &str) -> WeekendEvent {
+    let mut row = labelled("outdoor", "");
+    day.clone_into(&mut row.day);
+    start.clone_into(&mut row.start_date);
+    end.clone_into(&mut row.end_date);
+    row
+}
+
+/// W1. Each row is judged against the forecast for the day(s) it is on. One
+/// wet Sunday used to make the whole weekend "mixed" and every row neutral, so
+/// on 2026-10-10 the labels moved no score at all.
+#[test]
+fn a_row_is_judged_by_the_forecast_for_its_own_day() {
+    let saturday = on("Saturday", "2026-10-10", "2026-10-10");
+    let sunday = on("Sunday", "2026-10-11", "2026-10-11");
+    close(weather_points(&saturday, SAT_CLEAR_SUN_WET), 2.0);
+    close(weather_points(&sunday, SAT_CLEAR_SUN_WET), 0.0);
+    // No dates: the day name decides.
+    close(
+        weather_points(&on("Sunday", "", ""), SAT_CLEAR_SUN_WET),
+        0.0,
+    );
+    close(weather_points(&on("Sat", "", ""), SAT_CLEAR_SUN_WET), 2.0);
+
+    let mut rows = vec![sunday, saturday];
+    apply_scores(&mut rows, SAT_CLEAR_SUN_WET, &[]);
+    assert_eq!(
+        rows[0].start_date, "2026-10-10",
+        "Saturday's outdoor event ranks first"
+    );
+}
+
+/// A row open on several days -- a run of dates, a year-round venue, a day
+/// that names no weekday -- takes the best of them: the family can pick it.
+#[test]
+fn a_row_on_several_days_takes_the_best_one() {
+    close(
+        weather_points(&on("", "2026-10-10", "2026-10-11"), SAT_CLEAR_SUN_WET),
+        2.0,
+    );
+    close(
+        weather_points(&on("Fri-Sun", "", ""), SAT_CLEAR_SUN_WET),
+        2.0,
+    );
+    close(
+        weather_points(&on("This Weekend", "", ""), SAT_CLEAR_SUN_WET),
+        2.0,
+    );
+    let all_wet = "Daily Forecast:\n2026-10-10: 9.0°C, Precipitation (3.0mm)\n\
+2026-10-11: 8.0°C, Precipitation (6.0mm)";
+    close(weather_points(&on("Year-Round", "", ""), all_wet), 0.0);
+}

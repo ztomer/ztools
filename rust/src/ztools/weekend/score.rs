@@ -18,14 +18,18 @@
 //!   both, set by the structure phase under `WEATHER_RULE`) against the
 //!   forecast. An outdoor row fits a clear forecast (2) and not a wet one (0);
 //!   "both" fits a clear one (2) and survives a wet one (1); an indoor row is
-//!   weather-proof (1). A row with no label, or a forecast that is missing or
-//!   mixed, cannot be judged and gets the neutral 1 -- the same honesty as an
-//!   unjudged age range. The port used to read the DESCRIPTION here, contrary
+//!   weather-proof (1). A row with no label, or no forecast, cannot be judged
+//!   and gets the neutral 1 -- the same honesty as an unjudged age range.
+//!   Each row is judged by the forecast for ITS day(s) -- its dates, else the
+//!   weekdays its `day` names, else every day -- taking the best: one wet
+//!   Sunday used to make the whole weekend "mixed" and every row neutral. The port used to read the DESCRIPTION here, contrary
 //!   to this doc and to the Python original (`item["weather"]`): "sunny
 //!   picnic" earned the clear-sky bonus and an "outdoor"-labelled fair whose
 //!   blurb never said "outdoor" earned nothing.
 //!
 //! Price is deliberately absent: a price is not a fit, and free is never worse.
+
+use chrono::{Datelike, NaiveDate, Weekday};
 
 use super::WeekendEvent;
 
@@ -96,17 +100,99 @@ fn forecast_of(weather_str: &str) -> Forecast {
     }
 }
 
-/// Weather fit, 0 to 2, from the row's LABEL and the forecast. Anything but
-/// "indoor", "outdoor" or "both" is an unknown label and scores
-/// [`WEATHER_NEUTRAL`], as does an unknown forecast.
-#[must_use]
-pub fn weather_points(ev: &WeekendEvent, weather_str: &str) -> f32 {
-    let label = ev.weather.trim().to_lowercase();
-    match (label.as_str(), forecast_of(weather_str)) {
+/// Weather fit for one label under one day's (or the whole) forecast.
+fn fit(label: &str, forecast: Forecast) -> f32 {
+    match (label, forecast) {
         ("outdoor" | "both", Forecast::Clear) => 2.0,
         ("outdoor", Forecast::Wet) => 0.0,
         _ => WEATHER_NEUTRAL,
     }
+}
+
+/// The forecast day by day, from the fetcher's `YYYY-MM-DD: …` lines. Empty
+/// when the string carries none (a missing forecast, or a bare summary).
+fn daily(weather_str: &str) -> Vec<(NaiveDate, Forecast)> {
+    weather_str
+        .lines()
+        .filter_map(|line| {
+            let (date, rest) = line.trim().split_once(':')?;
+            let date = NaiveDate::parse_from_str(date.trim(), "%Y-%m-%d").ok()?;
+            Some((date, forecast_of(rest)))
+        })
+        .collect()
+}
+
+fn weekday(token: &str) -> Option<Weekday> {
+    let t = token.to_lowercase();
+    let prefix = t.get(..3)?;
+    ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        .iter()
+        .position(|d| *d == prefix)
+        .and_then(|i| Weekday::try_from(u8::try_from(i).ok()?).ok())
+}
+
+/// The weekdays `day` names: "Saturday", "Sat & Sun", or a range "Fri-Sun".
+fn weekdays_named(day: &str) -> Vec<Weekday> {
+    let named: Vec<Weekday> = day
+        .split(|c: char| !c.is_alphabetic())
+        .filter_map(weekday)
+        .collect();
+    if let [from, to] = named[..]
+        && day.contains('-')
+    {
+        let mut run = vec![from];
+        let mut d = from;
+        while d != to {
+            d = d.succ();
+            run.push(d);
+        }
+        return run;
+    }
+    named
+}
+
+/// The forecast days a row is on: its dates, else the weekdays it names,
+/// else every day.
+fn row_days(ev: &WeekendEvent, days: &[NaiveDate]) -> Vec<NaiveDate> {
+    let year = days.first().map_or(2026, Datelike::year);
+    let start = super::dates::parse_any_date(&ev.start_date, year);
+    let end = super::dates::parse_any_date(&ev.end_date, year).or(start);
+    if let (Some(start), Some(end)) = (start, end) {
+        let on: Vec<NaiveDate> = days
+            .iter()
+            .copied()
+            .filter(|d| (start..=end).contains(d))
+            .collect();
+        if !on.is_empty() {
+            return on;
+        }
+    }
+    let named = weekdays_named(&ev.day);
+    let on: Vec<NaiveDate> = days
+        .iter()
+        .copied()
+        .filter(|d| named.contains(&d.weekday()))
+        .collect();
+    if on.is_empty() { days.to_vec() } else { on }
+}
+
+/// Weather fit, 0 to 2: the row's LABEL against the forecast for its day(s).
+///
+/// The best of its days counts. Anything but "indoor", "outdoor" or "both" is
+/// an unknown label and scores [`WEATHER_NEUTRAL`], as does no forecast.
+#[must_use]
+pub fn weather_points(ev: &WeekendEvent, weather_str: &str) -> f32 {
+    let label = ev.weather.trim().to_lowercase();
+    let days = daily(weather_str);
+    if days.is_empty() {
+        return fit(&label, forecast_of(weather_str));
+    }
+    let dates: Vec<NaiveDate> = days.iter().map(|(d, _)| *d).collect();
+    row_days(ev, &dates)
+        .iter()
+        .filter_map(|d| days.iter().find(|(day, _)| day == d))
+        .map(|(_, forecast)| fit(&label, *forecast))
+        .fold(0.0, f32::max)
 }
 
 /// The row's fit, 0 to [`MAX_SCORE`].

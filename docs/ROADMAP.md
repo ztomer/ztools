@@ -92,19 +92,6 @@ plan anymore; this file is.
 Found while fixing the weather labels (2026-10-10). Ranked by how much of the plan
 each one makes wrong.
 
-### W1 — one wet day makes every row's weather fit neutral
-
-- **Class:** a per-day fact judged once for the whole weekend. `score.rs::forecast_of`
-  reads the forecast as Clear, Wet or Unknown for ALL days, and "clear on some days and
-  wet on others" is Unknown, so every label scores the neutral 1. On 2026-10-10 Sunday
-  alone had rain, and the labels the structure phase now gets right moved no score.
-- **Why now:** the labels are now right, so the score is the only thing between them and the ranking.
-- **Done when:** a row's weather points come from the forecast for the day(s) it is on
-  (its `day` or dates), a year-round row takes the best day, and a `score_tests.rs` case
-  with a Saturday-clear, Sunday-wet forecast ranks an outdoor Saturday event above an
-  outdoor Sunday one.
-- **Blocked by:** nothing.
-
 ### W2 — the other fields fill placeholders the way the label did
 
 - **Class:** C4 (a field the model fills because empty reads as failure). The weather

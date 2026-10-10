@@ -25,6 +25,11 @@ This file starts at v2.2.0 — earlier history is in git.
   2026-10-10 run that fell back drew "—" for every event. It now sends the
   structure phase's own system prompt (`phases::structure_system`) and the
   activity rule, so the two cannot drift.
+- **One wet day made every row's weather fit neutral.** The score read the
+  forecast once for the whole weekend, and "clear Saturday, wet Sunday" was
+  "mixed", so no label moved any score. Each row is now judged by the forecast
+  for its own day(s) -- its dates, else the weekdays it names, else every day --
+  taking the best, so an outdoor Saturday event outranks an outdoor Sunday one.
 - **The fixed table's weather column was blank.** The curated venues were
   built with an empty label. Each now states where it happens (a required
   field), so a trampoline park reads indoor and a conservation area outdoor.
