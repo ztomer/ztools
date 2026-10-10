@@ -90,9 +90,12 @@ jobs:
         with:
           tool: ${{ steps.ci_tools.outputs.tools }}
 
+      # The version is .python-version's, the file local tooling reads too: a
+      # literal here stayed at 3.14 after the machine moved to 3.15, so CI
+      # judged the Python tools on a version the gate never ran.
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.14"
+          python-version-file: .python-version
 
       # pytest is what `python3 -m pytest tools/tests -q` -- a .gatesrc step --
       # runs, and the gate's manifest does not name it: the manifest lists the

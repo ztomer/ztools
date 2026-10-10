@@ -1,0 +1,8 @@
+# Every process cargo starts for this crate -- test binaries, the binaries
+# integration tests spawn, `cargo run` -- sees HOME as rust/target/test-home,
+# never the operator's real home. Tests that forgot `TestEnv` used to write
+# fixtures into ~/Documents/twitter_summaries; now they cannot reach it.
+# `rust/tests/test_home_is_sandboxed.rs` fails if this stops holding. A live
+# run uses the installed binary (`./install.sh`), which this does not touch.
+[env]
+HOME = { value = "rust/target/test-home", relative = true, force = true }

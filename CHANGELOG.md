@@ -16,6 +16,12 @@ This file starts at v2.2.0 — earlier history is in git.
   the routines Settings window (the manifest's new `[settings]` command).
 
 ### Fixed
+- **Test runs wrote fixtures into the operator's real store** (`@cached_user` and
+  `@ai_researcher` summaries, a `{"screen_name":"u"}` debug cache). `.cargo/config.toml` now
+  points `HOME` at `rust/target/test-home` for every process cargo starts, so a test that
+  forgets `TestEnv` cannot reach `~`; `rust/tests/test_home_is_sandboxed.rs` fails if it can.
+- **CI ran the Python tools on 3.14 while the machine moved to 3.15.** CI now reads
+  `.python-version`, the file local tooling reads.
 - **Repetition loops were saved as primary summaries.** The quality gate rejected an answer
   only with no header AND no bullet. It now also rejects more than 2 exact-or-near duplicate
   bullets, more bullets than input tweets, and bullets mostly lacking `(@handle | timestamp)`;
