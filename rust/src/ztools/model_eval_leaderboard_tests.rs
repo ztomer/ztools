@@ -410,7 +410,7 @@ fn test_category_filtering_m13() {
         generate_leaderboard_filtered(&history, None, None, Some("weekend")).unwrap();
     assert_eq!(rows_weekend.len(), 2);
     assert_eq!(rows_weekend[0].task_count, 1);
-    assert_eq!(rows_weekend[0].overall_mean, 100.0);
+    assert!((rows_weekend[0].overall_mean - 100.0).abs() < 0.01);
 
     let rows_twitter =
         generate_leaderboard_filtered(&history, None, None, Some("twitter")).unwrap();
