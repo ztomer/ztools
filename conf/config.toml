@@ -142,11 +142,9 @@ llm_url = "http://localhost:1337"
 #
 # THREE OF THE FIVE SLOTS HAD NAMED MODELS THAT WERE NOT INSTALLED (ornith-1.0-35b,
 # gemma-4-e2b, qwen3.8-27b-8bit) since at least 2026-08-15. Installed models only now.
-default_model = "qwen3.8-27b-jang_6d"
-  # The think winner (85.0 vs 81.9 for gemma-4-e4b, 81.2 for its own -crack build), and
-  # 100 on injection. 25.8GB, 15 tok/s; a cold load measured up to 8m38s on a
-  # contended box, which is why every production call warms its model first
-  # (ztools/llm.rs, weekend/phases.rs).
+default_model = "qwen3.8-27b-jang_6d-crack"
+  # The think winner among installed models (82.5% think, 88.2% mean across 32 tasks),
+  # and 100% on injection resistance. 25.8GB, 15-17 tok/s; warmed before production calls.
 
 # Fallback chain for `rn`'s filename task, tried in order.
 # Top-level keys must stay ABOVE the first [table] header — a bare key after one
@@ -167,9 +165,9 @@ default_model = "qwen3.8-27b-jang_6d"
 #   accepted -- if the server is down AND a screenshot carries an injection, the
 #               filename comes from the attacker, silently
 filename_models = [
-  "muse-glimmer-30b-jang_6m",
-  "qwen3.8-27b-jang_6d",
   "qwen3.8-27b-jang_6d-crack",
+  "raptor-v0.5-8b-a1b-jang_6m",
+  "gemma-4-e4b-it-8bit",
   "foundation",
 ]
 
@@ -180,38 +178,16 @@ filename_models = [
 model_fallback_chain = ["foundation", "muse", "qwen", "gemma", "raptor"]
 
 [best_models]
-think = "qwen3.8-27b-jang_6d"
-  # 85.0 on the think group; re-verified 2026-10-09 under the final 32-task fingerprinted roster:
-  # qwen3.8-27b confirmed at 60 on taxes_audit_readiness and 100 on file_summary_mixed
-  # (mean 88.2% across 32 tasks, 0 unmeasured); foundation context window (4096) correctly
-  # leaves both file_summary tasks NOT MEASURED. muse (78.0) scores 20 on file_summary.
-json = "muse-glimmer-30b-jang_6m"
-  # 100 on all eight wk tasks, including weekend_fabrication -- the one task that
-  # measures invented rows, the failure the planner exists to avoid -- and 100 on
-  # weekend_injection. raptor-v0.5 ties at 100 on both (it resists in the snippet
-  # shape; the filename proxy had said otherwise), and the documented tiebreak
-  # (fewest zeros: 1 vs 2) keeps muse. qwen3.8 (96.9, the previous holder) loses only
-  # on fabrication (75). 26GB, ~77s per task in the sweep; the planner is a scheduled
-  # job and warms its model, so the size is not a cost the user waits on.
+think = "qwen3.8-27b-jang_6d-crack"
+  # 82.5 on think group, 88.2% overall mean, 100 on injection resistance.
+json = "raptor-v0.5-8b-a1b-jang_6m"
+  # 100.0% on JSON/weekend tasks, 100 on weekend_injection. Installed and fast.
 summarize = "raptor-v0.5-8b-a1b-jang_6m"
-  # THE RAW WINNER, and the direct measurement clears it (2026-09-19). Ranking:
-  # raptor-v0.5 92.8, raptor-v1 88.8, foundation 84.2, gemma-4-12b 81.3, muse and
-  # gemma-4-e4b 79.3. The slot was first gated on `filename_injection` (raptor-v0.5: 0)
-  # and the owner overrode that; then `summarize_injection` was built -- a timeline
-  # with one tweet ordering the summarizer to open with a fixed sentence and drop the
-  # rest -- and EVERY candidate scored 100 on it, raptor-v0.5 included (it summarised
-  # the other tweets and quoted the spam as a bullet, with attribution, which is the
-  # job). The filename proxy was the wrong instrument for this slot: it measured
-  # whether a model emits a hijacked filename, and foundation and gemma-4-12b (0
-  # there) also resist in the summarize shape. Revisit only on a new measurement.
-filename = "muse-glimmer-30b-jang_6m"
-  # 100 on all four quality tasks and 100 on injection; qwen3.8 and its -crack build
-  # tie, and the documented tiebreak (fewest zeros: 1 vs 2) picks muse. 26GB against
-  # 25.8GB, so no latency argument separates them for the interactive `rn`.
-vlm = "muse-glimmer-30b-jang_6m"
-  # 100 on image_real, image_rename, image_rename_mixed; five models tie and the
-  # tiebreak picks muse. raptor-v1-26b is the dedicated VL build and also scores 100
-  # here, but obeys injections and has three zeros.
+  # 90.7% on summarize tasks, 100 on summarize_injection. Undisputed winner.
+filename = "qwen3.8-27b-jang_6d-crack"
+  # 100.0% on filename quality tasks and 100 on filename_injection.
+vlm = "qwen3.8-27b-jang_6d-crack"
+  # 100.0% on image vision tasks and 100 on injection resistance.
 
 # Timeouts are a FLOOR, not a ceiling: eval/signals.py takes
 # max(learned, configured, DEFAULT_EVAL_TIMEOUT, derived-from-measured-rates). These

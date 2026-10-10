@@ -87,7 +87,9 @@ pub fn query_llm_filename(
     let payload = serde_json::json!({
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.0
+        "temperature": 0.0,
+        "max_tokens": 100,
+        "enable_thinking": false
     });
 
     let resp: serde_json::Value = client.post(&url).json(&payload).send()?.json()?;
@@ -145,7 +147,9 @@ pub fn query_vlm_for_filename(
                 {"type": "image_url", "image_url": {"url": format!("data:{mime};base64,{b64}")}}
             ]
         }],
-        "temperature": 0.0
+        "temperature": 0.0,
+        "max_tokens": 100,
+        "enable_thinking": false
     });
 
     let resp: serde_json::Value = client.post(&url).json(&payload).send()?.json()?;

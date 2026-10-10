@@ -90,6 +90,15 @@ pub fn resolve_weekend_model(base_url: &str, preferred_model: &str) -> String {
         return matched.clone();
     }
 
+    for fallback_family in &["raptor", "qwen", "gemma"] {
+        if let Some(matched) = models
+            .iter()
+            .find(|m| m.to_lowercase().contains(fallback_family))
+        {
+            return matched.clone();
+        }
+    }
+
     models
         .first()
         .cloned()

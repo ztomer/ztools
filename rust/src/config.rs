@@ -209,16 +209,16 @@ fn default_twitter_model() -> String {
     "raptor-v0.5-8b-a1b-jang_6m".to_string()
 }
 fn default_weekend_model() -> String {
-    "muse-glimmer-30b-jang_6m".to_string()
+    "raptor-v0.5-8b-a1b-jang_6m".to_string()
 }
 fn default_image_renamer_model() -> String {
-    "muse-glimmer-30b-jang_6m".to_string()
+    "qwen3.8-27b-jang_6d-crack".to_string()
 }
 fn default_image_renamer_vlm_model() -> String {
-    "muse-glimmer-30b-jang_6m".to_string()
+    "qwen3.8-27b-jang_6d-crack".to_string()
 }
 fn default_think_model() -> String {
-    "qwen3.8-27b-jang_6d".to_string()
+    "qwen3.8-27b-jang_6d-crack".to_string()
 }
 const fn default_llm_timeout_secs() -> u64 {
     120

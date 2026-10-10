@@ -241,12 +241,13 @@ fn search_duckduckgo(
         Ok(_) => {}
         Err(_) => unreachable = true,
     }
-    if let Ok(resp) = client
-        .get(url)
-        .query(&[("q", query)])
-        .header("User-Agent", SEARCH_UA)
-        .header("Accept-Language", "en-CA,en;q=0.9")
-        .send()
+    if verdict != EngineVerdict::Blocked
+        && let Ok(resp) = client
+            .get(url)
+            .query(&[("q", query)])
+            .header("User-Agent", SEARCH_UA)
+            .header("Accept-Language", "en-CA,en;q=0.9")
+            .send()
     {
         if resp.status().is_success()
             && let Ok(html) = resp.text()
