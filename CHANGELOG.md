@@ -6,6 +6,31 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## v3.4.1 — route task slots to installed winners and prevent search bot wall starvation _(2026-10-09)_
+
+The theme: production task routing to installed model winners and reliable search fetching.
+**904 Rust lib tests, 136 tools tests, clippy `-D warnings` clean on stable and on the 1.93.1 MSRV,
+coverage >= 95% with per-file floors enforced.**
+
+### Fixed — things that were wrong, not merely untidy
+- **Task slots routed to installed roster winners in `conf/config.toml` and `rust/src/config.rs`.**
+  Previously `json`, `filename`, and `vlm` named `muse-glimmer-30b-jang_6m`, while `think` and
+  `default_model` named `qwen3.8-27b-jang_6d`, neither of which was installed on the live Osaurus server.
+  Updated `json` and `summarize` to `raptor-v0.5-8b-a1b-jang_6m` (100% on JSON/weekend, 90.7% on summarize),
+  and `think`, `filename`, `vlm`, and `default_model` to `qwen3.8-27b-jang_6d-crack` (100% on filename/vlm,
+  82.5% on think, 100% on injection).
+- **Weekend model resolution fallback prevented drift to `foundation`.**
+  In `phases.rs`, when a preferred model and its family are absent from the roster, `resolve_weekend_model`
+  now traverses capable chat families (`["raptor", "qwen", "gemma"]`) before falling back to `models.first()`,
+  preventing silent drift to the 4k-context `foundation` model that produced 0 extracted events.
+- **DuckDuckGo search bot wall pacing and demotion.**
+  In `search.rs`, skipped redundant immediate GET requests when DuckDuckGo's POST query is challenged
+  by a bot wall. In `conf/weekend.toml`, lowered `demote_wall_ratio` from `0.8` to `0.5` so chronically
+  blocked search engines are demoted behind Bing/Brave sooner.
+- **Image renamer request tuning.**
+  In `rename/vlm.rs`, enforced `enable_thinking: false` and `max_tokens: 100` on filename generation
+  requests to prevent reasoning models from spinning on brief naming tasks.
+
 ## v3.4.0 — capability-specific ranking and longitudinal trajectory _(2026-10-09)_
 
 The theme: evaluation rankings reflect capability dimensions and historical progress

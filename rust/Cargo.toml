@@ -1,6 +1,6 @@
 [package]
 name = "ztools"
-version = "3.4.0"
+version = "3.4.1"
 edition = "2024"
 # The MSRV, determined rather than guessed. Read it as a FLOOR, which is what
 # it is: cargo enforces nothing below it -- it only tells cargo which dependency
