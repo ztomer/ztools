@@ -17,22 +17,27 @@
 
 use chrono::{Datelike, NaiveDate};
 
-use super::find_dates_in;
+use super::find_date_spans_in;
 
 /// What a marked line is prefixed with. The model is told what it means in the
 /// prompt; here it just has to be unmistakable and stable.
 pub const IN_WINDOW_MARK: &str = "[THIS WEEKEND]";
 
-/// Does this candidate mention any date inside the plan window?
+/// Does this candidate mention a date, or a date RANGE, that overlaps the
+/// plan window?
 ///
-/// Uses the same scanner the report checkers use, so a candidate this floats
-/// cannot be one the checker would later call out-of-window on the same
-/// evidence.
+/// Uses the same scanner the report checkers use, and the same question the
+/// enforcer asks of a row (`window_overlap`: does the range overlap?), so a
+/// candidate this floats cannot be one the checker would later call
+/// out-of-window on the same evidence. It used to ask whether a single date
+/// fell INSIDE the window, so "open daily Sept 19 – Oct 31" -- a pumpkin
+/// patch that is open all Thanksgiving weekend -- was never floated, while
+/// the enforcer would have kept the very row built from it.
 #[must_use]
 pub fn mentions_window(text: &str, start: NaiveDate, end: NaiveDate) -> bool {
-    find_dates_in(text, start.year())
+    find_date_spans_in(text, start.year())
         .iter()
-        .any(|d| *d >= start && *d <= end)
+        .any(|(first, last)| *last >= start && *first <= end)
 }
 
 /// Float in-window candidates to the top of the corpus and mark them.

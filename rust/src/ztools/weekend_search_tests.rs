@@ -50,7 +50,7 @@ fn search_reports_a_challenge_instead_of_silent_empty() {
         serve_html(challenge),
         serve_html(challenge),
     );
-    let outcome = search::search_engines("kids events", &urls);
+    let outcome = search::search_engines("Vaughan fall fair", &urls);
     assert!(
         outcome.results.is_empty(),
         "a WAF wall must yield no results, not parse the wall page: {outcome:?}"
@@ -71,7 +71,7 @@ fn search_reports_a_challenge_instead_of_silent_empty() {
 fn a_walled_duckduckgo_falls_through_to_bing() {
     let challenge = "<html><body><div class=\"anomaly-modal\">checking</div></body></html>";
     let urls = urls(serve_html(challenge), serve_html(BING_HTML), dead());
-    let outcome = search::search_engines("kids events", &urls);
+    let outcome = search::search_engines("Vaughan fall fair", &urls);
     assert_eq!(outcome.results.len(), 2, "{outcome:?}");
     assert_eq!(outcome.results[0].title, "Vaughan Fall Fair 2026");
     assert_eq!(outcome.results[0].href, "https://example.com/fair?a=1&b=2");
@@ -93,7 +93,7 @@ fn a_walled_duckduckgo_falls_through_to_bing() {
 #[test]
 fn an_answering_duckduckgo_never_consults_bing() {
     let urls = urls(serve_html(TITLED_HTML), dead(), dead());
-    let outcome = search::search_engines("kids events", &urls);
+    let outcome = search::search_engines("Vaughan fall fair", &urls);
     assert_eq!(outcome.results.len(), 2);
     assert_eq!(
         outcome.verdicts,
@@ -107,7 +107,7 @@ fn an_answering_duckduckgo_never_consults_bing() {
 
 #[test]
 fn unreachable_engines_are_recorded_as_such() {
-    let outcome = search::search_engines("kids events", &urls(dead(), dead(), dead()));
+    let outcome = search::search_engines("Vaughan fall fair", &urls(dead(), dead(), dead()));
     assert_empty!(&outcome.results);
     assert_eq!(
         outcome.verdicts,
@@ -139,7 +139,10 @@ fn a_results_page_that_merely_mentions_a_challenge_host_is_an_answer() {
         "<html><script>var allow=[\"login.live.com\",\"challenges.cloudflare.com\"];</script>{}",
         BING_HTML.trim_start_matches("<html>")
     );
-    let outcome = search::search_engines("kids events", &urls(dead(), serve_html(&html), dead()));
+    let outcome = search::search_engines(
+        "Vaughan fall fair",
+        &urls(dead(), serve_html(&html), dead()),
+    );
     assert_eq!(
         outcome.verdicts[1],
         search::EngineVerdict::Answered(2),
@@ -193,7 +196,7 @@ fn brave_parser_reads_web_blocks_only_and_takes_the_title_attribute() {
 fn a_walled_bing_falls_through_to_brave() {
     let wall = "<html><body><div class=\"anomaly-modal\">checking</div></body></html>";
     let urls = urls(serve_html(wall), serve_html(wall), serve_html(BRAVE_HTML));
-    let outcome = search::search_engines("kids events", &urls);
+    let outcome = search::search_engines("Vaughan fall fair", &urls);
     assert_eq!(outcome.results.len(), 2, "{outcome:?}");
     assert_eq!(
         outcome.verdicts,
@@ -204,6 +207,75 @@ fn a_walled_bing_falls_through_to_brave() {
         ]
     );
     assert!(!outcome.starved_by_bot_wall());
+}
+
+/// Bing's soft wall, verbatim from 2026-10-10: a well-formed results page for
+/// "kids activities Vaughan October 2026" that is about something else.
+const BING_OFF_TOPIC_HTML: &str = "<html><body><ol id=\"b_results\">\
+<li class=\"b_algo\"><h2><a href=\"https://www.youtubekids.com/\">YouTube Kids</a></h2><p>YouTube Kids provides a more contained environment for kids to explore.</p></li>\
+<li class=\"b_algo\"><h2><a href=\"https://pbskids.org/\">PBS KIDS</a></h2><p>Play free educational games and watch videos with your favorite PBS KIDS characters.</p></li>\
+<li class=\"b_algo\"><h2><a href=\"https://www.cbc.ca/kids/\">Play Games, Watch Video, Explore | CBC Kids</a></h2><p>Games and videos for kids.</p></li>\
+</ol></body></html>";
+
+/// Brave's answer to the same query on the same day.
+const BRAVE_ON_TOPIC_HTML: &str = "<html><body><div id=\"results\">\
+<div class=\"snippet\" data-type=\"web\"><a href=\"https://childslife.ca/vaughan\"><div class=\"title search-snippet-title\" title=\"Vaughan Events &amp; Activities Guides for Kids &amp; Families | Child's Life\">x</div></a><div class=\"content\">Halloween Dance Party in Vaughan on October 31.</div></div>\
+<div class=\"snippet\" data-type=\"web\"><a href=\"https://www.tripadvisor.ca/vaughan\"><div class=\"title search-snippet-title\" title=\"THE 10 BEST Things to Do in Vaughan with Kids (2026)\">x</div></a><div class=\"content\">Family attractions.</div></div>\
+</div></body></html>";
+
+/// A page that parses into results is not thereby an answer to the QUESTION.
+/// An off-topic answer is a wall in disguise: recorded as walled (so the
+/// learned order demotes the engine) and the next engine is asked -- where it
+/// used to be "Answered(10)", Brave was never consulted, and the plan's
+/// corpus became 88 lines about `YouTube`, condos and Grand Theft Auto.
+#[test]
+fn an_off_topic_answer_is_a_wall_and_the_next_engine_is_asked() {
+    let urls = urls(
+        dead(),
+        serve_html(BING_OFF_TOPIC_HTML),
+        serve_html(BRAVE_ON_TOPIC_HTML),
+    );
+    let outcome = search::search_engines("kids activities Vaughan October 2026", &urls);
+    assert_eq!(
+        outcome.verdicts,
+        [
+            search::EngineVerdict::Unreachable,
+            search::EngineVerdict::Blocked,
+            search::EngineVerdict::Answered(2)
+        ],
+        "{outcome:?}"
+    );
+    assert!(
+        outcome.results.iter().all(|r| r.title.contains("Vaughan")),
+        "only the on-topic answer reaches the corpus: {outcome:?}"
+    );
+}
+
+/// When EVERY engine answers off-topic there is no answer, and the query is
+/// starved by a wall -- never padded with the junk.
+#[test]
+fn off_topic_answers_from_every_engine_starve_the_query() {
+    // Brave's soft wall on 2026-10-10: "GTA ..." answered with Grand Theft Auto.
+    let brave_off_topic = "<html><body><div id=\"results\">\
+<div class=\"snippet\" data-type=\"web\"><a href=\"https://www.rockstargames.com/gta-online\"><div class=\"title search-snippet-title\" title=\"GTA Online - Rockstar Games\">x</div></a><div class=\"content\">Experience GTA Online.</div></div>\
+</div></body></html>";
+    let urls = urls(
+        dead(),
+        serve_html(BING_OFF_TOPIC_HTML),
+        serve_html(brave_off_topic),
+    );
+    let outcome = search::search_engines("kids activities Vaughan October 2026", &urls);
+    assert_empty!(&outcome.results);
+    assert_eq!(
+        outcome.verdicts,
+        [
+            search::EngineVerdict::Unreachable,
+            search::EngineVerdict::Blocked,
+            search::EngineVerdict::Blocked
+        ],
+        "{outcome:?}"
+    );
+    assert!(outcome.starved_by_bot_wall(), "{outcome:?}");
 }
 
 fn serve_html(body: &str) -> String {

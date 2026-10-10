@@ -398,6 +398,8 @@ mod weekend_search_tests;
 
 mod weekend_followup_tests;
 
+mod weekend_queries_tests;
+
 // — class C4: the word "unknown" never reaches a table —
 
 fn c4_event(absent: &str) -> crate::ztools::weekend::WeekendEvent {

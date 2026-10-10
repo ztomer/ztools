@@ -310,3 +310,19 @@ fn status_is_ok_for_a_current_full_plan() {
     assert_eq!(status["details"]["provenance"]["outside_window"], 2);
     assert_eq!(status["details"]["provenance"]["excluded"], 1);
 }
+
+/// The run's corpus record (`store_corpus.rs`) lives under the plan store and
+/// is newer than the plan it fed; the status page must still read the PLAN.
+#[test]
+fn a_newer_corpus_record_is_never_read_as_the_plan() {
+    let td = tempfile::tempdir().unwrap();
+    let plan = td
+        .path()
+        .join("weekend_plan_October_09_to_October_12_2026.md");
+    std::fs::write(&plan, "# plan\n").unwrap();
+    let run = NaiveDate::from_ymd_opt(2026, 10, 10)
+        .and_then(|d| d.and_hms_opt(23, 0, 0))
+        .unwrap();
+    crate::ztools::store_corpus::save_corpus(td.path(), run, "#", "- corpus").unwrap();
+    assert_eq!(newest_plan(td.path()), Some(plan));
+}

@@ -8,6 +8,7 @@ pub mod health;
 pub mod holidays;
 pub mod phases;
 pub mod prompts;
+pub mod queries;
 pub mod report;
 pub mod score;
 pub mod suitability;
@@ -20,6 +21,7 @@ pub use format::*;
 pub use health::*;
 pub use phases::*;
 pub use prompts::*;
+pub use queries::*;
 pub use score::{apply_scores, compute_score};
 /// Native Rust Weekend Planner module.
 use serde::{Deserialize, Serialize};
@@ -202,6 +204,7 @@ fn call_osaurus_json(
 }
 
 pub mod followup;
+pub mod relevance;
 pub mod search;
 pub mod search_order;
 pub mod search_parse;

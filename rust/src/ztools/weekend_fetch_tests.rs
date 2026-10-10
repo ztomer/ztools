@@ -208,6 +208,25 @@ fn corpus_building_dedupes_keeps_only_region_backed_snippets_and_counts_them() {
         events,
         "with the model dead the pipeline must yield no invented events"
     );
+
+    // The run keeps the corpus it judged, through the store seam, so a thin
+    // plan can be explained from what the engines returned.
+    let kept: Vec<_> = std::fs::read_dir(env.path("WEEKEND_OUTPUT_DIR").join("corpus"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert_eq!(kept.len(), 1, "{kept:?}");
+    let record = std::fs::read_to_string(&kept[0]).unwrap();
+    assert!(
+        record.starts_with("# window 2026-08-07..2026-08-09\n"),
+        "{record}"
+    );
+    assert!(record.contains("\n# query Vaughan events this weekend August 7-9 2026\n"));
+    assert_eq!(
+        record.matches("- Vaughan Fall Fair:").count(),
+        1,
+        "{record}"
+    );
     drop(env);
 }
 
@@ -340,37 +359,6 @@ fn malformed_snippets_are_skipped_and_scanning_still_advances() {
     assert_empty!(parse_snippets_from_html(
         "<html><body>nothing here</body></html>"
     ));
-}
-
-#[test]
-fn test_build_search_queries_derives_month_from_target_friday() {
-    let sep_friday = chrono::NaiveDate::from_ymd_opt(2026, 9, 4).unwrap();
-    let queries = build_search_queries(sep_friday);
-    assert_nonempty!(&queries);
-    assert!(
-        queries
-            .iter()
-            .any(|q| q.contains("September") && q.contains("2026"))
-    );
-    assert!(
-        queries
-            .iter()
-            .any(|q| q.contains("harvest festival farm pumpkin"))
-    );
-    assert!(!queries.iter().any(|q| q.contains("August")));
-
-    let jan_friday = chrono::NaiveDate::from_ymd_opt(2027, 1, 1).unwrap();
-    let jan_queries = build_search_queries(jan_friday);
-    assert!(
-        jan_queries
-            .iter()
-            .any(|q| q.contains("January") && q.contains("2027"))
-    );
-    assert!(
-        jan_queries
-            .iter()
-            .any(|q| q.contains("winter festival holiday lights"))
-    );
 }
 
 #[test]

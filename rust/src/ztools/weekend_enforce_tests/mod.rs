@@ -11,6 +11,7 @@
 
 mod support;
 
+mod date_shapes;
 mod dates;
 mod defects;
 mod exclusions;

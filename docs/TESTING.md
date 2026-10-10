@@ -212,6 +212,16 @@ value copied back into its own test proves nothing.
 - Tweet-ID set equality as the collect-parity criterion: the same collector run twice
   minutes apart shares ~7 of 50 IDs (the feed is a per-load sample), so the instrument
   could not see parity. Replaced by shared-record agreement.
+- An HTML noise-skip that resumed from the scan position instead of the close tag
+  leaked every `<script>`/`<style>` tail into the weekend corpus, while its test passed:
+  `!contains("_evil")` over `window._evil=true` sees nothing when the leak is
+  `vil=true`. Class: a NEGATIVE substring check over a fixture shorter than the
+  defect's footprint. Pin the whole output, over blocks longer than their close tags.
+- A search results page that PARSES is not an answer to the query: Bing served this
+  client query-irrelevant pages (YouTube Kids for "kids activities Vaughan ...") and
+  every one counted as answered (`weekend/relevance.rs`). The corollary for stubs: a
+  search fixture must be about the query the test sends (the engine tests used to send
+  "kids events" to a page about the Vaughan Fall Fair).
 
 ## A unit test must not read the live machine (2026-09-19)
 

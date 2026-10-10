@@ -91,6 +91,36 @@ This file starts at v2.2.0 — earlier history is in git.
   `weekly on thu at 18:00`.
 - The plan's provenance line gained a fifth count, `N unsuitable`, so every dropped row is
   still accounted for; older plans parse as 0.
+- **"Candidates: 0/88 mention a date this weekend" on Thanksgiving 2026.** Root cause: Bing
+  answers this client with a well-formed page about something ELSE -- "kids activities
+  Vaughan October 2026" got YouTube Kids, "Vaughan family events" a condo on Isla Mujeres,
+  every "GTA ..." query Grand Theft Auto -- while echoing the full query in its search box.
+  Every such page parsed, so it counted as answered; with DuckDuckGo demoted, Bing went
+  first and Brave was never asked. An answer is now judged against the query
+  (`weekend/relevance.rs`): when fewer than a third of its results carry half the query's
+  distinctive words it is a soft bot wall, recorded as walled (so the learned order demotes
+  the engine) and the next engine is asked. Calibrated on that day's live results: Bing's
+  junk scored at most 2 in 10, real answers 5 in 10 or more.
+- **Followed listing pages yielded script and CSS, not listings.** `extract_page_text`
+  resumed after a `<script>`/`<style>` block from the scan position instead of the close
+  tag, re-emitting the block's tail ("window.dataLayer = ...") as candidate lines; the test
+  missed it because it checked short blocks for a substring the leak happened to clip. The
+  same page found by two queries is also fetched once now, not twice.
+- **No query ever asked about the weekend being planned.** Queries were month-scoped only.
+  They now ask for the window by its dates first ("Vaughan events this weekend October 9-12
+  2026"), name the holiday when the window holds one ("Thanksgiving weekend ..."), and say
+  "near Toronto" instead of "GTA" (`weekend/queries.rs`).
+- **The in-window scanner missed real listing shapes.** Ordinal days ("9th October"), and
+  ranges that span the window ("Sept 19 - Oct 31") are read; `mentions_window` now asks the
+  enforcer's question (does the range OVERLAP the window?) instead of "is one date inside
+  it?"; "Markham 3" / "Junior 5" no longer read as March 3 / June 5; "Sept 19 - Oct 31" no
+  longer invents Oct 19; and a byline or a clock time after a date ("Oct 5, 2026 - 12:37",
+  "October 4 - 11 am") is not a range (`weekend/dates.rs`).
+- **The corpus a run judged is kept** under `<plan store>/corpus/<run>_corpus.txt` (newest
+  10, through `WEEKEND_OUTPUT_DIR`), headed by the window, the in-window count and every
+  query, so a thin plan can be explained from what the engines returned. The plan and status
+  readers never pick it up (`store_corpus.rs`). Measured on a live replay of the 2026-10-10
+  window with the same Bing-first order: 0/88 in-window before, 39/276 after.
 
 ## v3.5.0 — evaluation leaderboard category filtering, CSV export, family grouping, and regression alerts _(2026-10-09)_
 

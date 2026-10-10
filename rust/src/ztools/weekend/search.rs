@@ -98,10 +98,11 @@ pub fn parse_results_from_html(html: &str) -> Vec<SearchResult> {
 
 /// What one engine said to one query.
 ///
-/// `Blocked` is a bot wall, `Unreachable` a transport failure, `Empty` a real
-/// answer with nothing in it. The three used to collapse into an empty `Vec`,
-/// which is how "no events this weekend" was reported for a month of "no
-/// search this weekend".
+/// `Blocked` is a bot wall -- a challenge page, or a "soft" wall: a results
+/// page about something other than the query (`relevance.rs`) -- `Unreachable`
+/// a transport failure, `Empty` a real answer with nothing in it. The three
+/// used to collapse into an empty `Vec`, which is how "no events this
+/// weekend" was reported for a month of "no search this weekend".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EngineVerdict {
     Answered(usize),
@@ -174,17 +175,28 @@ pub fn search_engines_in(
         (&urls.bing, search_bing),
         (&urls.brave, search_brave),
     ];
+    let mut off_topic = [false; ENGINE_COUNT];
     for &i in order {
         let (url, leg) = &legs[i];
         let (found, verdict) = leg(&client, query, url);
+        // A page of results about something else is a soft wall, not an
+        // answer (see `relevance.rs`): record it as walled and ask the next.
+        if !found.is_empty() && !super::relevance::answer_is_on_topic(query, &found) {
+            verdicts[i] = EngineVerdict::Blocked;
+            off_topic[i] = true;
+            continue;
+        }
         verdicts[i] = verdict;
         if !found.is_empty() {
             results = found;
             break;
         }
     }
-    for (engine, verdict) in ENGINES.iter().zip(verdicts) {
+    for ((engine, verdict), off_topic) in ENGINES.iter().zip(verdicts).zip(off_topic) {
         match verdict {
+            EngineVerdict::Blocked if off_topic => {
+                eprintln!("\u{26a0} {engine} answered {query:?} off-topic (soft bot wall)");
+            }
             EngineVerdict::Blocked => {
                 eprintln!("\u{26a0} {engine} blocked {query:?} (bot wall)");
             }

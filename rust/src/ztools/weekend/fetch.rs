@@ -4,8 +4,8 @@ use super::WeekendEvent;
 use super::{DemotionPolicy, SearchRecord};
 use super::{ModelHealth, PlanHealth, SearchHealth};
 use super::{
-    PlanContext, SearchResult, condense_weather, draft_activities, extract_sources,
-    in_window_count, prioritise_in_window, refine_draft, seasonal_keywords, structure_to_json,
+    PlanContext, SearchResult, build_search_queries, condense_weather, draft_activities,
+    extract_sources, in_window_count, prioritise_in_window, refine_draft, structure_to_json,
 };
 use super::{follow_aggregators, search_engines_in, warm_model};
 
@@ -82,38 +82,19 @@ pub fn clean_search_results(
     cleaned.join("\n")
 }
 
-/// Search the aggregator for event snippets and return the cleaned, deduped,
-/// in-window-prioritised corpus.
-///
-/// This is the ground truth the provenance gate judges extracted rows against.
-/// Build search queries for a target weekend starting on d1.
-#[must_use]
-pub fn build_search_queries(d1: NaiveDate) -> Vec<String> {
-    let month_name = d1.format("%B").to_string();
-    let year = d1.format("%Y").to_string();
-
-    let municipalities = ["Vaughan", "Markham", "Richmond Hill", "Toronto"];
-    let mut queries = Vec::new();
-
-    for city in municipalities {
-        queries.push(format!("kids activities {city} {month_name} {year}"));
-        queries.push(format!(
-            "{city} community centre kids programs {month_name}"
-        ));
-        queries.push(format!("{city} family events {month_name} {year}"));
-    }
-
-    let region = "GTA";
-    queries.push(format!("{region} family events {month_name} {year}"));
-    queries.push(format!("{region} Zoo special events {month_name} {year}"));
-    queries.push(format!(
-        "{region} museum family programs {month_name} {year}"
-    ));
-    {
-        let seasonal = seasonal_keywords(&month_name);
-        queries.push(format!("{region} {seasonal} {month_name} {year}"));
-    }
-    queries
+/// The holiday inside `d1..=d2` by the configured province's table, if any.
+/// No province (or no table for it) means no holiday query, never a failure:
+/// the month-wide and window queries still run.
+fn holiday_in_window(
+    d1: NaiveDate,
+    d2: NaiveDate,
+    config: &crate::config::ZtoolsConfig,
+) -> Option<&'static str> {
+    let province = super::holidays::load_province(&config.weekend_region_paths).ok()?;
+    d1.iter_days()
+        .take_while(|d| *d <= d2)
+        .find_map(|d| province.holiday_on(d))
+        .map(|h| h.name)
 }
 
 /// Search the aggregator for event snippets and return the cleaned, deduped,
@@ -125,7 +106,7 @@ fn fetch_events_corpus(
     d2: NaiveDate,
     config: &crate::config::ZtoolsConfig,
 ) -> (String, SearchHealth) {
-    let queries = build_search_queries(d1);
+    let queries = build_search_queries(d1, d2, holiday_in_window(d1, d2, config));
 
     // The order is learned from the runs before this one (search_order.rs):
     // an engine that walled most of its queries lately goes last.
@@ -196,7 +177,30 @@ fn fetch_events_corpus(
     if total > 0 {
         println!("→ Candidates: {in_window}/{total} mention a date this weekend");
     }
+    record_corpus(&raw_text, (d1, d2), &queries, (in_window, total));
     (marked_text, health)
+}
+
+/// Keep the corpus this run judged beside the plans (`store_corpus.rs`), so a
+/// thin plan can be explained from what the engines actually returned. A
+/// failure to write it is reported and never fails the run.
+fn record_corpus(
+    corpus: &str,
+    (d1, d2): (NaiveDate, NaiveDate),
+    queries: &[String],
+    (in_window, total): (usize, usize),
+) {
+    let mut header = format!("# window {d1}..{d2}\n# in-window {in_window}/{total}");
+    for q in queries {
+        header.push_str("\n# query ");
+        header.push_str(q);
+    }
+    let store = crate::ztools::store::weekend_output_dir();
+    let run = chrono::Local::now().naive_local();
+    match crate::ztools::store_corpus::save_corpus(&store, run, &header, corpus) {
+        Ok(path) => println!("\u{2192} Corpus kept at {}", path.display()),
+        Err(e) => eprintln!("\u{26a0} corpus not kept under {}: {e}", store.display()),
+    }
 }
 
 /// The monolithic single-shot extraction used as a fallback when the 4-phase

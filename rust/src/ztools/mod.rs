@@ -10,6 +10,7 @@ pub mod rename;
 pub mod settings;
 pub mod status;
 pub mod store;
+pub mod store_corpus;
 pub mod twitter;
 pub mod twitter_status;
 pub mod weekend;

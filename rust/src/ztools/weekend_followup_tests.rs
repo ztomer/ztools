@@ -139,3 +139,65 @@ fn follow_aggregators_ignores_no_href_and_foreign_results() {
         "no href means no fetch can target it: {out}"
     );
 }
+
+/// The text AFTER a noise block resumes exactly at its close tag. The 2026-10-10
+/// corpus followed three listing pages and every candidate line from them was
+/// script or CSS ("window.dataLayer = ...", "display: inline !important;"): the
+/// skip advanced by the close tag's length from where the scan STOOD, not from
+/// where the close tag WAS, so it landed back inside the script body and
+/// emitted its tail. Short blocks hid it -- "window._evil=true" leaked only
+/// "vil=true", which a `!contains("_evil")` check cannot see -- so this pins
+/// the whole output, over blocks longer than their own close tags.
+#[test]
+fn text_after_a_long_noise_block_resumes_exactly_at_its_close_tag() {
+    let html = "<html><head><title>Things to Do</title>\
+<script>window.dataLayer = window.dataLayer || []; dataLayer.push({userRole: 'logged-out'});</script>\
+<style>img.emoji { display: inline !important; border: none !important; }</style></head>\
+<body><h2>Pumpkinfest at Downey's Farm</h2><p>Oct 9 - Oct 12, 2026</p>\
+<script type=\"application/ld+json\">{\"@type\":\"CollectionPage\",\"name\":\"Events\"}</script>\
+<li>Thanksgiving Harvest Market</li></body></html>";
+    assert_eq!(
+        followup::extract_page_text(html, 4000),
+        "Things to Do\nPumpkinfest at Downey's Farm\nOct 9 - Oct 12, 2026\nThanksgiving Harvest Market"
+    );
+}
+
+/// One page, one fetch: the same listing reached from two queries was followed
+/// twice on 2026-10-10 ("Things to Do - Visit Markham" filled 2 of the 3 follow
+/// slots), spending the budget on a duplicate.
+#[test]
+fn the_same_page_found_by_two_queries_is_followed_once() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let served = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let counter = served.clone();
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { break };
+            counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let mut buf = [0u8; 1024];
+            let _ = stream.read(&mut buf);
+            let body = "<p>Harvest hayrides all weekend long</p>";
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = stream.write_all(resp.as_bytes());
+        }
+    });
+    let page = format!("http://{addr}/things-to-do/");
+    let result = |title: &str| search::SearchResult {
+        title: title.into(),
+        href: page.clone(),
+        body: "Things to do in Markham".into(),
+    };
+    let out = followup::follow_aggregators(
+        &[
+            result("Things to Do - Visit Markham"),
+            result("Things To Do in Markham"),
+        ],
+        &test_region(),
+    );
+    assert_eq!(out.matches("Harvest hayrides").count(), 1, "{out}");
+    assert_eq!(served.load(std::sync::atomic::Ordering::SeqCst), 1);
+}

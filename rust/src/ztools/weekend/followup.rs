@@ -121,7 +121,10 @@ pub(crate) fn extract_page_text(html: &str, max_chars: usize) -> String {
             if candidate.starts_with("</") {
                 let (name, consumed) = close_tag_name(candidate);
                 if name.eq_ignore_ascii_case(tag) {
-                    i += consumed;
+                    // From the close tag, not from the scan position: `consumed`
+                    // counts from `<` at `i + lt`. Advancing from `i` put the
+                    // scan back inside the block and emitted its tail as text.
+                    i += lt + consumed;
                     discard = None;
                     continue;
                 }
@@ -240,18 +243,22 @@ pub fn as_candidate_lines(text: &str, title: &str) -> String {
 #[must_use]
 pub fn follow_aggregators(results: &[SearchResult], region: &RegionLists) -> String {
     let mut followed = Vec::new();
+    // Several queries find the same listing page; one fetch per URL, or the
+    // bounded budget is spent reading one page twice.
+    let mut fetched = std::collections::HashSet::new();
     for r in results {
         if followed.len() >= FOLLOW_LIMIT {
             break;
         }
         let title = r.title.trim();
         let url = r.href.trim();
-        if url.is_empty() || !looks_like_aggregator(title) {
+        if url.is_empty() || !looks_like_aggregator(title) || fetched.contains(url) {
             continue;
         }
         if !has_region_evidence(&format!("{title} {}", r.body), region) {
             continue;
         }
+        fetched.insert(url);
         let text = fetch_page_text(url);
         if !text.is_empty() {
             let block = as_candidate_lines(&text, title);

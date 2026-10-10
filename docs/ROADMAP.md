@@ -38,7 +38,7 @@ checked by a gate, so re-derive it before editing it:
 `git log --oneline origin/main..main`, `gh run list --limit 3`,
 `tools/gate.sh --full`, and `"$GOH_DIR/gates/goh.sh" home-paths --exclude ^vendor/`.
 
-- Release v3.5.0 cut, tagged, and published on GitHub (following v3.4.1).
+- Release v3.5.0 cut and tagged (following v3.4.1). v3.4.0 through v3.5.0 were tagged by hand and got no GitHub release; the release kit now backfills a tag that lacks one.
 - Items `L2`, `M1` through `M16` landed and deleted from open work; items `G5`, `G6`, and `R2` dropped.
 - Landed today, each proven by a test made to fail first:
   **`L2`** (green CI gate of record on GitHub Actions),

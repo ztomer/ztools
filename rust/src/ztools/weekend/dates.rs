@@ -39,7 +39,7 @@ pub fn plan_window(
     (friday, end)
 }
 
-/// Full month names, in order. Three-letter prefixes are the matching stems.
+/// Full month names, in order.
 const MONTHS: [&str; 12] = [
     "january",
     "february",
@@ -55,45 +55,174 @@ const MONTHS: [&str; 12] = [
     "december",
 ];
 
-/// 1-12 for a month name or its three-letter stem, mirroring `lib/dates.py`.
+/// 1-12 for a month name or an abbreviation of one ("oct", "sept").
+///
+/// The run must be a PREFIX of the month name, at least three letters long.
+/// It used to be enough for the run's first three letters to match, so
+/// "Markham 3" read as March 3, "Junior 5" as June 5 and "Decor 2" as
+/// December 2 — and Markham is one of the four cities every query names.
 fn month_number(run: &str) -> Option<u32> {
-    let stem = run.get(..3)?;
+    if run.len() < 3 || !run.chars().all(|c| c.is_ascii_alphabetic()) {
+        return None;
+    }
     MONTHS
         .iter()
-        .position(|m| m.starts_with(stem))
+        .position(|m| m.starts_with(run))
         .and_then(|i| u32::try_from(i + 1).ok())
 }
 
-fn push_date(found: &mut Vec<NaiveDate>, year: i32, month: u32, day: u32) {
-    if let Some(value) = NaiveDate::from_ymd_opt(year, month, day)
-        && !found.contains(&value)
-    {
-        found.push(value);
+/// A day of the month: one or two digits, optionally an English ordinal
+/// ("9", "09", "10th", "1st", "22nd", "3rd").
+fn day_of(run: &str) -> Option<u32> {
+    let digits = ["st", "nd", "rd", "th"]
+        .iter()
+        .find_map(|suffix| run.strip_suffix(suffix))
+        .unwrap_or(run);
+    if digits.is_empty() || digits.len() > 2 || !digits.chars().all(|c| c.is_ascii_digit()) {
+        return None;
+    }
+    digits.parse().ok().filter(|d| (1..=31).contains(d))
+}
+
+/// A four-digit year.
+fn year_of(run: &str) -> Option<i32> {
+    if run.len() == 4 && run.chars().all(|c| c.is_ascii_digit()) {
+        run.parse().ok()
+    } else {
+        None
     }
 }
 
-/// Pull explicit calendar dates out of a cell. Durations are not dates.
-///
-/// `year` is the fallback for formats that omit it; an explicit four-digit year
-/// in the text always wins, so a snippet carrying a past year is not silently
-/// promoted into this year's plan window.
-///
-/// Ported from `lib/dates.py` so the enforcer and any future in-window
-/// prioritiser cannot drift apart (they already did once: the enforcer read
-/// three-letter stems while the prioritiser matched only full month names).
-#[must_use]
-/// # Panics
-///
-/// Never: the digits are read through `to_digit(10)` only after the
-/// surrounding characters have been checked to be a date shape, and the
-/// day is parsed from a slice that matched a digit pattern.
-pub fn find_dates_in(value: &str, year: i32) -> Vec<NaiveDate> {
-    let mut found = Vec::new();
-    if value.is_empty() {
-        return found;
-    }
+/// One alphanumeric run of the text, with the separator text before it.
+struct Token {
+    text: String,
+    gap: String,
+}
 
-    // ISO dates YYYY-MM-DD.
+/// Lower-cased alphanumeric runs: month names are pure letters, days are 1-2
+/// digits (with an optional ordinal suffix), explicit years 4 digits.
+fn tokenize(value: &str) -> Vec<Token> {
+    let mut tokens = Vec::new();
+    let mut gap = String::new();
+    let mut cur = String::new();
+    for c in value.to_lowercase().chars() {
+        if c.is_ascii_alphanumeric() {
+            cur.push(c);
+        } else {
+            if !cur.is_empty() {
+                tokens.push(Token {
+                    text: std::mem::take(&mut cur),
+                    gap: std::mem::take(&mut gap),
+                });
+            }
+            gap.push(c);
+        }
+    }
+    if !cur.is_empty() {
+        tokens.push(Token { text: cur, gap });
+    }
+    tokens
+}
+
+/// Where the END of a range starts, if token `j` opens one: a dash between
+/// the two ends ("Oct 9-12", "October 1–4") or a connecting word ("Sept 19 to
+/// Oct 31", "through", "until").
+fn range_end_at(tokens: &[Token], j: usize) -> Option<usize> {
+    let tok = tokens.get(j)?;
+    if matches!(tok.gap.trim(), "-" | "\u{2013}" | "\u{2014}") {
+        return Some(j);
+    }
+    matches!(
+        tok.text.as_str(),
+        "to" | "through" | "thru" | "until" | "till"
+    )
+    .then_some(j + 1)
+}
+
+/// The day of the month at `j`, unless it is really the hour of a clock time
+/// ("- 11:00 am", "- 11 am"): event pages put a time after a date as often as
+/// they put a second date there.
+fn range_end_day(tokens: &[Token], j: usize) -> Option<u32> {
+    let day = day_of(&tokens.get(j)?.text)?;
+    let is_time = tokens.get(j + 1).is_some_and(|next| {
+        next.gap.starts_with(':') || matches!(next.text.as_str(), "am" | "pm" | "a" | "p")
+    });
+    (!is_time).then_some(day)
+}
+
+const fn ymd(year: i32, month: u32, day: u32) -> Option<NaiveDate> {
+    NaiveDate::from_ymd_opt(year, month, day)
+}
+
+/// A "Month Day" date at `k`, and the range it opens if one follows:
+/// "Oct 9-12, 2026", "October 9 to 12", "Sept 19 – Oct 31",
+/// "September 9, 2026 to October 28, 2026".
+fn month_first_span(tokens: &[Token], k: usize, year: i32) -> Option<(NaiveDate, NaiveDate)> {
+    let month = month_number(&tokens.get(k)?.text)?;
+    let day = day_of(&tokens.get(k + 1)?.text)?;
+    let own_year = tokens.get(k + 2).and_then(|t| year_of(&t.text));
+    let after = if own_year.is_some() { k + 3 } else { k + 2 };
+    let start_year = own_year.unwrap_or(year);
+
+    if let Some(e) = range_end_at(tokens, after) {
+        // "… to Oct 31[, 2026]": the far end names its own month.
+        if let Some(end_month) = tokens.get(e).and_then(|t| month_number(&t.text))
+            && let Some(end_day) = range_end_day(tokens, e + 1)
+        {
+            let rollover = i32::from(end_month < month);
+            let end_year = tokens
+                .get(e + 2)
+                .and_then(|t| year_of(&t.text))
+                .unwrap_or(start_year + rollover);
+            let start_year = own_year.unwrap_or(end_year - rollover);
+            let (start, end) = (
+                ymd(start_year, month, day)?,
+                ymd(end_year, end_month, end_day)?,
+            );
+            return Some((start, end.max(start)));
+        }
+        // "Oct 9-12[, 2026]": a bare day ends it -- but only when no year sat
+        // between, because "Oct 5, 2026 - 12 events" is a byline date
+        // followed by a sentence, not a range ending on the 12th.
+        if own_year.is_none()
+            && let Some(end_day) = range_end_day(tokens, e)
+            && end_day > day
+        {
+            let y = tokens
+                .get(e + 1)
+                .and_then(|t| year_of(&t.text))
+                .unwrap_or(year);
+            return Some((ymd(y, month, day)?, ymd(y, month, end_day)?));
+        }
+    }
+    let date = ymd(start_year, month, day)?;
+    Some((date, date))
+}
+
+/// A "Day Month" date at `k`: "15 Aug", "09 Aug 2026", "Sun 09 Aug", "10th October".
+///
+/// Not when the day already belongs to the month BEFORE it: in "Sept 19 - Oct
+/// 31" the 19 is September's, and reading "19 - Oct" as October 19 put a date
+/// in the window that the text never named.
+fn day_first_date(tokens: &[Token], k: usize, year: i32) -> Option<NaiveDate> {
+    let owned = k
+        .checked_sub(1)
+        .and_then(|p| tokens.get(p))
+        .is_some_and(|prev| month_number(&prev.text).is_some());
+    if owned {
+        return None;
+    }
+    let day = day_of(&tokens.get(k)?.text)?;
+    let month = month_number(&tokens.get(k + 1)?.text)?;
+    let y = tokens
+        .get(k + 2)
+        .and_then(|t| year_of(&t.text))
+        .unwrap_or(year);
+    ymd(y, month, day)
+}
+
+/// ISO dates YYYY-MM-DD, each a one-day span.
+fn iso_spans(value: &str, spans: &mut Vec<(NaiveDate, NaiveDate)>) {
     let chars: Vec<char> = value.chars().collect();
     for i in 0..chars.len().saturating_sub(9) {
         if chars[i + 4] != '-' || chars[i + 7] != '-' {
@@ -107,62 +236,65 @@ pub fn find_dates_in(value: &str, year: i32) -> Vec<NaiveDate> {
         // four-digit year fits `i32` by construction.
         let at = |k: usize| chars[i + k].to_digit(10).unwrap_or(0);
         let year = i32::try_from(at(0) * 1000 + at(1) * 100 + at(2) * 10 + at(3)).unwrap_or(0);
-        push_date(&mut found, year, at(5) * 10 + at(6), at(8) * 10 + at(9));
-    }
-
-    // Named-month forms: "Aug 15", "August 15, 2026", "Aug. 15 2026",
-    // "15 Aug", "09 Aug 2026", "Sun 09 Aug". Tokenise into alphanumeric runs
-    // (month names are pure letters, days are 1-2 digits, explicit years 4).
-    let lower = value.to_lowercase();
-    let mut runs: Vec<(String, bool)> = Vec::new();
-    let mut cur = String::new();
-    for c in lower.chars() {
-        if c.is_ascii_alphanumeric() {
-            cur.push(c);
-        } else if !cur.is_empty() {
-            runs.push((cur.clone(), cur.chars().all(|c| c.is_ascii_digit())));
-            cur.clear();
+        if let Some(date) = ymd(year, at(5) * 10 + at(6), at(8) * 10 + at(9)) {
+            spans.push((date, date));
         }
     }
-    if !cur.is_empty() {
-        runs.push((cur.clone(), cur.chars().all(|c| c.is_ascii_digit())));
-    }
+}
 
-    let is_month_word =
-        |run: &str| run.chars().all(|c| c.is_ascii_alphabetic()) && month_number(run).is_some();
-    let is_short_day = |run: &(String, bool)| run.1 && run.0.len() <= 2;
-    for k in 0..runs.len() {
-        let (text, is_num) = &runs[k];
-        // "Aug 15" / "August 15, 2026"
-        if is_month_word(text)
-            && let Some(next) = runs.get(k + 1)
-            && is_short_day(next)
-        {
-            let day = next.0.parse::<u32>().unwrap();
-            // The year is the run AFTER the month, and only a
-            // four-digit one is a year; anything else leaves `year`.
-            let yr = runs
-                .get(k + 2)
-                .filter(|yr_run| yr_run.1 && yr_run.0.len() == 4)
-                .map_or(year, |yr_run| yr_run.0.parse::<i32>().unwrap());
-            push_date(&mut found, yr, month_number(text).unwrap(), day);
+/// Every explicit date or date RANGE in `value`, as inclusive `(first, last)`
+/// spans; a single date is a one-day span.
+///
+/// Ranges are spans rather than their two endpoints because the question
+/// asked of them is "does this overlap the plan window?" — the enforcer's
+/// question (`window_overlap`), which the in-window prioritiser has to share.
+/// "Pumpkin patch open daily Sept 19 – Oct 31" is ON over Thanksgiving
+/// although neither endpoint is.
+///
+/// `year` is the fallback for formats that omit it; an explicit four-digit year
+/// in the text always wins, so a snippet carrying a past year is not silently
+/// promoted into this year's plan window.
+#[must_use]
+pub fn find_date_spans_in(value: &str, year: i32) -> Vec<(NaiveDate, NaiveDate)> {
+    let mut spans = Vec::new();
+    if value.is_empty() {
+        return spans;
+    }
+    iso_spans(value, &mut spans);
+    let tokens = tokenize(value);
+    for k in 0..tokens.len() {
+        if let Some(span) = month_first_span(&tokens, k, year) {
+            spans.push(span);
         }
-        // "15 Aug" / "09 Aug 2026" / "Sun 09 Aug"
-        if *is_num
-            && text.len() <= 2
-            && let Some(month_run) = runs.get(k + 1)
-            && !month_run.1
-            && is_month_word(&month_run.0)
-        {
-            let day = text.parse::<u32>().unwrap();
-            let yr = runs
-                .get(k + 2)
-                .filter(|yr_run| yr_run.1 && yr_run.0.len() == 4)
-                .map_or(year, |yr_run| yr_run.0.parse::<i32>().unwrap());
-            push_date(&mut found, yr, month_number(&month_run.0).unwrap(), day);
+        if let Some(date) = day_first_date(&tokens, k, year) {
+            spans.push((date, date));
         }
     }
+    let mut unique = Vec::new();
+    for span in spans {
+        if !unique.contains(&span) {
+            unique.push(span);
+        }
+    }
+    unique
+}
 
+/// Pull explicit calendar dates out of a cell -- every single date, and both
+/// ends of every range. Durations are not dates.
+///
+/// Ported from `lib/dates.py` so the enforcer and the in-window prioritiser
+/// cannot drift apart (they already did once: the enforcer read three-letter
+/// stems while the prioritiser matched only full month names).
+#[must_use]
+pub fn find_dates_in(value: &str, year: i32) -> Vec<NaiveDate> {
+    let mut found = Vec::new();
+    for (first, last) in find_date_spans_in(value, year) {
+        for date in <[NaiveDate; 2]>::from((first, last)) {
+            if !found.contains(&date) {
+                found.push(date);
+            }
+        }
+    }
     found
 }
 
