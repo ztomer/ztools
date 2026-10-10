@@ -56,7 +56,7 @@ fn test_call_osaurus_and_run_summary_success() {
             3,
             1,
         )],
-        Some(output.path()),
+        output.path(),
         Some(&base_url),
         Some("mock-model"),
         &cfg,
@@ -82,7 +82,7 @@ fn test_call_osaurus_and_run_summary_success() {
 fn test_run_summary_cache_reading() {
     let env = TestEnv::new();
     let base_url = stub_server(
-        r###"{"choices": [{"message": {"content": "## Section\n- Cached tweet summary"}}]}"###,
+        r###"{"choices": [{"message": {"content": "## Section\n- Cached tweet summary (@cached_user | 10:00)"}}]}"###,
     );
     // A fixture cache, inside the sandbox, not the operator's.
     let cfg = sandboxed_config(&env.root().join("cfg"));
@@ -95,7 +95,7 @@ fn test_run_summary_cache_reading() {
     .unwrap();
     let output = tempfile::tempdir().unwrap();
 
-    let path = run_summary(&[], Some(output.path()), Some(&base_url), None, &cfg)
+    let path = run_summary(&[], output.path(), Some(&base_url), None, &cfg)
         .expect("the cached timeline is summarised");
     let doc = std::fs::read_to_string(&path).unwrap();
     assert!(
@@ -129,7 +129,7 @@ fn test_run_summary_empty_fallback() {
 
     let res = run_summary(
         &[],
-        Some(output.path()),
+        output.path(),
         Some("http://127.0.0.1:59999"),
         None,
         &cfg,
@@ -164,7 +164,7 @@ fn test_run_summary_merges_thinking_into_analysis_section() {
             1,
             0,
         )],
-        Some(output.path()),
+        output.path(),
         Some(&base_url),
         Some("mock-model"),
         &cfg,
@@ -192,7 +192,7 @@ fn test_run_summary_fails_when_model_returns_unusable_summary() {
             1,
             0,
         )],
-        Some(output.path()),
+        output.path(),
         Some(&base_url),
         Some("mock-model"),
         &cfg,

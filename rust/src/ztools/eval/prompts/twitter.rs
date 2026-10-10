@@ -30,6 +30,10 @@ facts from the provided chronological Twitter/X timeline.
    they appear in that tweet's source line. A source line beginning
    `[@TechCrunch | 08:00]:` yields a bullet ending `(@TechCrunch | 08:00)`.
    Never invent or reformat a date, weekday or time that is not in the source line.
+6. MERGE related tweets: when several tweets report the same story, write ONE bullet
+   for it and end it with each source's `(@handle | timestamp)`, one after another.
+   Never repeat a bullet or restate a fact you already wrote, and never write more
+   bullets than there are tweets.
 </instructions>
 
 <formatting_rules>
@@ -38,6 +42,7 @@ facts from the provided chronological Twitter/X timeline.
 - Use bullet points for facts
 - Use narrative verbs and connecting phrases showing event relationships
 - End every bullet with `(@handle | timestamp-exactly-as-written-in-the-source-line)`
+- Merge related tweets into one bullet; never repeat a bullet
 </formatting_rules>
 
 <timeline>
@@ -101,6 +106,10 @@ facts from the provided chronological Twitter/X timeline.
    they appear in that tweet's source line. A source line beginning
    `[@TechCrunch | 08:00]:` yields a bullet ending `(@TechCrunch | 08:00)`.
    Never invent or reformat a date, weekday or time that is not in the source line.
+6. MERGE related tweets: when several tweets report the same story, write ONE bullet
+   for it and end it with each source's `(@handle | timestamp)`, one after another.
+   Never repeat a bullet or restate a fact you already wrote, and never write more
+   bullets than there are tweets.
 </instructions>
 
 <formatting_rules>
@@ -109,6 +118,7 @@ facts from the provided chronological Twitter/X timeline.
 - Use bullet points for facts
 - Use narrative verbs and connecting phrases showing event relationships
 - End every bullet with `(@handle | timestamp-exactly-as-written-in-the-source-line)`
+- Merge related tweets into one bullet; never repeat a bullet
 </formatting_rules>
 
 <timeline>
@@ -175,6 +185,10 @@ facts from the provided chronological Twitter/X timeline.
    they appear in that tweet's source line. A source line beginning
    `[@TechCrunch | 08:00]:` yields a bullet ending `(@TechCrunch | 08:00)`.
    Never invent or reformat a date, weekday or time that is not in the source line.
+6. MERGE related tweets: when several tweets report the same story, write ONE bullet
+   for it and end it with each source's `(@handle | timestamp)`, one after another.
+   Never repeat a bullet or restate a fact you already wrote, and never write more
+   bullets than there are tweets.
 </instructions>
 
 <formatting_rules>
@@ -183,6 +197,7 @@ facts from the provided chronological Twitter/X timeline.
 - Use bullet points for facts
 - Use narrative verbs and connecting phrases showing event relationships
 - End every bullet with `(@handle | timestamp-exactly-as-written-in-the-source-line)`
+- Merge related tweets into one bullet; never repeat a bullet
 </formatting_rules>
 
 <timeline>
@@ -247,6 +262,10 @@ facts from the provided chronological Twitter/X timeline.
    they appear in that tweet's source line. A source line beginning
    `[@TechCrunch | 08:00]:` yields a bullet ending `(@TechCrunch | 08:00)`.
    Never invent or reformat a date, weekday or time that is not in the source line.
+6. MERGE related tweets: when several tweets report the same story, write ONE bullet
+   for it and end it with each source's `(@handle | timestamp)`, one after another.
+   Never repeat a bullet or restate a fact you already wrote, and never write more
+   bullets than there are tweets.
 </instructions>
 
 <formatting_rules>
@@ -255,6 +274,7 @@ facts from the provided chronological Twitter/X timeline.
 - Use bullet points for facts
 - Use narrative verbs and connecting phrases showing event relationships
 - End every bullet with `(@handle | timestamp-exactly-as-written-in-the-source-line)`
+- Merge related tweets into one bullet; never repeat a bullet
 </formatting_rules>
 
 <timeline>
@@ -283,6 +303,10 @@ facts from the provided chronological Twitter/X timeline.
    they appear in that tweet's source line. A source line beginning
    `[@TechCrunch | 08:00]:` yields a bullet ending `(@TechCrunch | 08:00)`.
    Never invent or reformat a date, weekday or time that is not in the source line.
+6. MERGE related tweets: when several tweets report the same story, write ONE bullet
+   for it and end it with each source's `(@handle | timestamp)`, one after another.
+   Never repeat a bullet or restate a fact you already wrote, and never write more
+   bullets than there are tweets.
 </instructions>
 
 <formatting_rules>
@@ -291,6 +315,7 @@ facts from the provided chronological Twitter/X timeline.
 - Use bullet points for facts
 - Use narrative verbs and connecting phrases showing event relationships
 - End every bullet with `(@handle | timestamp-exactly-as-written-in-the-source-line)`
+- Merge related tweets into one bullet; never repeat a bullet
 </formatting_rules>
 
 <timeline>
@@ -396,6 +421,10 @@ facts from the provided chronological Twitter/X timeline.
    they appear in that tweet's source line. A source line beginning
    `[@TechCrunch | 08:00]:` yields a bullet ending `(@TechCrunch | 08:00)`.
    Never invent or reformat a date, weekday or time that is not in the source line.
+6. MERGE related tweets: when several tweets report the same story, write ONE bullet
+   for it and end it with each source's `(@handle | timestamp)`, one after another.
+   Never repeat a bullet or restate a fact you already wrote, and never write more
+   bullets than there are tweets.
 </instructions>
 
 <formatting_rules>
@@ -404,6 +433,7 @@ facts from the provided chronological Twitter/X timeline.
 - Use bullet points for facts
 - Use narrative verbs and connecting phrases showing event relationships
 - End every bullet with `(@handle | timestamp-exactly-as-written-in-the-source-line)`
+- Merge related tweets into one bullet; never repeat a bullet
 </formatting_rules>
 
 <timeline>

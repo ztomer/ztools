@@ -47,6 +47,46 @@ pub(crate) struct TwitterSummarizeOpts {
     pub md_out: Option<PathBuf>,
 }
 
+/// Where a run's summary is written. Decided ONCE, from where the tweets came
+/// from, because the production store is what the dashboard and the status
+/// page show as "the latest summary" (newest file wins), so any write there IS
+/// a production write whether or not it was meant as one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Destination {
+    /// The store (`store::twitter_output_dir`). Only a live fetch of the
+    /// operator's timeline writes here: that is the scheduled run.
+    Production,
+    /// A fresh scratch directory under the system temp dir. A run over tweets
+    /// the caller supplied (`--json`) or saved earlier (`--use-cache`) is a
+    /// development or recovery run, and its summary must never become what the
+    /// dashboard shows. On 2026-10-09 a two-tweet `--json` fixture run did
+    /// exactly that. `--md-out` still copies the result wherever it is asked.
+    Scratch,
+}
+
+/// The destination for a run whose tweets come from `source`.
+pub(crate) const fn destination_for(source: &TweetSource) -> Destination {
+    match source {
+        TweetSource::Live { .. } => Destination::Production,
+        TweetSource::Json(_) | TweetSource::Cache => Destination::Scratch,
+    }
+}
+
+/// The directory a destination resolves to now.
+///
+/// # Errors
+///
+/// When a scratch directory cannot be created.
+fn destination_dir(destination: Destination) -> Result<PathBuf> {
+    match destination {
+        Destination::Production => Ok(crate::ztools::store::twitter_output_dir()),
+        Destination::Scratch => Ok(tempfile::Builder::new()
+            .prefix("ztools-twitter-scratch-")
+            .tempdir()?
+            .keep()),
+    }
+}
+
 /// Parse a tweet array, or nothing.
 ///
 /// Deliberately lossy in one direction only: unparseable input yields an empty
@@ -108,6 +148,33 @@ fn tweets_from_cache(
     None
 }
 
+/// The tweets of a `--json` source (a path, or `-` for stdin).
+///
+/// # Errors
+///
+/// When the source yields no tweet. A named source that yielded nothing is a
+/// refusal, never a fallback and never a run: summarising nothing is how
+/// "Please provide the timeline" was saved as a summary.
+fn tweets_from_named_source(path_or_dash: &str) -> Result<Vec<crate::ztools::twitter::Tweet>> {
+    let tweets = if path_or_dash == "-" {
+        let mut buffer = String::new();
+        if std::io::Read::read_to_string(&mut std::io::stdin(), &mut buffer).is_ok() {
+            tweets_from_json(&buffer)
+        } else {
+            Vec::new()
+        }
+    } else {
+        tweets_from_file(std::path::Path::new(path_or_dash))
+    };
+    if tweets.is_empty() {
+        anyhow::bail!(
+            "no tweets in --json {path_or_dash}: it is missing, unreadable, or not a tweet \
+             array, and a named source is never fallen back from"
+        );
+    }
+    Ok(tweets)
+}
+
 pub(crate) fn twitter_summarize(config: &ZtoolsConfig, command: TwitterCommand) -> Result<()> {
     let opts = match command {
         TwitterCommand::Latest { last_updated } => {
@@ -120,7 +187,7 @@ pub(crate) fn twitter_summarize(config: &ZtoolsConfig, command: TwitterCommand) 
         TwitterCommand::Clean => {
             // Housekeeping before a run, never the run: clear stored summaries,
             // report what happened, and exit successfully either way.
-            let dir = crate::ztools::store::twitter_store_dir();
+            let dir = crate::ztools::store::twitter_output_dir();
             let report = crate::ztools::store::clean_folder(&dir);
             for warning in &report.warnings {
                 eprintln!("⚠ {warning}");
@@ -140,19 +207,12 @@ pub(crate) fn twitter_summarize(config: &ZtoolsConfig, command: TwitterCommand) 
         md_out,
     } = opts;
 
+    let destination = destination_for(&source);
     let tweets = match source {
         // An explicit `--json` is a source the caller NAMED, so it is never
         // fallen back from, even when it yielded nothing: that would summarise
         // a different set of tweets than was asked for.
-        TweetSource::Json(path_or_dash) if path_or_dash == "-" => {
-            let mut buffer = String::new();
-            if std::io::Read::read_to_string(&mut std::io::stdin(), &mut buffer).is_ok() {
-                tweets_from_json(&buffer)
-            } else {
-                Vec::new()
-            }
-        }
-        TweetSource::Json(path) => tweets_from_file(std::path::Path::new(&path)),
+        TweetSource::Json(path_or_dash) => tweets_from_named_source(&path_or_dash)?,
         TweetSource::Cache => {
             let candidates: Vec<PathBuf> = [
                 dirs::home_dir().map(|h| h.join(".twitter_summary_debug_cache.json")),
@@ -206,7 +266,15 @@ pub(crate) fn twitter_summarize(config: &ZtoolsConfig, command: TwitterCommand) 
         }
     };
 
-    let path = crate::ztools::twitter::run_summary(&tweets, None, None, model.as_deref(), config)?;
+    let dir = destination_dir(destination)?;
+    if destination == Destination::Scratch {
+        println!(
+            "· Not a live run, so not a production summary: writing to {} (the store at {} is untouched)",
+            dir.display(),
+            crate::ztools::store::twitter_output_dir().display()
+        );
+    }
+    let path = crate::ztools::twitter::run_summary(&tweets, &dir, None, model.as_deref(), config)?;
     if let Ok(doc) = std::fs::read_to_string(&path) {
         println!("{doc}");
     }

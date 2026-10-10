@@ -81,10 +81,11 @@ fn assert_golden(actual: &str, name: &str) {
 
 /// The one line of the document the golden cannot hold still: the moment the
 /// summary was taken. Only `**Period:**`'s value is substituted, and only when
-/// it matches the writer's exact `%Y-%m-%d %H:%M UTC` shape — so a change to
-/// that format fails the comparison instead of silently skipping the line.
-const PERIOD: &str = r"(?m)^\*\*Period:\*\* \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC$";
-const PERIOD_STAMP: &str = "**Period:** <LOCAL CLOCK> UTC";
+/// it matches the writer's exact `%Y-%m-%d %H:%M %:z` shape (local clock, real
+/// offset) — so a change to that format fails the comparison instead of
+/// silently skipping the line.
+const PERIOD: &str = r"(?m)^\*\*Period:\*\* \d{4}-\d{2}-\d{2} \d{2}:\d{2} [+-]\d{2}:\d{2}$";
+const PERIOD_STAMP: &str = "**Period:** <LOCAL CLOCK> <LOCAL OFFSET>";
 
 fn without_the_clock(doc: &str) -> String {
     let re = regex::Regex::new(PERIOD).expect("the clock pattern is a valid regex");
@@ -133,14 +134,16 @@ fn stub_server(roster: &'static str, content: &'static str) -> String {
 }
 
 /// A structured answer that passes `check_summary_quality`: its own `##`
-/// headings, three bullets, and enough prose to clear the length warning.
+/// headings, one bullet per input tweet (never more), each citing its tweet in
+/// the `(@handle | timestamp)` form — the first on a wrapped continuation line —
+/// and enough prose to clear the length warning.
 const SUMMARY_BODY: &str = "\
 ## Executive Summary
 
-- Two threads dominated the timeline: a rail shutdown on the Lakeshore line and a
-  funding round closing Friday.
-- The Lakeshore thread is the louder of the two and repeats most across accounts.
-- The funding thread has one account reporting it and has not been picked up.
+- Two threads dominated the timeline, the louder a rail shutdown on the Lakeshore
+  line between Union and Bathurst (@transit_watch | Thu Aug 20 12:00:00 +0000 2026).
+- A funding round for small groups closes Friday and has not been picked up
+  (@civic_notes | Thu Aug 20 12:04:00 +0000 2026).
 
 ## What The Funding Thread Adds
 
@@ -199,7 +202,7 @@ fn run(roster: &'static str, content: &'static str) -> (std::path::PathBuf, Stri
     let cfg = config(&base_url, tmp.path());
     let path = crate::ztools::twitter::run_summary(
         &tweets(),
-        Some(&out),
+        &out,
         Some(&cfg.osaurus_url),
         Some(&cfg.twitter_model),
         &cfg,
@@ -276,7 +279,7 @@ fn the_goldens_were_read_not_merely_recorded() {
             "counts do not match the two tweets this file supplies:\n{doc}"
         );
         assert!(
-            doc.contains("**Period:** <LOCAL CLOCK> UTC"),
+            doc.contains("**Period:** <LOCAL CLOCK> <LOCAL OFFSET>"),
             "the clock stamp was not substituted, so this fixture froze a moment in time:\n{doc}"
         );
         // The model's own heading survives, and no `## Summary` preamble is
@@ -312,6 +315,27 @@ fn the_goldens_were_read_not_merely_recorded() {
         degraded.contains("answered by small-fallback-8b instead of the intended golden-model"),
         "a degraded run must name both models, or the reader cannot tell what happened:\n{degraded}"
     );
+}
+
+/// The `**Period:**` stamp is the local clock labelled with the local offset.
+///
+/// It used to print a LOCAL time followed by a literal "UTC", which was wrong
+/// by the offset on every run (four hours, here). The golden cannot see this:
+/// its stamp is substituted. So this reads the live line and checks the label
+/// against the offset the clock really has.
+#[test]
+fn the_period_stamp_names_the_real_offset_not_a_literal_utc() {
+    let (_p, doc) = run(r#"{"id":"golden-model"}"#, SUMMARY_BODY);
+    let line = doc
+        .lines()
+        .find(|l| l.starts_with("**Period:**"))
+        .expect("a Period line");
+    let offset = chrono::Local::now().format("%:z").to_string();
+    assert!(
+        line.ends_with(&format!(" {offset}")),
+        "the Period stamp must carry the local offset {offset}: {line:?}"
+    );
+    assert!(!line.contains("UTC"), "{line:?}");
 }
 
 /// The document's PARAGRAPH structure, asserted on documents rendered live.

@@ -1,0 +1,197 @@
+//! The gate a model's answer must pass before it is saved as a summary.
+//!
+//! THE INVARIANT. A saved summary is a DISTILLATION of the tweets it was given:
+//! each bullet states one fact that no other bullet states, cites the tweet(s)
+//! it came from in the `(@handle | timestamp)` form the prompt requires, and
+//! there are never more bullets than tweets, because a bullet that cites no
+//! tweet of its own is either a repeat or an invention.
+//!
+//! WHY THE OLD GATE WAS NOT ENOUGH. It rejected an answer only when it had no
+//! `##` header AND no bullet, so anything with one heading passed. In October
+//! 2026 the ~1B-active-parameter summarizer fell into repetition loops at
+//! temperature 0 — one run turned 43 tweets into 58 bullets, 35 of them
+//! duplicates — and those loops were saved as PRIMARY output with no degraded
+//! banner, because nothing between the model and the file could see a loop.
+//! Others wrote the attribution as `[@handle | ts]`, which the dashboard and the
+//! eval's attribution checks do not read as a citation. Each shape now rejects
+//! the answer, and a rejected answer falls to the next model in the chain
+//! (`chain::run_chain`); it is never saved.
+
+use std::collections::HashSet;
+use std::sync::LazyLock;
+
+use regex::Regex;
+
+/// More exact-or-near duplicate bullets than this rejects the answer. Not zero:
+/// two stories can legitimately close on the same sentence, and a single
+/// restated fact is a weak summary, not a loop.
+pub const MAX_DUPLICATE_BULLETS: usize = 2;
+
+/// Two bullets whose word sets overlap at least this many percent (Jaccard:
+/// shared words over all words) state the
+/// same thing. A loop repeats a bullet with at most a word or two changed; two
+/// different facts from one account share the handle and little else.
+const NEAR_DUPLICATE_PERCENT: usize = 85;
+
+/// Bullets shorter than this many words are compared exactly, never by
+/// overlap: on three words one changed word is a different fact.
+const NEAR_DUPLICATE_MIN_WORDS: usize = 5;
+
+/// The required citation: `(@handle | timestamp)`. Position is not policed (a
+/// merged bullet cites several sources in a row), the delimiters are.
+static ATTRIBUTION: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\(@[A-Za-z0-9_]+\s*\|[^)\n]+\)").expect("valid regex"));
+
+/// What the gate found: `warnings` describe a weak answer that is still saved,
+/// `rejections` an answer that must not be.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Quality {
+    pub warnings: Vec<String>,
+    pub rejections: Vec<String>,
+}
+
+impl Quality {
+    /// Whether the answer must not be saved.
+    #[must_use]
+    pub const fn rejected(&self) -> bool {
+        !self.rejections.is_empty()
+    }
+}
+
+/// The bullets of a markdown answer, each with its indented continuation lines
+/// joined on, so a citation wrapped onto the next line still belongs to its
+/// bullet.
+#[must_use]
+pub fn bullets(summary: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut open = false;
+    for line in summary.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed
+            .strip_prefix("- ")
+            .or_else(|| trimmed.strip_prefix("* "))
+        {
+            out.push(rest.trim().to_string());
+            open = true;
+        } else if open
+            && !trimmed.is_empty()
+            && !trimmed.starts_with('#')
+            && line.starts_with(char::is_whitespace)
+        {
+            if let Some(last) = out.last_mut() {
+                last.push(' ');
+                last.push_str(trimmed);
+            }
+        } else {
+            open = false;
+        }
+    }
+    out
+}
+
+/// Whether a bullet carries at least one `(@handle | timestamp)` citation.
+#[must_use]
+pub fn is_attributed(bullet: &str) -> bool {
+    ATTRIBUTION.is_match(bullet)
+}
+
+/// Lowercased alphanumeric words: case, punctuation and spacing never make two
+/// bullets different.
+fn words(bullet: &str) -> Vec<String> {
+    bullet
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_lowercase)
+        .collect()
+}
+
+fn same_fact(a: &[String], b: &[String]) -> bool {
+    if a == b {
+        return true;
+    }
+    if a.len() < NEAR_DUPLICATE_MIN_WORDS || b.len() < NEAR_DUPLICATE_MIN_WORDS {
+        return false;
+    }
+    let a: HashSet<&String> = a.iter().collect();
+    let b: HashSet<&String> = b.iter().collect();
+    let shared = a.intersection(&b).count();
+    let union = a.union(&b).count();
+    union > 0 && shared * 100 >= union * NEAR_DUPLICATE_PERCENT
+}
+
+/// How many bullets repeat an EARLIER bullet exactly or nearly.
+#[must_use]
+pub fn duplicate_bullets(bullets: &[String]) -> usize {
+    let normalised: Vec<Vec<String>> = bullets.iter().map(|b| words(b)).collect();
+    normalised
+        .iter()
+        .enumerate()
+        .filter(|(i, b)| normalised[..*i].iter().any(|earlier| same_fact(earlier, b)))
+        .count()
+}
+
+/// Validate a model answer for `input_tweets` tweets.
+///
+/// Rejects (see the module's invariant): an empty answer; one with neither a
+/// `##` header nor a bullet; more than [`MAX_DUPLICATE_BULLETS`] repeated
+/// bullets; more bullets than input tweets; and bullets that mostly lack the
+/// `(@handle | timestamp)` citation.
+#[must_use]
+pub fn check_summary_quality(summary: &str, input_tweets: usize) -> Quality {
+    let mut quality = Quality::default();
+    if summary.trim().is_empty() {
+        quality.rejections.push("Summary is empty".to_string());
+        return quality;
+    }
+    let header_count = summary
+        .lines()
+        .filter(|l| l.trim().starts_with("##"))
+        .count();
+    let char_count: usize = summary.lines().map(|l| l.trim().len()).sum();
+    let bullets = bullets(summary);
+
+    if header_count == 0 {
+        quality.warnings.push("No ## headers".to_string());
+    }
+    if bullets.len() < 3 {
+        quality
+            .warnings
+            .push(format!("Only {} bullet points", bullets.len()));
+    }
+    if char_count < 100 {
+        quality
+            .warnings
+            .push(format!("Very short ({char_count} chars)"));
+    }
+
+    if header_count == 0 && bullets.is_empty() {
+        quality
+            .rejections
+            .push("no ## header and no bullet: the answer has no structure".to_string());
+    }
+    let duplicates = duplicate_bullets(&bullets);
+    if duplicates > MAX_DUPLICATE_BULLETS {
+        quality.rejections.push(format!(
+            "{duplicates} of {} bullets repeat an earlier bullet (a repetition loop)",
+            bullets.len()
+        ));
+    }
+    if bullets.len() > input_tweets {
+        quality.rejections.push(format!(
+            "{} bullets for {input_tweets} input tweets: more bullets than tweets",
+            bullets.len()
+        ));
+    }
+    let unattributed = bullets.iter().filter(|b| !is_attributed(b)).count();
+    if unattributed * 2 > bullets.len() {
+        quality.rejections.push(format!(
+            "{unattributed} of {} bullets lack the `(@handle | timestamp)` attribution",
+            bullets.len()
+        ));
+    }
+    quality
+}
+
+#[cfg(test)]
+#[path = "quality_tests.rs"]
+mod tests;

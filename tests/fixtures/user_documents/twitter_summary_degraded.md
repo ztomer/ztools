@@ -1,6 +1,6 @@
 # Twitter Timeline Summary
 
-**Period:** <LOCAL CLOCK> UTC
+**Period:** <LOCAL CLOCK> <LOCAL OFFSET>
 **Tweets:** 2 fetched, 2 processed
 
 > ⚠ **DEGRADED OUTPUT** — this summary was NOT produced by the primary model.
@@ -12,10 +12,10 @@
 
 ## Executive Summary
 
-- Two threads dominated the timeline: a rail shutdown on the Lakeshore line and a
-  funding round closing Friday.
-- The Lakeshore thread is the louder of the two and repeats most across accounts.
-- The funding thread has one account reporting it and has not been picked up.
+- Two threads dominated the timeline, the louder a rail shutdown on the Lakeshore
+  line between Union and Bathurst (@transit_watch | Thu Aug 20 12:00:00 +0000 2026).
+- A funding round for small groups closes Friday and has not been picked up
+  (@civic_notes | Thu Aug 20 12:04:00 +0000 2026).
 
 ## What The Funding Thread Adds
 

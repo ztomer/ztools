@@ -74,3 +74,47 @@ checked by a gate, so re-derive it before editing it:
 All Phase M items (`M1` through `M16`) have landed. No open work remains in this phase.
 
 
+
+## Phase T — the twitter summary must be trustworthy when nobody is watching
+
+Depends on nothing. Ranked by what a failure hides: T1 hides nothing (the outcome is
+a non-zero exit naming the cause) but loses every run while Osaurus is down; T2 hides
+whether the decoding change helped at all.
+
+### T1 — the fallback chain has no model outside the one Osaurus server
+
+- **Class:** a fallback that shares the primary's failure domain is not a fallback.
+  Every entry in `conf/twitter.toml` `[fallback] models`, `foundation` included, is
+  served by the same server at `osaurus_url`, so when it is down the whole chain fails
+  at once (seen 2026-10-03). Nothing in `rust/src/ztools/llm.rs` or `conf/` reaches a
+  model by any other route; the Python-era direct-MLX tier was retired with no Rust
+  counterpart. Today the outcome is explicit — exit 1 and "every model in the fallback
+  chain (...) is served by the same Osaurus server at ..., so the chain has no fallback
+  outside that server" (`rust/src/ztools/twitter/mod.rs`, pinned by
+  `rust/tests/cli_refusals.rs`) — but no summary is produced.
+- **Why now:** the summarizer runs three times a day unattended; every Osaurus outage
+  is a lost run that only the status page reports.
+- **Done when:** a `[fallback]` entry routed to a second backend that does not depend on
+  the Osaurus process (a separate server, or an in-process runtime) answers in a
+  `rust/tests/cli_refusals.rs` case where the Osaurus URL is a closed port, and that
+  test exits 0 with a DEGRADED banner naming the second backend.
+- **Blocked by:** owner decision on which second backend to run (none is installed).
+
+### T2 — the summary decoding change is unmeasured on the live server
+
+- **Class:** a decoding knob believed rather than measured. The summarizer now sends
+  `temperature: 0.1` and `frequency_penalty: 0.3` (`SUMMARY_SAMPLING`,
+  `rust/src/ztools/twitter/mod.rs`) because temperature 0 looped. Osaurus 0.25.20
+  decodes the `frequency_penalty` key (read from its binary's strings, not from a live
+  request), but whether it changes this model's output, and whether its speculative
+  path refuses it, was not measured: the GPU is shared under the machine-wide lock and
+  the change landed without a live run.
+- **Why now:** the quality gate now REJECTS loops, so a decoding setting that still
+  loops costs a fallback (a DEGRADED summary) rather than a silently bad one.
+- **Done when:** repeated `ztools twitter-summarize --use-cache` runs on one cached
+  timeline (they write a scratch directory, never the store), under the GPU lock, at
+  `Sampling::GREEDY` and at `SUMMARY_SAMPLING`, are recorded in `docs/MODEL_QUIRKS.md`
+  with how many answers the quality gate rejected for each, showing the
+  `frequency_penalty` request answered rather than refused. (`model-eval` cannot
+  answer this: it pins temperature 0 by design.)
+- **Blocked by:** a free slot on the GPU lock (`tools/gpu_lock.sh`).

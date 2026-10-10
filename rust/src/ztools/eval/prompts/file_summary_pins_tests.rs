@@ -282,6 +282,7 @@ fn a_fixture_row_that_is_missing_is_an_error_naming_the_row_not_a_shorter_prompt
 /// another month, which is why the slot and what fills it are both asserted here.
 #[test]
 fn the_rendered_prompt_carries_the_files_own_content() {
+    let _env = crate::test_env::TestEnv::new(); // a deterministic `live_root`
     for (name, template) in [
         ("FILE_SUMMARY_PROMPT", FILE_SUMMARY_PROMPT),
         ("FILE_SUMMARY_PROMPT_MIXED", FILE_SUMMARY_PROMPT_MIXED),
@@ -343,6 +344,7 @@ fn the_rendered_prompt_carries_the_files_own_content() {
 #[test]
 fn the_rendered_prompt_stays_inside_its_stated_budget() {
     const CEILING_BYTES: usize = 24_576;
+    let _env = crate::test_env::TestEnv::new(); // a deterministic `live_root`
     let rendered = render(FILE_SUMMARY_PROMPT).expect("renders");
     assert!(
         rendered.len() <= CEILING_BYTES,
@@ -368,6 +370,7 @@ fn the_rendered_prompt_stays_inside_its_stated_budget() {
 /// needs a root, and it is the same one the renderer resolved.
 #[test]
 fn truncation_is_stated_and_short_files_are_not_announced_as_cut() {
+    let _env = crate::test_env::TestEnv::new(); // a deterministic `live_root`
     let block = excerpts().expect("the listed files are readable");
     let root = repo_root();
     let mut saw_cut = false;
@@ -478,6 +481,7 @@ fn the_content_block_sits_above_the_noise_marker() {
 /// is.
 #[test]
 fn one_content_block_serves_both_prompts() {
+    let _env = crate::test_env::TestEnv::new(); // a deterministic `live_root`
     let (plain, mixed) =
         render_both(FILE_SUMMARY_PROMPT, FILE_SUMMARY_PROMPT_MIXED).expect("renders");
     assert_eq!(plain, render(FILE_SUMMARY_PROMPT).expect("renders"));

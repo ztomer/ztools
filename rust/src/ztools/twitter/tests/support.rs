@@ -66,6 +66,7 @@ pub(super) fn stub_server(body: &'static str) -> String {
 }
 
 /// The stub's chat answer for a summariser test: a body that already opens
-/// with its own heading, so the writer's empty-`## Summary` guard is exercised.
-pub(super) const CHAT_BODY: &str =
-    r###"{"choices": [{"message": {"content": "## Section\n- Item 1\n- Item 2"}}]}"###;
+/// with its own heading, so the writer's empty-`## Summary` guard is exercised,
+/// and whose one bullet cites the one tweet these tests send in the required
+/// `(@handle | timestamp)` form, so the quality gate passes it.
+pub(super) const CHAT_BODY: &str = r###"{"choices": [{"message": {"content": "## Section\n- Item 1 (@routine_user | 14:00)"}}]}"###;

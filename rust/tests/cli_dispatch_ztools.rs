@@ -84,6 +84,11 @@ fn stub_server(body: &'static str) -> u16 {
 
 const LLM_TEXT: &str = r###"{"choices":[{"message":{"content":"## Highlights\n- one thing happened\n- another thing happened\n- a third thing happened"}}]}"###;
 
+/// The summarizer's stub answer: one bullet per input tweet, each citing its
+/// tweet as `(@handle | timestamp)`, so the quality gate passes it. (`LLM_TEXT`
+/// above, three uncited bullets, is what the gate exists to reject.)
+const TWITTER_LLM_TEXT: &str = r###"{"choices":[{"message":{"content":"## Highlights\n- The new API launched (@john_doe | 2026-08-01)\n- Early users report it is fast (@jane_smith | 2026-08-02)"}}]}"###;
+
 const LLM_EVENTS: &str = r#"{"choices":[{"message":{"content":"{\"transient_events\":[{\"name\":\"Rib Fest\",\"location\":\"Vaughan Park\",\"target_ages\":\"6-12\",\"price\":\"Free\",\"day\":\"Saturday\",\"description\":\"An outdoor festival for kids\"},{\"name\":\"Bare Listing\",\"location\":\"Vaughan\",\"target_ages\":\"all\",\"price\":\"Free\",\"day\":\"Sunday\",\"description\":\"\"}]}"}}]}"#;
 
 /// The planner's other real outcome: the model found nothing for this weekend.
@@ -110,10 +115,13 @@ fn weekend_config(model_port: u16, weather_port: u16, home: &std::path::Path) ->
     )
 }
 
+/// A `--json` run summarises and copies to `--md-out`, and does NOT write the
+/// production store: only a live fetch does. A two-tweet `--json` fixture run
+/// once became the summary the dashboard showed (2026-10-09).
 #[test]
 fn twitter_summarize_writes_a_summary_and_an_md_copy() {
     let home = fresh("twitter");
-    let port = stub_server(LLM_TEXT);
+    let port = stub_server(TWITTER_LLM_TEXT);
     write_config(
         &home,
         &format!(
@@ -122,9 +130,6 @@ fn twitter_summarize_writes_a_summary_and_an_md_copy() {
         ),
     );
 
-    // Tweets must be supplied: with an empty list the summarizer falls back to
-    // reading the configured cache, and with none the run must fail rather than
-    // fabricate a document.
     let tweets = home.join("tweets.json");
     fs::write(
         &tweets,
@@ -145,54 +150,31 @@ fn twitter_summarize_writes_a_summary_and_an_md_copy() {
         .arg(&tweets)
         .arg("--md-out")
         .arg(&md_out)
+        .arg("--model")
+        .arg("stub-model")
         .output()
         .unwrap();
 
     let stdout = stdout_of(&out);
     assert!(stdout.contains("twitter summary generated at"), "{stdout}");
     assert!(stdout.contains("copy saved to"), "{stdout}");
+    assert!(
+        stdout.contains("not a production summary"),
+        "a --json run must say it is not a production run: {stdout}"
+    );
     assert!(md_out.exists(), "--md-out copy was not written");
 
     let doc = fs::read_to_string(&md_out).unwrap();
     assert!(doc.contains("Twitter Timeline Summary"), "{doc}");
     assert!(doc.contains("2 fetched"), "both tweets should count: {doc}");
     assert!(doc.contains("Highlights"), "LLM body missing: {doc}");
-    // The write must land under the redirected HOME, never the real one.
     assert!(
-        home.join("Documents/twitter_summaries").is_dir(),
-        "summary was written outside the sandboxed HOME"
+        doc.contains("stub-model"),
+        "the --model override should reach the document: {doc}"
     );
-}
-
-/// An unreadable or absent tweets file is not fatal: the command still runs,
-/// it just has nothing of its own to summarize.
-#[test]
-fn twitter_summarize_tolerates_a_missing_tweets_file() {
-    let home = fresh("twitter-nofile");
-    let port = stub_server(LLM_TEXT);
-    write_config(
-        &home,
-        &format!(
-            "osaurus_url = \"http://127.0.0.1:{port}\"\nllm_timeout_secs = 10\n{}",
-            write_twitter_policy(&home)
-        ),
-    );
-    let out = Command::new(bin())
-        .env("HOME", &home)
-        .arg("--config")
-        .arg(home.join("ztools.toml"))
-        .arg("twitter-summarize")
-        .arg("--json")
-        .arg(home.join("does-not-exist.json"))
-        .arg("--model")
-        .arg("stub-model")
-        .output()
-        .unwrap();
-    let stdout = stdout_of(&out);
-    assert!(stdout.contains("twitter summary generated at"), "{stdout}");
     assert!(
-        stdout.contains("stub-model"),
-        "the --model override should reach the document: {stdout}"
+        !home.join("Documents/twitter_summaries").exists(),
+        "a --json run wrote the production store, which the dashboard reads as the latest summary"
     );
 }
 

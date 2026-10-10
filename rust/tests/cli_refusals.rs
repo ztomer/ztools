@@ -246,3 +246,95 @@ fn a_command_with_nothing_to_refuse_exits_0_in_the_same_sandbox() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+/// The summarizer's whole fallback chain against an Osaurus that is down.
+///
+/// Every model in the chain (the intended one and `[fallback] models`) is
+/// served by the ONE server at `osaurus_url`, so when it is down the chain has
+/// nowhere else to go (seen 2026-10-03: "every model in the chain failed").
+/// That outcome must be a non-zero exit whose message names the shared server,
+/// not N reasons that read as N independent model faults, and it must leave no
+/// document behind anywhere -- the store included.
+#[test]
+fn a_summary_with_its_one_server_down_exits_1_and_names_the_shared_server() {
+    let home = fresh("refuse-twitter-server-down");
+    let policy = home.join("twitter.toml");
+    fs::write(
+        &policy,
+        "[fallback]\nmodels = [\"foundation\"]\npreferred = [\"foundation\"]\n",
+    )
+    .unwrap();
+    let url = format!("http://127.0.0.1:{}", closed_loopback_port());
+    fs::write(
+        home.join("ztools.toml"),
+        format!(
+            "osaurus_url = \"{url}\"\nllm_timeout_secs = 5\ntwitter_config_paths = [\"{}\"]\n",
+            policy.display()
+        ),
+    )
+    .unwrap();
+    let tweets = home.join("tweets.json");
+    fs::write(
+        &tweets,
+        r#"[{"screen_name":"a","text":"One fact worth summarising today.","created_at":"08:00","favorite_count":0,"retweet_count":0,"reply_to":null}]"#,
+    )
+    .unwrap();
+
+    let out = run_sandboxed(
+        &home,
+        &["twitter-summarize", "--json", &tweets.display().to_string()],
+    );
+
+    assert_refused(
+        "twitter-summarize with the one Osaurus server down",
+        &out,
+        1,
+        &[
+            "ztools:",
+            "no summary written",
+            &format!("served by the same Osaurus server at {url}"),
+            "no fallback outside that server",
+            // The per-model reasons survive underneath the summary line.
+            "every model in the chain failed",
+        ],
+    );
+    assert!(
+        !home.join("Documents/twitter_summaries").exists(),
+        "a failed run must not create the store, let alone write into it"
+    );
+}
+
+/// `--json` names a source. When it yields nothing, the run refuses rather than
+/// summarising nothing: that is how five "Please provide the timeline" answers
+/// were saved as summaries of 0 tweets in August 2026.
+#[test]
+fn a_json_source_with_no_tweets_exits_1_and_names_the_source() {
+    let home = fresh("refuse-twitter-empty-json");
+    fs::write(
+        home.join("ztools.toml"),
+        format!(
+            "osaurus_url = \"http://127.0.0.1:{}\"\n",
+            closed_loopback_port()
+        ),
+    )
+    .unwrap();
+    let missing = home.join("does-not-exist.json");
+    let out = run_sandboxed(
+        &home,
+        &[
+            "twitter-summarize",
+            "--json",
+            &missing.display().to_string(),
+        ],
+    );
+    assert_refused(
+        "twitter-summarize --json on a file with no tweets",
+        &out,
+        1,
+        &[
+            "ztools:",
+            &format!("no tweets in --json {}", missing.display()),
+            "never fallen back from",
+        ],
+    );
+}

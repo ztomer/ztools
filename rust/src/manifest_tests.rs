@@ -139,12 +139,15 @@ fn expansion_consumes_one_prefix_and_does_not_normalise() {
     );
 }
 
-/// The wrapper reads the REAL home, so the one thing asserted here is that the
-/// real branch expands: an absolute path out, never the literal `~`. (The
-/// "no home directory" arm cannot be reached without mutating `$HOME` for the
-/// whole process, so it is left unpinned; it fails closed — the input path.)
+/// The wrapper reads `$HOME` through `dirs::home_dir()`, so the one thing
+/// asserted here is that that branch expands: an absolute path out, never the
+/// literal `~`. It reads the SANDBOX home: a test that resolves the operator's
+/// real `~` is one edit away from writing there, which is the class the audit
+/// gate's home-resolver hazards exist for. (The "no home directory" arm is left
+/// unpinned; it fails closed — the input path.)
 #[test]
 fn the_real_home_expands_a_leading_tilde_to_an_absolute_path() {
+    let env = crate::test_env::TestEnv::new();
     let expanded = expand_tilde("~/probe/only");
     assert!(
         expanded.is_absolute(),
@@ -154,8 +157,10 @@ fn the_real_home_expands_a_leading_tilde_to_an_absolute_path() {
     if let Some(home) = dirs::home_dir() {
         assert_eq!(expanded, home.join("probe/only"));
     }
+    assert!(expanded.starts_with(env.root()), "{expanded:?}");
     // A path with no tilde is untouched by the real branch too.
     assert_eq!(expand_tilde("conf/x.toml"), PathBuf::from("conf/x.toml"));
+    drop(env);
 }
 
 // MARK: - The checkout derivation, and the precedence behind it

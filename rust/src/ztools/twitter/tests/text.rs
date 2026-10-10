@@ -103,24 +103,8 @@ fn summary_section_never_prepends_a_heading_a_body_already_has() {
     assert_eq!(bare, "## Summary\n\nNothing but prose.");
 }
 
-#[test]
-fn test_check_summary_quality() {
-    let (warn_empty, crit_empty) = check_summary_quality("");
-    assert!(crit_empty);
-    assert!(warn_empty[0].contains("empty"));
-
-    let good_summary = "## Topic Section\n- Fact one about event\n- Fact two about event\n- Fact three about event\nDetailed description of timeline story.";
-    let (warn_good, crit_good) = check_summary_quality(good_summary);
-    assert!(!crit_good);
-    assert_empty!(warn_good);
-
-    let (warn_no_head, crit_no_head) = check_summary_quality("Just raw text without headers");
-    assert!(crit_no_head);
-    assert!(warn_no_head.iter().any(|w| w.contains("headers")));
-
-    let (warn_short, _) = check_summary_quality("## Short Header\n- Bullet item");
-    assert!(warn_short.iter().any(|w| w.contains("Very short")));
-}
+// The quality gate's own fixtures, one per degenerate shape, are in
+// `quality_tests.rs` beside the module that owns it.
 
 #[test]
 fn test_merge_thinking_with_summary_includes_analysis() {
@@ -164,7 +148,10 @@ fn test_extract_thinking_without_block_returns_text_untouched() {
 #[test]
 fn test_handle_model_output_passes_good_content_through() {
     // Port of test_success_first_model in test_twit_summarize.py.
-    let result = handle_model_output("## Topic\n- fact 1\n- fact 2\n- fact 3", 7);
+    let result = handle_model_output(
+        "## Topic\n- fact 1 (@a | 1)\n- fact 2 (@b | 2)\n- fact 3 (@c | 3)",
+        7,
+    );
     let (text, processed) = result.expect("good content must survive the gate");
     assert!(text.contains("Topic"), "{text}");
     assert_eq!(processed, 7);
@@ -175,7 +162,7 @@ fn test_handle_model_output_merges_thinking_when_present() {
     // Port of test_success_with_thinking: thinking routes through the merge,
     // then the merged text faces the same quality gate.
     let result = handle_model_output(
-        "<thinking>reasoning here</thinking>## Topic\n- a\n- b\n- c",
+        "<thinking>reasoning here</thinking>## Topic\n- a (@a | 1)\n- b (@b | 2)\n- c (@c | 3)",
         3,
     );
     let (text, _) = result.expect("merged thinking must survive the gate");
@@ -187,13 +174,22 @@ fn test_handle_model_output_merges_thinking_when_present() {
 fn test_handle_model_output_drops_critical_thinking_output() {
     // Port of test_thinking_critical_skips (single attempt): thinking present
     // but the body is unstructured, so the attempt yields nothing.
-    assert!(handle_model_output("<thinking>x</thinking>bad", 1).is_none());
+    assert!(handle_model_output("<thinking>x</thinking>bad", 1).is_err());
 }
 
 #[test]
 fn test_handle_model_output_drops_structureless_content() {
     // Port of test_target_model_with_known_critical_skips (single attempt).
-    assert!(handle_model_output("no structure here at all", 1).is_none());
+    assert!(handle_model_output("no structure here at all", 1).is_err());
+}
+
+/// A rejected answer carries the gate's reason, so the chain can record WHY
+/// the model was passed over rather than "no usable summary".
+#[test]
+fn test_handle_model_output_names_the_rejection() {
+    let looped = "## Topic\n- same fact (@a | 1)\n- same fact (@a | 1)\n- same fact (@a | 1)\n- same fact (@a | 1)";
+    let why = handle_model_output(looped, 10).unwrap_err();
+    assert!(why.contains("repeat an earlier bullet"), "{why}");
 }
 
 /// The sandbox config really is self-contained.

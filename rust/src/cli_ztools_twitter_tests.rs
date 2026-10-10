@@ -138,10 +138,49 @@ fn test_save_tweets_json_round_trips_through_the_loader() {
 fn test_debug_cache_path_is_the_shared_python_path() {
     // Both collectors write `~/.twitter_summary_debug_cache.json`: the Rust
     // `--fetch-only` and Python's `save_debug_cache` must name the same file
-    // or the A/B compares a run against itself.
+    // or the A/B compares a run against itself. Resolved under the sandbox:
+    // the path is a `~` path, and this test must not resolve the real one.
+    let env = crate::test_env::TestEnv::new();
     let path = debug_cache_path().unwrap();
     assert_eq!(
         path.file_name().unwrap(),
         ".twitter_summary_debug_cache.json"
     );
+    assert!(path.starts_with(env.root()), "{}", path.display());
+    drop(env);
+}
+
+/// Only a live fetch is a production run. `--json` and `--use-cache` summarise
+/// tweets the caller supplied or saved earlier, and the newest file in the
+/// store is what the dashboard shows, so their summaries must land elsewhere.
+#[test]
+fn only_a_live_fetch_writes_the_production_store() {
+    let live = TweetSource::Live {
+        since: None,
+        debug: false,
+        fetch_only: false,
+    };
+    assert_eq!(destination_for(&live), Destination::Production);
+    assert_eq!(
+        destination_for(&TweetSource::Json("-".into())),
+        Destination::Scratch
+    );
+    assert_eq!(destination_for(&TweetSource::Cache), Destination::Scratch);
+}
+
+/// The production destination is the store the READERS resolve, override
+/// included; a scratch destination is a fresh directory outside it.
+#[test]
+fn the_destinations_resolve_to_the_store_and_to_somewhere_else() {
+    let env = crate::test_env::TestEnv::new();
+    let store = env.set_path("TWITTER_OUTPUT_DIR", "store");
+    assert_eq!(destination_dir(Destination::Production).unwrap(), store);
+    let scratch = destination_dir(Destination::Scratch).unwrap();
+    assert!(scratch.is_dir(), "{}", scratch.display());
+    assert!(!scratch.starts_with(&store), "{}", scratch.display());
+    let second = destination_dir(Destination::Scratch).unwrap();
+    assert_ne!(scratch, second, "each scratch run gets its own directory");
+    std::fs::remove_dir_all(&scratch).unwrap();
+    std::fs::remove_dir_all(&second).unwrap();
+    drop(env);
 }

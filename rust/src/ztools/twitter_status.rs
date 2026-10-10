@@ -13,7 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::ztools::store::{newest_md, twitter_store_dir};
+use crate::ztools::store::{newest_md, twitter_output_dir};
 
 /// Identity reported to the harness.
 pub const NAME: &str = "ztools-twitter";
@@ -32,7 +32,7 @@ fn unknown(summary: &str) -> serde_json::Value {
 /// the status page AND the dashboard tab both resolve, so a test redirect
 /// moves both at once and they can never disagree about the directory.
 fn output_dir() -> PathBuf {
-    std::env::var("TWITTER_OUTPUT_DIR").map_or_else(|_| twitter_store_dir(), PathBuf::from)
+    twitter_output_dir()
 }
 
 /// The `**Tweets:** ...` remainder, if the summary carries the header.
@@ -209,7 +209,7 @@ mod tests {
         let probe = env.set_path("TWITTER_OUTPUT_DIR", "probe");
         let got = output_dir();
         assert_eq!(got, probe);
-        assert!(twitter_store_dir().ends_with("Documents/twitter_summaries"));
+        assert!(crate::ztools::store::twitter_store_dir().ends_with("Documents/twitter_summaries"));
         drop(env);
     }
 }

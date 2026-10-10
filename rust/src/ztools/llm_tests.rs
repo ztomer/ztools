@@ -151,3 +151,36 @@ fn a_prompt_that_overflows_documented_window_is_refused_before_wire() {
     );
     drop(env);
 }
+
+/// The default call stays greedy and sends no penalty key at all: a penalty is
+/// a per-task decision, and a JSON extract must not inherit one.
+#[test]
+fn the_default_call_is_greedy_with_no_penalty_key() {
+    let (url, rx) = serve(SSE, "text/event-stream", Duration::ZERO);
+    chat(&request(&url), &budget()).unwrap();
+    let wire = rx.recv().unwrap();
+    let body = wire.split("\r\n\r\n").nth(1).unwrap_or("");
+    let payload: serde_json::Value = serde_json::from_str(body).unwrap();
+    assert_eq!(payload["temperature"], 0.0);
+    assert!(
+        payload.get("frequency_penalty").is_none(),
+        "a default call must not carry a penalty: {payload}"
+    );
+}
+
+/// `chat_with` puts its decoding policy on the wire under the key the server
+/// decodes.
+#[test]
+fn chat_with_sends_its_temperature_and_frequency_penalty() {
+    let (url, rx) = serve(SSE, "text/event-stream", Duration::ZERO);
+    let sampling = Sampling {
+        temperature: 0.25,
+        frequency_penalty: Some(0.5),
+    };
+    chat_with(&request(&url), &budget(), &sampling).unwrap();
+    let wire = rx.recv().unwrap();
+    let body = wire.split("\r\n\r\n").nth(1).unwrap_or("");
+    let payload: serde_json::Value = serde_json::from_str(body).unwrap();
+    assert_eq!(payload["temperature"], 0.25);
+    assert_eq!(payload["frequency_penalty"], 0.5);
+}

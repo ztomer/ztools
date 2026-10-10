@@ -335,6 +335,27 @@ pub(super) const HAZARDS: &[&str] = &[
     "config_paths(&",
     "checkout_roots()",
     "first_checkout_root()",
+    // The functions that RESOLVE the operator's home (2026-10-10). A test that
+    // calls one without the guard gets the real `~`, and the only thing keeping
+    // it from writing there is that this particular test happens not to. A
+    // retired test left `{"screen_name":"u","text":"t"}` in the real
+    // `~/.twitter_summary_debug_cache.json` that way, and a fixture run's
+    // summary became what the dashboard showed.
+    "dirs::home_dir()",
+    "twitter_store_dir()",
+    "twitter_output_dir()",
+    "weekend_store_dir()",
+    "weekend_output_dir()",
+    "debug_cache_path()",
+    // The LIVE file-summary render resolves its checkout from `ZTOOLS_EXE`,
+    // `$HOME` and then the build's own checkout (`file_summary::live_root`).
+    // Unguarded, it reads the home checkout while no peer sandbox is live and
+    // this checkout while one is, so in a worktree whose listed files differ
+    // from the home checkout's, two renders in one test disagreed (2026-10-10).
+    "live_root()",
+    "excerpts()",
+    "render(FILE_SUMMARY_PROMPT",
+    "render_both(FILE_SUMMARY_PROMPT",
 ];
 
 pub(super) fn hazard_in(body: &str) -> Option<&'static str> {

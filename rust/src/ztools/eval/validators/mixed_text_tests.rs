@@ -57,7 +57,7 @@ fn mixed_summary_clean_scores_100_and_reports_coverage() {
     );
     assert_eq!(
         validate_mixed_summary(&out, TWITTER_PROMPT_MIXED),
-        (100, "signal coverage 5/258".to_string())
+        (100, "signal coverage 5/270".to_string())
     );
 }
 
@@ -70,7 +70,7 @@ fn mixed_summary_noise_is_deducted_per_entry() {
         validate_mixed_summary(&out, TWITTER_PROMPT_MIXED),
         (
             50,
-            "included 4/8 noise items; signal coverage 4/258".to_string()
+            "included 4/8 noise items; signal coverage 4/270".to_string()
         )
     );
 }
@@ -85,7 +85,7 @@ fn mixed_summary_empty_and_unrelated() {
         validate_mixed_summary(&json!("the quick brown fox"), TWITTER_PROMPT_MIXED),
         (
             30,
-            "included 1/8 noise items; signal coverage 0/258".to_string()
+            "included 1/8 noise items; signal coverage 0/270".to_string()
         )
     );
 }
@@ -255,6 +255,9 @@ fn factual_coverage_matches_python_on_the_controls() {
 /// plain variant does not even have.
 #[test]
 fn the_rendered_prompt_yields_seventeen_signal_rows_and_six_noise_rows() {
+    // The live render resolves its checkout from the environment; the guard
+    // makes that resolution this checkout's, every time (see `live_root`).
+    let _env = crate::test_env::TestEnv::new();
     let rendered_mixed = file_summary::render(FILE_SUMMARY_PROMPT_MIXED).expect("renders");
     let (signal_part, noise_part) = split_signal_noise(&rendered_mixed);
     assert_eq!(
@@ -303,6 +306,9 @@ fn the_rendered_prompt_yields_seventeen_signal_rows_and_six_noise_rows() {
 /// than trusted.
 #[test]
 fn the_content_block_does_not_move_a_single_path() {
+    // The live render resolves its checkout from the environment; the guard
+    // makes that resolution this checkout's, every time (see `live_root`).
+    let _env = crate::test_env::TestEnv::new();
     let rendered = file_summary::render(FILE_SUMMARY_PROMPT_MIXED).expect("renders");
 
     let out = json!([
@@ -369,6 +375,9 @@ fn a_noise_word_in_prose_does_not_become_the_marker() {
 /// only thing that keeps it losing is that the signal set is read by shape.
 #[test]
 fn the_mixed_variant_still_separates_guessing_inventing_and_dropping() {
+    // The live render resolves its checkout from the environment; the guard
+    // makes that resolution this checkout's, every time (see `live_root`).
+    let _env = crate::test_env::TestEnv::new();
     let rendered = file_summary::render(FILE_SUMMARY_PROMPT_MIXED).expect("renders");
     let signal: Vec<String> = FILE_SUMMARY_FILE_LIST
         .lines()

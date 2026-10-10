@@ -55,6 +55,31 @@ pub struct ChatBudget {
     pub max_tokens: u32,
 }
 
+/// How the server picks each token.
+///
+/// [`Sampling::GREEDY`] is what every production call sent before this type
+/// existed and what [`chat`] still sends. A caller whose task is prone to
+/// repetition loops asks for something else through [`chat_with`], scoped to
+/// that task: a penalty that suits a summary would distort a JSON extract.
+///
+/// `frequency_penalty` is the OpenAI-compatible key Osaurus 0.25.20 decodes on
+/// `/v1/chat/completions` (with `presence_penalty`; `repetition_penalty` is
+/// NOT a request key there, only a `generation_config.json` default). See
+/// `docs/MODEL_QUIRKS.md`, "Decoding policy for production".
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Sampling {
+    pub temperature: f64,
+    pub frequency_penalty: Option<f64>,
+}
+
+impl Sampling {
+    /// Temperature 0 and no penalty: the default for every call.
+    pub const GREEDY: Self = Self {
+        temperature: 0.0,
+        frequency_penalty: None,
+    };
+}
+
 /// What the request thread hands back, in order: the status, then lines.
 enum Event {
     SendFailed(String),
@@ -72,6 +97,48 @@ enum Event {
 /// nor a chat completion. The raw body is included in a parse error, because
 /// the usual cause is a server answering something other than the API.
 pub fn chat(req: &ChatRequest<'_>, budget: &ChatBudget) -> Result<String> {
+    chat_with(req, budget, &Sampling::GREEDY)
+}
+
+/// The JSON body of one request: thinking off, streamed, bounded, decoded as
+/// `sampling` says, and in JSON mode when asked.
+fn request_body(
+    req: &ChatRequest<'_>,
+    budget: &ChatBudget,
+    sampling: &Sampling,
+) -> serde_json::Value {
+    let mut messages = Vec::new();
+    if let Some(system) = req.system {
+        messages.push(serde_json::json!({"role": "system", "content": system}));
+    }
+    messages.push(serde_json::json!({"role": "user", "content": req.user}));
+    let mut payload = serde_json::json!({
+        "model": req.model,
+        "messages": messages,
+        "temperature": sampling.temperature,
+        "stream": true,
+        "max_tokens": budget.max_tokens,
+        "enable_thinking": false,
+    });
+    if let Some(penalty) = sampling.frequency_penalty {
+        payload["frequency_penalty"] = serde_json::json!(penalty);
+    }
+    if req.json {
+        payload["response_format"] = serde_json::json!({"type": "json_object"});
+    }
+    payload
+}
+
+/// [`chat`] with an explicit decoding policy.
+///
+/// # Errors
+///
+/// As [`chat`].
+pub fn chat_with(
+    req: &ChatRequest<'_>,
+    budget: &ChatBudget,
+    sampling: &Sampling,
+) -> Result<String> {
     let prompt_bytes = req.system.map_or(0, str::len) + req.user.len();
     if let Some(reason) = crate::ztools::eval::context_fit::context_refusal(req.model, prompt_bytes)
     {
@@ -83,22 +150,7 @@ pub fn chat(req: &ChatRequest<'_>, budget: &ChatBudget) -> Result<String> {
         .build()?;
     let url = format!("{}/v1/chat/completions", req.base_url.trim_end_matches('/'));
 
-    let mut messages = Vec::new();
-    if let Some(system) = req.system {
-        messages.push(serde_json::json!({"role": "system", "content": system}));
-    }
-    messages.push(serde_json::json!({"role": "user", "content": req.user}));
-    let mut payload = serde_json::json!({
-        "model": req.model,
-        "messages": messages,
-        "temperature": 0.0,
-        "stream": true,
-        "max_tokens": budget.max_tokens,
-        "enable_thinking": false,
-    });
-    if req.json {
-        payload["response_format"] = serde_json::json!({"type": "json_object"});
-    }
+    let payload = request_body(req, budget, sampling);
 
     // The stall guard covers the WHOLE exchange, headers included: a wedged
     // server accepts the connection and then sends nothing, and that silence

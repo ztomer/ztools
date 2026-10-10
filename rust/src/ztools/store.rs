@@ -25,6 +25,17 @@ pub fn twitter_store_dir() -> PathBuf {
         .join("Documents/twitter_summaries")
 }
 
+/// THE production twitter store, honouring `TWITTER_OUTPUT_DIR`.
+///
+/// The scheduled run writes here; the dashboard (`--fetch-latest`), the status
+/// page and `--clean` read here. `TWITTER_OUTPUT_DIR` overrides it, and the writer honours the override too:
+/// it used to resolve [`twitter_store_dir`] directly while every reader
+/// honoured the variable, so a redirect moved the readers and not the writer.
+#[must_use]
+pub fn twitter_output_dir() -> PathBuf {
+    std::env::var("TWITTER_OUTPUT_DIR").map_or_else(|_| twitter_store_dir(), PathBuf::from)
+}
+
 /// Default directory weekend plans are stored in.
 #[must_use]
 pub fn weekend_store_dir() -> PathBuf {
@@ -138,9 +149,7 @@ pub fn last_updated(path: &Path) -> Result<String> {
 ///
 /// As [`print_newest`]: no stored summary, or an unreadable one.
 pub fn twitter_latest(show_time: bool) -> Result<()> {
-    let dir =
-        std::env::var("TWITTER_OUTPUT_DIR").map_or_else(|_| twitter_store_dir(), PathBuf::from);
-    print_newest(&dir, show_time)
+    print_newest(&twitter_output_dir(), show_time)
 }
 
 /// Read-side entry point for `weekend-plan --fetch-latest` / `--last-updated`;

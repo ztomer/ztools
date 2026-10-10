@@ -11,6 +11,7 @@ pub mod cookies;
 pub mod endpoints;
 pub mod fallback;
 pub mod native;
+pub mod quality;
 pub mod session;
 
 pub use browser::{BrowserCollector, CamoufoxConfig, MockBrowserCollector};
@@ -18,6 +19,7 @@ pub use browser_parse::parse_tweets_from_response;
 pub use cookies::{
     Cookie, DEFAULT_DOMAINS, SESSION_COOKIE_NAME, find_firefox_profile_dbs, has_session_cookie,
 };
+pub use quality::{Quality, check_summary_quality};
 
 use std::collections::HashSet;
 use std::fs;
@@ -126,6 +128,21 @@ pub fn build_prompt(tweets: &[Tweet], max_chars: usize, instructions: &str) -> (
     (prompt, lines.len())
 }
 
+/// How the summarizer decodes: not greedy.
+///
+/// At temperature 0 the ~1B-active summarizer fell into repetition loops (43 tweets became 58 bullets, 35 of
+/// them repeats), and greedy decoding is the documented loop-prone setting
+/// (`docs/MODEL_QUIRKS.md`). A small temperature breaks the tie that sustains a
+/// loop; the frequency penalty taxes a token the more it has just been used.
+/// Both are deliberately small: the attribution format repeats `(@`, `|` and
+/// `)` in every bullet, and a strong penalty would fight the format the
+/// quality gate requires. The gate, not this, is what keeps a loop out of the
+/// store; this only makes one less likely.
+pub const SUMMARY_SAMPLING: crate::ztools::llm::Sampling = crate::ztools::llm::Sampling {
+    temperature: 0.1,
+    frequency_penalty: Some(0.3),
+};
+
 /// Call the local Osaurus server for one plain-text answer.
 ///
 /// Streams through [`crate::ztools::llm::chat`]: `timeout_secs` is the CAP
@@ -144,7 +161,7 @@ pub fn call_osaurus(
     timeout_secs: u64,
     config: &crate::config::ZtoolsConfig,
 ) -> Result<String> {
-    crate::ztools::llm::chat(
+    crate::ztools::llm::chat_with(
         &crate::ztools::llm::ChatRequest {
             base_url,
             model,
@@ -153,18 +170,26 @@ pub fn call_osaurus(
             json: false,
         },
         &config.chat_budget(timeout_secs),
+        &SUMMARY_SAMPLING,
     )
 }
 
-/// Run full Twitter summary flow and save markdown artifact.
+/// Run full Twitter summary flow and save the markdown into `output_dir`.
+///
+/// The directory is REQUIRED, never defaulted here: whether a run writes the
+/// production store (`store::twitter_output_dir`, which the dashboard and the
+/// status page read) is the caller's decision, made once where the tweet
+/// source is known (`cli_ztools_twitter::destination_for`). A library default
+/// to the real store is how test and `--json` runs became the summary the
+/// dashboard showed.
 ///
 /// # Errors
 ///
-/// From the model call, and from writing the summary to the output
-/// directory.
+/// When there is no tweet to summarise, when every model in the chain failed
+/// or was rejected by the quality gate, and from writing the summary.
 pub fn run_summary(
     tweets: &[Tweet],
-    output_dir: Option<&Path>,
+    output_dir: &Path,
     base_url: Option<&str>,
     model: Option<&str>,
     config: &crate::config::ZtoolsConfig,
@@ -185,6 +210,11 @@ pub fn run_summary(
         }
     }
 
+    // Nothing to summarise is a refusal, not a document: five "Please provide
+    // the timeline" answers were saved as summaries of 0 tweets in August 2026.
+    if tweets_vec.is_empty() {
+        anyhow::bail!("no tweets to summarise: nothing was collected, and no summary was written");
+    }
     let deduped = deduplicate_tweets(&tweets_vec);
     let clustered = crate::ztools::embeddings::cluster_tweets(&deduped, base_url, config)
         .unwrap_or_else(|_| deduped.iter().map(|t| vec![t.clone()]).collect());
@@ -220,10 +250,23 @@ pub fn run_summary(
         eprintln!("· Summarizing {processed} tweets with {candidate} on {base_url}...");
         let raw = call_osaurus(base_url, candidate, &prompt, timeout_secs, config)?;
         // A reasoning model's `<thinking>` block must not land verbatim in
-        // the saved markdown, and an unstructured answer must not be saved
-        // as success: a critical-quality attempt yields nothing, which the
-        // chain spends on the next model.
-        Ok(handle_model_output(&raw, processed))
+        // the saved markdown, and an answer the quality gate rejects must not
+        // be saved at all: the rejection is this model's recorded reason, and
+        // the chain moves on to the next model.
+        handle_model_output(&raw, processed)
+            .map(Some)
+            .map_err(|why| anyhow::anyhow!("answer rejected by the quality gate: {why}"))
+    })
+    .map_err(|e| {
+        // Every model in the chain is served by the ONE server at `base_url`,
+        // so "every model failed" when that server is down is one failure, not
+        // N. Say so, or the log reads as N independent model faults.
+        e.context(format!(
+            "no summary written: every model in the fallback chain ({}) is served by the same \
+             Osaurus server at {base_url}, so the chain has no fallback outside that server \
+             (docs/ROADMAP.md T1)",
+            plan.join(", ")
+        ))
     })?;
     if provenance.degraded() {
         eprintln!("⚠ Degraded summary: {}", provenance.describe());
@@ -234,10 +277,8 @@ pub fn run_summary(
 
     let now = Local::now();
     let filename = format!("{}_summary.md", now.format("%Y-%m-%d_%H%M"));
-    let default_dir = crate::ztools::store::twitter_store_dir();
-    let dir = output_dir.unwrap_or(&default_dir);
-    fs::create_dir_all(dir)?;
-    let out_path = dir.join(filename);
+    fs::create_dir_all(output_dir)?;
+    let out_path = output_dir.join(filename);
 
     let total = tweets_vec.len();
     // The blank line before `{banner}` is load-bearing, not spacing: without it
@@ -251,7 +292,9 @@ pub fn run_summary(
          **Tweets:** {} fetched, {} processed\n\n\
          {}\n\n\
          {}\n",
-        now.format("%Y-%m-%d %H:%M UTC"),
+        // The local clock, labelled with its real offset. It used to carry a
+        // literal "UTC" after a LOCAL time, which was wrong by the offset.
+        now.format("%Y-%m-%d %H:%M %:z"),
         total,
         processed,
         provenance.banner(),
@@ -313,68 +356,30 @@ pub fn merge_thinking_with_summary(thinking: &str, summary: &str) -> String {
     }
 }
 
-/// One model attempt's post-call branch: split thinking, then merge or strip.
+/// One model attempt's post-call branch: split thinking, gate, then merge.
 ///
 /// The UNMERGED body faces the quality gate, never the merged text: an
-/// appended `## Analysis` heading must not rescue an empty body. A critical
-/// body yields nothing even when thinking is present; the caller tries the
-/// next model. Port of `_summarize_with_model`'s post-call branch in
+/// appended `## Analysis` heading must not rescue an empty body. A rejected
+/// body yields the gate's reasons even when thinking is present; the caller
+/// tries the next model. Port of `_summarize_with_model`'s post-call branch in
 /// `references/twitter/summarize.py`; the transport stays with the caller so
 /// this remains unit-testable without a server.
-#[must_use]
-pub fn handle_model_output(content: &str, processed: usize) -> Option<(String, usize)> {
+///
+/// # Errors
+///
+/// The quality gate's rejections, joined, when the answer must not be saved.
+pub fn handle_model_output(content: &str, processed: usize) -> Result<(String, usize), String> {
     let (thinking, cleaned) = extract_thinking(content);
-    if thinking.is_empty() {
-        let stripped = crate::ztools::eval::clean::remove_thinking_blocks(&cleaned);
-        let (_warnings, critical) = check_summary_quality(&stripped);
-        if critical {
-            None
-        } else {
-            Some((stripped, processed))
-        }
+    let body = if thinking.is_empty() {
+        crate::ztools::eval::clean::remove_thinking_blocks(&cleaned)
     } else {
-        let (_warnings, critical) = check_summary_quality(&cleaned);
-        if critical {
-            None
-        } else {
-            Some((merge_thinking_with_summary(&thinking, &cleaned), processed))
-        }
+        cleaned
+    };
+    let quality = check_summary_quality(&body, processed);
+    if quality.rejected() {
+        return Err(quality.rejections.join("; "));
     }
-}
-
-/// Validate summary formatting quality (headers, bullet count, length).
-#[must_use]
-pub fn check_summary_quality(summary: &str) -> (Vec<String>, bool) {
-    if summary.trim().is_empty() {
-        return (vec!["Summary is empty".to_string()], true);
-    }
-    let mut warnings = Vec::new();
-    let mut header_count = 0;
-    let mut bullet_count = 0;
-    let mut char_count = 0;
-
-    for line in summary.lines() {
-        let stripped = line.trim();
-        char_count += stripped.len();
-        if stripped.starts_with("##") {
-            header_count += 1;
-        } else if stripped.starts_with("- ") || stripped.starts_with("* ") {
-            bullet_count += 1;
-        }
-    }
-
-    if header_count == 0 {
-        warnings.push("No ## headers".to_string());
-    }
-    if bullet_count < 3 {
-        warnings.push(format!("Only {bullet_count} bullet points"));
-    }
-    if char_count < 100 {
-        warnings.push(format!("Very short ({char_count} chars)"));
-    }
-
-    let critical = header_count == 0 && bullet_count == 0;
-    (warnings, critical)
+    Ok((merge_thinking_with_summary(&thinking, &body), processed))
 }
 
 #[cfg(test)]
