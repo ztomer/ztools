@@ -14,6 +14,7 @@ pub mod failures;
 pub mod gpu_lock;
 pub mod graded;
 pub mod leaderboard;
+pub mod leaderboard_format;
 pub mod model_resolve;
 pub mod outputs;
 pub mod oversize;

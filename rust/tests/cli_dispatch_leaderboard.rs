@@ -15,17 +15,64 @@ fn stdout_of(out: &std::process::Output) -> String {
     String::from_utf8_lossy(&out.stdout).into_owned()
 }
 
+/// The shipped `conf/`, pinned in the sandbox config so the binary and this
+/// test read the same roster.
+fn conf_dir() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("rust/ has a parent")
+        .join("conf")
+}
+
+/// The fingerprint of the roster's `json` task as it stands now. Since M17 the
+/// leaderboard scores only rows that carry it, so the seeded history does too.
+fn json_fingerprint() -> String {
+    let roster = ztools::eval::tasks::RosterInputs::in_dir(&conf_dir());
+    let tasks = ztools::eval::load_all_eval_tasks(&roster, None).unwrap();
+    let json = tasks
+        .iter()
+        .find(|t| t.name == "json")
+        .expect("roster has json");
+    ztools::eval::task_fingerprint(json)
+}
+
+fn write_roster_config(home: &std::path::Path) {
+    write_config(
+        home,
+        &format!("eval_conf_dirs = [\"{}\"]\n", conf_dir().display()),
+    );
+}
+
+/// Two clean `json` runs (80 then 100), each carrying `fingerprint`.
+fn history_json(first: i64, second: i64, fingerprint: Option<&str>) -> String {
+    let rows: Vec<serde_json::Value> =
+        [(100.0, "2026-09-01", first), (200.0, "2026-10-09", second)]
+            .into_iter()
+            .map(|(ts, date, score)| {
+                serde_json::json!({
+                    "date": date, "timestamp": ts, "task": "json", "score": score,
+                    "complete": true, "fingerprint": fingerprint,
+                })
+            })
+            .collect();
+    serde_json::json!({ "m": rows }).to_string()
+}
+
 fn seed_eval_history(home: &std::path::Path) {
+    write_roster_config(home);
     let conf_dir = home.join(".config/ztools");
     fs::create_dir_all(&conf_dir).unwrap();
-    let sample = r#"{"m":[{"date":"2026-09-01","timestamp":100.0,"task":"json","score":80,"complete":true},{"date":"2026-10-09","timestamp":200.0,"task":"json","score":100,"complete":true}]}"#;
-    fs::write(conf_dir.join("eval_history.json"), sample).unwrap();
+    let fp = json_fingerprint();
+    fs::write(
+        conf_dir.join("eval_history.json"),
+        history_json(80, 100, Some(&fp)),
+    )
+    .unwrap();
 }
 
 #[test]
 fn model_eval_leaderboard_json_and_min_tasks_cli() {
     let home = fresh("eval-min");
-    write_config(&home, "");
     seed_eval_history(&home);
     let out = ztool(&home)
         .args([
@@ -45,7 +92,6 @@ fn model_eval_leaderboard_json_and_min_tasks_cli() {
 #[test]
 fn model_eval_leaderboard_sort_by_and_delta_cli() {
     let home = fresh("eval-sort");
-    write_config(&home, "");
     seed_eval_history(&home);
     let out = ztool(&home)
         .args(["model-eval", "--leaderboard", "--sort-by", "json"])
@@ -84,7 +130,6 @@ fn model_eval_leaderboard_sort_by_and_delta_cli() {
 #[test]
 fn model_eval_leaderboard_flags_m13_to_m16_cli() {
     let home = fresh("eval-flags");
-    write_config(&home, "");
     seed_eval_history(&home);
 
     // M13: --category
@@ -103,9 +148,9 @@ fn model_eval_leaderboard_flags_m13_to_m16_cli() {
         .unwrap();
     assert!(csv_out.status.success());
     let stdout_csv = stdout_of(&csv_out);
-    assert!(
-        stdout_csv.starts_with("model,mean,delta,think,json,summarize,filename,vlm,tasks,date\n")
-    );
+    assert!(stdout_csv.starts_with(
+        "model,mean,delta,think,json,summarize,filename,vlm,tasks,date,not_current\n"
+    ));
     assert!(stdout_csv.contains("m,100.0,20.0"));
 
     // M15: --group-by-family
@@ -126,8 +171,12 @@ fn model_eval_leaderboard_flags_m13_to_m16_cli() {
 
     // M16: --fail-on-regression (drop from 100% to 50% = -50% delta should fail)
     let conf_dir = home.join(".config/ztools");
-    let reg_sample = r#"{"m":[{"date":"2026-09-01","timestamp":100.0,"task":"json","score":100,"complete":true},{"date":"2026-10-09","timestamp":200.0,"task":"json","score":50,"complete":true}]}"#;
-    fs::write(conf_dir.join("eval_history.json"), reg_sample).unwrap();
+    let fp = json_fingerprint();
+    fs::write(
+        conf_dir.join("eval_history.json"),
+        history_json(100, 50, Some(&fp)),
+    )
+    .unwrap();
     let fail_reg = ztool(&home)
         .args([
             "model-eval",
@@ -140,4 +189,34 @@ fn model_eval_leaderboard_flags_m13_to_m16_cli() {
     assert!(!fail_reg.status.success());
     let stderr_reg = String::from_utf8_lossy(&fail_reg.stderr);
     assert!(stderr_reg.contains("regression detected"), "{stderr_reg}");
+}
+
+/// M17 end to end: the binary loads the roster, and a row that does not carry
+/// the current `json` fingerprint (every row on disk before 2026-10-08, and
+/// every row of a retired task) is shown as not measured on the current task,
+/// never as a score.
+#[test]
+fn model_eval_leaderboard_does_not_score_a_stale_row_cli() {
+    let home = fresh("eval-stale");
+    write_roster_config(&home);
+    let conf_dir = home.join(".config/ztools");
+    fs::create_dir_all(&conf_dir).unwrap();
+    fs::write(
+        conf_dir.join("eval_history.json"),
+        history_json(80, 100, Some("0000000000000000")),
+    )
+    .unwrap();
+    let out = ztool(&home)
+        .args(["model-eval", "--leaderboard"])
+        .output()
+        .unwrap();
+    let stdout = stdout_of(&out);
+    assert!(
+        stdout.contains("| `m` | not current |"),
+        "a superseded json row must not be scored: {stdout}"
+    );
+    assert!(
+        stdout.contains("not measured on the current task"),
+        "{stdout}"
+    );
 }

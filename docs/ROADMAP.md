@@ -96,18 +96,6 @@ All Phase W items (`W1` through `W6`) landed on 2026-10-10. No open work remains
 `M1` through `M16` landed. Found while landing W5 (2026-10-10), when the weekend eval rows
 started sending the planner's own prompts:
 
-### M17 — the leaderboard ranks a model on rows its rivals were never scored on
-
-- **Class:** a comparison across two measurements. `leaderboard` takes each model's latest
-  run whatever its task fingerprints, so a model last swept before W5 shows a `json` score
-  from the retired weekend rows beside models scored on the new ones.
-- **Why now:** W5 changed every weekend row's fingerprint today; until each model is
-  re-swept, the json-slot ranking compares different tasks.
-- **Done when:** the leaderboard scores a task only for models whose latest result for it
-  carries the CURRENT fingerprint, shows the others as "not measured on the current
-  task", and a `leaderboard` test with one stale and one current model proves it.
-- **Blocked by:** nothing.
-
 ### M18 — config tables nothing reads
 
 - **Class:** inert config that reads like live config (Rust rule 6). `conf/models/*.toml`

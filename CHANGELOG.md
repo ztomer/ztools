@@ -97,6 +97,17 @@ This file starts at v2.2.0 — earlier history is in git.
   `file_summary` task embeds `gemma.toml` and `qwen.toml`, so its prompt and
   fingerprint change with them; its pinned truth for those rows moved off the
   deleted block.
+- **The leaderboard ranked a model on rows its rivals were never scored on.**
+  `model-eval --leaderboard` took each model's latest run whatever its task
+  fingerprints, so a model last swept before W5 showed a json score from the
+  retired weekend rows beside models scored on the new ones (M17). It now loads
+  the roster and scores a row only when it carries the current task's
+  fingerprint; any other row is shown as `not current` ("not measured on the
+  current task"), listed per model under the table, and kept out of the mean
+  and the slot scores. A run with no current row has no mean and ranks last.
+  The delta column had the same defect one column over and now compares only
+  tasks current in both runs. The CSV gains a `not_current` column; JSON rows
+  carry `not_current` and a nullable `overall_mean`.
 
 ## v3.6.0 — twitter summary quality, and a weekend plan for these kids _(2026-10-10)_
 

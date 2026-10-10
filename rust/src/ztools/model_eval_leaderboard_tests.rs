@@ -4,7 +4,28 @@ use crate::ztools::eval::leaderboard::{
     task_matches_category, task_slot,
 };
 use crate::ztools::eval::report::HistoryEntry;
+use crate::ztools::eval::task_fingerprint::TaskIdentities;
 use std::collections::BTreeMap;
+
+/// The fingerprint of every task the fixtures below name, as the roster holds
+/// it now. Since M17 the leaderboard scores only rows carrying these, so the
+/// fixtures carry them too: before M17 the fingerprints here were arbitrary
+/// (`fp0` on model A's previous run, `None` on model F and the delta fixture)
+/// because nothing read them; they now say "same task" where the test means it.
+pub fn current_ids() -> TaskIdentities {
+    [
+        ("weekend_transient", "fp1"),
+        ("summarize", "fp2"),
+        ("filename", "fp3"),
+        ("file_summary", "fp4"),
+        ("image_real", "fp5"),
+        ("taxes_anomalies", "fp6"),
+        ("json", "fpj"),
+    ]
+    .into_iter()
+    .map(|(t, f)| (t.to_string(), f.to_string()))
+    .collect()
+}
 
 fn model_a_prior_runs() -> Vec<HistoryEntry> {
     vec![
@@ -16,7 +37,7 @@ fn model_a_prior_runs() -> Vec<HistoryEntry> {
             score: 50,
             time: Some(1.0),
             complete: true,
-            fingerprint: None,
+            fingerprint: Some("fpj".to_string()),
         },
         // Previous multi-task clean run (timestamp 150.0, 5 tasks at 80% = 80.0% mean)
         HistoryEntry {
@@ -26,7 +47,7 @@ fn model_a_prior_runs() -> Vec<HistoryEntry> {
             score: 80,
             time: Some(2.0),
             complete: true,
-            fingerprint: Some("fp0".to_string()),
+            fingerprint: Some("fp1".to_string()),
         },
         HistoryEntry {
             date: "2026-09-15".to_string(),
@@ -35,7 +56,7 @@ fn model_a_prior_runs() -> Vec<HistoryEntry> {
             score: 80,
             time: Some(4.0),
             complete: true,
-            fingerprint: Some("fp0".to_string()),
+            fingerprint: Some("fp2".to_string()),
         },
         HistoryEntry {
             date: "2026-09-15".to_string(),
@@ -44,7 +65,7 @@ fn model_a_prior_runs() -> Vec<HistoryEntry> {
             score: 80,
             time: Some(0.5),
             complete: true,
-            fingerprint: Some("fp0".to_string()),
+            fingerprint: Some("fp3".to_string()),
         },
         HistoryEntry {
             date: "2026-09-15".to_string(),
@@ -53,7 +74,7 @@ fn model_a_prior_runs() -> Vec<HistoryEntry> {
             score: 80,
             time: Some(6.0),
             complete: true,
-            fingerprint: Some("fp0".to_string()),
+            fingerprint: Some("fp4".to_string()),
         },
         HistoryEntry {
             date: "2026-09-15".to_string(),
@@ -62,7 +83,7 @@ fn model_a_prior_runs() -> Vec<HistoryEntry> {
             score: 80,
             time: Some(3.0),
             complete: true,
-            fingerprint: Some("fp0".to_string()),
+            fingerprint: Some("fp5".to_string()),
         },
     ]
 }
@@ -202,13 +223,13 @@ fn sample_history() -> BTreeMap<String, Vec<HistoryEntry>> {
 
 pub fn verify_leaderboard_ranking() {
     let history = sample_history();
-    let rows = generate_leaderboard(&history, None, None).unwrap();
+    let rows = generate_leaderboard(&history, &current_ids(), None, None).unwrap();
     assert_eq!(rows.len(), 2, "only models with complete runs are ranked");
 
     // Rank 1: Model A (mean = (100+80+100+90+100)/5 = 94.0%, delta = +14.0%)
     let first = &rows[0];
     assert_eq!(first.model, "model_a");
-    assert!((first.overall_mean - 94.0).abs() < 0.01);
+    assert!((first.overall_mean.unwrap() - 94.0).abs() < 0.01);
     assert_eq!(first.delta, Some(14.0));
     assert_eq!(first.task_count, 5);
     assert_eq!(first.json_score, Some(100.0));
@@ -220,7 +241,7 @@ pub fn verify_leaderboard_ranking() {
     // Rank 2: Model B (mean = (80+70+90+60)/4 = 75.0%, delta = None)
     let second = &rows[1];
     assert_eq!(second.model, "model_b");
-    assert!((second.overall_mean - 75.0).abs() < 0.01);
+    assert!((second.overall_mean.unwrap() - 75.0).abs() < 0.01);
     assert_eq!(second.delta, None);
     assert_eq!(second.task_count, 4);
     assert_eq!(second.json_score, Some(80.0));
@@ -251,7 +272,7 @@ pub fn verify_leaderboard_slot_sorting() {
                 score: 98,
                 time: Some(2.0),
                 complete: true,
-                fingerprint: None,
+                fingerprint: Some("fp4".to_string()),
             },
             HistoryEntry {
                 date: "2026-10-09".to_string(),
@@ -260,7 +281,7 @@ pub fn verify_leaderboard_slot_sorting() {
                 score: 98,
                 time: Some(2.0),
                 complete: true,
-                fingerprint: None,
+                fingerprint: Some("fp6".to_string()),
             },
             HistoryEntry {
                 date: "2026-10-09".to_string(),
@@ -269,7 +290,7 @@ pub fn verify_leaderboard_slot_sorting() {
                 score: 40,
                 time: Some(1.0),
                 complete: true,
-                fingerprint: None,
+                fingerprint: Some("fp1".to_string()),
             },
             HistoryEntry {
                 date: "2026-10-09".to_string(),
@@ -278,7 +299,7 @@ pub fn verify_leaderboard_slot_sorting() {
                 score: 40,
                 time: Some(1.0),
                 complete: true,
-                fingerprint: None,
+                fingerprint: Some("fp2".to_string()),
             },
             HistoryEntry {
                 date: "2026-10-09".to_string(),
@@ -287,26 +308,27 @@ pub fn verify_leaderboard_slot_sorting() {
                 score: 49,
                 time: Some(1.0),
                 complete: true,
-                fingerprint: None,
+                fingerprint: Some("fp3".to_string()),
             },
         ],
     );
 
-    let overall_rows = generate_leaderboard(&history, None, Some("overall")).unwrap();
+    let overall_rows =
+        generate_leaderboard(&history, &current_ids(), None, Some("overall")).unwrap();
     assert_eq!(overall_rows[0].model, "model_a");
     assert_eq!(overall_rows[1].model, "model_f");
     assert_eq!(overall_rows[2].model, "model_b");
 
-    let think_rows = generate_leaderboard(&history, None, Some("think")).unwrap();
+    let think_rows = generate_leaderboard(&history, &current_ids(), None, Some("think")).unwrap();
     assert_eq!(think_rows[0].model, "model_f");
     assert_eq!(think_rows[1].model, "model_a");
     assert_eq!(think_rows[2].model, "model_b");
 
-    let vlm_rows = generate_leaderboard(&history, None, Some("vlm")).unwrap();
+    let vlm_rows = generate_leaderboard(&history, &current_ids(), None, Some("vlm")).unwrap();
     assert_eq!(vlm_rows[0].model, "model_a");
     assert_eq!(vlm_rows[1].model, "model_f");
 
-    assert!(generate_leaderboard(&history, None, Some("unsupported")).is_err());
+    assert!(generate_leaderboard(&history, &current_ids(), None, Some("unsupported")).is_err());
 }
 
 pub fn verify_leaderboard_deltas() {
@@ -321,7 +343,7 @@ pub fn verify_leaderboard_deltas() {
                 score: 90,
                 time: Some(1.0),
                 complete: true,
-                fingerprint: None,
+                fingerprint: Some("fpj".to_string()),
             },
             HistoryEntry {
                 date: "2026-10-01".to_string(),
@@ -330,11 +352,11 @@ pub fn verify_leaderboard_deltas() {
                 score: 80,
                 time: Some(1.0),
                 complete: true,
-                fingerprint: None,
+                fingerprint: Some("fpj".to_string()),
             },
         ],
     );
-    let rows = generate_leaderboard(&history, Some(1), None).unwrap();
+    let rows = generate_leaderboard(&history, &current_ids(), Some(1), None).unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].delta, Some(-10.0));
     let table = format_leaderboard(&rows);
@@ -359,7 +381,7 @@ fn test_task_slot_mapping() {
 #[test]
 fn test_empty_leaderboard() {
     let history = BTreeMap::new();
-    let rows = generate_leaderboard(&history, None, None).unwrap();
+    let rows = generate_leaderboard(&history, &current_ids(), None, None).unwrap();
     assert_eq!(rows.len(), 0);
     let table = format_leaderboard(&rows);
     assert!(table.contains("No complete model eval runs found in history"));
@@ -369,22 +391,22 @@ fn test_empty_leaderboard() {
 fn test_min_tasks_filtering() {
     let history = sample_history();
 
-    let default_rows = generate_leaderboard(&history, None, None).unwrap();
+    let default_rows = generate_leaderboard(&history, &current_ids(), None, None).unwrap();
     assert_eq!(default_rows.len(), 2);
 
-    let min5_rows = generate_leaderboard(&history, Some(5), None).unwrap();
+    let min5_rows = generate_leaderboard(&history, &current_ids(), Some(5), None).unwrap();
     assert_eq!(min5_rows.len(), 1);
     assert_eq!(min5_rows[0].model, "model_a");
     assert_eq!(min5_rows[0].task_count, 5);
 
-    let min6_rows = generate_leaderboard(&history, Some(6), None).unwrap();
+    let min6_rows = generate_leaderboard(&history, &current_ids(), Some(6), None).unwrap();
     assert_eq!(min6_rows.len(), 0);
 }
 
 #[test]
 fn test_leaderboard_json_serialization() {
     let history = sample_history();
-    let rows = generate_leaderboard(&history, None, None).unwrap();
+    let rows = generate_leaderboard(&history, &current_ids(), None, None).unwrap();
     let json_str = serde_json::to_string_pretty(&rows).unwrap();
     let parsed: Vec<serde_json::Value> = serde_json::from_str(&json_str).unwrap();
     assert_eq!(parsed.len(), 2);
@@ -407,25 +429,27 @@ fn test_category_filtering_m13() {
 
     let history = sample_history();
     let rows_weekend =
-        generate_leaderboard_filtered(&history, None, None, Some("weekend")).unwrap();
+        generate_leaderboard_filtered(&history, &current_ids(), None, None, Some("weekend"))
+            .unwrap();
     assert_eq!(rows_weekend.len(), 2);
     assert_eq!(rows_weekend[0].task_count, 1);
-    assert!((rows_weekend[0].overall_mean - 100.0).abs() < 0.01);
+    assert!((rows_weekend[0].overall_mean.unwrap() - 100.0).abs() < 0.01);
 
     let rows_twitter =
-        generate_leaderboard_filtered(&history, None, None, Some("twitter")).unwrap();
+        generate_leaderboard_filtered(&history, &current_ids(), None, None, Some("twitter"))
+            .unwrap();
     assert_eq!(rows_twitter.len(), 2);
 }
 
 #[test]
 fn test_csv_output_m14() {
     let history = sample_history();
-    let rows = generate_leaderboard(&history, None, None).unwrap();
+    let rows = generate_leaderboard(&history, &current_ids(), None, None).unwrap();
     let csv = format_leaderboard_csv(&rows);
     let lines: Vec<&str> = csv.lines().collect();
     assert_eq!(
         lines[0],
-        "model,mean,delta,think,json,summarize,filename,vlm,tasks,date"
+        "model,mean,delta,think,json,summarize,filename,vlm,tasks,date,not_current"
     );
     assert!(lines[1].starts_with("model_a,94.0,14.0,90.0,100.0,80.0,100.0,100.0,5,2026-10-09"));
 }
@@ -439,7 +463,7 @@ fn test_family_grouping_m15() {
     assert_eq!(detect_model_family("custom-model"), "other");
 
     let history = sample_history();
-    let rows = generate_leaderboard(&history, None, None).unwrap();
+    let rows = generate_leaderboard(&history, &current_ids(), None, None).unwrap();
     let grouped = format_leaderboard_by_family(&rows);
     assert!(grouped.contains("# Model Evaluation Leaderboard (Grouped by Family)"));
     assert!(grouped.contains("## Family: other"));
@@ -448,7 +472,7 @@ fn test_family_grouping_m15() {
 #[test]
 fn test_fail_on_regression_m16() {
     let mut history = sample_history();
-    let rows = generate_leaderboard(&history, None, None).unwrap();
+    let rows = generate_leaderboard(&history, &current_ids(), None, None).unwrap();
     assert_eq!(check_regression(&rows, 5.0), None);
 
     let runs_b = history.get_mut("model_b").unwrap();
@@ -460,9 +484,9 @@ fn test_fail_on_regression_m16() {
         score: 70,
         time: Some(1.0),
         complete: true,
-        fingerprint: None,
+        fingerprint: Some("fp1".to_string()),
     });
-    let rows_reg = generate_leaderboard(&history, None, None).unwrap();
+    let rows_reg = generate_leaderboard(&history, &current_ids(), None, None).unwrap();
     let reg = check_regression(&rows_reg, 5.0);
     assert!(reg.is_some());
     let (model, delta) = reg.unwrap();
