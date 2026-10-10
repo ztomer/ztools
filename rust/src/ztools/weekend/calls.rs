@@ -68,6 +68,16 @@ fn whole_lines(partial: &str) -> Option<String> {
     (!whole.trim().is_empty()).then(|| whole.to_string())
 }
 
+/// How the weekend's text phases decode: temperature 0.1, their own constant.
+///
+/// They used to borrow the Twitter summary's call, and with it
+/// `SUMMARY_SAMPLING` and any `TWITTER_TEMPERATURE` override; now a change to
+/// the summary's decoding cannot move the planner's.
+pub const TEXT_SAMPLING: crate::ztools::llm::Sampling = crate::ztools::llm::Sampling {
+    temperature: 0.1,
+    frequency_penalty: None,
+};
+
 /// One plain-text LLM call against the configured osaurus endpoint, retried
 /// per `phase_retries`.
 ///
@@ -81,12 +91,16 @@ pub fn call_llm_text(prompt: &str, config: &crate::config::ZtoolsConfig) -> Opti
     let model = &config.weekend_model;
     let retries = phase_retries(&config.weekend_region_paths);
     with_retries("llm text call", retries, || {
-        let answer = match crate::ztools::twitter::call_osaurus(
-            &config.osaurus_url,
-            model,
-            prompt,
-            config.llm_extended_timeout_secs,
-            config,
+        let answer = match crate::ztools::llm::chat_with(
+            &crate::ztools::llm::ChatRequest {
+                base_url: &config.osaurus_url,
+                model,
+                system: None,
+                user: prompt,
+                json: false,
+            },
+            &config.chat_budget(config.llm_extended_timeout_secs),
+            &TEXT_SAMPLING,
         ) {
             Ok(answer) => answer,
             Err(e) => {

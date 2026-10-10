@@ -147,6 +147,34 @@ pub const SUMMARY_SAMPLING: crate::ztools::llm::Sampling = crate::ztools::llm::S
     frequency_penalty: None,
 };
 
+/// Environment override for the summary's temperature, for one run: the seam
+/// the loop-rate measurement (`docs/MODEL_QUIRKS.md`, roadmap T2) runs
+/// through, like `TWITTER_FALLBACK_MODELS` for the chain.
+pub const TEMPERATURE_ENV: &str = "TWITTER_TEMPERATURE";
+
+/// [`SUMMARY_SAMPLING`], or the temperature `TWITTER_TEMPERATURE` asks for when
+/// it is a number a server takes (0 to 2). Anything else keeps the shipped
+/// policy and says so.
+#[must_use]
+pub fn summary_sampling() -> crate::ztools::llm::Sampling {
+    let Ok(raw) = std::env::var(TEMPERATURE_ENV) else {
+        return SUMMARY_SAMPLING;
+    };
+    match raw.trim().parse::<f64>() {
+        Ok(t) if (0.0..=2.0).contains(&t) => crate::ztools::llm::Sampling {
+            temperature: t,
+            ..SUMMARY_SAMPLING
+        },
+        _ => {
+            eprintln!(
+                "\u{26a0} {TEMPERATURE_ENV}={raw:?} is not a temperature from 0 to 2; using {}",
+                SUMMARY_SAMPLING.temperature
+            );
+            SUMMARY_SAMPLING
+        }
+    }
+}
+
 /// Call the local Osaurus server for one plain-text answer.
 ///
 /// Streams through [`crate::ztools::llm::chat`]: `timeout_secs` is the CAP
@@ -174,7 +202,7 @@ pub fn call_osaurus(
             json: false,
         },
         &config.chat_budget(timeout_secs),
-        &SUMMARY_SAMPLING,
+        &summary_sampling(),
     )
 }
 
