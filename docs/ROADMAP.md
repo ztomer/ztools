@@ -105,18 +105,6 @@ started sending the planner's own prompts:
   recorded and `[best_models] json` is set from it, with the run cited in the config.
 - **Blocked by:** a free GPU for the sweep (`tools/gpu_lock.sh`).
 
-### M21 — eval history still holds series under retired names
-
-- **Class:** dead records beside live ones. `conf/eval_signals.json` keeps
-  `weekend_fixed`, `weekend_fixed_mixed` and `detailed_json` series; fingerprints keep them
-  out of averages, but they are noise in every read.
-- **Why now:** cheap, and every M17 reading is easier without them.
-- **Done when:** `ztools eval-signals --prune` has run and the file holds no series for a
-  task the roster no longer has; a test fails if the prune leaves one.
-- **Blocked by:** nothing.
-
-
-
 ## Phase T — the twitter summary must be trustworthy when nobody is watching
 
 Depends on nothing. Ranked by what a failure hides: T1 hides nothing (the outcome is

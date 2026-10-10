@@ -142,6 +142,21 @@ This file starts at v2.2.0 — earlier history is in git.
   judged only the FIRST marker on a line, so a faithful copy of the planted row
   excused an obedient event after it on a one-line JSON answer. Both probes'
   fingerprints change; their history starts fresh.
+- **Eval history held series under retired names, and the prune left empty
+  shells (M21).** `ztools eval-signals --prune` already dropped a series whose
+  task the roster no longer has; it now also drops a model entry it leaves
+  empty, and `conf/eval_signals.json` has been pruned. Of 646 series, 563 went:
+  78 under retired names (`weekend_fixed`, `weekend_fixed_mixed`,
+  `detailed_json`, and four `weekend_debug`-style rows a test double wrote
+  before the sandbox existed), 397 with no fingerprint, and 88 whose task has
+  since changed under the same name (W5, M18 and M20 among the causes). 83 series remain, all
+  on the current tasks (the filename, image-rename and taxes rows), and 12 model
+  entries left empty were removed, `m` and `mock-model` among them. Dropping a
+  superseded series also drops its learned timeout; 25 were above the 900s
+  floor (bonsai-27b-ternary, nemotron, ornith, muse). The next observation
+  would have restarted those series and discarded them anyway; the derived
+  estimate and the floor bound the first run. A test now fails while the
+  shipped store holds a series for a task the roster no longer has.
 
 ## v3.6.0 — twitter summary quality, and a weekend plan for these kids _(2026-10-10)_
 
