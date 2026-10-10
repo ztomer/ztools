@@ -6,7 +6,7 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
-## Unreleased — twitter summary quality, and a weekend plan for these kids
+## v3.6.0 — twitter summary quality, and a weekend plan for these kids _(2026-10-10)_
 
 ### Added
 - **A rolling seven days of output, on by default.** After a run saves, every summary (or
