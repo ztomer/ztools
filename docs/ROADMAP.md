@@ -92,17 +92,6 @@ plan anymore; this file is.
 Found while fixing the weather labels (2026-10-10). Ranked by how much of the plan
 each one makes wrong.
 
-### W2 — the other fields fill placeholders the way the label did
-
-- **Class:** C4 (a field the model fills because empty reads as failure). The weather
-  label stopped defaulting once "unknown" was a named answer; price and duration have no
-  such word, and on 2026-10-10 Pumpkinfest came back price "Unlimited" and duration
-  "Unlimited", lifted from "Unlimited midway rides".
-- **Why now:** a placeholder price reads as a fact to a parent choosing between two events.
-- **Done when:** a replay of a saved structure batch shows price and duration either
-  copied from text that states them or empty, measured on the same rows before and after.
-- **Blocked by:** a free slot on the GPU lock for the replay (`tools/gpu_lock.sh`).
-
 ### W3 — the draft phase ignores its count
 
 - **Class:** an instruction the model does not follow, with nothing checking it. "Suggest

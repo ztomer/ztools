@@ -173,8 +173,10 @@ fn gate_rows(
     health.provenance.extracted = transient.len();
     let (transient, provenance_notes) =
         crate::ztools::weekend::drop_unsourced_rows(transient, corpus);
+    let (transient, price_notes) =
+        crate::ztools::weekend::fields::clear_unsourced_prices(transient, corpus);
     health.provenance.unsourced = health.provenance.extracted - transient.len();
-    for note in &provenance_notes {
+    for note in provenance_notes.iter().chain(&price_notes) {
         println!("→ {note}");
     }
     // The same event scraped from two results is one row: merged before any

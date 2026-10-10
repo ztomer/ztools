@@ -184,11 +184,7 @@ pub fn parse_llm_events(resp: &serde_json::Value) -> Option<Vec<WeekendEvent>> {
                 description: e.description,
                 name: e.name,
                 location: e.location,
-                price: if e.price.is_empty() {
-                    "unknown".to_string()
-                } else {
-                    e.price
-                },
+                price: fields::price_value(&e.price),
                 target_ages: if e.target_ages.is_empty() {
                     "unknown".to_string()
                 } else {
@@ -203,7 +199,7 @@ pub fn parse_llm_events(resp: &serde_json::Value) -> Option<Vec<WeekendEvent>> {
                 start_date: e.start_date.clone(),
                 end_date: e.end_date,
                 weather: setting::label_for(&e.place_kind, &e.weather).to_string(),
-                duration: e.duration,
+                duration: fields::duration_value(&e.duration),
                 for_families: suitability::family_answer(&e.for_families).to_string(),
                 is_transient: true,
                 score: 0.0,
@@ -212,6 +208,7 @@ pub fn parse_llm_events(resp: &serde_json::Value) -> Option<Vec<WeekendEvent>> {
     )
 }
 
+pub mod fields;
 pub mod followup;
 pub mod setting;
 pub use setting::weather_label;

@@ -44,6 +44,13 @@ This file starts at v2.2.0 — earlier history is in git.
   batches: the three adult events dropped; every "no" the model gave a family
   event (the robotics workshop for ages 7-14, among others) was overruled by
   the row's own stated ages.
+- **Price and duration carried filler.** Pumpkinfest's price and duration both
+  read "Unlimited" (from "Unlimited midway rides"), Pumpkins After Dark's price
+  "$10,000+" (from "10,000+ glowing pumpkins"), and a description sat in a
+  duration. `weekend/fields.rs` keeps a price only when it reads as one (an
+  amount, "free", "by donation") and a duration only when it reads as a time
+  or a length; a dollar amount the fetched corpus never states as dollars is
+  cleared, with a note naming it.
 - **The fixed table's weather column was blank.** The curated venues were
   built with an empty label. Each now states where it happens (a required
   field), so a trampoline park reads indoor and a conservation area outdoor.
