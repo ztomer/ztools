@@ -13,6 +13,8 @@ pub mod fallback;
 pub mod native;
 pub mod quality;
 mod rejected;
+pub mod repair;
+pub use repair::{Answer, MIN_REPAIRED_BULLETS, handle_model_output};
 pub mod session;
 
 pub use browser::{BrowserCollector, CamoufoxConfig, MockBrowserCollector};
@@ -283,14 +285,14 @@ pub fn run_summary(
         prompt.chars().count(),
         &budget::TimeoutInputs::pessimistic(),
     );
-    let ((summary_body, _), provenance) = chain::run_chain(&plan, model, |candidate| {
+    let (answer, provenance) = chain::run_chain(&plan, model, |candidate| {
         eprintln!("· Summarizing {processed} tweets with {candidate} on {base_url}...");
-        let raw = call_osaurus(base_url, candidate, &prompt, timeout_secs, config)?;
+        let (raw, cut) = repair::ask(base_url, candidate, &prompt, timeout_secs, config)?;
         // A reasoning model's `<thinking>` block must not land verbatim in
         // the saved markdown, and an answer the quality gate rejects must not
         // be saved at all: the rejection is this model's recorded reason, and
         // the chain moves on to the next model.
-        handle_model_output(&raw, &sources)
+        handle_model_output(&raw, &sources, cut)
             .map(Some)
             .map_err(|why| {
                 let stamp = Local::now().format("%Y-%m-%d_%H%M%S").to_string();
@@ -340,13 +342,26 @@ pub fn run_summary(
         now.format("%Y-%m-%d %H:%M %:z"),
         total,
         processed,
-        provenance.banner(),
-        summary_section_for(&summary_body)
+        repaired_banner(&provenance.banner(), &answer.repairs),
+        summary_section_for(&answer.body)
     );
 
     fs::write(&out_path, content)?;
     crate::ztools::settings::retain(output_dir, crate::ztools::settings::TWITTER_RETENTION);
     Ok(out_path)
+}
+
+/// The provenance banner, and below it what the repair changed, if anything:
+/// a summary saved from a repaired answer says so where the reader starts.
+fn repaired_banner(banner: &str, repairs: &[String]) -> String {
+    if repairs.is_empty() {
+        banner.to_string()
+    } else {
+        format!(
+            "{banner}\n\n> Repaired before saving: {}.",
+            repairs.join("; ")
+        )
+    }
 }
 
 /// The section under the summary header. The `## Summary` preamble exists only
@@ -398,40 +413,6 @@ pub fn merge_thinking_with_summary(thinking: &str, summary: &str) -> String {
     } else {
         format!("{summary}\n\n## Analysis\n{thinking}")
     }
-}
-
-/// One model attempt's post-call branch: split thinking, gate, then merge.
-///
-/// The UNMERGED body faces the quality gate, never the merged text: an
-/// appended `## Analysis` heading must not rescue an empty body. A rejected
-/// body yields the gate's reasons even when thinking is present; the caller
-/// tries the next model. Port of `_summarize_with_model`'s post-call branch in
-/// `references/twitter/summarize.py`; the transport stays with the caller so
-/// this remains unit-testable without a server.
-///
-/// # Errors
-///
-/// The quality gate's rejections, joined, when the answer must not be saved.
-pub fn handle_model_output(
-    content: &str,
-    sources: &[(String, String)],
-) -> Result<(String, usize), String> {
-    let processed = sources.len();
-    let (thinking, cleaned) = extract_thinking(content);
-    let body = if thinking.is_empty() {
-        crate::ztools::eval::clean::remove_thinking_blocks(&cleaned)
-    } else {
-        cleaned
-    };
-    let mut quality = check_summary_quality(&body, processed);
-    quality
-        .rejections
-        .extend(unmatched_citations(&body, sources));
-    if quality.rejected() {
-        return Err(quality.rejections.join("; "));
-    }
-    let (body, _) = drop_recited(&body);
-    Ok((merge_thinking_with_summary(&thinking, &body), processed))
 }
 
 #[cfg(test)]

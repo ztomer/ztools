@@ -58,16 +58,6 @@ fn with_retries<T>(
     None
 }
 
-/// The whole lines of an answer cut at the token limit, without the line the
-/// cut fell in; `None` when no line is whole.
-fn whole_lines(partial: &str) -> Option<String> {
-    let whole = partial
-        .rsplit_once('\n')
-        .map_or("", |(head, _)| head)
-        .trim_end();
-    (!whole.trim().is_empty()).then(|| whole.to_string())
-}
-
 /// How the weekend's text phases decode: temperature 0.1, their own constant.
 ///
 /// They used to borrow the Twitter summary's call, and with it
@@ -107,7 +97,7 @@ pub fn call_llm_text(prompt: &str, config: &crate::config::ZtoolsConfig) -> Opti
                 let Some(cut) = e.downcast_ref::<crate::ztools::llm::CutAnswer>() else {
                     return Err(e);
                 };
-                let Some(kept) = whole_lines(&cut.partial) else {
+                let Some(kept) = cut.whole_lines() else {
                     return Err(e);
                 };
                 println!(

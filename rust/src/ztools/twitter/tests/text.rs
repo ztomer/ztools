@@ -159,8 +159,10 @@ fn test_handle_model_output_passes_good_content_through() {
             ("f", "6"),
             ("g", "7"),
         ]),
+        false,
     );
-    let (text, processed) = result.expect("good content must survive the gate");
+    let answer = result.expect("good content must survive the gate");
+    let (text, processed) = (answer.body, answer.processed);
     assert!(text.contains("Topic"), "{text}");
     assert_eq!(processed, 7);
 }
@@ -172,8 +174,9 @@ fn test_handle_model_output_merges_thinking_when_present() {
     let result = handle_model_output(
         "<thinking>reasoning here</thinking>## Topic\n- a (@a | 1)\n- b (@b | 2)\n- c (@c | 3)",
         &given(&[("a", "1"), ("b", "2"), ("c", "3")]),
+        false,
     );
-    let (text, _) = result.expect("merged thinking must survive the gate");
+    let text = result.expect("merged thinking must survive the gate").body;
     assert!(text.contains("## Analysis"), "{text}");
     assert!(text.contains("reasoning here"), "{text}");
 }
@@ -182,13 +185,15 @@ fn test_handle_model_output_merges_thinking_when_present() {
 fn test_handle_model_output_drops_critical_thinking_output() {
     // Port of test_thinking_critical_skips (single attempt): thinking present
     // but the body is unstructured, so the attempt yields nothing.
-    assert!(handle_model_output("<thinking>x</thinking>bad", &given(&[("a", "1")])).is_err());
+    assert!(
+        handle_model_output("<thinking>x</thinking>bad", &given(&[("a", "1")]), false).is_err()
+    );
 }
 
 #[test]
 fn test_handle_model_output_drops_structureless_content() {
     // Port of test_target_model_with_known_critical_skips (single attempt).
-    assert!(handle_model_output("no structure here at all", &given(&[("a", "1")])).is_err());
+    assert!(handle_model_output("no structure here at all", &given(&[("a", "1")]), false).is_err());
 }
 
 /// A rejected answer carries the gate's reason, so the chain can record WHY
@@ -196,8 +201,11 @@ fn test_handle_model_output_drops_structureless_content() {
 #[test]
 fn test_handle_model_output_names_the_rejection() {
     let looped = "## Topic\n- same fact (@a | 1)\n- same fact (@a | 1)\n- same fact (@a | 1)\n- same fact (@a | 1)";
-    let why = handle_model_output(looped, &given(&[("a", "1"); 10])).unwrap_err();
-    assert!(why.contains("repeat an earlier bullet"), "{why}");
+    let why = handle_model_output(looped, &given(&[("a", "1"); 10]), false).unwrap_err();
+    // T3: the loop's repeats are repaired away, and the one bullet left is too
+    // few to save -- the reason names both.
+    assert!(why.contains("repeat a tweet already cited"), "{why}");
+    assert!(why.contains("1 verified bullet"), "{why}");
 }
 
 /// The tweets the prompt showed, as `(handle, created_at)`.
@@ -213,8 +221,12 @@ fn given(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
 #[test]
 fn test_handle_model_output_refuses_citations_of_tweets_it_was_not_given() {
     let invented = "## Topic\n- fact 1 (@a | 1)\n- fact 2 (@zz | 9)\n- fact 3 (@c | 3o)";
-    let why =
-        handle_model_output(invented, &given(&[("a", "1"), ("b", "2"), ("c", "3")])).unwrap_err();
+    let why = handle_model_output(
+        invented,
+        &given(&[("a", "1"), ("b", "2"), ("c", "3")]),
+        false,
+    )
+    .unwrap_err();
     assert!(why.contains("2 of 3 citations"), "{why}");
 }
 
@@ -222,8 +234,9 @@ fn test_handle_model_output_refuses_citations_of_tweets_it_was_not_given() {
 #[test]
 fn test_handle_model_output_saves_no_bullet_that_only_recites() {
     let answer = "## Topic\n- fact (@a | 1)\n- other (@b | 2)\n- fact again (@a | 1)\n";
-    let (saved, _) =
-        handle_model_output(answer, &given(&[("a", "1"), ("b", "2"), ("c", "3")])).unwrap();
+    let saved = handle_model_output(answer, &given(&[("a", "1"), ("b", "2"), ("c", "3")]), false)
+        .unwrap()
+        .body;
     assert!(!saved.contains("fact again"), "{saved}");
     assert!(saved.contains("- other (@b | 2)"), "{saved}");
 }

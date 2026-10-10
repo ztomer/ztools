@@ -1289,8 +1289,11 @@ What this means in practice:
 
 Every production call goes through `rust/src/ztools/llm.rs`. `chat` is greedy
 (`Sampling::GREEDY`: temperature 0, no penalty key on the wire); `chat_with` takes a
-per-task `Sampling`, and only the twitter summarizer uses it (`SUMMARY_SAMPLING` in
-`rust/src/ztools/twitter/mod.rs`: temperature 0.1, `frequency_penalty` 0.3).
+per-task `Sampling`: the twitter summarizer (`SUMMARY_SAMPLING` in
+`rust/src/ztools/twitter/mod.rs`: temperature 0.1, no penalty -- a `frequency_penalty` of
+0.3 garbled the citation tokens it taxed and was removed the same day) and the weekend
+planner's text phases (`weekend/calls.rs` `TEXT_SAMPLING`, also 0.1, their own constant
+since 2026-10-10). `TWITTER_TEMPERATURE` overrides the summary's temperature for one run.
 
 Why the summarizer differs: at temperature 0 the ~1B-active summarize model looped. One
 October run turned 43 tweets into 58 bullets, 35 of them duplicates, and it was saved
@@ -1309,7 +1312,30 @@ windowed over recent tokens (mlx-swift-lm's default window is 20), which is why 
 value does not fight the `(@handle | timestamp)` tokens every bullet repeats. The
 speculative (DFlash) path carries a "frequency_penalty needs per-step logits" string;
 whether that falls back to ordinary decoding or refuses was not measured.
-`docs/ROADMAP.md T2` is the live measurement.
+
+### Loop rate at temperature 0 and 0.1, measured 2026-10-10 (roadmap T2)
+
+One cached 43-tweet timeline, `raptor-v0.5-8b-a1b-jang_6m`, 5 runs at each setting,
+`TWITTER_TEMPERATURE=<t> TWITTER_FALLBACK_MODELS=no-such-model ztools twitter-summarize
+--use-cache` under the GPU lock, recording raptor's own verdict (before T3's repair):
+
+| temperature | saved | cut at max_tokens | loop rejected | citations rejected |
+|---|---|---|---|---|
+| 0 (greedy) | 0 | 5 (all at exactly 13,550 chars) | 0 | 0 |
+| 0.1 (shipped) | 0 | 3 (10,047 / 13,245 / 12,528 chars) | 1 (36 of 43 bullets repeated) | 1 ("32 of 32") |
+
+Greedy loops deterministically on this timeline; 0.1 breaks the determinism, not the
+loop. Three 15-tweet slices of the same timeline at 0.1: one saved, one cut (a loop at
+15 tweets), one rejected for 1 of 8 citations -- input size is not the cause either.
+
+What the rejections really were: the "32 of 32" (and foundation's "19 of 19", "27 of
+28") citations dropped the year (`Sat Oct 10 09:46:22 +0000` for `... +0000 2026`) and
+every one still named exactly one given tweet; the loop kept seven real, cited bullets
+before reciting two of them under every later heading. T3 (`twitter/repair.rs`) repairs
+to what is verifiable instead of discarding the whole answer: shortened citations
+resolve to the one tweet they name, a loop's repeats and bullets citing nothing given are
+dropped, a cut answer keeps its whole lines, and the saved summary says what was removed.
+Decoding stays at 0.1: it is no worse than greedy here and breaks greedy's determinism.
 
 
 ## The weekend provenance ledger, read 2026-10-08

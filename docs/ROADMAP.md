@@ -153,9 +153,9 @@ started sending the planner's own prompts:
 
 ## Phase T — the twitter summary must be trustworthy when nobody is watching
 
-Depends on nothing. Ranked by what a failure hides: T1 hides nothing (the outcome is
-a non-zero exit naming the cause) but loses every run while Osaurus is down; T2 hides
-whether the decoding change helped at all.
+Depends on nothing. T2 (the loop-rate measurement) landed 2026-10-10 with T3, the repair it
+motivated; both are in `docs/MODEL_QUIRKS.md`. T1 hides nothing (the outcome is a non-zero
+exit naming the cause) but loses every run while Osaurus is down.
 
 ### T1 — the fallback chain has no model outside the one Osaurus server
 
@@ -176,18 +176,3 @@ whether the decoding change helped at all.
   test exits 0 with a DEGRADED banner naming the second backend.
 - **Blocked by:** owner decision on which second backend to run (none is installed).
 
-### T2 — the summary decoding change is unmeasured on the live server
-
-- **Class:** a decoding knob believed rather than measured. The summarizer now sends
-  `temperature: 0.1` (`SUMMARY_SAMPLING`, `rust/src/ztools/twitter/mod.rs`) because
-  temperature 0 looped. A `frequency_penalty` of 0.3 was dropped after two live runs
-  (2026-10-10) garbled the citation tokens it penalised; how often temperature 0.1
-  alone still loops on this model was not measured.
-- **Why now:** the quality gate now REJECTS loops, so a decoding setting that still
-  loops costs a fallback (a DEGRADED summary) rather than a silently bad one.
-- **Done when:** repeated `ztools twitter-summarize --use-cache` runs on one cached
-  timeline (they write a scratch directory, never the store), under the GPU lock, at
-  `Sampling::GREEDY` and at `SUMMARY_SAMPLING`, are recorded in `docs/MODEL_QUIRKS.md`
-  with how many answers the quality gate rejected for each. (`model-eval` cannot
-  answer this: it pins temperature 0 by design.)
-- **Blocked by:** a free slot on the GPU lock (`tools/gpu_lock.sh`).

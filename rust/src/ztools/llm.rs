@@ -309,6 +309,20 @@ impl std::fmt::Display for CutAnswer {
 
 impl std::error::Error for CutAnswer {}
 
+impl CutAnswer {
+    /// The whole lines of what arrived, without the line the cut fell in;
+    /// `None` when no line is whole.
+    #[must_use]
+    pub fn whole_lines(&self) -> Option<String> {
+        let whole = self
+            .partial
+            .rsplit_once('\n')
+            .map_or("", |(head, _)| head)
+            .trim_end();
+        (!whole.trim().is_empty()).then(|| whole.to_string())
+    }
+}
+
 fn complete(content: String, finish_reason: Option<&str>) -> Result<String> {
     if finish_reason == Some("length") {
         return Err(CutAnswer { partial: content }.into());

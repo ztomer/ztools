@@ -8,6 +8,23 @@ This file starts at v2.2.0 — earlier history is in git.
 
 ## Unreleased
 
+### Fixed — twitter summary
+- **One timeline's summaries were all thrown away, for the wrong reasons.** On a
+  43-tweet timeline every attempt failed: greedy decoding looped 5 of 5 times, 0.1
+  looped or was cut 4 of 5, and the rest were rejected for "32 of 32 citations name
+  no tweet" -- citations that only dropped the year and each still named exactly one
+  given tweet. `twitter/repair.rs` now repairs an answer to what is verifiable before
+  the gate judges it: a shortened citation resolves to the one tweet it names and is
+  rewritten in full; bullets citing nothing given and a loop's recited repeats are
+  dropped; an answer cut at the length limit keeps its whole lines. More than a third
+  of citations naming nothing is still a rejection (the model is inventing), and a
+  repaired answer must keep 5 verified bullets (or half the tweets, if fewer). The
+  saved summary says what was repaired. The loop-rate measurement is in
+  `docs/MODEL_QUIRKS.md`.
+- **`TWITTER_TEMPERATURE`** overrides the summary's temperature for one run, and the
+  weekend planner's text phases decode on their own constant instead of borrowing the
+  summary's.
+
 ### Fixed — weekend planner
 - **Weather labels said "outdoor" for nearly everything.** The structure prompt
   allowed `""` for "the text does not say", and the model never used it: a

@@ -44,7 +44,7 @@ static ATTRIBUTION: LazyLock<Regex> =
 
 /// One citation, with the handle and timestamp captured for checking against
 /// the tweets the model was given.
-static CITATION: LazyLock<Regex> = LazyLock::new(|| {
+pub(crate) static CITATION: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\(@([A-Za-z0-9_]+)\s*\|\s*([^)\n]+?)\s*\)").expect("valid regex")
 });
 
@@ -88,6 +88,24 @@ pub fn unmatched_citations(summary: &str, sources: &[(String, String)]) -> Optio
 /// byte, when nothing is dropped.
 #[must_use]
 pub fn drop_recited(summary: &str) -> (String, usize) {
+    let mut seen: HashSet<(String, String)> = HashSet::new();
+    drop_bullets(summary, |cites| {
+        if !cites.is_empty() && cites.iter().all(|c| seen.contains(c)) {
+            return false;
+        }
+        seen.extend(cites.iter().cloned());
+        true
+    })
+}
+
+/// The answer without every bullet `keep` refuses, and how many went.
+///
+/// `keep` sees each bullet's `(handle, timestamp)` citations in order. A topic
+/// left with no bullets loses its header; nothing dropped, nothing changed.
+pub fn drop_bullets(
+    summary: &str,
+    mut keep: impl FnMut(&[(String, String)]) -> bool,
+) -> (String, usize) {
     // Blocks: a bullet with its indented continuation lines, or one other line.
     let mut blocks: Vec<(String, bool)> = Vec::new();
     for line in summary.split_inclusive('\n') {
@@ -104,7 +122,6 @@ pub fn drop_recited(summary: &str) -> (String, usize) {
             blocks.push((line.to_string(), bullet));
         }
     }
-    let mut seen: HashSet<(String, String)> = HashSet::new();
     let mut dropped = 0;
     let mut kept: Vec<&str> = Vec::new();
     // Per section: where its header sits in `kept`, and whether it lost a bullet.
@@ -126,14 +143,13 @@ pub fn drop_recited(summary: &str) -> (String, usize) {
                 .captures_iter(text)
                 .map(|c| (c[1].to_string(), c[2].trim().to_string()))
                 .collect();
-            if !cites.is_empty() && cites.iter().all(|c| seen.contains(c)) {
+            if !keep(&cites) {
                 dropped += 1;
                 if let Some((_, lost)) = section.as_mut() {
                     *lost = true;
                 }
                 continue;
             }
-            seen.extend(cites);
         }
         kept.push(text);
     }
