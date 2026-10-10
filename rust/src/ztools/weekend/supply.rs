@@ -14,6 +14,16 @@
 //! plan window and floats them to the top, leaving every other candidate
 //! present and selectable below. Supply is unchanged, so the model can never be
 //! starved into inventing; what changes is only what it sees first.
+//!
+//! WHAT FLOATS IS A WHOLE SOURCE, NEVER PART OF ONE. A search result is one
+//! line and floats alone. A followed listing page is many lines, and one entry
+//! on it spans several -- "add Screemers to my stay", "Oct 10 - 11Sat - Sun+16
+//! dates", "Screemers" -- with the date on a line of its own. This used to
+//! float single lines, so on 2026-10-10 that date went to the top and
+//! "Screemers" stayed ninety lines below it, in another extract batch: the
+//! extractor saw a date with no event and an event with no date. A page's
+//! lines now keep their order and their neighbours; an in-window line among
+//! them is marked where it stands.
 
 use chrono::{Datelike, NaiveDate};
 
@@ -40,30 +50,43 @@ pub fn mentions_window(text: &str, start: NaiveDate, end: NaiveDate) -> bool {
         .any(|(first, last)| *last >= start && *first <= end)
 }
 
-/// Float in-window candidates to the top of the corpus and mark them.
+/// Float in-window search results to the top of the corpus, and mark every
+/// in-window line.
 ///
-/// Order is preserved within each group, so this is a stable partition rather
-/// than a re-ranking -- two runs over the same corpus produce the same text.
+/// A line from a followed listing page ([`super::followup::followed_page_of`])
+/// is marked IN PLACE and never moves: its event's name and its date may be on
+/// different lines, and only their adjacency says they belong together. A
+/// search result is self-contained and floats. Order is preserved within each
+/// group, so this is a stable partition rather than a re-ranking -- two runs
+/// over the same corpus produce the same text -- and the output holds exactly
+/// the input's lines, some prefixed with [`IN_WINDOW_MARK`].
 ///
 /// Returns the corpus unchanged when nothing matches: a corpus with no dated
 /// candidates is a real situation (evergreen venue listings), and inventing a
 /// marker for it would tell the model something untrue.
 #[must_use]
 pub fn prioritise_in_window(corpus: &str, start: NaiveDate, end: NaiveDate) -> String {
-    let mut marked = Vec::new();
+    let mut floated = Vec::new();
     let mut rest = Vec::new();
+    let mut marked_any = false;
     for line in corpus.lines() {
-        if !line.trim().is_empty() && mentions_window(line, start, end) {
-            marked.push(format!("{IN_WINDOW_MARK} {line}"));
-        } else {
+        if line.trim().is_empty() || !mentions_window(line, start, end) {
             rest.push(line.to_string());
+            continue;
+        }
+        marked_any = true;
+        let marked = format!("{IN_WINDOW_MARK} {line}");
+        if super::followup::followed_page_of(line).is_some() {
+            rest.push(marked);
+        } else {
+            floated.push(marked);
         }
     }
-    if marked.is_empty() {
+    if !marked_any {
         return corpus.to_string();
     }
-    marked.extend(rest);
-    marked.join("\n")
+    floated.extend(rest);
+    floated.join("\n")
 }
 
 /// How many candidates actually land in the window.

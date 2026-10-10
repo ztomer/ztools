@@ -101,11 +101,28 @@ struct Token {
 
 /// Lower-cased alphanumeric runs: month names are pure letters, days are 1-2
 /// digits (with an optional ordinal suffix), explicit years 4 digits.
+///
+/// A switch between digits and letters starts a new run, except into an
+/// ordinal suffix: listing cards glue the weekday to the day ("Oct 10Sat+2
+/// dates"), and "10sat" read as one word hid the only date a fair's card
+/// carried. "10th" stays one run, so it is still a day.
 fn tokenize(value: &str) -> Vec<Token> {
     let mut tokens = Vec::new();
     let mut gap = String::new();
     let mut cur = String::new();
-    for c in value.to_lowercase().chars() {
+    let lower = value.to_lowercase();
+    let chars: Vec<char> = lower.chars().collect();
+    for (i, &c) in chars.iter().enumerate() {
+        let switches = cur
+            .chars()
+            .last()
+            .is_some_and(|p| p.is_ascii_digit() != c.is_ascii_digit());
+        if c.is_ascii_alphanumeric() && switches && !opens_ordinal(&cur, &chars[i..]) {
+            tokens.push(Token {
+                text: std::mem::take(&mut cur),
+                gap: std::mem::take(&mut gap),
+            });
+        }
         if c.is_ascii_alphanumeric() {
             cur.push(c);
         } else {
@@ -122,6 +139,19 @@ fn tokenize(value: &str) -> Vec<Token> {
         tokens.push(Token { text: cur, gap });
     }
     tokens
+}
+
+/// Does `rest` open an ordinal suffix on the digit run `cur` ("10" + "th")?
+/// Only a whole suffix counts: "10thursday" is not "10th" + "ursday".
+fn opens_ordinal(cur: &str, rest: &[char]) -> bool {
+    if cur.is_empty() || !cur.chars().all(|c| c.is_ascii_digit()) {
+        return false;
+    }
+    let word: String = rest
+        .iter()
+        .take_while(|c| c.is_ascii_alphabetic())
+        .collect();
+    matches!(word.as_str(), "st" | "nd" | "rd" | "th")
 }
 
 /// Where the END of a range starts, if token `j` opens one: a dash between

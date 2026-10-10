@@ -1,0 +1,37 @@
+# The draft and refine answers of a replay of 2026-10-10_thanksgiving_corpus.txt
+# on raptor-v0.5-8b-a1b-jang_6m (2026-10-10), verbatim, from its phase transcript.
+=== draft
+Robotics Workshop For Kids | Aloft by Marriott Vaughan Mills, Vaughan, ON | Saturday, October 10, 2026 from 11:00 AM onwards | Free | 7-14yrs | Family-friendly hands-on robotics workshop for kids in Vaughan.
+Markham Farmers Market | Main Street Markham, Markham | October 11, 2026 | unknown | "Discover great produce, local arts & crafts, and local independent businesses every week at the Main Street Markham Farmers' Market."
+Richmond Hill Activities | Richmond Hill, ON | October 9-11, 2026 | unknown | "Explore some of the best things to do in Richmond Hill, Ontario this weekend and make your Friday, Saturday and Sunday full of fun and excitement."
+RHGA Member Gallery Show and Sale | RHGA Member Gallery, Richmond Hill | October 11, 2026 - 11:00 am to 5:00 pm | unknown | "Winter/March Break Programs Registration"
+Toronto Events | Toronto, ON | October 9, 2026 | unknown | "Discover the best events and activities in Toronto on 9th October 2026. From live concerts to art exhibitions, find the perfect thing to do for an unforgettable day out."
+Very Toronto | Toronto, ON | October 9-12, 2026 | unknown | "Toronto this weekend (Oct 9-12): weather, 43 free events, festivals, plus editor picks. Full calendar on Very Toronto."
+Family Fun Toronto | Toronto, ON | October 9-12, 2026 | unknown | "Best weekend events in Toronto with kids! Discover FREE and Must-See family-friendly activities and hands-on fun on Family Fun Toronto."
+Toronto Thanksgiving Long Weekend | Toronto, ON | October 9 - 12, 2026 | unknown | "The best things to do in Toronto this Thanksgiving long weekend: October 9 - 12, 2026"
+8 Things to Do in Toronto This Thanksgiving Long Weekend | Toronto, ON | October 9-12, 2026 | unknown | "Oct. 9-12: What to know Toronto has plenty of Thanksgiving long weekend events happening from Oct. 9-12, including fall markets, Halloween workshops and comedy shows."
+Pumpkins After Dark | Toronto | October 9-12, 2026 | $10,000+ | 2-12 years | 10,000+ glowing pumpkins, a bee-themed family fun day
+Best Thanksgiving Events and Fall Festivals Near Toronto 2026 | Toronto | October 9-12, 2026 | unknown | A mix of midway rides, agricultural fairs, artisan markets, corn mazes, wagon rides and apple picking for families
+Thanksgiving Family Festival | Erin Mills Town Centre, Mississauga | October 10-11, 2026 | unknown | unknown | A fun-filled weekend combining seasonal shopping, entertainment, kids activities, local vendors, and food
+Thanksgiving Weekend Toronto 2026: 15 Things to Do | Toronto | October 10-12, 2026 | unknown | unknown | Hands-on workshops to family outings beyond the dinner table
+Kids Craft & Play | Erin Mills Town Centre, Mississauga | October 10-11, 2026 | unknown | unknown | A free two-day family festival with hands-on activities, games, local vendors, and more
+Fall Harvest Market | Sugar Beach, Toronto | October 9-12, 2026 | unknown | unknown | Pumpkin painting, pumpkin bowling, face painting, kids' activities, cozy fire pits, and harvest foods
+Robotics Workshop For Kids at Vaughan Mills | Vaughan, ON | Sat 10 Oct 2026 from 11:00 AM onwards | Free | 7-14yrs | Hands-on robotics workshop for kids ages 7-14 at Aloft by Marriott Vaughan Mills
+Creativity Lab (Grades 1-6) | Vaughan, ON | Sat 24 Oct 2026 from 3:00 PM onward | Unknown | 1-6 | A creativity lab for grades 1-6 at Vaughan
+=== refine
+Robotics Workshop For Kids | Aloft by Marriott Vaughan Mills, Vaughan, ON | Saturday, October 10, 2026 from 11:00 AM onwards | Free | 7-14yrs | Family-friendly hands-on robotics workshop for kids in Vaughan.
+Markham Farmers Market | Main Street Markham, Markham | October 11, 2026 | unknown | unknown | "Discover great produce, local arts & crafts, and local independent businesses every week at the Main Street Markham Farmers' Market."
+Richmond Hill Activities | Richmond Hill, ON | October 9-11, 2026 | unknown | unknown | "Explore some of the best things to do in Richmond Hill, Ontario this weekend and make your Friday, Saturday and Sunday full of fun and excitement."
+RHGA Member Gallery Show and Sale | RHGA Member Gallery, Richmond Hill | October 11, 2026 - 11:00 am to 5:00 pm | unknown | unknown | "Winter/March Break Programs Registration"
+Toronto Events | Toronto, ON | October 9, 2026 | unknown | unknown | "Discover the best events and activities in Toronto on 9th October 2026. From live concerts to art exhibitions, find the perfect thing to do for an unforgettable day out."
+Very Toronto | Toronto, ON | October 9-12, 2026 | unknown | unknown | "Toronto this weekend (Oct 9-12): weather, 43 free events, festivals, plus editor picks. Full calendar on Very Toronto."
+Family Fun Toronto | Toronto, ON | October 9-12, 2026 | unknown | unknown | "Best weekend events in Toronto with kids! Discover FREE and Must-See family-friendly activities and hands-on fun on Family Fun Toronto."
+Toronto Thanksgiving Long Weekend | Toronto, ON | October 9 - 12, 2026 | unknown | unknown | "The best things to do in Toronto this Thanksgiving long weekend: October 9 - 12, 2026"
+8 Things to Do in Toronto This Thanksgiving Long Weekend | Toronto, ON | October 9-12, 2026 | unknown | unknown | "Oct. 9-12: What to know Toronto has plenty of Thanksgiving long weekend events happening from Oct. 9-12, including fall markets, Halloween workshops and comedy shows."
+Pumpkins After Dark | Toronto | October 9-12, 2026 | $10,000+ | 2-12yrs | 10,000+ glowing pumpkins, a bee-themed family fun day
+Best Thanksgiving Events and Fall Festivals Near Toronto 2026 | Toronto | October 9-12, 2026 | unknown | unknown | A mix of midway rides, agricultural fairs, artisan markets, corn mazes, wagon rides and apple picking for families
+Thanksgiving Family Festival | Erin Mills Town Centre, Mississauga | October 10-11, 2026 | unknown | unknown | A fun-filled weekend combining seasonal shopping, entertainment, kids activities, local vendors, and food
+Kids Craft & Play | Erin Mills Town Centre, Mississauga | October 10-11, 2026 | unknown | unknown | A free two-day family festival with hands-on activities, games, local vendors, and more
+Fall Harvest Market | Sugar Beach, Toronto | October 9-12, 2026 | unknown | unknown | Pumpkin painting, pumpkin bowling, face painting, kids' activities, cozy fire pits, and harvest foods
+Robotics Workshop For Kids at Vaughan Mills | Vaughan, ON | Sat 10 Oct 2026 from 11:00 AM onwards | Free | 7-14yrs | Hands-on robotics workshop for kids ages 7-14 at Aloft by Marriott Vaughan Mills
+Creativity Lab (Grades 1-6) | Vaughan, ON | Sat 24 Oct 2026 from 3:00 PM onward | Unknown | 1-6 | A creativity lab for grades 1-6 at Vaughan

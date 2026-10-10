@@ -151,6 +151,64 @@ This file starts at v2.2.0 — earlier history is in git.
   `<plan store>/corpus/<run>_phases.txt`, under the same stamp as that run's corpus and with
   the same bound (newest 10), so a thin plan names the phase that thinned it without
   replaying the model (`weekend/transcript.rs`, `store_corpus.rs`).
+- **The same event twice, and an event lost at refine.** The 2026-10-10 plan listed the
+  robotics workshop and the Markham Farmers' Market twice each, and the Sugar Beach Fall
+  Harvest Market reached refine and was not in its answer. Two causes. Duplicates come from
+  the corpus (two results name one event) and the refine prompt's "merge near-duplicates"
+  did not merge them: on a replay it carried "Robotics Workshop For Kids" and "... at Vaughan
+  Mills" through untouched. And refine was lossy by construction -- "keep the best 8 ... sort
+  by overall appeal", its answer replacing the draft. Now: whether two rows are one event is
+  verifiable (same name words, or one adds only venue words; overlapping dates; one location
+  inside the other), so `weekend/dedup.rs` merges them after the provenance gate, keeps the
+  richer row and fills its gaps from the twin, and the ledger counts it (`N duplicate`, a
+  sixth count; older plans parse as 0). Refine keeps its judgement (is this an event? are
+  these one?) but no cap and no ranking, and must write `DROPPED | NAME | reason` for every
+  removal; `merge_refined` (`weekend/refine.rs`) lays its answer back over the draft and
+  RESTORES any draft row it neither kept nor dropped with a reason, naming it. On the first
+  replay's answers refine left out one row silently, and it is restored (a listing title,
+  which the listing gate then drops with a reason); on the second, live with the new prompt,
+  refine silently left out "Main Street Markham Farmers Market" and "Creativity Lab", and
+  both were restored. A "DROPPED" line for a row the answer also kept is ignored (raptor
+  wrote 37 of those).
+- **The structure phase was one call over every row.** With refine's cap gone, the second
+  replay's draft returned ~80 rows, the structure prompt was 13.8K chars, and both attempts
+  produced nothing: every event lost at the last phase. The old "keep the best 8" had been
+  bounding it by accident. Structure now goes in batches of `STRUCTURE_BATCH` (10) rows; a
+  failed batch loses only its own rows and says so (`weekend/phases.rs`). Not yet measured
+  live.
+- **Listing-page titles passed the listing gate as event names**: "Richmond Hill, ON",
+  "Best Thanksgiving Events and Fall Festivals Near Toronto 2026", and on the replay
+  "Toronto Events", "Family Fun Toronto", "Richmond Hill Activities", "Toronto Thanksgiving
+  Long Weekend". A name that names no event -- every word a configured place, listing
+  vocabulary, a plural category ("festivals"; an event is "a festival"), a season, holiday or
+  date -- is now dropped (`suitability::names_no_event`); real names stand on one word of
+  their own ("Woodbridge Fall Fair", "Pumpkins After Dark", "Markham Farmers' Market",
+  "Thanksgiving Family Festival"). The three listing detectors now share one answer: the
+  transient gate also asks the follow-up step's aggregator markers, and the fixed-venue
+  cache asks the transient gate's. A followed page's category labels ("This Week", "Arts &
+  Culture", "All Categories"), which the second replay's draft returned as events, are
+  caught the same way. A site name ("Very Toronto") is left to the model. Re-gating the
+  first replay's 16 structured rows: 14 reached the plan before (7 listing titles, the
+  workshop twice), 8 after (7 events and "Very Toronto").
+- **A followed listing page's entry was split from its own date.** `prioritise_in_window`
+  floated single dated lines, so Screemers' "Oct 10 - 11Sat - Sun+16 dates" went to the top
+  of the corpus and its name stayed ninety lines below, in another extract batch; the extract
+  phase then floated marked lines a second time. A followed page's lines are now marked in
+  place and never move (search results still float); the extractor keeps corpus order. The
+  scanner also read "10Sat" as one word, so the Woodbridge Fall Fair's only date ("Oct
+  10Sat+2 dates") was never marked: a digit run and a letter run are now two words, an
+  ordinal ("10th") still one (`weekend/supply.rs`, `weekend/dates.rs`).
+- **The weather score read the description, not the weather label.** `score.rs` documented
+  the label and the Python original (`item["weather"]`) used it; the Rust port read the
+  blurb, so "sunny picnic" earned the clear-sky bonus and an "outdoor"-labelled fair earned
+  nothing. It reads the label now, and an unknown label, or a missing or mixed forecast,
+  scores the neutral 1 (it scored 0, as if outdoors in the rain). Scores move: an unlabelled
+  row gains 1.0, an "outdoor" row under a clear forecast scores 2.0 whatever its blurb says.
+- **Three prompts no phase sent** (`PHASE_EXTRACT_VENUES`, `PHASE_DRAFT_FIXED`,
+  `PHASE_STRUCTURE_FIXED_SYSTEM`) were deleted with their `conf/prompts.toml` entries; they
+  had been drift-gated in lockstep for a phase that did not exist. The drift test is now
+  two-way (every `[weekend.*]` entry mirrored, every constant in conf) and a reachability
+  test fails on any prompt constant no non-test code references.
 
 ## v3.5.0 — evaluation leaderboard category filtering, CSV export, family grouping, and regression alerts _(2026-10-09)_
 

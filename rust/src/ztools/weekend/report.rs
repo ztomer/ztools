@@ -177,7 +177,7 @@ mod tests {
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | * 4.0/5 | **Maple Syrup Festival** | April 11 to 12 | Saturday 10am-4pm | 6-13 | By donation | Fresh maple, made on site |
 
-_Provenance: 3 extracted, 1 unsourced, 1 outside the window, 1 excluded, 0 unsuitable._
+_Provenance: 3 extracted, 1 unsourced, 1 outside the window, 1 excluded, 0 unsuitable, 0 duplicate._
 ";
 
     // `Maple Syrup Festival` carries NO location parenthetical while the two

@@ -102,7 +102,7 @@ pub fn normalize_for_match(text: &str) -> String {
 ///   will not have ("Canada's Wonderland" vs "Wonderland Canada")
 /// - single characters, which carry no signal
 /// - connector words (see `CONNECTORS`)
-fn significant_tokens(text: &str) -> HashSet<String> {
+pub(crate) fn significant_tokens(text: &str) -> HashSet<String> {
     let norm = normalize_for_match(text);
     // Remove possessive "'s" at a word boundary, as Python's `re.sub(r"'s\b",
     // "", ...)` does, so "canada's" -> "canada".

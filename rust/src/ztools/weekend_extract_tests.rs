@@ -157,6 +157,37 @@ fn a_refusing_extractor_never_shrinks_the_supply() {
     assert_eq!(log.entries()[0].answer.as_deref(), Some(REFUSAL));
 }
 
+/// A listing entry reaches the extractor WHOLE, in one batch: the real Visit
+/// Vaughan card is "add Woodbridge Fall Fair to my stay" / "Oct 10Sat+2 dates"
+/// / "Woodbridge Fall Fair", and both the corpus prioritiser and this phase
+/// used to float the dated line alone, so the fair's date and its name were
+/// asked about in different batches. The refusing stub passes every batch
+/// through raw, in the order it was batched, so the output IS that order.
+#[test]
+fn a_listing_entry_reaches_the_extractor_in_one_piece() {
+    let (_env, cfg, _sent) = stubbed(REFUSAL);
+    let out = extract_sources(&marked_corpus(), "Vaughan/Toronto", &cfg, &PhaseLog::new());
+    let lines: Vec<&str> = out.lines().collect();
+    for (date, name) in [
+        ("Oct 10Sat+2 dates", "] Woodbridge Fall Fair"),
+        ("Oct 10 - 11Sat - Sun+16 dates", "] Screemers"),
+    ] {
+        let at = lines
+            .iter()
+            .position(|l| l.ends_with(date))
+            .unwrap_or_else(|| panic!("{date} was lost"));
+        assert!(
+            lines[at].starts_with(crate::ztools::weekend::IN_WINDOW_MARK),
+            "{date} is in the window and must be marked"
+        );
+        assert!(
+            lines.get(at + 1).is_some_and(|l| l.ends_with(name)),
+            "{date} was separated from{name}: next is {:?}",
+            lines.get(at + 1)
+        );
+    }
+}
+
 /// An answer WITH rows is an answer: its rows go to the draft, its commentary
 /// does not, and the batch's raw lines are not duplicated beside the rows.
 #[test]
@@ -256,4 +287,42 @@ fn the_weather_label_may_be_unknown_and_the_forecast_never_decides_it() {
     // The description the draft wrote is asked for by name, so "Why It Fits"
     // is not structurally empty (class C2c: a field dropped at the last link).
     assert!(sys.contains("\"description\": \"str\""), "{sys}");
+}
+
+/// The structure phase is a reformat, and its input size is whatever the
+/// draft returned: on a replay of this corpus that was ~80 rows, one 13.8K
+/// prompt, and no answer within budget on either attempt -- every event lost
+/// at the last phase. Rows now go in batches of `STRUCTURE_BATCH`, every row
+/// is asked about exactly once, and each batch's events are kept.
+#[test]
+fn the_structure_phase_is_asked_in_bounded_batches() {
+    use crate::ztools::weekend::STRUCTURE_BATCH;
+    let (_env, cfg, sent) = stubbed(
+        r#"{"transient_events":[{"name":"Woodbridge Fall Fair","start_date":"2026-10-10"}]}"#,
+    );
+    let rows: Vec<String> = (1..=25)
+        .map(|n| format!("Event {n} | Vaughan | Oct 10 | free | unknown | a thing"))
+        .collect();
+    let log = PhaseLog::new();
+    let events = structure_to_json(&rows.join("\n"), 2026, &cfg, &log).expect("batches answered");
+    let calls = sent.lock().unwrap().clone();
+    assert_eq!(calls.len(), 25_usize.div_ceil(STRUCTURE_BATCH));
+    assert_eq!(events.len(), calls.len(), "every batch's events are kept");
+    let mut asked = Vec::new();
+    for raw in &calls {
+        let user = recorded_chat_messages(raw).remove(1);
+        let batch: Vec<String> = user
+            .lines()
+            .filter(|l| l.starts_with("Event "))
+            .map(String::from)
+            .collect();
+        assert!(
+            batch.len() <= STRUCTURE_BATCH,
+            "{} rows in one call",
+            batch.len()
+        );
+        asked.extend(batch);
+    }
+    assert_eq!(asked, rows, "every row asked about once, in order");
+    assert_eq!(log.entries().len(), calls.len());
 }

@@ -174,6 +174,99 @@ fn listing_page_titles_are_recognised_as_a_class() {
     }
 }
 
+/// The places of `conf/weekend.toml [region]` the real titles below name.
+fn places() -> Vec<String> {
+    [
+        "vaughan",
+        "toronto",
+        "markham",
+        "richmond hill",
+        "woodbridge",
+        "mississauga",
+    ]
+    .map(String::from)
+    .to_vec()
+}
+
+/// A NAME that names no event: every word of it is a place, a listing word, a
+/// season or holiday, or a date. Each title below reached a plan's transient
+/// rows on 2026-10-10 (the parent run, then a replay of its corpus); the first
+/// two passed the phrase list, because neither carries "things to do".
+/// The events beside them -- several as generic-sounding -- must stand: what
+/// separates them is one word that is not listing vocabulary ("fair",
+/// "market", "festival", "pumpkins"), and a singular event noun is not one.
+#[test]
+fn a_name_that_names_no_event_is_a_listing_page() {
+    let places = places();
+    for title in [
+        "Richmond Hill, ON",
+        "Best Thanksgiving Events and Fall Festivals Near Toronto 2026",
+        "Toronto Events",
+        "Family Fun Toronto",
+        "Toronto Thanksgiving Long Weekend",
+        "Richmond Hill Activities",
+        "8 Things to Do in Toronto This Thanksgiving Long Weekend",
+        "Thanksgiving Weekend Toronto 2026: 15 Things to Do",
+        // A followed page's category labels, drafted as events on the replay.
+        "This Week",
+        "All Categories",
+        "Free Events",
+        "Music & Concerts",
+        "Arts & Culture",
+        "Community",
+        "Family & Kids",
+    ] {
+        assert!(names_no_event(title, &places), "{title} names no event");
+    }
+    for event in [
+        "Woodbridge Fall Fair",
+        "Pumpkins After Dark",
+        "Markham Farmers' Market",
+        "Markham Farmers Market",
+        "Thanksgiving Family Festival",
+        "Fall Harvest Market",
+        "Kids Craft & Play",
+        "Robotics Workshop For Kids",
+        "RHGA Member Gallery Show and Sale",
+        "Halloween Haunt at Canada's Wonderland",
+        "Screemers",
+        "Toastmasters for Teens",
+        "Sing and Sign",
+        "Little Explorers Storytime",
+        "Community Harvest Festival",
+        "Food Truck Festival",
+    ] {
+        assert!(!names_no_event(event, &places), "{event} is an event");
+    }
+    assert!(
+        !names_no_event("", &places),
+        "an empty name is not a listing title"
+    );
+
+    // The gate drops such a row and keeps the events.
+    let rows = vec![
+        row("Richmond Hill, ON", "Richmond Hill, ON", "", ""),
+        row("Woodbridge Fall Fair", "Woodbridge", "", ""),
+        row(
+            "Best Thanksgiving Events and Fall Festivals Near Toronto 2026",
+            "Toronto",
+            "",
+            "",
+        ),
+        row("Pumpkins After Dark", "Milton", "", ""),
+    ];
+    let (kept, notes, dropped) = reject_listing_page_titles(rows, &places);
+    assert_eq!(
+        names(&kept),
+        vec!["Woodbridge Fall Fair", "Pumpkins After Dark"]
+    );
+    assert_eq!((dropped, notes.len()), (2, 2), "{notes:?}");
+    assert_eq!(
+        kept[0].location, "Woodbridge",
+        "a place is a venue, not a listing"
+    );
+}
+
 #[test]
 fn a_listing_title_is_cleared_as_a_venue_and_dropped_as_an_event() {
     let rows = vec![
@@ -191,7 +284,7 @@ fn a_listing_title_is_cleared_as_a_venue_and_dropped_as_an_event() {
             "",
         ),
     ];
-    let (kept, notes, dropped) = reject_listing_page_titles(rows);
+    let (kept, notes, dropped) = reject_listing_page_titles(rows, &places());
     assert_eq!(names(&kept), vec!["Chess Club", "Robotics Workshop"]);
     assert_eq!(
         kept[0].location, "",

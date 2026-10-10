@@ -80,38 +80,85 @@ fn an_unlabelled_row_ranks_below_one_known_to_fit_everyone() {
     ];
     apply_scores(&mut rows, "", FAMILY);
     assert_eq!(rows[0].name, "Family Robotics Workshop (ages 6-14)");
-    close(rows[0].score, 3.0);
-    close(rows[1].score, 1.5);
+    // Neither carries a weather label: both take the neutral 1.0 on top.
+    close(rows[0].score, 4.0);
+    close(rows[1].score, 2.5);
 }
 
+fn labelled(weather: &str, description: &str) -> WeekendEvent {
+    let mut row = ev("", "x", description, "");
+    weather.clone_into(&mut row.weather);
+    row
+}
+
+/// The weather term reads the row's weather LABEL against the forecast, as the
+/// Python predecessor did (`item["weather"]`) and this module's doc says. The
+/// Rust port read the DESCRIPTION instead, so a row the structure phase
+/// labelled "outdoor" scored nothing unless its blurb happened to contain the
+/// word, and a blurb saying "warm drinks" earned the clear-sky bonus.
 #[test]
-fn weather_points_follow_the_forecast() {
-    close(weather_points(&ev("", "x", "indoor play", ""), "rain"), 1.0);
+fn weather_points_read_the_label_against_the_forecast() {
+    let clear = "Fri 19.2°C (clear), Sat 15.6°C (clear)";
+    let wet = "Fri 12.0°C (precipitation), Sat 11.0°C (precipitation)";
+    close(weather_points(&labelled("outdoor", ""), clear), 2.0);
+    close(weather_points(&labelled("outdoor", ""), wet), 0.0);
+    close(weather_points(&labelled("indoor", ""), clear), 1.0);
+    close(weather_points(&labelled("indoor", ""), wet), 1.0);
+    close(weather_points(&labelled("both", ""), clear), 2.0);
+    close(weather_points(&labelled("both", ""), wet), 1.0);
+    close(weather_points(&labelled("Outdoor ", ""), clear), 2.0);
+}
+
+/// The description is not the label: whatever words it holds, they move
+/// nothing. The old code paid 2.0 for "sunny picnic" under a clear sky and 0.0
+/// for an "outdoor"-labelled fair whose blurb never said "outdoor".
+#[test]
+fn the_description_never_decides_the_weather_term() {
+    let clear = "Sat 15.6°C (clear)";
     close(
-        weather_points(&ev("", "x", "outdoor fair", ""), "sunny"),
-        2.0,
-    );
-    close(
-        weather_points(&ev("", "x", "outdoor fair", ""), "cloudy rain"),
-        0.0,
-    );
-    close(
-        weather_points(&ev("", "x", "overcast walk", ""), "cloudy"),
-        2.0,
-    );
-    close(
-        weather_points(&ev("", "x", "sunny picnic", ""), "clear skies"),
-        2.0,
-    );
-    close(
-        weather_points(&ev("", "x", "sunny picnic", ""), "rain showers"),
+        weather_points(&labelled("", "outdoor fair, sunny and warm"), clear),
         1.0,
     );
-    close(weather_points(&ev("", "x", "fun", ""), "sunny"), 0.0);
+    close(
+        weather_points(&labelled("outdoor", "harvest market"), clear),
+        2.0,
+    );
+    close(
+        weather_points(&labelled("indoor", "outdoor fair"), "rain"),
+        1.0,
+    );
+}
+
+/// UNKNOWN IS NOT KNOWN (honest placeholders). A row the model could not
+/// place -- the structure prompt now says "" for that -- and a forecast that
+/// is missing or mixed earn the neutral middle, like an unjudged age range.
+/// They used to earn 0.0: an unlabelled row ranked as though it were an
+/// outdoor event in the rain.
+#[test]
+fn an_unknown_label_or_forecast_scores_neutral() {
+    let clear = "Sat 15.6°C (clear)";
+    for label in ["", "unknown", "n/a"] {
+        close(weather_points(&labelled(label, ""), clear), 1.0);
+    }
+    close(
+        weather_points(&labelled("outdoor", ""), "⚠ Forecast unavailable"),
+        1.0,
+    );
+    close(weather_points(&labelled("outdoor", ""), ""), 1.0);
+    // Clear Friday, wet Saturday: which day the row is on is not read here,
+    // so the forecast cannot be called either way.
+    close(
+        weather_points(
+            &labelled("outdoor", ""),
+            "Fri 19.2°C (clear), Sat 12.0°C (precipitation)",
+        ),
+        1.0,
+    );
 }
 
 #[test]
 fn a_perfect_row_scores_exactly_the_ceiling() {
-    let perfect = ev("6-14", "Fair", "outdoor festival", "Free");
+    let mut perfect = ev("6-14", "Fair", "", "Free");
+    perfect.weather = "outdoor".into();
     close(compute_score(&perfect, "sunny clear", FAMILY), MAX_SCORE);
 }

@@ -116,6 +116,9 @@ pub struct Provenance {
     /// children, is a listing page rather than an event, or is a fixed venue
     /// repeated as an event.
     pub unsuitable: usize,
+    /// Merged into a twin row that is the same event (`dedup.rs`): the same
+    /// workshop scraped from two results is one row, not two.
+    pub duplicate: usize,
 }
 
 impl Provenance {
@@ -125,8 +128,13 @@ impl Provenance {
     pub fn line(&self) -> String {
         format!(
             "_Provenance: {} extracted, {} unsourced, {} outside the window, {} excluded, \
-             {} unsuitable._",
-            self.extracted, self.unsourced, self.outside_window, self.excluded, self.unsuitable
+             {} unsuitable, {} duplicate._",
+            self.extracted,
+            self.unsourced,
+            self.outside_window,
+            self.excluded,
+            self.unsuitable,
+            self.duplicate
         )
     }
 
@@ -139,8 +147,9 @@ impl Provenance {
             .filter(|s| !s.is_empty())
             .filter_map(|s| s.parse().ok())
             .collect();
-        // A plan written before the `unsuitable` count existed carries four
-        // numbers; it reads back as zero unsuitable rather than as no ledger.
+        // A plan written before the `unsuitable` (or `duplicate`) count
+        // existed carries fewer numbers; a missing count reads back as zero
+        // rather than as no ledger.
         match nums[..] {
             [
                 extracted,
@@ -154,6 +163,7 @@ impl Provenance {
                 outside_window,
                 excluded,
                 unsuitable: rest.first().copied().unwrap_or(0),
+                duplicate: rest.get(1).copied().unwrap_or(0),
             }),
             _ => None,
         }
@@ -349,6 +359,7 @@ mod tests {
             outside_window: 0,
             excluded: 1,
             unsuitable: 4,
+            duplicate: 2,
         };
         let plan = format!("# Weekend Plan\n\n| a |\n\n{}\n", p.line());
         assert_eq!(Provenance::parse(&plan), Some(p));
@@ -356,13 +367,19 @@ mod tests {
         assert_eq!(
             Provenance::default().line(),
             "_Provenance: 0 extracted, 0 unsourced, 0 outside the window, 0 excluded, \
-             0 unsuitable._"
+             0 unsuitable, 0 duplicate._"
         );
         // A plan from before the count existed still reads, as zero unsuitable.
         let old = "_Provenance: 5 extracted, 1 unsourced, 0 outside the window, 2 excluded._";
         assert_eq!(
-            Provenance::parse(old).map(|p| (p.excluded, p.unsuitable)),
-            Some((2, 0))
+            Provenance::parse(old).map(|p| (p.excluded, p.unsuitable, p.duplicate)),
+            Some((2, 0, 0))
+        );
+        let five = "_Provenance: 5 extracted, 1 unsourced, 0 outside the window, 2 excluded, \
+                    3 unsuitable._";
+        assert_eq!(
+            Provenance::parse(five).map(|p| (p.unsuitable, p.duplicate)),
+            Some((3, 0))
         );
     }
 

@@ -127,3 +127,27 @@ fn the_count_sees_every_shape_that_lands_in_the_window() {
 - Fall Harvest Market \u{2014} Oct 9 - Oct 12 in Toronto";
     assert_eq!(in_window_count(corpus, start, end), 3);
 }
+
+/// A listing card glues the weekday to the day: Visit Vaughan's events page
+/// rendered the Woodbridge Fall Fair's date as "Oct 10Sat+2 dates" and
+/// Screemers' as "Oct 10 - 11Sat - Sun+16 dates" (verbatim, 2026-10-10). The
+/// scanner read "10sat" as one word, so the fair's only date line was never
+/// marked in-window. A digit run and a letter run are two words; an ordinal
+/// suffix ("10th") stays a day.
+#[test]
+fn a_weekday_glued_to_the_day_is_still_a_date() {
+    assert_eq!(
+        find_dates_in("Oct 10Sat+2 dates", 2026),
+        vec![d(2026, 10, 10)]
+    );
+    assert!(in_window(
+        "[Events in Vaughan | Visit Vaughan, Ontario] Oct 10Sat+2 dates"
+    ));
+    assert_eq!(
+        find_dates_in("Oct 10 - 11Sat - Sun+16 dates", 2026),
+        vec![d(2026, 10, 10), d(2026, 10, 11)]
+    );
+    assert_eq!(find_dates_in("Oct 10th", 2026), vec![d(2026, 10, 10)]);
+    // A clock time glued to its hour is still a time, not a range's end.
+    assert_eq!(find_dates_in("Oct 9 - 11am", 2026), vec![d(2026, 10, 9)]);
+}
