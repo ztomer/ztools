@@ -38,8 +38,8 @@ checked by a gate, so re-derive it before editing it:
 `git log --oneline origin/main..main`, `gh run list --limit 3`,
 `tools/gate.sh --full`, and `"$GOH_DIR/gates/goh.sh" home-paths --exclude ^vendor/`.
 
-- Release v3.3.0 cut, tagged, and published on GitHub.
-- Remote CI run 37998212140 and 37999807815 passed cleanly across all 12 steps.
+- Release v3.4.0 cut, tagged, and published on GitHub.
+- Remote CI run 38002901596 passed cleanly in 2m52s on macOS arm64 (`make ci` clean across all 12 steps).
 - Items `L2`, `M1` through `M12` landed and deleted from open work; items `G5` and `R2` dropped.
 - Landed today, each proven by a test made to fail first:
   **`L2`** (green CI gate of record on GitHub Actions),
