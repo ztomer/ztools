@@ -69,6 +69,24 @@ checked by a gate, so re-derive it before editing it:
   `python3 -m pytest tools/tests -q` green (136 passed).
 - All temporary agent sessions (OpenCode and Claude worktrees/caches) are purged.
 
+### Sources consolidated — 2026-10-10
+
+Every other agent session that touched ztools, and where its content went. Nothing below is a
+plan anymore; this file is.
+
+- **Claude Code / desktop:** no ztools transcripts or desktop sessions remain. The 10-08 backlog
+  chip "Bring up ztools CI: machete and 17 eval tests" is superseded: fixed in 64d67f3, CI green.
+- **OpenCode** (`ses_ee23c056…`, `ses_ef8dce2a…`, and nine Python-era sessions 07-16 → 08-24): every
+  item landed (M1–M3, M5, G2–G4, R1, edition 2024, weather endpoint, grounding) or was superseded
+  by the Rust cutover (ddb7d53). Project row and snapshot removed (Trash).
+- **Antigravity** (`f43ba45d…`, `46b086a1…`, `608907e3…`, `2901c3f7…`, plus backups): Python-era,
+  superseded by the Rust port; removed (Trash). The cross-repo conversation `460d804a…` (Python
+  3.15 move) is not this project's and was left alone; its one ztools finding, CI pinned to 3.14,
+  is fixed (CI reads `.python-version`).
+- **Gemini CLI** (`~/.gemini/tmp/ztools/`, April–June chats): Python-era; removed (Trash).
+- **Found by the consolidation itself:** tags v3.4.0, v3.4.1 and v3.5.0 had no GitHub release
+  (tagged by hand); the release kit now backfills a tag that lacks one (gates_of_heck 2573b86).
+
 ## Phase M — what the eval records must mean what it says
 
 All Phase M items (`M1` through `M16`) have landed. No open work remains in this phase.
