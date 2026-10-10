@@ -12,13 +12,13 @@ This file starts at v2.2.0 — earlier history is in git.
 - **Weather labels said "outdoor" for nearly everything.** The structure prompt
   allowed `""` for "the text does not say", and the model never used it: a
   replay of the 2026-10-10 rows came back 14 of 16 "outdoor", a workshop in a
-  hotel and a mall's craft fair among them. "unknown" is now a named answer,
-  the rule names place words on both sides (park, farm, beach, fairground /
-  hotel, gallery, studio, shopping centre) and says to read the description.
-  The same 16 rows now come back 2 indoor, 2 outdoor, 12 unknown with no wrong
-  label on a real event, and the live run's 8 events all read right. The label
-  is a closed set at parse (`weather_label`), so "unknown" lands as no label:
-  neutral in the score, "—" in the report.
+  hotel and a mall's craft fair among them. Naming "unknown" only moved the
+  bias with the batch (a street market "indoor", festivals "indoor" with no
+  venue word). The model now names the KIND of place the text gives ("hotel",
+  "beach", "art gallery"), which it gets right, and `weekend/setting.rs` looks
+  the label up from the kind; a kind the table does not know keeps the model's
+  label, and "unknown" keeps none (neutral in the score, "—" in the report).
+  On the three saved batches no real event is left with a wrong label.
 - **The fixed table's weather column was blank.** The curated venues were
   built with an empty label. Each now states where it happens (a required
   field), so a trampoline park reads indoor and a conservation area outdoor.

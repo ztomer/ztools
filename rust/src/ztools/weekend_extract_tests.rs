@@ -280,6 +280,16 @@ fn the_weather_label_may_be_unknown_and_the_forecast_never_decides_it() {
     assert!(sys.contains(WEATHER_RULE), "{sys}");
     assert!(WEATHER_RULE.contains("\"unknown\""), "{WEATHER_RULE}");
     assert!(WEATHER_RULE.contains("the description"), "{WEATHER_RULE}");
+    let kind = sys
+        .find("\"place_kind\": \"str\"")
+        .expect("the schema asks for place_kind");
+    let label = sys
+        .find("\"weather\": \"str\"")
+        .expect("the schema asks for weather");
+    assert!(
+        kind < label,
+        "the kind of place is asked for before the label: {sys}"
+    );
     assert!(!sys.contains("forecast above"), "{sys}");
     assert!(
         !sys.contains("Weather: "),

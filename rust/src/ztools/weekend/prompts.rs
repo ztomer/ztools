@@ -160,22 +160,26 @@ two entries keeps the more specific value, never \"unknown\" over a real one.";
 /// made to fill, rendered as data (class C4). The forecast no longer reaches
 /// either structure prompt at all, so it cannot decide the label.
 ///
-/// Unknown is a WORD, "unknown", not "": allowed only an empty string, the
-/// model never used it, and the 2026-10-10 replay came back 14 of 16 rows
-/// "outdoor" (the hotel workshop again, a mall's craft fair, seven listing
-/// pages). Named, it is used -- 12 of those 16 -- with no wrong label left on
-/// a real event. The place words are examples the model leans on: a list that
-/// named only buildings swung it the other way (a fall fair and a beach market
-/// "indoor"), so both sides are named. `parse_llm_events` keeps the label only
-/// inside the closed set, so "unknown" lands as no label.
+/// The model names the KIND of place first, and `setting::label_for` turns a
+/// known kind into the label. Allowed only "" for unknown, the model never used
+/// it: the 2026-10-10 replay came back 14 of 16 rows "outdoor" (the hotel
+/// workshop again, a mall's craft fair, seven listing pages). With "unknown"
+/// named it swung by batch instead -- a fall fair and a beach market "indoor"
+/// under one wording, a street market "indoor" under another. Asked for the
+/// kind, it named hotel, beach, gallery, library and mall right on all three
+/// saved batches and then fumbled its own label ("hotel", weather "unknown"):
+/// the noun is its judgement, the lookup is not.
 pub const WEATHER_RULE: &str =
-    "- weather: where the activity HAPPENS: one of \"indoor\", \"outdoor\", \"both\",
-  \"unknown\". Decide from the words that name the place, in the name, the location OR
-  the description: a park, farm, beach, trail, fairground or street is \"outdoor\"; a hotel, museum,
-  library, gallery, theatre, studio, arena or shopping centre is \"indoor\".
-  A city or region name says nothing about this. When no word in the input
-  names the kind of place, the answer is \"unknown\" -- that is the expected
-  answer for many rows, never a failure. The weather forecast does not decide this.";
+    "- place_kind: the KIND of place the input names for this activity, as a
+  common noun, read from the name, the location and the description: e.g.
+  \"hotel\", \"beach\", \"park\", \"street market\", \"fairground\", \"library\", \"mall\",
+  \"gallery\", \"farm\". A city, town or region is not a kind of place. When the
+  input names no kind of place, output \"unknown\".
+- weather: from place_kind: \"outdoor\" for a place in the open (park, beach,
+  farm, fairground, street, trail), \"indoor\" for a building (hotel, library,
+  museum, gallery, mall, studio, theatre, arena), \"both\" when the input says
+  it is both, \"unknown\" when place_kind is \"unknown\". The weather forecast
+  does not decide this.";
 
 /// Class C4 (MANDATED-PLACEHOLDER) + C2b (DATE-DROPPED-AT-THE-LLM-BOUNDARY).
 ///
@@ -189,7 +193,7 @@ pub const PHASE_STRUCTURE_TRANSIENT_SYSTEM: &str = "\
 Output JSON now. Use EXACT schema:
 {\"transient_events\": [{\"name\": \"str\", \"location\": \"str\",
 \"target_ages\": \"str\", \"price\": \"str\", \"start_date\": \"str\", \"end_date\": \"str\",
-\"duration\": \"str\", \"weather\": \"str\", \"day\": \"str\",
+\"duration\": \"str\", \"place_kind\": \"str\", \"weather\": \"str\", \"day\": \"str\",
 \"description\": \"str\"}]}
 
 Rules for every field:

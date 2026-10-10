@@ -235,3 +235,33 @@ fn every_curated_row_carries_a_weather_label() {
         );
     }
 }
+
+/// The model names the KIND of place; the label follows from the kind. On the
+/// three saved 2026-10-10 batches it named "hotel", "beach", "gallery",
+/// "library" and "mall" right and then answered "unknown" for the hotel's
+/// weather: naming the place is its judgement, and that a hotel is a building
+/// is not a judgement. Its own label stands only for a kind the table does
+/// not know, and a kind of "unknown" leaves no label -- a festival with no
+/// venue word came back "indoor" with nothing behind it.
+#[test]
+fn the_weather_label_follows_the_kind_of_place_the_model_names() {
+    for (kind, said, kept) in [
+        ("hotel", "unknown", "indoor"),
+        ("Art Gallery", "outdoor", "indoor"),
+        ("trampoline park", "outdoor", "indoor"),
+        ("beach", "unknown", "outdoor"),
+        ("fairground", "indoor", "outdoor"),
+        ("market", "outdoor", "outdoor"),
+        ("market", "unknown", ""),
+        ("unknown", "indoor", ""),
+        ("", "both", "both"),
+    ] {
+        let content = serde_json::json!({"transient_events": [
+            {"name": "Fall Fair", "place_kind": kind, "weather": said}
+        ]})
+        .to_string();
+        let resp = serde_json::json!({"choices": [{"message": {"content": content}}]});
+        let events = crate::ztools::weekend::parse_llm_events(&resp).unwrap();
+        assert_eq!(events[0].weather, kept, "kind {kind:?}, label {said:?}");
+    }
+}

@@ -161,20 +161,23 @@ two entries keeps the more specific value, never "unknown" over a real one."""
 
 [weekend.weather_rule]
 instructions = """\
-- weather: where the activity HAPPENS: one of "indoor", "outdoor", "both",
-  "unknown". Decide from the words that name the place, in the name, the location OR
-  the description: a park, farm, beach, trail, fairground or street is "outdoor"; a hotel, museum,
-  library, gallery, theatre, studio, arena or shopping centre is "indoor".
-  A city or region name says nothing about this. When no word in the input
-  names the kind of place, the answer is "unknown" -- that is the expected
-  answer for many rows, never a failure. The weather forecast does not decide this."""
+- place_kind: the KIND of place the input names for this activity, as a
+  common noun, read from the name, the location and the description: e.g.
+  "hotel", "beach", "park", "street market", "fairground", "library", "mall",
+  "gallery", "farm". A city, town or region is not a kind of place. When the
+  input names no kind of place, output "unknown".
+- weather: from place_kind: "outdoor" for a place in the open (park, beach,
+  farm, fairground, street, trail), "indoor" for a building (hotel, library,
+  museum, gallery, mall, studio, theatre, arena), "both" when the input says
+  it is both, "unknown" when place_kind is "unknown". The weather forecast
+  does not decide this."""
 
 [weekend.structure_transient_system]
 instructions = """\
 Output JSON now. Use EXACT schema:
 {"transient_events": [{"name": "str", "location": "str",
 "target_ages": "str", "price": "str", "start_date": "str", "end_date": "str",
-"duration": "str", "weather": "str", "day": "str",
+"duration": "str", "place_kind": "str", "weather": "str", "day": "str",
 "description": "str"}]}
 
 Rules for every field:

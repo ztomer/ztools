@@ -98,10 +98,12 @@ each one makes wrong.
   reads the forecast as Clear, Wet or Unknown for ALL days, and "clear on some days and
   wet on others" is Unknown, so every label scores the neutral 1. On 2026-10-10 Sunday
   alone had rain, and the labels the structure phase now gets right moved no score.
+- **Why now:** the labels are now right, so the score is the only thing between them and the ranking.
 - **Done when:** a row's weather points come from the forecast for the day(s) it is on
   (its `day` or dates), a year-round row takes the best day, and a `score_tests.rs` case
   with a Saturday-clear, Sunday-wet forecast ranks an outdoor Saturday event above an
   outdoor Sunday one.
+- **Blocked by:** nothing.
 
 ### W2 — the other fields fill placeholders the way the label did
 
@@ -109,16 +111,20 @@ each one makes wrong.
   label stopped defaulting once "unknown" was a named answer; price and duration have no
   such word, and on 2026-10-10 Pumpkinfest came back price "Unlimited" and duration
   "Unlimited", lifted from "Unlimited midway rides".
+- **Why now:** a placeholder price reads as a fact to a parent choosing between two events.
 - **Done when:** a replay of a saved structure batch shows price and duration either
   copied from text that states them or empty, measured on the same rows before and after.
+- **Blocked by:** a free slot on the GPU lock for the replay (`tools/gpu_lock.sh`).
 
 ### W3 — the draft phase ignores its count
 
 - **Class:** an instruction the model does not follow, with nothing checking it. "Suggest
   10" returned about 80 rows on a 2026-10-10 replay, nav labels included; the listing gate
   and structure batching absorb it, at the cost of prompt size and time.
+- **Why now:** every extra row costs a structure batch on a shared GPU, three runs a weekend.
 - **Done when:** the cause is measured (followed pages kept in order, or the prompt) and
   the draft's row count on a saved corpus is recorded before and after the change.
+- **Blocked by:** a free slot on the GPU lock for the measurement.
 
 ## Phase M — what the eval records must mean what it says
 
