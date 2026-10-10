@@ -222,6 +222,13 @@ value copied back into its own test proves nothing.
   every one counted as answered (`weekend/relevance.rs`). The corollary for stubs: a
   search fixture must be about the query the test sends (the engine tests used to send
   "kids events" to a page about the Vaughan Fall Fair).
+- A model's refusal counted as an answer: the weekend extractor answered a batch naming
+  four in-window events with "I cannot extract ...", the paragraph was kept as that
+  batch's result, and the draft never saw the events (2026-10-10, one event in the
+  plan). Class: a pre-draft phase that can shrink supply. The test that pins it is a
+  stub that REFUSES EVERYTHING over the real kept corpus
+  (`weekend_extract_tests.rs`): every candidate must still reach the draft. A stub that
+  answers helpfully cannot see this class at all.
 
 ## A unit test must not read the live machine (2026-09-19)
 

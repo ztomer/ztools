@@ -13,6 +13,7 @@ pub mod report;
 pub mod score;
 pub mod suitability;
 pub mod supply;
+pub mod transcript;
 pub use constants::*;
 pub use dates::*;
 pub use enforce::*;
@@ -32,6 +33,7 @@ pub use search::*;
 pub use search_order::*;
 pub use search_parse::*;
 pub use supply::*;
+pub use transcript::{PhaseEntry, PhaseLog};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WeekendEvent {
@@ -193,14 +195,6 @@ pub fn parse_llm_events(resp: &serde_json::Value) -> Option<Vec<WeekendEvent>> {
             })
             .collect(),
     )
-}
-
-fn call_osaurus_json(
-    prompt: &str,
-    config: &crate::config::ZtoolsConfig,
-) -> Option<Vec<WeekendEvent>> {
-    let resp = phases::call_llm_json(None, prompt, config)?;
-    parse_llm_events(&resp)
 }
 
 pub mod followup;

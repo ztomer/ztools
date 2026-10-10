@@ -38,6 +38,31 @@ source. It is NOT the age range of the family this plan is for. Never fill it
 with the family's ages -- if the source does not state an age range, \"unknown\"
 is the correct answer.";
 
+/// The one rule for telling an activity from a page that lists activities,
+/// bound into BOTH the extract and the draft prompts through `{activity_rule}`.
+///
+/// It used to be two pasted copies ending "Skip those results entirely,
+/// however well they match", with the exception -- list the events a page
+/// names -- trailing after the emphatic veto. On 2026-10-10 the extractor read
+/// the veto and not the exception: eight Thanksgiving results naming the Sugar
+/// Beach harvest market, the Erin Mills family festival and a pumpkin trail came
+/// back as "I cannot extract ... they are all pages that list things", and the
+/// plan had one event. Most results ARE listing pages; the events they name are
+/// the supply. So the rule now leads with what to keep, and refuses only the
+/// page's own title.
+pub const ACTIVITY_RULE: &str =
+    "IS THIS AN ACTIVITY? An activity is a thing a family can go and DO at a
+specific time and place. A PAGE that lists things -- a directory, guide,
+calendar, round-up, \"what's on\" page, \"things to do in X\" article, blog
+archive or a venue's events index -- is not one, so never output a page's own
+title as an activity.
+
+But read what such a page SAYS. When its text names a specific event -- a
+market, festival, fair, show, workshop -- that EVENT is an activity: output it,
+with the venue and the dates the text gives for it. Most results here come from
+listing pages, and the events they name are exactly what this plan is for.
+Leave a result out only when its text names no specific event at all.";
+
 pub const PHASE_EXTRACT_EVENTS: &str = "\
 Extract family-friendly event listings, near {location}, from the search
 results below.
@@ -64,29 +89,21 @@ NAME | LOCATION | DATES | PRICE | AGES | short description
   invent an event to fill the list, and never move an event's dates to make it
   fit the weekend. Fewer real events beats more invented ones.
 
-IS THIS AN ACTIVITY? Before listing anything, ask: \"is this an actual thing a
-family can go and DO at a specific time and place, or is it a page that LISTS
-things?\" A directory, guide, calendar, round-up, \"what's on\" page, \"things to do
-in X\" article, blog archive or a venue's events INDEX is NOT an activity -- you
-cannot attend a guide. Skip those results entirely, however well they match.
-If the page names a SPECIFIC event, list that event, not the page.
+{activity_rule}
 
 Search results:
 {raw_text}
 
-One event per line, in the pipe-separated format above.";
+Output ONLY event lines, one per line, in the pipe-separated format above. No
+explanations, no notes about what you left out: when no result names an event,
+output nothing.";
 
 pub const PHASE_DRAFT_TRANSIENT: &str = "\
 You are an expert family activity planner. Suggest 10 specific weekend activities for
 families with kids ages {age_range} in {location}. Focus on time-limited events
 happening specifically on {date_range}.
 
-IS THIS AN ACTIVITY? Before listing anything, ask: \"is this an actual thing a
-family can go and DO at a specific time and place, or is it a page that LISTS
-things?\" A directory, guide, calendar, round-up, \"what's on\" page, \"things to do
-in X\" article, blog archive or a venue's events INDEX is NOT an activity -- you
-cannot attend a guide. Skip those results entirely, however well they match.
-If the page names a SPECIFIC event, list that event, not the page.
+{activity_rule}
 
 The year is {year}. Every date you output must be in {year}. An event dated in
 any other year does not belong in this plan -- drop it rather than re-dating it.
@@ -117,6 +134,24 @@ NAME | LOCATION | DATES | PRICE | AGES | short description
 Carry DATES, PRICE, AGES and LOCATION through unchanged from the input. Merging
 two entries keeps the more specific value, never \"unknown\" over a real one.";
 
+/// How the structure phases label a row indoor/outdoor, bound into both
+/// structure prompts through `{weather_rule}`.
+///
+/// The label is a fact about the ACTIVITY, so it is judged from the activity's
+/// own text and may be unknown. It used to be "set weather from the activity
+/// type and the forecast above", with three allowed values and no way to say
+/// "the text does not tell": on 2026-10-10 a robotics workshop held in a hotel
+/// came back "outdoor" under a clear forecast -- a placeholder the model was
+/// made to fill, rendered as data (class C4). The forecast no longer reaches
+/// either structure prompt at all, so it cannot decide the label.
+pub const WEATHER_RULE: &str =
+    "- weather: where the activity HAPPENS, judged from its name, venue and
+  description: \"outdoor\" for activities in the open (parks, farms, fairs,
+  open-air markets, trails), \"indoor\" for activities inside a building
+  (museums, libraries, hotels, theatres, play centres), \"both\" when the text
+  says it is both. When the text does not say where it happens, output \"\".
+  The weather forecast does not decide this.";
+
 /// Class C4 (MANDATED-PLACEHOLDER) + C2b (DATE-DROPPED-AT-THE-LLM-BOUNDARY).
 ///
 /// This prompt used to ORDER the model to emit "$20-30 per child or free" and
@@ -129,7 +164,8 @@ pub const PHASE_STRUCTURE_TRANSIENT_SYSTEM: &str = "\
 Output JSON now. Use EXACT schema:
 {\"transient_events\": [{\"name\": \"str\", \"location\": \"str\",
 \"target_ages\": \"str\", \"price\": \"str\", \"start_date\": \"str\", \"end_date\": \"str\",
-\"duration\": \"str\", \"weather\": \"str\", \"day\": \"str\"}]}
+\"duration\": \"str\", \"weather\": \"str\", \"day\": \"str\",
+\"description\": \"str\"}]}
 
 Rules for every field:
 - Copy values from the source text. NEVER invent one.
@@ -144,11 +180,8 @@ Rules for every field:
   from the input. NEVER the family's ages. If the input does not state one,
   output \"\".
 - price: the actual price as written in the source, else \"\".
-
-Weather: {weather_condensed}
-Set weather from the activity type and the forecast above: \"outdoor\" for
-outdoor activities (parks, zoo, sports), \"indoor\" for indoor venues (museums,
-play centres, trampoline parks), \"both\" for flexible activities.
+- description: the input's short description of the activity, copied, else \"\".
+{weather_rule}
 
 Output ONLY JSON.";
 
@@ -191,11 +224,7 @@ Rules for every field:
 - If the source does not state a value, output an empty string \"\" for it.
   An empty field is CORRECT and expected. Do not guess a typical price or age
   range, and do not repeat a value from another row.
-
-Weather: {weather_condensed}
-Set weather from the activity type and the forecast above: \"outdoor\" for
-outdoor activities (parks, zoo, sports), \"indoor\" for indoor venues (museums,
-play centres, trampoline parks), \"both\" for flexible activities.
+{weather_rule}
 
 Output ONLY JSON.";
 
@@ -217,6 +246,8 @@ pub const KNOWN_KEYS: &[&str] = &[
     "exclusions",
     "draft_text",
     "weather_str",
+    "activity_rule",
+    "weather_rule",
 ];
 
 #[cfg(test)]
@@ -240,7 +271,11 @@ mod tests {
     fn extract_events_renders_clean() {
         assert_renders_clean(
             PHASE_EXTRACT_EVENTS,
-            &[("location", "Vaughan/GTA"), ("raw_text", "corpus")],
+            &[
+                ("location", "Vaughan/GTA"),
+                ("raw_text", "corpus"),
+                ("activity_rule", ACTIVITY_RULE),
+            ],
         );
     }
 
@@ -257,6 +292,7 @@ mod tests {
                 ("cleaned_sources", "sources"),
                 ("carry", CARRY_FIELDS),
                 ("exclusions", "none"),
+                ("activity_rule", ACTIVITY_RULE),
             ],
         );
     }
@@ -270,7 +306,11 @@ mod tests {
     fn structure_transient_renders_clean() {
         assert_renders_clean(
             PHASE_STRUCTURE_TRANSIENT_SYSTEM,
-            &[("year", "2026"), ("weather_condensed", "sunny")],
+            &[("year", "2026"), ("weather_rule", WEATHER_RULE)],
+        );
+        assert_renders_clean(
+            PHASE_STRUCTURE_FIXED_SYSTEM,
+            &[("weather_rule", WEATHER_RULE)],
         );
         assert_renders_clean(PHASE_STRUCTURE_USER, &[("draft_text", "draft")]);
     }
@@ -300,6 +340,8 @@ mod tests {
 
         assert_eq!(PHASE_WEATHER_CONDENSE, get_inst("weather_condense"));
         assert_eq!(CARRY_FIELDS, get_inst("carry_fields"));
+        assert_eq!(ACTIVITY_RULE, get_inst("activity_rule"));
+        assert_eq!(WEATHER_RULE, get_inst("weather_rule"));
         assert_eq!(PHASE_EXTRACT_EVENTS, get_inst("extract_events"));
         assert_eq!(PHASE_EXTRACT_VENUES, get_inst("extract_venues"));
         assert_eq!(PHASE_DRAFT_TRANSIENT, get_inst("draft_transient"));

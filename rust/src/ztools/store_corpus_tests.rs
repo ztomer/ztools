@@ -81,3 +81,76 @@ fn a_failed_prune_does_not_fail_the_save() {
             .is_dir()
     );
 }
+
+/// A run's phase transcript lands beside its corpus under the SAME stamp, so
+/// the two pair by name, and each kind is bounded on its own: twelve runs of
+/// both keep ten of each, and neither kind's prune can take the other's files.
+#[test]
+fn the_phase_transcript_pairs_with_its_corpus_and_is_bounded_separately() {
+    let td = tempfile::tempdir().unwrap();
+    let store = td.path();
+    for hour in 0..12 {
+        save_corpus(store, at(3, hour), "#", "-").unwrap();
+        save_phases(store, at(3, hour), "=== draft").unwrap();
+    }
+    let mut names: Vec<String> = std::fs::read_dir(corpus_dir(store))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().into_string().unwrap())
+        .collect();
+    names.sort();
+    let phases: Vec<&String> = names
+        .iter()
+        .filter(|n| n.ends_with("_phases.txt"))
+        .collect();
+    let corpora: Vec<&String> = names
+        .iter()
+        .filter(|n| n.ends_with("_corpus.txt"))
+        .collect();
+    assert_eq!(
+        (phases.len(), corpora.len()),
+        (CORPUS_KEEP, CORPUS_KEEP),
+        "{names:?}"
+    );
+    assert_eq!(phases[0], "2026-10-03_020005_phases.txt");
+    assert_eq!(corpora[0], "2026-10-03_020005_corpus.txt");
+    assert_eq!(phases_filename(at(3, 2)), "2026-10-03_020005_phases.txt");
+    assert_eq!(
+        std::fs::read_to_string(corpus_dir(store).join(phases[0])).unwrap(),
+        "=== draft"
+    );
+}
+
+/// A run that never called the model keeps no transcript: an empty file would
+/// read as "the model was asked nothing" beside a plan that says the model was
+/// unavailable, which is the same fact said worse.
+#[test]
+#[serial_test::serial]
+fn a_run_with_no_model_call_keeps_no_transcript() {
+    let env = crate::test_env::TestEnv::new();
+    let d = chrono::NaiveDate::from_ymd_opt(2026, 10, 9).unwrap();
+    record_phases(
+        at(4, 1),
+        &crate::ztools::weekend::PhaseLog::new(),
+        (d, d),
+        "m",
+    );
+    assert!(!corpus_dir(&env.path("WEEKEND_OUTPUT_DIR")).exists());
+
+    let log = crate::ztools::weekend::PhaseLog::new();
+    log.record(
+        "draft",
+        "Available events:",
+        Some("Fall Fair | Vaughan | Oct 10"),
+    );
+    record_phases(at(4, 1), &log, (d, d), "raptor");
+    let kept = std::fs::read_to_string(
+        corpus_dir(&env.path("WEEKEND_OUTPUT_DIR")).join(phases_filename(at(4, 1))),
+    )
+    .unwrap();
+    assert!(
+        kept.starts_with("# window 2026-10-09..2026-10-09\n# model raptor\n# calls 1\n=== draft"),
+        "{kept}"
+    );
+    assert!(kept.contains("Fall Fair | Vaughan | Oct 10"), "{kept}");
+    drop(env);
+}
