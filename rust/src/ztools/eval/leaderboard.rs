@@ -12,6 +12,26 @@ use std::path::Path;
 use crate::units::{count, signed};
 use crate::ztools::eval::report::HistoryEntry;
 
+/// Output formats supported by leaderboard reporting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LeaderboardFormat {
+    #[default]
+    Markdown,
+    Json,
+    Csv,
+}
+
+/// Options controlling leaderboard generation and filtering.
+#[derive(Debug, Clone, Default)]
+pub struct LeaderboardOptions<'a> {
+    pub min_tasks: Option<usize>,
+    pub sort_by: Option<&'a str>,
+    pub category: Option<&'a str>,
+    pub format: LeaderboardFormat,
+    pub group_by_family: bool,
+    pub fail_on_regression: Option<f64>,
+}
+
 /// A model's ranking row on the leaderboard.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ModelLeaderboardEntry {
@@ -26,6 +46,61 @@ pub struct ModelLeaderboardEntry {
     pub summarize_score: Option<f64>,
     pub filename_score: Option<f64>,
     pub vlm_score: Option<f64>,
+}
+
+/// Returns whether a task name belongs to the specified category filter (`M13`).
+#[must_use]
+pub fn task_matches_category(task: &str, category: &str) -> bool {
+    let cat = category.to_ascii_lowercase();
+    let t = task.to_ascii_lowercase();
+    if cat == "twitter" {
+        return t.starts_with("summarize") || t.contains("twitter");
+    }
+    if cat == "vlm" {
+        return t.starts_with("image") || t.contains("vlm");
+    }
+    t.starts_with(&cat) || t.contains(&cat)
+}
+
+/// Detects the model family from a model name string (`M15`).
+#[must_use]
+pub fn detect_model_family(model: &str) -> &'static str {
+    const FAMILIES: &[(&str, &str)] = &[
+        ("qwen", "qwen"),
+        ("qwopus", "qwen"),
+        ("gemma", "gemma"),
+        ("raptor", "raptor"),
+        ("muse", "muse"),
+        ("bonsai", "bonsai"),
+        ("ornith", "ornith"),
+        ("nemotron", "nemotron"),
+        ("lfm", "lfm"),
+        ("foundation", "foundation"),
+    ];
+    let m = model.to_ascii_lowercase();
+    for &(prefix, family) in FAMILIES {
+        if m.starts_with(prefix) || m.contains(prefix) {
+            return family;
+        }
+    }
+    "other"
+}
+
+/// Checks if any model's delta regressed below `-threshold_pct` (`M16`).
+#[must_use]
+pub fn check_regression(
+    entries: &[ModelLeaderboardEntry],
+    threshold_pct: f64,
+) -> Option<(String, f64)> {
+    let cutoff = -threshold_pct.abs();
+    for entry in entries {
+        if let Some(delta) = entry.delta
+            && delta < cutoff
+        {
+            return Some((entry.model.clone(), delta));
+        }
+    }
+    None
 }
 
 /// Categorizes an eval task name into its corresponding slot.
@@ -141,11 +216,12 @@ fn sort_leaderboard_rows(rows: &mut [ModelLeaderboardEntry], threshold: usize, s
     });
 }
 
-/// Aggregates each model's latest clean run from history and ranks by overall mean or slot descending.
+/// Aggregates each model's latest clean run from history and ranks by overall mean or slot descending,
+/// optionally filtering by task category (`M13`).
 ///
 /// When `min_tasks` is specified (`Some(min)`), models whose latest clean run holds fewer
-/// than `min` tasks are filtered out. When `None`, the default threshold (5) is used to prioritize
-/// multi-task sweeps over spot checks without excluding spot checks.
+/// than `min` tasks are filtered out. When `None`, the default threshold (5, or 1 when filtered by category)
+/// is used to prioritize multi-task sweeps over spot checks without excluding spot checks.
 ///
 /// When `sort_by` is specified, entries are sorted by that capability slot (`overall`, `think`,
 /// `json`, `summarize`, `filename`, `vlm`) descending, with unrated (`None`) slots placed last.
@@ -153,10 +229,11 @@ fn sort_leaderboard_rows(rows: &mut [ModelLeaderboardEntry], threshold: usize, s
 /// # Errors
 ///
 /// Returns an error if `sort_by` is not a recognized slot name.
-pub fn generate_leaderboard(
+pub fn generate_leaderboard_filtered(
     history: &BTreeMap<String, Vec<HistoryEntry>>,
     min_tasks: Option<usize>,
     sort_by: Option<&str>,
+    category: Option<&str>,
 ) -> Result<Vec<ModelLeaderboardEntry>> {
     let sort_slot = sort_by.unwrap_or("overall");
     match sort_slot {
@@ -166,11 +243,17 @@ pub fn generate_leaderboard(
         ),
     }
 
-    let threshold = min_tasks.unwrap_or(5);
+    let default_threshold = if category.is_some() { 1 } else { 5 };
+    let threshold = min_tasks.unwrap_or(default_threshold);
     let mut rows = Vec::new();
 
     for (model, entries) in history {
-        let complete: Vec<&HistoryEntry> = entries.iter().filter(|e| e.complete).collect();
+        let complete: Vec<&HistoryEntry> = entries
+            .iter()
+            .filter(|e| {
+                e.complete && category.is_none_or(|cat| task_matches_category(&e.task, cat))
+            })
+            .collect();
         if complete.is_empty() {
             continue;
         }
@@ -211,6 +294,19 @@ pub fn generate_leaderboard(
     Ok(rows)
 }
 
+/// Aggregates each model's latest clean run from history and ranks by overall mean or slot descending.
+///
+/// # Errors
+///
+/// Returns an error if `sort_by` is not a recognized slot name.
+pub fn generate_leaderboard(
+    history: &BTreeMap<String, Vec<HistoryEntry>>,
+    min_tasks: Option<usize>,
+    sort_by: Option<&str>,
+) -> Result<Vec<ModelLeaderboardEntry>> {
+    generate_leaderboard_filtered(history, min_tasks, sort_by, None)
+}
+
 fn fmt_cell(val: Option<f64>) -> String {
     val.map_or_else(|| "—".to_string(), |v| format!("{v:.1}%"))
 }
@@ -222,6 +318,91 @@ fn fmt_delta(val: Option<f64>) -> String {
         Some(d) if d < -0.049 => format!("{d:.1}%"),
         Some(_) => "0.0%".to_string(),
     }
+}
+
+fn csv_escape(field: &str) -> String {
+    if field.contains(',') || field.contains('"') || field.contains('\n') {
+        format!("\"{}\"", field.replace('"', "\"\""))
+    } else {
+        field.to_string()
+    }
+}
+
+fn fmt_csv_opt(val: Option<f64>) -> String {
+    val.map_or_else(String::new, |v| format!("{v:.1}"))
+}
+
+/// Formats the leaderboard entries into CSV (`M14`).
+#[must_use]
+pub fn format_leaderboard_csv(entries: &[ModelLeaderboardEntry]) -> String {
+    let mut out = String::new();
+    out.push_str("model,mean,delta,think,json,summarize,filename,vlm,tasks,date\n");
+    for entry in entries {
+        let _ = writeln!(
+            out,
+            "{},{:.1},{},{},{},{},{},{},{},{}",
+            csv_escape(&entry.model),
+            entry.overall_mean,
+            fmt_csv_opt(entry.delta),
+            fmt_csv_opt(entry.think_score),
+            fmt_csv_opt(entry.json_score),
+            fmt_csv_opt(entry.summarize_score),
+            fmt_csv_opt(entry.filename_score),
+            fmt_csv_opt(entry.vlm_score),
+            entry.task_count,
+            csv_escape(&entry.date)
+        );
+    }
+    out
+}
+
+/// Formats the leaderboard entries grouped by detected model family (`M15`).
+#[must_use]
+pub fn format_leaderboard_by_family(entries: &[ModelLeaderboardEntry]) -> String {
+    if entries.is_empty() {
+        return "No complete model eval runs found in history.\n".to_string();
+    }
+
+    let mut groups: Vec<(&'static str, Vec<&ModelLeaderboardEntry>)> = Vec::new();
+    for entry in entries {
+        let fam = detect_model_family(&entry.model);
+        if let Some((_, list)) = groups.iter_mut().find(|(f, _)| *f == fam) {
+            list.push(entry);
+        } else {
+            groups.push((fam, vec![entry]));
+        }
+    }
+
+    let mut out = String::new();
+    out.push_str("# Model Evaluation Leaderboard (Grouped by Family)\n\n");
+    for (fam, fam_entries) in groups {
+        let _ = writeln!(out, "## Family: {fam}\n");
+        out.push_str(
+            "| Rank | Model | Mean | Delta | Think | JSON | Summarize | Filename | VLM | Tasks | Date |\n",
+        );
+        out.push_str(
+            "| ---: | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :--- |\n",
+        );
+        for (idx, entry) in fam_entries.iter().enumerate() {
+            let _ = writeln!(
+                out,
+                "| {} | `{}` | {:.1}% | {} | {} | {} | {} | {} | {} | {} | {} |",
+                idx + 1,
+                entry.model,
+                entry.overall_mean,
+                fmt_delta(entry.delta),
+                fmt_cell(entry.think_score),
+                fmt_cell(entry.json_score),
+                fmt_cell(entry.summarize_score),
+                fmt_cell(entry.filename_score),
+                fmt_cell(entry.vlm_score),
+                entry.task_count,
+                entry.date
+            );
+        }
+        out.push('\n');
+    }
+    out
 }
 
 /// Formats the leaderboard entries into a markdown table.
@@ -266,19 +447,37 @@ pub fn format_leaderboard(entries: &[ModelLeaderboardEntry]) -> String {
 ///
 /// # Errors
 ///
-/// Returns an error if loading history fails, sorting slot is invalid, or JSON serialization fails.
-pub fn cli_leaderboard(
-    eval_dir: Option<&Path>,
-    json_output: bool,
-    min_tasks: Option<usize>,
-    sort_by: Option<&str>,
-) -> Result<()> {
+/// Returns an error if loading history fails, sorting slot is invalid, JSON serialization fails,
+/// or regression threshold is breached (`M16`).
+pub fn cli_leaderboard(eval_dir: Option<&Path>, opts: &LeaderboardOptions<'_>) -> Result<()> {
     let history = crate::ztools::eval::report::load_history_entries(eval_dir);
-    let entries = generate_leaderboard(&history, min_tasks, sort_by)?;
-    if json_output {
-        println!("{}", serde_json::to_string_pretty(&entries)?);
-    } else {
-        println!("{}", format_leaderboard(&entries));
+    let entries =
+        generate_leaderboard_filtered(&history, opts.min_tasks, opts.sort_by, opts.category)?;
+
+    match opts.format {
+        LeaderboardFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&entries)?);
+        }
+        LeaderboardFormat::Csv => {
+            print!("{}", format_leaderboard_csv(&entries));
+        }
+        LeaderboardFormat::Markdown => {
+            if opts.group_by_family {
+                print!("{}", format_leaderboard_by_family(&entries));
+            } else {
+                print!("{}", format_leaderboard(&entries));
+            }
+        }
     }
+
+    if let Some(threshold) = opts.fail_on_regression
+        && let Some((model, delta)) = check_regression(&entries, threshold)
+    {
+        anyhow::bail!(
+            "model evaluation regression detected: '{model}' delta {delta:+.1}% fell below threshold -{:.1}%",
+            threshold.abs()
+        );
+    }
+
     Ok(())
 }

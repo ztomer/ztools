@@ -152,6 +152,18 @@ enum Cmd {
         /// Slot to sort the leaderboard by (overall, think, json, summarize, filename, vlm).
         #[arg(long)]
         sort_by: Option<String>,
+        /// Output leaderboard in comma-separated values (CSV) format.
+        #[arg(long)]
+        csv_output: bool,
+        /// Group leaderboard entries by detected model family.
+        #[arg(long)]
+        group_by_family: bool,
+        /// Filter leaderboard scoring and rankings to tasks belonging to category.
+        #[arg(long)]
+        category: Option<String>,
+        /// Fail with non-zero exit code if any model's score delta falls below threshold percent.
+        #[arg(long)]
+        fail_on_regression: Option<f64>,
     },
     /// Manage stored eval signals (inspect or prune superseded task observations).
     #[command(version)]
@@ -331,13 +343,30 @@ pub fn run() -> Result<()> {
             leaderboard,
             min_tasks,
             sort_by,
+            csv_output,
+            group_by_family,
+            category,
+            fail_on_regression,
         } => {
-            let action = if leaderboard || sort_by.is_some() {
+            let is_leaderboard = leaderboard
+                || sort_by.is_some()
+                || csv_output
+                || group_by_family
+                || category.is_some()
+                || fail_on_regression.is_some();
+            let action = if is_leaderboard {
                 crate::cli_ztools::EvalAction::Leaderboard
             } else if capabilities {
                 crate::cli_ztools::EvalAction::Capabilities
             } else {
                 crate::cli_ztools::EvalAction::Run
+            };
+            let format = if json_output {
+                crate::ztools::eval::LeaderboardFormat::Json
+            } else if csv_output {
+                crate::ztools::eval::LeaderboardFormat::Csv
+            } else {
+                crate::ztools::eval::LeaderboardFormat::Markdown
             };
             crate::cli_ztools::model_eval(
                 &config,
@@ -349,8 +378,14 @@ pub fn run() -> Result<()> {
                     json_output,
                     thinking,
                     action,
-                    min_tasks,
-                    sort_by: sort_by.as_deref(),
+                    leaderboard_opts: crate::ztools::eval::LeaderboardOptions {
+                        min_tasks,
+                        sort_by: sort_by.as_deref(),
+                        category: category.as_deref(),
+                        format,
+                        group_by_family,
+                        fail_on_regression,
+                    },
                 },
             )
         }

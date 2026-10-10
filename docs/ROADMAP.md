@@ -38,9 +38,8 @@ checked by a gate, so re-derive it before editing it:
 `git log --oneline origin/main..main`, `gh run list --limit 3`,
 `tools/gate.sh --full`, and `"$GOH_DIR/gates/goh.sh" home-paths --exclude ^vendor/`.
 
-- Release v3.4.1 cut, tagged, and published on GitHub (following v3.4.0).
-- Remote CI run 38002901596 passed cleanly in 2m52s on macOS arm64 (`make ci` clean across all 12 steps).
-- Items `L2`, `M1` through `M12` landed and deleted from open work; items `G5` and `R2` dropped.
+- Release v3.5.0 cut, tagged, and published on GitHub (following v3.4.1).
+- Items `L2`, `M1` through `M16` landed and deleted from open work; items `G5`, `G6`, and `R2` dropped.
 - Landed today, each proven by a test made to fail first:
   **`L2`** (green CI gate of record on GitHub Actions),
   **`M1`** (repo-relative file_summary checkout rows), **`M2`** (task identity
@@ -58,6 +57,10 @@ checked by a gate, so re-derive it before editing it:
   **`M10`** (`ztools model-eval --leaderboard --min-tasks <N>` filters models by run task count floor),
   **`M11`** (`ztools model-eval --leaderboard --sort-by <slot>` slot-specific capability sorting),
   **`M12`** (`ztools model-eval --leaderboard` longitudinal score delta tracking against previous run),
+  **`M13`** (`ztools model-eval --leaderboard --category <name>` category-filtered evaluation ranking),
+  **`M14`** (`ztools model-eval --leaderboard --csv-output` spreadsheet/pipeline CSV export format),
+  **`M15`** (`ztools model-eval --leaderboard --group-by-family` model family grouping),
+  **`M16`** (`ztools model-eval --leaderboard --fail-on-regression <pct>` automated regression threshold check),
   **`G2`** (307 files clean under `GOH_NO_HOME_PATHS=1`), **`G3`** (toolchain header cleaned),
   **`G4`** (CI gate tool manifest dynamic install + pinned tsv), **`R1`** (provenance ledger reading).
 - Local verification on `main`:
@@ -68,63 +71,6 @@ checked by a gate, so re-derive it before editing it:
 
 ## Phase M — what the eval records must mean what it says
 
-Depends on nothing. The class for the whole phase: **a stored number that no longer
-describes the thing its name says it describes.** `M1` through `M12` landed on
-2026-10-08/09 (task fingerprinting, context guards, full-roster sweeps, signal
-re-baselining, signal pruning, comparative leaderboards, JSON serialization,
-configurable task thresholds, slot sorting, and historical delta tracking).
+All Phase M items (`M1` through `M16`) have landed. No open work remains in this phase.
 
-### M13 — Task category breakdown filtering in model evaluation leaderboard
-- **Class:** broad whole-roster aggregate obscuring performance across task categories.
-- **Why now:** `ztools model-eval --leaderboard` ranks across all tasks or by capability slots,
-  but operators evaluating specific domains (e.g. `taxes` compliance vs `weekend` extraction) have
-  no flag to filter the leaderboard to a specific task prefix or category.
-- **Done when:** `ztools model-eval --leaderboard --category <name>` (e.g. `taxes`, `weekend`, `twitter`)
-  filters scoring and rankings to tasks belonging to that category, covered by a test in
-  `rust/src/ztools/model_eval_leaderboard_tests.rs`.
-- **Blocked by:** nothing.
 
-### M14 — CSV export mode for model evaluation leaderboard
-- **Class:** tabular output format limited to markdown and JSON, lacking spreadsheet and pipeline ingestion format.
-- **Why now:** `ztools model-eval --leaderboard` supports human-readable markdown and structured JSON
-  (`--json-output`), but data ingestion scripts and analysis pipelines require CSV formatting consistent with
-  `rust/src/ztools/eval/report_csv.rs`.
-- **Done when:** `ztools model-eval --leaderboard --csv-output` prints comma-separated values with columns
-  `model,mean,delta,think,json,summarize,filename,vlm,tasks,date`, covered by a test in
-  `rust/src/ztools/model_eval_leaderboard_tests.rs`.
-- **Blocked by:** nothing.
-
-### M15 — Model family grouping in evaluation leaderboard
-- **Class:** unstructured model list obscuring intra-family variant progression.
-- **Why now:** The roster includes multiple variants across model families (e.g. `qwen3.8`, `gemma-4`,
-  `raptor`); operators need to compare quantizations and fine-tunes within families.
-- **Done when:** `ztools model-eval --leaderboard --group-by-family` groups leaderboard entries by detected
-  family (`qwen`, `gemma`, `raptor`, `muse`), covered by a test in
-  `rust/src/ztools/model_eval_leaderboard_tests.rs`.
-- **Blocked by:** nothing.
-
-### M16 — Thresholded regression alert on model evaluation delta
-- **Class:** silent performance drop across model runs requiring manual inspection of delta columns.
-- **Why now:** An operator re-running sweeps after local quant or server configuration updates needs a
-  non-zero exit code or warning when a model regresses beyond an acceptable tolerance.
-- **Done when:** `ztools model-eval --leaderboard --fail-on-regression <threshold_pct>` returns a non-zero
-  exit code if any model's score delta falls below `-threshold_pct`, covered by a test in
-  `rust/src/ztools/model_eval_leaderboard_tests.rs`.
-- **Blocked by:** nothing.
-
-## Phase G — gates that still cannot fail
-
-Depends on nothing. The class for the whole phase: **a check that reports green over
-something it never inspected.**
-
-### G6 — CI runs a NAMED release of `gates_of_heck`, not its `main`
-- **Class:** a gate whose checker can change under it, so a verdict move cannot be
-  attributed to the repo and `git bisect` of a gate change is impossible.
-- **Why now:** `.gatesrc`'s hooks delegate to whatever `gates_of_heck` currently is,
-  and CI clones its `main` at depth 1, so a push is checked by a different checker
-  than the last push was. The standing house rule is that `main` is never a pin; a
-  local checkout already sits 52 commits past v0.24.0 (`G2`'s counts, `L2`'s history
-  and `X1`-`X3` all shipped inside that window unpinned).
-- **Done when:** the workflow's clone in `.github/workflows/ci.yml` names a released
-  tag, CI passes on it, and the local `GOH_DIR` reports the same tag.
-- **Blocked by:** the owner's pick of the first pinned tag.

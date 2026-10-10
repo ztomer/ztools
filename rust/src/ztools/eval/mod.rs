@@ -64,7 +64,10 @@ pub use gpu_lock::{
     DEFAULT_LOCK_DIR, DEFAULT_MAX_IDLE_SECS, GpuLockGuard, foreign_holder, lock_dir,
 };
 pub use leaderboard::{
-    ModelLeaderboardEntry, cli_leaderboard, format_leaderboard, generate_leaderboard,
+    LeaderboardFormat, LeaderboardOptions, ModelLeaderboardEntry, check_regression,
+    cli_leaderboard, detect_model_family, format_leaderboard, format_leaderboard_by_family,
+    format_leaderboard_csv, generate_leaderboard, generate_leaderboard_filtered,
+    task_matches_category,
 };
 pub use model_resolve::{
     MISSING_MODEL_MARKERS, RosterEntry, default_fallback_chain, disk_corroborated, fetch_roster,

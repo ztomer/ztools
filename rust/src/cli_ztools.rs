@@ -275,18 +275,14 @@ pub(crate) struct EvalOptions<'a> {
     pub json_output: bool,
     pub thinking: bool,
     pub action: EvalAction,
-    pub min_tasks: Option<usize>,
-    pub sort_by: Option<&'a str>,
+    pub leaderboard_opts: crate::ztools::eval::LeaderboardOptions<'a>,
 }
 
 pub(crate) fn model_eval(config: &ZtoolsConfig, model: &str, opts: &EvalOptions<'_>) -> Result<()> {
     match opts.action {
-        EvalAction::Leaderboard => crate::ztools::eval::cli_leaderboard(
-            None,
-            opts.json_output,
-            opts.min_tasks,
-            opts.sort_by,
-        ),
+        EvalAction::Leaderboard => {
+            crate::ztools::eval::cli_leaderboard(None, &opts.leaderboard_opts)
+        }
         EvalAction::Capabilities => print_capabilities(&config.osaurus_url, model),
         EvalAction::Run => {
             if opts.suite == "full" {

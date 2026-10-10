@@ -6,6 +6,27 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## v3.5.0 — evaluation leaderboard category filtering, CSV export, family grouping, and regression alerts _(2026-10-09)_
+
+The theme: precision leaderboard filtering, standard data pipeline export, and automated CI regression enforcement.
+**908 Rust lib tests, 136 tools tests, clippy `-D warnings` clean on stable and on the 1.93.1 MSRV,
+coverage >= 95% with per-file floors enforced.**
+
+### Added — new tools, features, and CLI capabilities
+- **Task category breakdown filtering (`--category <name>`) (`M13`).**
+  `ztools model-eval --leaderboard --category <name>` (e.g. `taxes`, `weekend`, `twitter`, `summarize`)
+  filters scoring and rankings to tasks belonging to that category prefix or domain.
+- **CSV export format (`--csv-output`) (`M14`).**
+  `ztools model-eval --leaderboard --csv-output` prints comma-separated values with columns
+  `model,mean,delta,think,json,summarize,filename,vlm,tasks,date` for spreadsheets and downstream ingestion pipelines.
+- **Model family grouping (`--group-by-family`) (`M15`).**
+  `ztools model-eval --leaderboard --group-by-family` groups leaderboard entries by detected
+  model family (`qwen`, `gemma`, `raptor`, `muse`, `bonsai`, `ornith`, `nemotron`, `lfm`, `foundation`),
+  preserving relative ranking within each family section.
+- **Automated regression threshold alert (`--fail-on-regression <pct>`) (`M16`).**
+  `ztools model-eval --leaderboard --fail-on-regression <threshold_pct>` inspects longitudinal score deltas
+  and exits with a non-zero exit code if any model's score drops below `-threshold_pct`.
+
 ## v3.4.1 — route task slots to installed winners and prevent search bot wall starvation _(2026-10-09)_
 
 The theme: production task routing to installed model winners and reliable search fetching.
