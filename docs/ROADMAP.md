@@ -103,18 +103,15 @@ whether the decoding change helped at all.
 ### T2 — the summary decoding change is unmeasured on the live server
 
 - **Class:** a decoding knob believed rather than measured. The summarizer now sends
-  `temperature: 0.1` and `frequency_penalty: 0.3` (`SUMMARY_SAMPLING`,
-  `rust/src/ztools/twitter/mod.rs`) because temperature 0 looped. Osaurus 0.25.20
-  decodes the `frequency_penalty` key (read from its binary's strings, not from a live
-  request), but whether it changes this model's output, and whether its speculative
-  path refuses it, was not measured: the GPU is shared under the machine-wide lock and
-  the change landed without a live run.
+  `temperature: 0.1` (`SUMMARY_SAMPLING`, `rust/src/ztools/twitter/mod.rs`) because
+  temperature 0 looped. A `frequency_penalty` of 0.3 was dropped after two live runs
+  (2026-10-10) garbled the citation tokens it penalised; how often temperature 0.1
+  alone still loops on this model was not measured.
 - **Why now:** the quality gate now REJECTS loops, so a decoding setting that still
   loops costs a fallback (a DEGRADED summary) rather than a silently bad one.
 - **Done when:** repeated `ztools twitter-summarize --use-cache` runs on one cached
   timeline (they write a scratch directory, never the store), under the GPU lock, at
   `Sampling::GREEDY` and at `SUMMARY_SAMPLING`, are recorded in `docs/MODEL_QUIRKS.md`
-  with how many answers the quality gate rejected for each, showing the
-  `frequency_penalty` request answered rather than refused. (`model-eval` cannot
+  with how many answers the quality gate rejected for each. (`model-eval` cannot
   answer this: it pins temperature 0 by design.)
 - **Blocked by:** a free slot on the GPU lock (`tools/gpu_lock.sh`).

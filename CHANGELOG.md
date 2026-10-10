@@ -14,9 +14,12 @@ This file starts at v2.2.0 — earlier history is in git.
   bullets, more bullets than input tweets, and bullets mostly lacking `(@handle | timestamp)`;
   a rejected answer falls to the next model with the reason recorded
   (`rust/src/ztools/twitter/quality.rs`).
-- **The summarizer decoded greedily.** It now sends temperature 0.1 and `frequency_penalty`
-  0.3 (`SUMMARY_SAMPLING`); every other call stays greedy (`llm::chat_with`). The prompt asks
-  for related tweets to be merged and no bullet repeated. Live effect unmeasured: ROADMAP T2.
+- **The summarizer decoded greedily.** It now sends temperature 0.1 (`SUMMARY_SAMPLING`);
+  every other call stays greedy (`llm::chat_with`). The prompt asks for related tweets to be
+  merged and no bullet repeated. A `frequency_penalty` of 0.3 was tried and removed: both
+  live runs with it on 2026-10-10 garbled the citation tokens every bullet repeats
+  (`Sat Oct 10 336:51`, `+0000 2о` with a Cyrillic о, `Sat Oct 1`). Repetition is the
+  gate's job, not a penalty that taxes the required format. ROADMAP T2 measures the rest.
 - **`--json` / `--use-cache` runs wrote the production store**, so a fixture run became the
   dashboard's summary. Only a live fetch writes it now; the writer honours
   `TWITTER_OUTPUT_DIR` like the readers. A `--json` source with no tweets, or no tweets at
@@ -28,6 +31,14 @@ This file starts at v2.2.0 — earlier history is in git.
   `llm.rs` now refuses `finish_reason: length` and a stream that ends with neither `[DONE]`
   nor a finish reason; the quality gate rejects a last bullet that opens a citation it never
   closes, which catches a cut the server does not report.
+- **Citations were invented and still passed.** The gate checked only that a citation was
+  well-formed. It now matches every `(@handle | timestamp)` against the tweets the model was
+  given and rejects an answer when more than 1 in 10 name none of them
+  (`unmatched_citations`) -- the garbled timestamps above, and handles the model made up.
+- **The model talking to itself was saved as the summary.** The second live run put prose
+  ("Wait, let me check...") between bullets inside topic sections. Topic sections are
+  bullets only; prose there is a rejection. 59 of the 60 summaries in the store already
+  hold to that, so the rule describes the format rather than changing it.
 - **`**Period:**` printed local time labelled "UTC"**; it now carries the real offset.
 - **Tests that resolve `~` or render the live file-summary prompt** must take `TestEnv`
   (audit gate 2).

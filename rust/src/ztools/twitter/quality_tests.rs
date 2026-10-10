@@ -212,3 +212,42 @@ fn an_answer_cut_off_mid_citation_is_rejected() {
     whole.push("- He said \"wait...\" and left. (@someone | 09:00)".into());
     assert!(!check_summary_quality(&doc(&whole), 45).rejected());
 }
+
+/// The tweets `cited(i)` cites, as the prompt showed them.
+fn sources(n: usize) -> Vec<(String, String)> {
+    (0..n)
+        .map(|i| (format!("account_{i}"), format!("0{}:00", i % 10)))
+        .collect()
+}
+
+/// Ground truth, not a shape: every citation must name a tweet the model was
+/// given. Live on 2026-10-10 the summarizer wrote `(@danielamram3 | Sat Oct 10
+/// 15:33:43 +0000 2о)` (a Cyrillic о) and `(@unusual_whales | Sat Oct 1`, and
+/// both passed, because "is it cited" only checked the parentheses.
+#[test]
+fn citations_that_name_no_input_tweet_are_rejected() {
+    let healthy: Vec<String> = (0..7).map(cited).collect();
+    assert_eq!(unmatched_citations(&doc(&healthy), &sources(7)), None);
+
+    let mut garbled: Vec<String> = (0..5).map(cited).collect();
+    garbled.push("- A shot was fired over parking. (@account_5 | 05:0о)".into());
+    garbled.push("- Elections were postponed. (@nobody_given | 06:00)".into());
+    let why = unmatched_citations(&doc(&garbled), &sources(7)).expect("rejected");
+    assert!(why.contains("2 of 7 citations"), "{why}");
+}
+
+/// The model thinking aloud inside a topic section ("Actually wait - I realize
+/// I've been overthinking this") is not a summary. Prose belongs only in the
+/// Executive Summary.
+#[test]
+fn prose_inside_a_topic_section_is_rejected() {
+    let mut lines: Vec<String> = (0..6).map(cited).collect();
+    lines.push(String::new());
+    lines.push("Actually wait - I realize I've been overthinking this.".into());
+    let q = check_summary_quality(&doc(&lines), 10);
+    assert_eq!(q.rejections.len(), 1, "{q:?}");
+    assert!(q.rejections[0].contains("talking to itself"), "{q:?}");
+    // The Executive Summary paragraph `doc` writes is prose, and allowed.
+    let healthy: Vec<String> = (0..6).map(cited).collect();
+    assert!(!check_summary_quality(&doc(&healthy), 10).rejected());
+}

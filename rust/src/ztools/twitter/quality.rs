@@ -42,6 +42,62 @@ const NEAR_DUPLICATE_MIN_WORDS: usize = 5;
 static ATTRIBUTION: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\(@[A-Za-z0-9_]+\s*\|[^)\n]+\)").expect("valid regex"));
 
+/// One citation, with the handle and timestamp captured for checking against
+/// the tweets the model was given.
+static CITATION: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\(@([A-Za-z0-9_]+)\s*\|\s*([^)\n]+?)\s*\)").expect("valid regex")
+});
+
+/// Citations that name no tweet the model was given.
+///
+/// A garbled timestamp, an invented one, a handle that was never in the
+/// timeline. `sources` are the `(handle, created_at)` pairs the prompt showed.
+/// `None` when at most a tenth are unmatched (a stray reformat is a weak
+/// answer, not a fabricated one), else the reason. Ground truth, where
+/// `is_attributed` only sees a shape.
+#[must_use]
+pub fn unmatched_citations(summary: &str, sources: &[(String, String)]) -> Option<String> {
+    let known: HashSet<(&str, &str)> = sources
+        .iter()
+        .map(|(h, ts)| (h.as_str(), ts.trim()))
+        .collect();
+    let mut total = 0usize;
+    let mut unmatched = 0usize;
+    for cap in CITATION.captures_iter(summary) {
+        total += 1;
+        if !known.contains(&(&cap[1], cap[2].trim())) {
+            unmatched += 1;
+        }
+    }
+    (unmatched * 10 > total).then(|| {
+        format!(
+            "{unmatched} of {total} citations name no tweet the model was given \
+             (a garbled or invented handle or timestamp)"
+        )
+    })
+}
+
+/// Non-bullet prose under a topic header: the model talking to itself
+/// ("Actually wait - I realize I've been overthinking this"). Prose is the
+/// Executive Summary's alone.
+fn prose_in_topics(summary: &str) -> usize {
+    let mut in_topic = false;
+    let mut prose = 0;
+    for line in summary.lines() {
+        let trimmed = line.trim();
+        if let Some(title) = trimmed.strip_prefix("##") {
+            in_topic = !title.to_lowercase().contains("summary");
+            continue;
+        }
+        let bullet = trimmed.starts_with("- ") || trimmed.starts_with("* ");
+        let continuation = line.starts_with(char::is_whitespace);
+        if in_topic && !trimmed.is_empty() && !bullet && !continuation {
+            prose += 1;
+        }
+    }
+    prose
+}
+
 /// What the gate found: `warnings` describe a weak answer that is still saved,
 /// `rejections` an answer that must not be.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -135,7 +191,9 @@ pub fn duplicate_bullets(bullets: &[String]) -> usize {
 /// Rejects (see the module's invariant): an empty answer; one with neither a
 /// `##` header nor a bullet; more than [`MAX_DUPLICATE_BULLETS`] repeated
 /// bullets; more bullets than input tweets; an answer cut off mid-citation;
-/// and bullets that mostly lack the `(@handle | timestamp)` citation.
+/// prose inside a topic section; and bullets that mostly lack the
+/// `(@handle | timestamp)` citation. Whether those citations name real input
+/// tweets is [`unmatched_citations`], which needs the tweets themselves.
 #[must_use]
 pub fn check_summary_quality(summary: &str, input_tweets: usize) -> Quality {
     let mut quality = Quality::default();
@@ -194,6 +252,12 @@ pub fn check_summary_quality(summary: &str, input_tweets: usize) -> Quality {
         quality.rejections.push(
             "the last bullet is cut off mid-citation: the answer stops before it ends".to_string(),
         );
+    }
+    let prose = prose_in_topics(summary);
+    if prose > 0 {
+        quality.rejections.push(format!(
+            "{prose} line(s) of prose inside topic sections: the model is talking to itself"
+        ));
     }
     let unattributed = bullets.iter().filter(|b| !is_attributed(b)).count();
     if unattributed * 2 > bullets.len() {

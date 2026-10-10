@@ -19,7 +19,7 @@ pub use browser_parse::parse_tweets_from_response;
 pub use cookies::{
     Cookie, DEFAULT_DOMAINS, SESSION_COOKIE_NAME, find_firefox_profile_dbs, has_session_cookie,
 };
-pub use quality::{Quality, check_summary_quality};
+pub use quality::{Quality, check_summary_quality, unmatched_citations};
 
 use std::collections::HashSet;
 use std::fs;
@@ -128,19 +128,22 @@ pub fn build_prompt(tweets: &[Tweet], max_chars: usize, instructions: &str) -> (
     (prompt, lines.len())
 }
 
-/// How the summarizer decodes: not greedy.
+/// How the summarizer decodes: not greedy, and no frequency penalty.
 ///
-/// At temperature 0 the ~1B-active summarizer fell into repetition loops (43 tweets became 58 bullets, 35 of
-/// them repeats), and greedy decoding is the documented loop-prone setting
-/// (`docs/MODEL_QUIRKS.md`). A small temperature breaks the tie that sustains a
-/// loop; the frequency penalty taxes a token the more it has just been used.
-/// Both are deliberately small: the attribution format repeats `(@`, `|` and
-/// `)` in every bullet, and a strong penalty would fight the format the
-/// quality gate requires. The gate, not this, is what keeps a loop out of the
-/// store; this only makes one less likely.
+/// At temperature 0 the ~1B-active summarizer fell into repetition loops (43
+/// tweets became 58 bullets, 35 of them repeats), and greedy decoding is the
+/// documented loop-prone setting (`docs/MODEL_QUIRKS.md`). A small temperature
+/// breaks the tie that sustains a loop.
+///
+/// A `frequency_penalty` of 0.3 was tried and REMOVED the same day: the
+/// citation `(@handle | Sat Oct 10 15:33:43 +0000 2026)` repeats the same
+/// tokens in every bullet, and both live runs with the penalty garbled exactly
+/// those -- `Sat Oct 10 336:51`, `+0000 2о` with a Cyrillic о, `Sat Oct 1`. A
+/// penalty taxes the format the gate requires. The gate (`quality.rs`), not
+/// sampling, is what keeps a loop or a garbled citation out of the store.
 pub const SUMMARY_SAMPLING: crate::ztools::llm::Sampling = crate::ztools::llm::Sampling {
     temperature: 0.1,
-    frequency_penalty: Some(0.3),
+    frequency_penalty: None,
 };
 
 /// Call the local Osaurus server for one plain-text answer.
@@ -235,6 +238,11 @@ pub fn run_summary(
         config.twitter_prompt_max_chars,
         &config.twitter_summarize_prompt,
     );
+    // What the answer may cite: exactly the source lines the prompt showed.
+    let sources: Vec<(String, String)> = final_tweets[..processed.min(final_tweets.len())]
+        .iter()
+        .map(|t| (t.screen_name.clone(), t.created_at.clone()))
+        .collect();
     // The chain: intended model resolved against what the server serves,
     // then the configured fallbacks. A roster the server will not give us is
     // an unknown roster, not an empty one — the intent stands unfiltered.
@@ -253,7 +261,7 @@ pub fn run_summary(
         // the saved markdown, and an answer the quality gate rejects must not
         // be saved at all: the rejection is this model's recorded reason, and
         // the chain moves on to the next model.
-        handle_model_output(&raw, processed)
+        handle_model_output(&raw, &sources)
             .map(Some)
             .map_err(|why| anyhow::anyhow!("answer rejected by the quality gate: {why}"))
     })
@@ -368,14 +376,21 @@ pub fn merge_thinking_with_summary(thinking: &str, summary: &str) -> String {
 /// # Errors
 ///
 /// The quality gate's rejections, joined, when the answer must not be saved.
-pub fn handle_model_output(content: &str, processed: usize) -> Result<(String, usize), String> {
+pub fn handle_model_output(
+    content: &str,
+    sources: &[(String, String)],
+) -> Result<(String, usize), String> {
+    let processed = sources.len();
     let (thinking, cleaned) = extract_thinking(content);
     let body = if thinking.is_empty() {
         crate::ztools::eval::clean::remove_thinking_blocks(&cleaned)
     } else {
         cleaned
     };
-    let quality = check_summary_quality(&body, processed);
+    let mut quality = check_summary_quality(&body, processed);
+    quality
+        .rejections
+        .extend(unmatched_citations(&body, sources));
     if quality.rejected() {
         return Err(quality.rejections.join("; "));
     }

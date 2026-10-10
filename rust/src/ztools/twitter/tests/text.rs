@@ -150,7 +150,15 @@ fn test_handle_model_output_passes_good_content_through() {
     // Port of test_success_first_model in test_twit_summarize.py.
     let result = handle_model_output(
         "## Topic\n- fact 1 (@a | 1)\n- fact 2 (@b | 2)\n- fact 3 (@c | 3)",
-        7,
+        &given(&[
+            ("a", "1"),
+            ("b", "2"),
+            ("c", "3"),
+            ("d", "4"),
+            ("e", "5"),
+            ("f", "6"),
+            ("g", "7"),
+        ]),
     );
     let (text, processed) = result.expect("good content must survive the gate");
     assert!(text.contains("Topic"), "{text}");
@@ -163,7 +171,7 @@ fn test_handle_model_output_merges_thinking_when_present() {
     // then the merged text faces the same quality gate.
     let result = handle_model_output(
         "<thinking>reasoning here</thinking>## Topic\n- a (@a | 1)\n- b (@b | 2)\n- c (@c | 3)",
-        3,
+        &given(&[("a", "1"), ("b", "2"), ("c", "3")]),
     );
     let (text, _) = result.expect("merged thinking must survive the gate");
     assert!(text.contains("## Analysis"), "{text}");
@@ -174,13 +182,13 @@ fn test_handle_model_output_merges_thinking_when_present() {
 fn test_handle_model_output_drops_critical_thinking_output() {
     // Port of test_thinking_critical_skips (single attempt): thinking present
     // but the body is unstructured, so the attempt yields nothing.
-    assert!(handle_model_output("<thinking>x</thinking>bad", 1).is_err());
+    assert!(handle_model_output("<thinking>x</thinking>bad", &given(&[("a", "1")])).is_err());
 }
 
 #[test]
 fn test_handle_model_output_drops_structureless_content() {
     // Port of test_target_model_with_known_critical_skips (single attempt).
-    assert!(handle_model_output("no structure here at all", 1).is_err());
+    assert!(handle_model_output("no structure here at all", &given(&[("a", "1")])).is_err());
 }
 
 /// A rejected answer carries the gate's reason, so the chain can record WHY
@@ -188,8 +196,26 @@ fn test_handle_model_output_drops_structureless_content() {
 #[test]
 fn test_handle_model_output_names_the_rejection() {
     let looped = "## Topic\n- same fact (@a | 1)\n- same fact (@a | 1)\n- same fact (@a | 1)\n- same fact (@a | 1)";
-    let why = handle_model_output(looped, 10).unwrap_err();
+    let why = handle_model_output(looped, &given(&[("a", "1"); 10])).unwrap_err();
     assert!(why.contains("repeat an earlier bullet"), "{why}");
+}
+
+/// The tweets the prompt showed, as `(handle, created_at)`.
+fn given(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+    pairs
+        .iter()
+        .map(|(h, t)| ((*h).to_string(), (*t).to_string()))
+        .collect()
+}
+
+/// The gate is wired to the tweets themselves: a well-formed answer whose
+/// citations name tweets the model was never given is not saved.
+#[test]
+fn test_handle_model_output_refuses_citations_of_tweets_it_was_not_given() {
+    let invented = "## Topic\n- fact 1 (@a | 1)\n- fact 2 (@zz | 9)\n- fact 3 (@c | 3o)";
+    let why =
+        handle_model_output(invented, &given(&[("a", "1"), ("b", "2"), ("c", "3")])).unwrap_err();
+    assert!(why.contains("2 of 3 citations"), "{why}");
 }
 
 /// The sandbox config really is self-contained.

@@ -136,18 +136,24 @@ fn stub_server(roster: &'static str, content: &'static str) -> String {
 /// A structured answer that passes `check_summary_quality`: its own `##`
 /// headings, one bullet per input tweet (never more), each citing its tweet in
 /// the `(@handle | timestamp)` form — the first on a wrapped continuation line —
-/// and enough prose to clear the length warning.
+/// and enough prose to clear the length warning. The prose sits in the
+/// Executive Summary: a topic section holds bullets only (the prompt's format,
+/// and the gate's `prose_in_topics` rule since 2026-10-10).
 const SUMMARY_BODY: &str = "\
 ## Executive Summary
 
+Two threads dominated the timeline. The funding round closes Friday and one
+account flagged the deadline specifically.
+
+## Transit
+
 - Two threads dominated the timeline, the louder a rail shutdown on the Lakeshore
   line between Union and Bathurst (@transit_watch | Thu Aug 20 12:00:00 +0000 2026).
+
+## Funding
+
 - A funding round for small groups closes Friday and has not been picked up
-  (@civic_notes | Thu Aug 20 12:04:00 +0000 2026).
-
-## What The Funding Thread Adds
-
-The funding round closes Friday and one account flagged the deadline specifically.";
+  (@civic_notes | Thu Aug 20 12:04:00 +0000 2026).";
 
 fn tweets() -> Vec<Tweet> {
     vec![
@@ -293,12 +299,9 @@ fn the_goldens_were_read_not_merely_recorded() {
         // has none).
         assert!(doc.contains("## Executive Summary"), "{doc}");
         assert!(!doc.contains("## Summary"), "{doc}");
-        assert!(doc.contains("## What The Funding Thread Adds"), "{doc}");
+        assert!(doc.contains("## Funding"), "{doc}");
         assert!(
-            doc.ends_with(
-                "The funding round closes Friday and one account flagged the deadline \
-                          specifically.\n"
-            ),
+            doc.ends_with("(@civic_notes | Thu Aug 20 12:04:00 +0000 2026).\n"),
             "the document must end with the model body, one trailing newline and nothing \
              else:\n{doc}"
         );
