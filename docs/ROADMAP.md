@@ -31,14 +31,14 @@ cannot fail hides more than a plan that reads oddly, because it is the thing tha
 would have noticed. Phases are SEQUENTIAL where a later phase's evidence depends on an
 earlier one, and each phase says what it depends on.
 
-## Where things stand — 2026-10-09
+## Where things stand — 2026-10-10
 
 A dated summary of what the runs below already print. Nothing in this section is
 checked by a gate, so re-derive it before editing it:
 `git log --oneline origin/main..main`, `gh run list --limit 3`,
 `tools/gate.sh --full`, and `"$GOH_DIR/gates/goh.sh" home-paths --exclude ^vendor/`.
 
-- Release v3.5.0 cut and tagged (following v3.4.1). v3.4.0 through v3.5.0 were tagged by hand and got no GitHub release; the release kit now backfills a tag that lacks one.
+- Release v3.6.0 cut (twitter summary quality, 7-day retention toggles, the test-home sandbox, weekend supply and plan fixes). The kit backfilled the GitHub releases v2.2.0, v3.0.0, v3.4.0, v3.4.1 and v3.5.0 lacked; 57 older tags have no CHANGELOG stanza and stay without one.
 - Items `L2`, `M1` through `M16` landed and deleted from open work; items `G5`, `G6`, and `R2` dropped.
 - Landed today, each proven by a test made to fail first:
   **`L2`** (green CI gate of record on GitHub Actions),
@@ -86,6 +86,39 @@ plan anymore; this file is.
 - **Gemini CLI** (`~/.gemini/tmp/ztools/`, April–June chats): Python-era; removed (Trash).
 - **Found by the consolidation itself:** tags v3.4.0, v3.4.1 and v3.5.0 had no GitHub release
   (tagged by hand); the release kit now backfills a tag that lacks one (gates_of_heck 2573b86).
+
+## Phase W — the weekend plan must read right to a parent
+
+Found while fixing the weather labels (2026-10-10). Ranked by how much of the plan
+each one makes wrong.
+
+### W1 — one wet day makes every row's weather fit neutral
+
+- **Class:** a per-day fact judged once for the whole weekend. `score.rs::forecast_of`
+  reads the forecast as Clear, Wet or Unknown for ALL days, and "clear on some days and
+  wet on others" is Unknown, so every label scores the neutral 1. On 2026-10-10 Sunday
+  alone had rain, and the labels the structure phase now gets right moved no score.
+- **Done when:** a row's weather points come from the forecast for the day(s) it is on
+  (its `day` or dates), a year-round row takes the best day, and a `score_tests.rs` case
+  with a Saturday-clear, Sunday-wet forecast ranks an outdoor Saturday event above an
+  outdoor Sunday one.
+
+### W2 — the other fields fill placeholders the way the label did
+
+- **Class:** C4 (a field the model fills because empty reads as failure). The weather
+  label stopped defaulting once "unknown" was a named answer; price and duration have no
+  such word, and on 2026-10-10 Pumpkinfest came back price "Unlimited" and duration
+  "Unlimited", lifted from "Unlimited midway rides".
+- **Done when:** a replay of a saved structure batch shows price and duration either
+  copied from text that states them or empty, measured on the same rows before and after.
+
+### W3 — the draft phase ignores its count
+
+- **Class:** an instruction the model does not follow, with nothing checking it. "Suggest
+  10" returned about 80 rows on a 2026-10-10 replay, nav labels included; the listing gate
+  and structure batching absorb it, at the cost of prompt size and time.
+- **Done when:** the cause is measured (followed pages kept in order, or the prompt) and
+  the draft's row count on a saved corpus is recorded before and after the change.
 
 ## Phase M — what the eval records must mean what it says
 

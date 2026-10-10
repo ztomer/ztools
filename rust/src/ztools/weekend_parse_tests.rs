@@ -190,3 +190,48 @@ fn test_parse_llm_events_canonical_key_beats_alternate_key() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].name, "Bar");
 }
+
+/// The weather label is a closed set: indoor, outdoor, both, or none. The
+/// structure prompt lets the model answer "unknown" -- given only "" for that,
+/// it never used it, and on the 2026-10-10 replay labelled 14 of 16 rows
+/// "outdoor", a workshop in a hotel among them -- and the row stores any
+/// answer outside the set as no label, which the scorer judges neutral and
+/// the report draws as "—".
+#[test]
+fn a_model_weather_label_is_indoor_outdoor_both_or_none() {
+    for (said, kept) in [
+        ("Outdoor", "outdoor"),
+        (" indoors ", "indoor"),
+        ("both", "both"),
+        ("unknown", ""),
+        ("partly covered", ""),
+        ("", ""),
+    ] {
+        let content =
+            serde_json::json!({"transient_events": [{"name": "Fall Fair", "weather": said}]})
+                .to_string();
+        let resp = serde_json::json!({"choices": [{"message": {"content": content}}]});
+        let events = crate::ztools::weekend::parse_llm_events(&resp).unwrap();
+        assert_eq!(events[0].weather, kept, "the model said {said:?}");
+    }
+}
+
+/// Every curated row says where it happens. The curated list is written here,
+/// not read off a page, so where each venue is is known; a blank label drew
+/// "—" down the whole fixed table's "Weather Appropriateness" column and left
+/// the score unable to tell a trampoline park from a conservation area.
+#[test]
+fn every_curated_row_carries_a_weather_label() {
+    let (_env, mut config) = sandboxed_config();
+    config.weekend_exclusions_paths = vec![];
+    let (transient, fixed) = load_cached_activities(&config);
+    assert_nonempty!(&fixed);
+    for ev in fixed.iter().chain(&transient) {
+        assert!(
+            matches!(ev.weather.as_str(), "indoor" | "outdoor" | "both"),
+            "{}: {:?}",
+            ev.name,
+            ev.weather
+        );
+    }
+}

@@ -6,6 +6,23 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## Unreleased
+
+### Fixed — weekend planner
+- **Weather labels said "outdoor" for nearly everything.** The structure prompt
+  allowed `""` for "the text does not say", and the model never used it: a
+  replay of the 2026-10-10 rows came back 14 of 16 "outdoor", a workshop in a
+  hotel and a mall's craft fair among them. "unknown" is now a named answer,
+  the rule names place words on both sides (park, farm, beach, fairground /
+  hotel, gallery, studio, shopping centre) and says to read the description.
+  The same 16 rows now come back 2 indoor, 2 outdoor, 12 unknown with no wrong
+  label on a real event, and the live run's 8 events all read right. The label
+  is a closed set at parse (`weather_label`), so "unknown" lands as no label:
+  neutral in the score, "—" in the report.
+- **The fixed table's weather column was blank.** The curated venues were
+  built with an empty label. Each now states where it happens (a required
+  field), so a trampoline park reads indoor and a conservation area outdoor.
+
 ## v3.6.0 — twitter summary quality, and a weekend plan for these kids _(2026-10-10)_
 
 ### Added

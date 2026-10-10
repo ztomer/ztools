@@ -278,7 +278,8 @@ fn the_weather_label_may_be_unknown_and_the_forecast_never_decides_it() {
     let raw = sent.lock().unwrap().pop().expect("the structure call");
     let sys = recorded_chat_messages(&raw).remove(0);
     assert!(sys.contains(WEATHER_RULE), "{sys}");
-    assert!(WEATHER_RULE.contains("output \"\""), "{WEATHER_RULE}");
+    assert!(WEATHER_RULE.contains("\"unknown\""), "{WEATHER_RULE}");
+    assert!(WEATHER_RULE.contains("the description"), "{WEATHER_RULE}");
     assert!(!sys.contains("forecast above"), "{sys}");
     assert!(
         !sys.contains("Weather: "),

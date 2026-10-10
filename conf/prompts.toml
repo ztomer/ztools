@@ -161,12 +161,13 @@ two entries keeps the more specific value, never "unknown" over a real one."""
 
 [weekend.weather_rule]
 instructions = """\
-- weather: where the activity HAPPENS, judged from its name, venue and
-  description: "outdoor" for activities in the open (parks, farms, fairs,
-  open-air markets, trails), "indoor" for activities inside a building
-  (museums, libraries, hotels, theatres, play centres), "both" when the text
-  says it is both. When the text does not say where it happens, output "".
-  The weather forecast does not decide this."""
+- weather: where the activity HAPPENS: one of "indoor", "outdoor", "both",
+  "unknown". Decide from the words that name the place, in the name, the location OR
+  the description: a park, farm, beach, trail, fairground or street is "outdoor"; a hotel, museum,
+  library, gallery, theatre, studio, arena or shopping centre is "indoor".
+  A city or region name says nothing about this. When no word in the input
+  names the kind of place, the answer is "unknown" -- that is the expected
+  answer for many rows, never a failure. The weather forecast does not decide this."""
 
 [weekend.structure_transient_system]
 instructions = """\

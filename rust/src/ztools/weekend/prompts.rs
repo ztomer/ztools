@@ -159,13 +159,23 @@ two entries keeps the more specific value, never \"unknown\" over a real one.";
 /// came back "outdoor" under a clear forecast -- a placeholder the model was
 /// made to fill, rendered as data (class C4). The forecast no longer reaches
 /// either structure prompt at all, so it cannot decide the label.
+///
+/// Unknown is a WORD, "unknown", not "": allowed only an empty string, the
+/// model never used it, and the 2026-10-10 replay came back 14 of 16 rows
+/// "outdoor" (the hotel workshop again, a mall's craft fair, seven listing
+/// pages). Named, it is used -- 12 of those 16 -- with no wrong label left on
+/// a real event. The place words are examples the model leans on: a list that
+/// named only buildings swung it the other way (a fall fair and a beach market
+/// "indoor"), so both sides are named. `parse_llm_events` keeps the label only
+/// inside the closed set, so "unknown" lands as no label.
 pub const WEATHER_RULE: &str =
-    "- weather: where the activity HAPPENS, judged from its name, venue and
-  description: \"outdoor\" for activities in the open (parks, farms, fairs,
-  open-air markets, trails), \"indoor\" for activities inside a building
-  (museums, libraries, hotels, theatres, play centres), \"both\" when the text
-  says it is both. When the text does not say where it happens, output \"\".
-  The weather forecast does not decide this.";
+    "- weather: where the activity HAPPENS: one of \"indoor\", \"outdoor\", \"both\",
+  \"unknown\". Decide from the words that name the place, in the name, the location OR
+  the description: a park, farm, beach, trail, fairground or street is \"outdoor\"; a hotel, museum,
+  library, gallery, theatre, studio, arena or shopping centre is \"indoor\".
+  A city or region name says nothing about this. When no word in the input
+  names the kind of place, the answer is \"unknown\" -- that is the expected
+  answer for many rows, never a failure. The weather forecast does not decide this.";
 
 /// Class C4 (MANDATED-PLACEHOLDER) + C2b (DATE-DROPPED-AT-THE-LLM-BOUNDARY).
 ///

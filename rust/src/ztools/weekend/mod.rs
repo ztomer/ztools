@@ -193,13 +193,28 @@ pub fn parse_llm_events(resp: &serde_json::Value) -> Option<Vec<WeekendEvent>> {
                 dates: e.start_date.clone(),
                 start_date: e.start_date.clone(),
                 end_date: e.end_date,
-                weather: e.weather,
+                weather: weather_label(&e.weather).to_string(),
                 duration: e.duration,
                 is_transient: true,
                 score: 0.0,
             })
             .collect(),
     )
+}
+
+/// The weather label as the plan stores it: `indoor`, `outdoor`, `both` or `""`.
+///
+/// Anything else -- the model's "unknown", a stray word, nothing -- is `""`.
+/// Everything downstream (the score, the report, the inversion check) reads
+/// only these four, so the set is closed where the model's answer comes in.
+#[must_use]
+pub fn weather_label(raw: &str) -> &'static str {
+    match raw.trim().to_lowercase().as_str() {
+        "indoor" | "indoors" => "indoor",
+        "outdoor" | "outdoors" => "outdoor",
+        "both" => "both",
+        _ => "",
+    }
 }
 
 pub mod followup;

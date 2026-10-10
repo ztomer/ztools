@@ -275,6 +275,9 @@ struct Curated {
     ages: &'static str,
     day: &'static str,
     dates: &'static str,
+    /// Where it happens: `indoor`, `outdoor` or `both`. Required, because a
+    /// curated row is written here and where the venue is is known.
+    weather: &'static str,
     description: &'static str,
 }
 
@@ -292,7 +295,7 @@ impl Curated {
             score: 0.0,
             start_date: String::new(),
             end_date: String::new(),
-            weather: String::new(),
+            weather: self.weather.into(),
             duration: String::new(),
         }
     }
@@ -307,6 +310,7 @@ const CURATED_FIXED: &[Curated] = &[
         ages: "All Ages",
         day: "Sat-Sun",
         dates: "Year-Round",
+        weather: "outdoor",
         description: "800 acres of outdoor hiking trails, pond dipping, and interactive nature exhibits great for ages 6-13.",
     },
     Curated {
@@ -316,6 +320,7 @@ const CURATED_FIXED: &[Curated] = &[
         ages: "6-13",
         day: "Fri-Sun",
         dates: "Year-Round",
+        weather: "indoor",
         description: "Indoor trampoline zone, 24ft climbing walls, dodgeball court, and ninja warrior obstacle course.",
     },
     Curated {
@@ -325,6 +330,7 @@ const CURATED_FIXED: &[Curated] = &[
         ages: "6-13",
         day: "Fri-Sun",
         dates: "Year-Round",
+        weather: "indoor",
         description: "40,000 sq ft venue featuring high-tech arcade games, virtual reality arenas, and indoor ropes courses.",
     },
     Curated {
@@ -334,6 +340,7 @@ const CURATED_FIXED: &[Curated] = &[
         ages: "6-13",
         day: "Fri-Sun",
         dates: "Year-Round",
+        weather: "outdoor",
         description: "Escarpment cliffside walking trails, cliffside lookout points, and limestone cave exploration.",
     },
     Curated {
@@ -343,6 +350,7 @@ const CURATED_FIXED: &[Curated] = &[
         ages: "All Ages",
         day: "Sat-Sun",
         dates: "Year-Round",
+        weather: "outdoor",
         description: "100-acre outdoor sculpture park, pine forest trails, and hands-on family art activities.",
     },
 ];
@@ -356,6 +364,7 @@ const CURATED_TRANSIENT: &[Curated] = &[
         ages: "6-13",
         day: "Saturday",
         dates: "Aug 08",
+        weather: "indoor",
         description: "Free hands-on STEM experiment and creative tech coding activity for kids ages 6-13.",
     },
     Curated {
@@ -365,6 +374,7 @@ const CURATED_TRANSIENT: &[Curated] = &[
         ages: "All Ages",
         day: "Sunday",
         dates: "Aug 09",
+        weather: "outdoor",
         description: "Guided family nature walk with wildlife tracking, pond exploration, and bug identification.",
     },
     Curated {
@@ -374,6 +384,7 @@ const CURATED_TRANSIENT: &[Curated] = &[
         ages: "All Ages",
         day: "Saturday",
         dates: "Aug 08",
+        weather: "outdoor",
         description: "Interactive woodland nature walk and birdwatching session tailored for young explorers.",
     },
 ];
