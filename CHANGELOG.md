@@ -44,6 +44,10 @@ This file starts at v2.2.0 — earlier history is in git.
   ("Wait, let me check...") between bullets inside topic sections. Topic sections are
   bullets only; prose there is a rejection. 59 of the 60 summaries in the store already
   hold to that, so the rule describes the format rather than changing it.
+- **A rejected answer left no trace.** The reason named the rule that fired, never what the
+  model wrote, so a run where every model was rejected could not be diagnosed. Each rejected
+  answer is now written to `<store>/rejected/` (the newest 20 kept; the store's readers never
+  descend into it) and the reason names the file.
 - **`**Period:**` printed local time labelled "UTC"**; it now carries the real offset.
 - **Tests that resolve `~` or render the live file-summary prompt** must take `TestEnv`
   (audit gate 2).

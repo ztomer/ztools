@@ -12,6 +12,7 @@ pub mod endpoints;
 pub mod fallback;
 pub mod native;
 pub mod quality;
+mod rejected;
 pub mod session;
 
 pub use browser::{BrowserCollector, CamoufoxConfig, MockBrowserCollector};
@@ -263,7 +264,13 @@ pub fn run_summary(
         // the chain moves on to the next model.
         handle_model_output(&raw, &sources)
             .map(Some)
-            .map_err(|why| anyhow::anyhow!("answer rejected by the quality gate: {why}"))
+            .map_err(|why| {
+                let stamp = Local::now().format("%Y-%m-%d_%H%M%S").to_string();
+                let kept = rejected::keep(output_dir, &stamp, candidate, &raw, &why)
+                    .map(|p| format!(" (answer kept at {})", p.display()))
+                    .unwrap_or_default();
+                anyhow::anyhow!("answer rejected by the quality gate: {why}{kept}")
+            })
     })
     .map_err(|e| {
         // Every model in the chain is served by the ONE server at `base_url`,

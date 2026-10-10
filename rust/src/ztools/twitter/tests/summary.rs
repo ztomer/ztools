@@ -197,9 +197,22 @@ fn test_run_summary_fails_when_model_returns_unusable_summary() {
         Some("mock-model"),
         &cfg,
     );
-    assert!(
-        res.is_err(),
-        "a critical-quality summary must fail, not be saved as success"
+    let why = format!(
+        "{:#}",
+        res.expect_err("a critical-quality summary must fail, not be saved")
     );
+    // The refused answer is kept for diagnosis, and the reason says where.
+    let kept: Vec<_> = std::fs::read_dir(output.path().join("rejected"))
+        .expect("a rejected/ directory")
+        .flatten()
+        .map(|e| e.path())
+        .collect();
+    // One per model the chain tried (the fixture chain has two).
+    assert_eq!(kept.len(), 2, "{kept:?}");
+    for path in &kept {
+        let body = std::fs::read_to_string(path).unwrap();
+        assert!(body.contains("junk with no structure"), "{body}");
+        assert!(why.contains(&path.display().to_string()), "{why}");
+    }
     drop(env);
 }
