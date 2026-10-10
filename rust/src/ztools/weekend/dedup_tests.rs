@@ -182,3 +182,59 @@ fn an_unknown_date_or_venue_does_not_split_a_twin() {
     assert_eq!(kept.len(), 1, "{notes:?}");
     assert_eq!(kept[0].target_ages, "2-12yrs");
 }
+
+/// W6, from the 2026-10-10 17:3x run: one Sugar Beach market under three page
+/// titles. One adds only dates and the city; one adds "Street Eats" and the
+/// venue. Same venue, same dates, every word of the short name in the long
+/// ones: one row.
+#[test]
+fn one_event_under_three_page_titles_is_one_row() {
+    let at_the_beach = |name: &str| {
+        row(
+            name,
+            "Sugar Beach, Toronto",
+            "2026-10-09",
+            "2026-10-12",
+            "",
+            "",
+        )
+    };
+    let rows = vec![
+        at_the_beach("Fall Harvest Market Toronto"),
+        at_the_beach("Fall Harvest Market — Oct 9 - Oct 12 in Toronto"),
+        at_the_beach("Fall Harvest & Street Eats Market at Sugar Beach in Toronto"),
+    ];
+    let (kept, notes) = merge_duplicate_events(rows, 2026);
+    assert_eq!(kept.len(), 1, "{notes:?}");
+    assert_eq!(notes.len(), 2, "{notes:?}");
+}
+
+/// A name that ADDS words ("Street Eats") is the same event only on evidence
+/// both rows state: an undated twin, or one with no venue, cannot vouch for
+/// it, and a one-word name ("Market") is too common to extend.
+#[test]
+fn a_longer_name_needs_stated_dates_and_venue_on_both_rows() {
+    let long = row(
+        "Fall Harvest & Street Eats Market",
+        "Sugar Beach, Toronto",
+        "2026-10-09",
+        "2026-10-12",
+        "",
+        "",
+    );
+    for short in [
+        row(
+            "Fall Harvest Market",
+            "Sugar Beach, Toronto",
+            "",
+            "",
+            "",
+            "",
+        ),
+        row("Fall Harvest Market", "", "2026-10-10", "", "", ""),
+        row("Market", "Sugar Beach, Toronto", "2026-10-10", "", "", ""),
+    ] {
+        let (kept, notes) = merge_duplicate_events(vec![long.clone(), short.clone()], 2026);
+        assert_eq!(kept.len(), 2, "{} merged: {notes:?}", short.name);
+    }
+}

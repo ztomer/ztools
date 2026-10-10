@@ -138,19 +138,6 @@ each one makes wrong.
   (`phases::structure_system`) instead of a copy, and a test fails if they differ.
 - **Blocked by:** nothing.
 
-### W6 — one event under three page titles survives the duplicate merge
-
-- **Class:** identity judged from the title's wording. On the 2026-10-10 17:3x run "Fall
-  Harvest Market Toronto", "Fall Harvest Market — Oct 9 - Oct 12 in Toronto" and "Fall
-  Harvest & Street Eats Market at Sugar Beach in Toronto" (same venue, same dates) are
-  three rows: `dedup.rs` merges only when one name adds venue words, and these add dates,
-  a city and "Street Eats".
-- **Why now:** three rows of one market push real options off a short plan.
-- **Done when:** names that differ only by dates, the configured cities and words of the
-  location count as the same, the three titles above merge in a `dedup_tests.rs` case, and
-  "Kids Craft & Play" and "Thanksgiving Family Festival" at one mall stay two rows.
-- **Blocked by:** nothing.
-
 ## Phase M — what the eval records must mean what it says
 
 All Phase M items (`M1` through `M16`) have landed. No open work remains in this phase.

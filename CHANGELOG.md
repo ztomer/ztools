@@ -30,6 +30,11 @@ This file starts at v2.2.0 — earlier history is in git.
   "mixed", so no label moved any score. Each row is now judged by the forecast
   for its own day(s) -- its dates, else the weekdays it names, else every day --
   taking the best, so an outdoor Saturday event outranks an outdoor Sunday one.
+- **One market under three page titles was three rows.** The duplicate merge
+  allowed one name to add only venue words. Dates and weekdays in a title are
+  now set aside too, and a name that adds words of its own ("Fall Harvest &
+  Street Eats Market") is the same event when both rows state overlapping
+  dates and an agreeing venue and the shorter name keeps two words or more.
 - **The fixed table's weather column was blank.** The curated venues were
   built with an empty label. Each now states where it happens (a required
   field), so a trampoline park reads indoor and a conservation area outdoor.
