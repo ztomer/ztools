@@ -51,6 +51,14 @@ This file starts at v2.2.0 — earlier history is in git.
   amount, "free", "by donation") and a duration only when it reads as a time
   or a length; a dollar amount the fetched corpus never states as dollars is
   cleared, with a note naming it.
+- **A long draft answer was thrown away whole.** Given a 29,490-char prompt the
+  model listed every candidate instead of 10, the answer hit `max_tokens`, the
+  client rightly refused it as cut, and the weekend phases turned the refusal
+  into "no answer" -- twice -- so the plan came from the monolithic fallback.
+  The cut is now a typed error (`llm::CutAnswer`) carrying what arrived; the
+  line-per-row phases (extract, draft, refine) keep its whole lines and say
+  how many, and every failed attempt prints its cause. Replayed: 0 rows before,
+  89 whole rows (85 distinct) after.
 - **The fixed table's weather column was blank.** The curated venues were
   built with an empty label. Each now states where it happens (a required
   field), so a trampoline park reads indoor and a conservation area outdoor.

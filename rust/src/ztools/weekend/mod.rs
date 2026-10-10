@@ -208,6 +208,7 @@ pub fn parse_llm_events(resp: &serde_json::Value) -> Option<Vec<WeekendEvent>> {
     )
 }
 
+pub mod calls;
 pub mod fields;
 pub mod followup;
 pub mod setting;

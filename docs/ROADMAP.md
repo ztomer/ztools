@@ -92,18 +92,6 @@ plan anymore; this file is.
 Found while fixing the weather labels (2026-10-10). Ranked by how much of the plan
 each one makes wrong.
 
-### W3 — the draft phase ignores its count
-
-- **Class:** an instruction the model does not follow, with nothing checking it. "Suggest
-  10" returned about 80 rows on a 2026-10-10 replay, nav labels included; the listing gate
-  and structure batching absorb it, at the cost of prompt size and time.
-- **Why now:** every extra row costs a structure batch on a shared GPU, three runs a weekend.
-  The other direction too: on a later 2026-10-10 run the draft prompt reached 29,490 chars
-  and got no answer on either attempt, so the plan came from the monolithic fallback.
-- **Done when:** the cause is measured (followed pages kept in order, or the prompt) and
-  the draft's row count on a saved corpus is recorded before and after the change.
-- **Blocked by:** a free slot on the GPU lock for the measurement.
-
 ### W5 — model-eval scores a weekend prompt production no longer sends
 
 - **Class:** a parallel copy of a prompt (engineering rule 9). `conf/models/*.toml`

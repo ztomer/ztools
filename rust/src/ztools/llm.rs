@@ -285,16 +285,33 @@ fn read_sse(
     complete(content, finished.as_deref())
 }
 
-/// An answer the server stopped at the token limit is cut, whatever it looks
-/// like: on 2026-10-10 a cut summary ending mid-citation was saved as
-/// complete because nothing read `finish_reason`. Every caller wants a whole
-/// answer -- a cut JSON extract and a cut summary are both wrong.
+/// An answer the server stopped at `max_tokens`: an error for every caller,
+/// carrying what arrived.
+///
+/// On 2026-10-10 a cut summary ending mid-citation was saved as complete
+/// because nothing read `finish_reason`; a cut JSON extract and a cut summary
+/// are both wrong. A caller whose answer is one row per line may keep the
+/// whole rows -- it must downcast to this type to do so, and say it did.
+#[derive(Debug)]
+pub struct CutAnswer {
+    pub partial: String,
+}
+
+impl std::fmt::Display for CutAnswer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "answer cut at max_tokens after {} chars (finish_reason: length)",
+            self.partial.chars().count()
+        )
+    }
+}
+
+impl std::error::Error for CutAnswer {}
+
 fn complete(content: String, finish_reason: Option<&str>) -> Result<String> {
     if finish_reason == Some("length") {
-        anyhow::bail!(
-            "answer cut at max_tokens after {} chars (finish_reason: length)",
-            content.chars().count()
-        );
+        return Err(CutAnswer { partial: content }.into());
     }
     Ok(content)
 }
