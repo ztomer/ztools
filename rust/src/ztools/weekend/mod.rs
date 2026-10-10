@@ -62,6 +62,11 @@ pub struct WeekendEvent {
     pub weather: String,
     #[serde(default)]
     pub duration: String,
+    /// The structure phase's answer to "is this a family outing?": `yes`,
+    /// `no` or `""` (unknown). Read only by the suitability gate, which drops a
+    /// "no" unless the row itself says it welcomes children.
+    #[serde(default)]
+    pub for_families: String,
 }
 
 pub use super::weekend_cache::{
@@ -91,6 +96,8 @@ struct WeekendEventLlm {
     day: String,
     #[serde(default)]
     place_kind: String,
+    #[serde(default)]
+    for_families: String,
     #[serde(default)]
     weather: String,
     #[serde(default)]
@@ -197,6 +204,7 @@ pub fn parse_llm_events(resp: &serde_json::Value) -> Option<Vec<WeekendEvent>> {
                 end_date: e.end_date,
                 weather: setting::label_for(&e.place_kind, &e.weather).to_string(),
                 duration: e.duration,
+                for_families: suitability::family_answer(&e.for_families).to_string(),
                 is_transient: true,
                 score: 0.0,
             })

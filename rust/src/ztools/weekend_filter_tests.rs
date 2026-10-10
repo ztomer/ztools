@@ -51,6 +51,7 @@ fn event(name: &str, location: &str, description: &str) -> WeekendEvent {
         end_date: String::new(),
         weather: String::new(),
         duration: String::new(),
+        for_families: String::new(),
     }
 }
 
@@ -301,4 +302,13 @@ fn an_empty_forecast_states_that_the_forecast_is_missing() {
         !out.contains("°C"),
         "no temperature may be invented for a forecast that was never fetched: {out}"
     );
+}
+
+#[test]
+fn test_format_weather_display() {
+    let raw = "Daily Forecast:\n2026-08-07: 28.2°C, Clear (0.0mm)\n2026-08-08: 32.0°C, Precipitation (1.2mm)\n2026-08-09: 29.7°C, Clear (0.1mm)";
+    let formatted = format_weather_display(raw);
+    assert!(formatted.contains("Fri 28.2°C (clear)"));
+    assert!(formatted.contains("Sat 32.0°C (precipitation)"));
+    assert!(formatted.contains("Sun 29.7°C (clear)"));
 }

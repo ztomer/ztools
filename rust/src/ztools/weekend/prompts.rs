@@ -181,6 +181,21 @@ pub const WEATHER_RULE: &str =
   it is both, \"unknown\" when place_kind is \"unknown\". The weather forecast
   does not decide this.";
 
+/// Whether a row is a family outing (W4), bound in through `{family_rule}`.
+///
+/// A judgement, so the model makes it; the suitability
+/// gate drops a "no" only when the row does not itself say it welcomes the
+/// children. Measured on four saved 2026-10-10 batches: all three adult
+/// nights out "no", and every "no" on a family event fell on a row stating an
+/// age range that admits the children -- which the gate reads first.
+pub const FAMILY_RULE: &str =
+    "- for_families: is this something a family takes children aged 6 to 14 to?
+  \"yes\" when the input says it is for kids, families or all ages, or it is
+  the kind of outing families go to (a fair, a festival, a farm, a library
+  program, a kids' workshop). \"no\" when it is a night out for adults: a bar,
+  nightclub or lounge, a party or brunch built around drinks, an event that
+  starts late at night, 19+ or 18+. \"unknown\" when the input does not tell.";
+
 /// Class C4 (MANDATED-PLACEHOLDER) + C2b (DATE-DROPPED-AT-THE-LLM-BOUNDARY).
 ///
 /// This prompt used to ORDER the model to emit "$20-30 per child or free" and
@@ -193,7 +208,7 @@ pub const PHASE_STRUCTURE_TRANSIENT_SYSTEM: &str = "\
 Output JSON now. Use EXACT schema:
 {\"transient_events\": [{\"name\": \"str\", \"location\": \"str\",
 \"target_ages\": \"str\", \"price\": \"str\", \"start_date\": \"str\", \"end_date\": \"str\",
-\"duration\": \"str\", \"place_kind\": \"str\", \"weather\": \"str\", \"day\": \"str\",
+\"duration\": \"str\", \"place_kind\": \"str\", \"for_families\": \"str\", \"weather\": \"str\", \"day\": \"str\",
 \"description\": \"str\"}]}
 
 Rules for every field:
@@ -210,6 +225,7 @@ Rules for every field:
   output \"\".
 - price: the actual price as written in the source, else \"\".
 - description: the input's short description of the activity, copied, else \"\".
+{family_rule}
 {weather_rule}
 
 Output ONLY JSON.";
@@ -234,6 +250,7 @@ pub const KNOWN_KEYS: &[&str] = &[
     "weather_str",
     "activity_rule",
     "weather_rule",
+    "family_rule",
 ];
 
 #[cfg(test)]
@@ -292,7 +309,11 @@ mod tests {
     fn structure_transient_renders_clean() {
         assert_renders_clean(
             PHASE_STRUCTURE_TRANSIENT_SYSTEM,
-            &[("year", "2026"), ("weather_rule", WEATHER_RULE)],
+            &[
+                ("year", "2026"),
+                ("weather_rule", WEATHER_RULE),
+                ("family_rule", FAMILY_RULE),
+            ],
         );
         assert_renders_clean(PHASE_STRUCTURE_USER, &[("draft_text", "draft")]);
     }
@@ -343,6 +364,7 @@ mod tests {
         ("carry_fields", CARRY_FIELDS),
         ("activity_rule", ACTIVITY_RULE),
         ("weather_rule", WEATHER_RULE),
+        ("family_rule", FAMILY_RULE),
         ("extract_events", PHASE_EXTRACT_EVENTS),
         ("draft_transient", PHASE_DRAFT_TRANSIENT),
         ("refine", PHASE_REFINE),

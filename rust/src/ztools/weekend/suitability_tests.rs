@@ -19,6 +19,7 @@ fn row(name: &str, location: &str, target_ages: &str, description: &str) -> Week
         end_date: String::new(),
         weather: String::new(),
         duration: String::new(),
+        for_families: String::new(),
     }
 }
 
@@ -316,4 +317,54 @@ fn a_transient_row_that_is_only_a_fixed_venue_is_dropped() {
     );
     assert_eq!(notes.len(), 2);
     assert!(notes[0].contains("fixed venue 'Kortright Centre for Conservation'"));
+}
+
+fn answered(name: &str, target_ages: &str, description: &str, for_families: &str) -> WeekendEvent {
+    let mut r = row(name, "Vaughan", target_ages, description);
+    for_families.clone_into(&mut r.for_families);
+    r
+}
+
+/// W4. A night out for adults is not a family outing. The 2026-10-10 17:17
+/// plan carried a 10:30 PM Bollywood night at a bar, a club's "$5 tequila"
+/// night and a brunch party for children aged 6, 11 and 14: none states an
+/// age, so the age gate had nothing to read. Whether an event is a family
+/// outing is the model's judgement ("no"); a row that SAYS it welcomes these
+/// children is evidence that outranks it -- on the saved batches the model
+/// also answered "no" for "Robotics Workshop For Kids" (ages 7-14).
+#[test]
+fn a_no_from_the_model_drops_a_row_unless_the_row_welcomes_the_children() {
+    let rows = vec![
+        answered(
+            "BAESHARAM BOLLYWOOD AFTER DARK",
+            "",
+            "at Bombae Social",
+            "no",
+        ),
+        answered(
+            "BARBIE NIGHT @ FICTION",
+            "",
+            "free entry and $5 tequila",
+            "no",
+        ),
+        answered("Robotics Workshop For Kids", "7-14yrs", "", "no"),
+        answered("Legends of Horror", "all ages", "", "no"),
+        answered("Kids Craft & Play", "", "a festival for families", "no"),
+        answered("Woodbridge Fall Fair", "", "", "yes"),
+        answered("Vaughan Culture Days", "", "", ""),
+    ];
+    let (kept, notes) = drop_not_for_families(rows, FAMILY);
+    assert_eq!(
+        names(&kept),
+        vec![
+            "Robotics Workshop For Kids",
+            "Legends of Horror",
+            "Kids Craft & Play",
+            "Woodbridge Fall Fair",
+            "Vaughan Culture Days"
+        ],
+        "{notes:?}"
+    );
+    assert_eq!(notes.len(), 2);
+    assert!(notes[0].contains("not a family outing"), "{notes:?}");
 }

@@ -111,6 +111,7 @@ fn event(name: &str, description: &str) -> WeekendEvent {
         end_date: "2026-08-08".to_string(),
         weather: "outdoor".to_string(),
         duration: String::new(),
+        for_families: String::new(),
     }
 }
 

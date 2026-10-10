@@ -202,6 +202,7 @@ _Provenance: 3 extracted, 1 unsourced, 1 outside the window, 1 excluded, 0 unsui
             start_date: String::new(),
             end_date: String::new(),
             duration: String::new(),
+            for_families: String::new(),
         }
     }
 

@@ -1,6 +1,6 @@
 //! Whether a row is fit to recommend to THIS family at all.
 //!
-//! Three gates, each a class a real plan shipped (2026-10-09, Thanksgiving):
+//! Four gates, each a class a real plan shipped (2026-10-09/10, Thanksgiving):
 //!
 //! - **Age (A1).** "Baby and Me (birth to 12 months)" and "French Meetup for
 //!   Adults" were recommended to children aged 14, 11 and 6. Age only counted
@@ -16,6 +16,10 @@
 //! - **Duplicates of fixed venues (A3).** "Kortright Centre for Conservation"
 //!   appeared in BOTH halves of the plan: once as a year-round venue and once
 //!   as a "transient event" whose name was just the venue's.
+//! - **Not a family outing (W4).** A 10:30 PM Bollywood night at a bar and a
+//!   club's "$5 tequila" night state no age, so A1 had nothing to read. The
+//!   structure phase judges "is this a family outing?"; a "no" drops the row
+//!   unless the row itself says it welcomes the children.
 
 use std::sync::LazyLock;
 
@@ -225,6 +229,51 @@ pub fn drop_unsuitable_for_ages(
                 ev.name,
                 ranges.join(" and "),
                 super::family::ages_label(ages)
+            ));
+            false
+        })
+        .collect();
+    (kept, notes)
+}
+
+/// The family answer as a row stores it: `yes`, `no` or `""` for anything
+/// else (the model's "unknown", a stray word).
+#[must_use]
+pub fn family_answer(raw: &str) -> &'static str {
+    match raw.trim().to_lowercase().as_str() {
+        "yes" => "yes",
+        "no" => "no",
+        _ => "",
+    }
+}
+
+/// Does the row itself say it welcomes these children: a stated range one of
+/// them fits, or a word like "kids", "family" or "all ages"?
+fn welcomes_children(ev: &WeekendEvent, ages: &[u32]) -> bool {
+    if children_who_fit(ev, ages).is_some_and(|n| n > 0) {
+        return true;
+    }
+    let text = format!("{} {} {}", ev.name, ev.target_ages, ev.description).to_lowercase();
+    INCLUSIVE.iter().any(|w| text.contains(w))
+}
+
+/// W4: drop a row the model judged not a family outing ("no") unless the row
+/// says it welcomes the children -- stated evidence outranks the judgement.
+#[must_use]
+pub fn drop_not_for_families(
+    events: Vec<WeekendEvent>,
+    ages: &[u32],
+) -> (Vec<WeekendEvent>, Vec<String>) {
+    let mut notes = Vec::new();
+    let kept = events
+        .into_iter()
+        .filter(|ev| {
+            if ev.for_families != "no" || welcomes_children(ev, ages) {
+                return true;
+            }
+            notes.push(format!(
+                "dropped '{}' — not a family outing, and it states nothing that welcomes children",
+                ev.name
             ));
             false
         })

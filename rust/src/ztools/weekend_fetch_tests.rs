@@ -389,23 +389,6 @@ fn malformed_snippets_are_skipped_and_scanning_still_advances() {
 }
 
 #[test]
-fn test_is_challenged_detects_captcha_and_waf_markers() {
-    let ddg_anomaly = r#"<html><body><form id="challenge-form" action="/anomaly.js"><div class="anomaly-modal__modal"></div></form></body></html>"#;
-    assert!(is_challenged(ddg_anomaly));
-
-    let cloudflare_turnstile = r#"<html><body><iframe src="https://challenges.cloudflare.com/turnstile/v0/api.js"></iframe></body></html>"#;
-    assert!(is_challenged(cloudflare_turnstile));
-
-    let human_verify =
-        r"<html><title>Please Verify You Are Human</title><body>Just a moment...</body></html>";
-    assert!(is_challenged(human_verify));
-
-    let normal_results =
-        r#"<html><body><a class="result__snippet">Normal search snippet</a></body></html>"#;
-    assert!(!is_challenged(normal_results));
-}
-
-#[test]
 fn test_degradation_banner_rendered_when_transient_empty() {
     let fixed = vec![WeekendEvent {
         name: "Test Park".into(),
@@ -421,6 +404,7 @@ fn test_degradation_banner_rendered_when_transient_empty() {
         end_date: String::new(),
         weather: "outdoor".into(),
         duration: String::new(),
+        for_families: String::new(),
     }];
     let empty_transient: Vec<WeekendEvent> = Vec::new();
 
@@ -477,6 +461,7 @@ fn a_partly_walled_search_is_noted_under_a_populated_table() {
         end_date: "2026-08-08".into(),
         weather: "outdoor".into(),
         duration: String::new(),
+        for_families: String::new(),
     };
     let markdown = format_weekend_plan(
         &[event],

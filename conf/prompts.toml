@@ -172,12 +172,21 @@ instructions = """\
   it is both, "unknown" when place_kind is "unknown". The weather forecast
   does not decide this."""
 
+[weekend.family_rule]
+instructions = """\
+- for_families: is this something a family takes children aged 6 to 14 to?
+  "yes" when the input says it is for kids, families or all ages, or it is
+  the kind of outing families go to (a fair, a festival, a farm, a library
+  program, a kids' workshop). "no" when it is a night out for adults: a bar,
+  nightclub or lounge, a party or brunch built around drinks, an event that
+  starts late at night, 19+ or 18+. "unknown" when the input does not tell."""
+
 [weekend.structure_transient_system]
 instructions = """\
 Output JSON now. Use EXACT schema:
 {"transient_events": [{"name": "str", "location": "str",
 "target_ages": "str", "price": "str", "start_date": "str", "end_date": "str",
-"duration": "str", "place_kind": "str", "weather": "str", "day": "str",
+"duration": "str", "place_kind": "str", "for_families": "str", "weather": "str", "day": "str",
 "description": "str"}]}
 
 Rules for every field:
@@ -194,6 +203,7 @@ Rules for every field:
   output "".
 - price: the actual price as written in the source, else "".
 - description: the input's short description of the activity, copied, else "".
+{family_rule}
 {weather_rule}
 
 Output ONLY JSON."""

@@ -35,6 +35,15 @@ This file starts at v2.2.0 — earlier history is in git.
   now set aside too, and a name that adds words of its own ("Fall Harvest &
   Street Eats Market") is the same event when both rows state overlapping
   dates and an agreeing venue and the shorter name keeps two words or more.
+- **Adult nights out reached the family plan.** A 10:30 PM Bollywood night at
+  a bar, a club's "$5 tequila" night and a brunch party were planned for kids
+  6, 11 and 14: none states an age, so the age gate had nothing to read. The
+  structure phase now answers `for_families` (yes / no / unknown), and a "no"
+  drops the row unless the row itself says it welcomes the children (an age
+  range one of them fits, or "kids", "family", "all ages"). On four saved
+  batches: the three adult events dropped; every "no" the model gave a family
+  event (the robotics workshop for ages 7-14, among others) was overruled by
+  the row's own stated ages.
 - **The fixed table's weather column was blank.** The curated venues were
   built with an empty label. Each now states where it happens (a required
   field), so a trampoline park reads indoor and a conservation area outdoor.

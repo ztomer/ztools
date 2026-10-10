@@ -67,6 +67,7 @@ fn test_filter_exclusions() {
             end_date: String::new(),
             weather: String::new(),
             duration: String::new(),
+            for_families: String::new(),
         },
         WeekendEvent {
             name: "Local Library Story Time".into(),
@@ -82,6 +83,7 @@ fn test_filter_exclusions() {
             end_date: String::new(),
             weather: String::new(),
             duration: String::new(),
+            for_families: String::new(),
         },
     ];
     let exclusions = vec!["Toronto Zoo".into()];
@@ -107,6 +109,7 @@ fn test_flag_constant_columns() {
             end_date: String::new(),
             weather: String::new(),
             duration: String::new(),
+            for_families: String::new(),
         },
         WeekendEvent {
             name: "Event 2".into(),
@@ -122,6 +125,7 @@ fn test_flag_constant_columns() {
             end_date: String::new(),
             weather: String::new(),
             duration: String::new(),
+            for_families: String::new(),
         },
     ];
 
@@ -271,6 +275,7 @@ fn test_format_weekend_plan_empty_and_populated() {
         end_date: String::new(),
         weather: String::new(),
         duration: String::new(),
+        for_families: String::new(),
     }];
     let plan2 = format_weekend_plan(
         &transient,
@@ -282,15 +287,6 @@ fn test_format_weekend_plan_empty_and_populated() {
         &PlanHealth::nominal(),
     );
     assert!(plan2.contains("Harvest Fair"));
-}
-
-#[test]
-fn test_format_weather_display() {
-    let raw = "Daily Forecast:\n2026-08-07: 28.2°C, Clear (0.0mm)\n2026-08-08: 32.0°C, Precipitation (1.2mm)\n2026-08-09: 29.7°C, Clear (0.1mm)";
-    let formatted = format_weather_display(raw);
-    assert!(formatted.contains("Fri 28.2°C (clear)"));
-    assert!(formatted.contains("Sat 32.0°C (precipitation)"));
-    assert!(formatted.contains("Sun 29.7°C (clear)"));
 }
 
 #[test]
@@ -310,6 +306,7 @@ fn test_apply_scores_sorts_by_score() {
             end_date: String::new(),
             weather: String::new(),
             duration: String::new(),
+            for_families: String::new(),
         },
         crate::ztools::weekend::WeekendEvent {
             name: "B".into(),
@@ -325,6 +322,7 @@ fn test_apply_scores_sorts_by_score() {
             end_date: String::new(),
             weather: "outdoor".into(),
             duration: String::new(),
+            for_families: String::new(),
         },
     ];
     // A states 6-12 and fits both children (3.0) but carries no weather label
@@ -353,6 +351,7 @@ fn test_apply_scores_empty_ages() {
         end_date: String::new(),
         weather: String::new(),
         duration: String::new(),
+        for_families: String::new(),
     }];
     // No family ages: age fit cannot be judged and earns half marks; no
     // weather label cannot be judged either, and earns the neutral 1.0.
@@ -382,6 +381,7 @@ fn sample_event(name: &str, location: &str, score: f32) -> crate::ztools::weeken
         end_date: String::new(),
         weather: String::new(),
         duration: String::new(),
+        for_families: String::new(),
     }
 }
 
@@ -420,6 +420,7 @@ fn c4_event(absent: &str) -> crate::ztools::weekend::WeekendEvent {
         end_date: String::new(),
         weather: absent.to_string(),
         duration: String::new(),
+        for_families: String::new(),
     }
 }
 

@@ -115,18 +115,6 @@ each one makes wrong.
   the draft's row count on a saved corpus is recorded before and after the change.
 - **Blocked by:** a free slot on the GPU lock for the measurement.
 
-### W4 — adult nightlife reaches a family plan
-
-- **Class:** a suitability judgement nobody is asked. The 2026-10-10 17:17 run (monolithic
-  fallback) planned "BAESHARAM BOLLYWOOD AFTER DARK" (10:30 PM, a bar), "BARBIE NIGHT @
-  FICTION" (a club) and an R&B brunch party for kids 6, 11 and 14. `suitability.rs` reads
-  stated age ranges; these state none, so they pass.
-- **Why now:** it is the one defect a parent reading the plan notices first.
-- **Done when:** the structure schema asks the model whether the activity is for families
-  (its judgement, with the reason), the plan drops a "no", and a replay of the 17:17 corpus
-  drops those three while keeping Kidchella and the Woodbridge Fall Fair.
-- **Blocked by:** a free slot on the GPU lock for the replay.
-
 ### W5 — model-eval scores a weekend prompt production no longer sends
 
 - **Class:** a parallel copy of a prompt (engineering rule 9). `conf/models/*.toml`

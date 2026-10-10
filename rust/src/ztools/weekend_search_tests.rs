@@ -296,3 +296,20 @@ fn serve_html(body: &str) -> String {
     });
     format!("http://{addr}")
 }
+
+#[test]
+fn test_is_challenged_detects_captcha_and_waf_markers() {
+    let ddg_anomaly = r#"<html><body><form id="challenge-form" action="/anomaly.js"><div class="anomaly-modal__modal"></div></form></body></html>"#;
+    assert!(crate::ztools::weekend::is_challenged(ddg_anomaly));
+
+    let cloudflare_turnstile = r#"<html><body><iframe src="https://challenges.cloudflare.com/turnstile/v0/api.js"></iframe></body></html>"#;
+    assert!(crate::ztools::weekend::is_challenged(cloudflare_turnstile));
+
+    let human_verify =
+        r"<html><title>Please Verify You Are Human</title><body>Just a moment...</body></html>";
+    assert!(crate::ztools::weekend::is_challenged(human_verify));
+
+    let normal_results =
+        r#"<html><body><a class="result__snippet">Normal search snippet</a></body></html>"#;
+    assert!(!crate::ztools::weekend::is_challenged(normal_results));
+}

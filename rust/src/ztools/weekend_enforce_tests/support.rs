@@ -22,5 +22,6 @@ pub(super) fn event(name: &str, location: &str) -> WeekendEvent {
         end_date: String::new(),
         weather: String::new(),
         duration: String::new(),
+        for_families: String::new(),
     }
 }

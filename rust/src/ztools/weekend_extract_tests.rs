@@ -290,6 +290,8 @@ fn the_weather_label_may_be_unknown_and_the_forecast_never_decides_it() {
         kind < label,
         "the kind of place is asked for before the label: {sys}"
     );
+    assert!(sys.contains(crate::ztools::weekend::FAMILY_RULE), "{sys}");
+    assert!(sys.contains("\"for_families\": \"str\""), "{sys}");
     assert!(!sys.contains("forecast above"), "{sys}");
     assert!(
         !sys.contains("Weather: "),

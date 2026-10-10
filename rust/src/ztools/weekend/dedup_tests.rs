@@ -26,6 +26,7 @@ fn row(
         end_date: end.into(),
         weather: String::new(),
         duration: String::new(),
+        for_families: String::new(),
     }
 }
 

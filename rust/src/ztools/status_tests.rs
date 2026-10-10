@@ -32,6 +32,7 @@ fn event(
         end_date: String::new(),
         weather: String::new(),
         duration: String::new(),
+        for_families: String::new(),
     }
 }
 

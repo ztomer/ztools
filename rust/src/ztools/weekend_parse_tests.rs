@@ -265,3 +265,22 @@ fn the_weather_label_follows_the_kind_of_place_the_model_names() {
         assert_eq!(events[0].weather, kept, "kind {kind:?}, label {said:?}");
     }
 }
+
+/// The family answer is a closed set: yes, no, or unknown (stored as "").
+#[test]
+fn the_family_answer_is_yes_no_or_unknown() {
+    for (said, kept) in [
+        ("Yes", "yes"),
+        (" no ", "no"),
+        ("unknown", ""),
+        ("maybe", ""),
+        ("", ""),
+    ] {
+        let content =
+            serde_json::json!({"transient_events": [{"name": "Fall Fair", "for_families": said}]})
+                .to_string();
+        let resp = serde_json::json!({"choices": [{"message": {"content": content}}]});
+        let events = crate::ztools::weekend::parse_llm_events(&resp).unwrap();
+        assert_eq!(events[0].for_families, kept, "the model said {said:?}");
+    }
+}

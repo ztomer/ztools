@@ -199,6 +199,7 @@ fn fill_from(into: &mut WeekendEvent, from: &WeekendEvent) {
         (&mut into.description, &from.description),
         (&mut into.weather, &from.weather),
         (&mut into.duration, &from.duration),
+        (&mut into.for_families, &from.for_families),
     ] {
         if !known(field) && known(other) {
             field.clone_from(other);

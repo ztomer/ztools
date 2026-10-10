@@ -10,7 +10,7 @@ use std::cmp;
 
 use super::PhaseLog;
 use super::prompts::{
-    ACTIVITY_RULE, CARRY_FIELDS, PHASE_DRAFT_TRANSIENT, PHASE_EXTRACT_EVENTS,
+    ACTIVITY_RULE, CARRY_FIELDS, FAMILY_RULE, PHASE_DRAFT_TRANSIENT, PHASE_EXTRACT_EVENTS,
     PHASE_STRUCTURE_TRANSIENT_SYSTEM, PHASE_STRUCTURE_USER, PHASE_WEATHER_CONDENSE, WEATHER_RULE,
     render,
 };
@@ -475,7 +475,11 @@ pub fn structure_to_json(
 pub(crate) fn structure_system(year: i32) -> String {
     render(
         PHASE_STRUCTURE_TRANSIENT_SYSTEM,
-        &[("year", &year.to_string()), ("weather_rule", WEATHER_RULE)],
+        &[
+            ("year", &year.to_string()),
+            ("weather_rule", WEATHER_RULE),
+            ("family_rule", FAMILY_RULE),
+        ],
     )
 }
 

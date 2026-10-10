@@ -237,12 +237,19 @@ fn gate_suitability(
     let before = transient.len();
     let (transient, listing_notes, _) = fit::reject_listing_page_titles(transient, places);
     let (transient, age_notes) = fit::drop_unsuitable_for_ages(transient, ages);
+    let (transient, family_notes) = fit::drop_not_for_families(transient, ages);
     let (fixed, fixed_notes) = fit::drop_unsuitable_for_ages(fixed, ages);
     let (transient, twin_notes) = fit::drop_duplicates_of_fixed(transient, &fixed);
     health.provenance.unsuitable = before - transient.len();
-    for note in [listing_notes, age_notes, fixed_notes, twin_notes]
-        .iter()
-        .flatten()
+    for note in [
+        listing_notes,
+        age_notes,
+        family_notes,
+        fixed_notes,
+        twin_notes,
+    ]
+    .iter()
+    .flatten()
     {
         println!("→ {note}");
     }

@@ -110,7 +110,11 @@ fn prompt_templates_render_fully() {
         ),
         (
             PHASE_STRUCTURE_TRANSIENT_SYSTEM,
-            vec![("year", "2026"), ("weather_rule", "- weather: sunny")],
+            vec![
+                ("year", "2026"),
+                ("weather_rule", "- weather: sunny"),
+                ("family_rule", "- for_families: yes"),
+            ],
         ),
         (PHASE_STRUCTURE_USER, vec![("draft_text", "draft")]),
         (PHASE_REFINE, vec![("draft_text", "draft")]),
@@ -129,7 +133,11 @@ fn prompt_templates_render_fully() {
     // double-braced escape a format-string port would emit.
     let sys = crate::ztools::weekend::prompts::render(
         PHASE_STRUCTURE_TRANSIENT_SYSTEM,
-        &[("year", "2026"), ("weather_rule", "- weather: sunny")],
+        &[
+            ("year", "2026"),
+            ("weather_rule", "- weather: sunny"),
+            ("family_rule", "- for_families: yes"),
+        ],
     );
     assert!(sys.contains(r#"{"transient_events":"#), "{sys}");
     assert!(!sys.contains("{{"), "double braces leaked: {sys}");
@@ -391,6 +399,7 @@ fn structure_to_json_carries_dates_price_ages_and_location_out_of_the_draft() {
             &[
                 ("year", "2026"),
                 ("weather_rule", crate::ztools::weekend::WEATHER_RULE),
+                ("family_rule", crate::ztools::weekend::FAMILY_RULE),
             ],
         ),
         "the system prompt the model was shown is not the structure template rendered \

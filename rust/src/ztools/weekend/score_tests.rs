@@ -18,6 +18,7 @@ fn ev(target_ages: &str, name: &str, description: &str, price: &str) -> WeekendE
         end_date: String::new(),
         weather: String::new(),
         duration: String::new(),
+        for_families: String::new(),
     }
 }
 

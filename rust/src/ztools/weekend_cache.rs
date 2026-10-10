@@ -297,6 +297,7 @@ impl Curated {
             end_date: String::new(),
             weather: self.weather.into(),
             duration: String::new(),
+            for_families: String::new(),
         }
     }
 }
