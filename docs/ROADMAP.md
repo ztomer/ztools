@@ -93,7 +93,61 @@ All Phase W items (`W1` through `W6`) landed on 2026-10-10. No open work remains
 
 ## Phase M — what the eval records must mean what it says
 
-All Phase M items (`M1` through `M16`) have landed. No open work remains in this phase.
+`M1` through `M16` landed. Found while landing W5 (2026-10-10), when the weekend eval rows
+started sending the planner's own prompts:
+
+### M17 — the leaderboard ranks a model on rows its rivals were never scored on
+
+- **Class:** a comparison across two measurements. `leaderboard` takes each model's latest
+  run whatever its task fingerprints, so a model last swept before W5 shows a `json` score
+  from the retired weekend rows beside models scored on the new ones.
+- **Why now:** W5 changed every weekend row's fingerprint today; until each model is
+  re-swept, the json-slot ranking compares different tasks.
+- **Done when:** the leaderboard scores a task only for models whose latest result for it
+  carries the CURRENT fingerprint, shows the others as "not measured on the current
+  task", and a `leaderboard` test with one stale and one current model proves it.
+- **Blocked by:** nothing.
+
+### M18 — config tables nothing reads
+
+- **Class:** inert config that reads like live config (Rust rule 6). `conf/models/*.toml`
+  `[field_mapping]`, `[key_mappings]`, `[top_keys]`, `[[quirks]]`, and `conf/config.toml`
+  `[eval_inputs]`, are read by no Rust code (W5 found and deleted the `[prompts]` tables).
+- **Why now:** an operator editing them changes nothing and is not told.
+- **Done when:** each is confirmed unread and deleted (or wired, if a reader is missing by
+  mistake), a test fails if a deleted table returns, and `file_summary`'s pinned ground
+  truth no longer names a deleted block.
+- **Blocked by:** nothing.
+
+### M19 — the json slot's default was measured on retired rows
+
+- **Class:** a derived value left standing after its inputs changed (`half-derived-model`).
+  `conf/config.toml [best_models] json` came from the sweep over the retired weekend rows.
+- **Why now:** it picks the weekend planner's model.
+- **Done when:** a sweep of the installed models over the current json-slot rows is
+  recorded and `[best_models] json` is set from it, with the run cited in the config.
+- **Blocked by:** a free GPU for the sweep (`tools/gpu_lock.sh`).
+
+### M20 — two weekend probes ask for a schema the planner never sends
+
+- **Class:** a parallel copy of a prompt (engineering rule 9), the W5 class in two rows W5
+  left alone: `weekend_fabrication` and `weekend_injection` are eval-owned text asking for
+  `fixed_activities`.
+- **Why now:** they score the json slot.
+- **Done when:** both send `phases::structure_system` and production-shaped rows, keep what
+  they probe (a famous venue absent from the rows; an instruction planted in a row), and
+  the W5 parity test covers them.
+- **Blocked by:** nothing.
+
+### M21 — eval history still holds series under retired names
+
+- **Class:** dead records beside live ones. `conf/eval_signals.json` keeps
+  `weekend_fixed`, `weekend_fixed_mixed` and `detailed_json` series; fingerprints keep them
+  out of averages, but they are noise in every read.
+- **Why now:** cheap, and every M17 reading is easier without them.
+- **Done when:** `ztools eval-signals --prune` has run and the file holds no series for a
+  task the roster no longer has; a test fails if the prune leaves one.
+- **Blocked by:** nothing.
 
 
 
