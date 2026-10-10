@@ -53,6 +53,9 @@ This file starts at v2.2.0 — earlier history is in git.
   (audit gate 2).
 
 ### Fixed — weekend planner
+- **A row with no name was rendered.** Live on 2026-10-10 a nameless transient row printed as
+  ` (Vaughan/Toronto)` with a 1.5 score, because the provenance gate waved unnamed rows
+  through (and a test pinned that). A row with no name is now dropped always, with a note.
 - **An uninstalled model was silently replaced by the server's first model**, so every
   scheduled plan through 2026-10-09 had 0 live events. An unresolvable model is now
   `ModelHealth::NotInstalled`: no chat call, and the degraded banner names the model and

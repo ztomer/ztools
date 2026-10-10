@@ -157,13 +157,27 @@ fn provenance_coverage_is_a_fraction_not_all_or_nothing() {
     assert!(!row_is_sourced("Apple Plum Festival", corpus));
 }
 
-/// An unnamed row has nothing to check; empty corpus judges nothing.
+/// A row with no name is never kept: there is nothing for a reader to go to
+/// and nothing to trace. Live on 2026-10-10 one rendered as ` (Vaughan/Toronto)`
+/// with a score, because this gate used to wave unnamed rows through. That
+/// holds with no corpus too; an empty corpus judges only the NAMED rows.
 #[test]
-fn unnamed_rows_and_empty_corpus_are_never_dropped() {
-    assert!(row_is_sourced("", "anything"));
-    assert!(row_is_sourced("   ", "anything"));
+fn unnamed_rows_are_dropped_and_an_empty_corpus_judges_nothing_else() {
+    assert!(!row_is_sourced("", "anything"));
+    assert!(!row_is_sourced("   ", "anything"));
 
-    let (kept, notes) = drop_unsourced_rows(vec![event("X", "Y")], "");
-    assert_eq!(kept.len(), 1);
-    assert_empty!(notes);
+    for corpus in ["", "Harbour Kite Festival"] {
+        let (kept, notes) = drop_unsourced_rows(
+            vec![event("Pumpkin Parade", "Y"), event(" ", "Vaughan/Toronto")],
+            corpus,
+        );
+        let names: Vec<&str> = kept.iter().map(|e| e.name.as_str()).collect();
+        let expect: &[&str] = if corpus.is_empty() {
+            &["Pumpkin Parade"]
+        } else {
+            &[]
+        };
+        assert_eq!(names, expect, "corpus {corpus:?}: {notes:?}");
+        assert!(notes.iter().any(|n| n.contains("unnamed row")), "{notes:?}");
+    }
 }

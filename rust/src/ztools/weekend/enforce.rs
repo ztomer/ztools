@@ -425,10 +425,14 @@ fn significant_words(text: &str) -> Vec<String> {
 
 /// Whether this row's name traces back to the corpus we actually fetched.
 ///
-/// The corpus is passed already-normalised. A row with no name is kept: an
-/// unnamed row is class C7's problem, not provenance's.
+/// The corpus is passed already-normalised. A row with no name traces to
+/// nothing and is never sourced. A name made only of short words ("Go Kart")
+/// has nothing to check and is kept.
 #[must_use]
 pub fn row_is_sourced(name: &str, corpus_normalized: &str) -> bool {
+    if name.trim().is_empty() {
+        return false;
+    }
     let words = significant_words(name);
     if words.is_empty() {
         return true;
@@ -447,23 +451,35 @@ pub fn row_is_sourced(name: &str, corpus_normalized: &str) -> bool {
 /// starved pipeline fabricates confidently, and confident fabrication is
 /// exactly what survives shape checks.
 ///
-/// Applied ONLY when a corpus is available; with no corpus there is nothing to
-/// judge against and dropping would be worse than keeping.
+/// A row with no name is dropped always: it is nothing a reader can go to,
+/// and on 2026-10-10 one rendered as ` (Vaughan/Toronto)` with a score. The
+/// NAMED rows are judged only when a corpus is available; with no corpus there
+/// is nothing to judge against and dropping would be worse than keeping.
 #[must_use]
 pub fn drop_unsourced_rows(
     events: Vec<WeekendEvent>,
     corpus: &str,
 ) -> (Vec<WeekendEvent>, Vec<String>) {
+    let mut notes = Vec::new();
+    let events: Vec<WeekendEvent> = events
+        .into_iter()
+        .filter(|ev| {
+            let named = !ev.name.trim().is_empty();
+            if !named {
+                notes.push(format!("dropped unnamed row (at {})", ev.location));
+            }
+            named
+        })
+        .collect();
     if corpus.is_empty() || events.is_empty() {
-        return (events, Vec::new());
+        return (events, notes);
     }
     let corpus_normalized = normalize_for_match(corpus);
     if corpus_normalized.is_empty() {
-        return (events, Vec::new());
+        return (events, notes);
     }
 
     let mut kept = Vec::new();
-    let mut notes = Vec::new();
     for ev in events {
         if row_is_sourced(&ev.name, &corpus_normalized) {
             kept.push(ev);
