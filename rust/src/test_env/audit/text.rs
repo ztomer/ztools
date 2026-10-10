@@ -347,6 +347,8 @@ pub(super) const HAZARDS: &[&str] = &[
     "weekend_store_dir()",
     "weekend_output_dir()",
     "debug_cache_path()",
+    "settings_path()",
+    "settings::retain(",
     // The LIVE file-summary render resolves its checkout from `ZTOOLS_EXE`,
     // `$HOME` and then the build's own checkout (`file_summary::live_root`).
     // Unguarded, it reads the home checkout while no peer sandbox is live and

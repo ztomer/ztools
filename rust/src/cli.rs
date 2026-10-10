@@ -97,6 +97,17 @@ enum Cmd {
     /// model. The `[status]` command in `routines-twitter.toml`.
     #[command(version)]
     TwitterStatus,
+    /// Show or change the operator's toggles (retention), in
+    /// `~/.config/ztools/settings.toml`: no args lists them, `get KEY`, or
+    /// `set KEY true|false`. `--json` is what the routines Settings window reads.
+    #[command(version)]
+    Settings {
+        /// `get KEY` or `set KEY true|false`; empty lists every setting.
+        args: Vec<String>,
+        /// List as JSON (key, title, help, kind, default, value).
+        #[arg(long)]
+        json: bool,
+    },
     /// Run native Rust image renamer.
     #[command(version)]
     ImageRenamer {
@@ -323,6 +334,7 @@ pub fn run() -> Result<()> {
         Cmd::ImageRenamer { dir, apply } => crate::cli_ztools::image_renamer(&config, &dir, apply),
         Cmd::Status => crate::cli_ztools::status(&config),
         Cmd::TwitterStatus => crate::ztools::twitter_status::run(),
+        Cmd::Settings { args, json } => crate::ztools::settings::cli(&args, json),
         Cmd::ModelEval {
             model,
             suite,

@@ -56,3 +56,9 @@ id = "ztools-weekend"
 title = "Weekend Plan"
 command = "/opt/homebrew/bin/ztools weekend-plan --fetch-latest"
 refresh = "/opt/homebrew/bin/ztools weekend-plan --md-out \"${WEEKEND_OUTPUT_DIR:-$HOME/Documents/weekend_plans}/weekend_plan_latest.md\""
+
+# The operator's toggles (retention), shown in the routines Settings window.
+# routines runs `<command> --json` to list them and `<command> set KEY VALUE`
+# to change one; the list itself lives in `rust/src/ztools/settings.rs`.
+[settings]
+command = "/opt/homebrew/bin/ztools settings"

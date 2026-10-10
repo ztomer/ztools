@@ -7,6 +7,7 @@ pub mod llm;
 pub mod model_eval;
 pub mod model_health;
 pub mod rename;
+pub mod settings;
 pub mod status;
 pub mod store;
 pub mod twitter;

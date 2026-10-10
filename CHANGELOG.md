@@ -8,6 +8,13 @@ This file starts at v2.2.0 — earlier history is in git.
 
 ## Unreleased — twitter summary quality, and a weekend plan for these kids
 
+### Added
+- **A rolling seven days of output, on by default.** After a run saves, every summary (or
+  plan) in its store older than 7 days is deleted -- never the newest, so the dashboard never
+  goes empty. One toggle per store, `twitter.rolling_7_days` and `weekend.rolling_7_days`, in
+  `~/.config/ztools/settings.toml`, changed with `ztools settings set KEY true|false` or from
+  the routines Settings window (the manifest's new `[settings]` command).
+
 ### Fixed
 - **Repetition loops were saved as primary summaries.** The quality gate rejected an answer
   only with no header AND no bullet. It now also rejects more than 2 exact-or-near duplicate

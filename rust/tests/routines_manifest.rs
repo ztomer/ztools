@@ -56,3 +56,17 @@ fn the_schedule_reader_rejects_what_the_harness_would() {
     assert!(weekly("weekly on thu at 25:00").is_err());
     assert!(weekly("weekly on thu").is_err());
 }
+
+/// The Settings window lists what `[settings] command --json` prints, so the
+/// command must be the installed binary's `settings` subcommand -- the same
+/// binary `[run]` uses, never a path the two could disagree on.
+#[test]
+fn the_settings_command_is_the_run_binarys_settings_subcommand() {
+    let m = manifest();
+    let settings = m["settings"]["command"]
+        .as_str()
+        .expect("[settings] command");
+    let run = m["run"]["command"].as_str().expect("[run] command");
+    let binary = run.split_whitespace().next().expect("a binary");
+    assert_eq!(settings, format!("{binary} settings"));
+}

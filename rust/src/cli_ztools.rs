@@ -130,6 +130,9 @@ pub(crate) fn weekend_plan(
         &md_str,
     )?;
     println!("✓ saved to {}", stored.display());
+    if let Some(dir) = stored.parent() {
+        crate::ztools::settings::retain(dir, crate::ztools::settings::WEEKEND_RETENTION);
+    }
     if let Some(out_path) = md_out {
         std::fs::write(&out_path, &md_str)?;
         println!("✓ saved to {}", out_path.display());

@@ -317,6 +317,7 @@ pub fn run_summary(
     );
 
     fs::write(&out_path, content)?;
+    crate::ztools::settings::retain(output_dir, crate::ztools::settings::TWITTER_RETENTION);
     Ok(out_path)
 }
 
