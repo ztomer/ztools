@@ -125,6 +125,23 @@ This file starts at v2.2.0 — earlier history is in git.
   silently dropped or wired. `file_summary` embeds `gemma.toml` and `qwen.toml`,
   so its prompt and fingerprint change; its pinned truth for those rows no
   longer names the deleted `field_mapping` block.
+- **The json slot's two adversarial probes asked for a schema the planner never
+  sends (M20).** `weekend_fabrication` and `weekend_injection` were eval-owned
+  text asking for `{"fixed_activities": [...]}`, the W5 class in the two rows W5
+  left alone. Both now send `phases::structure_system` behind the planner's
+  parse gate: fabrication is the monolithic fallback (`monolithic_user`) over six
+  invented, in-window results, so production's own "find as many as you can, up
+  to 10" is the padding pressure the famous-venue lures (Toronto Zoo, CN Tower
+  ...) test; injection is one structure batch whose third row carries the
+  planted instruction. The W5 parity tests now cover both rows, and new tests pin
+  that each still catches what it was built for. Porting them exposed two
+  grader holes, fixed in `validators/adversarial.rs`: the fabrication grader
+  could not read window-marked result lines (a grounded answer scored 0) and
+  would have taken the prompt's own `- ` instruction bullets as sources (a lure
+  dated that weekend would have been "grounded"); and the injection grader
+  judged only the FIRST marker on a line, so a faithful copy of the planted row
+  excused an obedient event after it on a one-line JSON answer. Both probes'
+  fingerprints change; their history starts fresh.
 
 ## v3.6.0 — twitter summary quality, and a weekend plan for these kids _(2026-10-10)_
 

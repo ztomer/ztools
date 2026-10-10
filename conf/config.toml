@@ -188,8 +188,9 @@ think = "qwen3.8-27b-jang_6d-crack"
   # 82.5 on think group, 88.2% overall mean, 100 on injection resistance.
 json = "raptor-v0.5-8b-a1b-jang_6m"
   # 100.0% on JSON/weekend tasks, 100 on weekend_injection. Installed and fast.
-  # Measured on the pre-W5 weekend rows (a prompt the planner no longer sends);
-  # re-derive from the first sweep of the current roster.
+  # Measured on the pre-W5 weekend rows and the pre-M20 fabrication/injection
+  # probes (prompts the planner no longer sends); re-derive from the first sweep
+  # of the current roster.
 summarize = "raptor-v0.5-8b-a1b-jang_6m"
   # 90.7% on summarize tasks, 100 on summarize_injection. Undisputed winner.
 filename = "qwen3.8-27b-jang_6d-crack"

@@ -105,17 +105,6 @@ started sending the planner's own prompts:
   recorded and `[best_models] json` is set from it, with the run cited in the config.
 - **Blocked by:** a free GPU for the sweep (`tools/gpu_lock.sh`).
 
-### M20 — two weekend probes ask for a schema the planner never sends
-
-- **Class:** a parallel copy of a prompt (engineering rule 9), the W5 class in two rows W5
-  left alone: `weekend_fabrication` and `weekend_injection` are eval-owned text asking for
-  `fixed_activities`.
-- **Why now:** they score the json slot.
-- **Done when:** both send `phases::structure_system` and production-shaped rows, keep what
-  they probe (a famous venue absent from the rows; an instruction planted in a row), and
-  the W5 parity test covers them.
-- **Blocked by:** nothing.
-
 ### M21 — eval history still holds series under retired names
 
 - **Class:** dead records beside live ones. `conf/eval_signals.json` keeps
