@@ -8,9 +8,11 @@
 
 use std::cmp;
 
+use super::PhaseLog;
 use super::prompts::{
-    CARRY_FIELDS, PHASE_DRAFT_TRANSIENT, PHASE_EXTRACT_EVENTS, PHASE_REFINE,
-    PHASE_STRUCTURE_TRANSIENT_SYSTEM, PHASE_STRUCTURE_USER, PHASE_WEATHER_CONDENSE, render,
+    ACTIVITY_RULE, CARRY_FIELDS, PHASE_DRAFT_TRANSIENT, PHASE_EXTRACT_EVENTS, PHASE_REFINE,
+    PHASE_STRUCTURE_TRANSIENT_SYSTEM, PHASE_STRUCTURE_USER, PHASE_WEATHER_CONDENSE, WEATHER_RULE,
+    render,
 };
 
 pub const WEATHER_PREVIEW_LIMIT: usize = 200;
@@ -231,10 +233,48 @@ pub(crate) fn call_llm_json(
 
 /// Condense a forecast to 1-2 sentences; fall back to a preview on failure.
 #[must_use]
-pub fn condense_weather(weather_str: &str, config: &crate::config::ZtoolsConfig) -> String {
+pub fn condense_weather(
+    weather_str: &str,
+    config: &crate::config::ZtoolsConfig,
+    log: &PhaseLog,
+) -> String {
     let prompt = render(PHASE_WEATHER_CONDENSE, &[("weather_str", weather_str)]);
-    call_llm_text(&prompt, config)
-        .unwrap_or_else(|| weather_str.chars().take(WEATHER_PREVIEW_LIMIT).collect())
+    let answer = call_llm_text(&prompt, config);
+    log.record("condense weather", &prompt, answer.as_deref());
+    answer.unwrap_or_else(|| weather_str.chars().take(WEATHER_PREVIEW_LIMIT).collect())
+}
+
+/// The fewest pipe-separated fields a row can have and still be about one
+/// event: NAME | LOCATION | DATES.
+const MIN_ROW_FIELDS: usize = 3;
+
+/// The candidate rows in one extract answer, and nothing else.
+///
+/// A row is a line in the pipe format with at least [`MIN_ROW_FIELDS`] fields
+/// and a NAME: not empty, not "unknown", not the format's own header echoed
+/// back, not a markdown rule. Surrounding table pipes are tolerated.
+/// Everything else in an answer is the model talking -- "I cannot extract
+/// ...", "Per the instructions, I skipped ..." -- and is not a source the draft
+/// should be shown as an event. Whether a NAMED row is an activity is not
+/// decided here: that is the draft's judgement, made with the activity rule.
+#[must_use]
+pub fn extracted_rows(answer: &str) -> Vec<&str> {
+    answer
+        .lines()
+        .map(str::trim)
+        .filter(|line| {
+            let inner = line.trim_matches('|');
+            let fields: Vec<&str> = inner.split('|').map(str::trim).collect();
+            fields.len() >= MIN_ROW_FIELDS && is_a_name(fields[0])
+        })
+        .collect()
+}
+
+fn is_a_name(field: &str) -> bool {
+    let name = field.trim_start_matches(['-', '*', ' ']).trim();
+    name.chars().any(char::is_alphanumeric)
+        && !name.eq_ignore_ascii_case("unknown")
+        && !name.eq_ignore_ascii_case("name")
 }
 
 /// Phase 1: pull clean pipe-separated lines out of the raw scraped corpus.
@@ -244,11 +284,23 @@ pub fn condense_weather(weather_str: &str, config: &crate::config::ZtoolsConfig)
 /// raw rather than dropping it. The Python original persists batch sizes to a
 /// signals file; this port keeps them in-memory per run, which is what the
 /// shapes actually depend on.
+///
+/// THIS PHASE REFORMATS; IT NEVER REDUCES SUPPLY (`supply.rs`: a candidate
+/// removed before the draft makes the model invent, or makes the plan thin).
+/// Every candidate line is put to the model -- there used to be a cap of 24
+/// unmarked lines, which on 2026-10-10 dropped 88 of 112 -- and a batch whose
+/// answer holds no row ([`extracted_rows`]) reaches the draft as its raw
+/// lines, exactly as a batch whose call failed does. A refusal is not an
+/// answer about those lines: that run's extractor answered the batch naming
+/// four in-window family events with "I cannot extract ...", the paragraph was
+/// kept as the batch's result, and the plan had one event. Commentary in an
+/// answer that does hold rows is dropped; the rows go on.
 #[must_use]
 pub fn extract_sources(
     raw_text: &str,
     location: &str,
     config: &crate::config::ZtoolsConfig,
+    log: &PhaseLog,
 ) -> String {
     let raw_lines: Vec<&str> = raw_text
         .lines()
@@ -265,7 +317,7 @@ pub fn extract_sources(
         .into_iter()
         .partition(|l| l.trim_start().starts_with("[THIS WEEKEND]"));
     let mut lines = marked;
-    lines.extend(general.into_iter().take(24));
+    lines.extend(general);
 
     let mut results = Vec::new();
     let mut batch_size = DEFAULT_BATCH_SIZE;
@@ -286,10 +338,25 @@ pub fn extract_sources(
         let chunk = lines[i..end].join("\n");
         let prompt = render(
             PHASE_EXTRACT_EVENTS,
-            &[("location", location), ("raw_text", &chunk)],
+            &[
+                ("activity_rule", ACTIVITY_RULE),
+                ("location", location),
+                ("raw_text", &chunk),
+            ],
         );
-        if let Some(res) = call_llm_text(&prompt, config) {
-            results.push(res);
+        let answer = call_llm_text(&prompt, config);
+        log.record(
+            &format!("extract lines {}-{end} of {}", i + 1, lines.len()),
+            &prompt,
+            answer.as_deref(),
+        );
+        if let Some(res) = answer {
+            let rows = extracted_rows(&res);
+            if rows.is_empty() {
+                results.extend(lines[i..end].iter().map(ToString::to_string));
+            } else {
+                results.push(rows.join("\n"));
+            }
             streak += 1;
             failures = 0;
             i = end;
@@ -324,10 +391,12 @@ pub fn draft_activities(
     cleaned_sources: &str,
     ctx: &PlanContext,
     config: &crate::config::ZtoolsConfig,
+    log: &PhaseLog,
 ) -> Option<String> {
     let prompt = render(
         PHASE_DRAFT_TRANSIENT,
         &[
+            ("activity_rule", ACTIVITY_RULE),
             ("age_range", &ctx.ages),
             ("location", &ctx.location),
             ("date_range", &ctx.date_range),
@@ -338,32 +407,51 @@ pub fn draft_activities(
             ("exclusions", &ctx.exclusions),
         ],
     );
-    call_llm_text(&prompt, config)
+    let answer = call_llm_text(&prompt, config);
+    log.record("draft", &prompt, answer.as_deref());
+    answer
 }
 
 /// Phase 3: merge near-duplicates, keep the best, sort by appeal.
 #[must_use]
-pub fn refine_draft(draft_text: &str, config: &crate::config::ZtoolsConfig) -> String {
+pub fn refine_draft(
+    draft_text: &str,
+    config: &crate::config::ZtoolsConfig,
+    log: &PhaseLog,
+) -> String {
     let prompt = render(PHASE_REFINE, &[("draft_text", draft_text)]);
-    call_llm_text(&prompt, config).unwrap_or_else(|| draft_text.to_string())
+    let answer = call_llm_text(&prompt, config);
+    log.record("refine", &prompt, answer.as_deref());
+    answer.unwrap_or_else(|| draft_text.to_string())
 }
 
 /// Phase 4: structure the refined draft into the transient-event JSON schema.
+///
+/// Takes no forecast: the weather LABEL is a fact about where the activity
+/// happens ([`WEATHER_RULE`]), and a forecast in this prompt is what turned a
+/// hotel workshop "outdoor" under a clear sky.
 #[must_use]
 pub fn structure_to_json(
     text: &str,
-    weather_condensed: &str,
     year: i32,
     config: &crate::config::ZtoolsConfig,
+    log: &PhaseLog,
 ) -> Option<Vec<super::WeekendEvent>> {
     let sys = render(
         PHASE_STRUCTURE_TRANSIENT_SYSTEM,
-        &[
-            ("year", &year.to_string()),
-            ("weather_condensed", weather_condensed),
-        ],
+        &[("year", &year.to_string()), ("weather_rule", WEATHER_RULE)],
     );
     let usr = render(PHASE_STRUCTURE_USER, &[("draft_text", text)]);
-    let resp = call_llm_json(Some(&sys), &usr, config)?;
-    super::parse_llm_events(&resp)
+    let resp = call_llm_json(Some(&sys), &usr, config);
+    log.record(
+        "structure",
+        &format!("{sys}\n\n{usr}"),
+        resp.as_ref().and_then(answer_content),
+    );
+    super::parse_llm_events(&resp?)
+}
+
+/// The answer text inside the completion shape [`call_llm_json`] returns.
+pub(crate) fn answer_content(resp: &serde_json::Value) -> Option<&str> {
+    resp["choices"][0]["message"]["content"].as_str()
 }

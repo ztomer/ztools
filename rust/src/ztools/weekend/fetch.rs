@@ -4,7 +4,7 @@ use super::WeekendEvent;
 use super::{DemotionPolicy, SearchRecord};
 use super::{ModelHealth, PlanHealth, SearchHealth};
 use super::{
-    PlanContext, SearchResult, build_search_queries, condense_weather, draft_activities,
+    PhaseLog, PlanContext, SearchResult, build_search_queries, condense_weather, draft_activities,
     extract_sources, in_window_count, prioritise_in_window, refine_draft, structure_to_json,
 };
 use super::{follow_aggregators, search_engines_in, warm_model};
@@ -102,8 +102,8 @@ fn holiday_in_window(
 /// it. The corpus is the ground truth the provenance gate judges extracted
 /// rows against; the health is what the plan says when that corpus is empty.
 fn fetch_events_corpus(
-    d1: NaiveDate,
-    d2: NaiveDate,
+    run: chrono::NaiveDateTime,
+    (d1, d2): (NaiveDate, NaiveDate),
     config: &crate::config::ZtoolsConfig,
 ) -> (String, SearchHealth) {
     let queries = build_search_queries(d1, d2, holiday_in_window(d1, d2, config));
@@ -177,30 +177,14 @@ fn fetch_events_corpus(
     if total > 0 {
         println!("→ Candidates: {in_window}/{total} mention a date this weekend");
     }
-    record_corpus(&raw_text, (d1, d2), &queries, (in_window, total));
+    crate::ztools::store_corpus::record_corpus(
+        run,
+        &raw_text,
+        (d1, d2),
+        &queries,
+        (in_window, total),
+    );
     (marked_text, health)
-}
-
-/// Keep the corpus this run judged beside the plans (`store_corpus.rs`), so a
-/// thin plan can be explained from what the engines actually returned. A
-/// failure to write it is reported and never fails the run.
-fn record_corpus(
-    corpus: &str,
-    (d1, d2): (NaiveDate, NaiveDate),
-    queries: &[String],
-    (in_window, total): (usize, usize),
-) {
-    let mut header = format!("# window {d1}..{d2}\n# in-window {in_window}/{total}");
-    for q in queries {
-        header.push_str("\n# query ");
-        header.push_str(q);
-    }
-    let store = crate::ztools::store::weekend_output_dir();
-    let run = chrono::Local::now().naive_local();
-    match crate::ztools::store_corpus::save_corpus(&store, run, &header, corpus) {
-        Ok(path) => println!("\u{2192} Corpus kept at {}", path.display()),
-        Err(e) => eprintln!("\u{26a0} corpus not kept under {}: {e}", store.display()),
-    }
 }
 
 /// The monolithic single-shot extraction used as a fallback when the 4-phase
@@ -211,6 +195,7 @@ fn monolithic_transient(
     d1: NaiveDate,
     d2: NaiveDate,
     config: &crate::config::ZtoolsConfig,
+    log: &PhaseLog,
 ) -> Vec<WeekendEvent> {
     let (d1_str, d2_str) = (
         d1.format("%Y-%m-%d").to_string(),
@@ -234,7 +219,14 @@ fn monolithic_transient(
         \n\
         Output ONLY JSON."
     );
-    super::call_osaurus_json(&prompt, config).unwrap_or_default()
+    let resp = super::phases::call_llm_json(None, &prompt, config);
+    log.record(
+        "monolithic",
+        &prompt,
+        resp.as_ref().and_then(super::phases::answer_content),
+    );
+    resp.and_then(|r| super::parse_llm_events(&r))
+        .unwrap_or_default()
 }
 
 /// Run the full transient pipeline for a weekend: fetch -> prioritise ->
@@ -260,7 +252,10 @@ pub fn fetch_duckduckgo_events(
         let config = config.clone();
         std::thread::spawn(move || warm_model(&config))
     };
-    let (corpus, search) = fetch_events_corpus(d1, d2, config);
+    // One stamp for the run's records, so its corpus and its model answers
+    // pair by name in the store.
+    let run = chrono::Local::now().naive_local();
+    let (corpus, search) = fetch_events_corpus(run, (d1, d2), config);
     let model = warm.join().unwrap_or_else(|_| ModelHealth::Unavailable {
         model: config.weekend_model.clone(),
         reason: "the warm-up thread panicked".to_string(),
@@ -287,18 +282,20 @@ pub fn fetch_duckduckgo_events(
         return (Vec::new(), corpus, health);
     }
 
-    let weather_condensed = condense_weather(weather_str, config);
-    let cleaned = extract_sources(&corpus, location, config);
+    let log = PhaseLog::new();
+    let weather_condensed = condense_weather(weather_str, config, &log);
+    let cleaned = extract_sources(&corpus, location, config, &log);
 
-    let events = draft_activities(&weather_condensed, &cleaned, ctx, config).map_or_else(
+    let events = draft_activities(&weather_condensed, &cleaned, ctx, config, &log).map_or_else(
         // A dead draft phase must not starve the plan: fall back to the
         // monolithic prompt rather than returning nothing.
-        || monolithic_transient(&corpus, location, d1, d2, config),
+        || monolithic_transient(&corpus, location, d1, d2, config, &log),
         |draft| {
-            let refined = refine_draft(&draft, config);
-            structure_to_json(&refined, &weather_condensed, ctx.year, config).unwrap_or_default()
+            let refined = refine_draft(&draft, config, &log);
+            structure_to_json(&refined, ctx.year, config, &log).unwrap_or_default()
         },
     );
+    crate::ztools::store_corpus::record_phases(run, &log, (d1, d2), &config.weekend_model);
 
     (events, corpus, health)
 }

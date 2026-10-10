@@ -7,7 +7,7 @@
 use crate::test_env::TestEnv;
 use crate::ztools::weekend::{
     CARRY_FIELDS, PHASE_EXTRACT_EVENTS, PHASE_REFINE, PHASE_STRUCTURE_TRANSIENT_SYSTEM,
-    PHASE_STRUCTURE_USER, PlanContext, call_llm_json, condense_weather, draft_activities,
+    PHASE_STRUCTURE_USER, PhaseLog, PlanContext, call_llm_json, condense_weather, draft_activities,
     extract_sources, refine_draft, structure_to_json,
 };
 
@@ -21,7 +21,7 @@ use crate::ztools::weekend::{
 /// current: a wrong number rather than an error. One binding is what stops the
 /// next test added below getting one without the other. Callers needing a
 /// loopback stub server override `osaurus_url` after it.
-fn config() -> (TestEnv, crate::config::ZtoolsConfig) {
+pub(super) fn config() -> (TestEnv, crate::config::ZtoolsConfig) {
     let env = TestEnv::new();
     let cfg = crate::config::ZtoolsConfig {
         osaurus_url: "http://127.0.0.1:1".into(),
@@ -32,7 +32,7 @@ fn config() -> (TestEnv, crate::config::ZtoolsConfig) {
     (env, cfg)
 }
 
-fn ctx() -> PlanContext {
+pub(super) fn ctx() -> PlanContext {
     PlanContext {
         location: "Vaughan".into(),
         ages: "6-12".into(),
@@ -48,8 +48,8 @@ fn ctx() -> PlanContext {
 fn unreachable_llm_yields_nothing() {
     let (_env, cfg) = config();
     assert!(call_llm_json(None, "hi", &cfg).is_none());
-    assert!(structure_to_json("draft", "sunny", 2026, &cfg).is_none());
-    assert!(draft_activities("sunny", "sources", &ctx(), &cfg).is_none());
+    assert!(structure_to_json("draft", 2026, &cfg, &PhaseLog::new()).is_none());
+    assert!(draft_activities("sunny", "sources", &ctx(), &cfg, &PhaseLog::new()).is_none());
 }
 
 /// `condense_weather` degrades to a preview slice, never an empty string.
@@ -57,7 +57,7 @@ fn unreachable_llm_yields_nothing() {
 fn condense_weather_falls_back_to_a_preview() {
     let (_env, cfg) = config();
     let long = format!("forecast: {}", "x".repeat(300));
-    let out = condense_weather(&long, &cfg);
+    let out = condense_weather(&long, &cfg, &PhaseLog::new());
     assert_nonempty!(&out);
     assert_eq!(out.len(), 200);
 }
@@ -67,17 +67,20 @@ fn condense_weather_falls_back_to_a_preview() {
 fn refine_draft_falls_back_to_the_draft() {
     let (_env, cfg) = config();
     let draft = "Alpha | Toronto | Aug 8 | free | 6-12 | a thing\nBeta | Vaughan | Aug 9 | $10 | 6-12 | another";
-    assert_eq!(refine_draft(draft, &cfg), draft);
+    assert_eq!(refine_draft(draft, &cfg, &PhaseLog::new()), draft);
 }
 
 /// `extract_sources` with no input returns the input unchanged.
 #[test]
 fn extract_sources_passes_through_empty_and_unparseable_corpora() {
     let (_env, cfg) = config();
-    assert_eq!(extract_sources("", "Vaughan", &cfg), "");
+    assert_eq!(extract_sources("", "Vaughan", &cfg, &PhaseLog::new()), "");
     // No "- " lines: returned verbatim, not dropped.
     let prose = "no dash lines here\njust prose";
-    assert_eq!(extract_sources(prose, "Vaughan", &cfg), prose);
+    assert_eq!(
+        extract_sources(prose, "Vaughan", &cfg, &PhaseLog::new()),
+        prose
+    );
 }
 
 /// `extract_sources` with a dead LLM passes every line through raw, in order,
@@ -87,7 +90,7 @@ fn extract_sources_passes_through_empty_and_unparseable_corpora() {
 fn extract_sources_passes_lines_through_raw_when_the_llm_is_dead() {
     let (_env, cfg) = config();
     let corpus = "- Event: Zoo day on Aug 8\n- Event: Museum night\n- Event: Farm visit";
-    let out = extract_sources(corpus, "Vaughan", &cfg);
+    let out = extract_sources(corpus, "Vaughan", &cfg, &PhaseLog::new());
     assert_eq!(out, corpus);
 }
 
@@ -99,11 +102,15 @@ fn prompt_templates_render_fully() {
     for (template, fields) in [
         (
             PHASE_EXTRACT_EVENTS,
-            vec![("location", "Vaughan"), ("raw_text", "corpus")],
+            vec![
+                ("location", "Vaughan"),
+                ("raw_text", "corpus"),
+                ("activity_rule", "rule"),
+            ],
         ),
         (
             PHASE_STRUCTURE_TRANSIENT_SYSTEM,
-            vec![("year", "2026"), ("weather_condensed", "sunny")],
+            vec![("year", "2026"), ("weather_rule", "- weather: sunny")],
         ),
         (PHASE_STRUCTURE_USER, vec![("draft_text", "draft")]),
         (PHASE_REFINE, vec![("draft_text", "draft")]),
@@ -122,7 +129,7 @@ fn prompt_templates_render_fully() {
     // double-braced escape a format-string port would emit.
     let sys = crate::ztools::weekend::prompts::render(
         PHASE_STRUCTURE_TRANSIENT_SYSTEM,
-        &[("year", "2026"), ("weather_condensed", "sunny")],
+        &[("year", "2026"), ("weather_rule", "- weather: sunny")],
     );
     assert!(sys.contains(r#"{"transient_events":"#), "{sys}");
     assert!(!sys.contains("{{"), "double braces leaked: {sys}");
@@ -150,8 +157,14 @@ fn the_carry_fields_rule_reaches_the_phase_that_binds_it() {
     let (url, sent) = recording_stub("a draft, unused");
     cfg.osaurus_url = url;
     cfg.llm_timeout_secs = 5;
-    draft_activities("sunny and warm", "- Zoo day on Aug 8", &ctx(), &cfg)
-        .expect("the stub answered");
+    draft_activities(
+        "sunny and warm",
+        "- Zoo day on Aug 8",
+        &ctx(),
+        &cfg,
+        &PhaseLog::new(),
+    )
+    .expect("the stub answered");
 
     let raw = sent.lock().unwrap().pop().expect("the draft was requested");
     // The parsed message, not the raw body: a recorded request is JSON, so
@@ -202,7 +215,7 @@ fn structure_prompt_sent_to(config: &crate::config::ZtoolsConfig) -> String {
     let (url, sent) = recording_stub(r#"{"transient_events":[]}"#);
     let mut cfg = config.clone();
     cfg.osaurus_url = url;
-    structure_to_json("a draft", "sunny", 2026, &cfg).expect("the stub answered");
+    structure_to_json("a draft", 2026, &cfg, &PhaseLog::new()).expect("the stub answered");
     let raw = sent
         .lock()
         .unwrap()
@@ -282,7 +295,7 @@ fn recording_stub(
 /// Recorded as a RAW request and split here, so a test can talk about the
 /// prompts the model was actually shown rather than about the strings this
 /// file would have passed in.
-fn recorded_chat_messages(raw: &str) -> Vec<String> {
+pub(super) fn recorded_chat_messages(raw: &str) -> Vec<String> {
     let body = raw
         .split_once("\r\n\r\n")
         .expect("a recorded request is headers then a body")
@@ -328,7 +341,7 @@ fn structure_to_json_carries_dates_price_ages_and_location_out_of_the_draft() {
     cfg.osaurus_url = url;
     cfg.llm_timeout_secs = 5;
 
-    let events = structure_to_json(draft, "sat 28C sunny", 2026, &cfg)
+    let events = structure_to_json(draft, 2026, &cfg, &PhaseLog::new())
         .expect("the stub answered, so the phase must produce events");
 
     assert_eq!(events.len(), 2);
@@ -375,10 +388,13 @@ fn structure_to_json_carries_dates_price_ages_and_location_out_of_the_draft() {
         messages[0],
         crate::ztools::weekend::prompts::render(
             PHASE_STRUCTURE_TRANSIENT_SYSTEM,
-            &[("year", "2026"), ("weather_condensed", "sat 28C sunny")],
+            &[
+                ("year", "2026"),
+                ("weather_rule", crate::ztools::weekend::WEATHER_RULE),
+            ],
         ),
         "the system prompt the model was shown is not the structure template rendered \
-         with this run's year and forecast"
+         with this run's year and the weather rule"
     );
     assert_eq!(
         messages[1],

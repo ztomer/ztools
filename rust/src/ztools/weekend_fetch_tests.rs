@@ -95,7 +95,7 @@ fn window() -> (chrono::NaiveDate, chrono::NaiveDate) {
 /// Read one HTTP request completely: keep reading until the declared
 /// Content-Length body has arrived, so prompt-content checks cannot flake on
 /// TCP segmentation.
-fn read_request(stream: &mut TcpStream) -> String {
+pub(super) fn read_request(stream: &mut TcpStream) -> String {
     stream
         .set_read_timeout(Some(std::time::Duration::from_secs(5)))
         .ok();
@@ -246,6 +246,23 @@ fn a_dead_draft_phase_falls_back_to_the_monolithic_prompt_and_parses_real_events
     assert_eq!(events[0].price, "By donation");
     assert_eq!(events[0].day, "Saturday");
     assert!(events[0].is_transient);
+
+    // The run keeps what each call was asked and answered: the draft that gave
+    // nothing, and the fallback's raw answer, so a thin plan names its phase.
+    let kept: Vec<_> = std::fs::read_dir(env.path("WEEKEND_OUTPUT_DIR").join("corpus"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.to_string_lossy().ends_with("_phases.txt"))
+        .collect();
+    assert_eq!(kept.len(), 1, "{kept:?}");
+    let transcript = std::fs::read_to_string(&kept[0]).unwrap();
+    assert!(transcript.contains("\n=== draft: prompt "), "{transcript}");
+    let after_draft = transcript.split("\n=== draft: prompt ").nth(1).unwrap();
+    assert!(
+        after_draft.contains("\n--- no answer\n=== monolithic: prompt "),
+        "{transcript}"
+    );
+    assert!(transcript.contains(monolithic_json), "{transcript}");
     drop(env);
 }
 

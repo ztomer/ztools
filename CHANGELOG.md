@@ -121,6 +121,36 @@ This file starts at v2.2.0 — earlier history is in git.
   query, so a thin plan can be explained from what the engines returned. The plan and status
   readers never pick it up (`store_corpus.rs`). Measured on a live replay of the 2026-10-10
   window with the same Bing-first order: 0/88 in-window before, 39/276 after.
+- **A Thanksgiving corpus naming four in-window family events became a plan with one.** The
+  2026-10-10 16:00 run had 88/200 in-window candidates, among them the Sugar Beach Fall
+  Harvest Market, the Erin Mills Thanksgiving Family Festival, the last Markham Farmers'
+  Market and Pumpkins After Dark; the ledger said `1 extracted`. Root cause, read off the
+  model server's request log (each phase's prompt carries the previous phase's answer): the
+  EXTRACT phase lost them. Its activity rule ended "Skip those results entirely, however well
+  they match", and the extractor answered the batch holding all four with "I cannot extract
+  ... they are all pages that list things"; that paragraph counted as a successful answer,
+  so the batch's lines never reached the draft, which received 2 real rows (one an Oct 24
+  event) and drafted 1. A cap of 24 unmarked lines dropped 88 more candidates, the Woodbridge
+  Fall Fair among them. Now: the extract phase never shrinks supply -- every candidate is put
+  to the model, and a batch whose answer holds no pipe row passes through raw like a failed
+  call's (`extracted_rows`, `weekend/phases.rs`); commentary in an answer is dropped. The
+  activity rule is ONE text bound into both extract and draft (`ACTIVITY_RULE`), and leads
+  with "list the events a listing page names". Measured on the live model (raptor) replaying
+  the kept corpus: 1 extracted before, 16 after; 10 survive every gate (Markham Farmers'
+  Market, Pumpkins After Dark, both Erin Mills events, Historic Unionville among them).
+- **Every structured event's "Why It Fits" was blank**: the structure schema had no
+  `description` field, so the draft's description was dropped at the last link (class C2c).
+  It is in the schema now.
+- **A robotics workshop in a hotel was labelled "outdoor".** The label came from the model,
+  not a code default, but the prompt made it fill one of three values from "the activity
+  type and the forecast above" -- a clear forecast and no way to say "the text does not
+  tell". The forecast no longer reaches the structure prompts, and the label is "" when the
+  activity's text does not say where it happens (`WEATHER_RULE`). Still open: on the live
+  replay raptor labels all 16 rows "outdoor" anyway, so the column is not yet trustworthy.
+- **Each run keeps what every model call was asked and answered** as
+  `<plan store>/corpus/<run>_phases.txt`, under the same stamp as that run's corpus and with
+  the same bound (newest 10), so a thin plan names the phase that thinned it without
+  replaying the model (`weekend/transcript.rs`, `store_corpus.rs`).
 
 ## v3.5.0 — evaluation leaderboard category filtering, CSV export, family grouping, and regression alerts _(2026-10-09)_
 
