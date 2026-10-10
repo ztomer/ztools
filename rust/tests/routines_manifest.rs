@@ -69,4 +69,7 @@ fn the_settings_command_is_the_run_binarys_settings_subcommand() {
     let run = m["run"]["command"].as_str().expect("[run] command");
     let binary = run.split_whitespace().next().expect("a binary");
     assert_eq!(settings, format!("{binary} settings"));
+    // The group holds the Twitter toggle too, so it is labelled by the tool,
+    // not by this manifest's (weekend) task name.
+    assert_eq!(m["settings"]["title"].as_str(), Some("ztools"));
 }

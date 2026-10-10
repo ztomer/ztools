@@ -62,3 +62,4 @@ refresh = "/opt/homebrew/bin/ztools weekend-plan --md-out \"${WEEKEND_OUTPUT_DIR
 # to change one; the list itself lives in `rust/src/ztools/settings.rs`.
 [settings]
 command = "/opt/homebrew/bin/ztools settings"
+title = "ztools"
