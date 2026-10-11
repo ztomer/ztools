@@ -155,7 +155,7 @@ fn stream_accumulates_content_and_reasoning() {
         r#"{"choices":[{"delta":{},"finish_reason":"stop"}]}"#,
     ]);
     let (port, _h) = serve(http_response("text/event-stream", &body));
-    let r = stream_with_overrun_guard(&spec(port, 1000, 10));
+    let r = stream_with_overrun_guard(&spec(port, 1000, 10), false);
     assert_eq!(r.error, None, "{r:?}");
     assert_eq!(r.reasoning_content, "thinking");
     assert_eq!(r.content, "the answer");
@@ -173,7 +173,7 @@ fn overrun_guard_aborts_reasoning_past_budget_with_no_content() {
         r#"{{"choices":[{{"delta":{{"reasoning_content":"{reasoning}"}}}}]}}"#
     )]);
     let (port, _h) = serve(http_response("text/event-stream", &body));
-    let r = stream_with_overrun_guard(&spec(port, 10, 10));
+    let r = stream_with_overrun_guard(&spec(port, 10, 10), false);
     assert!(r.aborted, "{r:?}");
     assert_eq!(r.finish_reason, "aborted_reasoning_overrun");
     assert!(r.abort_reason.contains("cannot hold an answer"), "{r:?}");
@@ -195,7 +195,7 @@ fn overrun_guard_leaves_a_model_that_is_answering_alone() {
         ),
     ]);
     let (port, _h) = serve(http_response("text/event-stream", &body));
-    let r = stream_with_overrun_guard(&spec(port, 10, 10));
+    let r = stream_with_overrun_guard(&spec(port, 10, 10), false);
     assert!(!r.aborted, "{r:?}");
     assert_eq!(r.content, "answer");
 }
@@ -246,7 +246,7 @@ fn stream_deadline_enforced_in_wall_clock() {
     });
     await_stub(port);
     let started = std::time::Instant::now();
-    let r = stream_with_overrun_guard(&spec(port, 1000, 1));
+    let r = stream_with_overrun_guard(&spec(port, 1000, 1), false);
     assert!(
         r.error.as_deref().unwrap_or("").contains("Timeout"),
         "{r:?}"
@@ -310,9 +310,53 @@ fn thinking_flag_reaches_both_wire_shapes() {
         &sse_body(&[r#"{"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}"#]),
     ));
     s.port = port;
-    let r = stream_with_overrun_guard(&s);
+    let r = stream_with_overrun_guard(&s, true);
     assert!(r.error.is_none(), "{r:?}");
     let payload = payload_of(&rx.recv().unwrap());
     assert_eq!(payload["stream"], true, "{payload}");
     assert_eq!(payload["enable_thinking"], true, "{payload}");
+    // A JSON task asks for JSON on the streamed path too, as production does.
+    assert_eq!(
+        payload["response_format"]["type"], "json_object",
+        "{payload}"
+    );
+}
+
+/// Both wire shapes finish the same way: the answer is cleaned and, for a JSON
+/// task, parsed. The streamed path returned its raw text unparsed, so every
+/// full-suite JSON task (the runner always streams) scored a fenced answer 0
+/// -- gemma's valid fenced `json` block read as "JSON extraction failed" on all six
+/// json-slot tasks of the 2026-10-10 sweep, while bare-JSON raptor scored 100.
+#[test]
+fn a_streamed_answer_is_cleaned_and_parsed_like_a_blocking_one() {
+    let fenced = "```json\n{\"transient_events\":[{\"name\":\"Rib Fest\"}]}\n```";
+    let delta = serde_json::json!({"choices":[{"delta":{"content": fenced}}]}).to_string();
+    let body = sse_body(&[
+        &delta,
+        r#"{"choices":[{"delta":{},"finish_reason":"stop"}]}"#,
+    ]);
+    let (port, _h) = serve(http_response("text/event-stream", &body));
+    let mut streamed = spec(port, 1000, 10);
+    streamed.stream_guard = true;
+    let r = call(&streamed, true);
+    assert_eq!(r.error, None, "{r:?}");
+    assert!(
+        r.parsed.is_some(),
+        "a streamed JSON answer must be parsed: {r:?}"
+    );
+    assert!(
+        !r.content.contains("```"),
+        "a streamed answer must be cleaned: {r:?}"
+    );
+
+    let blocking_body = serde_json::json!({
+        "choices": [{"message": {"content": fenced}, "finish_reason": "stop"}]
+    })
+    .to_string();
+    let (port, _h) = serve(http_response("application/json", &blocking_body));
+    let b = call(&spec(port, 1000, 10), true);
+    assert_eq!(
+        (b.parsed.is_some(), b.content),
+        (r.parsed.is_some(), r.content)
+    );
 }

@@ -113,6 +113,16 @@ This file starts at v2.2.0 — earlier history is in git.
   failure and an honest "no forecast", never another city's weather.
 
 ### Fixed — model eval
+- **Every streamed JSON answer was scored unparsed.** The full-suite runner always
+  streams, and the streamed path returned the model's raw text: never cleaned, never
+  run through `extract_json`, and asked without the `response_format: json_object`
+  that production (`llm.rs`) and the blocking path send. A model that fenced valid
+  JSON scored 0: the 2026-10-10 json-slot sweep read gemma-4-e4b and gemma-4-12b as
+  0/6 with "JSON extraction failed" on answers that parse. Both paths now build one
+  payload and pass through one `finish` (clean, then parse); pinned by
+  `a_streamed_answer_is_cleaned_and_parsed_like_a_blocking_one` and the wire-shape
+  test, each seen red. Earlier json-slot numbers for any model that fences were
+  measured through this hole.
 - **The json slot was ranked on a prompt the planner does not send.** The
   weekend rows sent a private bare-array schema whose system prompt ORDERED
   defaults (`weather: "indoor"`, `price: $20-30 or Free`, `target_ages:

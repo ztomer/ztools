@@ -148,15 +148,15 @@ pub fn call(spec: &RequestSpec, parse_json: bool) -> TransportResult {
     // a deleted model.
     let quirked_spec = derived_spec(spec, &quirked);
     if spec.stream_guard {
-        let streamed = stream_with_overrun_guard(&quirked_spec);
+        let streamed = stream_with_overrun_guard(&quirked_spec, parse_json);
         let produced_nothing = streamed.content.is_empty()
             && streamed.reasoning_content.is_empty()
             && streamed.finish_reason.is_empty();
         if streamed.error.is_none() && !produced_nothing {
-            return streamed;
+            return finish(streamed, parse_json);
         }
     }
-    let result = blocking_request(&quirked_spec, parse_json);
+    let result = finish(blocking_request(&quirked_spec, parse_json), parse_json);
 
     // Retry once against a servable model when the configured tag is gone.
     // None-of-our-business whenever we lack evidence: a non-404, a 404 about
@@ -204,23 +204,15 @@ fn derived_spec_with_model<'a>(
     copy
 }
 
-/// The plain blocking POST: wire format, cleaning, parsing, errors-as-data.
+/// The plain blocking POST: wire format and errors-as-data ([`finish`] cleans
+/// and parses).
 fn blocking_request(spec: &RequestSpec, parse_json: bool) -> TransportResult {
     let mut result = TransportResult {
         model: spec.model.to_string(),
         ..Default::default()
     };
     let start = Instant::now();
-    let mut payload = json!({
-        "model": spec.model,
-        "messages": spec.messages,
-        "temperature": spec.temperature,
-        "max_tokens": spec.max_tokens,
-        "enable_thinking": spec.thinking,
-    });
-    if parse_json {
-        payload["response_format"] = json!({"type": "json_object"});
-    }
+    let payload = request_payload(spec, parse_json, false);
 
     let url = format!("{}/v1/chat/completions", base_url(spec.host, spec.port));
     let response = match client(spec.timeout_secs).post(&url).json(&payload).send() {
@@ -279,7 +271,7 @@ fn blocking_request(spec: &RequestSpec, parse_json: bool) -> TransportResult {
         .and_then(|c| c.as_str())
         .unwrap_or("")
         .to_string();
-    result.content = clean_model_output(&raw_content);
+    result.content = raw_content;
     result.reasoning_content = message
         .get("reasoning_content")
         .and_then(|c| c.as_str())
@@ -290,9 +282,40 @@ fn blocking_request(spec: &RequestSpec, parse_json: bool) -> TransportResult {
         .and_then(|c| c.as_str())
         .unwrap_or("")
         .to_string();
-    if parse_json && !raw_content.is_empty() {
-        result.parsed = extract_json(&raw_content);
+    result
+}
+
+/// The request body, for either wire shape. ONE builder: the streamed body
+/// once lacked the JSON task's `response_format`, which production sends
+/// (`llm.rs`), so the eval asked a different question than the planner does.
+fn request_payload(spec: &RequestSpec, parse_json: bool, stream: bool) -> Value {
+    let mut payload = json!({
+        "model": spec.model,
+        "messages": spec.messages,
+        "temperature": spec.temperature,
+        "max_tokens": spec.max_tokens,
+        "enable_thinking": spec.thinking,
+    });
+    if parse_json {
+        payload["response_format"] = json!({"type": "json_object"});
     }
+    if stream {
+        payload["stream"] = json!(true);
+    }
+    payload
+}
+
+/// What every answer goes through on its way out of [`call`], whichever wire
+/// shape carried it: the content is cleaned, and a JSON task's raw text is
+/// parsed. ONE place, because the streamed path once returned its raw text
+/// unparsed and uncleaned while the blocking path did both -- and the runner
+/// always streams, so every fenced JSON answer of a full-suite run scored 0.
+fn finish(mut result: TransportResult, parse_json: bool) -> TransportResult {
+    let raw = std::mem::take(&mut result.content);
+    if parse_json && !raw.is_empty() {
+        result.parsed = extract_json(&raw);
+    }
+    result.content = clean_model_output(&raw);
     result
 }
 
@@ -320,7 +343,7 @@ fn sse_choice(line: &str) -> Option<Value> {
 /// timeouts: a model emitting one slow token at a time never trips a per-read
 /// gap timeout, and that exact case hung a real sweep for 97 minutes.
 #[must_use]
-pub fn stream_with_overrun_guard(spec: &RequestSpec) -> TransportResult {
+pub fn stream_with_overrun_guard(spec: &RequestSpec, parse_json: bool) -> TransportResult {
     let mut result = TransportResult {
         model: spec.model.to_string(),
         ..Default::default()
@@ -332,14 +355,7 @@ pub fn stream_with_overrun_guard(spec: &RequestSpec) -> TransportResult {
             .max(1.0),
     );
 
-    let payload = json!({
-        "model": spec.model,
-        "messages": spec.messages,
-        "temperature": spec.temperature,
-        "max_tokens": spec.max_tokens,
-        "enable_thinking": spec.thinking,
-        "stream": true,
-    });
+    let payload = request_payload(spec, parse_json, true);
     let url = format!("{}/v1/chat/completions", base_url(spec.host, spec.port));
     let response = match client(spec.timeout_secs)
         .post(&url)
