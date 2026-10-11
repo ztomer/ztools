@@ -1,45 +1,8 @@
-name = "gemma"
 timeout = 120
 best_for = ["fast_json", "structured_extraction", "lightweight"]
-
-[field_mapping]
-activity = "name"
-event_name = "name"
-venue = "location"
 
 [models."gemma-4-12b-it-mxfp8"]
 best_for = ["structured_extraction", "general_reasoning"]
 
 [models."gemma-4-e4b-it-8bit"]
 best_for = ["fast_json", "lightweight", "low_latency"]
-
-[key_mappings]
-event = "name"
-title = "name"
-activity = "name"
-venue = "location"
-address = "location"
-place = "location"
-age_group = "target_ages"
-ages = "target_ages"
-age_range = "target_ages"
-cost = "price"
-pricing = "price"
-fee = "price"
-type = "weather"
-category = "weather"
-
-[top_keys]
-fixed = ["fixed_activities", "year_round_fixed_activities", "weekend_data", "target_weekend", "venues", "places", "activities", "items"]
-transient = ["transient_events", "events", "weekend_data", "target_weekend", "activities", "recommendations"]
-
-[[quirks]]
-type = "prefix"
-pattern = "Output JSON now."
-reason = "Prevents thinking blocks in JSON output"
-
-[[quirks]]
-type = "transform"
-name = "gemma_weekend_forecast"
-description = "Transform gemma's weekend_forecast structure to events list"
-when = "gemma returns weekend_forecast object with nested day objects"

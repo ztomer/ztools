@@ -1,44 +1,11 @@
-name = "qwen"
 timeout = 300
 best_for = ["think", "reasoning", "taxes_audit", "fallback"]
-
-[field_mapping]
-category = "target_ages"
-context_highlight = "price"
-type = "weather"
-event_date = "day"
-end_date = "end_date"
 
 [models."qwen3.8-27b-jang_6d"]
 best_for = ["think", "reasoning", "taxes_audit", "synthesis"]
 
 [models."qwen3.8-27b-jang_6d-crack"]
 best_for = ["fast_reasoning", "taxes_audit"]
-
-[key_mappings]
-event = "name"
-title = "name"
-activity = "name"
-venue = "location"
-address = "location"
-place = "location"
-age_group = "target_ages"
-ages = "target_ages"
-age_range = "target_ages"
-cost = "price"
-pricing = "price"
-fee = "price"
-type = "weather"
-category = "weather"
-
-[[quirks]]
-type = "prefix"
-pattern = "Output JSON now."
-reason = "Prevents thinking blocks in JSON output"
-
-[top_keys]
-fixed = ["fixed_activities", "year_round_fixed_activities", "venues", "places", "activities", "items"]
-transient = ["transient_events", "events", "activities", "recommendations"]
 
 # --------------------------------------------------------------------------------
 # Per-model overrides

@@ -31,8 +31,8 @@ use super::prompts::{
     RENAME_TEXT_SLOT, SUMMARIZE_INJECTION_KEYWORDS, SUMMARIZE_INJECTION_MARKERS, TWITTER_PROMPT,
     TWITTER_PROMPT_ACCURACY, TWITTER_PROMPT_CONTRADICTION, TWITTER_PROMPT_INJECTION,
     TWITTER_PROMPT_MISATTRIBUTION, TWITTER_PROMPT_MIXED, WEEKEND_EVAL_LOCATION,
-    WEEKEND_FABRICATION_LURES, WEEKEND_FABRICATION_PROMPT, WEEKEND_INJECTION_KEYWORDS,
-    WEEKEND_INJECTION_MARKERS, WEEKEND_INJECTION_PROMPT, WEEKEND_NOISE_RESULTS,
+    WEEKEND_FABRICATION_LURES, WEEKEND_FABRICATION_RESULTS, WEEKEND_INJECTION_KEYWORDS,
+    WEEKEND_INJECTION_MARKERS, WEEKEND_INJECTION_ROWS, WEEKEND_NOISE_RESULTS,
     WEEKEND_SEARCH_RESULTS, WEEKEND_SIGNAL_EVENTS, WEEKEND_STRUCTURE_ROWS, weekend_eval_window,
 };
 use super::task_loader::{ChatMessage, Check, EvalTask};
@@ -113,8 +113,13 @@ fn weekend_structure_prompt() -> (String, String) {
 /// results floated and marked by `prioritise_in_window`, as
 /// `fetch_events_corpus` hands them on, under the same system prompt.
 fn weekend_monolithic_prompt() -> (String, String) {
+    weekend_monolithic_over(WEEKEND_SEARCH_RESULTS)
+}
+
+/// The monolithic fallback over `results`, as `weekend::fetch` sends it.
+fn weekend_monolithic_over(results: &str) -> (String, String) {
     let (start, end) = weekend_eval_window();
-    let corpus = crate::ztools::weekend::prioritise_in_window(WEEKEND_SEARCH_RESULTS, start, end);
+    let corpus = crate::ztools::weekend::prioritise_in_window(results, start, end);
     (
         crate::ztools::weekend::structure_system(start.year()),
         crate::ztools::weekend::monolithic_user(&corpus, WEEKEND_EVAL_LOCATION, start, end),
@@ -279,6 +284,8 @@ fn text_tasks(
 /// Rows 12-22: the faithfulness, vision and adversarial probes.
 fn probe_tasks(filename_prompt: &str, images: Vec<String>) -> Vec<EvalTask> {
     let (system, rows) = weekend_structure_prompt();
+    let (fab_system, fab_listing) = weekend_monolithic_over(WEEKEND_FABRICATION_RESULTS);
+    let injection_rows = crate::ztools::weekend::structure_user(WEEKEND_INJECTION_ROWS);
     vec![
         system_task(
             "weekend_transient_schema",
@@ -309,13 +316,16 @@ fn probe_tasks(filename_prompt: &str, images: Vec<String>) -> Vec<EvalTask> {
             checks: graded(Graded::ImageDescription),
             parse_json: false,
         },
-        user_task(
+        // M20: the monolithic fallback over a six-result listing, under its
+        // own "up to 10" -- production's padding pressure, not an eval count.
+        system_task(
             "weekend_fabrication",
-            WEEKEND_FABRICATION_PROMPT,
-            Graded::NoFabrication {
-                source: WEEKEND_FABRICATION_PROMPT.to_string(),
+            &fab_system,
+            &fab_listing,
+            planner(Graded::NoFabrication {
+                source: fab_listing.clone(),
                 lures: strs(WEEKEND_FABRICATION_LURES),
-            },
+            }),
         )
         .json(),
         user_task(
@@ -354,14 +364,16 @@ fn probe_tasks(filename_prompt: &str, images: Vec<String>) -> Vec<EvalTask> {
                 keywords: strs(SUMMARIZE_INJECTION_KEYWORDS),
             },
         ),
-        user_task(
+        // M20: one structure batch with the instruction planted in a row.
+        system_task(
             "weekend_injection",
-            WEEKEND_INJECTION_PROMPT,
-            Graded::ResistsInjection {
-                source: WEEKEND_INJECTION_PROMPT.to_string(),
+            &system,
+            &injection_rows,
+            planner(Graded::ResistsInjection {
+                source: injection_rows.clone(),
                 markers: strs(WEEKEND_INJECTION_MARKERS),
                 keywords: strs(WEEKEND_INJECTION_KEYWORDS),
-            },
+            }),
         )
         .json(),
     ]

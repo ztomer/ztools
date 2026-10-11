@@ -3,7 +3,14 @@
 //! When tasks evolve (e.g. prompt adjustments, new requirements), old observations
 //! are superseded by new fingerprints. This module removes records whose fingerprints
 //! no longer match current active task definitions, ensuring the store only retains
-//! active observations.
+//! active observations. A task the roster no longer has is never current, so its
+//! series always goes, and so does a model entry the prune leaves empty (M21).
+//!
+//! Dropping a superseded series of a LIVE task also drops its learned timeout,
+//! which `effective_timeout` reads across fingerprints. That is what the next
+//! observation would do anyway (`record_observation` restarts the series and
+//! removes the timeout), and the derived estimate and the floor still bound the
+//! first run, so the prune only does early what the store does itself.
 
 use anyhow::Result;
 use serde_json::Value;
@@ -20,6 +27,8 @@ pub struct PruneReport {
     pub models_affected: usize,
     pub kept_task_records: usize,
     pub pruned_task_records: usize,
+    /// Model entries the prune left empty, and so removed (M21).
+    pub models_removed: usize,
 }
 
 /// Prunes task records whose fingerprints do not match current active task identities.
@@ -60,6 +69,12 @@ pub fn prune_signals(signals: &mut SignalStore, current: &TaskIdentities) -> Pru
         }
     }
 
+    // A model with no series and no capabilities left holds nothing any reader
+    // uses; leaving `{}` behind is the dead record this prune exists to remove.
+    let before = signals.len();
+    signals.retain(|_, val| val.as_object().is_none_or(|obj| !obj.is_empty()));
+    report.models_removed = before - signals.len();
+
     report
 }
 
@@ -97,8 +112,11 @@ pub fn cli_eval_signals(
 
     if dry_run {
         println!(
-            "Dry run: would prune {} task record(s) across {} model(s) ({} active records kept). Store not modified.",
-            report.pruned_task_records, report.models_affected, report.kept_task_records
+            "Dry run: would prune {} task record(s) across {} model(s) ({} active records kept, {} emptied model(s) removed). Store not modified.",
+            report.pruned_task_records,
+            report.models_affected,
+            report.kept_task_records,
+            report.models_removed
         );
     } else if prune {
         if let Some(parent) = store_path.parent() {
@@ -107,10 +125,11 @@ pub fn cli_eval_signals(
         let formatted = serde_json::to_string_pretty(&store)?;
         std::fs::write(&store_path, formatted)?;
         println!(
-            "✓ Pruned {} task record(s) across {} model(s) ({} active records kept). Saved to {}.",
+            "✓ Pruned {} task record(s) across {} model(s) ({} active records kept, {} emptied model(s) removed). Saved to {}.",
             report.pruned_task_records,
             report.models_affected,
             report.kept_task_records,
+            report.models_removed,
             store_path.display()
         );
     } else {
@@ -208,5 +227,93 @@ mod tests {
         assert_eq!(report.pruned_task_records, 0);
         assert_eq!(report.kept_task_records, 1);
         assert_eq!(report.models_affected, 0);
+    }
+
+    /// M21: a series under a name the roster no longer has is dead whatever it
+    /// carries. W5 retired `weekend_fixed`, `weekend_fixed_mixed` and
+    /// `detailed_json`; their series held fingerprints that WERE current once,
+    /// and no reader can ever average or time against them again.
+    #[test]
+    fn a_series_for_a_retired_task_is_pruned_even_with_a_fingerprint() {
+        let mut store: SignalStore = serde_json::from_str(
+            r#"{
+                "model_a": {
+                    "weekend_transient": { "fingerprint": "fp_now", "samples": 1 },
+                    "weekend_fixed": { "fingerprint": "fp_was", "timeout": 10277 },
+                    "weekend_fixed_mixed": { "fingerprint": "fp_was2", "samples": 4 },
+                    "detailed_json": { "samples": 9 }
+                }
+            }"#,
+        )
+        .unwrap();
+        let current: TaskIdentities =
+            BTreeMap::from([("weekend_transient".to_string(), "fp_now".to_string())]);
+        let report = prune_signals(&mut store, &current);
+        let left: Vec<&String> = store["model_a"].as_object().unwrap().keys().collect();
+        assert_eq!(left, vec!["weekend_transient"]);
+        assert_eq!(report.pruned_task_records, 3);
+    }
+
+    /// M21: a model the prune leaves with nothing is itself a dead record. Two
+    /// of the twelve it emptied in the shipped store were test doubles (`m`,
+    /// `mock-model`) from before the test sandbox existed.
+    #[test]
+    fn a_model_left_with_nothing_is_dropped_and_capabilities_alone_keep_one() {
+        let mut store: SignalStore = serde_json::from_str(
+            r#"{
+                "gone": { "weekend_x": { "samples": 159 } },
+                "measured": { "_capabilities": { "cold_start_seconds": 1.0 },
+                              "weekend_x": { "samples": 1 } },
+                "already_empty": {}
+            }"#,
+        )
+        .unwrap();
+        let report = prune_signals(&mut store, &TaskIdentities::new());
+        let left: Vec<&String> = store.keys().collect();
+        assert_eq!(
+            left,
+            vec!["measured"],
+            "capabilities are kept, empties dropped"
+        );
+        assert_eq!(report.models_removed, 2);
+        assert_eq!(report.pruned_task_records, 2);
+    }
+
+    /// M21, the shipped store: `conf/eval_signals.json` holds no series for a
+    /// task the roster no longer has. Retiring a task leaves its series behind
+    /// until `ztools eval-signals --prune` runs; this makes that step part of
+    /// the retirement rather than something to remember.
+    #[test]
+    fn the_shipped_store_holds_no_series_for_a_retired_task() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("rust/ has a parent")
+            .to_path_buf();
+        let roster = crate::ztools::eval::load_all_eval_tasks(
+            &crate::ztools::eval::tasks::RosterInputs::in_dir(&root.join("conf")),
+            Some(&root.join("eval_tasks/data")),
+        )
+        .expect("the shipped roster loads");
+        let names: std::collections::BTreeSet<&str> =
+            roster.iter().map(|t| t.name.as_str()).collect();
+        assert!(names.contains("taxes_qa"), "control: the taxes rows loaded");
+        let text = std::fs::read_to_string(root.join("conf/eval_signals.json")).unwrap();
+        let store: SignalStore = serde_json::from_str(&text).unwrap();
+        let retired: Vec<String> = store
+            .iter()
+            .flat_map(|(model, series)| {
+                series
+                    .as_object()
+                    .into_iter()
+                    .flat_map(|o| o.keys())
+                    .filter(|t| *t != "_capabilities" && !names.contains(t.as_str()))
+                    .map(move |t| format!("{model}: {t}"))
+            })
+            .collect();
+        assert!(
+            retired.is_empty(),
+            "series for tasks the roster no longer has -- run `ztools eval-signals \
+             --prune`: {retired:#?}"
+        );
     }
 }

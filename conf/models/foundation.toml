@@ -1,4 +1,3 @@
-name = "foundation"
 timeout = 60
 best_for = ["offline", "on_device", "fast_fallback", "zero_latency"]
 
@@ -22,21 +21,3 @@ max_tokens = 3000
 
 [models."foundation"]
 best_for = ["offline", "on_device", "fast_fallback", "zero_latency"]
-
-[key_mappings]
-event = "name"
-title = "name"
-activity = "name"
-venue = "location"
-address = "location"
-place = "location"
-age_group = "target_ages"
-ages = "target_ages"
-age_range = "target_ages"
-cost = "price"
-pricing = "price"
-fee = "price"
-type = "weather"
-category = "weather"
-
-quirks = []

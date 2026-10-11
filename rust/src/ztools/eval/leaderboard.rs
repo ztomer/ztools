@@ -2,15 +2,22 @@
 //!
 //! Formats the latest clean run of each model from `eval_history.json` into a
 //! comparative markdown table ranking overall means and per-slot scores.
+//!
+//! A score is a measurement of ONE task, and a task is its fingerprint, not its
+//! name (`task_fingerprint.rs`). The leaderboard scores a row only when it
+//! carries the current task's fingerprint (`M17`); see `generate_leaderboard_filtered`.
 
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
 use std::path::Path;
 
+pub use super::leaderboard_format::{
+    format_leaderboard, format_leaderboard_by_family, format_leaderboard_csv,
+};
 use crate::units::{count, signed};
 use crate::ztools::eval::report::HistoryEntry;
+use crate::ztools::eval::task_fingerprint::{TaskIdentities, standing_of};
 
 /// Output formats supported by leaderboard reporting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -38,14 +45,19 @@ pub struct ModelLeaderboardEntry {
     pub model: String,
     pub date: String,
     pub timestamp: f64,
+    /// Tasks SCORED: rows of the chosen run taken on the current task.
     pub task_count: usize,
-    pub overall_mean: f64,
+    /// Mean over the scored rows; `None` when the run has none on a current task.
+    pub overall_mean: Option<f64>,
     pub delta: Option<f64>,
     pub think_score: Option<f64>,
     pub json_score: Option<f64>,
     pub summarize_score: Option<f64>,
     pub filename_score: Option<f64>,
     pub vlm_score: Option<f64>,
+    /// Tasks in the chosen run whose fingerprint is not the current task's:
+    /// not measured on the current task, so not scored (`M17`).
+    pub not_current: Vec<String>,
 }
 
 /// Returns whether a task name belongs to the specified category filter (`M13`).
@@ -125,18 +137,26 @@ pub fn task_slot(task: &str) -> Option<&'static str> {
     }
 }
 
-fn slot_mean(entries: &[&HistoryEntry], slot: &str) -> Option<f64> {
-    let scores: Vec<f64> = entries
-        .iter()
-        .filter(|e| task_slot(&e.task) == Some(slot))
-        .map(|e| signed(e.score))
-        .collect();
-    if scores.is_empty() {
+fn mean_of(entries: &[&HistoryEntry]) -> Option<f64> {
+    if entries.is_empty() {
         None
     } else {
-        let sum: f64 = scores.iter().sum();
-        Some(sum / count(scores.len()))
+        Some(entries.iter().map(|e| signed(e.score)).sum::<f64>() / count(entries.len()))
     }
+}
+
+fn slot_mean(entries: &[&HistoryEntry], slot: &str) -> Option<f64> {
+    let in_slot: Vec<&HistoryEntry> = entries
+        .iter()
+        .copied()
+        .filter(|e| task_slot(&e.task) == Some(slot))
+        .collect();
+    mean_of(&in_slot)
+}
+
+/// Whether `entry` was taken on the task as it stands now (`M17`).
+fn is_current(entry: &HistoryEntry, current: &TaskIdentities) -> bool {
+    standing_of(entry.fingerprint.as_deref(), current, &entry.task).counts()
 }
 
 fn group_runs<'a>(entries: &[&'a HistoryEntry]) -> Vec<Vec<&'a HistoryEntry>> {
@@ -172,7 +192,18 @@ fn filter_eligible_runs<'a, 'b>(
     }
 }
 
-fn compute_run_delta(eligible_runs: &[&Vec<&HistoryEntry>], latest_mean: f64) -> Option<f64> {
+/// The change from the previous eligible run, over the tasks BOTH runs scored
+/// on the current task (`M17`).
+///
+/// Before M17 this subtracted the previous run's mean over every row from the
+/// latest run's, so a re-fingerprinted task made the delta a comparison of two
+/// different questions: the same defect as the ranking, one column over. Only
+/// tasks current in both runs enter it; with none shared there is no delta.
+fn compute_run_delta(
+    eligible_runs: &[&Vec<&HistoryEntry>],
+    latest_scored: &[&HistoryEntry],
+    current: &TaskIdentities,
+) -> Option<f64> {
     if eligible_runs.len() < 2 {
         return None;
     }
@@ -182,9 +213,23 @@ fn compute_run_delta(eligible_runs: &[&Vec<&HistoryEntry>], latest_mean: f64) ->
             .partial_cmp(&a[0].timestamp)
             .unwrap_or(std::cmp::Ordering::Equal)
     });
-    let prev_run = sorted.get(1)?;
-    let prev_mean = prev_run.iter().map(|e| signed(e.score)).sum::<f64>() / count(prev_run.len());
-    Some(latest_mean - prev_mean)
+    let prev_scored: Vec<&HistoryEntry> = sorted
+        .get(1)?
+        .iter()
+        .copied()
+        .filter(|e| is_current(e, current))
+        .collect();
+    let latest = mean_of(&shared(latest_scored, &prev_scored))?;
+    let prev = mean_of(&shared(&prev_scored, latest_scored))?;
+    Some(latest - prev)
+}
+
+/// The rows of `side` whose task `other` also holds.
+fn shared<'a>(side: &[&'a HistoryEntry], other: &[&HistoryEntry]) -> Vec<&'a HistoryEntry> {
+    side.iter()
+        .copied()
+        .filter(|e| other.iter().any(|o| o.task == e.task))
+        .collect()
 }
 
 fn cmp_opt_score_desc(a: Option<f64>, b: Option<f64>) -> std::cmp::Ordering {
@@ -210,18 +255,49 @@ fn sort_leaderboard_rows(rows: &mut [ModelLeaderboardEntry], threshold: usize, s
                 "vlm" => cmp_opt_score_desc(a.vlm_score, b.vlm_score),
                 _ => std::cmp::Ordering::Equal,
             })
-            .then_with(|| {
-                b.overall_mean
-                    .partial_cmp(&a.overall_mean)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
+            .then_with(|| cmp_opt_score_desc(a.overall_mean, b.overall_mean))
             .then_with(|| b.task_count.cmp(&a.task_count))
             .then_with(|| a.model.cmp(&b.model))
     });
 }
 
+/// One model's row from its chosen run: only rows on the CURRENT task are
+/// scored; the rest are named in `not_current`.
+fn build_row(
+    model: &str,
+    run_entries: &[&HistoryEntry],
+    eligible: &[&Vec<&HistoryEntry>],
+    current: &TaskIdentities,
+) -> ModelLeaderboardEntry {
+    let (scored, stale): (Vec<&HistoryEntry>, Vec<&HistoryEntry>) = run_entries
+        .iter()
+        .copied()
+        .partition(|e| is_current(e, current));
+    let mut not_current: Vec<String> = stale.iter().map(|e| e.task.clone()).collect();
+    not_current.sort();
+    not_current.dedup();
+    ModelLeaderboardEntry {
+        model: model.to_string(),
+        date: run_entries[0].date.clone(),
+        timestamp: run_entries[0].timestamp,
+        task_count: scored.len(),
+        overall_mean: mean_of(&scored),
+        delta: compute_run_delta(eligible, &scored, current),
+        think_score: slot_mean(&scored, "think"),
+        json_score: slot_mean(&scored, "json"),
+        summarize_score: slot_mean(&scored, "summarize"),
+        filename_score: slot_mean(&scored, "filename"),
+        vlm_score: slot_mean(&scored, "vlm"),
+        not_current,
+    }
+}
+
 /// Aggregates each model's latest clean run from history and ranks by overall mean or slot descending,
 /// optionally filtering by task category (`M13`).
+///
+/// A row is SCORED only when it carries the fingerprint `current` holds for its
+/// task (`M17`): a model whose latest run predates a task's change shows that
+/// task in `not_current` instead of a score taken on a different question.
 ///
 /// When `min_tasks` is specified (`Some(min)`), models whose latest clean run holds fewer
 /// than `min` tasks are filtered out. When `None`, the default threshold (5, or 1 when filtered by category)
@@ -235,6 +311,7 @@ fn sort_leaderboard_rows(rows: &mut [ModelLeaderboardEntry], threshold: usize, s
 /// Returns an error if `sort_by` is not a recognized slot name.
 pub fn generate_leaderboard_filtered(
     history: &BTreeMap<String, Vec<HistoryEntry>>,
+    current: &TaskIdentities,
     min_tasks: Option<usize>,
     sort_by: Option<&str>,
     category: Option<&str>,
@@ -273,25 +350,7 @@ pub fn generate_leaderboard_filtered(
         let Some(run_entries) = chosen_run else {
             continue;
         };
-
-        let latest_ts = run_entries[0].timestamp;
-        let overall_mean =
-            run_entries.iter().map(|e| signed(e.score)).sum::<f64>() / count(run_entries.len());
-        let delta = compute_run_delta(&eligible, overall_mean);
-
-        rows.push(ModelLeaderboardEntry {
-            model: model.clone(),
-            date: run_entries[0].date.clone(),
-            timestamp: latest_ts,
-            task_count: run_entries.len(),
-            overall_mean,
-            delta,
-            think_score: slot_mean(run_entries, "think"),
-            json_score: slot_mean(run_entries, "json"),
-            summarize_score: slot_mean(run_entries, "summarize"),
-            filename_score: slot_mean(run_entries, "filename"),
-            vlm_score: slot_mean(run_entries, "vlm"),
-        });
+        rows.push(build_row(model, run_entries, &eligible, current));
     }
 
     sort_leaderboard_rows(&mut rows, threshold, sort_slot);
@@ -305,158 +364,36 @@ pub fn generate_leaderboard_filtered(
 /// Returns an error if `sort_by` is not a recognized slot name.
 pub fn generate_leaderboard(
     history: &BTreeMap<String, Vec<HistoryEntry>>,
+    current: &TaskIdentities,
     min_tasks: Option<usize>,
     sort_by: Option<&str>,
 ) -> Result<Vec<ModelLeaderboardEntry>> {
-    generate_leaderboard_filtered(history, min_tasks, sort_by, None)
-}
-
-fn fmt_cell(val: Option<f64>) -> String {
-    val.map_or_else(|| "—".to_string(), |v| format!("{v:.1}%"))
-}
-
-fn fmt_delta(val: Option<f64>) -> String {
-    match val {
-        None => "—".to_string(),
-        Some(d) if d > 0.049 => format!("+{d:.1}%"),
-        Some(d) if d < -0.049 => format!("{d:.1}%"),
-        Some(_) => "0.0%".to_string(),
-    }
-}
-
-fn csv_escape(field: &str) -> String {
-    if field.contains(',') || field.contains('"') || field.contains('\n') {
-        format!("\"{}\"", field.replace('"', "\"\""))
-    } else {
-        field.to_string()
-    }
-}
-
-fn fmt_csv_opt(val: Option<f64>) -> String {
-    val.map_or_else(String::new, |v| format!("{v:.1}"))
-}
-
-/// Formats the leaderboard entries into CSV (`M14`).
-#[must_use]
-pub fn format_leaderboard_csv(entries: &[ModelLeaderboardEntry]) -> String {
-    let mut out = String::new();
-    out.push_str("model,mean,delta,think,json,summarize,filename,vlm,tasks,date\n");
-    for entry in entries {
-        let _ = writeln!(
-            out,
-            "{},{:.1},{},{},{},{},{},{},{},{}",
-            csv_escape(&entry.model),
-            entry.overall_mean,
-            fmt_csv_opt(entry.delta),
-            fmt_csv_opt(entry.think_score),
-            fmt_csv_opt(entry.json_score),
-            fmt_csv_opt(entry.summarize_score),
-            fmt_csv_opt(entry.filename_score),
-            fmt_csv_opt(entry.vlm_score),
-            entry.task_count,
-            csv_escape(&entry.date)
-        );
-    }
-    out
-}
-
-/// Formats the leaderboard entries grouped by detected model family (`M15`).
-#[must_use]
-pub fn format_leaderboard_by_family(entries: &[ModelLeaderboardEntry]) -> String {
-    if entries.is_empty() {
-        return "No complete model eval runs found in history.\n".to_string();
-    }
-
-    let mut groups: Vec<(&'static str, Vec<&ModelLeaderboardEntry>)> = Vec::new();
-    for entry in entries {
-        let fam = detect_model_family(&entry.model);
-        if let Some((_, list)) = groups.iter_mut().find(|(f, _)| *f == fam) {
-            list.push(entry);
-        } else {
-            groups.push((fam, vec![entry]));
-        }
-    }
-
-    let mut out = String::new();
-    out.push_str("# Model Evaluation Leaderboard (Grouped by Family)\n\n");
-    for (fam, fam_entries) in groups {
-        let _ = writeln!(out, "## Family: {fam}\n");
-        out.push_str(
-            "| Rank | Model | Mean | Delta | Think | JSON | Summarize | Filename | VLM | Tasks | Date |\n",
-        );
-        out.push_str(
-            "| ---: | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :--- |\n",
-        );
-        for (idx, entry) in fam_entries.iter().enumerate() {
-            let _ = writeln!(
-                out,
-                "| {} | `{}` | {:.1}% | {} | {} | {} | {} | {} | {} | {} | {} |",
-                idx + 1,
-                entry.model,
-                entry.overall_mean,
-                fmt_delta(entry.delta),
-                fmt_cell(entry.think_score),
-                fmt_cell(entry.json_score),
-                fmt_cell(entry.summarize_score),
-                fmt_cell(entry.filename_score),
-                fmt_cell(entry.vlm_score),
-                entry.task_count,
-                entry.date
-            );
-        }
-        out.push('\n');
-    }
-    out
-}
-
-/// Formats the leaderboard entries into a markdown table.
-#[must_use]
-pub fn format_leaderboard(entries: &[ModelLeaderboardEntry]) -> String {
-    if entries.is_empty() {
-        return "No complete model eval runs found in history.\n".to_string();
-    }
-
-    let mut out = String::new();
-    out.push_str("# Model Evaluation Leaderboard\n\n");
-    out.push_str("Latest clean full-roster run for each evaluated model from eval history.\n\n");
-    out.push_str(
-        "| Rank | Model | Mean | Delta | Think | JSON | Summarize | Filename | VLM | Tasks | Date |\n",
-    );
-    out.push_str(
-        "| ---: | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | :--- |\n",
-    );
-
-    for (idx, entry) in entries.iter().enumerate() {
-        let _ = writeln!(
-            out,
-            "| {} | `{}` | {:.1}% | {} | {} | {} | {} | {} | {} | {} | {} |",
-            idx + 1,
-            entry.model,
-            entry.overall_mean,
-            fmt_delta(entry.delta),
-            fmt_cell(entry.think_score),
-            fmt_cell(entry.json_score),
-            fmt_cell(entry.summarize_score),
-            fmt_cell(entry.filename_score),
-            fmt_cell(entry.vlm_score),
-            entry.task_count,
-            entry.date
-        );
-    }
-
-    out
+    generate_leaderboard_filtered(history, current, min_tasks, sort_by, None)
 }
 
 /// CLI entrypoint for `ztools model-eval --leaderboard`.
+///
+/// `current` is the fingerprint of every task on the roster as it stands now;
+/// the caller loads the roster to get it, because a leaderboard that cannot
+/// tell a current row from a superseded one is the M17 defect.
 ///
 /// # Errors
 ///
 /// Returns an error if loading history fails, sorting slot is invalid, JSON serialization fails,
 /// or regression threshold is breached (`M16`).
-pub fn cli_leaderboard(eval_dir: Option<&Path>, opts: &LeaderboardOptions<'_>) -> Result<()> {
+pub fn cli_leaderboard(
+    eval_dir: Option<&Path>,
+    opts: &LeaderboardOptions<'_>,
+    current: &TaskIdentities,
+) -> Result<()> {
     let history = crate::ztools::eval::report::load_history_entries(eval_dir);
-    let entries =
-        generate_leaderboard_filtered(&history, opts.min_tasks, opts.sort_by, opts.category)?;
+    let entries = generate_leaderboard_filtered(
+        &history,
+        current,
+        opts.min_tasks,
+        opts.sort_by,
+        opts.category,
+    )?;
 
     match opts.format {
         LeaderboardFormat::Json => {
@@ -485,3 +422,7 @@ pub fn cli_leaderboard(eval_dir: Option<&Path>, opts: &LeaderboardOptions<'_>) -
 
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "leaderboard_tests.rs"]
+mod tests;

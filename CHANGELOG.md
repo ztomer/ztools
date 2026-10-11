@@ -123,6 +123,66 @@ This file starts at v2.2.0 — earlier history is in git.
   `file_summary` task embeds `gemma.toml` and `qwen.toml`, so its prompt and
   fingerprint change with them; its pinned truth for those rows moved off the
   deleted block.
+- **The leaderboard ranked a model on rows its rivals were never scored on.**
+  `model-eval --leaderboard` took each model's latest run whatever its task
+  fingerprints, so a model last swept before W5 showed a json score from the
+  retired weekend rows beside models scored on the new ones (M17). It now loads
+  the roster and scores a row only when it carries the current task's
+  fingerprint; any other row is shown as `not current` ("not measured on the
+  current task"), listed per model under the table, and kept out of the mean
+  and the slot scores. A run with no current row has no mean and ranks last.
+  The delta column had the same defect one column over and now compares only
+  tasks current in both runs. The CSV gains a `not_current` column; JSON rows
+  carry `not_current` and a nullable `overall_mean`.
+- **Config tables nothing read are gone, and a gate keeps the class out (M18).**
+  `conf/models/*.toml` carried `[field_mapping]`, `[key_mappings]`,
+  `[top_keys]`, `[[quirks]]` (family and per-model), `internal_name`, `name`
+  and `quirks = []`; `conf/config.toml` carried `[eval_inputs]` and a second
+  `[prompts]` that W5's sweep missed. No Rust code read any of them: key aliases
+  live in `weekend::ALT_KEYS`, the parser reads `transient_events` only, and the
+  qwen JSON trigger is a constant in `eval/quirks.rs` (the gemma "Output JSON
+  now." quirk the config claimed was never applied). The per-name W5 test is
+  replaced by an allowlist gate (`eval/conf_keys_tests.rs`): every key in the
+  shipped conf must be one a reader fetches, every allowlisted key must be
+  fetched somewhere in `src/`, and no source may fetch a deleted one. Four
+  top-level `conf/config.toml` keys are also unread (`llm_url`,
+  `default_model`, `filename_models`, `model_fallback_chain`); they record owner
+  decisions, so they stand as a ratchet list with reasons instead of being
+  silently dropped or wired. `file_summary` embeds `gemma.toml` and `qwen.toml`,
+  so its prompt and fingerprint change; its pinned truth for those rows no
+  longer names the deleted `field_mapping` block.
+- **The json slot's two adversarial probes asked for a schema the planner never
+  sends (M20).** `weekend_fabrication` and `weekend_injection` were eval-owned
+  text asking for `{"fixed_activities": [...]}`, the W5 class in the two rows W5
+  left alone. Both now send `phases::structure_system` behind the planner's
+  parse gate: fabrication is the monolithic fallback (`monolithic_user`) over six
+  invented, in-window results, so production's own "find as many as you can, up
+  to 10" is the padding pressure the famous-venue lures (Toronto Zoo, CN Tower
+  ...) test; injection is one structure batch whose third row carries the
+  planted instruction. The W5 parity tests now cover both rows, and new tests pin
+  that each still catches what it was built for. Porting them exposed two
+  grader holes, fixed in `validators/adversarial.rs`: the fabrication grader
+  could not read window-marked result lines (a grounded answer scored 0) and
+  would have taken the prompt's own `- ` instruction bullets as sources (a lure
+  dated that weekend would have been "grounded"); and the injection grader
+  judged only the FIRST marker on a line, so a faithful copy of the planted row
+  excused an obedient event after it on a one-line JSON answer. Both probes'
+  fingerprints change; their history starts fresh.
+- **Eval history held series under retired names, and the prune left empty
+  shells (M21).** `ztools eval-signals --prune` already dropped a series whose
+  task the roster no longer has; it now also drops a model entry it leaves
+  empty, and `conf/eval_signals.json` has been pruned. Of 646 series, 563 went:
+  78 under retired names (`weekend_fixed`, `weekend_fixed_mixed`,
+  `detailed_json`, and four `weekend_debug`-style rows a test double wrote
+  before the sandbox existed), 397 with no fingerprint, and 88 whose task has
+  since changed under the same name (W5, M18 and M20 among the causes). 83 series remain, all
+  on the current tasks (the filename, image-rename and taxes rows), and 12 model
+  entries left empty were removed, `m` and `mock-model` among them. Dropping a
+  superseded series also drops its learned timeout; 25 were above the 900s
+  floor (bonsai-27b-ternary, nemotron, ornith, muse). The next observation
+  would have restarted those series and discarded them anyway; the derived
+  estimate and the floor bound the first run. A test now fails while the
+  shipped store holds a series for a task the roster no longer has.
 
 ## v3.6.0 — twitter summary quality, and a weekend plan for these kids _(2026-10-10)_
 

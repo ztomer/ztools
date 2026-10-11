@@ -213,61 +213,6 @@ mod tests {
     use serial_test::serial;
     use std::fs;
 
-    /// `conf/models/*.toml` carries no `prompts` table, and nothing would read
-    /// one. Until 2026-10-10 every family file held per-task `[prompts]` --
-    /// `weekend_fixed`, `weekend_transient` with the old schema and weather
-    /// rule, `summarize`, `filename` -- that no Rust code has loaded since the
-    /// Python runtime died: inert config that read like the prompts a model was
-    /// sent (W5). Both halves are checked, so the config cannot grow one back
-    /// and the code cannot start reading a key the files no longer hold.
-    #[test]
-    fn no_family_config_carries_or_reads_a_prompts_table() {
-        fn tables(v: &toml::Value, path: &str, out: &mut Vec<String>) {
-            if let Some(t) = v.as_table() {
-                for (k, child) in t {
-                    let here = format!("{path}.{k}");
-                    out.push(here.clone());
-                    tables(child, &here, out);
-                }
-            }
-        }
-        let crate_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let models = crate_root.parent().unwrap().join("conf/models");
-        let mut keys = Vec::new();
-        for entry in fs::read_dir(&models)
-            .expect("conf/models is readable")
-            .flatten()
-        {
-            let text = fs::read_to_string(entry.path()).expect("a family file reads");
-            let val: toml::Value = toml::from_str(&text).expect("a family file parses");
-            tables(&val, &entry.file_name().to_string_lossy(), &mut keys);
-        }
-        assert!(
-            keys.iter().any(|k| k.ends_with(".best_for")),
-            "control: the scan must see a key the readers DO consume: {keys:?}"
-        );
-        let prompts: Vec<&String> = keys.iter().filter(|k| k.ends_with(".prompts")).collect();
-        assert!(prompts.is_empty(), "inert prompt tables: {prompts:?}");
-
-        let reads = regex::Regex::new(r#"(get\(|\[)"prompts"[)\]]"#).expect("static regex");
-        let mut stack = vec![crate_root.join("src")];
-        while let Some(dir) = stack.pop() {
-            for entry in fs::read_dir(&dir).expect("src is readable").flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    stack.push(path);
-                } else if path.extension().is_some_and(|e| e == "rs") {
-                    let src = fs::read_to_string(&path).unwrap_or_default();
-                    assert!(
-                        !reads.is_match(&src),
-                        "{} reads a prompts key",
-                        path.display()
-                    );
-                }
-            }
-        }
-    }
-
     /// A conf root and signals store inside one sandbox, holding `files`.
     ///
     /// This replaces a hand-rolled `ConfEnvGuard` that captured and restored
@@ -423,3 +368,7 @@ mod tests {
         assert_eq!(model_timeout("unknown-model"), None);
     }
 }
+
+#[cfg(test)]
+#[path = "conf_keys_tests.rs"]
+mod conf_keys_tests;

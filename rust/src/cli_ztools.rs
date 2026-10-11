@@ -361,7 +361,17 @@ pub(crate) struct EvalOptions<'a> {
 pub(crate) fn model_eval(config: &ZtoolsConfig, model: &str, opts: &EvalOptions<'_>) -> Result<()> {
     match opts.action {
         EvalAction::Leaderboard => {
-            crate::ztools::eval::cli_leaderboard(None, &opts.leaderboard_opts)
+            // The roster as it stands now, for its fingerprints: a row is
+            // scored only if it was taken on the current task (M17).
+            let default_tasks_dir = config.eval_tasks_dir();
+            let tasks_dir = opts.tasks_dir.or(default_tasks_dir.as_deref());
+            let tasks =
+                crate::ztools::eval::load_all_eval_tasks(&config.eval_roster_inputs()?, tasks_dir)?;
+            let current: crate::ztools::eval::TaskIdentities = tasks
+                .iter()
+                .map(|t| (t.name.clone(), crate::ztools::eval::task_fingerprint(t)))
+                .collect();
+            crate::ztools::eval::cli_leaderboard(None, &opts.leaderboard_opts, &current)
         }
         EvalAction::Capabilities => print_capabilities(&config.osaurus_url, model),
         EvalAction::Run => {

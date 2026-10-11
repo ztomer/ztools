@@ -110,7 +110,7 @@ const PYTHON_TABLE: &[(&str, &str, bool, &str)] = &[
     ("image_real", "user", false, "validate_image_description"),
     (
         "weekend_fabrication",
-        "user",
+        "system,user",
         true,
         "validate_no_fabrication",
     ),
@@ -141,7 +141,7 @@ const PYTHON_TABLE: &[(&str, &str, bool, &str)] = &[
     ),
     (
         "weekend_injection",
-        "user",
+        "system,user",
         true,
         "validate_resists_injection",
     ),
@@ -197,12 +197,18 @@ fn the_source_is_the_prompt_the_model_was_shown() {
         "summarize_mixed",
         "summarize_misattribution",
         "weekend_fabrication",
+        "weekend_injection",
         "filename_injection",
     ] {
         let t = tasks.iter().find(|t| t.name == name).unwrap();
         let prompt = &t.messages.last().unwrap().content;
         let Check::Graded(g) = &t.checks[0] else {
             unreachable!()
+        };
+        // The weekend probes sit behind the planner's parse gate (M20).
+        let g = match g {
+            Graded::PlannerEvents { inner } => inner.as_ref(),
+            other => other,
         };
         let source = match g {
             Graded::Summary { source }

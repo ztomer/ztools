@@ -141,11 +141,17 @@ pub const FILE_SUMMARY_GROUND_TRUTH: &[(&str, &[&str])] = &[
         "conf/models/foundation.toml",
         &["context window", "max tokens cap"],
     ),
+    // M18 deleted `[field_mapping]` (and the other tables nothing read) from
+    // both family files, so "field mapping" left the ground truth with it; the
+    // replacements are what the files still say and no name-guess contains.
     (
         "conf/models/gemma.toml",
-        &["field mapping", "structured extraction"],
+        &["low latency", "structured extraction"],
     ),
-    ("conf/models/qwen.toml", &["field mapping", "taxes audit"]),
+    (
+        "conf/models/qwen.toml",
+        &["runaway thinking", "taxes audit"],
+    ),
     ("docs/MODEL_QUIRKS.md", &["duckduckgo", "search engines"]),
     ("docs/TESTING.md", &["golden parity", "structural gates"]),
     ("rust/src/manifest.rs", &["leading tilde", "home directory"]),
