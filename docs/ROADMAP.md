@@ -38,7 +38,7 @@ checked by a gate, so re-derive it before editing it:
 `git log --oneline origin/main..main`, `gh run list --limit 3`,
 `tools/gate.sh --full`, and `"$GOH_DIR/gates/goh.sh" home-paths --exclude ^vendor/`.
 
-- Release v3.6.0 cut (twitter summary quality, 7-day retention toggles, the test-home sandbox, weekend supply and plan fixes). The kit backfilled the GitHub releases v2.2.0, v3.0.0, v3.4.0, v3.4.1 and v3.5.0 lacked; 57 older tags have no CHANGELOG stanza and stay without one.
+- Releases v3.7.0 (twitter repair, weekend graders that read fields, retention in days) and v3.8.0 (the on-device fallback, T1) cut 2026-10-10. Nothing is open: every phase below has landed.
 - Items `L2`, `M1` through `M16` landed and deleted from open work; items `G5`, `G6`, and `R2` dropped.
 - Landed today, each proven by a test made to fail first:
   **`L2`** (green CI gate of record on GitHub Actions),
@@ -99,26 +99,8 @@ phase.
 
 ## Phase T — the twitter summary must be trustworthy when nobody is watching
 
-Depends on nothing. T2 (the loop-rate measurement) landed 2026-10-10 with T3, the repair it
-motivated; both are in `docs/MODEL_QUIRKS.md`. T1 hides nothing (the outcome is a non-zero
-exit naming the cause) but loses every run while Osaurus is down.
-
-### T1 — the fallback chain has no model outside the one Osaurus server
-
-- **Class:** a fallback that shares the primary's failure domain is not a fallback.
-  Every entry in `conf/twitter.toml` `[fallback] models`, `foundation` included, is
-  served by the same server at `osaurus_url`, so when it is down the whole chain fails
-  at once (seen 2026-10-03). Nothing in `rust/src/ztools/llm.rs` or `conf/` reaches a
-  model by any other route; the Python-era direct-MLX tier was retired with no Rust
-  counterpart. Today the outcome is explicit — exit 1 and "every model in the fallback
-  chain (...) is served by the same Osaurus server at ..., so the chain has no fallback
-  outside that server" (`rust/src/ztools/twitter/mod.rs`, pinned by
-  `rust/tests/cli_refusals.rs`) — but no summary is produced.
-- **Why now:** the summarizer runs three times a day unattended; every Osaurus outage
-  is a lost run that only the status page reports.
-- **Done when:** a `[fallback]` entry routed to a second backend that does not depend on
-  the Osaurus process (a separate server, or an in-process runtime) answers in a
-  `rust/tests/cli_refusals.rs` case where the Osaurus URL is a closed port, and that
-  test exits 0 with a DEGRADED banner naming the second backend.
-- **Blocked by:** owner decision on which second backend to run (none is installed).
+All Phase T items landed on 2026-10-10: T2 (the loop-rate measurement) and T3 (the repair it
+motivated) are in `docs/MODEL_QUIRKS.md`; T1 gave the chain a model outside the Osaurus
+server -- `foundation` answered by macOS 27's `fm` (`conf/twitter.toml [fallback] on_device`).
+No open work remains in this phase.
 

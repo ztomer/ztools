@@ -8,15 +8,20 @@
 //! placeholders): a degraded state must be visually distinct and say WHY.
 //!
 //! The retired tiers are not here: a server restart is ops-side
-//! (`tools/osaurus_one.sh`) and the direct-MLX last resort has no Rust
-//! counterpart. What remains is the server chain: the intended model, then
-//! the configured fallbacks, first usable answer wins.
+//! (`tools/osaurus_one.sh`) and the direct-MLX last resort is replaced by
+//! macOS 27's `fm` (`ztools::on_device`). What remains is the server chain: the intended model, then
+//! the configured fallbacks, first usable answer wins -- except the on-device
+//! model, which `[fallback] on_device` routes around the server (T1).
 //!
 //! Policy is DATA: `conf/twitter.toml [fallback]` names the extra models and
 //! the preference order; `TWITTER_FALLBACK_MODELS` keeps its Python-era
 //! override for one run.
 
+use std::path::Path;
+
 use anyhow::Result;
+
+use crate::ztools::on_device::ON_DEVICE_MODEL;
 
 use super::fallback::{fallback_chain, resolve_target_model};
 
@@ -29,6 +34,31 @@ pub struct FallbackPolicy {
     /// Preference substrings used when the intended model is absent from the
     /// server's roster.
     pub preferred: Vec<String>,
+    /// The `fm` binary that answers [`ON_DEVICE_MODEL`] without the server
+    /// (`[fallback] on_device`, T1). Unset, every model goes to the server.
+    pub on_device: Option<String>,
+}
+
+impl FallbackPolicy {
+    /// The `fm` binary `model` is answered by, when it is the on-device model
+    /// and one is configured; `None` means the server answers it.
+    #[must_use]
+    pub fn on_device_for(&self, model: &str) -> Option<&Path> {
+        (model == ON_DEVICE_MODEL)
+            .then_some(self.on_device.as_deref())
+            .flatten()
+            .map(Path::new)
+    }
+
+    /// Where `model` is answered, as the provenance names it.
+    #[must_use]
+    pub fn backend_of(&self, model: &str) -> &'static str {
+        if self.on_device_for(model).is_some() {
+            "on-device, fm"
+        } else {
+            "osaurus"
+        }
+    }
 }
 
 /// Environment override for the extra fallback models (comma-separated),
@@ -60,6 +90,12 @@ pub fn load_fallback_policy(paths: &[String]) -> Result<FallbackPolicy> {
         policy = Some(FallbackPolicy {
             models: string_list(table.get("models")),
             preferred: string_list(table.get("preferred")),
+            on_device: table
+                .get("on_device")
+                .and_then(toml::Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string),
         });
         break;
     }
@@ -111,6 +147,9 @@ pub struct Provenance {
     /// The model the run set out to use.
     pub intended: String,
     pub tier: Tier,
+    /// Where the kept answer came from: `osaurus` unless the caller says
+    /// otherwise (`FallbackPolicy::backend_of`).
+    pub backend: &'static str,
     /// Why the run did not go to plan, in the order things went wrong.
     pub reasons: Vec<String>,
 }
@@ -127,7 +166,7 @@ impl Provenance {
             Tier::Primary => "primary",
             Tier::Fallback => "fallback",
         };
-        format!("{} (osaurus, {tier})", self.model)
+        format!("{} ({}, {tier})", self.model, self.backend)
     }
 
     /// The provenance block for the top of the report. A normal run gets one
@@ -207,6 +246,7 @@ pub fn run_chain<T>(
                         model: model.clone(),
                         intended: intended.to_string(),
                         tier,
+                        backend: "osaurus",
                         reasons: prov_reasons,
                     },
                 ));

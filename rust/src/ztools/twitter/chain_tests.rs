@@ -10,6 +10,7 @@ fn policy() -> FallbackPolicy {
     FallbackPolicy {
         models: s(&["foundation"]),
         preferred: s(&["foundation", "qwen", "gemma"]),
+        on_device: None,
     }
 }
 

@@ -6,6 +6,20 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## Unreleased
+
+### Added — a fallback outside the server (T1)
+- **The twitter summary survives Osaurus being down.** Every model in the chain,
+  `foundation` included, was served by the one Osaurus server, so an outage lost
+  every run (2026-10-03). `conf/twitter.toml [fallback] on_device = "/usr/bin/fm"`
+  now answers `foundation` with macOS 27's own `fm` -- one process per answer, no
+  server. Measured with the server unreachable: 43 tweets summarised in 33s, through
+  the same quality gate and repair, saved with the degraded banner naming
+  `foundation (on-device, fm, fallback)` and why. `fm` failing is named (terms not
+  agreed: `sudo fm license`; a timeout; an empty answer), and a prompt past the
+  model's 4096-token window is refused before it runs. Without `on_device` the run
+  still exits 1 naming the shared server, now with the key that fixes it.
+
 ## v3.7.0 — twitter repair, weekend graders that read fields, retention in days _(2026-10-10)_
 
 ### Fixed — twitter summary

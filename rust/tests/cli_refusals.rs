@@ -304,6 +304,59 @@ fn a_summary_with_its_one_server_down_exits_1_and_names_the_shared_server() {
     );
 }
 
+/// The same dead server with `[fallback] on_device` set: `foundation` is
+/// answered by `fm` without the server, so the run SUCCEEDS, degraded, and
+/// says which backend answered (T1). `fm` is a stub here; the real one is
+/// `/usr/bin/fm` on macOS 27.
+#[test]
+fn a_summary_with_its_server_down_falls_back_to_the_on_device_model() {
+    use std::os::unix::fs::PermissionsExt;
+    let home = fresh("fallback-twitter-on-device");
+    let fm = home.join("fm");
+    fs::write(
+        &fm,
+        "#!/bin/sh\ncat >/dev/null\necho '- One fact worth summarising today. (@a | 08:00)'\n",
+    )
+    .unwrap();
+    fs::set_permissions(&fm, fs::Permissions::from_mode(0o755)).unwrap();
+    let policy = home.join("twitter.toml");
+    fs::write(
+        &policy,
+        format!(
+            "[fallback]\nmodels = [\"foundation\"]\npreferred = [\"foundation\"]\non_device = \"{}\"\n",
+            fm.display()
+        ),
+    )
+    .unwrap();
+    let url = format!("http://127.0.0.1:{}", closed_loopback_port());
+    fs::write(
+        home.join("ztools.toml"),
+        format!(
+            "osaurus_url = \"{url}\"\nllm_timeout_secs = 5\ntwitter_config_paths = [\"{}\"]\n",
+            policy.display()
+        ),
+    )
+    .unwrap();
+    let tweets = home.join("tweets.json");
+    fs::write(
+        &tweets,
+        r#"[{"screen_name":"a","text":"One fact worth summarising today.","created_at":"08:00","favorite_count":0,"retweet_count":0,"reply_to":null}]"#,
+    )
+    .unwrap();
+
+    let out = run_sandboxed(
+        &home,
+        &["twitter-summarize", "--json", &tweets.display().to_string()],
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{stderr}");
+    assert!(
+        stderr.contains("Degraded summary: foundation (on-device, fm, fallback)"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("on this Mac"), "{stderr}");
+}
+
 /// `--json` names a source. When it yields nothing, the run refuses rather than
 /// summarising nothing: that is how five "Please provide the timeline" answers
 /// were saved as summaries of 0 tweets in August 2026.

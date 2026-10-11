@@ -208,6 +208,60 @@ pub fn call_osaurus(
     )
 }
 
+/// Where one candidate is asked: the on-device model by `fm` when the policy
+/// routes it there, every other model by the server.
+struct Route<'a> {
+    policy: &'a chain::FallbackPolicy,
+    base_url: &'a str,
+    timeout_secs: u64,
+    config: &'a crate::config::ZtoolsConfig,
+}
+
+impl Route<'_> {
+    /// The candidate's raw answer and whether it was cut at the length limit.
+    fn ask(&self, candidate: &str, prompt: &str, processed: usize) -> Result<(String, bool)> {
+        if let Some(fm) = self.policy.on_device_for(candidate) {
+            eprintln!("· Summarizing {processed} tweets with {candidate} on this Mac...");
+            let raw = crate::ztools::on_device::respond(fm, prompt, self.timeout_secs)?;
+            return Ok((raw, false));
+        }
+        eprintln!(
+            "· Summarizing {processed} tweets with {candidate} on {}...",
+            self.base_url
+        );
+        repair::ask(
+            self.base_url,
+            candidate,
+            prompt,
+            self.timeout_secs,
+            self.config,
+        )
+    }
+}
+
+/// The run's error when every model in `plan` failed.
+///
+/// When every model is served by the ONE server at `base_url`, "every model
+/// failed" while it is down is one failure, not N: say so, or the log reads as
+/// N independent model faults. A chain with an on-device model did have
+/// somewhere else to go.
+fn chain_failure(
+    e: anyhow::Error,
+    plan: &[String],
+    policy: &chain::FallbackPolicy,
+    base_url: &str,
+) -> anyhow::Error {
+    if plan.iter().any(|m| policy.on_device_for(m).is_some()) {
+        return e.context("no summary written: every model in the fallback chain failed");
+    }
+    e.context(format!(
+        "no summary written: every model in the fallback chain ({}) is served by the same \
+         Osaurus server at {base_url}, so the chain has no fallback outside that server \
+         (set conf/twitter.toml [fallback] on_device to reach foundation without it)",
+        plan.join(", ")
+    ))
+}
+
 /// Run full Twitter summary flow and save the markdown into `output_dir`.
 ///
 /// The directory is REQUIRED, never defaulted here: whether a run writes the
@@ -285,9 +339,14 @@ pub fn run_summary(
         prompt.chars().count(),
         &budget::TimeoutInputs::pessimistic(),
     );
-    let (answer, provenance) = chain::run_chain(&plan, model, |candidate| {
-        eprintln!("· Summarizing {processed} tweets with {candidate} on {base_url}...");
-        let (raw, cut) = repair::ask(base_url, candidate, &prompt, timeout_secs, config)?;
+    let (answer, mut provenance) = chain::run_chain(&plan, model, |candidate| {
+        let route = Route {
+            policy: &policy,
+            base_url,
+            timeout_secs,
+            config,
+        };
+        let (raw, cut) = route.ask(candidate, &prompt, processed)?;
         // A reasoning model's `<thinking>` block must not land verbatim in
         // the saved markdown, and an answer the quality gate rejects must not
         // be saved at all: the rejection is this model's recorded reason, and
@@ -302,17 +361,8 @@ pub fn run_summary(
                 anyhow::anyhow!("answer rejected by the quality gate: {why}{kept}")
             })
     })
-    .map_err(|e| {
-        // Every model in the chain is served by the ONE server at `base_url`,
-        // so "every model failed" when that server is down is one failure, not
-        // N. Say so, or the log reads as N independent model faults.
-        e.context(format!(
-            "no summary written: every model in the fallback chain ({}) is served by the same \
-             Osaurus server at {base_url}, so the chain has no fallback outside that server \
-             (docs/ROADMAP.md T1)",
-            plan.join(", ")
-        ))
-    })?;
+    .map_err(|e| chain_failure(e, &plan, &policy, base_url))?;
+    provenance.backend = policy.backend_of(&provenance.model);
     if provenance.degraded() {
         eprintln!("⚠ Degraded summary: {}", provenance.describe());
         for reason in &provenance.reasons {

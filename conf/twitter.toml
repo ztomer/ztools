@@ -21,4 +21,7 @@ following = "HomeLatestTimeline"
 # `TWITTER_FALLBACK_MODELS=a,b` overrides `models` for one run.
 [fallback]
 models = ["foundation"]
+# The binary that answers `foundation` on this Mac without the Osaurus server
+# (macOS 27's `fm`), so the chain has a fallback outside that server (T1).
+on_device = "/usr/bin/fm"
 preferred = ["raptor", "muse", "foundation", "qwen", "gemma"]
