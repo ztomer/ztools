@@ -105,6 +105,26 @@ started sending the planner's own prompts:
   recorded and `[best_models] json` is set from it, with the run cited in the config.
 - **Blocked by:** a free GPU for the sweep (`tools/gpu_lock.sh`).
 
+## Phase S — the settings the operator sets
+
+Asked for 2026-10-10. The routines side (the dropdown, and the layout of the Settings
+window) is `routines` ROADMAP O52.
+
+### S1 — retention is a number of days, not on/off
+
+- **Class:** a control narrower than the decision it stands for. The two retention
+  toggles in `rust/src/ztools/settings.rs` are `bool` with `KEEP_DAYS = 7` fixed in
+  code, so "keep a day" or "keep only the newest" cannot be said.
+- **Why now:** the operator asked for "keep twitter summaries for [N] days" and the same
+  for weekend plans, with 0 meaning keep only the last one.
+- **Done when:** each store's setting is a day count chosen from a fixed list that
+  includes 0 (`ztools settings set twitter.keep_days 0` keeps exactly the newest file,
+  proven by a `prune` test), `ztools settings --json` declares it as a choice with its
+  options, the old `*.rolling_7_days` keys are migrated or refused with a named reason,
+  and the titles carry no help text.
+- **Blocked by:** `routines` O52 rendering a choice-kind setting as a dropdown (today it
+  renders `bool` only); the two land together.
+
 ## Phase T — the twitter summary must be trustworthy when nobody is watching
 
 Depends on nothing. T2 (the loop-rate measurement) landed 2026-10-10 with T3, the repair it
