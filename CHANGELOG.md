@@ -6,7 +6,7 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
-## Unreleased
+## v3.7.0 — twitter repair, weekend graders that read fields, retention in days _(2026-10-10)_
 
 ### Fixed — twitter summary
 - **One timeline's summaries were all thrown away, for the wrong reasons.** On a
