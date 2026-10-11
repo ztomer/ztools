@@ -2162,11 +2162,6 @@
         {
           "clean": true,
           "ts": 0.0,
-          "v": 2.8298
-        },
-        {
-          "clean": true,
-          "ts": 0.0,
           "v": 0.8118
         },
         {
@@ -2208,15 +2203,15 @@
           "clean": false,
           "ts": 0.0,
           "v": 0.2266
-        }
-      ],
-      "decode_tokens_per_sec": 133.84,
-      "decode_tokens_per_sec_samples": [
+        },
         {
           "clean": true,
           "ts": 0.0,
-          "v": 136.4184
-        },
+          "v": 3.4402
+        }
+      ],
+      "decode_tokens_per_sec": 132.52,
+      "decode_tokens_per_sec_samples": [
         {
           "clean": true,
           "ts": 0.0,
@@ -2261,15 +2256,15 @@
           "clean": false,
           "ts": 0.0,
           "v": 138.4705
-        }
-      ],
-      "prefill_chars_per_sec": 11435.3,
-      "prefill_chars_per_sec_samples": [
+        },
         {
           "clean": true,
           "ts": 0.0,
-          "v": 11435.3
-        },
+          "v": 77.9216
+        }
+      ],
+      "prefill_chars_per_sec": 10597.3,
+      "prefill_chars_per_sec_samples": [
         {
           "clean": true,
           "ts": 0.0,
@@ -2314,9 +2309,14 @@
           "clean": false,
           "ts": 0.0,
           "v": 12111.1
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 8683.7
         }
       ],
-      "prefill_samples": 15
+      "prefill_samples": 16
     },
     "filename": {
       "fingerprint": "e27a50a456be7142",
@@ -2376,6 +2376,14 @@
       "parse_failures": 0,
       "samples": 2,
       "superseded_samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "json": {
+      "fingerprint": "49ae35312724f6ad",
+      "p95_latency": 9.5,
+      "parse_failures": 0,
+      "samples": 1,
       "timeout": 900,
       "total_retries": 0
     },
@@ -2439,6 +2447,46 @@
       "parse_failures": 0,
       "samples": 2,
       "superseded_samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_fabrication": {
+      "fingerprint": "5915747486cabc6a",
+      "p95_latency": 8.9,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_injection": {
+      "fingerprint": "a6a45ff76f1bc9ac",
+      "p95_latency": 6.4,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient": {
+      "fingerprint": "dd951ad650fd60ff",
+      "p95_latency": 9.6,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient_mixed": {
+      "fingerprint": "5107f253ab83a3e2",
+      "p95_latency": 12.1,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient_schema": {
+      "fingerprint": "d5fc4e12cec95ac0",
+      "p95_latency": 9.6,
+      "parse_failures": 0,
+      "samples": 1,
       "timeout": 900,
       "total_retries": 0
     }

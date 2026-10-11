@@ -3,9 +3,8 @@
 //! `conf/weekend.toml [location]` names the operator's coordinates and time
 //! zone. The forecast URL used to hard-code its own copy -- a different
 //! longitude (-79.4982 against -79.5083) and zone (`America/New_York` against
-//! `America/Toronto`) --
-//! so the config's values were read by nothing and a move would have kept the
-//! old forecast. The config is now the only source.
+//! `America/Toronto`) -- so the config's values were read by nothing and a
+//! move would have kept the old forecast. The config is now the only source.
 
 use std::fmt::Write as _;
 
