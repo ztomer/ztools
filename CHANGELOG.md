@@ -6,7 +6,7 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
-## Unreleased
+## v3.8.0 — the twitter summary survives Osaurus being down _(2026-10-10)_
 
 ### Added — a fallback outside the server (T1)
 - **The twitter summary survives Osaurus being down.** Every model in the chain,
