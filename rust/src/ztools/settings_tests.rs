@@ -116,3 +116,42 @@ fn a_legacy_toggle_migrates_or_is_refused_by_name() {
             .contains("twitter.rolling_7_days")
     );
 }
+
+/// The CLI against the sandboxed `$HOME`: list, get, set, and each refusal.
+#[test]
+fn the_cli_lists_gets_sets_and_refuses_by_name() {
+    let env = crate::test_env::TestEnv::new();
+    let s = |v: &[&str]| v.iter().map(|x| (*x).to_string()).collect::<Vec<_>>();
+    cli(&[], false).unwrap();
+    cli(&[], true).unwrap();
+    cli(&s(&["set", WEEKEND_RETENTION, "3"]), false).unwrap();
+    cli(&s(&["get", WEEKEND_RETENTION]), false).unwrap();
+    assert_eq!(get_at(&settings_path(), WEEKEND_RETENTION).unwrap(), 3);
+    let why = cli(&s(&["set", WEEKEND_RETENTION, "a week"]), false).unwrap_err();
+    assert!(why.to_string().contains("not a day count"), "{why}");
+    let why = cli(&s(&["frobnicate"]), false).unwrap_err();
+    assert!(why.to_string().contains("usage"), "{why}");
+    drop(env);
+}
+
+/// `retain` prunes to the stored count, and skips -- deleting nothing -- when
+/// the setting cannot be read.
+#[test]
+fn retain_prunes_to_the_setting_and_skips_what_it_cannot_read() {
+    let env = crate::test_env::TestEnv::new();
+    let now = SystemTime::now();
+    let store = tempfile::tempdir().unwrap();
+    let old = touch(store.path(), "a.md", 5, now);
+    let newest = touch(store.path(), "b.md", 0, now);
+
+    std::fs::create_dir_all(settings_path().parent().unwrap()).unwrap();
+    std::fs::write(settings_path(), "\"weekend.rolling_7_days\" = false\n").unwrap();
+    retain(store.path(), WEEKEND_RETENTION);
+    assert!(old.exists(), "an unreadable setting deletes nothing");
+
+    set_at(&settings_path(), WEEKEND_RETENTION, 3).unwrap();
+    retain(store.path(), WEEKEND_RETENTION);
+    assert!(!old.exists(), "older than 3 days goes");
+    assert!(newest.exists());
+    drop(env);
+}
