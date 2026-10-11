@@ -1,6 +1,21 @@
 timeout = 120
 best_for = ["fast_json", "structured_extraction", "lightweight"]
 
+# gemma-4-26b-a4b-it-mxfp4: Largest model, returns structured data
+[models."gemma-4-26b-a4b-it-mxfp4"]
+timeout = 120
+best_for = ["structured_data", "high_capacity_json"]
+
+# gemma-4-31b-it-jang_4m: Medium model
+[models."gemma-4-31b-it-jang_4m"]
+timeout = 90
+best_for = ["fast_extraction", "medium_context"]
+
+# gemma-4-e2b-it-8bit: Smallest, fastest model
+[models."gemma-4-e2b-it-8bit"]
+timeout = 60
+best_for = ["ultra_fast", "lightweight_extraction"]
+
 [models."gemma-4-12b-it-mxfp8"]
 best_for = ["structured_extraction", "general_reasoning"]
 

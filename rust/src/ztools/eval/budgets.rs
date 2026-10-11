@@ -37,16 +37,10 @@ fn parse(path: PathBuf) -> Option<toml::Value> {
 }
 
 fn family_toml_exists(candidate: &str) -> bool {
-    for suffix in ["", "_versions"] {
-        if conf_root()
-            .join("models")
-            .join(format!("{candidate}{suffix}.toml"))
-            .is_file()
-        {
-            return true;
-        }
-    }
-    false
+    conf_root()
+        .join("models")
+        .join(format!("{candidate}.toml"))
+        .is_file()
 }
 
 /// The conf/models/<family>.toml that serves an architecture, or None.
@@ -116,18 +110,12 @@ pub fn config_family(model: &str) -> Option<String> {
     }
 }
 
-/// The family config for `model`: `<family>_versions.toml` when it exists,
-/// else `<family>.toml`. Mirrors `get_model_config`'s preference -- a versions
-/// file REPLACES the family file wholesale there, so top-level keys like
-/// `max_tokens` must be read from whichever file actually won.
+/// The family config for `model`: `conf/models/<family>.toml`, the one file
+/// per family. (A `<family>_versions.toml` once REPLACED it wholesale, which
+/// left every per-model entry in `gemma.toml` unread; the two were merged.)
 fn family_config(model: &str) -> Option<toml::Value> {
     let family = config_family(model)?;
-    let root = conf_root().join("models");
-    let versions = root.join(format!("{family}_versions.toml"));
-    if versions.is_file() {
-        return parse(versions);
-    }
-    parse(root.join(format!("{family}.toml")))
+    parse(conf_root().join("models").join(format!("{family}.toml")))
 }
 
 /// The narrowing cap for one model: the family config's top-level
@@ -286,7 +274,7 @@ mod tests {
     #[serial]
     fn a_per_model_section_narrows_below_the_family() {
         let _dir = conf_sandbox(&[(
-            "models/gemma_versions.toml",
+            "models/gemma.toml",
             "name = \"gemma\"\nmax_tokens = 16000\n\n[models.\"gemma-4-tiny-test\"]\nmax_tokens = 512\n",
         )]);
         assert_eq!(max_tokens_for_task("json", "gemma-4-e2b-it-8bit"), 16000);

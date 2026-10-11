@@ -112,7 +112,7 @@ pub const FILE_SUMMARY_EXCERPT_BYTES: usize = 1200;
 ///   * every description written from the content clears its row.
 ///
 /// A phrase with a single identifying token is still allowed — `tesseract` is one
-/// token and no sentence about `rename.toml` contains it. A phrase whose tokens
+/// token and no sentence about a renamer's config would contain it. A phrase whose tokens
 /// are all shorter than four characters is not: `llm url` has none, and a phrase
 /// nothing can match is a phrase nothing can clear.
 ///
@@ -134,9 +134,12 @@ pub const FILE_SUMMARY_GROUND_TRUTH: &[(&str, &[&str])] = &[
     ),
     (
         "conf/twitter.toml",
-        &["chrome cookies db", "state file output directory"],
+        &["graphql endpoint markers", "summarizer fallback policy"],
     ),
-    ("conf/rename.toml", &["tesseract", "mlx models directory"]),
+    (
+        "conf/eval_vision.toml",
+        &["synthetic images", "measuring whether a model can see"],
+    ),
     (
         "conf/models/foundation.toml",
         &["context window", "max tokens cap"],
@@ -192,7 +195,7 @@ CLAUDE.md
 conf/config.toml
 conf/weekend.toml
 conf/twitter.toml
-conf/rename.toml
+conf/eval_vision.toml
 conf/models/foundation.toml
 conf/models/gemma.toml
 conf/models/qwen.toml
@@ -224,7 +227,7 @@ CLAUDE.md
 conf/config.toml
 conf/weekend.toml
 conf/twitter.toml
-conf/rename.toml
+conf/eval_vision.toml
 conf/models/foundation.toml
 conf/models/gemma.toml
 conf/models/qwen.toml
@@ -278,7 +281,7 @@ CLAUDE.md
 conf/config.toml
 conf/weekend.toml
 conf/twitter.toml
-conf/rename.toml
+conf/eval_vision.toml
 conf/models/foundation.toml
 conf/models/gemma.toml
 conf/models/qwen.toml

@@ -9,6 +9,7 @@ pub mod health;
 pub mod holidays;
 pub mod listing;
 pub mod phases;
+pub mod place;
 pub mod prompts;
 pub mod queries;
 pub mod refine;

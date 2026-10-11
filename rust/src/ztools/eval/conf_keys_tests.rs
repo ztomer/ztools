@@ -11,7 +11,7 @@
 //! one is an ALLOWLIST of what is read, checked from both sides:
 //!
 //! * every key in the files matches a pattern in [`MODEL_KEYS_READ`] /
-//!   [`CONFIG_KEYS_READ`], or is a [`CONFIG_KEYS_UNREAD`] ratchet entry;
+//!   [`CONF_FILE_KEYS`], and every `conf/*.toml` is in that table;
 //! * every allowlisted key is fetched by name somewhere in `src/` (an entry
 //!   nothing reads is the same lie in the allowlist), and every ratchet entry
 //!   still exists in the file (a stale entry fails rather than rots);
@@ -39,39 +39,98 @@ const MODEL_KEYS_READ: &[&str] = &[
     "models.*.max_tokens",
 ];
 
-/// Keys of `conf/config.toml` that a reader consumes: `[best_models]`
-/// (`config.rs`), `[timeouts]` (`signals.rs`), `[max_tokens]` (`budgets.rs`).
-const CONFIG_KEYS_READ: &[&str] = &[
-    "best_models",
-    "best_models.*",
-    "timeouts",
-    "timeouts.*",
-    "max_tokens",
-    "max_tokens.*",
-];
-
-/// Top-level keys of `conf/config.toml` that NO Rust code reads today, each
-/// left in place because it records an owner decision that deleting would
-/// silently drop, and wiring would change production behaviour. A RATCHET:
-/// an entry is deleted when its key is wired or removed, and the test fails
-/// on an entry whose key has gone.
-const CONFIG_KEYS_UNREAD: &[(&str, &str)] = &[
+/// Every `conf/*.toml` and the keys some reader consumes in it. A conf file
+/// not listed here fails the scan (a new file arrives checked or not at all).
+/// `*` is any one slot under `[best_models]`, `[timeouts]` or `[max_tokens]`.
+///
+/// 2026-10-10 found the class outside the two files M18 scanned: `llm_url` in
+/// three files, `twitter.toml`'s `state_file`/`output_dir`/`chrome_cookies_db`/
+/// `max_scrolls`, all of `rename.toml`, a `[rename.relevance_check]` prompt for
+/// a check never ported -- and `weekend.toml`'s coordinates, read by nothing
+/// while the forecast URL hard-coded them (now wired, `weekend/place.rs`).
+const CONF_FILE_KEYS: &[(&str, &[&str])] = &[
     (
-        "llm_url",
-        "the server URL lives in the --config file (osaurus_url); this copy is stale prose",
+        "config.toml",
+        &[
+            "best_models",
+            "best_models.*",
+            "timeouts",
+            "timeouts.*",
+            "max_tokens",
+            "max_tokens.*",
+        ],
     ),
     (
-        "default_model",
-        "records the think winner; production takes think_model from the --config file",
+        "twitter.toml",
+        &[
+            "endpoints",
+            "endpoints.timeline",
+            "endpoints.following",
+            "fallback",
+            "fallback.models",
+            "fallback.preferred",
+        ],
     ),
     (
-        "filename_models",
-        "records the owner's 2026-08-18 fallback-order trade for rn; rn has no fallback chain",
+        "weekend.toml",
+        &[
+            "exclude_places",
+            "location",
+            "location.city",
+            "location.region",
+            "location.timezone",
+            "location.province",
+            "location.latitude",
+            "location.longitude",
+            "region",
+            "region.in_region",
+            "region.foreign",
+            "children",
+            "search",
+            "search.demote_after_runs",
+            "search.demote_wall_ratio",
+            "llm",
+            "llm.phase_retries",
+        ],
     ),
     (
-        "model_fallback_chain",
-        "Python's substitution order; Rust uses default_fallback_chain() (different order)",
+        "prompts.toml",
+        &[
+            "twitter",
+            "twitter.summarize",
+            "twitter.summarize.instructions",
+            "weekend",
+            "weekend.weather_condense",
+            "weekend.weather_condense.instructions",
+            "weekend.carry_fields",
+            "weekend.carry_fields.instructions",
+            "weekend.activity_rule",
+            "weekend.activity_rule.instructions",
+            "weekend.extract_events",
+            "weekend.extract_events.instructions",
+            "weekend.draft_transient",
+            "weekend.draft_transient.instructions",
+            "weekend.refine",
+            "weekend.refine.instructions",
+            "weekend.weather_rule",
+            "weekend.weather_rule.instructions",
+            "weekend.family_rule",
+            "weekend.family_rule.instructions",
+            "weekend.structure_transient_system",
+            "weekend.structure_transient_system.instructions",
+            "weekend.structure_user",
+            "weekend.structure_user.instructions",
+            "rename",
+            "rename.filename",
+            "rename.filename.instructions",
+            "rename.task_restatement",
+            "rename.task_restatement.instructions",
+            "rename.image_to_filename",
+            "rename.image_to_filename.instructions",
+        ],
     ),
+    ("eval_inputs.toml", &["test_inputs", "test_inputs.filename"]),
+    ("eval_vision.toml", &["size", "fixture"]),
 ];
 
 fn conf_dir() -> PathBuf {
@@ -82,7 +141,7 @@ fn conf_dir() -> PathBuf {
 }
 
 /// Every key path in `v`, dotted from the root, with a model id under
-/// `models` (or a slot under a `CONFIG_KEYS_READ` table) written as `*`.
+/// `models` (or a slot under a `config.toml` slot table) written as `*`.
 fn key_paths(v: &toml::Value, prefix: &[String], out: &mut Vec<String>) {
     let Some(table) = v.as_table() else { return };
     for (k, child) in table {
@@ -138,9 +197,15 @@ fn all_source() -> String {
     text
 }
 
-/// Whether `src` fetches `key` by name: `get("key")` or `["key"]`.
+/// Whether `src` names `key` the way a reader does: as a string literal
+/// (`get("key")`, `["city", "region"]`, `rename = "fixture"`), as the last
+/// segment of a dotted one (`"weekend.family_rule"`), or as a serde field
+/// (`pub size:`).
 fn fetched(src: &str, key: &str) -> bool {
-    src.contains(&format!("get(\"{key}\")")) || src.contains(&format!("[\"{key}\"]"))
+    src.contains(&format!("\"{key}\""))
+        || src.contains(&format!(".{key}\""))
+        || src.contains(&format!("\"{key} = "))
+        || src.contains(&format!("pub {key}:"))
 }
 
 #[test]
@@ -167,24 +232,38 @@ fn every_family_config_key_has_a_reader() {
 }
 
 #[test]
-fn every_config_toml_key_has_a_reader_or_a_ratchet_entry() {
-    let keys = file_keys(&conf_dir().join("config.toml"));
-    assert!(keys.iter().any(|k| k == "best_models"), "control: {keys:?}");
-    let inert: Vec<&String> = keys
-        .iter()
-        .filter(|k| !CONFIG_KEYS_READ.contains(&k.as_str()))
-        .filter(|k| !CONFIG_KEYS_UNREAD.iter().any(|(u, _)| u == k))
-        .collect();
-    assert!(inert.is_empty(), "keys nothing reads: {inert:#?}");
-    let stale: Vec<&str> = CONFIG_KEYS_UNREAD
-        .iter()
-        .map(|(k, _)| *k)
-        .filter(|k| !keys.iter().any(|have| have == k))
-        .collect();
+fn every_conf_file_key_has_a_reader_and_every_conf_file_is_scanned() {
+    let mut inert = Vec::new();
+    let mut unscanned = Vec::new();
+    for entry in fs::read_dir(conf_dir())
+        .expect("conf is readable")
+        .flatten()
+    {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if entry.path().extension().is_none_or(|e| e != "toml") {
+            continue;
+        }
+        let Some((_, read)) = CONF_FILE_KEYS.iter().find(|(f, _)| *f == name) else {
+            unscanned.push(name);
+            continue;
+        };
+        for key in file_keys(&entry.path()) {
+            if !read.contains(&key.as_str()) {
+                inert.push(format!("{name}: {key}"));
+            }
+        }
+    }
     assert!(
-        stale.is_empty(),
-        "ratchet entries whose key is gone: {stale:?}"
+        unscanned.is_empty(),
+        "conf files no allowlist covers: {unscanned:?}"
     );
+    assert!(inert.is_empty(), "keys nothing reads: {inert:#?}");
+    let gone: Vec<&str> = CONF_FILE_KEYS
+        .iter()
+        .map(|(f, _)| *f)
+        .filter(|f| !conf_dir().join(f).is_file())
+        .collect();
+    assert!(gone.is_empty(), "allowlisted files that are gone: {gone:?}");
 }
 
 #[test]
@@ -192,23 +271,13 @@ fn every_allowlisted_key_is_fetched_and_no_deleted_one_is() {
     let src = all_source();
     let named = MODEL_KEYS_READ
         .iter()
-        .chain(CONFIG_KEYS_READ)
+        .chain(CONF_FILE_KEYS.iter().flat_map(|(_, keys)| keys.iter()))
         .filter_map(|k| k.rsplit('.').next())
         .filter(|leaf| *leaf != "*");
     let unread: Vec<&str> = named.filter(|leaf| !fetched(&src, leaf)).collect();
     assert!(
         unread.is_empty(),
         "allowlisted but fetched nowhere: {unread:?}"
-    );
-
-    let ratchet_read: Vec<&str> = CONFIG_KEYS_UNREAD
-        .iter()
-        .map(|(k, _)| *k)
-        .filter(|k| fetched(&src, k))
-        .collect();
-    assert!(
-        ratchet_read.is_empty(),
-        "now read -- move from CONFIG_KEYS_UNREAD to CONFIG_KEYS_READ: {ratchet_read:?}"
     );
 
     let deleted = [
@@ -219,6 +288,12 @@ fn every_allowlisted_key_is_fetched_and_no_deleted_one_is() {
         "quirks",
         "eval_inputs",
         "internal_name",
+        "llm_url",
+        "default_model",
+        "filename_models",
+        "model_fallback_chain",
+        "relevance_check",
+        "chrome_cookies_db",
     ];
     let read_again: Vec<&str> = deleted.into_iter().filter(|k| fetched(&src, k)).collect();
     assert!(

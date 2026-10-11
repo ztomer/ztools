@@ -89,6 +89,29 @@ This file starts at v2.2.0 — earlier history is in git.
   built with an empty label. Each now states where it happens (a required
   field), so a trampoline park reads indoor and a conservation area outdoor.
 
+### Removed — config nothing read
+- **Every `conf/*.toml` key now has a reader, and the gate covers every file.** M18's
+  allowlist scanned two files; the rest of `conf/` held the same class. Deleted:
+  `llm_url`, `default_model`, `filename_models` and `model_fallback_chain` from
+  `config.toml` (the filename order recorded a 2026-08-18 trade for a fallback chain
+  `rn` does not have); `state_file`, `output_dir`, `llm_url`, `chrome_cookies_db` and
+  `max_scrolls` from `twitter.toml`; all of `rename.toml`; and `prompts.toml`'s
+  `[rename.relevance_check]`, a prompt for a check that was never ported.
+  `eval/conf_keys_tests.rs` now lists every conf file's read keys and fails on a conf
+  file it does not list (calibrated: a restored `llm_url`, a stray file, and the old
+  `rename.toml` each go red). `file_summary` lists `conf/eval_vision.toml` where it
+  listed `rename.toml`, so its fingerprint moves.
+- **One config file per model family.** `gemma_versions.toml` replaced `gemma.toml`
+  wholesale, so `gemma.toml`'s entries (gemma-4-12b, gemma-4-e4b) were never read. The
+  two are merged into `gemma.toml` and the `_versions` lookup is gone.
+
+### Fixed — weekend forecast place
+- **The forecast is asked for the configured place.** `conf/weekend.toml [location]`
+  carried latitude, longitude and timezone that nothing read; the forecast URL
+  hard-coded a different longitude (-79.4982 against the config's -79.5083) and
+  `America/New_York` against the config's `America/Toronto`. `weekend/place.rs` reads them; a location missing one is a stated
+  failure and an honest "no forecast", never another city's weather.
+
 ### Fixed — model eval
 - **The json slot was ranked on a prompt the planner does not send.** The
   weekend rows sent a private bare-array schema whose system prompt ORDERED

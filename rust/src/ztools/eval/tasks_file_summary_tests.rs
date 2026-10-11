@@ -146,12 +146,12 @@ fn a_missing_listed_file_is_an_error_not_a_shorter_prompt() {
     assert!(err.contains(FILE_SUMMARY_CONTENTS_SLOT), "{err}");
 
     let fixture = fixture_checkout();
-    std::fs::remove_file(fixture.path().join("conf/rename.toml")).expect("a fixture row");
+    std::fs::remove_file(fixture.path().join("conf/twitter.toml")).expect("a fixture row");
     let err = render_from(fixture.path(), FILE_SUMMARY_PROMPT)
         .expect_err("a row the checkout does not have must not render")
         .to_string();
     assert!(
-        err.contains("listed file conf/rename.toml"),
+        err.contains("listed file conf/twitter.toml"),
         "the error must name the row: {err}"
     );
     assert!(

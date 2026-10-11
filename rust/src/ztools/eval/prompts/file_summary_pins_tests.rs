@@ -57,7 +57,7 @@ const LISTED: &[&str] = &[
     "conf/config.toml",
     "conf/weekend.toml",
     "conf/twitter.toml",
-    "conf/rename.toml",
+    "conf/eval_vision.toml",
     "conf/models/foundation.toml",
     "conf/models/gemma.toml",
     "conf/models/qwen.toml",

@@ -141,10 +141,12 @@ fn the_forecast_request_carries_the_configured_host_and_the_plan_reads_its_answe
         // The endpoint contract, which is NOT overridable: an override
         // substitutes the host, not the API.
         "get /v1/forecast?",
+        // The place is `conf/weekend.toml [location]`'s, not a copy in code:
+        // the copy said -79.4982 and America/New_York (2026-10-10).
         "latitude=43.8361",
-        "longitude=-79.4982",
+        "longitude=-79.5083",
         "daily=temperature_2m_max,precipitation_sum",
-        "timezone=america/new_york",
+        "timezone=america/toronto",
     ] {
         assert!(
             request.contains(fragment),

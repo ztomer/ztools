@@ -307,21 +307,6 @@ pub fn fetch_duckduckgo_events(
     (events, corpus, health)
 }
 
-/// The forecast URL for the weekend window, against `endpoint`.
-///
-/// `endpoint` is an ORIGIN — scheme, host, and any path prefix — exactly as
-/// [`crate::config::ZtoolsConfig::weather_url`] holds it, so a mirror, a proxy or
-/// a self-hosted instance substitutes the host and still gets Open-Meteo's
-/// `/v1/forecast` contract. The trailing slash is TRIMMED rather than
-/// concatenated: an operator who writes `https://host/` meant one slash, and
-/// `//v1/forecast` is a 404 that reads as a dead forecast.
-fn open_meteo_url(endpoint: &str, friday_date: &str, sunday_date: &str) -> String {
-    format!(
-        "{}/v1/forecast?latitude=43.8361&longitude=-79.4982&daily=temperature_2m_max,precipitation_sum&timezone=America/New_York&start_date={friday_date}&end_date={sunday_date}",
-        endpoint.trim_end_matches('/')
-    )
-}
-
 /// Fallback forecast when the fetch fails.
 fn fallback_forecast() -> String {
     "Daily Forecast: Friday: 24.5°C Clear, Saturday: 26.0°C Clear, Sunday: 23.0°C Clear".to_string()
@@ -372,11 +357,18 @@ pub fn fetch_weather(
     sunday_date: &str,
     config: &crate::config::ZtoolsConfig,
 ) -> String {
-    fetch_weather_from(&open_meteo_url(
-        &config.weather_url,
-        friday_date,
-        sunday_date,
-    ))
+    match super::place::load_place(&config.weekend_region_paths) {
+        Ok(place) => fetch_weather_from(&super::place::open_meteo_url(
+            &config.weather_url,
+            &place,
+            friday_date,
+            sunday_date,
+        )),
+        Err(why) => {
+            eprintln!("\u{26a0} no forecast: {why}");
+            fallback_forecast()
+        }
+    }
 }
 
 /// [`fetch_weather`] against an explicit endpoint.
@@ -417,79 +409,6 @@ pub fn fetch_weather_from(url: &str) -> String {
         Err(e) => {
             eprintln!("\u{26a0} forecast fetch failed for {url}: {e:?}");
             fallback_forecast()
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use crate::test_env::TestEnv;
-    use serial_test::serial;
-
-    /// The whole content of the URL builder is its query, so it is pinned
-    /// whole: the window must reach the wire in the right slots and the right
-    /// ORDER (an inverted range is a window the endpoint will not honour, and
-    /// nothing else in the suite sees these two arguments).
-    ///
-    /// The origin is read off the DEFAULT CONFIG rather than written here, so
-    /// this test also covers the join -- the value the default hands over is
-    /// the one the builder is handed -- and cannot drift from
-    /// `config::tests::the_default_weather_endpoint_is_the_host_that_was_hardcoded`,
-    /// which pins those same bytes.
-    ///
-    /// Reading the default config is what makes this a hazard test, so it takes
-    /// the sandbox with it: `test_env::audit` is right that a config's `~/…`
-    /// defaults are resolved through a process-global `dirs::home_dir()`, and a
-    /// test that reads one without the lock can observe another test's home.
-    #[test]
-    #[serial]
-    fn the_weekend_window_reaches_the_forecast_endpoint_in_order() {
-        let env = TestEnv::new();
-        assert_eq!(
-            open_meteo_url(
-                crate::config::ZtoolsConfig::default().weather_url.as_str(),
-                "2026-08-07",
-                "2026-08-09"
-            ),
-            concat!(
-                "https://api.open-meteo.com/v1/forecast",
-                "?latitude=43.8361&longitude=-79.4982",
-                "&daily=temperature_2m_max,precipitation_sum",
-                "&timezone=America/New_York",
-                "&start_date=2026-08-07&end_date=2026-08-09",
-            )
-        );
-        drop(env);
-    }
-
-    /// The ORIGIN substitutes; the path and the window do not. This is the arm
-    /// the hardcoded literal could not have: a mirror or a self-hosted instance
-    /// has to land on the same contract, and a trailing slash an operator typed
-    /// must not become `//v1/forecast` — which is a 404, and a 404 reads as a
-    /// dead forecast behind a fallback that looks like weather.
-    ///
-    /// The expectation is a LITERAL rather than built from the endpoint on
-    /// purpose: an expectation assembled from the same value the function trims
-    /// agrees with the function whether or not the trim happens, which is a
-    /// test that cannot fail (calibrated — removing `trim_end_matches` left it
-    /// green).
-    #[test]
-    fn the_configured_origin_replaces_the_host_and_survives_a_trailing_slash() {
-        let expected = concat!(
-            "http://127.0.0.1:9/v1/forecast",
-            "?latitude=43.8361&longitude=-79.4982",
-            "&daily=temperature_2m_max,precipitation_sum",
-            "&timezone=America/New_York",
-            "&start_date=2026-08-07&end_date=2026-08-09",
-        );
-        for endpoint in ["http://127.0.0.1:9", "http://127.0.0.1:9/"] {
-            assert_eq!(
-                open_meteo_url(endpoint, "2026-08-07", "2026-08-09"),
-                expected,
-                "an endpoint of {endpoint:?} must not change the path or the window"
-            );
         }
     }
 }
