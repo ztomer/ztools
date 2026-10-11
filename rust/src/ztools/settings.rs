@@ -6,11 +6,16 @@
 //! `[settings]` command), so a toggle is declared here once and never
 //! re-described by a UI that could drift from it.
 //!
-//! RETENTION. The stores keep a rolling seven days: after a run saves its
-//! file, every `*.md` in that store last written more than [`KEEP_DAYS`] days
-//! ago is deleted -- except the newest, so a store never goes empty under the
-//! dashboard because the tool has not run for a week. Each store has its own
-//! toggle, on by default.
+//! RETENTION. Each store keeps the last N days, N chosen per store from
+//! [`KEEP_DAYS_OPTIONS`] (default [`DEFAULT_KEEP_DAYS`]): after a run saves its
+//! file, every `*.md` in that store last written more than N days ago is
+//! deleted -- except the newest, so a store never goes empty under the
+//! dashboard. 0 keeps only the newest file.
+//!
+//! The settings were on/off toggles (`*.rolling_7_days`) until 2026-10-10. A
+//! stored `true` still reads as 7 days, which is what it meant; a stored
+//! `false` meant "keep everything", which no day count says, so it is refused
+//! by name and the store is left alone until a count is chosen.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -18,35 +23,37 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result, bail};
 
-/// How many days of output a store keeps when its toggle is on.
-pub const KEEP_DAYS: u64 = 7;
+/// The day counts a store can keep. 0 keeps only the newest file.
+pub const KEEP_DAYS_OPTIONS: &[u64] = &[0, 1, 3, 7, 14, 30];
 
-/// One toggle the operator can flip.
+/// What a store keeps until the operator chooses.
+pub const DEFAULT_KEEP_DAYS: u64 = 7;
+
+/// One setting the operator can choose.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Setting {
     pub key: &'static str,
+    /// The sentence the Settings window shows; `{}` is where the choice sits.
     pub title: &'static str,
-    pub help: &'static str,
-    pub default: bool,
+    /// The pre-2026-10-10 on/off key this setting replaced.
+    pub legacy: &'static str,
 }
 
-pub const TWITTER_RETENTION: &str = "twitter.rolling_7_days";
-pub const WEEKEND_RETENTION: &str = "weekend.rolling_7_days";
+pub const TWITTER_RETENTION: &str = "twitter.keep_days";
+pub const WEEKEND_RETENTION: &str = "weekend.keep_days";
 
 /// Every setting there is. A key not listed here is refused, so a typo can
 /// never be stored and silently ignored.
 pub const SETTINGS: &[Setting] = &[
     Setting {
         key: TWITTER_RETENTION,
-        title: "Keep 7 days of Twitter summaries",
-        help: "Delete summaries older than 7 days after each run (the newest is always kept)",
-        default: true,
+        title: "Keep Twitter summaries for {} days",
+        legacy: "twitter.rolling_7_days",
     },
     Setting {
         key: WEEKEND_RETENTION,
-        title: "Keep 7 days of weekend plans",
-        help: "Delete plans older than 7 days after each run (the newest is always kept)",
-        default: true,
+        title: "Keep weekend plans for {} days",
+        legacy: "weekend.rolling_7_days",
     },
 ];
 
@@ -65,7 +72,7 @@ fn setting(key: &str) -> Result<&'static Setting> {
     })
 }
 
-fn stored(path: &Path) -> Result<BTreeMap<String, bool>> {
+fn stored(path: &Path) -> Result<BTreeMap<String, toml::Value>> {
     match std::fs::read_to_string(path) {
         Ok(text) => {
             toml::from_str(&text).with_context(|| format!("{} is not valid", path.display()))
@@ -75,25 +82,47 @@ fn stored(path: &Path) -> Result<BTreeMap<String, bool>> {
     }
 }
 
-/// The value of `key` in the file at `path`, or its default.
+/// The day count `key` holds in the file at `path`, or its default.
 ///
 /// # Errors
 ///
-/// An unknown key, or a file that exists but cannot be read or parsed.
-pub fn get_at(path: &Path, key: &str) -> Result<bool> {
+/// An unknown key; a file that exists but cannot be read or parsed; a stored
+/// count that is not one of [`KEEP_DAYS_OPTIONS`]; or a legacy toggle stored
+/// off, which meant "keep everything" and has no day count.
+pub fn get_at(path: &Path, key: &str) -> Result<u64> {
     let s = setting(key)?;
-    Ok(stored(path)?.get(key).copied().unwrap_or(s.default))
+    let all = stored(path)?;
+    if let Some(v) = all.get(key) {
+        let days = v
+            .as_integer()
+            .and_then(|n| u64::try_from(n).ok())
+            .filter(|n| KEEP_DAYS_OPTIONS.contains(n));
+        return days.with_context(|| format!("`{key}` = {v} is not one of {KEEP_DAYS_OPTIONS:?}"));
+    }
+    match all.get(s.legacy).and_then(toml::Value::as_bool) {
+        Some(true) | None => Ok(DEFAULT_KEEP_DAYS),
+        Some(false) => bail!(
+            "`{}` = false (keep everything) has no day count; choose one with \
+             `ztools settings set {key} N`",
+            s.legacy
+        ),
+    }
 }
 
-/// Store `value` for `key` in the file at `path`.
+/// Store `days` for `key` in the file at `path`, dropping its legacy toggle.
 ///
 /// # Errors
 ///
-/// An unknown key, or the file cannot be read, parsed or written.
-pub fn set_at(path: &Path, key: &str, value: bool) -> Result<()> {
-    setting(key)?;
+/// An unknown key, a count not in [`KEEP_DAYS_OPTIONS`], or the file cannot be
+/// read, parsed or written.
+pub fn set_at(path: &Path, key: &str, days: u64) -> Result<()> {
+    let s = setting(key)?;
+    if !KEEP_DAYS_OPTIONS.contains(&days) {
+        bail!("{days} is not one of {KEEP_DAYS_OPTIONS:?}");
+    }
     let mut all = stored(path)?;
-    all.insert(key.to_string(), value);
+    all.remove(s.legacy);
+    all.insert(key.to_string(), toml::Value::Integer(i64::try_from(days)?));
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -101,53 +130,52 @@ pub fn set_at(path: &Path, key: &str, value: bool) -> Result<()> {
         .with_context(|| format!("cannot write {}", path.display()))
 }
 
-/// Every setting with its current value, as the JSON `routines` renders.
+/// Every setting with its current value, as the JSON `routines` renders: a
+/// `choice` whose options are the day counts.
 ///
 /// # Errors
 ///
-/// The file exists but cannot be read or parsed.
+/// Any setting's value cannot be read (see [`get_at`]).
 pub fn list_json_at(path: &Path) -> Result<serde_json::Value> {
-    let all = stored(path)?;
-    Ok(serde_json::Value::Array(
-        SETTINGS
-            .iter()
-            .map(|s| {
-                serde_json::json!({
-                    "key": s.key, "title": s.title, "help": s.help, "kind": "bool",
-                    "default": s.default,
-                    "value": all.get(s.key).copied().unwrap_or(s.default),
-                })
-            })
-            .collect(),
-    ))
+    let options: Vec<String> = KEEP_DAYS_OPTIONS.iter().map(u64::to_string).collect();
+    SETTINGS
+        .iter()
+        .map(|s| {
+            Ok(serde_json::json!({
+                "key": s.key, "title": s.title, "kind": "choice",
+                "value": get_at(path, s.key)?.to_string(),
+                "default": DEFAULT_KEEP_DAYS.to_string(),
+                "options": options,
+            }))
+        })
+        .collect::<Result<Vec<_>>>()
+        .map(serde_json::Value::Array)
 }
 
-/// `ztools settings [--json] | get KEY | set KEY true|false`.
+/// `ztools settings [--json] | get KEY | set KEY DAYS`.
 ///
 /// # Errors
 ///
-/// A malformed command, an unknown key, or the settings file failing.
+/// A malformed command, an unknown key or count, or the settings file failing.
 pub fn cli(args: &[String], json: bool) -> Result<()> {
     let path = settings_path();
     match args {
         [] if json => println!("{}", list_json_at(&path)?),
         [] => {
             for s in SETTINGS {
-                let on = get_at(&path, s.key)?;
-                println!("{} {}  {}", if on { "✓" } else { "·" }, s.key, s.title);
+                let days = get_at(&path, s.key)?;
+                println!("· {}  {}", s.key, s.title.replace("{}", &days.to_string()));
             }
         }
         [verb, key] if verb == "get" => println!("{}", get_at(&path, key)?),
         [verb, key, value] if verb == "set" => {
-            let value = match value.as_str() {
-                "true" | "on" => true,
-                "false" | "off" => false,
-                other => bail!("`{other}` is not true or false"),
-            };
-            set_at(&path, key, value)?;
-            println!("✓ {key} = {value}");
+            let days: u64 = value
+                .parse()
+                .with_context(|| format!("`{value}` is not a day count"))?;
+            set_at(&path, key, days)?;
+            println!("✓ {key} = {days}");
         }
-        _ => bail!("usage: ztools settings [--json] | get KEY | set KEY true|false"),
+        _ => bail!("usage: ztools settings [--json] | get KEY | set KEY DAYS"),
     }
     Ok(())
 }
@@ -178,21 +206,22 @@ pub fn prune(dir: &Path, keep: Duration, now: SystemTime) -> Vec<PathBuf> {
         .collect()
 }
 
-/// After a run saved into `dir`: prune it when `key`'s toggle is on, and say
-/// what went. A settings file that cannot be read is said and skipped --
-/// retention must never fail the run whose output it tidies.
+/// After a run saved into `dir`: prune it to `key`'s day count, and say what
+/// went.
+///
+/// A setting that cannot be read is said and skipped -- retention must never
+/// fail the run whose output it tidies, nor delete on a guess.
 pub fn retain(dir: &Path, key: &str) {
     match get_at(&settings_path(), key) {
-        Ok(true) => {
-            let gone = prune(dir, Duration::from_hours(KEEP_DAYS * 24), SystemTime::now());
+        Ok(days) => {
+            let gone = prune(dir, Duration::from_hours(days * 24), SystemTime::now());
             if !gone.is_empty() {
                 println!(
-                    "→ removed {} file(s) older than {KEEP_DAYS} days ({key})",
+                    "→ removed {} file(s) older than {days} days ({key})",
                     gone.len()
                 );
             }
         }
-        Ok(false) => {}
         Err(e) => eprintln!("⚠ retention skipped: {e:#}"),
     }
 }

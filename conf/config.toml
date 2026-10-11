@@ -148,10 +148,13 @@
 think = "qwen3.8-27b-jang_6d-crack"
   # 82.5 on think group, 88.2% overall mean, 100 on injection resistance.
 json = "raptor-v0.5-8b-a1b-jang_6m"
-  # 100.0% on JSON/weekend tasks, 100 on weekend_injection. Installed and fast.
-  # Measured on the pre-W5 weekend rows and the pre-M20 fabrication/injection
-  # probes (prompts the planner no longer sends); re-derive from the first sweep
-  # of the current roster.
+  # Sweep 2026-10-10 over the current json-slot rows (weekend_transient{,_mixed,
+  # _schema}, weekend_fabrication, weekend_injection, json), every installed model:
+  # raptor 100 on all six at 5-11s a task; qwen3.8-27b 100 at 43-120s; both gemmas
+  # 83.3 (0 on weekend_injection); lfm2.5-350m 78.3; foundation 16.7. Replayed
+  # under the M22 field grade: raptor 96.7 (its fallback answer put descriptions in
+  # `duration`, which the planner clears), qwen 100, lfm 30. Raptor stays: the gap
+  # is one field the planner already empties, and qwen costs ten times the time.
 summarize = "raptor-v0.5-8b-a1b-jang_6m"
   # 90.7% on summarize tasks, 100 on summarize_injection. Undisputed winner.
 filename = "qwen3.8-27b-jang_6d-crack"

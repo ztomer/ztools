@@ -47,37 +47,72 @@ fn prune_never_empties_a_store() {
     assert!(newest.exists());
 }
 
-/// Both retention toggles exist, default on, and round-trip through the file;
-/// an unknown key is refused rather than stored.
+/// 0 days keeps exactly the newest file: "keep just the last one".
 #[test]
-fn settings_default_on_round_trip_and_refuse_unknown_keys() {
+fn zero_days_keeps_only_the_newest() {
+    let dir = tempfile::tempdir().unwrap();
+    let now = SystemTime::now();
+    let older = touch(dir.path(), "a.md", 1, now);
+    let newest = touch(dir.path(), "b.md", 0, now);
+    let gone = prune(dir.path(), Duration::from_hours(0), now);
+    assert_eq!(gone, vec![older]);
+    assert!(newest.exists());
+}
+
+/// Both day counts exist, default 7, round-trip through the file, and list as
+/// a choice of the fixed options; an unknown key or count is refused.
+#[test]
+fn day_counts_default_round_trip_and_refuse_what_is_not_offered() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("settings.toml");
     for key in [TWITTER_RETENTION, WEEKEND_RETENTION] {
-        assert!(get_at(&path, key).unwrap(), "{key} defaults on");
+        assert_eq!(get_at(&path, key).unwrap(), DEFAULT_KEEP_DAYS, "{key}");
     }
-    set_at(&path, WEEKEND_RETENTION, false).unwrap();
-    assert!(!get_at(&path, WEEKEND_RETENTION).unwrap());
-    assert!(get_at(&path, TWITTER_RETENTION).unwrap());
-    assert!(set_at(&path, "weekend.rolling_7_day", false).is_err());
+    set_at(&path, WEEKEND_RETENTION, 0).unwrap();
+    assert_eq!(get_at(&path, WEEKEND_RETENTION).unwrap(), 0);
+    assert_eq!(get_at(&path, TWITTER_RETENTION).unwrap(), 7);
+    assert!(set_at(&path, "weekend.keep_day", 7).is_err());
+    assert!(set_at(&path, WEEKEND_RETENTION, 5).is_err());
 
     let listed = list_json_at(&path).unwrap();
-    let values: Vec<(String, bool)> = listed
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|s| {
-            (
-                s["key"].as_str().unwrap().to_string(),
-                s["value"].as_bool().unwrap(),
-            )
-        })
-        .collect();
-    assert_eq!(
-        values,
-        vec![
-            (TWITTER_RETENTION.to_string(), true),
-            (WEEKEND_RETENTION.to_string(), false)
-        ]
+    let rows = listed.as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    for row in rows {
+        assert_eq!(row["kind"], "choice");
+        assert!(row["title"].as_str().unwrap().contains("{}"), "{row}");
+        assert_eq!(
+            row["options"],
+            serde_json::json!(["0", "1", "3", "7", "14", "30"])
+        );
+        assert!(row.get("help").is_none(), "no explanatory text: {row}");
+    }
+    assert_eq!(rows[0]["value"], "7");
+    assert_eq!(rows[1]["value"], "0");
+}
+
+/// The old toggles: `true` reads as the 7 days it meant; `false` meant "keep
+/// everything", which no count says, so it is refused by name. Setting the
+/// new key drops the old one.
+#[test]
+fn a_legacy_toggle_migrates_or_is_refused_by_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("settings.toml");
+    std::fs::write(
+        &path,
+        "\"weekend.rolling_7_days\" = true\n\"twitter.rolling_7_days\" = false\n",
+    )
+    .unwrap();
+    assert_eq!(get_at(&path, WEEKEND_RETENTION).unwrap(), 7);
+    let why = get_at(&path, TWITTER_RETENTION).unwrap_err().to_string();
+    assert!(
+        why.contains("keep everything") && why.contains("twitter.keep_days"),
+        "{why}"
+    );
+    set_at(&path, TWITTER_RETENTION, 30).unwrap();
+    assert_eq!(get_at(&path, TWITTER_RETENTION).unwrap(), 30);
+    assert!(
+        !std::fs::read_to_string(&path)
+            .unwrap()
+            .contains("twitter.rolling_7_days")
     );
 }

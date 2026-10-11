@@ -34,7 +34,7 @@ fn validator_name(check: &Check) -> &'static str {
 /// front of one, not a validator of its own (`tasks_weekend_tests.rs`).
 fn graded_name(g: &Graded) -> &'static str {
     match g {
-        Graded::PlannerEvents { inner } => graded_name(inner),
+        Graded::PlannerEvents { inner, .. } => graded_name(inner),
         Graded::DetailedJson { .. } => "validate_detailed_json",
         Graded::MixedSignal { .. } => "validate_mixed_signal",
         Graded::Filename { .. } => "validate_filename",
@@ -207,7 +207,7 @@ fn the_source_is_the_prompt_the_model_was_shown() {
         };
         // The weekend probes sit behind the planner's parse gate (M20).
         let g = match g {
-            Graded::PlannerEvents { inner } => inner.as_ref(),
+            Graded::PlannerEvents { inner, .. } => inner.as_ref(),
             other => other,
         };
         let source = match g {

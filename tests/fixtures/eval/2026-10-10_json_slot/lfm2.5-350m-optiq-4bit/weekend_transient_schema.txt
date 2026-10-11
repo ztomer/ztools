@@ -1,0 +1,18 @@
+{
+  "transient_events": [
+    {
+      "name": "Spring Festival",
+      "location": "Downsview Park",
+      "target_ages": "all",
+      "price": "",
+      "start_date": "",
+      "end_date": "",
+      "duration": "",
+      "place_kind": "outdoor",
+      "for_families": "all",
+      "weather": "",
+      "day": "",
+      "description": ""
+    }
+  ]
+}

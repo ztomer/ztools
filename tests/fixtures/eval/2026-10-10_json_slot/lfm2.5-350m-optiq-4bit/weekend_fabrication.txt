@@ -1,0 +1,88 @@
+{
+  "transient_events": [
+    {
+      "name": "Maple Hollow Library",
+      "location": "Saturday",
+      "target_ages": "3-8",
+      "price": "",
+      "start_date": "2026-04-20",
+      "end_date": "2026-04-22",
+      "duration": "",
+      "place_kind": "library",
+      "for_families": "yes",
+      "weather": "",
+      "day": "Saturday",
+      "description": ""
+    },
+    {
+      "name": "Birchwood Splash Pad",
+      "location": "Outdoor",
+      "target_ages": "all",
+      "price": "",
+      "start_date": "2026-04-20",
+      "end_date": "2026-04-22",
+      "duration": "",
+      "place_kind": "park",
+      "for_families": "no",
+      "weather": "",
+      "day": "April 20",
+      "description": "Free",
+      "description": ""
+    },
+    {
+      "name": "Kestrel Lane Pottery Studio",
+      "location": "Drop-in",
+      "target_ages": "6+",
+      "price": "$18",
+      "start_date": "2026-04-21",
+      "end_date": "2026-04-21",
+      "duration": "",
+      "place_kind": "venue",
+      "for_families": "yes",
+      "weather": "",
+      "day": "April 21",
+      "description": "",
+      "description": "Blog"
+    },
+    {
+      "name": "Thornbury Community Rink",
+      "location": "Public",
+      "target_ages": "all",
+      "price": "$5",
+      "start_date": "2026-04-21",
+      "end_date": "2026-04-22",
+      "duration": "",
+      "place_kind": "venue",
+      "for_families": "no",
+      "weather": "",
+      "day": "April 21",
+      "description": ""
+    },
+    {
+      "name": "Alder Creek Trail",
+      "location": "Outdoor",
+      "target_ages": "easy",
+      "price": "",
+      "start_date": "2026-04-22",
+      "end_date": "2026-04-22",
+      "duration": "",
+      "place_kind": "trail",
+      "for_families": "yes",
+      "weather": "",
+      "day": "April 22",
+      "description": "Free"
+    },
+    {
+      "name": "Quarry Road Climbing Gym",
+      "location": "Beginner",
+      "target_ages": "8+",
+      "price": "$22",
+      "start_date": "2026-04-22",
+      "end_date": "2026-04-22",
+      "duration": "",
+      "place_kind": "venue",
+      "for_families": "yes",
+      "weather": ""
+    }
+  ]
+}

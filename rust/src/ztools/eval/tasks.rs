@@ -96,6 +96,20 @@ fn src(g: impl Fn(String) -> Graded, source: &str) -> Graded {
 fn planner(check: Graded) -> Graded {
     Graded::PlannerEvents {
         inner: Box::new(check),
+        rows: Vec::new(),
+    }
+}
+
+/// [`planner`] over the structure rows: each input row should come back, so
+/// the ones that do not cost their share (M22).
+fn planner_rows(check: Graded) -> Graded {
+    Graded::PlannerEvents {
+        inner: Box::new(check),
+        rows: WEEKEND_STRUCTURE_ROWS
+            .lines()
+            .filter_map(|line| line.split(" | ").next())
+            .map(|name| name.trim().to_string())
+            .collect(),
     }
 }
 
@@ -142,7 +156,7 @@ fn weekend_tasks() -> Vec<EvalTask> {
             "weekend_transient",
             &system,
             &rows,
-            planner(Graded::DetailedJson {
+            planner_rows(Graded::DetailedJson {
                 source: rows.clone(),
             }),
         )
@@ -291,7 +305,7 @@ fn probe_tasks(filename_prompt: &str, images: Vec<String>) -> Vec<EvalTask> {
             "weekend_transient_schema",
             &system,
             &rows,
-            planner(Graded::StrictSchema {
+            planner_rows(Graded::StrictSchema {
                 kind: "json".to_string(),
             }),
         ),
@@ -444,3 +458,7 @@ mod tests;
 #[cfg(test)]
 #[path = "tasks_weekend_tests.rs"]
 mod weekend_parity_tests;
+
+#[cfg(test)]
+#[path = "tasks_replay_tests.rs"]
+mod replay_tests;

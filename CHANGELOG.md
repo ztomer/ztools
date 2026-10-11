@@ -112,7 +112,24 @@ This file starts at v2.2.0 — earlier history is in git.
   `America/New_York` against the config's `America/Toronto`. `weekend/place.rs` reads them; a location missing one is a stated
   failure and an honest "no forecast", never another city's weather.
 
+### Changed — retention is a number of days
+- **Keep Twitter summaries / weekend plans for N days**, N one of 0, 1, 3, 7, 14 or
+  30 (`ztools settings set twitter.keep_days 0`); 0 keeps only the newest file. The
+  on/off `*.rolling_7_days` toggles are gone: a stored `true` reads as the 7 days it
+  meant, and a stored `false` (keep everything) is refused by name -- retention skips
+  that store until a count is chosen, rather than deleting on a guess. `ztools
+  settings --json` declares each as a choice with its options and no help text, which
+  routines renders as a dropdown inside the sentence.
+
 ### Fixed — model eval
+- **The weekend graders passed a 350M model's garbage.** lfm2.5-350m scored 100 on
+  three json-slot rows with one row out of the ten it was handed, `"place_kind":
+  "outdoor"` and `"for_families": "all"`. A weekend answer's verdict is now scaled by
+  the share of it the planner keeps: each closed field (price, duration,
+  for_families, weather, place_kind) is judged by the planner's own function, and on
+  the structure rows every input row has to come back. Replayed on the saved sweep:
+  lfm 78.3 → 30, raptor 100 → 96.7, qwen3.8-27b 100. `[best_models] json` stays
+  raptor, measured over the current rows (it was set from retired ones).
 - **Every streamed JSON answer was scored unparsed.** The full-suite runner always
   streams, and the streamed path returned the model's raw text: never cleaned, never
   run through `extract_json`, and asked without the `response_format: json_object`

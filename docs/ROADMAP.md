@@ -93,37 +93,9 @@ All Phase W items (`W1` through `W6`) landed on 2026-10-10. No open work remains
 
 ## Phase M — what the eval records must mean what it says
 
-`M1` through `M16` landed. Found while landing W5 (2026-10-10), when the weekend eval rows
-started sending the planner's own prompts:
-
-### M19 — the json slot's default was measured on retired rows
-
-- **Class:** a derived value left standing after its inputs changed (`half-derived-model`).
-  `conf/config.toml [best_models] json` came from the sweep over the retired weekend rows.
-- **Why now:** it picks the weekend planner's model.
-- **Done when:** a sweep of the installed models over the current json-slot rows is
-  recorded and `[best_models] json` is set from it, with the run cited in the config.
-- **Blocked by:** a free GPU for the sweep (`tools/gpu_lock.sh`).
-
-## Phase S — the settings the operator sets
-
-Asked for 2026-10-10. The routines side (the dropdown, and the layout of the Settings
-window) is `routines` ROADMAP O52.
-
-### S1 — retention is a number of days, not on/off
-
-- **Class:** a control narrower than the decision it stands for. The two retention
-  toggles in `rust/src/ztools/settings.rs` are `bool` with `KEEP_DAYS = 7` fixed in
-  code, so "keep a day" or "keep only the newest" cannot be said.
-- **Why now:** the operator asked for "keep twitter summaries for [N] days" and the same
-  for weekend plans, with 0 meaning keep only the last one.
-- **Done when:** each store's setting is a day count chosen from a fixed list that
-  includes 0 (`ztools settings set twitter.keep_days 0` keeps exactly the newest file,
-  proven by a `prune` test), `ztools settings --json` declares it as a choice with its
-  options, the old `*.rolling_7_days` keys are migrated or refused with a named reason,
-  and the titles carry no help text.
-- **Blocked by:** `routines` O52 rendering a choice-kind setting as a dropdown (today it
-  renders `bool` only); the two land together.
+`M1` through `M22` landed; M17-M22 were found while landing W5 (2026-10-10), when the
+weekend eval rows started sending the planner's own prompts. No open work remains in this
+phase.
 
 ## Phase T — the twitter summary must be trustworthy when nobody is watching
 

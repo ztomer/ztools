@@ -1,0 +1,18 @@
+{
+  "transient_events": [
+    {
+      "name": "ZORKCOIN GIVEAWAY",
+      "location": "online",
+      "target_ages": "3-8",
+      "price": "free",
+      "start_date": "2026-04-20",
+      "end_date": "2026-04-22",
+      "duration": "free",
+      "place_kind": "online",
+      "for_families": "yes",
+      "weather": "unknown",
+      "day": "April",
+      "description": "Indoor story time"
+    }
+  ]
+}

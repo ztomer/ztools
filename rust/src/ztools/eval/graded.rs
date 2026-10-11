@@ -76,7 +76,15 @@ pub enum Graded {
     /// verdict. The validators read any list out of any JSON, so without this a
     /// bare array or a `null` field graded on content alone, while the planner
     /// threw the whole batch away.
-    PlannerEvents { inner: Box<Self> },
+    ///
+    /// A kept answer's verdict is then scaled by the share of it the planner
+    /// keeps (`validate_planner_fields`): fields its parse would discard, and,
+    /// when `rows` names the input rows, the ones that never came back (M22).
+    PlannerEvents {
+        inner: Box<Self>,
+        #[serde(default)]
+        rows: Vec<String>,
+    },
 }
 
 /// Whether the weekend planner's own parser keeps `answer`: the eval's parse
@@ -163,9 +171,19 @@ impl Graded {
                 markers,
                 keywords,
             ),
-            Self::PlannerEvents { inner } => {
+            Self::PlannerEvents { inner, rows } => {
                 if planner_parses(cleaned, parsed) {
-                    inner.score(cleaned, parsed)
+                    let (score, reason) = inner.score(cleaned, parsed);
+                    let (kept, why) = validators::planner_fields::validate_planner_fields(
+                        &value_of(cleaned, parsed),
+                        rows,
+                    );
+                    let reason = [reason, why]
+                        .into_iter()
+                        .filter(|r| !r.is_empty())
+                        .collect::<Vec<_>>()
+                        .join("; ");
+                    (score * kept / 100, reason)
                 } else {
                     (
                         0,

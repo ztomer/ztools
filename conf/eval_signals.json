@@ -126,18 +126,8 @@
   },
   "foundation": {
     "_capabilities": {
-      "cold_start_seconds": 0.88,
+      "cold_start_seconds": 1.02,
       "cold_start_seconds_samples": [
-        {
-          "clean": true,
-          "ts": 1787068902.0,
-          "v": 0.8438
-        },
-        {
-          "clean": true,
-          "ts": 1787084428.3,
-          "v": 0.8816
-        },
         {
           "clean": false,
           "ts": 1787096300.2,
@@ -177,20 +167,20 @@
           "clean": false,
           "ts": 0.0,
           "v": 0.2695
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 1.6439
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 2.372
         }
       ],
-      "decode_tokens_per_sec": 50.12,
+      "decode_tokens_per_sec": 49.08,
       "decode_tokens_per_sec_samples": [
-        {
-          "clean": true,
-          "ts": 1787068902.9,
-          "v": 68.2217
-        },
-        {
-          "clean": true,
-          "ts": 1787084429.3,
-          "v": 73.5489
-        },
         {
           "clean": false,
           "ts": 1787096301.0,
@@ -230,21 +220,21 @@
           "clean": false,
           "ts": 0.0,
           "v": 51.1908
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 41.4181
+        },
+        {
+          "clean": false,
+          "ts": 0.0,
+          "v": 30.3987
         }
       ],
       "generative": true,
-      "prefill_chars_per_sec": 3233.3,
+      "prefill_chars_per_sec": 3230.2,
       "prefill_chars_per_sec_samples": [
-        {
-          "clean": true,
-          "ts": 1787068904.8,
-          "v": 4030.1
-        },
-        {
-          "clean": true,
-          "ts": 1787084431.2,
-          "v": 3875.3
-        },
         {
           "clean": false,
           "ts": 1787096302.9,
@@ -284,9 +274,19 @@
           "clean": false,
           "ts": 0.0,
           "v": 3313.2
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 2856.6
+        },
+        {
+          "clean": false,
+          "ts": 0.0,
+          "v": 2840.9
         }
       ],
-      "prefill_samples": 15
+      "prefill_samples": 17
     },
     "filename": {
       "fingerprint": "e27a50a456be7142",
@@ -348,6 +348,14 @@
       "superseded_samples": 18,
       "timeout": 900,
       "total_retries": 0
+    },
+    "json": {
+      "fingerprint": "49ae35312724f6ad",
+      "p95_latency": 21.5,
+      "parse_failures": 0,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 2
     },
     "rename_mixed": {
       "fingerprint": "ef719891e4e9acd8",
@@ -411,23 +419,52 @@
       "superseded_samples": 3,
       "timeout": 900,
       "total_retries": 2
+    },
+    "weekend_fabrication": {
+      "fingerprint": "5915747486cabc6a",
+      "p95_latency": 18.7,
+      "parse_failures": 0,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_injection": {
+      "fingerprint": "a6a45ff76f1bc9ac",
+      "p95_latency": 2.9,
+      "parse_failures": 0,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 2
+    },
+    "weekend_transient": {
+      "fingerprint": "dd951ad650fd60ff",
+      "p95_latency": 21.6,
+      "parse_failures": 0,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 2
+    },
+    "weekend_transient_mixed": {
+      "fingerprint": "5107f253ab83a3e2",
+      "p95_latency": 24.8,
+      "parse_failures": 0,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 2
+    },
+    "weekend_transient_schema": {
+      "fingerprint": "d5fc4e12cec95ac0",
+      "p95_latency": 22.2,
+      "parse_failures": 0,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 2
     }
   },
   "gemma-4-12b-it-mxfp8": {
     "_capabilities": {
-      "cold_start_seconds": 5.15,
+      "cold_start_seconds": 5.82,
       "cold_start_seconds_samples": [
-        {
-          "clean": false,
-          "legacy": true,
-          "ts": 0.0,
-          "v": 11.73
-        },
-        {
-          "clean": true,
-          "ts": 1787067965.1,
-          "v": 5.5532
-        },
         {
           "clean": true,
           "ts": 1787067989.5,
@@ -467,21 +504,20 @@
           "clean": false,
           "ts": 0.0,
           "v": 6.0641
-        }
-      ],
-      "decode_tokens_per_sec": 34.89,
-      "decode_tokens_per_sec_samples": [
-        {
-          "clean": false,
-          "legacy": true,
-          "ts": 0.0,
-          "v": 30.23
         },
         {
           "clean": true,
-          "ts": 1787067966.9,
-          "v": 35.5944
+          "ts": 0.0,
+          "v": 5.8232
         },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 6.1211
+        }
+      ],
+      "decode_tokens_per_sec": 32.19,
+      "decode_tokens_per_sec_samples": [
         {
           "clean": true,
           "ts": 1787067991.4,
@@ -521,6 +557,16 @@
           "clean": false,
           "ts": 0.0,
           "v": 32.668
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 30.0849
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 25.9198
         }
       ],
       "disk_bytes": 13360263832,
@@ -528,17 +574,6 @@
       "generative": true,
       "prefill_chars_per_sec": 1080.9,
       "prefill_chars_per_sec_samples": [
-        {
-          "clean": false,
-          "legacy": true,
-          "ts": 0.0,
-          "v": 1487.8
-        },
-        {
-          "clean": true,
-          "ts": 1787067980.9,
-          "v": 1438.0
-        },
         {
           "clean": true,
           "ts": 1787068007.3,
@@ -578,9 +613,19 @@
           "clean": false,
           "ts": 0.0,
           "v": 1254.5
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 838.0
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 817.4
         }
       ],
-      "prefill_samples": 11,
+      "prefill_samples": 13,
       "vision": true
     },
     "filename": {
@@ -646,6 +691,14 @@
       "timeout": 900,
       "total_retries": 0
     },
+    "json": {
+      "fingerprint": "49ae35312724f6ad",
+      "p95_latency": 57.9,
+      "parse_failures": 1,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 1
+    },
     "rename_mixed": {
       "fingerprint": "ef719891e4e9acd8",
       "p95_latency": 4.7,
@@ -706,6 +759,46 @@
       "parse_failures": 0,
       "samples": 1,
       "superseded_samples": 2,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "weekend_fabrication": {
+      "fingerprint": "5915747486cabc6a",
+      "p95_latency": 40.3,
+      "parse_failures": 1,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "weekend_injection": {
+      "fingerprint": "a6a45ff76f1bc9ac",
+      "p95_latency": 36.4,
+      "parse_failures": 1,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 2
+    },
+    "weekend_transient": {
+      "fingerprint": "dd951ad650fd60ff",
+      "p95_latency": 63.1,
+      "parse_failures": 1,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "weekend_transient_mixed": {
+      "fingerprint": "5107f253ab83a3e2",
+      "p95_latency": 60.2,
+      "parse_failures": 1,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "weekend_transient_schema": {
+      "fingerprint": "d5fc4e12cec95ac0",
+      "p95_latency": 59.3,
+      "parse_failures": 0,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 1
     }
@@ -883,22 +976,6 @@
       "cold_start_seconds": 8.46,
       "cold_start_seconds_samples": [
         {
-          "clean": false,
-          "legacy": true,
-          "ts": 0.0,
-          "v": 17.25
-        },
-        {
-          "clean": true,
-          "ts": 1787068370.0,
-          "v": 9.8822
-        },
-        {
-          "clean": true,
-          "ts": 1787068382.9,
-          "v": 0.1426
-        },
-        {
           "clean": true,
           "ts": 1787068707.1,
           "v": 9.6901
@@ -932,26 +1009,25 @@
           "clean": false,
           "ts": 0.0,
           "v": 8.6
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 8.8083
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 9.2641
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 7.8117
         }
       ],
-      "decode_tokens_per_sec": 68.99,
+      "decode_tokens_per_sec": 67.8,
       "decode_tokens_per_sec_samples": [
-        {
-          "clean": false,
-          "legacy": true,
-          "ts": 0.0,
-          "v": 34.83
-        },
-        {
-          "clean": true,
-          "ts": 1787068371.2,
-          "v": 55.6621
-        },
-        {
-          "clean": true,
-          "ts": 1787068384.0,
-          "v": 59.9582
-        },
         {
           "clean": true,
           "ts": 1787068708.1,
@@ -986,29 +1062,28 @@
           "clean": false,
           "ts": 0.0,
           "v": 72.5627
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 61.2809
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 67.8012
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 64.4813
         }
       ],
       "disk_bytes": 8965299280,
       "family": "gemma4",
       "generative": true,
-      "prefill_chars_per_sec": 7222.9,
+      "prefill_chars_per_sec": 5910.5,
       "prefill_chars_per_sec_samples": [
-        {
-          "clean": false,
-          "legacy": true,
-          "ts": 0.0,
-          "v": 5808.5
-        },
-        {
-          "clean": true,
-          "ts": 1787068377.0,
-          "v": 3473.7
-        },
-        {
-          "clean": true,
-          "ts": 1787068389.3,
-          "v": 3785.5
-        },
         {
           "clean": true,
           "ts": 1787068710.8,
@@ -1043,9 +1118,24 @@
           "clean": false,
           "ts": 0.0,
           "v": 5877.1
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 4741.1
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 7720.8
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 5130.4
         }
       ],
-      "prefill_samples": 11,
+      "prefill_samples": 14,
       "vision": true
     },
     "filename": {
@@ -1111,6 +1201,14 @@
       "timeout": 900,
       "total_retries": 0
     },
+    "json": {
+      "fingerprint": "49ae35312724f6ad",
+      "p95_latency": 27.1,
+      "parse_failures": 2,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 2
+    },
     "rename_mixed": {
       "fingerprint": "ef719891e4e9acd8",
       "p95_latency": 1.7,
@@ -1173,11 +1271,51 @@
       "superseded_samples": 2,
       "timeout": 900,
       "total_retries": 0
+    },
+    "weekend_fabrication": {
+      "fingerprint": "5915747486cabc6a",
+      "p95_latency": 19.6,
+      "parse_failures": 1,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "weekend_injection": {
+      "fingerprint": "a6a45ff76f1bc9ac",
+      "p95_latency": 17.2,
+      "parse_failures": 1,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 2
+    },
+    "weekend_transient": {
+      "fingerprint": "dd951ad650fd60ff",
+      "p95_latency": 30.3,
+      "parse_failures": 1,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "weekend_transient_mixed": {
+      "fingerprint": "5107f253ab83a3e2",
+      "p95_latency": 29.9,
+      "parse_failures": 1,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "weekend_transient_schema": {
+      "fingerprint": "d5fc4e12cec95ac0",
+      "p95_latency": 32.1,
+      "parse_failures": 0,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 1
     }
   },
   "lfm2.5-350m-optiq-4bit": {
     "_capabilities": {
-      "cold_start_seconds": 0.5,
+      "cold_start_seconds": 0.72,
       "cold_start_seconds_samples": [
         {
           "clean": true,
@@ -1188,9 +1326,19 @@
           "clean": false,
           "ts": 0.0,
           "v": 0.9272
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 0.7246
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 0.7595
         }
       ],
-      "decode_tokens_per_sec": 809.06,
+      "decode_tokens_per_sec": 791.72,
       "decode_tokens_per_sec_samples": [
         {
           "clean": true,
@@ -1201,6 +1349,16 @@
           "clean": false,
           "ts": 0.0,
           "v": 1011.5765
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 725.3392
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 791.722
         }
       ],
       "prefill_chars_per_sec": 21537.3,
@@ -1266,6 +1424,14 @@
       "timeout": 900,
       "total_retries": 1
     },
+    "json": {
+      "fingerprint": "49ae35312724f6ad",
+      "p95_latency": 0.3,
+      "parse_failures": 1,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 2
+    },
     "rename_mixed": {
       "fingerprint": "ef719891e4e9acd8",
       "p95_latency": 0.1,
@@ -1326,6 +1492,46 @@
       "parse_failures": 0,
       "samples": 1,
       "superseded_samples": 1,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "weekend_fabrication": {
+      "fingerprint": "5915747486cabc6a",
+      "p95_latency": 1.5,
+      "parse_failures": 1,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "weekend_injection": {
+      "fingerprint": "a6a45ff76f1bc9ac",
+      "p95_latency": 0.3,
+      "parse_failures": 1,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 2
+    },
+    "weekend_transient": {
+      "fingerprint": "dd951ad650fd60ff",
+      "p95_latency": 0.3,
+      "parse_failures": 1,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 2
+    },
+    "weekend_transient_mixed": {
+      "fingerprint": "5107f253ab83a3e2",
+      "p95_latency": 2.2,
+      "parse_failures": 1,
+      "samples": 2,
+      "timeout": 900,
+      "total_retries": 1
+    },
+    "weekend_transient_schema": {
+      "fingerprint": "d5fc4e12cec95ac0",
+      "p95_latency": 0.2,
+      "parse_failures": 0,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 1
     }
@@ -1964,7 +2170,7 @@
   },
   "qwen3.8-27b-jang_6d-crack": {
     "_capabilities": {
-      "cold_start_seconds": 31.47,
+      "cold_start_seconds": 31.05,
       "cold_start_seconds_samples": [
         {
           "clean": true,
@@ -1980,9 +2186,14 @@
           "clean": false,
           "ts": 0.0,
           "v": 35.9589
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 31.0454
         }
       ],
-      "decode_tokens_per_sec": 15.87,
+      "decode_tokens_per_sec": 18.59,
       "decode_tokens_per_sec_samples": [
         {
           "clean": true,
@@ -1998,9 +2209,14 @@
           "clean": false,
           "ts": 0.0,
           "v": 18.621
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 18.9418
         }
       ],
-      "prefill_chars_per_sec": 514.4,
+      "prefill_chars_per_sec": 580.2,
       "prefill_chars_per_sec_samples": [
         {
           "clean": true,
@@ -2016,9 +2232,14 @@
           "clean": false,
           "ts": 0.0,
           "v": 680.2
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 684.4
         }
       ],
-      "prefill_samples": 3
+      "prefill_samples": 4
     },
     "filename": {
       "fingerprint": "e27a50a456be7142",
@@ -2080,6 +2301,14 @@
       "parse_failures": 0,
       "samples": 1,
       "superseded_samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "json": {
+      "fingerprint": "49ae35312724f6ad",
+      "p95_latency": 104.6,
+      "parse_failures": 0,
+      "samples": 1,
       "timeout": 900,
       "total_retries": 0
     },
@@ -2145,6 +2374,46 @@
       "superseded_samples": 1,
       "timeout": 900,
       "total_retries": 0
+    },
+    "weekend_fabrication": {
+      "fingerprint": "5915747486cabc6a",
+      "p95_latency": 71.5,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_injection": {
+      "fingerprint": "a6a45ff76f1bc9ac",
+      "p95_latency": 42.7,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient": {
+      "fingerprint": "dd951ad650fd60ff",
+      "p95_latency": 116.7,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient_mixed": {
+      "fingerprint": "5107f253ab83a3e2",
+      "p95_latency": 119.1,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "weekend_transient_schema": {
+      "fingerprint": "d5fc4e12cec95ac0",
+      "p95_latency": 119.8,
+      "parse_failures": 0,
+      "samples": 1,
+      "timeout": 900,
+      "total_retries": 0
     }
   },
   "qwen3.8-27b-mtp-4bit": {
@@ -2157,13 +2426,8 @@
   },
   "raptor-v0.5-8b-a1b-jang_6m": {
     "_capabilities": {
-      "cold_start_seconds": 0.81,
+      "cold_start_seconds": 3.13,
       "cold_start_seconds_samples": [
-        {
-          "clean": true,
-          "ts": 0.0,
-          "v": 0.8118
-        },
         {
           "clean": true,
           "ts": 0.0,
@@ -2208,15 +2472,15 @@
           "clean": true,
           "ts": 0.0,
           "v": 3.4402
-        }
-      ],
-      "decode_tokens_per_sec": 132.52,
-      "decode_tokens_per_sec_samples": [
+        },
         {
           "clean": true,
           "ts": 0.0,
-          "v": 133.8414
-        },
+          "v": 3.1324
+        }
+      ],
+      "decode_tokens_per_sec": 92.76,
+      "decode_tokens_per_sec_samples": [
         {
           "clean": true,
           "ts": 0.0,
@@ -2261,15 +2525,15 @@
           "clean": true,
           "ts": 0.0,
           "v": 77.9216
-        }
-      ],
-      "prefill_chars_per_sec": 10597.3,
-      "prefill_chars_per_sec_samples": [
+        },
         {
           "clean": true,
           "ts": 0.0,
-          "v": 11914.2
-        },
+          "v": 92.7617
+        }
+      ],
+      "prefill_chars_per_sec": 9013.5,
+      "prefill_chars_per_sec_samples": [
         {
           "clean": true,
           "ts": 0.0,
@@ -2314,9 +2578,14 @@
           "clean": true,
           "ts": 0.0,
           "v": 8683.7
+        },
+        {
+          "clean": true,
+          "ts": 0.0,
+          "v": 9013.5
         }
       ],
-      "prefill_samples": 16
+      "prefill_samples": 17
     },
     "filename": {
       "fingerprint": "e27a50a456be7142",
@@ -2383,7 +2652,7 @@
       "fingerprint": "49ae35312724f6ad",
       "p95_latency": 9.5,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
@@ -2452,9 +2721,9 @@
     },
     "weekend_fabrication": {
       "fingerprint": "5915747486cabc6a",
-      "p95_latency": 8.9,
+      "p95_latency": 8.8,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
@@ -2462,31 +2731,31 @@
       "fingerprint": "a6a45ff76f1bc9ac",
       "p95_latency": 6.4,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
     "weekend_transient": {
       "fingerprint": "dd951ad650fd60ff",
-      "p95_latency": 9.6,
+      "p95_latency": 9.5,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
     "weekend_transient_mixed": {
       "fingerprint": "5107f253ab83a3e2",
-      "p95_latency": 12.1,
+      "p95_latency": 12.0,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
     "weekend_transient_schema": {
       "fingerprint": "d5fc4e12cec95ac0",
-      "p95_latency": 9.6,
+      "p95_latency": 9.5,
       "parse_failures": 0,
-      "samples": 1,
+      "samples": 2,
       "timeout": 900,
       "total_retries": 0
     }

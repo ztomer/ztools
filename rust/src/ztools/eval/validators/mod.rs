@@ -10,6 +10,7 @@
 //! - `faithfulness`: instruction-leak, strict-schema, and contradiction gates.
 //! - `filename`: filename-quality scorer with leak and relevance gates.
 //! - `mixed_text`: signal-from-noise scorers and the factual probes.
+//! - `planner_fields`: a weekend answer's fields, graded by the planner's own parse.
 //! - `summary`: summary-quality scorer with misattribution and placeholder caps.
 //! - `taxes_grounded`: arithmetic and citation grounding for financial tasks.
 
@@ -21,6 +22,7 @@ pub mod faithfulness;
 pub mod filename;
 pub mod json_validator;
 pub mod mixed_text;
+pub mod planner_fields;
 pub mod summary;
 pub mod taxes_grounded;
 pub mod taxes_rubric;
