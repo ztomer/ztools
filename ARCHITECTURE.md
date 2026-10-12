@@ -55,10 +55,10 @@ ztools/
 ├── docs/                    # Developer documentation and quality specs
 │   ├── TESTING.md           # Test patterns, mock infrastructure, coverage rules
 │   ├── MODEL_QUIRKS.md      # Observed model quirks and workarounds
-│   ├── ROADMAP.md           # Forward-looking backlog: phases L, G, M, R by
-│   │                        # item ID; contract gated by tools/tests/test_roadmap.py
+│   ├── ROADMAP.md           # The one forward-looking plan, phased, by item ID;
+│   │                        # contract gated by tools/tests/test_roadmap.py
 │   ├── PORT_PARITY.md       # Parity ledger and benchmark comparisons
-│   └── BUGS_twitter_llm_fallback.md, EVALUATION_WORKFLOW.md,
+│   └── BUGS_twitter_llm_fallback.md,
 │       LLM_GUIDANCE_AND_TEACHER_EVAL.md, DEEP_MODEL_VS_GEMINI_EVALUATION.md,
 │       REPORT_WEAKNESS_CLASSES.md, eval_calibration_2026-07-11.md,
 │       eval_baseline.json

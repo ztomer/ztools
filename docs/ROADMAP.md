@@ -31,76 +31,191 @@ cannot fail hides more than a plan that reads oddly, because it is the thing tha
 would have noticed. Phases are SEQUENTIAL where a later phase's evidence depends on an
 earlier one, and each phase says what it depends on.
 
-## Where things stand — 2026-10-10
+## Where things stand — 2026-10-12
 
-A dated summary of what the runs below already print. Nothing in this section is
-checked by a gate, so re-derive it before editing it:
-`git log --oneline origin/main..main`, `gh run list --limit 3`,
-`tools/gate.sh --full`, and `"$GOH_DIR/gates/goh.sh" home-paths --exclude ^vendor/`.
+A dated summary, not checked by any gate; re-derive it before editing:
+`gh run list --limit 3`, `git log --oneline origin/main..main`, `tools/gate.sh --full`.
 
-- Releases v3.7.0 (twitter repair, weekend graders that read fields, retention in days) and v3.8.0 (the on-device fallback, T1) cut 2026-10-10. Nothing is open: every phase below has landed.
-- Items `L2`, `M1` through `M16` landed and deleted from open work; items `G5`, `G6`, and `R2` dropped.
-- Landed today, each proven by a test made to fail first:
-  **`L2`** (green CI gate of record on GitHub Actions),
-  **`M1`** (repo-relative file_summary checkout rows), **`M2`** (task identity
-  fingerprinting and set-aside history aggregation), **`M3`** (production context-fit
-  guard in `rust/src/ztools/llm.rs`, fallback skip down `model_fallback_chain`, and
-  live Osaurus 8k window overflow probe documented in `docs/MODEL_QUIRKS.md`),
-  **`M4`** (full-roster sweep across all installed models on 32-task fingerprinted roster,
-  architectural vision refusal diagnosis, `[best_models]` confirmed and cited in `conf/config.toml`,
-  and embedded slot defaults drift test passing),
-  **`M5`** (smoke prompts fit all documented windows),
-  **`M6`** (eval signals re-baselined with fresh task fingerprints in `conf/eval_signals.json`),
-  **`M7`** (`ztools eval-signals --prune` strips unrecorded and superseded task observations),
-  **`M8`** (`ztools model-eval --leaderboard` formats latest clean runs into comparative rankings),
-  **`M9`** (`ztools model-eval --leaderboard --json-output` exports structured ranking JSON array),
-  **`M10`** (`ztools model-eval --leaderboard --min-tasks <N>` filters models by run task count floor),
-  **`M11`** (`ztools model-eval --leaderboard --sort-by <slot>` slot-specific capability sorting),
-  **`M12`** (`ztools model-eval --leaderboard` longitudinal score delta tracking against previous run),
-  **`M13`** (`ztools model-eval --leaderboard --category <name>` category-filtered evaluation ranking),
-  **`M14`** (`ztools model-eval --leaderboard --csv-output` spreadsheet/pipeline CSV export format),
-  **`M15`** (`ztools model-eval --leaderboard --group-by-family` model family grouping),
-  **`M16`** (`ztools model-eval --leaderboard --fail-on-regression <pct>` automated regression threshold check),
-  **`G2`** (307 files clean under `GOH_NO_HOME_PATHS=1`), **`G3`** (toolchain header cleaned),
-  **`G4`** (CI gate tool manifest dynamic install + pinned tsv), **`R1`** (provenance ledger reading).
-- Local verification on `main`:
-  `tools/gate.sh --full` passes all 12 CI steps (coverage floor 95%, clippy, cargo audit,
-  cargo deny, structural, pytest, ruff, camoufox tests, and secrets scan),
-  `python3 -m pytest tools/tests -q` green (136 passed).
-- All temporary agent sessions (OpenCode and Claude worktrees/caches) are purged.
+- **CI on `main` is RED, and has been for four pushes** (runs from 2026-10-10 20:57 UTC on:
+  `changelog: v3.6.0 stanza`, `chore: version 3.7.0`, `settings: …`, `docs: …`). Every one
+  dies in `actions/setup-python` before the gate runs: `.python-version doesn't exist`. The
+  last green run is `fix(eval): use float difference threshold…` (2026-10-10 01:10 UTC).
+  Releases v3.6.0, v3.7.0 and v3.8.0 were tagged and published over that red. `P1`, `P2`.
+- The local gate is green: `tools/gate.sh --full` passed 12/12 steps on HEAD `6a10475`
+  (2026-10-12, 1 min 43 s). No CI run has reached the gate on any push since `83cf63b`
+  (2026-10-10 01:10 UTC).
+- Installed: `ztools 3.8.0` (Homebrew). HEAD is two commits past v3.8.0, docs/settings only.
+- Phases W, M, T, L, G, R and S from the previous plan all landed; their narrative is in git
+  (`git show 6a10475:docs/ROADMAP.md`) and in `CHANGELOG.md`. Product work has no open item;
+  everything open below is the machinery that would have caught the red CI, and documents
+  that still describe the retired Python implementation.
 
-### Sources consolidated — 2026-10-10
+## Phase P — the gate of record is green and can fail
 
-Every other agent session that touched ztools, and where its content went. Nothing below is a
-plan anymore; this file is.
+Goal: CI is green on `main`, releases cannot ship over a red CI, and the two roadmap checks
+that currently pass over nothing can go red. Depends on nothing. Size: S (one session).
+Exit: `gh run list --branch main --limit 1` reports `success` on a commit after `P1`, and
+every new check in this phase has been seen red once on the real tree.
 
-- **Claude Code / desktop:** no ztools transcripts or desktop sessions remain. The 10-08 backlog
-  chip "Bring up ztools CI: machete and 17 eval tests" is superseded: fixed in 64d67f3, CI green.
-- **OpenCode** (`ses_ee23c056…`, `ses_ef8dce2a…`, and nine Python-era sessions 07-16 → 08-24): every
-  item landed (M1–M3, M5, G2–G4, R1, edition 2024, weather endpoint, grounding) or was superseded
-  by the Rust cutover (ddb7d53). Project row and snapshot removed (Trash).
-- **Antigravity** (`f43ba45d…`, `46b086a1…`, `608907e3…`, `2901c3f7…`, plus backups): Python-era,
-  superseded by the Rust port; removed (Trash). The cross-repo conversation `460d804a…` (Python
-  3.15 move) is not this project's and was left alone; its one ztools finding, CI pinned to 3.14,
-  is fixed (CI reads `.python-version`).
-- **Gemini CLI** (`~/.gemini/tmp/ztools/`, April–June chats): Python-era; removed (Trash).
-- **Found by the consolidation itself:** tags v3.4.0, v3.4.1 and v3.5.0 had no GitHub release
-  (tagged by hand); the release kit now backfills a tag that lacks one (gates_of_heck 2573b86).
+### P1 — CI checks out a file the repo does not track
+- **Class:** CI reads a file only the developer's checkout has, so the local gate passes
+  and the gate of record cannot start. `.github/workflows/ci.yml` says
+  `python-version-file: .python-version`; `.gitignore:85` (`# pyenv`) ignores that file and
+  it has never been tracked. Introduced by `22d8009` ("CI reads .python-version").
+- **Why now:** CI has not reached the gate on any push since `83cf63b`; v3.6.0–v3.8.0 were
+  proven only locally. Rule #17's "local gate identical to CI" is false while this stands.
+- **Done when:** a pytest in `tools/tests/test_ci_files_tracked.py` (new) parses every
+  `*-file:` / `hashFiles(...)` / `path:` input in `.github/workflows/ci.yml` and asserts each
+  is `git ls-files`-tracked — seen red on today's tree — then `.python-version` is tracked
+  (drop `.gitignore:85`) and the next CI run on `main` is `success`.
+- **Blocked by:** nothing.
 
-## Phase W — the weekend plan must read right to a parent
+### P2 — a release can be tagged over a red CI
+- **Class:** the release path consults the LOCAL gate only. `tools/release.sh` passes
+  `--gate "make ci"` to the house release kit; nothing asks GitHub whether the gate of
+  record passed on the commit being tagged, so v3.6.0–v3.8.0 shipped over `P1`.
+- **Why now:** without it, the next environment-only CI break ships the same way.
+- **Done when:** the release kit refuses to tag a commit whose CI run is not `success`
+  (or names an explicit `--ci-skip <reason>`), proven by `tools/release.sh <ver> --dry-run`
+  refusing on today's red `main`.
+- **Blocked by:** cross-repo ask — the sequencing lives in `gates_of_heck`'s release kit, not
+  here. If goh declines, a preflight in `tools/release.sh` carries it for this repo only.
 
-All Phase W items (`W1` through `W6`) landed on 2026-10-10. No open work remains in this phase.
+### P3 — the roadmap's "has items" check passes over nothing
+- **Class:** a gate made vacuous to accommodate an empty input.
+  `test_the_roadmap_has_items_to_check` in `tools/tests/test_roadmap.py` asserts
+  `len(items(roadmap)) >= 0`, which no input can fail; it was loosened in `6ad4a2b` when the
+  file emptied. A broken `ITEM` regex would now report every rule satisfied.
+- **Why now:** this file's whole contract rests on the parser seeing the items.
+- **Done when:** the test compares `items()` against an independent count of
+  `^### ` headings under `## Phase` sections (so an empty roadmap passes honestly and a
+  parser that misses headings fails), and a fixture with a heading the parser cannot read
+  is asserted red.
+- **Blocked by:** nothing.
 
-## Phase M — what the eval records must mean what it says
+### P4 — an inbound roadmap reference the gate cannot see
+- **Class:** a reference check that knows one word order and a subset of files.
+  `rust-toolchain.toml` says "That mechanism is `X6` in `docs/ROADMAP.md`"; no `X6` has ever
+  existed in this file (checked against `git log -p`), the `INBOUND` regex only matches
+  `ROADMAP <ID>`, and root `*.toml` files are not in `inbound_sources()`.
+- **Why now:** the comment also claims `gates/rust_gate.sh` prints no `rustc -V`; goh's
+  gates/_proven.sh now keys on `rustc -V`, so the claim may be stale as well as its pointer.
+- **Done when:** `inbound_sources()` covers root `*.toml`, the regex accepts
+  `<ID>` … `docs/ROADMAP.md` within one sentence, a fixture of that form is asserted red,
+  and the `rust-toolchain.toml` comment says what a red gate prints today (measured, quoted).
+- **Blocked by:** nothing.
 
-`M1` through `M22` landed; M17-M22 were found while landing W5 (2026-10-10), when the
-weekend eval rows started sending the planner's own prompts. No open work remains in this
-phase.
+### P5 — `ruff format` is documented as a gate and nothing runs it
+- **Class:** a doc that states a gate's contents without a check. `README.md` says
+  "`ruff` is configured but not yet a gate" and `CLAUDE.md` says "Ruff is NOT in the gate's
+  step list yet"; `.gatesrc` `GOH_CI_STEPS` does run `ruff check tools/`, and does NOT run
+  `ruff format --check tools/`, which both docs tell you to run by hand.
+- **Why now:** two docs disagree with the step list in opposite directions.
+- **Done when:** `ruff format --check tools/` is a `GOH_CI_STEPS` step (seen red once on an
+  unformatted fixture), and both docs say what the list runs — or quote it from `.gatesrc`
+  instead of restating it.
+- **Blocked by:** nothing.
 
-## Phase T — the twitter summary must be trustworthy when nobody is watching
+## Phase D — the docs describe the Rust tool, not the retired Python one
 
-All Phase T items landed on 2026-10-10: T2 (the loop-rate measurement) and T3 (the repair it
-motivated) are in `docs/MODEL_QUIRKS.md`; T1 gave the chain a model outside the Osaurus
-server -- `foundation` answered by macOS 27's `fm` (`conf/twitter.toml [fallback] on_device`).
-No open work remains in this phase.
+Goal: no document a session reads first states something the code no longer does.
+Depends on nothing, but do it after Phase P so the doc checks land on a green CI.
+Size: S. Exit: the two checks below are green and each was seen red once.
 
+### D1 — parity rows still say "deferred, recorded in ROADMAP"
+- **Class:** a deferral recorded in two places, closed in one. `docs/PORT_PARITY.md` rows
+  for `test_weekend_llm_1.py`, `test_weekend_llm_2.py`, `test_eval_report.py` and
+  `test_signal_handling.py` say "B4 … Recorded in ROADMAP"; the plan has no such items
+  because `9ce9677` (phase retries; timeout learning retired), `27624ff` (verbosity metrics)
+  and `c83ac38` (Ctrl-C drain) closed them. The ledger's own count ("B4-deferred 2") is stale.
+- **Why now:** a reader looking for those deferrals finds nothing and re-derives them.
+- **Done when:** each row names the commit and the Rust test that covers it, the count line
+  is recomputed from the table, and `grep -n "Recorded in ROADMAP" docs/PORT_PARITY.md`
+  returns nothing.
+- **Blocked by:** nothing.
+
+### D2 — Python-era reference docs carry no banner
+- **Class:** a historical document that does not announce it is historical.
+  `docs/BUGS_twitter_llm_fallback.md`, `docs/LLM_GUIDANCE_AND_TEACHER_EVAL.md`,
+  `docs/DEEP_MODEL_VS_GEMINI_EVALUATION.md`, `docs/eval_calibration_2026-07-11.md` and
+  `docs/REPORT_WEAKNESS_CLASSES.md` cite `twitter/summarize.py`, `eval/validate.py`,
+  `lib/osaurus_lib.py` and other files deleted at the Rust cutover (`ddb7d53`).
+  `docs/REPORT_WEAKNESS_CLASSES.md` heads C16 "*(open)*" while its body says closed, and C11 is
+  fixed in Rust (`rust/src/ztools/twitter/mod.rs` prints "fetched, processed").
+- **Why now:** these are measurement records worth keeping, and they read as current.
+- **Done when:** each carries a first-line banner ("Python-era record, superseded by …")
+  or its file pointers resolve under `rust/`; a test over `docs/*.md` fails on a
+  `*.py` product path in a doc without the banner (seen red before the banners land).
+- **Blocked by:** nothing.
+
+### D3 — `CLAUDE.md` points at gate lines that moved
+- **Class:** a line-number citation with no check. `CLAUDE.md` cites `.gatesrc:26` for the
+  coverage floor; `GOH_CI_STEPS` is at `.gatesrc:113` today.
+- **Why now:** it is the first file a session reads.
+- **Done when:** the citation names the variable, not a line (`GOH_CI_STEPS`), and a grep for
+  `\.gatesrc:[0-9]` in `*.md` returns nothing.
+- **Blocked by:** nothing.
+
+## Phase H — currency (house rule: newest release of every layer)
+
+Goal: nothing in the stack is behind its newest release without a recorded reason.
+Depends on `P1` (a CI that runs, to prove each move). Size: S. Exit: the commands named in
+each item report nothing pending.
+
+### H1 — lockfile refresh
+- **Class:** dependency drift. `cargo update --dry-run --verbose` in `rust/` (2026-10-12):
+  14 compatible updates pending (`hyper` 1.12.0, `serde_json` 1.0.154, `syn` 3.0.8, `toml`
+  1.1.8, …) and `brotli-decompressor` held at 6.0.1 (6.1.0 available) by its parent.
+- **Why now:** routine hygiene; a held-back transitive is how a duplicate major starts.
+- **Done when:** `cargo update --verbose` shows no `Updating` line, any `Unchanged … available`
+  line names its parent and reason here, `cargo tree -d` is empty, and the gate is green.
+- **Blocked by:** `P1`.
+
+### H2 — CI runner and actions ride moving tags
+- **Class:** "latest means a named release, never a moving tag". `.github/workflows/ci.yml`
+  runs on `macos-15` while the host is macOS 27, and uses `actions/checkout@v7`,
+  `Swatinem/rust-cache@v2`, `taiki-e/install-action@v2`, `actions/setup-python@v7` —
+  major tags the maintainer moves.
+- **Why now:** a CI image two majors behind the host tests a platform the tool never runs
+  on (it is macOS/arm64 by `install.sh`'s hard gate).
+- **Done when:** the newest GitHub macOS arm64 image is named (measured from GitHub's runner
+  list, not assumed), each action is pinned to a release SHA with its tag in a comment, and
+  CI is green on it.
+- **Blocked by:** `P1`.
+
+### H3 — the vendored crate's clippy ratchet
+- **Class:** suppressed findings held under a ceiling instead of fixed.
+  `tools/vendor_lint_baseline.jsonc` holds 208 pedantic/nursery findings in
+  `vendor/camoufox-rs` under shrink-only ceilings.
+- **Why now:** low — the ratchet already stops growth. Parked until Phases P and D land.
+- **Done when:** the baseline is empty and the step is replaced by `-D warnings`.
+- **Blocked by:** owner decision on whether the vendored crate is worth the effort.
+
+## Sources consolidated (2026-10-12)
+
+- **This file's previous version** (`6a10475`): every item had landed; its narrative is in
+  `git show 6a10475:docs/ROADMAP.md`. One claim in its 2026-10-10 sources list was wrong:
+  "CI pinned to 3.14 is fixed (CI reads `.python-version`)" — that change is what turned CI
+  red (`P1`).
+- **docs/EVALUATION_WORKFLOW.md** (a "Gemini MUST inspect every eval run" directive plus
+  four prompt actions): removed. Action 1 (context bounding) is pinned by
+  `rust/src/ztools/eval/prompts/file_summary_pins_tests.rs`; Action 2 by
+  `correct_weather_labels`; Action 3 is superseded (the planner carries LOCATION verbatim
+  and the eval caps generic locations — a prompted city default would be the mandated-
+  placeholder class C4); Action 4 by the `(@handle | timestamp)` rule in `conf/prompts.toml`
+  and the DEGRADED banner. The per-run directive was disciplinary (rule #3) and linked a
+  deleted Antigravity brain file. Recover: `git show 6a10475:docs/EVALUATION_WORKFLOW.md`.
+- **Other `docs/*.md`**: reference and measurement records, not plans; kept (`D1`–`D3`).
+- **`.opencode/opencode-loop/`**: empty; removed.
+- **`.claude/`** in the repo: `.claude/settings.local.json` (one stale allow rule for the retired
+  `model_eval` Python module) and an empty `worktrees/`; nothing to carry.
+- **Claude Code CLI**: no transcripts; memory store kept (two feedback notes: "no invented
+  constants", "macOS-only — hard-fail, don't verify Linux"). The latter is already
+  structural (`install.sh` platform gate).
+- **Claude desktop**: no ztools session. **Gemini CLI**: no ztools dir (only `scripts`'
+  chats mention the path). **Antigravity**: no ztools conversation; the IDE conversation
+  that mentions the path is a ZeroThunder one quoting old shell aliases (none survive in
+  `~/.zshrc`) — left alone.
+- **RUSTIFICATION_ROADMAP.md** and **ROADMAP-consolidated.md** (Projects root): no ztools
+  item in either (grepped for the name, its tools and its modules).
+- **git**: one branch (`main`), one worktree, no stash, clean tree.

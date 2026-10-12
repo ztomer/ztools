@@ -158,4 +158,4 @@ The 4 universal prompt steering rules were propagated across all 7 model configu
 
 Empirical evaluation (`task-899`) confirms that the combination of **strict prompt context-bounding**, **executive summary & narrative verb prompt structures**, and **code-side post-processing enforcements** successfully elevates `summarize`, `file_summary`, `filename`, and `weekend` tasks to **EXCELLENT** quality standards (`91.6% – 98.5%`).
 
-Per the mandatory evaluation policy in [`docs/EVALUATION_WORKFLOW.md`](EVALUATION_WORKFLOW.md), every future eval run will be inspected directly and recorded in this document.
+The per-run "Gemini MUST inspect every eval" directive that used to live in `EVALUATION_WORKFLOW.md` was retired 2026-10-12 (a rule nobody's gate enforces is not a rule; its four prompt actions had landed or been superseded). Recover it with `git show 6a10475:docs/EVALUATION_WORKFLOW.md`.
