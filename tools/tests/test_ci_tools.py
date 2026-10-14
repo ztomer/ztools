@@ -1,8 +1,8 @@
 """`tools/ci_tools.tsv` is a pin, and this file is what makes it one.
 
-The list it holds is the tools only THIS REPO'S OWN steps need: `cargo-audit` and
-`cargo-deny`, for the `cargo audit` and `cargo deny` steps `.gatesrc` added
-(2026-10-05). It is deliberately NOT a copy of gates_of_heck's manifest -- that
+The list it holds is the tools only THIS REPO'S OWN steps need: `cargo-deny`, for
+the `cargo deny` step `.gatesrc` added (2026-10-05); `cargo-audit` left it when goh
+0.27.0's manifest began naming it. It is deliberately NOT a copy of gates_of_heck's manifest -- that
 manifest names the tools ITS gates refuse without, ci.yml consumes it directly
 (`"$GOH_DIR/gates/required_tools.py" --repo . --install`), and a consumed list
 cannot drift. The repo-local half is the half nothing keeps honest, and it is the
@@ -32,7 +32,9 @@ list rather than installing nothing and passing.
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -126,6 +128,31 @@ def _gatesrc_with(steps: str) -> str:
     return f"export GOH_CI_STEPS='{steps}'\n"
 
 
+def _manifest_names() -> list[str]:
+    """The tools gates_of_heck's manifest installs for this repo, as ci.yml asks it.
+
+    `--names` is the same rows `--install` turns into commands, so a name here is
+    one the workflow's manifest step already installs.
+    """
+    goh = Path(os.environ.get("GOH_DIR") or Path.home() / "Projects" / "gates_of_heck")
+    return subprocess.run(
+        ["python3", str(goh / "gates" / "required_tools.py"), "--repo", str(ROOT), "--names"],
+        capture_output=True,
+        text=True,
+        check=True,
+        stdin=subprocess.DEVNULL,
+    ).stdout.split()
+
+
+def _installed_twice(tools_text: str, manifest: list[str]) -> list[str]:
+    """The names this file lists that the gate's manifest installs as well."""
+    return [
+        f"{tool!r} -- gates_of_heck's manifest installs it too; drop the line"
+        for tool in _tools(tools_text)
+        if tool in manifest
+    ]
+
+
 def _duplicates(tools_text: str) -> list[str]:
     names = _tools(tools_text)
     return sorted({name for name in names if names.count(name) > 1})
@@ -162,13 +189,13 @@ def test_the_step_parse_finds_the_steps_this_file_exists_for():
 
     Every other test here is only as good as `_gatesrc_steps`. A parse that
     returned [] -- a renamed key, a reworded assignment -- would make the main
-    rule vacuously true, so the parse is pinned to the two steps that are the
-    file's whole subject: if `.gatesrc` renames them, this says so rather than
+    rule vacuously true, so the parse is pinned to the step that is the
+    file's whole subject: if `.gatesrc` renames it, this says so rather than
     letting the file quietly check nothing.
     """
     steps = _gatesrc_steps(GATESRC.read_text())
     assert len(steps) > 2, f"parsed {len(steps)} step(s), which is too few to be the gate"
-    for command in ("cargo audit", "cargo deny"):
+    for command in ("cargo deny",):
         assert any(step.startswith(command) for step in steps), (
             f"no {KEY} step runs `{command}`, which ci_tools.tsv exists to serve"
         )
@@ -177,6 +204,22 @@ def test_the_step_parse_finds_the_steps_this_file_exists_for():
 def test_no_name_appears_twice():
     """One tool, one line: a duplicate is a reader that installs it twice."""
     assert not _duplicates(CI_TOOLS.read_text())
+
+
+def test_no_name_is_one_the_gate_manifest_installs():
+    """One tool, one installer. goh 0.27.0's Rust gate grew an advisory step, so its
+    manifest now names `cargo-audit`; with this file naming it too, ci.yml installed
+    it twice and `cargo install` refused the second (`binary cargo-audit already
+    exists in destination`, run 38578922096). The manifest's half is the one that
+    keeps itself current, so the repo-local half gives the name up."""
+    manifest = _manifest_names()
+    assert "cargo-llvm-cov" in manifest, f"the manifest read named nothing useful: {manifest}"
+    assert not _installed_twice(CI_TOOLS.read_text(), manifest)
+
+
+def test_a_name_the_manifest_installs_is_named():
+    bad = _installed_twice("cargo-audit\ncargo-deny\n", ["cargo-machete", "cargo-audit"])
+    assert len(bad) == 1 and "'cargo-audit'" in bad[0], bad
 
 
 # ── the rule, run against what it must reject ─────────────────────────────────

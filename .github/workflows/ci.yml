@@ -63,11 +63,12 @@ jobs:
             rust
             vendor/camoufox-rs
 
-      # THE TOOLS ONLY THIS REPO'S OWN STEPS NEED (ROADMAP G4). `cargo audit
-      # --file rust/Cargo.lock` and `cargo deny --manifest-path rust/Cargo.toml
-      # check` are steps .gatesrc added (2026-10-05), and gates_of_heck's manifest
-      # cannot name them: it lists the tools ITS gates refuse without, and it has
-      # no way to know a consumer grew a step. So they are named once, in
+      # THE TOOLS ONLY THIS REPO'S OWN STEPS NEED (ROADMAP G4). `cargo deny
+      # --manifest-path rust/Cargo.toml check` is a step .gatesrc added
+      # (2026-10-05), and gates_of_heck's manifest cannot name it: it lists the
+      # tools ITS gates refuse without, and it has no way to know a consumer grew
+      # a step. (cargo-audit was here too until goh 0.27.0's manifest named it;
+      # one tool, one installer.) So they are named once, in
       # tools/ci_tools.tsv, and this step READS them rather than spelling them
       # here -- one place, checked in, and the gate can see it.
       #

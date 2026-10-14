@@ -8,11 +8,12 @@
 #
 # WHY THIS IS SEPARATE FROM THE GATE'S MANIFEST. `"$GOH_DIR/gates/required_tools.py"
 # --repo . --install` names the tools its own gates REFUSE without -- measured
-# 2026-10-08: cargo-machete, cargo-llvm-cov, ruff, shellcheck. It cannot name
-# these two, because `cargo audit --file rust/Cargo.lock` and `cargo deny
-# --manifest-path rust/Cargo.toml check` are steps THIS repo added to GOH_CI_STEPS
-# (2026-10-05: licences, sources and bans -- the audit ignore list is the ratchet
-# the house rules name, so `cargo audit` stays alongside `cargo deny`). A shared
+# 2026-10-08: cargo-machete, cargo-llvm-cov, ruff, shellcheck; since goh 0.27.0's
+# advisory step, cargo-audit as well, so it left this file (a tool both lists name
+# is installed twice, and `cargo install` refuses the second:
+# tools/tests/test_ci_tools.py goes red on the overlap). It cannot name
+# cargo-deny, because `cargo deny --manifest-path rust/Cargo.toml check` is a step
+# THIS repo added to GOH_CI_STEPS (2026-10-05: licences, sources and bans). A shared
 # manifest has no way to know a consumer grew a step, which is exactly how the
 # hand-copied list rotted: run 37855122727 died at step 1/12 with
 # `cargo-machete is not installed, and this gate does not pass without the step it
@@ -26,5 +27,4 @@
 # NOT a .txt. `.gitignore:149` ignores `*.txt` (only `tests/fixtures/**/*.txt` is
 # excepted), so this file as a .txt would be untrackable -- invisible to the gate
 # AND to CI, which read it and installed nothing while the step passed.
-cargo-audit
 cargo-deny
