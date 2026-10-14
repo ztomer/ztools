@@ -47,7 +47,9 @@ def test_the_guarded_path_is_the_lock_gpu_lock_shell_falls_back_to(tmp_path):
 
 
 def _run(argv, cwd):
-    return subprocess.run(argv, capture_output=True, text=True, cwd=cwd, check=False)
+    return subprocess.run(
+        argv, capture_output=True, text=True, cwd=cwd, check=False, stdin=subprocess.DEVNULL
+    )
 
 
 class TestTheTripwires:

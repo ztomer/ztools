@@ -127,6 +127,7 @@ def make_compare(body: str):
                 cwd=str(REPO),
                 timeout=COMPARATOR_TIMEOUT,
                 check=False,
+                stdin=subprocess.DEVNULL,
             )
         except subprocess.TimeoutExpired as expired:
             raise AssertionError(

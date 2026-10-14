@@ -122,7 +122,13 @@ def _run(cmd, target_dir, timeout):
     env = dict(os.environ, CARGO_TARGET_DIR=str(target_dir))
     try:
         return subprocess.run(
-            cmd, env=env, capture_output=True, text=True, timeout=timeout, check=False
+            cmd,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+            stdin=subprocess.DEVNULL,
         )
     except subprocess.TimeoutExpired:
         raise Precondition(f"timed out after {timeout}s: {' '.join(cmd[:4])}…") from None

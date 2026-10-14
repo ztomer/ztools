@@ -80,6 +80,7 @@ def _run(os_name, arch, **overrides):
         # on the code and the message.
         check=False,
         timeout=TIMEOUT,
+        stdin=subprocess.DEVNULL,
     )
 
 
@@ -252,6 +253,7 @@ def test_missing_dependencies_are_named(tmp_path):
             env={"PATH": str(empty)},
             check=False,
             timeout=TIMEOUT,
+            stdin=subprocess.DEVNULL,
         )
         assert found.returncode != 0, (
             f"{name} resolves under the empty PATH; this test would build for real"

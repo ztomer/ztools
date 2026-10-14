@@ -67,6 +67,7 @@ def sh(body, lock_dir, extra_env=None, cwd=None):
             cwd=str(cwd or REPO),
             timeout=SHELL_TIMEOUT,
             check=False,
+            stdin=subprocess.DEVNULL,
         )
     except subprocess.TimeoutExpired as expired:
         raise AssertionError(
@@ -89,13 +90,17 @@ def live_start_time(pid):
     # RECYCLED pid, so the test would go on to prove the wrong thing about lock
     # reclamation, quietly.
     out = subprocess.run(
-        ["ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True, check=True
+        ["ps", "-o", "lstart=", "-p", str(pid)],
+        capture_output=True,
+        text=True,
+        check=True,
+        stdin=subprocess.DEVNULL,
     ).stdout
     return " ".join(out.split())
 
 
 def dead_pid():
-    proc = subprocess.Popen(["true"])
+    proc = subprocess.Popen(["true"], stdin=subprocess.DEVNULL)
     proc.wait()
     return proc.pid
 
@@ -268,7 +273,7 @@ def stubbed_tools(tmp_path):
     # first mutation run that removed the lock from the script reached `stop_all`
     # and killed the pytest process itself (exit 143). A test fixture must not hand
     # the code under test a weapon aimed at the test runner.
-    victim = subprocess.Popen(["sleep", "600"])
+    victim = subprocess.Popen(["sleep", "600"], stdin=subprocess.DEVNULL)
     stub("pgrep", f"echo {victim.pid}")
     stub("lsof", f"echo {victim.pid}")
     stub("curl", "exit 0")
@@ -299,6 +304,7 @@ def run_osaurus_one(args, lock_dir, stubs, extra_env=None):
         env=env,
         cwd=str(REPO),
         check=False,
+        stdin=subprocess.DEVNULL,
     )
 
 

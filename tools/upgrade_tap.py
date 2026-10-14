@@ -86,6 +86,7 @@ def run_cmd(args, cwd=None, env=None) -> subprocess.CompletedProcess:
         capture_output=True,
         text=True,
         check=True,
+        stdin=subprocess.DEVNULL,
     )
 
 

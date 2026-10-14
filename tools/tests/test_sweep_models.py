@@ -167,6 +167,7 @@ class Sweep:
             cwd=str(REPO),
             timeout=RUN_TIMEOUT,
             check=False,
+            stdin=subprocess.DEVNULL,
         )
 
     def all_output(self, result):
