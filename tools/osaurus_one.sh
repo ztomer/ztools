@@ -176,7 +176,10 @@ survey() {
   # exits 0 and always prints a number, so the value cannot depend on how the count
   # was produced.
   COUNT="$(printf '%s' "$FOUND" | awk 'NF { n++ } END { printf "%d\n", n + 0 }')"
-  FIRST="$(printf '%s\n' "$FOUND" | head -1)"
+  # A here-string, not `printf | head`: head exits after one line, and under pipefail
+  # the SIGPIPE it can deal printf would turn a found server into a failed survey.
+  # printf terminates, so the whole list is read first and nothing is cut short.
+  FIRST="$(head -n1 <<< "$FOUND")"
 }
 survey
 
