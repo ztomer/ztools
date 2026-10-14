@@ -111,3 +111,19 @@ GOH_PYTHON_FORMATTED=1
 # colon -- hence $GOH_DIR resolved here.
 export GOH_DIR="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
 GOH_CI_STEPS='"$GOH_DIR/gates/rust_gate.sh" . rust:cargo audit --file rust/Cargo.lock:cargo deny --manifest-path rust/Cargo.toml check:tools/shell_lint_extra.sh:python3 tools/vendor_lint_ratchet.py:"$GOH_DIR/gates/structural.sh" --full:cargo test --manifest-path rust/Cargo.toml --all-features --doc:python3 -m pytest tools/tests -q:"$GOH_DIR/gates/coverage_gate.sh" --lang rust --floor 95 --floors-json "$PWD/tools/coverage_floors.jsonc" rust:ruff check tools/:cargo test --manifest-path vendor/camoufox-rs/Cargo.toml --all-features:"$GOH_DIR/gates/goh.sh" secrets'
+
+# Every scanner's floor (goh v0.27.0): a full-scope scan reading less than this
+# has lost its subject and is red. Nine tenths of the 2026-10-14 count, beside it.
+GOH_EMOJI_MIN_FILES=348                 # read 387
+GOH_CONFLICT_MARKERS_MIN_FILES=396      # read 441
+GOH_FILE_LENGTH_MIN_FILES=257           # read 286
+GOH_SECRETS_MIN_FILES=396               # read 441
+GOH_SHELL_LINT_MIN_FILES=7              # read 8
+GOH_EARLY_EXIT_PIPE_MIN_FILES=12        # read 14
+GOH_DEAD_AFTER_EXEC_MIN_FILES=12        # read 14
+GOH_BARE_HOOK_INDEX_MIN_FILES=12        # read 14
+GOH_BARE_PYTHON_MIN_FILES=5             # read 6
+GOH_CHECKOUT_CREDENTIALS_MIN_FILES=1    # read 1
+GOH_MD_LINKS_MIN_LINKS=3                # read 4
+GOH_UNREAPED_SPAWN_MIN_FILES=182        # read 203
+GOH_SUBPROCESS_STDIN_MIN_CALLS=12       # read 14
