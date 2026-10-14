@@ -265,6 +265,33 @@ or a deletion, and each was seen red once.
   bump through the hook. Size: XS.
 - **Blocked by:** `A1`, `A2` (the hook must pass on the tree first).
 
+## Phase F — owner-requested features
+
+Goal: the owner's feature asks, each behind a test that can go red. Depends on Phase A (nothing
+pushes before it). Size: S. Exit: each item's round-trip tests green and the command used once
+from `routines`.
+
+### F1 — `ztools weekend exclude <place>`, the seam the routines row button calls
+- **Class:** a second writer of a user's config file. Owner, 2026-10-14: "weekend add an
+  exclusion directly from the ui (button on the row)" -- the button lives in `routines`
+  (its ROADMAP F1), and the only safe writer of the planner's exclusion list is this repo,
+  so the counterpart is a CLI rather than `routines` editing TOML it does not own.
+- **Why now:** `routines` F1 depends on it; without a command, the button would have to
+  write `conf/weekend.toml` itself and inherit its traps.
+- **Done when:** `ztools weekend exclude <place>` appends to the user-level `exclude_places`
+  list (the file `weekend_exclusions_paths` names, `conf/weekend.toml` by default)
+  idempotently, and `--undo` removes it; edits preserve comments and keep `exclude_places`
+  ABOVE any table header (the C8 placement trap `conf/weekend.toml`'s own header explains:
+  below a header TOML parses it as that table's key -- it once landed in the last
+  `[[children]]` entry -- and the whole list was silently ignored, C8 in
+  `docs/REPORT_WEAKNESS_CLASSES.md`). Round-trip tests on a TOML file with comments and a trailing table: add, add
+  again (no duplicate), undo -- each re-parsed by the real config loader to prove the list is
+  top-level, and one watched red with the entry appended at the end of the file. The place's
+  identity is what the exclusion list matches on (today the place name, as
+  `conf/weekend.toml` lists it), printed by the plan so `routines` sends that, never a row
+  index. Size: S.
+- **Blocked by:** nothing.
+
 ## Phase H — currency (house rule: newest release of every layer)
 
 Goal: nothing in the stack is behind its newest release without a recorded reason.
