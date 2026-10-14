@@ -232,14 +232,20 @@ fn every_smoke_prompt_fits_every_documented_context_window() {
         }
     }
     windows.sort_unstable();
-    assert!(
-        !windows.is_empty(),
-        "no conf/models/*.toml documents a context_window, so this gate scanned \
-         nothing and would pass whatever the smoke prompts grow into"
+    // The exact windows the shipped conf documents, not merely "some": a scan
+    // that read nothing would pass whatever the smoke prompts grow into, and one
+    // that read the wrong file would pass against the wrong number. A window
+    // added to another family belongs in this list, so this gate names it.
+    assert_eq!(
+        windows,
+        [("foundation".to_owned(), 4096)],
+        "the context windows conf/models/*.toml documents"
     );
 
     let tasks = get_built_in_smoke_tasks();
-    assert!(!tasks.is_empty(), "the smoke roster is empty");
+    let names: Vec<&str> = tasks.iter().map(|t| t.name.as_str()).collect();
+    let pinned: Vec<&str> = SMOKE_TABLE.iter().map(|(name, _)| *name).collect();
+    assert_eq!(names, pinned, "the smoke roster this gate measures");
     for task in &tasks {
         // The bytes that WILL be sent: what the runner refuses on, and what
         // `eval_model` serialises into the request body.
