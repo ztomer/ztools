@@ -81,8 +81,8 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# pyenv
-.python-version
+# .python-version is TRACKED: CI reads it (setup-python python-version-file),
+# and a file CI reads must be one its checkout has (tools/tests/test_ci_files_tracked.py).
 
 # celery beat schedule file
 celerybeat-schedule
