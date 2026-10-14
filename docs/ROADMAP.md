@@ -31,55 +31,112 @@ cannot fail hides more than a plan that reads oddly, because it is the thing tha
 would have noticed. Phases are SEQUENTIAL where a later phase's evidence depends on an
 earlier one, and each phase says what it depends on.
 
-## Where things stand — 2026-10-12
+## Where things stand — 2026-10-14
 
 A dated summary, not checked by any gate; re-derive it before editing:
 `gh run list --limit 3`, `git log --oneline origin/main..main`, `tools/gate.sh --full`.
 
-- **CI on `main` is RED, and has been for four pushes** (runs from 2026-10-10 20:57 UTC on:
-  `changelog: v3.6.0 stanza`, `chore: version 3.7.0`, `settings: …`, `docs: …`). Every one
-  dies in `actions/setup-python` before the gate runs: `.python-version doesn't exist`. The
-  last green run is `fix(eval): use float difference threshold…` (2026-10-10 01:10 UTC).
-  Releases v3.6.0, v3.7.0 and v3.8.0 were tagged and published over that red. `P1`, `P2`.
-- The local gate is green: `tools/gate.sh --full` passed 12/12 steps on HEAD `6a10475`
-  (2026-10-12, 1 min 43 s). No CI run has reached the gate on any push since `83cf63b`
-  (2026-10-10 01:10 UTC).
-- Installed: `ztools 3.8.0` (Homebrew). HEAD is two commits past v3.8.0, docs/settings only.
-- Phases W, M, T, L, G, R and S from the previous plan all landed; their narrative is in git
-  (`git show 6a10475:docs/ROADMAP.md`) and in `CHANGELOG.md`. Product work has no open item;
-  everything open below is the machinery that would have caught the red CI, and documents
-  that still describe the retired Python implementation.
+- **The local gate is RED since goh v0.27.0** (`gates_of_heck` `51d31a5`, 2026-10-14):
+  `tools/gate.sh --full` on `1076cde` failed 2 of 12 steps in 2 min 7 s -- the Rust gate's
+  `no emptiness asserts` and the structural gate's `no early-exit pipe under pipefail`; with
+  those two masked (scratch run, not committed) structural also refuses 13 undeclared
+  stdin calls. Every other step was green at 09:00; RustSec published four `rustls`
+  advisories the same day, so `cargo audit` is red now too (`A6`). Phase A is that list.
+- **CI on `main` is still RED** (latest run 2026-10-12 14:43 UTC, `roadmap: rephase…`): every
+  run since 2026-10-10 dies in `actions/setup-python` (`.python-version doesn't exist`). `A5`.
+- Hooks reinstalled to goh 0.27.0's stock set (`1076cde`). Installed: `ztools 3.8.0`.
+- The previous plan's `P2` (a release can be tagged over a red CI) is closed upstream:
+  goh `5c5868e` makes the release kit refuse while CI on HEAD is red, pending or missing,
+  and `tools/release.sh` execs that kit. Narrative of earlier phases:
+  `git show 6a10475:docs/ROADMAP.md`.
 
-## Phase P — the gate of record is green and can fail
+## Phase A — wire in goh 0.27.0 (Phase 0)
 
-Goal: CI is green on `main`, releases cannot ship over a red CI, and the two roadmap checks
-that currently pass over nothing can go red. Depends on nothing. Size: S (one session).
-Exit: `gh run list --branch main --limit 1` reports `success` on a commit after `P1`, and
-every new check in this phase has been seen red once on the real tree.
+Goal: `tools/gate.sh --full` green at HEAD, the commit pushed, and CI green on it. Depends on
+nothing; everything else waits on it, because the pre-push hook refuses every push until it
+lands. Size: S (one session). Exit: `tools/gate.sh --full` 12/12 green on HEAD, `git push`
+accepted by the pre-push gate, `gh run list --branch main --limit 1` reports `success`.
 
-### P1 — CI checks out a file the repo does not track
-- **Class:** CI reads a file only the developer's checkout has, so the local gate passes
-  and the gate of record cannot start. `.github/workflows/ci.yml` says
-  `python-version-file: .python-version`; `.gitignore:85` (`# pyenv`) ignores that file and
-  it has never been tracked. Introduced by `22d8009` ("CI reads .python-version").
-- **Why now:** CI has not reached the gate on any push since `83cf63b`; v3.6.0–v3.8.0 were
-  proven only locally. Rule #17's "local gate identical to CI" is false while this stands.
-- **Done when:** a pytest in `tools/tests/test_ci_files_tracked.py` (new) parses every
-  `*-file:` / `hashFiles(...)` / `path:` input in `.github/workflows/ci.yml` and asserts each
-  is `git ls-files`-tracked — seen red on today's tree — then `.python-version` is tracked
-  (drop `.gitignore:85`) and the next CI run on `main` is `success`.
+### A1 — 13 child processes inherit stdin undeclared
+- **Class:** a child that inherits a stdin nobody chose HANGS instead of failing (goh 3.4,
+  `0c93f4d`: the check is on by default). Measured 2026-10-14 by
+  goh's `subprocess-stdin`: 13 calls, 11 in `tools/tests/` (`test_gpu_lock_shell.py:62,91,98,271,295`,
+  `test_install_platform_gate.py:73,248`, `test_ab_test_comparator.py:123`,
+  `test_conftest_guard.py:50`, `test_rerun_truncated.py:198`, `test_sweep_models.py:162`) plus
+  `tools/upgrade_tap.py:82` (deleted by `U1`) and `tools/vendor_lint_ratchet.py:124`.
+- **Why now:** structural step `every child process names its stdin` is red at full scope, so
+  pre-push refuses every push.
+- **Done when:** each call names `stdin=subprocess.DEVNULL`, `input=` or `stdin=None` (none of
+  these needs the caller's stdin; declare, do not `--seed`), and the step is green. Size: S.
 - **Blocked by:** nothing.
 
-### P2 — a release can be tagged over a red CI
-- **Class:** the release path consults the LOCAL gate only. `tools/release.sh` passes
-  `--gate "make ci"` to the house release kit; nothing asks GitHub whether the gate of
-  record passed on the commit being tagged, so v3.6.0–v3.8.0 shipped over `P1`.
-- **Why now:** without it, the next environment-only CI break ships the same way.
-- **Done when:** the release kit refuses to tag a commit whose CI run is not `success`
-  (or names an explicit `--ci-skip <reason>`), proven by `tools/release.sh <ver> --dry-run`
-  refusing on today's red `main`.
-- **Blocked by:** cross-repo ask — the sequencing lives in `gates_of_heck`'s release kit, not
-  here. If goh declines, a preflight in `tools/release.sh` carries it for this repo only.
+### A2 — an early-exit `head` reads a pipe under pipefail
+- **Class:** an early-exit consumer SIGPIPEs its producer and pipefail turns a hit into a
+  failure, depending on load (goh 6.9, `496b6a5`). One site: `tools/osaurus_one.sh:179`,
+  `FIRST="$(printf '%s\n' "$FOUND" | head -1)"`.
+- **Why now:** structural step `no early-exit pipe under pipefail` is red; it is the first
+  structural red, so it hides every step after it.
+- **Done when:** the line reads `FIRST="$(head -n1 <<< "$FOUND")"` (the shape the finding
+  prints) and the step is green with no `early_exit_pipe_seed.json` (new) written. Size: XS.
+- **Blocked by:** nothing.
+
+### A3 — two emptiness asserts in the eval tests
+- **Class:** `assert!(!x.is_empty())` prints nothing about `x` when it fails (goh
+  `empty-assert`, run by the house Rust gate). Sites: `rust/src/ztools/eval/smoke_tasks_tests.rs:235`
+  and `:242`.
+- **Why now:** the Rust gate's step `no emptiness asserts` is red (`[1/12]`).
+- **Done when:** both read `assert_ne!(x.len(), 0, …)` with their messages kept, and step
+  `[1/12]` is green. Size: XS.
+- **Blocked by:** nothing.
+
+### A4 — scanner floors are unset, so a scan that stops reading passes
+- **Class:** a vacuous pass -- a scanner whose file selection broke reads nothing and reports
+  clean (goh 4.3, `831d686`).
+- **Why now:** advisory today, but it is the line that tells a blind gate from a clean one,
+  and Phase A is the session that reads it.
+- **Done when:** `.gatesrc` sets the twelve floors printed on 2026-10-14
+  (`GOH_EMOJI_MIN_FILES=385 GOH_CONFLICT_MARKERS_MIN_FILES=439 GOH_FILE_LENGTH_MIN_FILES=285
+  GOH_SECRETS_MIN_FILES=439 GOH_SHELL_LINT_MIN_FILES=8 GOH_EARLY_EXIT_PIPE_MIN_FILES=14
+  GOH_DEAD_AFTER_EXEC_MIN_FILES=14 GOH_BARE_HOOK_INDEX_MIN_FILES=14 GOH_BARE_PYTHON_MIN_FILES=6
+  GOH_CHECKOUT_CREDENTIALS_MIN_FILES=1 GOH_MD_LINKS_MIN_LINKS=4 GOH_UNREAPED_SPAWN_MIN_FILES=202`,
+  re-read at the time, at or a little under each) plus `GOH_SUBPROCESS_STDIN_MIN_CALLS` at the
+  post-`A1` count; the `[subject]` advisory line is gone; and one floor raised by one past its
+  count turns `every scanner read its declared subject` red naming the key (then put back).
+  Size: XS.
+- **Blocked by:** `A1` (the stdin floor is counted after the declarations).
+
+### A5 — CI checks out a file the repo does not track
+- **Class:** CI reads a file only the developer's checkout has, so the local gate passes
+  and the gate of record cannot start. `.github/workflows/ci.yml:98` says
+  `python-version-file: .python-version`; `.gitignore:85` (`# pyenv`) ignores that file and
+  it has never been tracked. Introduced by `22d8009` ("CI reads .python-version").
+- **Why now:** CI has not reached the gate on any push since `83cf63b` (2026-10-10); goh
+  `5c5868e` now refuses the next release while it stays red (goh BACKLOG Downstream, ztools).
+  `--no-ci-check` exists and is not the fix.
+- **Done when:** a pytest in `tools/tests/test_ci_files_tracked.py` (new) parses every
+  `*-file:` / `hashFiles(...)` / `path:` input in `.github/workflows/ci.yml` and asserts each
+  is `git ls-files`-tracked -- seen red on today's tree -- then `.python-version` is tracked
+  (drop `.gitignore:85`) and the next CI run on `main` is `success`. Size: S.
+- **Blocked by:** nothing.
+
+### A6 — four rustls advisories published 2026-10-14
+- **Class:** a dependency advisory published after the last green gate (RustSec, same day as
+  goh 0.27.0): `rustls` 0.23.45 in `rust/Cargo.lock` carries RUSTSEC-2026-0346 (`Debug`
+  impls expose TLS secrets), -0347 (buffered data to the outer server after ECH rejection),
+  -0348 (Brotli certificate decompression allocates up to 1 GiB before authentication) and
+  -0349 (an unauthenticated ServerHello downgrades later connections to classical key
+  exchange). Fixed in 0.23.46, which `cargo update -p rustls` takes (dry run 2026-10-14).
+- **Why now:** `cargo audit` (`[2/12]`) and the Rust gate's advisory step went red on the
+  advisory DB fetched after the 09:00 gate run above; pre-push refuses on it.
+- **Done when:** the lock holds `rustls` 0.23.46 or later in its own commit, and both audit
+  steps are green with no ignore entry added. Size: XS.
+- **Blocked by:** nothing.
+
+## Phase P — the gate of record can fail
+
+Goal: the two roadmap checks that currently pass over nothing can go red, and the docs say
+what the step list runs. Depends on Phase A. Size: S. Exit: every new check in this phase
+has been seen red once on the real tree.
 
 ### P3 — the roadmap's "has items" check passes over nothing
 - **Class:** a gate made vacuous to accommodate an empty input.
@@ -156,20 +213,73 @@ Size: S. Exit: the two checks below are green and each was seen red once.
   `\.gatesrc:[0-9]` in `*.md` returns nothing.
 - **Blocked by:** nothing.
 
+## Phase U — house-layer adoption (advisory today, from goh's Downstream list)
+
+Goal: every goh capability this repo still carries a private copy of, or has not wired, is
+the house one. Depends on Phase A. Size: S. Exit: each item's check is a `GOH_CI_STEPS` step
+or a deletion, and each was seen red once.
+
+### U1 — a manual tap door that bypasses the tap's gate, and the repo's only status markers
+- **Class:** two release paths, one of them ungated (goh 6.8, `bfac28b`): the release kit's
+  tap step goes through the kit's tap bump, which runs the tap's own gate, but
+  `tools/upgrade_tap.py` clones and pushes `ztomer/homebrew-tap` itself. Its docstring says
+  nothing invokes it (re-checked 2026-10-14: no caller). The same file is all 3 of the repo's
+  hand-rolled status markers (goh's `status-markers`, 284 files read: `tools/upgrade_tap.py:34`,
+  `:38`, `:42`; goh 4.9, `51109d6`).
+- **Why now:** it is a push to a shared repo that no gate sees, and it is the only thing
+  keeping `status-markers` from adopting with no seed.
+- **Done when:** `tools/upgrade_tap.py` and its `ARCHITECTURE.md` row are deleted, and
+  `"$GOH_DIR/gates/goh.sh" status-markers` is a `GOH_CI_STEPS` step, green with no seed and
+  seen red on a fixture marker. Size: XS.
+- **Blocked by:** nothing.
+
+### U2 — a vendored copy of the house GPU lock
+- **Class:** a private copy of a house library drifts (goh `3103441`): `tools/gpu_lock.sh`
+  duplicates `$GOH_DIR/lib/gpu_lock/gpu_lock.sh`, and its header cites a desktop-lock path
+  that is gone.
+- **Why now:** `rust/tests/gpu_lock_shell_parity.rs` judges the Rust client against this
+  copy, not against the bash half every other repo sources.
+- **Done when:** `tools/osaurus_one.sh` sources the house file, `tools/gpu_lock.sh` is
+  deleted, and `rust/tests/gpu_lock_shell_parity.rs` plus `tools/tests/test_gpu_lock_shell.py`
+  point at the house file (the parity test watched red against a deliberately skewed copy).
+  Size: S.
+- **Blocked by:** nothing.
+
+### U3 — the vendored crate's tests are a plain `cargo test` with 26 emptiness asserts
+- **Class:** a gate step that bypasses the house runner (goh Downstream, ztools):
+  `GOH_CI_STEPS` runs `cargo test --manifest-path vendor/camoufox-rs/Cargo.toml --all-features`
+  directly, and `vendor/camoufox-rs` carries 26 `assert!(…is_empty())` (counted 2026-10-14;
+  `GOH_EXCLUDE='^vendor/'` keeps them out of the gate).
+- **Why now:** low; the step runs and passes. Same owner decision as `H3`.
+- **Done when:** the step runs through the house Rust layer (or the decision in `H3` drops
+  the vendored crate), and the asserts read `assert_eq!(x.len(), 0)` / `assert_ne!`. Size: S.
+- **Blocked by:** `H3`'s owner decision.
+
+### U4 — the release script commits with `--no-verify`
+- **Class:** a gate bypass written into a script (house rule: never `--no-verify`).
+  `tools/release.sh:46` commits the version bump with `git commit … --no-verify`, so the
+  commit that every release tags never ran the pre-commit gate.
+- **Why now:** the kit gates the tree afterwards (`--gate "make ci"`), but the commit itself
+  is the one place a staged-scope check (stdin, secrets) is exact.
+- **Done when:** the flag is gone and a dry-run release on a clean tree still commits the
+  bump through the hook. Size: XS.
+- **Blocked by:** `A1`, `A2` (the hook must pass on the tree first).
+
 ## Phase H — currency (house rule: newest release of every layer)
 
 Goal: nothing in the stack is behind its newest release without a recorded reason.
-Depends on `P1` (a CI that runs, to prove each move). Size: S. Exit: the commands named in
+Depends on `A5` (a CI that runs, to prove each move). Size: S. Exit: the commands named in
 each item report nothing pending.
 
 ### H1 — lockfile refresh
-- **Class:** dependency drift. `cargo update --dry-run --verbose` in `rust/` (2026-10-12):
-  14 compatible updates pending (`hyper` 1.12.0, `serde_json` 1.0.154, `syn` 3.0.8, `toml`
-  1.1.8, …) and `brotli-decompressor` held at 6.0.1 (6.1.0 available) by its parent.
+- **Class:** dependency drift. `cargo update --dry-run --verbose` in `rust/`: 22
+  compatible updates pending on 2026-10-14 (14 on 2026-10-12: `hyper` 1.12.0, `serde_json`
+  1.0.154, `syn` 3.0.8, `toml` 1.1.8, …) and `brotli-decompressor` held at 6.0.1 (6.1.0
+  available) by its parent.
 - **Why now:** routine hygiene; a held-back transitive is how a duplicate major starts.
 - **Done when:** `cargo update --verbose` shows no `Updating` line, any `Unchanged … available`
   line names its parent and reason here, `cargo tree -d` is empty, and the gate is green.
-- **Blocked by:** `P1`.
+- **Blocked by:** `A5`.
 
 ### H2 — CI runner and actions ride moving tags
 - **Class:** "latest means a named release, never a moving tag". `.github/workflows/ci.yml`
@@ -181,7 +291,7 @@ each item report nothing pending.
 - **Done when:** the newest GitHub macOS arm64 image is named (measured from GitHub's runner
   list, not assumed), each action is pinned to a release SHA with its tag in a comment, and
   CI is green on it.
-- **Blocked by:** `P1`.
+- **Blocked by:** `A5`.
 
 ### H3 — the vendored crate's clippy ratchet
 - **Class:** suppressed findings held under a ceiling instead of fixed.
@@ -193,29 +303,5 @@ each item report nothing pending.
 
 ## Sources consolidated (2026-10-12)
 
-- **This file's previous version** (`6a10475`): every item had landed; its narrative is in
-  `git show 6a10475:docs/ROADMAP.md`. One claim in its 2026-10-10 sources list was wrong:
-  "CI pinned to 3.14 is fixed (CI reads `.python-version`)" — that change is what turned CI
-  red (`P1`).
-- **docs/EVALUATION_WORKFLOW.md** (a "Gemini MUST inspect every eval run" directive plus
-  four prompt actions): removed. Action 1 (context bounding) is pinned by
-  `rust/src/ztools/eval/prompts/file_summary_pins_tests.rs`; Action 2 by
-  `correct_weather_labels`; Action 3 is superseded (the planner carries LOCATION verbatim
-  and the eval caps generic locations — a prompted city default would be the mandated-
-  placeholder class C4); Action 4 by the `(@handle | timestamp)` rule in `conf/prompts.toml`
-  and the DEGRADED banner. The per-run directive was disciplinary (rule #3) and linked a
-  deleted Antigravity brain file. Recover: `git show 6a10475:docs/EVALUATION_WORKFLOW.md`.
-- **Other `docs/*.md`**: reference and measurement records, not plans; kept (`D1`–`D3`).
-- **`.opencode/opencode-loop/`**: empty; removed.
-- **`.claude/`** in the repo: `.claude/settings.local.json` (one stale allow rule for the retired
-  `model_eval` Python module) and an empty `worktrees/`; nothing to carry.
-- **Claude Code CLI**: no transcripts; memory store kept (two feedback notes: "no invented
-  constants", "macOS-only — hard-fail, don't verify Linux"). The latter is already
-  structural (`install.sh` platform gate).
-- **Claude desktop**: no ztools session. **Gemini CLI**: no ztools dir (only `scripts`'
-  chats mention the path). **Antigravity**: no ztools conversation; the IDE conversation
-  that mentions the path is a ZeroThunder one quoting old shell aliases (none survive in
-  `~/.zshrc`) — left alone.
-- **RUSTIFICATION_ROADMAP.md** and **ROADMAP-consolidated.md** (Projects root): no ztools
-  item in either (grepped for the name, its tools and its modules).
-- **git**: one branch (`main`), one worktree, no stash, clean tree.
+Every agent store for this repo was read and given a disposition on 2026-10-12; nothing in
+them is open beyond the items above. The table is `git show 47684e4:docs/ROADMAP.md`.
