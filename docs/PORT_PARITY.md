@@ -137,8 +137,12 @@ The "parallel reimplementation" failure mode is addressed by:
 Per-file verdicts for the 139 files that were under `references/tests/`, produced
 by inspection cross-checked against the Rust side and CLOSED at cutover: every
 row is COVERED (names the Rust test), DELETE (names the retired behaviour),
-MOVED (a tools test that follows its tool), or a B4 deferral recorded in
-`docs/ROADMAP.md`. Final count: COVERED 88 / DELETE 48 / B4-deferred 2 / MOVED 1.
+MOVED (a tools test that follows its tool), or a B4 deferral. Final count:
+COVERED 88 / DELETE 48 / B4-deferred 0 / MOVED 1 — recounted from the table on
+2026-10-14, not carried. The B4 count is 0 because the last deferrals have since
+landed; each row now names the commit and the Rust symbol that closed it. A
+deferral used to point at `docs/ROADMAP.md`, which had no such item: a reader
+looking for the follow-up found nothing and had to re-derive it.
 Triage history: at triage COVERED 59 / RE-EXPRESS 40 / DELETE 40; the
 RE-EXPRESS rows were each ported fail-first (the eval task roster, mixed-signal
 validators, vision task, fallback chain, C4 sentinel, twitter-status, one
@@ -154,8 +158,8 @@ weekend store) or reclassified with the reason in the row. Only `test_llm.py`,
 | test_weekend_data.py | DELETE | retired ddgs DDGS.text/429-retry/scrape_review_score (corpus kernel now pinned by weekend parity gate) |
 | test_weekend_followup.py | COVERED | weekend_followup_tests.rs::follow_aggregators_fetches_directory_pages_and_bounds_the_tally |
 | test_weekend_integration.py | COVERED 2026-09-13 — `tests/cli_dispatch_ztools.rs::weekend_plan_renders_and_writes_the_markdown` + `weekend_plan_says_so_when_nothing_is_on` drive the real binary end to end against a stub search + LLM |
-| test_weekend_llm_1.py | DELETE + B4 — alt-key normalization covered (`normalize_llm_item`); the per-model `field_mapping` TOML chain had no Rust consumer and was deleted with the other unread family-config tables (M18; prompts are `conf/prompts.toml`-canonical, not per-model); `get_llm_json` retry/`panic_dump` were Python transport plumbing. B4 deferral recorded in ROADMAP: the Rust weekend phases are single-shot per phase (Python retried `LLM_MAX_RETRIES=5`) |
-| test_weekend_llm_2.py | B4 — phase timeout LEARNING (`phase_signals.json` widen/floor/accumulate) not ported; Rust phases use the configured `llm_extended_timeout_secs`. Recorded in ROADMAP |
+| test_weekend_llm_1.py | DELETE + B4 — alt-key normalization covered (`normalize_llm_item`); the per-model `field_mapping` TOML chain had no Rust consumer and was deleted with the other unread family-config tables (M18; prompts are `conf/prompts.toml`-canonical, not per-model); `get_llm_json` retry/`panic_dump` were Python transport plumbing. CLOSED `9ce9677` — per-phase retries are config, not a hardcoded `LLM_MAX_RETRIES=5`: `conf/weekend.toml:140 phase_retries` (the comment there records why a blind retry loop was the wrong shape) |
+| test_weekend_llm_2.py | CLOSED `9ce9677` — phase timeout LEARNING is a stated NON-GOAL, retired deliberately rather than deferred; Rust phases use the configured `llm_extended_timeout_secs` |
 | test_weekend_output.py | COVERED | weekend_parse_tests.rs::test_render_weekend_plan_gorgeous_fixed_activities |
 | test_weekend_planner_branches.py | COVERED 2026-09-13 — alt-key parse pins in `weekend_parse_tests.rs` (`normalize_llm_item`), weather labelling in `weekend_enforce_tests.rs` (`correct_weather_labels`), `--use-cache` is a clap flag exercised by the dispatch tests |
 | test_weekend_supply.py | COVERED | float_top.rs::in_window_lines_float_to_the_top_marked_but_nothing_is_removed |
@@ -191,9 +195,9 @@ weekend store) or reclassified with the reason in the row. Only `test_llm.py`,
 |---|---|---|
 | test_eval_failures.py | COVERED | eval/failures.rs::infra_timeout_and_reasoning_are_distinguished |
 | test_eval_outputs.py | COVERED | eval/outputs.rs::save_output_writes_header_body_and_reasoning_to_the_seamed_dir |
-| test_eval_report.py | COVERED (partial) + B4 — score stats / error rates / failure groups in `eval/report_metrics.rs`; token-estimate and verbosity metrics need per-outcome content capture in `TaskOutcome` (deferral recorded in ROADMAP) |
+| test_eval_report.py | COVERED (partial) + B4 — score stats / error rates / failure groups in `eval/report_metrics.rs`; token-estimate and verbosity metrics ship: `eval/report_metrics.rs::{compute_token_estimates, compute_verbosity}` (`:240`), measuring verbosity from answer LENGTH, not answer text (`27624ff`) |
 | test_eval_report_extra_1.py | DELETE — rich `print_*` summary tables were the Python presenter; the Rust report renders through `eval/report.rs` (`render_eval_report`, `render_historical_trends`), covered by `tests/model_eval.rs` |
-| test_eval_report_extra_2.py | COVERED (partial) 2026-09-13 — CSV in `report_csv.rs`; history in `report.rs::{save_historical_results, load_historical_stats, render_historical_trends}`. Python's `diff_from_last_run` presenter is not ported (B4 deferral: the trend table already shows the per-model delta) |
+| test_eval_report_extra_2.py | COVERED (partial) 2026-09-13 — CSV in `report_csv.rs`; history in `report.rs::{save_historical_results, load_historical_stats, render_historical_trends}`. Python's `diff_from_last_run` presenter IS ported — `eval/report_diff.rs:147 render_diff_from_last_run`, with `:53 deltas_since` and `:103 render_deltas` feeding it (the row claiming otherwise was stale) |
 | test_eval_run_integration_1.py | COVERED | tests/eval_runner.rs::perfect_output_scores_ok_without_retry |
 | test_eval_run_integration_2.py | COVERED | task_loader_tests::graded_score_dispatches_every_graded_variant |
 | test_eval_run_integration_3.py | COVERED | tests/eval_runner.rs::consecutive_infra_failures_abandon_the_model_early |
@@ -285,7 +289,7 @@ weekend store) or reclassified with the reason in the row. Only `test_llm.py`,
 | test_osaurus_server.py | DELETE | retired lib/osaurus_server.py lifecycle |
 | test_no_live_server_gate.py | DELETE | Python-only socket-block harness gate, not product behavior |
 | test_server_contention.py | DELETE — the two-server announcement was the Python eval's process-count check; the Rust eval holds the machine-wide GPU lock for the whole run instead (`gpu_lock_tests.rs`, `cli_ztools.rs`) |
-| test_signal_handling.py | B4 — drain-mode SIGINT handling not ported; the safety property (a dead holder's lock is reclaimed by pid + start time) is covered by `gpu_lock_tests.rs`. Recorded in ROADMAP |
+| test_signal_handling.py | CLOSED `c83ac38` — drain-mode SIGINT ships: `eval/drain.rs`, consumed at `eval/runner.rs:277` (a request stops the next sample; what is kept is finished and what is not is not started), with `drain_tests` at `:328`. The safety property (a dead holder's lock reclaimed by pid + start time) is covered by `gpu_lock_tests.rs` |
 | test_streaming_guard.py | COVERED | transport_http::overrun_guard_aborts_reasoning_past_budget_with_no_content |
 | test_transport_perimeter.py | DELETE | Python-only raw-POST perimeter gate over .py packages |
 | test_oversize_and_gpu_gate.py | COVERED | oversize::oversize_headroom_branches_are_exact + gpu_lock acquire tests |

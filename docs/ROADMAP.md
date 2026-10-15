@@ -58,18 +58,6 @@ Goal: no document a session reads first states something the code no longer does
 Depends on nothing, but do it after Phase P so the doc checks land on a green CI.
 Size: S. Exit: the two checks below are green and each was seen red once.
 
-### D1 — parity rows still say "deferred, recorded in ROADMAP"
-- **Class:** a deferral recorded in two places, closed in one. `docs/PORT_PARITY.md` rows
-  for `test_weekend_llm_1.py`, `test_weekend_llm_2.py`, `test_eval_report.py` and
-  `test_signal_handling.py` say "B4 … Recorded in ROADMAP"; the plan has no such items
-  because `9ce9677` (phase retries; timeout learning retired), `27624ff` (verbosity metrics)
-  and `c83ac38` (Ctrl-C drain) closed them. The ledger's own count ("B4-deferred 2") is stale.
-- **Why now:** a reader looking for those deferrals finds nothing and re-derives them.
-- **Done when:** each row names the commit and the Rust test that covers it, the count line
-  is recomputed from the table, and `grep -n "Recorded in ROADMAP" docs/PORT_PARITY.md`
-  returns nothing.
-- **Blocked by:** nothing.
-
 ### D2 — Python-era reference docs carry no banner
 - **Class:** a historical document that does not announce it is historical.
   `docs/BUGS_twitter_llm_fallback.md`, `docs/LLM_GUIDANCE_AND_TEACHER_EVAL.md`,
