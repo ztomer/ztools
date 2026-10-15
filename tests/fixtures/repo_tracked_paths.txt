@@ -366,7 +366,6 @@ tests/fixtures/weekend_parity/expected_python_payloads.json
 tools/ci_tools.tsv
 tools/coverage_floors.jsonc
 tools/gate.sh
-tools/gpu_lock.sh
 tools/osaurus_one.sh
 tools/release.sh
 tools/rerun_truncated.sh

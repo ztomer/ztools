@@ -15,6 +15,7 @@ the harmful path.
 import re
 import shutil
 import subprocess
+import os
 from pathlib import Path
 
 from conftest import (
@@ -40,7 +41,9 @@ def test_the_guarded_path_is_the_lock_gpu_lock_shell_falls_back_to(tmp_path):
     does. Read from the source rather than restated here, so changing
     `GPU_LOCK_DIR`'s default turns this red instead of quietly leaving the guard
     watching a path nothing uses."""
-    source = (Path(REPO_ROOT) / "tools" / "gpu_lock.sh").read_text()
+    # The house lock, not the retired private copy (U2).
+    goh = Path(os.environ.get("GOH_DIR", Path.home() / "Projects" / "gates_of_heck"))
+    source = (goh / "lib" / "gpu_lock" / "gpu_lock.sh").read_text()
     match = re.search(r'GPU_LOCK_DIR="\$\{ZTOOLS_GPU_LOCK_DIR:-([^}]+)\}"', source)
     assert match, "tools/gpu_lock.sh no longer sets GPU_LOCK_DIR the way it did"
     assert DEFAULT_REAL_GPU_LOCK == Path(match.group(1))

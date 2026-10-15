@@ -58,18 +58,6 @@ Goal: every goh capability this repo still carries a private copy of, or has not
 the house one. Depends on nothing. Size: S. Exit: each item's check is a `GOH_CI_STEPS` step
 or a deletion, and each was seen red once.
 
-### U2 — a vendored copy of the house GPU lock
-- **Class:** a private copy of a house library drifts (goh `3103441`): `tools/gpu_lock.sh`
-  duplicates `$GOH_DIR/lib/gpu_lock/gpu_lock.sh`, and its header cites a desktop-lock path
-  that is gone.
-- **Why now:** `rust/tests/gpu_lock_shell_parity.rs` judges the Rust client against this
-  copy, not against the bash half every other repo sources.
-- **Done when:** `tools/osaurus_one.sh` sources the house file, `tools/gpu_lock.sh` is
-  deleted, and `rust/tests/gpu_lock_shell_parity.rs` plus `tools/tests/test_gpu_lock_shell.py`
-  point at the house file (the parity test watched red against a deliberately skewed copy).
-  Size: S.
-- **Blocked by:** nothing.
-
 ### U3 — the vendored crate's tests are a plain `cargo test` with 26 emptiness asserts
 - **Class:** a gate step that bypasses the house runner (goh Downstream, ztools):
   `GOH_CI_STEPS` runs `cargo test --manifest-path vendor/camoufox-rs/Cargo.toml --all-features`

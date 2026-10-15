@@ -34,7 +34,7 @@
 # that session's numbers just as thoroughly as a second server would -- and the
 # sample guard cannot see it, because machine_is_uncontended() reads swap and
 # compressor and never the GPU, so the ruined timing is filed as a CLEAN sample.
-# See tools/gpu_lock.sh.
+# See the house lib/gpu_lock/gpu_lock.sh.
 
 set -euo pipefail
 
@@ -44,7 +44,7 @@ GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
 # The output helpers, defined BEFORE the source so a missing tui degrades instead of
 # dying. `require_commands` is in the list because it lives in tui/lib.sh too and this
 # script calls it below: sourcing nothing leaves it undefined, and "command not found"
-# at 127 names neither the cause nor the remedy. Same rule tools/gpu_lock.sh states --
+# at 127 names neither the cause nor the remedy. Same rule the house `gpu_lock.sh` states --
 # a guard that only returns non-zero is not enough, because `return` from a sourced file
 # returns from the SOURCE and the caller carries on -- so the helpers are DEFINED here,
 # not merely checked for.
@@ -75,8 +75,11 @@ else
 fi
 unset _osaurus_helper
 
+# The house GPU lock, not a private copy (U2). It was born here as
+# tools/gpu_lock.sh and was promoted to gates_of_heck/lib/gpu_lock/ on 2026-10-10;
+# keeping a second copy here is how the two drift, and they already had.
 # shellcheck disable=SC1091
-source "$ROOT/tools/gpu_lock.sh"
+source "$GOH/lib/gpu_lock/gpu_lock.sh"
 
 PORT="${OSAURUS_PORT:-1337}"
 MODE="ensure"

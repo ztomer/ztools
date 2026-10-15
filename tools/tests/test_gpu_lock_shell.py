@@ -1,6 +1,6 @@
 """The shell half of the GPU lock, and its wiring into tools/osaurus_one.sh.
 
-WHY A SECOND TEST FILE. tools/gpu_lock.sh is a SEPARATE IMPLEMENTATION of the same
+WHY A SECOND TEST FILE. the house lib/gpu_lock/gpu_lock.sh is a SEPARATE IMPLEMENTATION of the same
 lock as lib/gpu_lock.py, not a wrapper around it -- osaurus_one.sh is bash and
 cannot import Python, and shelling out to Python from a lock would add a failure
 mode to the thing whose whole job is to fail safely. Two implementations of one
@@ -44,12 +44,15 @@ SHELL_TIMEOUT = 30
 
 
 def sh(body, lock_dir, extra_env=None, cwd=None):
-    """Run a bash snippet with the canonical tui/lib.sh and tools/gpu_lock.sh sourced."""
+    """Run a bash snippet with the canonical tui/lib.sh and the HOUSE gpu_lock.sh sourced."""
     env = {**os.environ, "ZTOOLS_GPU_LOCK_DIR": str(lock_dir), "NO_COLOR": "1"}
     env.pop("ZTOOLS_GPU_LOCK_OWNER", None)
     env.update(extra_env or {})
     goh = os.environ.get("GOH_DIR", Path.home() / "Projects" / "gates_of_heck")
-    script = f'source "{goh}/tui/lib.sh"\nsource "{REPO}/tools/gpu_lock.sh"\n{body}\n'
+    # The HOUSE lock (U2), not tools/gpu_lock.sh: that file was promoted to
+    # gates_of_heck/lib/gpu_lock/ on 2026-10-10 and this repo kept a stale copy.
+    # Parity is only worth measuring against the one every other repo sources.
+    script = f'source "{goh}/tui/lib.sh"\nsource "{goh}/lib/gpu_lock/gpu_lock.sh"\n{body}\n'
     # check=False, and deliberately: the snippet's exit status IS the observation
     # (a refusal must FAIL), so callers assert on returncode rather than letting
     # run() raise before the assertion can read what happened.

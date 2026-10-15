@@ -92,7 +92,7 @@ pub(super) const CLEARED: &[&str] = &[
 
 /// Variables read by code OUTSIDE the crate — the house gate's checkout
 /// locator, reached only from `rust/tests/gpu_lock_shell_parity.rs`, which
-/// spawns `tools/gpu_lock.sh`. The sandbox cannot recreate another repository,
+/// spawns the house `gpu_lock.sh`. The sandbox cannot recreate another repository,
 /// and clearing `GOH_DIR` would only break that one test, so these are
 /// declared rather than redirected: the gate still fails if a NEW external
 /// variable appears.

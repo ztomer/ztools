@@ -82,7 +82,7 @@
 //!   macOS gate has always had this property and the Linux gate inherits it
 //!   exactly rather than introducing it.
 //! - Neither platform's reading can see GPU or CPU contention. That is what
-//!   `tools/gpu_lock.sh` and the whole OS are for; see its header.
+//!   the house `gpu_lock.sh` and the whole OS are for; see its header.
 
 use std::path::Path;
 

@@ -29,7 +29,7 @@ WHAT IS PROVEN, and by what mechanism:
     server, AND the log is asserted EMPTY at teardown, so forgetting is a failure
     rather than a quietly machine-dependent result.
 
-  * The machine-wide lock cannot come into existence. `gpu_lock.sh:260` takes the
+  * The machine-wide lock cannot come into existence. the house `gpu_lock.sh` takes the
     lock with `mkdir "$GPU_LOCK_DIR"` -- an ordinary PATH-resolved command, not a
     shell builtin -- so a `mkdir` interposer redirects that one path into this
     test's tmp_path and forwards every other mkdir. This is a seam, not a
@@ -71,7 +71,7 @@ from pathlib import Path
 
 import pytest
 
-#: The machine-wide GPU lock `tools/gpu_lock.sh:114` falls back to when
+#: The machine-wide GPU lock the house `gpu_lock.sh` falls back to when
 #: `ZTOOLS_GPU_LOCK_DIR` is unset. A fixture, not a bare constant, so a test that
 #: needs to watch the guard fire can substitute a stand-in path.
 DEFAULT_REAL_GPU_LOCK = Path("/tmp/mac-osaurus-gpu.lock")
@@ -115,7 +115,7 @@ def _write_refuser(directory, name, log):
 def _write_mkdir_interposer(directory, log, real_lock, redirect_to):
     """Point `mkdir` of the machine-wide lock somewhere harmless, forward the rest.
 
-    This is the load-bearing piece. `gpu_lock.sh` takes the lock with a plain
+    This is the load-bearing piece. the house `gpu_lock.sh` takes the lock with a plain
     `mkdir` (line 260), which PATH resolves -- so intercepting the one path makes
     the real lock un-creatable while a marked test runs, deterministically. A
     comparison of the path before and after the test cannot do that: the script
@@ -196,7 +196,7 @@ def no_real_server_restart(request, tmp_path, monkeypatch, real_gpu_lock):
     before = _fingerprint(real_gpu_lock)
 
     # The seam, made the default: a test that forgets to redirect the lock lands
-    # in tmp_path rather than on the machine-wide lock. gpu_lock.sh reads this
+    # in tmp_path rather than on the machine-wide lock. the house `gpu_lock.sh` reads this
     # variable once, at source time (line 114).
     monkeypatch.setenv("PATH", os.pathsep.join([str(shadow), os.environ["PATH"]]))
     monkeypatch.setenv("ZTOOLS_GPU_LOCK_DIR", str(tmp_path / "gpu.lock"))

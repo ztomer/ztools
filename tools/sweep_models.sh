@@ -51,7 +51,7 @@ GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
 # dying. Two separate failures, one cause: `source` on an absent file prints
 # "tui/lib.sh: No such file or directory" and, under `set -e`, exits with no
 # explanation -- and had `die` then been undefined, the bare "die: command not found"
-# is not an abort at all but a CONTINUE. tools/gpu_lock.sh documents the damage that
+# is not an abort at all but a CONTINUE. the house `gpu_lock.sh` documents the damage that
 # caused: gpu_lock_acquire could never time out, it spun forever, and the test suite
 # hung at 24%. A guard that only returns non-zero is not enough either -- `return` from
 # a sourced file returns from the SOURCE and the caller carries on -- so the helpers

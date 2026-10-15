@@ -28,7 +28,7 @@ GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
 # The output helpers, defined BEFORE the source so a missing tui degrades instead
 # of dying. Sourcing an absent file prints "No such file or directory" and, under
 # `set -e`, exits with nothing named — fail-closed but unnamed, which is the worst
-# of both. Same rule tools/gpu_lock.sh and tools/release.sh state: a guard that
+# of both. Same rule the house `gpu_lock.sh` and tools/release.sh state: a guard that
 # only returns non-zero is not enough, because `return` from a sourced file returns
 # from the SOURCE and the caller carries on — so the helpers are DEFINED here, not
 # merely checked for. `require_commands` is in the list for the same reason and is

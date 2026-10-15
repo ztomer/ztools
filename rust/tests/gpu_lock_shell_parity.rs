@@ -1,5 +1,6 @@
-//! One lock, two implementations: `tools/gpu_lock.sh` (bash, used by
-//! `osaurus_one.sh`) and `eval::gpu_lock` (Rust, held by `model-eval`).
+//! One lock, two implementations: the house `lib/gpu_lock/gpu_lock.sh` (bash, sourced
+//! by `osaurus_one.sh` since U2 retired this repo's private copy) and `eval::gpu_lock`
+//! (Rust, held by `model-eval`).
 //!
 //! If they disagree about the path or the owner-file format, each reads the
 //! other's record as an impostor and silently grants a lock the peer is
@@ -37,9 +38,11 @@ fn goh_dir() -> Option<PathBuf> {
 
 fn script(goh: &Path, body: &str) -> String {
     format!(
-        "source \"{}/tui/lib.sh\"\nsource \"{}/tools/gpu_lock.sh\"\n{body}\n",
+        // The HOUSE lock (U2), not the retired tools/gpu_lock.sh. Parity measured
+        // against a private copy is parity with a copy nobody else holds.
+        "source \"{}/tui/lib.sh\"\nsource \"{}/lib/gpu_lock/gpu_lock.sh\"\n{body}\n",
         goh.display(),
-        repo().display()
+        goh.display()
     )
 }
 

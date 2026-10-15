@@ -1,6 +1,6 @@
 //! Machine-wide mutual exclusion for the osaurus server and the GPU.
 //!
-//! Rust implementation matching `lib/gpu_lock.py` and `tools/gpu_lock.sh`:
+//! Rust implementation matching the house `lib/gpu_lock/gpu_lock.{py,sh}`:
 //! same lock path (`/tmp/mac-osaurus-gpu.lock`), same owner format (`pid\nstart_time\nlabel\n`),
 //! same staleness rules, and identical start-time normalisation.
 

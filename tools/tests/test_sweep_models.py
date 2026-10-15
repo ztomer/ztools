@@ -26,7 +26,7 @@ nothing to wait for and a 1s tax per test buys nothing.
 tui/lib.sh is a formatting library in another checkout. These tests use the real one
 when it is present (so the real output path is exercised) and a minimal stand-in when it
 is not, because a state-machine test must not fail because a second checkout is absent —
-the same reason tools/gpu_lock.sh defines its own helpers. Assertions are substring
+the same reason the house `gpu_lock.sh` defines its own helpers. Assertions are substring
 matches, so icons and colour are irrelevant either way.
 """
 
