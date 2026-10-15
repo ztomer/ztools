@@ -36,119 +36,27 @@ earlier one, and each phase says what it depends on.
 A dated summary, not checked by any gate; re-derive it before editing:
 `gh run list --limit 3`, `git log --oneline origin/main..main`, `tools/gate.sh --full`.
 
-- **The local gate is RED since goh v0.27.0** (`gates_of_heck` `51d31a5`, 2026-10-14):
-  `tools/gate.sh --full` on `1076cde` failed 2 of 12 steps in 2 min 7 s -- the Rust gate's
-  `no emptiness asserts` and the structural gate's `no early-exit pipe under pipefail`; with
-  those two masked (scratch run, not committed) structural also refuses 13 undeclared
-  stdin calls. Every other step was green at 09:00; RustSec published four `rustls`
-  advisories the same day, so `cargo audit` is red now too (`A6`). Phase A is that list.
-- **CI on `main` is still RED** (latest run 2026-10-12 14:43 UTC, `roadmap: rephase…`): every
-  run since 2026-10-10 dies in `actions/setup-python` (`.python-version doesn't exist`). `A5`.
-- Hooks reinstalled to goh 0.27.0's stock set (`1076cde`). Installed: `ztools 3.8.0`.
+- **Re-derived 2026-10-14: the gate is GREEN and Phase 0 is LANDED.** The list below used to say
+  the gate had been red since goh v0.27.0; it is not. `gates/structural.sh --full` is green on
+  every step Phase 0 was about — `no early-exit pipe under pipefail`, `every child process names
+  its stdin`, `every scanner read its declared subject`, `gates refuse to pass over an empty
+  tree`, `no bare python in a hook or gate`. `.python-version` is tracked (A5) and `rustls` is
+  0.23.46 in `rust/Cargo.lock` (A6). Phase A is deleted from this file for that reason, per
+  rule 2 above; its narrative is git history at the commit that closed each item.
+- **CI on `main` was last RED** (every run since 2026-10-10 died in `actions/setup-python`).
+  A5's tracking fix has landed, so the next run is the evidence — check `gh run list` rather
+  than trusting this line.
+- Hooks are goh 0.27.0's stock set. Installed: `ztools 3.8.0`.
 - The previous plan's `P2` (a release can be tagged over a red CI) is closed upstream:
   goh `5c5868e` makes the release kit refuse while CI on HEAD is red, pending or missing,
   and `tools/release.sh` execs that kit. Narrative of earlier phases:
   `git show 6a10475:docs/ROADMAP.md`.
 
-## Phase A — wire in goh 0.27.0 (Phase 0)
-
-Goal: `tools/gate.sh --full` green at HEAD, the commit pushed, and CI green on it. Depends on
-nothing; everything else waits on it, because the pre-push hook refuses every push until it
-lands. Size: S (one session). Exit: `tools/gate.sh --full` 12/12 green on HEAD, `git push`
-accepted by the pre-push gate, `gh run list --branch main --limit 1` reports `success`.
-
-### A1 — 13 child processes inherit stdin undeclared
-- **Class:** a child that inherits a stdin nobody chose HANGS instead of failing (goh 3.4,
-  `0c93f4d`: the check is on by default). Measured 2026-10-14 by
-  goh's `subprocess-stdin`: 13 calls, 11 in `tools/tests/` (`test_gpu_lock_shell.py:62,91,98,271,295`,
-  `test_install_platform_gate.py:73,248`, `test_ab_test_comparator.py:123`,
-  `test_conftest_guard.py:50`, `test_rerun_truncated.py:198`, `test_sweep_models.py:162`) plus
-  `tools/upgrade_tap.py:82` (deleted by `U1`) and `tools/vendor_lint_ratchet.py:124`.
-- **Why now:** structural step `every child process names its stdin` is red at full scope, so
-  pre-push refuses every push.
-- **Done when:** each call names `stdin=subprocess.DEVNULL`, `input=` or `stdin=None` (none of
-  these needs the caller's stdin; declare, do not `--seed`), and the step is green. Size: S.
-- **Blocked by:** nothing.
-
-### A2 — an early-exit `head` reads a pipe under pipefail
-- **Class:** an early-exit consumer SIGPIPEs its producer and pipefail turns a hit into a
-  failure, depending on load (goh 6.9, `496b6a5`). One site: `tools/osaurus_one.sh:179`,
-  `FIRST="$(printf '%s\n' "$FOUND" | head -1)"`.
-- **Why now:** structural step `no early-exit pipe under pipefail` is red; it is the first
-  structural red, so it hides every step after it.
-- **Done when:** the line reads `FIRST="$(head -n1 <<< "$FOUND")"` (the shape the finding
-  prints) and the step is green with no `early_exit_pipe_seed.json` (new) written. Size: XS.
-- **Blocked by:** nothing.
-
-### A3 — two emptiness asserts in the eval tests
-- **Class:** `assert!(!x.is_empty())` prints nothing about `x` when it fails (goh
-  `empty-assert`, run by the house Rust gate). Sites: `rust/src/ztools/eval/smoke_tasks_tests.rs:235`
-  and `:242`.
-- **Why now:** the Rust gate's step `no emptiness asserts` is red (`[1/12]`).
-- **Done when:** both read `assert_ne!(x.len(), 0, …)` with their messages kept, and step
-  `[1/12]` is green. Size: XS.
-- **Blocked by:** nothing.
-
-### A4 — scanner floors are unset, so a scan that stops reading passes
-- **Class:** a vacuous pass -- a scanner whose file selection broke reads nothing and reports
-  clean (goh 4.3, `831d686`).
-- **Why now:** advisory today, but it is the line that tells a blind gate from a clean one,
-  and Phase A is the session that reads it.
-- **Done when:** `.gatesrc` sets the twelve floors printed on 2026-10-14
-  (`GOH_EMOJI_MIN_FILES=385 GOH_CONFLICT_MARKERS_MIN_FILES=439 GOH_FILE_LENGTH_MIN_FILES=285
-  GOH_SECRETS_MIN_FILES=439 GOH_SHELL_LINT_MIN_FILES=8 GOH_EARLY_EXIT_PIPE_MIN_FILES=14
-  GOH_DEAD_AFTER_EXEC_MIN_FILES=14 GOH_BARE_HOOK_INDEX_MIN_FILES=14 GOH_BARE_PYTHON_MIN_FILES=6
-  GOH_CHECKOUT_CREDENTIALS_MIN_FILES=1 GOH_MD_LINKS_MIN_LINKS=4 GOH_UNREAPED_SPAWN_MIN_FILES=202`,
-  re-read at the time, at or a little under each) plus `GOH_SUBPROCESS_STDIN_MIN_CALLS` at the
-  post-`A1` count; the `[subject]` advisory line is gone; and one floor raised by one past its
-  count turns `every scanner read its declared subject` red naming the key (then put back).
-  Size: XS.
-- **Blocked by:** `A1` (the stdin floor is counted after the declarations).
-
-### A5 — CI checks out a file the repo does not track
-- **Class:** CI reads a file only the developer's checkout has, so the local gate passes
-  and the gate of record cannot start. `.github/workflows/ci.yml:98` says
-  `python-version-file: .python-version`; `.gitignore:85` (`# pyenv`) ignores that file and
-  it has never been tracked. Introduced by `22d8009` ("CI reads .python-version").
-- **Why now:** CI has not reached the gate on any push since `83cf63b` (2026-10-10); goh
-  `5c5868e` now refuses the next release while it stays red (goh BACKLOG Downstream, ztools).
-  `--no-ci-check` exists and is not the fix.
-- **Done when:** a pytest in `tools/tests/test_ci_files_tracked.py` (new) parses every
-  `*-file:` / `hashFiles(...)` / `path:` input in `.github/workflows/ci.yml` and asserts each
-  is `git ls-files`-tracked -- seen red on today's tree -- then `.python-version` is tracked
-  (drop `.gitignore:85`) and the next CI run on `main` is `success`. Size: S.
-- **Blocked by:** nothing.
-
-### A6 — four rustls advisories published 2026-10-14
-- **Class:** a dependency advisory published after the last green gate (RustSec, same day as
-  goh 0.27.0): `rustls` 0.23.45 in `rust/Cargo.lock` carries RUSTSEC-2026-0346 (`Debug`
-  impls expose TLS secrets), -0347 (buffered data to the outer server after ECH rejection),
-  -0348 (Brotli certificate decompression allocates up to 1 GiB before authentication) and
-  -0349 (an unauthenticated ServerHello downgrades later connections to classical key
-  exchange). Fixed in 0.23.46, which `cargo update -p rustls` takes (dry run 2026-10-14).
-- **Why now:** `cargo audit` (`[2/12]`) and the Rust gate's advisory step went red on the
-  advisory DB fetched after the 09:00 gate run above; pre-push refuses on it.
-- **Done when:** the lock holds `rustls` 0.23.46 or later in its own commit, and both audit
-  steps are green with no ignore entry added. Size: XS.
-- **Blocked by:** nothing.
-
 ## Phase P — the gate of record can fail
 
 Goal: the two roadmap checks that currently pass over nothing can go red, and the docs say
-what the step list runs. Depends on Phase A. Size: S. Exit: every new check in this phase
+what the step list runs. Depends on nothing. Size: S. Exit: every new check in this phase
 has been seen red once on the real tree.
-
-### P3 — the roadmap's "has items" check passes over nothing
-- **Class:** a gate made vacuous to accommodate an empty input.
-  `test_the_roadmap_has_items_to_check` in `tools/tests/test_roadmap.py` asserts
-  `len(items(roadmap)) >= 0`, which no input can fail; it was loosened in `6ad4a2b` when the
-  file emptied. A broken `ITEM` regex would now report every rule satisfied.
-- **Why now:** this file's whole contract rests on the parser seeing the items.
-- **Done when:** the test compares `items()` against an independent count of
-  `^### ` headings under `## Phase` sections (so an empty roadmap passes honestly and a
-  parser that misses headings fails), and a fixture with a heading the parser cannot read
-  is asserted red.
-- **Blocked by:** nothing.
 
 ### P4 — an inbound roadmap reference the gate cannot see
 - **Class:** a reference check that knows one word order and a subset of files.
@@ -160,17 +68,6 @@ has been seen red once on the real tree.
 - **Done when:** `inbound_sources()` covers root `*.toml`, the regex accepts
   `<ID>` … `docs/ROADMAP.md` within one sentence, a fixture of that form is asserted red,
   and the `rust-toolchain.toml` comment says what a red gate prints today (measured, quoted).
-- **Blocked by:** nothing.
-
-### P5 — `ruff format` is documented as a gate and nothing runs it
-- **Class:** a doc that states a gate's contents without a check. `README.md` says
-  "`ruff` is configured but not yet a gate" and `CLAUDE.md` says "Ruff is NOT in the gate's
-  step list yet"; `.gatesrc` `GOH_CI_STEPS` does run `ruff check tools/`, and does NOT run
-  `ruff format --check tools/`, which both docs tell you to run by hand.
-- **Why now:** two docs disagree with the step list in opposite directions.
-- **Done when:** `ruff format --check tools/` is a `GOH_CI_STEPS` step (seen red once on an
-  unformatted fixture), and both docs say what the list runs — or quote it from `.gatesrc`
-  instead of restating it.
 - **Blocked by:** nothing.
 
 ## Phase D — the docs describe the Rust tool, not the retired Python one
@@ -205,18 +102,10 @@ Size: S. Exit: the two checks below are green and each was seen red once.
   `*.py` product path in a doc without the banner (seen red before the banners land).
 - **Blocked by:** nothing.
 
-### D3 — `CLAUDE.md` points at gate lines that moved
-- **Class:** a line-number citation with no check. `CLAUDE.md` cites `.gatesrc:26` for the
-  coverage floor; `GOH_CI_STEPS` is at `.gatesrc:113` today.
-- **Why now:** it is the first file a session reads.
-- **Done when:** the citation names the variable, not a line (`GOH_CI_STEPS`), and a grep for
-  `\.gatesrc:[0-9]` in `*.md` returns nothing.
-- **Blocked by:** nothing.
-
 ## Phase U — house-layer adoption (advisory today, from goh's Downstream list)
 
 Goal: every goh capability this repo still carries a private copy of, or has not wired, is
-the house one. Depends on Phase A. Size: S. Exit: each item's check is a `GOH_CI_STEPS` step
+the house one. Depends on nothing. Size: S. Exit: each item's check is a `GOH_CI_STEPS` step
 or a deletion, and each was seen red once.
 
 ### U1 — a manual tap door that bypasses the tap's gate, and the repo's only status markers
@@ -263,12 +152,12 @@ or a deletion, and each was seen red once.
   is the one place a staged-scope check (stdin, secrets) is exact.
 - **Done when:** the flag is gone and a dry-run release on a clean tree still commits the
   bump through the hook. Size: XS.
-- **Blocked by:** `A1`, `A2` (the hook must pass on the tree first).
+- **Blocked by:** nothing (A1 and A2 landed; the hook passes on the tree).
 
 ## Phase F — owner-requested features
 
-Goal: the owner's feature asks, each behind a test that can go red. Depends on Phase A (nothing
-pushes before it). Size: S. Exit: each item's round-trip tests green and the command used once
+Goal: the owner's feature asks, each behind a test that can go red. Depends on nothing (Phase 0
+is landed, so pushes are no longer waiting on it). Size: S. Exit: each item's round-trip tests green and the command used once
 from `routines`.
 
 ### F1 — `ztools weekend exclude <place>`, the seam the routines row button calls
@@ -295,7 +184,7 @@ from `routines`.
 ## Phase H — currency (house rule: newest release of every layer)
 
 Goal: nothing in the stack is behind its newest release without a recorded reason.
-Depends on `A5` (a CI that runs, to prove each move). Size: S. Exit: the commands named in
+Depends on nothing. Size: S. Exit: the commands named in
 each item report nothing pending.
 
 ### H1 — lockfile refresh
@@ -306,7 +195,7 @@ each item report nothing pending.
 - **Why now:** routine hygiene; a held-back transitive is how a duplicate major starts.
 - **Done when:** `cargo update --verbose` shows no `Updating` line, any `Unchanged … available`
   line names its parent and reason here, `cargo tree -d` is empty, and the gate is green.
-- **Blocked by:** `A5`.
+- **Blocked by:** nothing.
 
 ### H2 — CI runner and actions ride moving tags
 - **Class:** "latest means a named release, never a moving tag". `.github/workflows/ci.yml`
@@ -318,7 +207,7 @@ each item report nothing pending.
 - **Done when:** the newest GitHub macOS arm64 image is named (measured from GitHub's runner
   list, not assumed), each action is pinned to a release SHA with its tag in a comment, and
   CI is green on it.
-- **Blocked by:** `A5`.
+- **Blocked by:** nothing.
 
 ### H3 — the vendored crate's clippy ratchet
 - **Class:** suppressed findings held under a ceiling instead of fixed.

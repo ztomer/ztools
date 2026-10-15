@@ -120,9 +120,64 @@ def roadmap() -> str:
     return ROADMAP.read_text()
 
 
+def independent_item_count(text: str) -> int:
+    """Count item headings WITHOUT using `ITEM`, so the two can disagree.
+
+    `items()` keys on `^### ([A-Z]\\d+) — .+$`. A parser that silently stops
+    matching -- a renamed heading level, a lost em dash, a non-breaking space --
+    returns {} and every rule below it reports "satisfied". This counts the
+    headings a reader would call items by their shape alone, which is the only
+    way a broken parser can fail rather than pass.
+
+    A `### ` belongs to the `## ` section that contains it: a section runs from
+    its heading to the next `## ` of any kind.
+    """
+    sections = [(m.start(), m.group(0)) for m in re.finditer(r"^## .+$", text, re.M)]
+    sections.append((len(text), ""))
+    n = 0
+    for h in re.finditer(r"^### (.+)$", text, re.M):
+        owner = ""
+        for i, (start, title) in enumerate(sections):
+            if start <= h.start() < sections[i + 1][0]:
+                owner = title
+                break
+        if h.group(1).strip() and owner.startswith("## Phase"):
+            n += 1
+    return n
+
+
+def item_count_disagreement(text: str) -> str | None:
+    """None when `items()` and an independent heading count agree; why they differ otherwise."""
+    found = len(items(text))
+    independent = independent_item_count(text)
+    if found != independent:
+        return f"the item parser found {found} but {independent} `### ` headings sit under a phase"
+    return None
+
+
 def test_the_roadmap_has_items_to_check(roadmap: str) -> None:
-    # Guard against vacuous pass when populated; 0 items indicates all landed.
-    assert len(items(roadmap)) >= 0, "the item parser found almost nothing"
+    # `>= 0` is true of every possible input, so this asserted nothing (P3). An empty
+    # roadmap passes honestly; a parser that has stopped matching the file's own
+    # heading shape fails, which is the failure it was pretending to catch.
+    assert len(items(roadmap)) > 0, (
+        "the roadmap has no items at all; if that is genuinely true, delete this test deliberately"
+    )
+    assert item_count_disagreement(roadmap) is None
+
+
+def test_the_count_check_fails_on_a_heading_the_parser_cannot_read() -> None:
+    """A hyphen where the em dash belongs: `ITEM` misses B2, a reader still sees an item."""
+    fixture = "## Phase Z — anything\n\n### A1 — real\n\n### B2 - not an em dash\n"
+    assert "A1" in items(fixture) and "B2" not in items(fixture)
+    assert item_count_disagreement(fixture) is not None, (
+        "a heading the parser cannot read must make this check red -- it is the only thing P3 added"
+    )
+
+
+def test_an_empty_roadmap_passes_honestly() -> None:
+    """Zero items is not a parser failure. It must not read as one, or the rule would force a
+    placeholder item into the file forever."""
+    assert item_count_disagreement("# Roadmap\n\nNothing open.\n") is None
 
 
 def test_every_item_carries_its_four_fields(roadmap: str) -> None:
@@ -215,3 +270,33 @@ def test_an_unknown_or_old_style_inbound_reference_is_rejected() -> None:
         "a.md: ROADMAP M9 is not an item",
         "b.md: 'ROADMAP item 1' -- refer to a roadmap item by its ID",
     ]
+
+
+# --- no line-number citations into a config file (D3) ---------------------------
+# `CLAUDE.md` cited `.gatesrc:26` for the coverage floor while `GOH_CI_STEPS` sits at
+# `.gatesrc:113`. The number was never checked and nobody noticed for months: a doc
+# citation is a claim about a FILE's interior, so it goes stale on any edit above it.
+# The rule is to name the variable, never a line.
+
+LINE_CITATION = re.compile(r"\.gatesrc:(\d+)")
+# The roadmap quotes the forbidden form in order to forbid it, same as ANNOTATED_DONE.
+_SKIP = {ROADMAP}
+
+
+def line_citations(sources: dict[str, str]) -> list[str]:
+    out = []
+    for name, text in sorted(sources.items()):
+        if Path(name).resolve() in _SKIP:
+            continue
+        for m in LINE_CITATION.finditer(text):
+            out.append(f"{name}: `.gatesrc:{m.group(1)}` -- name the variable, not a line")
+    return out
+
+
+def test_no_doc_cites_a_line_number_in_gatesrc(roadmap: str) -> None:
+    assert line_citations(inbound_sources()) == []
+
+
+def test_a_line_citation_is_named_when_it_appears() -> None:
+    found = line_citations({"docs/real.md": "the floor is at `.gatesrc:26` here"})
+    assert found == ["docs/real.md: `.gatesrc:26` -- name the variable, not a line"]

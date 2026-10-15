@@ -169,9 +169,10 @@ guard, which makes the sandbox checkable instead of assumed: `osaurus`/`pgrep`/`
 lock is redirected into the test's `tmp_path`, and the real lock must come out
 byte-identical. A test that forgets its stubs fails instead of reaching the machine.
 
-**`ruff` is configured but not yet a gate.** `.gatesrc`'s step list runs the tools
-pytest and nothing Python-lint-wise, so these two commands are on you until someone
-adds them to `GOH_CI_STEPS`.
+**`ruff` IS a gate.** `.gatesrc`'s `GOH_CI_STEPS` runs both `ruff check tools/` and
+`ruff format --check tools/`, so neither is on you any more. Read the list rather
+than trusting this paragraph — it is `GOH_CI_STEPS` in `.gatesrc`, one line, and the
+next section quotes where to find it.
 
 ### The gate is ONE list (`.gatesrc`)
 

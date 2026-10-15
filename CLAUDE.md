@@ -42,7 +42,7 @@ unpoliced until that suffix list grows, and nothing warns you.
 - Run (quick): `cargo test --manifest-path rust/Cargo.toml --all-features`
 - Run (what the gate runs — use this before pushing): `tools/gate.sh --full`
   (= `make ci`): fmt, clippy `-D warnings`, no `#[allow]`, audit, emoji, file length,
-  tests, coverage floor **95** (`.gatesrc:26` `GOH_CI_STEPS` →
+  tests, coverage floor **95** (`GOH_CI_STEPS` in `.gatesrc` →
   `coverage_gate.sh --lang rust --floor 95 rust`; `Makefile:19` states the same).
 - `tools/tests/` holds the pytest for the shell tooling (`tools/gpu_lock.sh`):
   `python3 -m pytest tools/tests -q`. `tools/*.py` are dev gates, never the product.
@@ -52,9 +52,10 @@ unpoliced until that suffix list grows, and nothing warns you.
   proves the sandbox (machine-reaching commands stubbed, lock at `tmp_path`) rather
   than assuming it. Lint and format for `tools/` are configured in
   `pyproject.toml` (ruff, line-length 100, `PLW`/`BLE` selected because those are
-  the two that bit here) — run `ruff check tools/` and
-  `ruff format --check tools/`. Ruff is NOT in the gate's step list yet, so
-  nothing runs it for you.
+  the two that bit here). Both `ruff check tools/` and `ruff format --check tools/`
+  are steps in `.gatesrc`'s `GOH_CI_STEPS`, so the gate runs them; to see the real
+  list rather than this summary, read `GOH_CI_STEPS` in `.gatesrc` (do not cite a
+  line number — D3 removed the last one).
 - Add discovered test patterns or bugs to `docs/TESTING.md` immediately
 
 ### Model Evals
