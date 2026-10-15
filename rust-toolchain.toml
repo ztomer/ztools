@@ -7,10 +7,21 @@
 # this file) simply picks the newer stable up, so a new lint in clippy or a new
 # edition gate in rustc can still turn a green gate red on a commit that changed
 # nothing. Which of those two things happened — a defect, or a toolchain move —
-# is not ATTRIBUTED by anything here: `gates/rust_gate.sh` prints no `rustc -V`
-# (measured 2026-10-08), so a red gate cannot say which compiler produced it.
-# That mechanism is `X6` in `docs/ROADMAP.md`, and `rust/src/ztools` is not
-# involved in it.
+# is only HALF attributed, and this comment says which half, measured 2026-10-14:
+#
+#   * HALF DONE — the compiler is part of the gate's identity. `gates/_proven.sh`
+#     keys `proven_identity` on `_proven_tool rustc rustc -V`, so a toolchain move
+#     invalidates every recorded step instead of silently reusing it. That is the
+#     part that was asked for and now exists.
+#   * STILL MISSING — nothing PRINTS it. `gates/rust_gate.sh` emits no `rustc -V`
+#     line on any path, pass or fail, so a red gate still cannot say which compiler
+#     produced it. Printing it is the open half, and it is not tracked in
+#     `docs/ROADMAP.md` — this comment used to point at an item `X6` that has never
+#     existed in that file, which a reference check could not see because it
+#     neither globbed root `*.toml` nor read this word order. Both are fixed;
+#     `tools/tests/test_roadmap.py` now fails on a pointer that does not resolve.
+#
+# `rust/src/ztools` is not involved in either half.
 #
 # `stable` and not a point release, deliberately. Point-pinning (`1.99.0`) would
 # freeze the toolchain harder, but it also means the pin itself rots: the next

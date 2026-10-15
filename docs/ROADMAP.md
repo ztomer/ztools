@@ -52,24 +52,6 @@ A dated summary, not checked by any gate; re-derive it before editing:
   and `tools/release.sh` execs that kit. Narrative of earlier phases:
   `git show 6a10475:docs/ROADMAP.md`.
 
-## Phase P — the gate of record can fail
-
-Goal: the two roadmap checks that currently pass over nothing can go red, and the docs say
-what the step list runs. Depends on nothing. Size: S. Exit: every new check in this phase
-has been seen red once on the real tree.
-
-### P4 — an inbound roadmap reference the gate cannot see
-- **Class:** a reference check that knows one word order and a subset of files.
-  `rust-toolchain.toml` says "That mechanism is `X6` in `docs/ROADMAP.md`"; no `X6` has ever
-  existed in this file (checked against `git log -p`), the `INBOUND` regex only matches
-  `ROADMAP <ID>`, and root `*.toml` files are not in `inbound_sources()`.
-- **Why now:** the comment also claims `gates/rust_gate.sh` prints no `rustc -V`; goh's
-  gates/_proven.sh now keys on `rustc -V`, so the claim may be stale as well as its pointer.
-- **Done when:** `inbound_sources()` covers root `*.toml`, the regex accepts
-  `<ID>` … `docs/ROADMAP.md` within one sentence, a fixture of that form is asserted red,
-  and the `rust-toolchain.toml` comment says what a red gate prints today (measured, quoted).
-- **Blocked by:** nothing.
-
 ## Phase D — the docs describe the Rust tool, not the retired Python one
 
 Goal: no document a session reads first states something the code no longer does.

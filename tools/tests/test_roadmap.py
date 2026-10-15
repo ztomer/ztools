@@ -32,6 +32,11 @@ ANNOTATED_DONE = re.compile(r"(?i)\b(closed|shipped|landed|done|fixed)\s+(on\s+)
 PATH_ROOTS = ("rust/", "tools/", "docs/", "conf/", "bin/", "vendor/", ".githooks/", ".cargo/")
 ROOT_FILES = re.compile(r"^[\w.-]+\.(md|toml|sh|jsonc?|lock)$|^\.gatesrc$")
 INBOUND = re.compile(r"ROADMAP(?:\.md)?`?\s+([A-Z]\d+)\b")
+# The same reference written the other way round, which is how prose usually puts it:
+# "that mechanism is `X6` in `docs/ROADMAP.md`". Both word orders name the same
+# promise, so a check that only knows one of them cannot see half the references
+# it is here to resolve (P4: rust-toolchain.toml's X6, which has never existed).
+INBOUND_REVERSED = re.compile(r"`?([A-Z]\d+)`?\s+(?:in|see|per)\s+`?(?:docs/)?ROADMAP(?:\.md)?`?")
 STALE_INBOUND = re.compile(r"ROADMAP(?:\.md)?`?\s+(?:item|Phase)\s+\w")
 
 
@@ -88,6 +93,9 @@ def unresolved_inbound(defined: set[str], sources: dict[str, str]) -> list[str]:
         for m in INBOUND.finditer(text):
             if m.group(1) not in defined:
                 bad.append(f"{name}: ROADMAP {m.group(1)} is not an item")
+        for m in INBOUND_REVERSED.finditer(text):
+            if m.group(1) not in defined:
+                bad.append(f"{name}: `{m.group(1)}` in ...ROADMAP.md is not an item")
         for m in STALE_INBOUND.finditer(text):
             bad.append(f"{name}: '{m.group(0)}' -- refer to a roadmap item by its ID")
     return bad
@@ -96,6 +104,9 @@ def unresolved_inbound(defined: set[str], sources: dict[str, str]) -> list[str]:
 def inbound_sources() -> dict[str, str]:
     globs = [
         "*.md",
+        # Root *.toml: rust-toolchain.toml carries a roadmap pointer in a comment, and
+        # a check that only globs docs/ cannot see a file the compiler reads (P4).
+        "*.toml",
         "docs/*.md",
         "rust/src/**/*.rs",
         "tools/**/*.py",
@@ -270,6 +281,17 @@ def test_an_unknown_or_old_style_inbound_reference_is_rejected() -> None:
         "a.md: ROADMAP M9 is not an item",
         "b.md: 'ROADMAP item 1' -- refer to a roadmap item by its ID",
     ]
+
+
+def test_the_reversed_word_order_is_seen_too() -> None:
+    """`X6` in `docs/ROADMAP.md` is the same promise as `ROADMAP X6`, and it is how prose
+    writes it. rust-toolchain.toml's pointer survived for months because only one order was
+    matched -- and because root `*.toml` was not even globbed, so the file was never read."""
+    sources = {"rust-toolchain.toml": "that mechanism is `X6` in `docs/ROADMAP.md`"}
+    assert unresolved_inbound({"P4"}, sources) == [
+        "rust-toolchain.toml: `X6` in ...ROADMAP.md is not an item"
+    ]
+    assert unresolved_inbound({"X6"}, sources) == []
 
 
 # --- no line-number citations into a config file (D3) ---------------------------
