@@ -101,15 +101,23 @@ Goal: nothing in the stack is behind its newest release without a recorded reaso
 Depends on nothing. Size: S. Exit: the commands named in
 each item report nothing pending.
 
-### H1 — lockfile refresh
-- **Class:** dependency drift. `cargo update --dry-run --verbose` in `rust/`: 22
-  compatible updates pending on 2026-10-14 (14 on 2026-10-12: `hyper` 1.12.0, `serde_json`
-  1.0.154, `syn` 3.0.8, `toml` 1.1.8, …) and `brotli-decompressor` held at 6.0.1 (6.1.0
-  available) by its parent.
-- **Why now:** routine hygiene; a held-back transitive is how a duplicate major starts.
-- **Done when:** `cargo update --verbose` shows no `Updating` line, any `Unchanged … available`
-  line names its parent and reason here, `cargo tree -d` is empty, and the gate is green.
-- **Blocked by:** nothing.
+### H1 — lockfile refresh — DONE except one clause no release can satisfy
+- **Class:** dependency drift. `cargo update --dry-run --verbose` in `rust/` had 21 compatible
+  updates pending on 2026-10-14, and `brotli-decompressor` held at 6.0.1 (6.1.0 available).
+- **Done:** all 21 updated. `cargo update --dry-run --verbose` now reports **zero** package
+  updates — the only remaining `Updating` line is the crates.io index fetch.
+- **The one `Unchanged … available` line, named as the item requires:** `brotli-decompressor
+  v6.0.1 (available: v6.1.0)`, held by its parent **`brotli v9.0.0`**, a direct dependency.
+  `brotli` 9.0.0 is the newest release and pins the 6.0 line; nothing here can move it.
+- **NOT DONE, and not doable from this repo:** the item also asked for `cargo tree -d` to be
+  empty. One real duplicate remains — `miniz_oxide 0.8.9` (via `png 0.18.1`) beside
+  `0.9.1` (via `flate2 1.1.10`). `png` 0.18.1 is the newest 0.18.x and `cargo update -p png`
+  locks 0 packages, so the 0.8 line cannot move until a `png` release adopts `miniz_oxide`
+  0.9. This is an upstream release, not a decision. (`libc v0.2.190` appears twice in
+  `cargo tree -d` output but is ONE version reached by two paths — camoufox-rs and
+  core-foundation — not a duplicate.)
+- **Blocked by:** an upstream `png` release. Re-measure rather than assume; if a `png` has
+  shipped, the refresh is a `cargo update` and this row goes.
 
 ### H2 — CI runner and actions ride moving tags
 - **Class:** "latest means a named release, never a moving tag". `.github/workflows/ci.yml`
