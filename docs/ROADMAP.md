@@ -58,20 +58,6 @@ Goal: every goh capability this repo still carries a private copy of, or has not
 the house one. Depends on nothing. Size: S. Exit: each item's check is a `GOH_CI_STEPS` step
 or a deletion, and each was seen red once.
 
-### U1 — a manual tap door that bypasses the tap's gate, and the repo's only status markers
-- **Class:** two release paths, one of them ungated (goh 6.8, `bfac28b`): the release kit's
-  tap step goes through the kit's tap bump, which runs the tap's own gate, but
-  `tools/upgrade_tap.py` clones and pushes `ztomer/homebrew-tap` itself. Its docstring says
-  nothing invokes it (re-checked 2026-10-14: no caller). The same file is all 3 of the repo's
-  hand-rolled status markers (goh's `status-markers`, 284 files read: `tools/upgrade_tap.py:34`,
-  `:38`, `:42`; goh 4.9, `51109d6`).
-- **Why now:** it is a push to a shared repo that no gate sees, and it is the only thing
-  keeping `status-markers` from adopting with no seed.
-- **Done when:** `tools/upgrade_tap.py` and its `ARCHITECTURE.md` row are deleted, and
-  `"$GOH_DIR/gates/goh.sh" status-markers` is a `GOH_CI_STEPS` step, green with no seed and
-  seen red on a fixture marker. Size: XS.
-- **Blocked by:** nothing.
-
 ### U2 — a vendored copy of the house GPU lock
 - **Class:** a private copy of a house library drifts (goh `3103441`): `tools/gpu_lock.sh`
   duplicates `$GOH_DIR/lib/gpu_lock/gpu_lock.sh`, and its header cites a desktop-lock path

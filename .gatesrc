@@ -110,7 +110,7 @@ GOH_PYTHON_FORMATTED=1
 # Steps are COLON-separated by the runner, so no step string may contain a
 # colon -- hence $GOH_DIR resolved here.
 export GOH_DIR="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
-GOH_CI_STEPS='"$GOH_DIR/gates/rust_gate.sh" . rust:cargo audit --file rust/Cargo.lock:cargo deny --manifest-path rust/Cargo.toml check:tools/shell_lint_extra.sh:python3 tools/vendor_lint_ratchet.py:"$GOH_DIR/gates/structural.sh" --full:cargo test --manifest-path rust/Cargo.toml --all-features --doc:python3 -m pytest tools/tests -q:"$GOH_DIR/gates/coverage_gate.sh" --lang rust --floor 95 --floors-json "$PWD/tools/coverage_floors.jsonc" rust:ruff check tools/:ruff format --check tools/:cargo test --manifest-path vendor/camoufox-rs/Cargo.toml --all-features:"$GOH_DIR/gates/goh.sh" secrets'
+GOH_CI_STEPS='"$GOH_DIR/gates/rust_gate.sh" . rust:cargo audit --file rust/Cargo.lock:cargo deny --manifest-path rust/Cargo.toml check:tools/shell_lint_extra.sh:python3 tools/vendor_lint_ratchet.py:"$GOH_DIR/gates/structural.sh" --full:cargo test --manifest-path rust/Cargo.toml --all-features --doc:python3 -m pytest tools/tests -q:"$GOH_DIR/gates/coverage_gate.sh" --lang rust --floor 95 --floors-json "$PWD/tools/coverage_floors.jsonc" rust:ruff check tools/:ruff format --check tools/:"$GOH_DIR/gates/goh.sh" status-markers:cargo test --manifest-path vendor/camoufox-rs/Cargo.toml --all-features:"$GOH_DIR/gates/goh.sh" secrets'
 
 # Every scanner's floor (goh v0.27.0): a full-scope scan reading less than this
 # has lost its subject and is red. Nine tenths of the 2026-10-14 count, beside it.

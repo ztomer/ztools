@@ -332,8 +332,12 @@ def test_a_line_citation_is_named_when_it_appears() -> None:
 # A banner is the whole fix, and a check is what stops the sixth one arriving
 # unbannered.
 
+# The RETIRED product tree only. `tools/` is deliberately absent: it is live
+# tooling, and a tools script deleted on purpose (U1 retired upgrade_tap.py) is
+# not a stale pointer to anything. Demanding a "Python-era" banner for it would
+# make this check wrong in the same way it was wrong before.
 PY_PATH = re.compile(
-    r"(?<![\w/])((?:twitter|weekend|eval|lib|tools|report_class_cases|"
+    r"(?<![\w/])((?:twitter|weekend|eval|lib|report_class_cases|"
     r"test_report_class_fixes|twitter_summarizer)[A-Za-z0-9_/]*\.py)\b"
 )
 # A doc declares itself in its own words; TESTING.md says "The Python-era version

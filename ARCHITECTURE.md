@@ -76,7 +76,6 @@ ztools/
 │   ├── release.sh           # This repo's release specifics; the kit owns sequencing
 │   ├── sweep_models.sh      # The long model sweep
 │   ├── rerun_truncated.sh   # Resume a truncated sweep
-│   ├── upgrade_tap.py       # Manual/local tap bump (the kit owns the release one)
 │   └── tests/               # pytest over the shell tooling; conftest.py guards it
 ├── rust/                    # Native Rust crate (ztools)
 │   ├── Cargo.toml           # THE version source (reqwest, serde, clap, chrono, ...)
