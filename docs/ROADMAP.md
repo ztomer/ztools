@@ -52,26 +52,6 @@ A dated summary, not checked by any gate; re-derive it before editing:
   and `tools/release.sh` execs that kit. Narrative of earlier phases:
   `git show 6a10475:docs/ROADMAP.md`.
 
-## Phase D — the docs describe the Rust tool, not the retired Python one
-
-Goal: no document a session reads first states something the code no longer does.
-Depends on nothing, but do it after Phase P so the doc checks land on a green CI.
-Size: S. Exit: the two checks below are green and each was seen red once.
-
-### D2 — Python-era reference docs carry no banner
-- **Class:** a historical document that does not announce it is historical.
-  `docs/BUGS_twitter_llm_fallback.md`, `docs/LLM_GUIDANCE_AND_TEACHER_EVAL.md`,
-  `docs/DEEP_MODEL_VS_GEMINI_EVALUATION.md`, `docs/eval_calibration_2026-07-11.md` and
-  `docs/REPORT_WEAKNESS_CLASSES.md` cite `twitter/summarize.py`, `eval/validate.py`,
-  `lib/osaurus_lib.py` and other files deleted at the Rust cutover (`ddb7d53`).
-  `docs/REPORT_WEAKNESS_CLASSES.md` heads C16 "*(open)*" while its body says closed, and C11 is
-  fixed in Rust (`rust/src/ztools/twitter/mod.rs` prints "fetched, processed").
-- **Why now:** these are measurement records worth keeping, and they read as current.
-- **Done when:** each carries a first-line banner ("Python-era record, superseded by …")
-  or its file pointers resolve under `rust/`; a test over `docs/*.md` fails on a
-  `*.py` product path in a doc without the banner (seen red before the banners land).
-- **Blocked by:** nothing.
-
 ## Phase U — house-layer adoption (advisory today, from goh's Downstream list)
 
 Goal: every goh capability this repo still carries a private copy of, or has not wired, is

@@ -322,3 +322,58 @@ def test_no_doc_cites_a_line_number_in_gatesrc(roadmap: str) -> None:
 def test_a_line_citation_is_named_when_it_appears() -> None:
     found = line_citations({"docs/real.md": "the floor is at `.gatesrc:26` here"})
     assert found == ["docs/real.md: `.gatesrc:26` -- name the variable, not a line"]
+
+
+# --- a historical doc must SAY it is historical (D2) ---------------------------
+# Five docs under docs/ are measurement records from the Python era. They cite
+# `twitter/summarize.py`, `eval/validate.py`, `lib/osaurus_lib.py` and friends --
+# all deleted at the Rust cutover. The records are worth keeping; what is not
+# worth keeping is a reader taking them for a description of the current tree.
+# A banner is the whole fix, and a check is what stops the sixth one arriving
+# unbannered.
+
+PY_PATH = re.compile(
+    r"(?<![\w/])((?:twitter|weekend|eval|lib|tools|report_class_cases|"
+    r"test_report_class_fixes|twitter_summarizer)[A-Za-z0-9_/]*\.py)\b"
+)
+# A doc declares itself in its own words; TESTING.md says "The Python-era version
+# of this file ..." rather than the phrase this check was written around, and a
+# check that only accepts its own phrasing is the same blindness in a new coat.
+BANNER = re.compile(r"python-era", re.I)
+# PORT_PARITY.md is the ledger whose SUBJECT is retired files: naming
+# `twitter/summarize.py` is the job, not a stale pointer.
+EXEMPT = {"docs/PORT_PARITY.md"}
+
+
+def py_era_docs_without_a_banner(root: Path) -> list[str]:
+    out = []
+    for doc in sorted((root / "docs").glob("*.md")):
+        rel = str(doc.relative_to(root))
+        if rel in EXEMPT:
+            continue
+        text = doc.read_text(errors="replace")
+        # Only DELETED paths are the defect. `tools/vendor_lint_ratchet.py` is cited
+        # by ROADMAP.md and is still on disk; flagging it would have made this check
+        # cry wolf on live files, which is how a check gets switched off.
+        dead = sorted(
+            {m.group(1) for m in PY_PATH.finditer(text) if not (root / m.group(1)).exists()}
+        )
+        if dead and not BANNER.search(text):
+            out.append(f"{rel}: cites deleted Python-era paths with no banner ({len(dead)})")
+    return out
+
+
+def test_a_python_era_doc_declares_itself_one() -> None:
+    assert py_era_docs_without_a_banner(ROOT) == []
+
+
+def test_the_banner_check_would_catch_the_next_one(tmp_path: Path) -> None:
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "live.py").write_text("# still here\n")
+    (tmp_path / "docs" / "ok.md").write_text("> Python-era record\n\nsee twitter/summarize.py\n")
+    (tmp_path / "docs" / "new.md").write_text("# A fresh doc\n\nit calls twitter/summarize.py\n")
+    (tmp_path / "docs" / "live_ref.md").write_text("see `tools/live.py`, which exists\n")
+    assert py_era_docs_without_a_banner(tmp_path) == [
+        "docs/new.md: cites deleted Python-era paths with no banner (1)"
+    ]

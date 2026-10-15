@@ -1,3 +1,6 @@
+> **Python-era record, superseded by the Rust cutover** (`ddb7d53`). Every `*.py` path below
+> is deleted; the behaviour now lives under `rust/src/ztools/`. Kept as the measurement
+> record it is — read it as history, not as a description of the tree.
 # Meticulous Qualitative Evaluation: Local Models vs. Gemini Ideal Production Standard
 
 This document presents a line-by-line qualitative analysis comparing raw local LLM outputs (from `eval_results.json`) against Gemini's ideal production standards across `ztools` tasks.

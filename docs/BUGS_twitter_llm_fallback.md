@@ -1,3 +1,6 @@
+> **Python-era record, superseded by the Rust cutover** (`ddb7d53`). Every `*.py` path below
+> is deleted; the behaviour now lives under `rust/src/ztools/`. Kept as the measurement
+> record it is — read it as history, not as a description of the tree.
 # Bug report: Twitter summarizer LLM + MLX fallback chain
 
 Symptom (observed run):

@@ -1,5 +1,10 @@
 # Model Quirks & Best Practices
 
+> **Mixed-era document.** The current guidance here is live, but the dated entries
+> quote Python-era paths (`eval/samples.py`, `eval/run.py`, ...) that were deleted at the
+> Rust cutover (`ddb7d53`). Those quotes are left as the record they are; the live
+> equivalents are under *Key Files* below, which points at `rust/src/ztools/eval/`.
+
 **Updated: June 2026** — canonical reference for model selection and prompts.
 
 ---
@@ -95,7 +100,7 @@ work already finished -- and it drained on its own schedule.
 
 **The bug was in the guard, not the machine.** `machine_is_uncontended()` gated on a
 compressor LEVEL, so it called an idle box contended and blocked measurement that
-would have been perfectly valid. `eval/memory.py` now requires a large compressor to
+would have been perfectly valid. `rust/src/ztools/eval/signals.rs` (`memory_pressure`) now requires a large compressor to
 be corroborated by an active COMPRESSION RATE before calling it thrashing; swap in
 use still decides on its own, because swap already written to disk is unambiguous.
 
@@ -236,7 +241,8 @@ measured:
     "reason": "stamped by stamp_qwen38_27b; recommendation, not measurement"
 
 Note the shape of the detection problem: `config.json`'s TOP-LEVEL keys say plain
-`qwen3_5`, `osaurus show` reports plain `qwen3_5`, and `eval/capabilities.py` probes
+`qwen3_5`, `osaurus show` reports plain `qwen3_5`, and the capability probe in
+`rust/src/ztools/eval/runner.rs` probes
 config.json. A capability probe cannot see this build's MTP head. Only reading the
 quantization block, the vendor sidecar, or `ls` can.
 
@@ -1161,13 +1167,15 @@ python3 -m eval.benchmark_quality
 
 ## Key Files
 
-- `eval/cli.py` - Eval runner CLI
-- `eval/tasks_core.py` - Task definitions
-- `eval/run.py` - Eval loop (shim; `run_transport` / `run_validate` /
-  `run_attempt` / `run_loop` / `run_summary` hold the code)
-- `lib/quality_models.py` / `lib/quality_scorers.py` - Quality evaluation
-- `lib/validators/` - Validator implementations
-- `conf/models/*.toml` - Model prompts
+Everything below moved at the Rust cutover (`ddb7d53`); the Python paths are
+kept in the git history, not in the tree.
+
+- `rust/src/ztools/eval/` - the eval runner: `runner.rs` (loop and capability
+  probe), `samples.rs`, `tasks*.rs` (task definitions), `signals.rs`
+  (`machine_is_uncontended` / `memory_pressure`), `report_metrics.rs`,
+  `report_diff.rs`, `drain.rs`
+- `rust/src/ztools/eval/cli.rs` - Eval runner CLI
+- `conf/models/*.toml` - Model prompts (still the canonical prompt source)
 
 ---
 

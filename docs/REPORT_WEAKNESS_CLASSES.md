@@ -1,3 +1,6 @@
+> **Python-era record, superseded by the Rust cutover** (`ddb7d53`). Every `*.py` path below
+> is deleted; the behaviour now lives under `rust/src/ztools/`. Kept as the measurement
+> record it is — read it as history, not as a description of the tree.
 # Report weakness classes — `tw` and `wk`
 
 **Stage 0 of G3** (the `routines` harness's `AUTOMATION_PLAN.md` §3 G3, backlog item 9).
@@ -494,7 +497,7 @@ the same assertion trap that cost two rounds on C8.
 
 ---
 
-## C16 · OUT-OF-REGION-ROW  *(open)*
+## C16 · OUT-OF-REGION-ROW  *(fixed — whitelist + source scoping, real-run verified; the table above is the authority)*
 
 **Invariant:** every row must be somewhere the user could actually go.
 

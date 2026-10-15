@@ -1,3 +1,6 @@
+> **Python-era record, superseded by the Rust cutover** (`ddb7d53`). Every `*.py` path below
+> is deleted; the behaviour now lives under `rust/src/ztools/`. Kept as the measurement
+> record it is — read it as history, not as a description of the tree.
 # LLM Guidance & Teacher Evaluation for `ztools`
 
 This document provides a deep, qualitative evaluation of `ztools` outputs across local models and establishes prompt distillation guidelines for smaller on-device LLMs (e.g. `gemma-4-e4b`, `qwen3.6-27b`, `foundation`) in `weekend` (`wk`) and `twitter` (`tw`).
