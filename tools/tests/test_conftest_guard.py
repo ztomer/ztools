@@ -12,10 +12,10 @@ an interposer that redirected every `mkdir`, would pass a test that only checks
 the harmful path.
 """
 
+import os
 import re
 import shutil
 import subprocess
-import os
 from pathlib import Path
 
 from conftest import (
