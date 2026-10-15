@@ -43,7 +43,10 @@ if [ "$CURRENT_V" != "$V" ]; then
   /usr/bin/sed -i '' "s|^version = \".*\"|version = \"$V\"|" rust/Cargo.toml
   cargo update --manifest-path rust/Cargo.toml -p ztools --quiet
   git add rust/Cargo.toml rust/Cargo.lock
-  git commit -q -m "chore: version $V" --no-verify
+  # No --no-verify (U4). This is the commit every release tags, and it is the one place a
+  # staged-scope check is exact: the pre-commit gate reads the index, so it sees the version
+  # bump as staged. Bypassing it meant the tag could point at a commit no hook ever looked at.
+  git commit -q -m "chore: version $V"
 fi
 
 # Install, then prove the binary on PATH is this version and that every

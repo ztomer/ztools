@@ -144,16 +144,6 @@ or a deletion, and each was seen red once.
   the vendored crate), and the asserts read `assert_eq!(x.len(), 0)` / `assert_ne!`. Size: S.
 - **Blocked by:** `H3`'s owner decision.
 
-### U4 — the release script commits with `--no-verify`
-- **Class:** a gate bypass written into a script (house rule: never `--no-verify`).
-  `tools/release.sh:46` commits the version bump with `git commit … --no-verify`, so the
-  commit that every release tags never ran the pre-commit gate.
-- **Why now:** the kit gates the tree afterwards (`--gate "make ci"`), but the commit itself
-  is the one place a staged-scope check (stdin, secrets) is exact.
-- **Done when:** the flag is gone and a dry-run release on a clean tree still commits the
-  bump through the hook. Size: XS.
-- **Blocked by:** nothing (A1 and A2 landed; the hook passes on the tree).
-
 ## Phase F — owner-requested features
 
 Goal: the owner's feature asks, each behind a test that can go red. Depends on nothing (Phase 0
