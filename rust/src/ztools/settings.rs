@@ -180,8 +180,9 @@ pub fn cli(args: &[String], json: bool) -> Result<()> {
     Ok(())
 }
 
-/// Delete every `*.md` directly in `dir` last modified before `now - keep`,
-/// never the newest one. Returns what was deleted. Subdirectories (`rejected/`
+/// Delete every `*.md` directly in `dir` last modified before `now - keep`.
+///
+/// Never the newest one. Returns what was deleted. Subdirectories (`rejected/`
 /// and the like) keep their own bounds and are not entered.
 #[must_use]
 pub fn prune(dir: &Path, keep: Duration, now: SystemTime) -> Vec<PathBuf> {

@@ -1,6 +1,8 @@
-//! A2, listing-page titles: a page that LISTS events is neither a venue nor
-//! an event. Split from `suitability.rs` (the house 500-line cap); its items
-//! are re-exported there, where the gates are called from.
+//! A2, listing-page titles.
+//!
+//! A page that LISTS events is neither a venue nor an event. Split from
+//! `suitability.rs` (the house 500-line cap); its items are re-exported there,
+//! where the gates are called from.
 
 use std::sync::LazyLock;
 
