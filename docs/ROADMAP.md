@@ -31,7 +31,7 @@ cannot fail hides more than a plan that reads oddly, because it is the thing tha
 would have noticed. Phases are SEQUENTIAL where a later phase's evidence depends on an
 earlier one, and each phase says what it depends on.
 
-## Where things stand — 2026-10-14
+## Where things stand — 2026-10-16
 
 A dated summary, not checked by any gate; re-derive it before editing:
 `gh run list --limit 3`, `git log --oneline origin/main..main`, `tools/gate.sh --full`.
@@ -43,9 +43,20 @@ A dated summary, not checked by any gate; re-derive it before editing:
   tree`, `no bare python in a hook or gate`. `.python-version` is tracked (A5) and `rustls` is
   0.23.46 in `rust/Cargo.lock` (A6). Phase A is deleted from this file for that reason, per
   rule 2 above; its narrative is git history at the commit that closed each item.
-- **CI on `main` was last RED** (every run since 2026-10-10 died in `actions/setup-python`).
-  A5's tracking fix has landed, so the next run is the evidence — check `gh run list` rather
-  than trusting this line.
+- **CI on `main` is GREEN**, run 38899800424 (2026-10-16) — the first green run since
+  2026-10-10, and the `make ci` step inside it is the full 14-step gate. Two reds were behind
+  it and the tree was innocent in both. (1) `Swatinem/rust-cache` caches `~/.cargo/bin`, so the
+  manifest's `cargo install` met a binary a cache had restored with no record in
+  `~/.cargo/.crates.toml`, and `cargo install` refuses exactly that (`binary ... already exists
+  in destination`); the
+  step runs under `set -euo pipefail`, so every gate step after it was skipped — for two days
+  the gate of record ran nothing, and this file read the redness as the code's. goh's
+  `required_tools.py` now installs per tool behind a presence guard, so a binary that is on
+  PATH is a satisfied requirement whoever put it there. (2) The runner's `stable` clippy was
+  1.98.0 where this host's is 1.99.0, and 1.98 fires `too_long_first_doc_paragraph` on two doc
+  comments 1.99 accepts: the local 14/14 was green on a tree CI refused. Both are in git
+  history; `git log --oneline -6` names them. Re-derive this bullet with `gh run list` rather
+  than trusting it.
 - Hooks are goh 0.27.0's stock set. Installed: `ztools 3.8.0`.
 - The previous plan's `P2` (a release can be tagged over a red CI) is closed upstream:
   goh `5c5868e` makes the release kit refuse while CI on HEAD is red, pending or missing,
@@ -113,10 +124,39 @@ each item report nothing pending.
   runs on `macos-15` while the host is macOS 27. The four actions are pinned
   (`tools/tests/test_ci_actions_pinned.py`); the runner image is what remains.
 - **Why now:** a runner two majors behind the host judges a different machine -- it can pass
-  what the host breaks and break what the host passes, and CI is the gate of record.
+  what the host breaks and break what the host passes, and CI is the gate of record. Measured
+  2026-10-16, and the skew reaches the TOOLCHAIN, not only the OS: the runner's `stable` clippy
+  was 1.98.0 where this host's is 1.99.0, and 1.98 refused two doc comments in `rust/src/ztools`
+  that 1.99 accepts -- so the local gate ran green on a tree CI would not take, which is the
+  failure mode this item exists to remove. `rust-toolchain.toml` names the channel `stable` on
+  purpose, so the compiler moves under both ends without either announcing it.
 - **Done when:** the newest GitHub macOS arm64 image is named (measured from GitHub's runner
   list, not assumed), `ci.yml` runs on it, and CI is green on it.
 - **Blocked by:** nothing.
+
+### H4 — the vendored suite orders two mock events with a 10 ms sleep
+- **Class:** a test whose subject is a timing, judged by a timing. In `vendor/camoufox-rs`, 
+  `api::main_frame::tests::navigate_captures_404_status_and_returns_ok` injects a
+  `Network.requestWillBeSent` and a navigate ack, sleeps 10 ms on the responder thread, then
+  injects the `Network.responseReceived` whose status it asserts -- so the assertion holds only
+  if the frame's speculative grace outlasts that sleep. Measured 2026-10-16: it failed on run
+  38841488233 (`status_code must be Some(404)`, left `None`) and passed on run 38899800424,
+  while this host ran the crate's full 198-test suite 20 times without a failure.
+- **Why now:** the step is load-bearing by decision, not by accident -- `.gatesrc` keeps the
+  vendored suite in the gate because it is what would catch a readiness regression in the copy
+  this repo carries (`wait_for_ready` read the wrong stream while upstream's own tests were red
+  and invisible). A test that fails on a busy runner and passes on an idle one takes the
+  verdict with it: a red CI run then has to be re-read before anyone can tell it from a real
+  regression, and a re-run that goes green cannot say which it was.
+- **Done when:** an unchanged `vendor/camoufox-rs` tree is green on consecutive CI runs, with
+  the count and the run IDs recorded in the commit that earns them -- a fix to the mock counts
+  only if the re-vendor procedure in `tools/vendor_lint_baseline.jsonc` carries it, since the
+  next re-vendor overwrites the copy.
+- **Blocked by:** an owner decision, because the two available fixes pull against each other.
+  Making the mock deterministic means editing `vendor/camoufox-rs` -- third-party code carried
+  in-tree, whose re-vendor would silently drop the edit unless the procedure carries a patch
+  step; retrying the step instead buys a quiet badge without touching the subject. The third
+  option, reporting it upstream and waiting, leaves the flake in the gate meanwhile.
 
 ## Sources consolidated (2026-10-12)
 
