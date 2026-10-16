@@ -52,22 +52,6 @@ A dated summary, not checked by any gate; re-derive it before editing:
   and `tools/release.sh` execs that kit. Narrative of earlier phases:
   `git show 6a10475:docs/ROADMAP.md`.
 
-## Phase U — house-layer adoption (advisory today, from goh's Downstream list)
-
-Goal: every goh capability this repo still carries a private copy of, or has not wired, is
-the house one. Depends on nothing. Size: S. Exit: each item's check is a `GOH_CI_STEPS` step
-or a deletion, and each was seen red once.
-
-### U3 — the vendored crate's tests are a plain `cargo test` with 26 emptiness asserts
-- **Class:** a gate step that bypasses the house runner (goh Downstream, ztools):
-  `GOH_CI_STEPS` runs `cargo test --manifest-path vendor/camoufox-rs/Cargo.toml --all-features`
-  directly, and `vendor/camoufox-rs` carries 26 `assert!(…is_empty())` (counted 2026-10-14;
-  `GOH_EXCLUDE='^vendor/'` keeps them out of the gate).
-- **Why now:** low; the step runs and passes. Same owner decision as `H3`.
-- **Done when:** the step runs through the house Rust layer (or the decision in `H3` drops
-  the vendored crate), and the asserts read `assert_eq!(x.len(), 0)` / `assert_ne!`. Size: S.
-- **Blocked by:** `H3`'s owner decision.
-
 ## Phase F — owner-requested features
 
 Goal: the owner's feature asks, each behind a test that can go red. Depends on nothing (Phase 0
@@ -124,25 +108,15 @@ each item report nothing pending.
   adopts 0.9. Re-measure rather than assume: if a `png` has shipped, the refresh is one
   `cargo update` and this row goes.
 
-### H2 — CI runner and actions ride moving tags
+### H2 — the CI runner image is two majors behind the host
 - **Class:** "latest means a named release, never a moving tag". `.github/workflows/ci.yml`
-  runs on `macos-15` while the host is macOS 27, and uses `actions/checkout@v7`,
-  `Swatinem/rust-cache@v2`, `taiki-e/install-action@v2`, `actions/setup-python@v7` —
-  major tags the maintainer moves.
-- **Why now:** a CI image two majors behind the host tests a platform the tool never runs
-  on (it is macOS/arm64 by `install.sh`'s hard gate).
+  runs on `macos-15` while the host is macOS 27. The four actions are pinned
+  (`tools/tests/test_ci_actions_pinned.py`); the runner image is what remains.
+- **Why now:** a runner two majors behind the host judges a different machine -- it can pass
+  what the host breaks and break what the host passes, and CI is the gate of record.
 - **Done when:** the newest GitHub macOS arm64 image is named (measured from GitHub's runner
-  list, not assumed), each action is pinned to a release SHA with its tag in a comment, and
-  CI is green on it.
+  list, not assumed), `ci.yml` runs on it, and CI is green on it.
 - **Blocked by:** nothing.
-
-### H3 — the vendored crate's clippy ratchet
-- **Class:** suppressed findings held under a ceiling instead of fixed.
-  `tools/vendor_lint_baseline.jsonc` holds 208 pedantic/nursery findings in
-  `vendor/camoufox-rs` under shrink-only ceilings.
-- **Why now:** low — the ratchet already stops growth. Parked until Phases P and D land.
-- **Done when:** the baseline is empty and the step is replaced by `-D warnings`.
-- **Blocked by:** owner decision on whether the vendored crate is worth the effort.
 
 ## Sources consolidated (2026-10-12)
 

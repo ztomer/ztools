@@ -46,7 +46,7 @@ jobs:
       # checkout leaves the job token in git config (http.<host>.extraheader),
       # readable by every later step and refused by the gates_of_heck structural
       # gate's no-credential-in-git-config check (2026-10-08).
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
@@ -57,7 +57,7 @@ jobs:
           rustc -V
           cargo clippy -V
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
         with:
           workspaces: |
             rust
@@ -87,14 +87,14 @@ jobs:
           [ -n "$tools" ] || { echo "::error::tools/ci_tools.tsv names no tools"; exit 1; }
           echo "tools=$tools" >> "$GITHUB_OUTPUT"
 
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2
         with:
           tool: ${{ steps.ci_tools.outputs.tools }}
 
       # The version is .python-version's, the file local tooling reads too: a
       # literal here stayed at 3.14 after the machine moved to 3.15, so CI
       # judged the Python tools on a version the gate never ran.
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version-file: .python-version
 

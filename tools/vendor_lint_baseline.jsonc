@@ -3,17 +3,25 @@
 // tools/vendor_lint_ratchet.py, which measures the crate directly and compares
 // these per-lint counts.
 //
-// WHY A RATCHET AND NOT A GATE. Measured 2026-10-04 at -D warnings: clippy::all alone
+// THIS IS UPSTREAM'S CODE, NOT OURS (owner ruling 2026-10-15). The crate is
+// re-vendored wholesale when upstream moves: measured, commit `efe364a` rewrote 29
+// files in one sync (+1242/-423). So this file is NOT a way-station toward a
+// `-D warnings` gate on the crate. Paying 208 findings down inside someone else's 28
+// files is work the next re-vendor undoes, and a gate that would be red on arrival
+// teaches a reviewer to ignore it. The ceiling IS the instrument: it bounds growth
+// from our side without pretending we own the tree. Entries are still paid where a
+// finding is OURS (a wrapper we wrote), and those are deleted as they are paid.
+//
+// WHY A CEILING AND NOT A GATE. Measured 2026-10-04 at -D warnings: clippy::all alone
 // had 1 finding in this crate (now 0, after the sweep and the 10 #[allow] removals),
 // and all+pedantic+nursery had 365 unique findings across 28 files. So the crate CAN
-// meet clippy::all and CANNOT meet the parent's policy. A -D warnings gate on the full
-// policy would be red on arrival; declaring only `all` would be green while the other
-// 208 sit unwatched. Each count below is therefore a CEILING: it may fall, never rise,
-// and a count that rises fails even if the total does not.
+// meet clippy::all and CANNOT meet the parent's policy. Each count below is therefore
+// a CEILING: it may fall, never rise, and a count that rises fails even if the total
+// does not.
 //
 // EVERY ENTRY CARRIES A WHY, and the gate refuses a baseline whose entries do not. An
 // allowlist entry is an argument, and a number with no argument is how a baseline rots
-// into a rubber stamp. Entries are deleted as they are paid, so 'done' is an empty file.
+// into a rubber stamp.
 //
 // WHAT WAS ALREADY FIXED (2026-10-04, so these counts are the floor, not the original
 // 365): 157 findings by `cargo clippy --fix`, the 1 clippy::all finding
@@ -22,6 +30,13 @@
 //
 // TO RE-SEED after a shrink: tools/vendor_lint_ratchet.py --record, then write the
 // `why` on every FILL IN entry it reports, in the same commit.
+//
+// RE-VENDORING, when upstream moves. Replace vendor/camoufox-rs with the new upstream
+// tree, then re-record in the SAME commit: the counts above are a function of upstream's
+// code, so a sync that leaves them stale fails on the sync commit for the wrong reason.
+// Expect the counts to move. Raise a ceiling only in the sync that raised the findings,
+// and lower it whenever a sync lowers them -- the ratchet may only ever be tightened
+// between syncs.
 //
 // WHY .jsonc AND NOT .json: .gitignore:143 is a blanket `*.json` (whitelisting only
 // conf/, eval_tasks/, docs/, tests/fixtures/), so a `*.json` baseline here is
