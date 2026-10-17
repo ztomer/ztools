@@ -57,6 +57,11 @@ A dated summary, not checked by any gate; re-derive it before editing:
   comments 1.99 accepts: the local 14/14 was green on a tree CI refused. Both are in git
   history; `git log --oneline -6` names them. Re-derive this bullet with `gh run list` rather
   than trusting it.
+- **Umbrella B7 (b), `twitter-evening` failing, measured 2026-10-17:** not a model, endpoint
+  or env fault -- raptor and `fm` both answered; the gate refused both answers over citation
+  FORM (no `@`; time of day only; `;`-joined sources). The repair parses those forms now
+  (`docs/MODEL_QUIRKS.md`, CHANGELOG "B7 (b)"). The installed `ztools 3.8.0` predates it, so
+  scheduled runs keep the old repair until the next release is installed.
 - Hooks are goh 0.27.0's stock set. Installed: `ztools 3.8.0`.
 - The previous plan's `P2` (a release can be tagged over a red CI) is closed upstream:
   goh `5c5868e` makes the release kit refuse while CI on HEAD is red, pending or missing,

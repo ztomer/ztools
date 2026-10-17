@@ -276,3 +276,126 @@ fn one_clean_bullet_for_many_tweets_is_rejected() {
     let why = handle_model_output(answer, &g, false).expect_err("one bullet for eight tweets");
     assert!(why.contains("too few"), "{why}");
 }
+
+/// Every form a model has written a citation of ONE given tweet in, from the
+/// rejected answers in the store (2026-10-10..16). The class: a faithful
+/// citation in a form the repair's grammar did not parse, so the answer was
+/// thrown away whole and the chain ran out of models -- `twitter-evening`
+/// 2026-10-16: raptor "23 of 25 bullets lack the `(@handle | timestamp)`
+/// attribution" (it wrote `(TomerPersico | Fri Oct 16 14:21:56 +0000 2026)`),
+/// then foundation "42 of 42 citations name no tweet the model was given" (it
+/// wrote `(@Uvalajnr | 04:11:19)`). Each form must come back canonical.
+fn drifted_forms(handle: &str, full: &str) -> Vec<String> {
+    let year_dropped = full.rsplit_once(' ').map_or(full, |(head, _)| head);
+    let time = full.split_whitespace().nth(3).expect("a time field");
+    let minute = &time[..5];
+    vec![
+        format!("(@{handle} | {full})"),
+        format!("[@{handle} | {full}]"),
+        format!("**[@{handle} | {full}]**"),
+        format!("[@{handle} | {full})"),
+        format!("(@{handle} | {year_dropped})"),
+        format!("({handle} | {full})"),
+        format!("({handle} | {year_dropped})"),
+        format!("(@{handle} | {time})"),
+        format!("(@{handle} | {minute})"),
+        format!("({handle} | {time})"),
+    ]
+}
+
+#[test]
+fn every_drifted_form_of_a_given_citation_comes_back_canonical() {
+    let g = given();
+    // grace's two tweets share a minute; her full stamps are still unique.
+    for (handle, full) in g.iter().filter(|(h, _)| h != "grace") {
+        for form in drifted_forms(handle, full) {
+            let answer = format!("## Topic\n\n- a fact {form}\n");
+            let fixed = repair(&answer, &g).unwrap_or_else(|why| panic!("{form}: {why}"));
+            assert!(
+                fixed
+                    .body
+                    .contains(&format!("- a fact (@{handle} | {full})")),
+                "{form} -> {}",
+                fixed.body
+            );
+            assert_empty!(fixed.notes);
+        }
+    }
+}
+
+/// Foundation joins the sources of one bullet inside one bracket:
+/// `(@shipwreckedcrew | 18:08:50; @fedesimio | 18:31:56)` (2026-10-13). Each
+/// names a given tweet; they come back as one canonical citation apiece.
+#[test]
+fn several_sources_in_one_bracket_become_one_citation_each() {
+    let g = given();
+    let answer =
+        "## Topic\n\n- two facts (@alice | 09:46:22; bob | Sat Oct 10 10:32:00 +0000 2026)\n";
+    let fixed = repair(answer, &g).expect("both name a given tweet");
+    assert!(
+        fixed.body.contains(
+            "- two facts (@alice | Sat Oct 10 09:46:22 +0000 2026) \
+             (@bob | Sat Oct 10 10:32:00 +0000 2026)"
+        ),
+        "{}",
+        fixed.body
+    );
+}
+
+/// The looser forms resolve only what is unambiguous. A time of day two of a
+/// handle's tweets share names neither; a bracket with a bar whose handle the
+/// model was never given is prose, left as written and never counted.
+#[test]
+fn a_loose_form_resolves_only_what_is_unambiguous() {
+    let g = given();
+    assert_eq!(resolve("grace", "07:54", &g), None);
+    assert_eq!(
+        resolve("grace", "07:54:59", &g),
+        Some("Sat Oct 10 07:54:59 +0000 2026")
+    );
+    assert_eq!(resolve("alice", "9:46", &g), None);
+    assert_eq!(resolve("mallory", "09:46:22", &g), None);
+    let answer = "## Topic\n\n- a fact (@alice | 09:46:22), ratio (wins | losses) unchanged\n";
+    let fixed = repair(answer, &g).expect("the one citation names a given tweet");
+    assert!(
+        fixed.body.contains("ratio (wins | losses) unchanged"),
+        "{}",
+        fixed.body
+    );
+}
+
+/// The 2026-10-16 evening answers, end to end: every bullet's citation drifted
+/// (raptor dropped the `@`, foundation kept only the time of day), and every
+/// one names a given tweet. Both are summaries, not rejections.
+#[test]
+fn the_2026_10_16_evening_answers_are_accepted() {
+    let g = given();
+    let mut raptor = String::from("## Executive Summary\n\nA busy Saturday.\n\n## Topic\n\n");
+    let mut foundation = raptor.clone();
+    for (n, (handle, full)) in g.iter().filter(|(h, _)| h != "grace").enumerate() {
+        let _ = writeln!(
+            raptor,
+            "- Fact number {n} from the timeline ({handle} | {full})"
+        );
+        let time = full.split_whitespace().nth(3).expect("a time field");
+        let _ = writeln!(
+            foundation,
+            "- Fact number {n} from the timeline (@{handle} | {time})"
+        );
+    }
+    let mut refused = Vec::new();
+    for (name, answer) in [("raptor", raptor), ("foundation", foundation)] {
+        match handle_model_output(&answer, &g, false) {
+            Ok(kept) => {
+                assert_eq!(
+                    super::super::quality::bullets(&kept.body).len(),
+                    6,
+                    "{name}"
+                );
+                assert_empty!(kept.repairs);
+            }
+            Err(why) => refused.push(format!("{name}: {why}")),
+        }
+    }
+    assert_empty!(refused);
+}

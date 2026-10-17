@@ -1345,6 +1345,21 @@ resolve to the one tweet they name, a loop's repeats and bullets citing nothing 
 dropped, a cut answer keeps its whole lines, and the saved summary says what was removed.
 Decoding stays at 0.1: it is no worse than greedy here and breaks greedy's determinism.
 
+Three more citation forms, read 2026-10-17 from `~/Documents/twitter_summaries/rejected/`
+after `twitter-evening` (2026-10-16 22:17) lost both models of its chain: raptor dropped
+the `@` (`(TomerPersico | Fri Oct 16 14:21:56 +0000 2026)`: "23 of 25 bullets lack the
+attribution"), foundation kept only the time of day (`(@Uvalajnr | 04:11:19)`: "42 of 42
+citations name no tweet"; 2026-10-13: "21 of 21"), and foundation joins a bullet's sources
+in one bracket (`(@shipwreckedcrew | 18:08:50; @fedesimio | 18:31:56)`). Transport was
+never the fault -- both models answered. The repair now parses all three and still resolves
+each source to exactly one given tweet: a time of day two of a handle's tweets share stays
+unresolved, and a bare `(a | b)` naming no given handle is prose, left alone. Replayed on a
+live rejection (46 tweets, foundation, `(@CTV | 08:00)` form): the old repair refused it
+"25 of 25", the new one kept 23 verified bullets and dropped 3 whose citations really were
+wrong (`@CTV` and `@Hiroku1122` were never given; `@GrumpyTechBro | 08:34` for a 20:34 tweet).
+Still unparsed: raptor's unbracketed `..., per @LauraLoomer | Tue Oct 13 15:38:30 +0000
+2026.` (2026-10-13 noon), which arrived inside a 49-of-56 repetition loop.
+
 
 ## The weekend provenance ledger, read 2026-10-08
 

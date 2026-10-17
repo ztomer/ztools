@@ -6,6 +6,28 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## B7 (b) — the summary chain stops losing faithful answers to citation form _(2026-10-17)_
+
+`twitter-evening` (routines) exited 1 with "every model in the fallback chain
+failed". Measured from the store's `rejected/` answers and a live A/B: the server and
+`fm` both answered every time; the quality gate refused both answers, because each
+model cited real tweets in a form `repair.rs` did not parse.
+
+### Fixed — twitter summary
+- **raptor:** `(handle | timestamp)` without the `@` -- "23 of 25 bullets lack the
+  attribution" (2026-10-16 22:19).
+- **foundation:** the time of day alone, `(@handle | 04:11:19)` -- "42 of 42 citations
+  name no tweet" (2026-10-16 22:21), "25 of 25" reproduced live 2026-10-17 -- and several
+  sources joined by `;` inside one bracket.
+- Each form now resolves to its tweet when it names exactly one given tweet, and is
+  rewritten to the canonical `(@handle | full timestamp)`; anything ambiguous or not
+  given stays unresolved and its bullet is dropped as before. Replayed on the live
+  rejection: refused before, 23 verified bullets kept after.
+- Class tests in `repair_tests.rs` (every drifted form round-trips, `;`-joined groups,
+  ambiguity refused, both 2026-10-16 answers accepted end to end), watched red on the
+  old repair with the live reasons ("6 of 6 bullets lack the attribution", "6 of 6
+  citations name no tweet").
+
 ## H2 — CI runner image moved to macos-26 _(2026-10-16)_
 
 `ci.yml` ran on `macos-15` while the host is macOS 27, so CI judged a
