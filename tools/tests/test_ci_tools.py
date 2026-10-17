@@ -101,9 +101,19 @@ def _step_needing(tool: str, steps: list[str]) -> str | None:
     The two spellings differ on purpose: the name is a package (`cargo-audit`)
     and the step is a command line (`cargo audit --file rust/Cargo.lock`), so
     either the name or its space spelling is accepted as the step's prefix.
+    The step can also run behind a wrapper rather than as its own prefix: since
+    2026-10-17 the audit step goes through goh's advisory-db flock
+    (`python3 "$GOH_DIR/lib/advisory_db.py" run --fetch -- cargo audit ...`,
+    tools/tests/test_audit_routing.py), so its space spelling is matched after
+    `run --fetch -- ` there instead. That anchor is deliberately narrow: matching
+    any occurrence would let a step that only MENTIONS a tool (the
+    `cargo-deny-tools` case below) count as running it.
     """
     for step in steps:
-        if step.startswith(tool) or step.startswith(tool.replace("-", " ")):
+        spaced = tool.replace("-", " ")
+        if step.startswith(tool) or step.startswith(spaced):
+            return step
+        if re.search(rf"run --fetch -- {re.escape(spaced)}\b", step):
             return step
     return None
 
