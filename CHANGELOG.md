@@ -6,6 +6,18 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## H2 — CI runner image moved to macos-26 _(2026-10-16)_
+
+`ci.yml` ran on `macos-15` while the host is macOS 27, so CI judged a
+different machine than the one the code is developed on. The runner image is now
+named from GitHub's runner list (`macos-26`, the newest GA macOS arm64 image)
+rather than a moving tag.
+
+- **Pinned and tested.** `.github/workflows/ci.yml` runs on `macos-26`;
+  `tools/tests/test_ci_runner_image.py` asserts the runs-on line equals
+  `macos-26` (4 targeted tests green).
+- Full pre-push gate 14/14.
+
 ## v3.8.0 — the twitter summary survives Osaurus being down _(2026-10-10)_
 
 ### Added — a fallback outside the server (T1)

@@ -5,7 +5,7 @@ that tag next: the same workflow file runs different code tomorrow, and a review
 says nothing about it. `uses: actions/checkout@<40-hex sha> # v7` is the same action, twice
 readable -- machine-checkable, and still naming the release.
 
-ROADMAP H2. The other half of that item -- the runner image (`macos-15`) being two majors behind
+The runner-image half of this area -- the runner image (`macos-15`) being two majors behind
 the host -- is a separate risk with a separate fix (it can break a build; this cannot) and is
 tracked on its own. This test is only the pin.
 """

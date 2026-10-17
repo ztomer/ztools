@@ -119,21 +119,6 @@ each item report nothing pending.
   adopts 0.9. Re-measure rather than assume: if a `png` has shipped, the refresh is one
   `cargo update` and this row goes.
 
-### H2 — the CI runner image is two majors behind the host
-- **Class:** "latest means a named release, never a moving tag". `.github/workflows/ci.yml`
-  runs on `macos-15` while the host is macOS 27. The four actions are pinned
-  (`tools/tests/test_ci_actions_pinned.py`); the runner image is what remains.
-- **Why now:** a runner two majors behind the host judges a different machine -- it can pass
-  what the host breaks and break what the host passes, and CI is the gate of record. Measured
-  2026-10-16, and the skew reaches the TOOLCHAIN, not only the OS: the runner's `stable` clippy
-  was 1.98.0 where this host's is 1.99.0, and 1.98 refused two doc comments in `rust/src/ztools`
-  that 1.99 accepts -- so the local gate ran green on a tree CI would not take, which is the
-  failure mode this item exists to remove. `rust-toolchain.toml` names the channel `stable` on
-  purpose, so the compiler moves under both ends without either announcing it.
-- **Done when:** the newest GitHub macOS arm64 image is named (measured from GitHub's runner
-  list, not assumed), `ci.yml` runs on it, and CI is green on it.
-- **Blocked by:** nothing.
-
 ### H4 — the vendored suite orders two mock events with a 10 ms sleep
 - **Class:** a test whose subject is a timing, judged by a timing. In `vendor/camoufox-rs`, 
   `api::main_frame::tests::navigate_captures_404_status_and_returns_ok` injects a
