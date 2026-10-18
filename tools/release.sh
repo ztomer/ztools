@@ -37,8 +37,17 @@ V="${1#v}"; shift
 # rust/Cargo.toml is the ONE version source (a pyproject once disagreed with
 # it and the binary shipped reporting the previous version). Sync it before
 # the kit runs the gate, so the gate and the archive build see the release.
+#
+# --dry-run is the kit's contract ("performs NOTHING"), and this bump runs BEFORE the
+# kit is exec'd, so it must honour the flag itself: a dry run once left a real
+# "chore: version" commit behind while reporting a plan (tools/tests/test_release_dry_run.py).
+DRY_RUN=0
+for _arg in "$@"; do [ "$_arg" = "--dry-run" ] && DRY_RUN=1; done
+unset _arg
 CURRENT_V=$(grep -m1 '^version = ' rust/Cargo.toml | cut -d'"' -f2)
-if [ "$CURRENT_V" != "$V" ]; then
+if [ "$CURRENT_V" != "$V" ] && [ "$DRY_RUN" = 1 ]; then
+  info "[dry-run] would bump rust/Cargo.toml version: $CURRENT_V → $V and commit 'chore: version $V'"
+elif [ "$CURRENT_V" != "$V" ]; then
   info "rust/Cargo.toml version: $CURRENT_V → $V"
   /usr/bin/sed -i '' "s|^version = \".*\"|version = \"$V\"|" rust/Cargo.toml
   cargo update --manifest-path rust/Cargo.toml -p ztools --quiet

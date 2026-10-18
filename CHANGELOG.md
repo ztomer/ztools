@@ -6,14 +6,14 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
-## B7 (b) — the summary chain stops losing faithful answers to citation form _(2026-10-17)_
+## v3.8.1 — the twitter summary keeps faithful answers; a dry run changes nothing _(2026-10-18)_
 
 `twitter-evening` (routines) exited 1 with "every model in the fallback chain
 failed". Measured from the store's `rejected/` answers and a live A/B: the server and
 `fm` both answered every time; the quality gate refused both answers, because each
 model cited real tweets in a form `repair.rs` did not parse.
 
-### Fixed — twitter summary
+### Fixed — twitter summary (B7 b)
 - **raptor:** `(handle | timestamp)` without the `@` -- "23 of 25 bullets lack the
   attribution" (2026-10-16 22:19).
 - **foundation:** the time of day alone, `(@handle | 04:11:19)` -- "42 of 42 citations
@@ -28,17 +28,21 @@ model cited real tweets in a form `repair.rs` did not parse.
   old repair with the live reasons ("6 of 6 bullets lack the attribution", "6 of 6
   citations name no tweet").
 
-## H2 — CI runner image moved to macos-26 _(2026-10-16)_
+### Fixed — release tooling
+- **`tools/release.sh --dry-run` changes nothing.** The wrapper's Cargo.toml version
+  bump ran before the kit and ignored `--dry-run`, so a dry run of 3.8.1 left a real
+  `chore: version 3.8.1` commit behind. It now prints the bump it would make;
+  `tools/tests/test_release_dry_run.py` covers both directions (watched red first).
+- The version-bump commit goes through the pre-commit hook, not around it (U4).
 
-`ci.yml` ran on `macos-15` while the host is macOS 27, so CI judged a
-different machine than the one the code is developed on. The runner image is now
-named from GitHub's runner list (`macos-26`, the newest GA macOS arm64 image)
-rather than a moving tag.
+### Security and dependencies
+- rustls 0.23.46 (RUSTSEC-2026-0346..0349); lockfile refreshed to latest-compatible.
 
-- **Pinned and tested.** `.github/workflows/ci.yml` runs on `macos-26`;
-  `tools/tests/test_ci_runner_image.py` asserts the runs-on line equals
-  `macos-26` (4 targeted tests green).
-- Full pre-push gate 14/14.
+### CI (H2)
+- `ci.yml` ran on `macos-15` while the host is macOS 27, so CI judged a different
+  machine than the one the code is developed on. The runner image is now `macos-26`
+  (the newest GA macOS arm64 image), asserted by `tools/tests/test_ci_runner_image.py`;
+  the four actions are pinned to release SHAs, and a test gates the pin.
 
 ## v3.8.0 — the twitter summary survives Osaurus being down _(2026-10-10)_
 
