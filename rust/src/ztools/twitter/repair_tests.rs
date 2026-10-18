@@ -399,3 +399,54 @@ fn the_2026_10_16_evening_answers_are_accepted() {
     }
     assert_empty!(refused);
 }
+
+/// Raptor's unbracketed citation (2026-10-13 noon): `..., per @h | stamp.`
+/// with the sentence's own full stop after it. It names one given tweet, so it
+/// is rewritten to the canonical `(@h | stamp)` and the stop stays outside.
+/// Without the `@` a bare bar is prose, never a citation.
+#[test]
+fn a_bracketless_citation_is_repaired_to_the_canonical_form() {
+    let g = given();
+    let answer = "## Topic\n\n\
+        - Alice reports a thing, per @alice | Sat Oct 10 09:46:22 +0000 2026.\n\
+        - Bob reports another, per @bob | Sat Oct 10 10:32 and nothing else.\n\
+        - Carol at the time, @carol | 13:30:45\n\
+        - The ratio was wins | losses, per nobody\n";
+    let fixed = repair(answer, &g).expect("every bare citation names a given tweet");
+    assert!(
+        fixed
+            .body
+            .contains("per (@alice | Sat Oct 10 09:46:22 +0000 2026)."),
+        "{}",
+        fixed.body
+    );
+    assert!(
+        fixed
+            .body
+            .contains("per (@bob | Sat Oct 10 10:32:00 +0000 2026) and nothing else."),
+        "{}",
+        fixed.body
+    );
+    assert!(
+        fixed
+            .body
+            .contains("(@carol | Sat Oct 10 13:30:45 +0000 2026)"),
+        "{}",
+        fixed.body
+    );
+    assert!(
+        fixed.body.contains("wins | losses, per nobody"),
+        "{}",
+        fixed.body
+    );
+}
+
+/// A bare citation naming no given tweet counts against the answer like a
+/// bracketed one: it is not silently trusted.
+#[test]
+fn an_unresolvable_bracketless_citation_still_counts_against_the_answer() {
+    let g = given();
+    let answer = "## Topic\n\n- a fact, per @mallory | Sat Oct 10 09:46:22 +0000 2026.\n";
+    let why = repair(answer, &g).expect_err("the only citation names no given tweet");
+    assert!(why.contains("1 of 1 citations"), "{why}");
+}

@@ -59,8 +59,9 @@ A dated summary, not checked by any gate; re-derive it before editing:
   than trusting it.
 - **Umbrella B7 (b), `twitter-evening` failing, measured 2026-10-17:** not a model, endpoint
   or env fault -- raptor and `fm` both answered; the gate refused both answers over citation
-  FORM (no `@`; time of day only; `;`-joined sources). The repair parses those forms now
-  (`docs/MODEL_QUIRKS.md`, CHANGELOG "B7 (b)"). The installed `ztools 3.8.0` predates it, so
+  FORM (no `@`; time of day only; `;`-joined sources; unbracketed `per @h | ts`). The repair
+  parses all four now (`docs/MODEL_QUIRKS.md`, CHANGELOG "B7 (b)"); no citation form seen
+  in `rejected/` is left unparsed. The installed `ztools 3.8.0` predates it, so
   scheduled runs keep the old repair until the next release is installed.
 - Hooks are goh 0.27.0's stock set. Installed: `ztools 3.8.0`.
 - The previous plan's `P2` (a release can be tagged over a red CI) is closed upstream:

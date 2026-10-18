@@ -6,6 +6,15 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## Unreleased
+
+### Fixed -- twitter summary (B7 b, last form)
+- **raptor, unbracketed:** `..., per @handle | Tue Oct 13 15:38:30 +0000 2026.` (2026-10-13
+  noon) had no bracket for the repair to see. It now needs the `@` and a source-shaped
+  timestamp (or time of day), resolves only when it names exactly one given tweet, and is
+  rewritten to `(@handle | full timestamp)` with the sentence's full stop left outside.
+  A bare `a | b` stays prose. Tests in `repair_tests.rs`, watched red first.
+
 ## v3.8.1 — the twitter summary keeps faithful answers; a dry run changes nothing _(2026-10-18)_
 
 `twitter-evening` (routines) exited 1 with "every model in the fallback chain

@@ -1357,8 +1357,11 @@ unresolved, and a bare `(a | b)` naming no given handle is prose, left alone. Re
 live rejection (46 tweets, foundation, `(@CTV | 08:00)` form): the old repair refused it
 "25 of 25", the new one kept 23 verified bullets and dropped 3 whose citations really were
 wrong (`@CTV` and `@Hiroku1122` were never given; `@GrumpyTechBro | 08:34` for a 20:34 tweet).
-Still unparsed: raptor's unbracketed `..., per @LauraLoomer | Tue Oct 13 15:38:30 +0000
-2026.` (2026-10-13 noon), which arrived inside a 49-of-56 repetition loop.
+The fourth form, raptor's unbracketed `..., per @LauraLoomer | Tue Oct 13 15:38:30 +0000
+2026.` (2026-10-13 noon, inside a 49-of-56 repetition loop), is parsed too: with no bracket to
+say "citation" it needs the `@` and a source-shaped timestamp (or a time of day), is rewritten
+to `(@h | ts)` only when it names exactly one given tweet, and leaves the sentence's full stop
+outside. A bare `a | b` without the `@` is prose.
 
 
 ## The weekend provenance ledger, read 2026-10-08

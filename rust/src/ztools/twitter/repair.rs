@@ -14,7 +14,8 @@
 //! bullets lack the attribution"), and foundation kept only the time of day,
 //! `(@Uvalajnr | 04:11:19)` ("42 of 42 citations name no tweet"), joining a
 //! bullet's sources in one bracket with `;` on other days. The class is a
-//! faithful citation in a form this grammar did not parse; every form seen in
+//! faithful citation in a form this grammar did not parse (raptor also wrote it
+//! with no bracket at all, `per @h | ts.`); every form seen in
 //! the store's `rejected/` is parsed below, and each still has to name exactly
 //! one given tweet before it is rewritten.
 //!
@@ -30,13 +31,24 @@ use regex::Regex;
 
 use super::quality::{drop_bullets, drop_recited};
 
-/// A citation group in any bracketing the models write: `(@h | ts)`,
+/// A citation in any form the models write: a bracketed group `(@h | ts)`,
 /// `[@h | ts]`, either mixed (`[@h | ts)`), optionally bold, the `@` optional,
-/// and several sources joined by `;` inside one bracket. The repair rewrites
-/// each source to the one form the gate reads, `(@h | ts)`.
+/// and several sources joined by `;` inside one bracket (capture 1); or, with
+/// no bracket at all, `@h | ts` inside a sentence (captures 2 and 3). The
+/// repair rewrites each source to the one form the gate reads, `(@h | ts)`.
+///
+/// A bracketless source needs its `@` and a timestamp shaped like the source
+/// line's (or a time of day): without a bracket to say "citation", anything
+/// looser is prose. The alternation is leftmost-first, so a bracketed group
+/// wins over the `@h | ts` inside it.
 static ANY_CITATION: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?:\*\*)?[\[(](@?[A-Za-z0-9_]+\s*\|[^)\]\n]+?)\s*[)\]](?:\*\*)?")
-        .expect("valid regex")
+    Regex::new(concat!(
+        r"(?:\*\*)?[\[(](@?[A-Za-z0-9_]+\s*\|[^)\]\n]+?)\s*[)\]](?:\*\*)?",
+        r"|@([A-Za-z0-9_]+)\s*\|\s*(",
+        r"[A-Z][a-z]{2} [A-Z][a-z]{2} \d{2} \d{2}:\d{2}(?::\d{2})?(?: \+\d{4})?(?: \d{4})?",
+        r"|\d{2}:\d{2}(?::\d{2})?)",
+    ))
+    .expect("valid regex")
 });
 
 /// One source inside a citation group: `@h | ts`, the `@` optional.
@@ -136,7 +148,10 @@ pub fn repair(summary: &str, sources: &[(String, String)]) -> Result<Repaired, S
     let given: HashSet<&str> = sources.iter().map(|(h, _)| h.as_str()).collect();
     let body = ANY_CITATION
         .replace_all(summary, |cap: &regex::Captures<'_>| {
-            let parts = group_sources(&cap[1]);
+            let parts = cap.get(1).map_or_else(
+                || vec![(true, &cap[2], &cap[3])],
+                |group| group_sources(group.as_str()),
+            );
             // A bracket with a bar is a citation when it says so (`@`) or names
             // someone the model was given; `(wins | losses)` is prose.
             if !parts.iter().any(|(at, h, _)| *at || given.contains(h)) {
