@@ -6,7 +6,14 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
-## Unreleased
+## v3.9.0 — a commented-out exclusion no longer excludes; `weekend exclude` _(2026-10-19)_
+
+**Corrected behaviour, re-check your config.** `load_exclusions` was a line scanner: a
+commented-out entry (`# "X",`) in `exclude_places` was counted as an exclusion, and a list
+misplaced under a table was read as a top-level one. A place you had commented out to
+re-include was still being excluded from the weekend plan. Check `exclude_places` in your
+config: a place you believed re-included now appears in plans, and a list that sat under a
+table is no longer read.
 
 ### Added -- `ztools weekend exclude <place>` (F1)
 - The one safe writer of the planner's `exclude_places`, for the `routines` row button:
