@@ -26,6 +26,64 @@ struct Cli {
     cmd: Cmd,
 }
 
+/// `ztools weekend ...`.
+#[derive(Subcommand)]
+enum WeekendCmd {
+    /// Add a place to the planner's `exclude_places` list (or `--undo` it).
+    ///
+    /// The place is a row's bold name exactly as the newest stored plan prints
+    /// it. Prints one JSON object on stdout; exit 0 = added/removed/unchanged,
+    /// 3 = refused (unknown or malformed place), 1 = failed. The contract is
+    /// in `docs/ROADMAP.md`, "Contracts other repos build on".
+    Exclude {
+        /// The place, as the plan prints it.
+        place: String,
+        /// Remove the place from the list instead.
+        #[arg(long)]
+        undo: bool,
+    },
+}
+
+/// A deliberate exit status: the command already printed its result, and the
+/// status is part of its contract (`main` exits with `code`, after `reason`
+/// on stderr).
+#[derive(Debug)]
+pub struct Exit {
+    pub code: u8,
+    pub reason: String,
+}
+
+impl std::fmt::Display for Exit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.reason)
+    }
+}
+
+impl std::error::Error for Exit {}
+
+/// `ztools weekend exclude`: print the result JSON, exit by its contract.
+fn weekend_exclude(config: &ZtoolsConfig, place: &str, undo: bool) -> Result<()> {
+    use crate::ztools::weekend::exclude::{Action, edit, report};
+    let action = if undo {
+        Action::Include
+    } else {
+        Action::Exclude
+    };
+    let result = edit(
+        &config.weekend_exclusions_paths,
+        &crate::ztools::store::weekend_output_dir(),
+        action,
+        place,
+    );
+    let (json, code) = report(action, place, &result);
+    println!("{json}");
+    if code == 0 {
+        return Ok(());
+    }
+    let reason = json["reason"].as_str().unwrap_or_default().to_string();
+    Err(Exit { code, reason }.into())
+}
+
 #[derive(Subcommand)]
 enum Cmd {
     /// Run native Rust Twitter timeline summarizer.
@@ -82,6 +140,11 @@ enum Cmd {
         /// Print when the newest stored plan was last updated. Read-only.
         #[arg(long)]
         last_updated: bool,
+    },
+    /// Weekend planner configuration edits (`exclude`).
+    Weekend {
+        #[command(subcommand)]
+        cmd: WeekendCmd,
     },
     /// Print this project's status as JSON for the routines harness.
     ///
@@ -332,6 +395,9 @@ pub fn run() -> Result<()> {
             crate::cli_ztools::weekend_plan(&config, &location, md_out, fetch_latest, last_updated)
         }
         Cmd::ImageRenamer { dir, apply } => crate::cli_ztools::image_renamer(&config, &dir, apply),
+        Cmd::Weekend {
+            cmd: WeekendCmd::Exclude { place, undo },
+        } => weekend_exclude(&config, &place, undo),
         Cmd::Status => crate::cli_ztools::status(&config),
         Cmd::TwitterStatus => crate::ztools::twitter_status::run(),
         Cmd::Settings { args, json } => crate::ztools::settings::cli(&args, json),

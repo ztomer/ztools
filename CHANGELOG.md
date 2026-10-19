@@ -8,6 +8,23 @@ This file starts at v2.2.0 — earlier history is in git.
 
 ## Unreleased
 
+### Added -- `ztools weekend exclude <place>` (F1)
+- The one safe writer of the planner's `exclude_places`, for the `routines` row button:
+  format-preserving (`toml_edit`; comments kept, list kept above every table), atomic, locked
+  against concurrent writers, idempotent, `--undo` to re-include. A place must be a row's bold
+  name in the newest stored plan; anything else is refused with a reason. One JSON object on
+  stdout; exit 0 / 3 refused / 1 failed. Contract in `docs/ROADMAP.md`.
+
+### Fixed -- the exclusion loader reads TOML, not lines (F1)
+- `load_exclusions` was a line scanner: it read a commented-out entry (`# "X",`) as an
+  exclusion, and a list misplaced under a table (C8) as a top-level one. It now reads the
+  top-level `exclude_places` as TOML, through the same resolver the writer uses.
+
+### Fixed -- the vendored 404 navigate test no longer races a 10 ms sleep (H4)
+- Ordered by the mock channel's FIFO instead; carried across re-vendors as
+  `vendor/patches/camoufox-rs/0001-order-404-test-by-channel.patch`, and
+  `tools/tests/test_vendor_patches.py` fails while it is unapplied.
+
 ### Fixed -- twitter summary (B7 b, last form)
 - **raptor, unbracketed:** `..., per @handle | Tue Oct 13 15:38:30 +0000 2026.` (2026-10-13
   noon) had no bracket for the repair to see. It now needs the `@` and a source-shaped

@@ -51,6 +51,32 @@ pub fn weekend_output_dir() -> PathBuf {
     std::env::var("WEEKEND_OUTPUT_DIR").map_or_else(|_| weekend_store_dir(), PathBuf::from)
 }
 
+/// Newest `weekend_plan_*.md` in `directory` by modification time.
+///
+/// Shared by `ztools status` and `ztools weekend exclude`, which validates a
+/// place against the plan the operator is looking at: two readers of "the
+/// newest plan" with two rules would disagree about which plan that is.
+#[must_use]
+pub fn newest_dated_plan(directory: &std::path::Path) -> Option<std::path::PathBuf> {
+    let mut plans: Vec<std::path::PathBuf> = std::fs::read_dir(directory)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            // Dated plans only. The store also holds `weekend_plan_latest.md`
+            // (the tab's pointer copy of a dated plan) and older `*_plan.md`
+            // shapes; neither carries the weekend in its name, and a status
+            // built on one reports "an unreadable date range" for a plan
+            // that exists under its dated name right beside it.
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            p.extension().is_some_and(|e| e == "md")
+                && crate::ztools::weekend::report::parse_window_from_filename(name).is_some()
+        })
+        .collect();
+    plans.sort_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok());
+    plans.last().cloned()
+}
+
 /// File name of the stored plan for one weekend.
 ///
 /// `weekend_plan_August_14_to_August_16_2026.md` — byte-compatible with the

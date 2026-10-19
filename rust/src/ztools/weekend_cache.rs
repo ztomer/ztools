@@ -224,38 +224,21 @@ pub fn clean_venue_or_event_title(raw_title: &str, region: &RegionLists) -> Opti
 /// `~/…` lookup made this read whichever machine was running, so the same test
 /// took a different branch on a developer box than in CI -- and the coverage
 /// number moved with it.
+///
+/// Read as TOML, top level only ([`crate::ztools::weekend::exclude::source`],
+/// shared with the one writer so the two cannot pick different files). This
+/// used to be a line scanner, which read a commented-out entry as an
+/// exclusion and a list misplaced under a table (C8) as a top-level one -- so
+/// a file TOML and the writer disagree about looked fine here.
 #[must_use]
 pub fn load_exclusions(config: &crate::config::ZtoolsConfig) -> Vec<String> {
-    for p in config
-        .weekend_exclusions_paths
-        .iter()
-        .map(|s| crate::manifest::expand_tilde(s))
-    {
-        if let Ok(content) = fs::read_to_string(p) {
-            let mut list = Vec::new();
-            let mut in_excl = false;
-            for line in content.lines() {
-                let trimmed = line.trim();
-                if trimmed.starts_with("exclude_places = [") {
-                    in_excl = true;
-                    continue;
-                }
-                if in_excl {
-                    if trimmed.starts_with(']') {
-                        break;
-                    }
-                    let item = trimmed.trim_matches(|c| c == '"' || c == '\'' || c == ',');
-                    if !item.is_empty() {
-                        list.push(item.to_string());
-                    }
-                }
-            }
-            if !list.is_empty() {
-                return list;
-            }
-        }
-    }
+    crate::ztools::weekend::exclude::source(&config.weekend_exclusions_paths)
+        .map_or_else(builtin_exclusions, |(_, list)| list)
+}
 
+/// The list the planner runs on when no configured file has one.
+#[must_use]
+pub fn builtin_exclusions() -> Vec<String> {
     vec![
         "Canada's Wonderland".into(),
         "Toronto Zoo".into(),

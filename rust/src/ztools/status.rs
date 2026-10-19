@@ -47,26 +47,6 @@ fn upcoming_weekend(
     crate::ztools::weekend::plan_window(today, province)
 }
 
-/// Newest `weekend_plan_*.md` in `directory` by modification time.
-fn newest_plan(directory: &std::path::Path) -> Option<std::path::PathBuf> {
-    let mut plans: Vec<std::path::PathBuf> = std::fs::read_dir(directory)
-        .ok()?
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| {
-            // Dated plans only. The store also holds `weekend_plan_latest.md`
-            // (the tab's pointer copy of a dated plan) and older `*_plan.md`
-            // shapes; neither carries the weekend in its name, and a status
-            // built on one reports "an unreadable date range" for a plan
-            // that exists under its dated name right beside it.
-            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
-            p.extension().is_some_and(|e| e == "md") && parse_window_from_filename(name).is_some()
-        })
-        .collect();
-    plans.sort_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok());
-    plans.last().cloned()
-}
-
 /// The store directory status reads plans from — the same one
 /// `weekend-plan` writes and the dashboard tab reads
 /// (`store::weekend_output_dir`). The Python original read `~/Documents`
@@ -85,7 +65,7 @@ fn build_status(
     if !directory.is_dir() {
         return unknown(&format!("no plan directory at {}", directory.display()));
     }
-    let Some(plan) = newest_plan(&directory) else {
+    let Some(plan) = crate::ztools::store::newest_dated_plan(&directory) else {
         return unknown(&format!(
             "no weekend plan has ever been written to {}",
             directory.display()

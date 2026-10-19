@@ -165,7 +165,7 @@ fn newest_plan_picks_latest_by_mtime_and_only_plan_files() {
             .join("weekend_plan_August_14_to_August_16_2026.md"),
         5,
     );
-    let path = newest_plan(td.path()).unwrap();
+    let path = crate::ztools::store::newest_dated_plan(td.path()).unwrap();
     assert_eq!(
         path.file_name().unwrap().to_str().unwrap(),
         "weekend_plan_August_14_to_August_16_2026.md"
@@ -325,5 +325,8 @@ fn a_newer_corpus_record_is_never_read_as_the_plan() {
         .and_then(|d| d.and_hms_opt(23, 0, 0))
         .unwrap();
     crate::ztools::store_corpus::save_corpus(td.path(), run, "#", "- corpus").unwrap();
-    assert_eq!(newest_plan(td.path()), Some(plan));
+    assert_eq!(
+        crate::ztools::store::newest_dated_plan(td.path()),
+        Some(plan)
+    );
 }

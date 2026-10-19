@@ -6,6 +6,10 @@
 fn main() {
     if let Err(e) = ztools::cli::run() {
         eprintln!("ztools: {e:#}");
-        std::process::exit(1);
+        // A command whose exit status is part of its contract says which.
+        let code = e
+            .downcast_ref::<ztools::cli::Exit>()
+            .map_or(1, |exit| i32::from(exit.code));
+        std::process::exit(code);
     }
 }

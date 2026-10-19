@@ -69,32 +69,32 @@ A dated summary, not checked by any gate; re-derive it before editing:
   and `tools/release.sh` execs that kit. Narrative of earlier phases:
   `git show 6a10475:docs/ROADMAP.md`.
 
-## Phase F — owner-requested features
+## Contracts other repos build on
 
-Goal: the owner's feature asks, each behind a test that can go red. Depends on nothing (Phase 0
-is landed, so pushes are no longer waiting on it). Size: S. Exit: each item's round-trip tests green and the command used once
-from `routines`.
+### `ztools weekend exclude` — what the `routines` row button calls
 
-### F1 — `ztools weekend exclude <place>`, the seam the routines row button calls
-- **Class:** a second writer of a user's config file. Owner, 2026-10-14: "weekend add an
-  exclusion directly from the ui (button on the row)" -- the button lives in `routines`
-  (its ROADMAP F1), and the only safe writer of the planner's exclusion list is this repo,
-  so the counterpart is a CLI rather than `routines` editing TOML it does not own.
-- **Why now:** `routines` F1 depends on it; without a command, the button would have to
-  write `conf/weekend.toml` itself and inherit its traps.
-- **Done when:** `ztools weekend exclude <place>` appends to the user-level `exclude_places`
-  list (the file `weekend_exclusions_paths` names, `conf/weekend.toml` by default)
-  idempotently, and `--undo` removes it; edits preserve comments and keep `exclude_places`
-  ABOVE any table header (the C8 placement trap `conf/weekend.toml`'s own header explains:
-  below a header TOML parses it as that table's key -- it once landed in the last
-  `[[children]]` entry -- and the whole list was silently ignored, C8 in
-  `docs/REPORT_WEAKNESS_CLASSES.md`). Round-trip tests on a TOML file with comments and a trailing table: add, add
-  again (no duplicate), undo -- each re-parsed by the real config loader to prove the list is
-  top-level, and one watched red with the entry appended at the end of the file. The place's
-  identity is what the exclusion list matches on (today the place name, as
-  `conf/weekend.toml` lists it), printed by the plan so `routines` sends that, never a row
-  index. Size: S.
-- **Blocked by:** nothing.
+The planner's exclusion list has ONE writer, this command (`rust/src/ztools/weekend/exclude.rs`);
+`routines` (its own item F1) calls it rather than editing `conf/weekend.toml`. The contract,
+pinned by `rust/tests/cli_weekend_exclude.rs` and `rust/src/ztools/weekend/exclude_tests.rs`:
+
+- **Invocation:** `ztools weekend exclude "<place>"` adds; `ztools weekend exclude "<place>" --undo`
+  removes. `<place>` is the row's IDENTITY: its bold name in the newest stored plan, exactly as the
+  plan prints it (`| * 3.0/5 | **Kortright Centre for Conservation** (Vaughan) | ...` sends
+  `Kortright Centre for Conservation`). Never a row index — rows reorder between runs. Matching is
+  case-, whitespace- and quote-insensitive; the plan's spelling is what is stored.
+- **Stdout:** exactly one JSON object, on every exit status:
+  `{"schema":1,"action":"exclude"|"include","place":<as sent>,"result":"added"|"removed"|"unchanged"|"refused"|"failed","entry":<stored spelling>|null,"file":<path>|null,"entries":<list length>|null,"reason":<text>|null}`.
+  `reason` is set exactly when `result` is `refused` or `failed`, and is written for a person.
+- **Exit status:** `0` added, removed or unchanged (a repeat is a no-op, never an error); `3`
+  refused — the place is not in the newest plan, is malformed, or the file's list sits under a
+  table (C8), so retrying the same request cannot help; `1` failed — no config file, unreadable
+  or invalid TOML, lock wait over 10 s, or the write failed; `2` is clap's own usage error.
+- **Guarantees:** edits the file the planner reads (the first `weekend_exclusions_paths` entry
+  with a top-level list), preserving comments and keeping the list above every table; atomic
+  (temp file + rename, permissions kept, through a symlink to its target); serialised by an
+  exclusive lock on the file, so concurrent presses lose no entry; a no-op leaves the file
+  byte-identical. The plan store it validates against is `WEEKEND_OUTPUT_DIR`, the one the tab
+  reads.
 
 ## Phase H — currency (house rule: newest release of every layer)
 
