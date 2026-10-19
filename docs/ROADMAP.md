@@ -102,28 +102,30 @@ Goal: nothing in the stack is behind its newest release without a recorded reaso
 Depends on nothing. Size: S. Exit: the commands named in
 each item report nothing pending.
 
-### H1 — lockfile refresh — one clause left, and no release can satisfy it
+### H1 — lockfile refresh — the duplicate clause is still blocked, and six updates are pending again
 - **Class:** dependency drift. `cargo update --dry-run --verbose` in `rust/` had 21 compatible
   updates pending on 2026-10-14, and `brotli-decompressor` held at 6.0.1 (6.1.0 available).
 - **Why now:** routine hygiene; a held-back transitive is how a duplicate major starts. Most of
-  this row is done — all 21 updated, and `cargo update --dry-run --verbose` now reports ZERO
-  package updates (the only `Updating` line left is the crates.io index fetch). It stays open
-  for the last clause alone, which is the one that matters: a duplicate major is not hygiene,
-  it is two copies of a library to keep in step.
-- **Done when:** `cargo update --verbose` shows no package `Updating` line (met); every
-  `Unchanged … available` line names its parent and reason here (met — see below); the gate is
-  green (met). The remaining clause, `cargo tree -d` empty, is recorded as blocked below rather
-  than claimed: ONE real duplicate remains, `miniz_oxide 0.8.9` (via `png 0.18.1`) beside
-  `0.9.1` (via `flate2 1.1.10`). Note `libc v0.2.190` appears twice in that output but is ONE
-  version reached by two paths (camoufox-rs and core-foundation), not a duplicate — reading
-  the raw output as a count would have "fixed" nothing.
+  this row is done — all 21 updated. Re-measured 2026-10-19: SIX compatible updates are
+  pending again (`cc` 1.8.0→1.9.0, `combine` 4.6.8→4.6.9, `find-msvc-tools` 0.1.14→0.1.15,
+  `libc` 0.2.190→0.2.191, `schannel` 0.1.29→0.1.30, `tokio` 1.53.3→1.54.0), so the
+  zero-pending clause is open again. The clause that matters is still the one below: a
+  duplicate major is not hygiene, it is two copies of a library to keep in step.
+- **Done when:** `cargo update --verbose` shows no package `Updating` line (open again — six
+  pending, re-measured 2026-10-19); every `Unchanged … available` line names its parent and
+  reason here (met — see below); the gate is green (met). The remaining clause,
+  `cargo tree -d` empty, is recorded as blocked below rather than claimed: ONE real duplicate
+  remains, `miniz_oxide 0.8.9` (via `png 0.18.1`) beside `0.9.1` (via `flate2 1.1.10`),
+  re-measured 2026-10-19 and unchanged. Note `libc v0.2.190` appears twice in that output but
+  is ONE version reached by two paths (camoufox-rs and core-foundation), not a duplicate —
+  reading the raw output as a count would have "fixed" nothing.
 - **The held-back line, named:** `brotli-decompressor v6.0.1 (available: v6.1.0)`, held by its
   parent **`brotli v9.0.0`**, a direct dependency. 9.0.0 is the newest release and pins the 6.0
   line.
 - **Blocked by:** an upstream `png` release. `png` 0.18.1 is the newest 0.18.x and
-  `cargo update -p png` locks 0 packages, so the `miniz_oxide` 0.8 line cannot move until `png`
-  adopts 0.9. Re-measure rather than assume: if a `png` has shipped, the refresh is one
-  `cargo update` and this row goes.
+  `cargo update -p png` locks 0 packages (re-measured 2026-10-19), so the `miniz_oxide` 0.8
+  line cannot move until `png` adopts 0.9. Re-measure rather than assume: if a `png` has
+  shipped, the refresh is one `cargo update` and this row goes.
 
 ## Sources consolidated (2026-10-12)
 
