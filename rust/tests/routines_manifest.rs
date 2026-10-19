@@ -73,3 +73,22 @@ fn the_settings_command_is_the_run_binarys_settings_subcommand() {
     // not by this manifest's (weekend) task name.
     assert_eq!(m["settings"]["title"].as_str(), Some("ztools"));
 }
+
+/// The Weekend tab's per-row Exclude button exists only while `[tab.row_action]`
+/// is declared (routines `docs/STATUS_CONTRACT.md`). Its command is the run
+/// binary's `weekend exclude`, the subcommand that answers that contract.
+#[test]
+fn the_weekend_tab_declares_its_exclude_row_action() {
+    let m = manifest();
+    let action = m["tab"]
+        .get("row_action")
+        .expect("[tab.row_action] must be declared");
+    assert_eq!(action["label"].as_str(), Some("Exclude"));
+    assert_eq!(action["done"].as_str(), Some("excluded"));
+    let run = m["run"]["command"].as_str().expect("[run] command");
+    let binary = run.split_whitespace().next().expect("a binary");
+    assert_eq!(
+        action["command"].as_str(),
+        Some(format!("{binary} weekend exclude").as_str())
+    );
+}
