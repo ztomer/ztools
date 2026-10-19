@@ -2377,8 +2377,19 @@ mod tests {
             let nav_req_id = sent["id"].as_i64().expect("id");
             assert_eq!(sent["method"], "Page.navigate");
 
-            // Inject Network.requestWillBeSent BEFORE the navigate ack to
-            // test the speculative path.
+            // ORDERED BY THE CHANNEL, NOT BY A CLOCK (local divergence from
+            // upstream, carried by vendor/patches/camoufox-rs/). Upstream
+            // sent the ack, slept 10 ms, then sent responseReceived, so the
+            // 404 counted only if it landed inside navigate's 80 ms test-build
+            // status window; on a busy CI runner it did not (`left: None`).
+            // The connection has ONE reader thread that dispatches
+            // `in_tx` in FIFO order, synchronously, so queuing both Network
+            // events BEFORE the ack means both handlers have run by the time
+            // the ack unblocks navigate: the status is already set on the
+            // first poll, and no scheduling delay can reorder it.
+            //
+            // requestWillBeSent precedes the ack: the speculative path (the
+            // nav_id is not known yet) is what this case exists to cover.
             in_tx
                 .send(request_will_be_sent_msg(
                     "req-001",
@@ -2387,17 +2398,14 @@ mod tests {
                     "page-g4a",
                 ))
                 .expect("send rws");
+            in_tx
+                .send(response_received_msg("req-001", 404, "page-g4a"))
+                .expect("send responseReceived");
 
             // Now ack the navigate.
             in_tx
                 .send(navigate_success_response(nav_req_id, "page-g4a"))
                 .expect("send nav response");
-
-            // Inject the response event.
-            std::thread::sleep(Duration::from_millis(10));
-            in_tx
-                .send(response_received_msg("req-001", 404, "page-g4a"))
-                .expect("send responseReceived");
         });
 
         let result = h.frame.navigate(

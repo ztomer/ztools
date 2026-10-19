@@ -125,30 +125,6 @@ each item report nothing pending.
   adopts 0.9. Re-measure rather than assume: if a `png` has shipped, the refresh is one
   `cargo update` and this row goes.
 
-### H4 — the vendored suite orders two mock events with a 10 ms sleep
-- **Class:** a test whose subject is a timing, judged by a timing. In `vendor/camoufox-rs`, 
-  `api::main_frame::tests::navigate_captures_404_status_and_returns_ok` injects a
-  `Network.requestWillBeSent` and a navigate ack, sleeps 10 ms on the responder thread, then
-  injects the `Network.responseReceived` whose status it asserts -- so the assertion holds only
-  if the frame's speculative grace outlasts that sleep. Measured 2026-10-16: it failed on run
-  38841488233 (`status_code must be Some(404)`, left `None`) and passed on run 38899800424,
-  while this host ran the crate's full 198-test suite 20 times without a failure.
-- **Why now:** the step is load-bearing by decision, not by accident -- `.gatesrc` keeps the
-  vendored suite in the gate because it is what would catch a readiness regression in the copy
-  this repo carries (`wait_for_ready` read the wrong stream while upstream's own tests were red
-  and invisible). A test that fails on a busy runner and passes on an idle one takes the
-  verdict with it: a red CI run then has to be re-read before anyone can tell it from a real
-  regression, and a re-run that goes green cannot say which it was.
-- **Done when:** an unchanged `vendor/camoufox-rs` tree is green on consecutive CI runs, with
-  the count and the run IDs recorded in the commit that earns them -- a fix to the mock counts
-  only if the re-vendor procedure in `tools/vendor_lint_baseline.jsonc` carries it, since the
-  next re-vendor overwrites the copy.
-- **Blocked by:** an owner decision, because the two available fixes pull against each other.
-  Making the mock deterministic means editing `vendor/camoufox-rs` -- third-party code carried
-  in-tree, whose re-vendor would silently drop the edit unless the procedure carries a patch
-  step; retrying the step instead buys a quiet badge without touching the subject. The third
-  option, reporting it upstream and waiting, leaves the flake in the gate meanwhile.
-
 ## Sources consolidated (2026-10-12)
 
 Every agent store for this repo was read and given a disposition on 2026-10-12; nothing in

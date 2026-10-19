@@ -32,7 +32,10 @@
 // `why` on every FILL IN entry it reports, in the same commit.
 //
 // RE-VENDORING, when upstream moves. Replace vendor/camoufox-rs with the new upstream
-// tree, then re-record in the SAME commit: the counts above are a function of upstream's
+// tree, re-apply this repo's local divergences (`git apply vendor/patches/camoufox-rs/*.patch`;
+// vendor/patches/camoufox-rs/README.md says what each is and why, and
+// tools/tests/test_vendor_patches.py fails while any is unapplied), then re-record in the
+// SAME commit: the counts above are a function of upstream's
 // code, so a sync that leaves them stale fails on the sync commit for the wrong reason.
 // Expect the counts to move. Raise a ceiling only in the sync that raised the findings,
 // and lower it whenever a sync lowers them -- the ratchet may only ever be tightened
