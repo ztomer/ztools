@@ -2496,11 +2496,7 @@ mod tests {
                 .expect("Page.navigate not sent");
             let id = sent["id"].as_i64().expect("id");
 
-            in_tx
-                .send(navigate_success_response(id, "page-g4c"))
-                .expect("send nav response");
-
-            // Inject Network events after ack (common timing).
+            // Network events, then the ack (below).
             in_tx
                 .send(request_will_be_sent_msg(
                     "req-200",
@@ -2512,6 +2508,13 @@ mod tests {
             in_tx
                 .send(response_received_msg("req-200", 200, "page-g4c"))
                 .expect("send responseReceived");
+            // Ack LAST: ordered by the channel, not a clock (see
+            // vendor/patches/camoufox-rs/README.md, 0002). The single reader
+            // thread dispatches in FIFO order, so every Network handler has run
+            // before the ack unblocks navigate and its 80 ms status poll starts.
+            in_tx
+                .send(navigate_success_response(id, "page-g4c"))
+                .expect("send nav response");
         });
 
         let result = h.frame.navigate(
@@ -2553,11 +2556,6 @@ mod tests {
                 .expect("Page.navigate not sent");
             let id = sent["id"].as_i64().expect("id");
 
-            // Ack the navigate (nav id "nav-1", per navigate_success_response).
-            in_tx
-                .send(navigate_success_response(id, "page-g4r"))
-                .expect("send nav response");
-
             // 1. Initial document request A.
             in_tx
                 .send(request_will_be_sent_msg(
@@ -2585,6 +2583,13 @@ mod tests {
             in_tx
                 .send(response_received_msg("req-B", 200, "page-g4r"))
                 .expect("send respReceived B");
+            // Ack LAST: ordered by the channel, not a clock (see
+            // vendor/patches/camoufox-rs/README.md, 0002). The single reader
+            // thread dispatches in FIFO order, so every Network handler has run
+            // before the ack unblocks navigate and its 80 ms status poll starts.
+            in_tx
+                .send(navigate_success_response(id, "page-g4r"))
+                .expect("send nav response");
         });
 
         let result = h.frame.navigate(
@@ -2618,10 +2623,6 @@ mod tests {
                 .recv_timeout(Duration::from_secs(5))
                 .expect("Page.navigate not sent");
             let id = sent["id"].as_i64().expect("id");
-            in_tx
-                .send(navigate_success_response(id, "page-g4h"))
-                .expect("send nav response");
-
             // Main document request A → 200 final.
             in_tx
                 .send(request_will_be_sent_msg(
@@ -2650,6 +2651,13 @@ mod tests {
             in_tx
                 .send(response_received_msg("req-img-2", 500, "page-g4h"))
                 .expect("send respReceived sub-resource");
+            // Ack LAST: ordered by the channel, not a clock (see
+            // vendor/patches/camoufox-rs/README.md, 0002). The single reader
+            // thread dispatches in FIFO order, so every Network handler has run
+            // before the ack unblocks navigate and its 80 ms status poll starts.
+            in_tx
+                .send(navigate_success_response(id, "page-g4h"))
+                .expect("send nav response");
         });
 
         let result = h.frame.navigate(
@@ -2683,9 +2691,6 @@ mod tests {
                 .expect("Page.navigate not sent");
             let id = sent["id"].as_i64().expect("id");
             in_tx
-                .send(navigate_success_response(id, "page-g4l"))
-                .expect("send nav response");
-            in_tx
                 .send(request_will_be_sent_msg(
                     "req-A",
                     Some("nav-1"),
@@ -2708,6 +2713,13 @@ mod tests {
             in_tx
                 .send(response_received_msg("req-B", 200, "page-g4l"))
                 .expect("send respReceived B");
+            // Ack LAST: ordered by the channel, not a clock (see
+            // vendor/patches/camoufox-rs/README.md, 0002). The single reader
+            // thread dispatches in FIFO order, so every Network handler has run
+            // before the ack unblocks navigate and its 80 ms status poll starts.
+            in_tx
+                .send(navigate_success_response(id, "page-g4l"))
+                .expect("send nav response");
         });
 
         let _ = h.frame.navigate(

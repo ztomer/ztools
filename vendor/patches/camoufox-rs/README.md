@@ -28,3 +28,19 @@ against the new tree. Then re-record `tools/vendor_lint_baseline.jsonc`.
   the new body with a 200 ms stall inserted between every send passes.
 - **Upstream-worthy:** yes. Report it if upstream accepts issues; delete this patch
   when a re-vendor carries the fix.
+
+## `0002-order-status-tests-by-channel.patch`
+
+- **Upstream state:** unchanged as of 2026-10-19. Same class as 0001, same ruling.
+- **What:** `navigate_captures_200_status`, `navigate_follows_redirect_chain_reports_final_status`
+  and `navigate_subresource_redirect_does_not_hijack_chain` sent the navigate ack FIRST
+  and the Network events after it, so their status counted only if every event landed
+  inside navigate's 80 ms test-build status window. `navigate_redirect_does_not_leak_handlers`
+  asserts no status, but its redirect chain ran only inside that window too.
+- **Fix:** the ack is sent LAST in each responder; FIFO dispatch on the single reader
+  thread means every handler has run before navigate is unblocked. The post-ack
+  nav-id-match branch was never guaranteed by the old order either (the reader could
+  dispatch the events before navigate published the nav id).
+- **Proof:** the old bodies with a 100 ms stall after the ack fail (3 of 3); the new
+  bodies with a 200 ms stall after every send pass 3/3 runs.
+- **Upstream-worthy:** yes, together with 0001.
