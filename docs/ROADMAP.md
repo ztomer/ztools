@@ -125,29 +125,6 @@ each item report nothing pending.
   adopts 0.9. Re-measure rather than assume: if a `png` has shipped, the refresh is one
   `cargo update` and this row goes.
 
-### H5 — the nav-id-match branch of the vendored status logic has no test that reaches it
-- **Class:** a branch no test reaches. `MainFrame::navigate` in `vendor/camoufox-rs` decides
-  whether a `Network.requestWillBeSent` belongs to THIS navigation by comparing the event's
-  `navigationId` with the id the navigate ack published; the arm that does the comparing —
-  both ids present — is the branch. Nothing in the vendored suite reaches it: every status case
-  sends its `Network.requestWillBeSent` BEFORE the ack, so the handler still sees "no id
-  published yet" and takes the speculative arm instead. The ack-first order the suite used
-  before H4 could not reach it either — the reader thread may dispatch the request before
-  navigate publishes the id, so that arm was reached by luck, never by construction.
-- **Why now:** the arm is the only thing that stops a request belonging to ANOTHER navigation
-  from being counted as this navigation's main document, and the status `navigate` returns is
-  that request's status. Untested it rots silently: a change that accepts every request would
-  report the wrong page's status and the four existing status cases would stay green, because
-  all four take the speculative arm and would still pass.
-- **Done when:** a case in `vendor/camoufox-rs/src/api/main_frame.rs` reaches the arm on every
-  run — `cargo test --manifest-path vendor/camoufox-rs/Cargo.toml nav_id` is green, and the same
-  case is RED when the comparison is broken (accept always, reject always) and GREEN with the
-  shipped logic. The divergence is carried as
-  `vendor/patches/camoufox-rs/0003-nav-id-match-test.patch` (new) with a README entry, so
-  `tools/tests/test_vendor_patches.py` fails while it is unapplied, and the gate's own step
-  `cargo test --manifest-path vendor/camoufox-rs/Cargo.toml --all-features` runs it.
-- **Blocked by:** nothing
-
 ## Sources consolidated (2026-10-12)
 
 Every agent store for this repo was read and given a disposition on 2026-10-12; nothing in

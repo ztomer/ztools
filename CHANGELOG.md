@@ -6,6 +6,24 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## Unreleased
+
+### Fixed -- the vendored nav-id-match branch has a test that reaches it (H5)
+- `MainFrame::navigate` in the vendored `camoufox-rs` decides whether a
+  `Network.requestWillBeSent` belongs to THIS navigation by comparing the event's
+  `navigationId` with the id the navigate ack published. No test reached that arm:
+  every status case sends its request BEFORE the ack, so the handler still sees "no id
+  published yet", and the ack-first order could not reach it either — the reader thread
+  may dispatch the request before navigate publishes the id. A request of another
+  navigation could therefore be counted as this navigation's main document, and the
+  status `navigate` returns is that request's status, with the suite still green.
+- A case now reaches the arm by construction (a state barrier, not a clock): it is red
+  when the comparison accepts every request (`Some(500)` where `Some(200)` is expected)
+  and when it rejects every request (`None`), and green with the shipped logic.
+  Carried across re-vendors as `vendor/patches/camoufox-rs/0003-nav-id-match-test.patch`;
+  the gate's own step `cargo test --manifest-path vendor/camoufox-rs/Cargo.toml
+  --all-features` runs it.
+
 ## v3.9.0 — a commented-out exclusion no longer excludes; `weekend exclude` _(2026-10-19)_
 
 **Corrected behaviour, re-check your config.** `load_exclusions` was a line scanner: a

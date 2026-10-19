@@ -1,0 +1,138 @@
+diff --git a/vendor/camoufox-rs/src/api/main_frame.rs b/vendor/camoufox-rs/src/api/main_frame.rs
+index 5a2e179..37232de 100644
+--- a/vendor/camoufox-rs/src/api/main_frame.rs
++++ b/vendor/camoufox-rs/src/api/main_frame.rs
+@@ -2745,4 +2745,133 @@ mod tests {
+ 
+         h.closed.store(true, Ordering::SeqCst);
+     }
++
++    /// G4 nav-id gate: the `requestWillBeSent` handler compares the event's
++    /// `navigationId` with the id the navigate ack published, and the arm that
++    /// does the comparing -- both ids present -- is the one that decides whether
++    /// a request belongs to THIS navigation.
++    ///
++    /// No case reached that arm before this one. Every other status test sends
++    /// its `Network.requestWillBeSent` BEFORE the ack, so the handler still sees
++    /// "no id published yet" and takes the speculative arm; and the ack-first
++    /// order the suite used before H4 could not reach it either, because the
++    /// reader thread may dispatch the request before navigate publishes the id.
++    /// It was reached by luck, never by construction.
++    ///
++    /// The barrier here is a STATE, not a clock. The mock waits until navigate
++    /// has registered its `Page.eventFired` handler -- the lifecycle wait runs
++    /// AFTER the id is published -- and only then sends the Network events. The
++    /// lifecycle event itself goes last, so the status poll can only start once
++    /// every Network handler has run.
++    ///
++    /// Both directions are asserted: the request of ANOTHER navigation is
++    /// ignored, and the one whose id matches is the main document, so its
++    /// status is the status reported.
++    #[test]
++    fn navigate_nav_id_match_branch_decides_the_main_document() {
++        let h = build_mock_frame("page-g4m", "frame-g4m");
++        let in_tx = h.in_tx.clone();
++        let out_rx = h.out_rx;
++        let conn = h.conn.clone();
++
++        let responder = std::thread::spawn(move || {
++            let sent = out_rx
++                .recv_timeout(Duration::from_secs(5))
++                .expect("Page.navigate not sent");
++            let id = sent["id"].as_i64().expect("id");
++
++            // Ack FIRST: navigate publishes "nav-1" from this response, and the
++            // events below are sent only after the barrier proves it did.
++            in_tx
++                .send(navigate_success_response(id, "page-g4m"))
++                .expect("send nav response");
++
++            // BARRIER, a state and not a clock: navigate registers the
++            // `Page.eventFired` handler in the lifecycle wait, which runs AFTER
++            // it has published the navigation id. Seeing that handler
++            // registered therefore proves the id is published, and the request
++            // events dispatched after it reach the comparing arm.
++            let deadline = Instant::now() + Duration::from_secs(5);
++            while conn.event_handler_count_for("page-g4m", "Page.eventFired") == 0 {
++                assert!(
++                    Instant::now() < deadline,
++                    "navigate never reached the lifecycle wait, so the navigation id \
++                     was never published and the nav-id arm was never reached"
++                );
++                std::thread::yield_now();
++            }
++
++            // A request of ANOTHER navigation: the handler must ignore it, so
++            // it never becomes the main document.
++            in_tx
++                .send(request_will_be_sent_msg(
++                    "req-OTHER",
++                    Some("nav-OTHER"),
++                    "frame-g4m",
++                    "page-g4m",
++                ))
++                .expect("send rws OTHER");
++            // THIS navigation's document request: accepted, and the one whose
++            // status counts.
++            in_tx
++                .send(request_will_be_sent_msg(
++                    "req-MINE",
++                    Some("nav-1"),
++                    "frame-g4m",
++                    "page-g4m",
++                ))
++                .expect("send rws MINE");
++            in_tx
++                .send(response_received_msg("req-MINE", 200, "page-g4m"))
++                .expect("send respReceived MINE");
++            // The ignored request's status must not be captured either.
++            in_tx
++                .send(response_received_msg("req-OTHER", 500, "page-g4m"))
++                .expect("send respReceived OTHER");
++
++            // Release the lifecycle wait LAST: the status poll starts only
++            // after this, so the status is already set when the poll runs.
++            in_tx
++                .send(event_fired_message("load", "frame-g4m", "page-g4m"))
++                .expect("send eventFired");
++        });
++
++        let result = h.frame.navigate(
++            "https://example.com",
++            NavigateOptions {
++                wait_until: Some("load".into()),
++                ..NavigateOptions::default()
++            },
++            Duration::from_secs(10),
++        );
++
++        responder.join().unwrap();
++
++        let outcome = result.expect("navigate must succeed");
++        assert_eq!(
++            outcome.nav_id.as_deref(),
++            Some("nav-1"),
++            "nav_id must be preserved"
++        );
++        assert_eq!(
++            outcome.status_code,
++            Some(200),
++            "only the request whose navigation id matches may be the main document"
++        );
++
++        assert_eq!(
++            h.conn
++                .event_handler_count_for("page-g4m", "Network.requestWillBeSent"),
++            0,
++            "Network.requestWillBeSent handler must not leak"
++        );
++        assert_eq!(
++            h.conn
++                .event_handler_count_for("page-g4m", "Network.responseReceived"),
++            0,
++            "Network.responseReceived handler must not leak"
++        );
++
++        h.closed.store(true, Ordering::SeqCst);
++    }
+ }
