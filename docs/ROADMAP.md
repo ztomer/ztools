@@ -43,6 +43,11 @@ A dated summary, not checked by any gate; re-derive it before editing:
   tree`, `no bare python in a hook or gate`. `.python-version` is tracked (A5) and `rustls` is
   0.23.46 in `rust/Cargo.lock` (A6). Phase A is deleted from this file for that reason, per
   rule 2 above; its narrative is git history at the commit that closed each item.
+- **Re-measured 2026-10-20: the stdin floor is 18, against the 20 process calls a full scan
+  reads.** It was 12 against 14, set on 2026-10-14 when the Python tools were fewer; at 12
+  six calls could go unseen, and the floor is the only thing that says a scan has stopped
+  reading its subject. Nothing is seeded: every one of the 20 calls declares its stdin, and
+  the check is red the moment one of them does not.
 - **CI on `main` is GREEN**, run 38899800424 (2026-10-16) — the first green run since
   2026-10-10, and the `make ci` step inside it is the full 14-step gate. Two reds were behind
   it and the tree was innocent in both. (1) `Swatinem/rust-cache` caches `~/.cargo/bin`, so the
