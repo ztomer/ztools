@@ -8,6 +8,15 @@ This file starts at v2.2.0 — earlier history is in git.
 
 ## Unreleased
 
+### Fixed -- two certificate advisories in the Rust tree (RUSTSEC-2026-0382, RUSTSEC-2026-0383)
+- `rustls-webpki` 0.103.15 -> 0.103.16 and `webpki-root-certs` 1.0.9 -> 1.0.10. The
+  first could accept a distrusted intermediate when verifying a certificate; the second
+  bundles root certificates that trust distrusted emSign intermediates. Both advisories
+  were published on 2026-10-19 and 2026-10-20, so the gate that reads the advisory
+  database went red on its own -- `cargo audit` and `cargo deny` each name one -- and no
+  push could pass until the lockfile moved. Two patch releases, four lines of
+  `rust/Cargo.lock`, no source change.
+
 ### Fixed -- the vendored nav-id-match branch has a test that reaches it (H5)
 - `MainFrame::navigate` in the vendored `camoufox-rs` decides whether a
   `Network.requestWillBeSent` belongs to THIS navigation by comparing the event's
