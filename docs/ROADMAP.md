@@ -118,7 +118,7 @@ Goal: nothing in the stack is behind its newest release without a recorded reaso
 Depends on nothing. Size: S. Exit: the commands named in
 each item report nothing pending.
 
-### H1 — lockfile refresh — refreshed 2026-10-21; the duplicate clause is still blocked upstream
+### H1 — lockfile refresh — refreshed 2026-10-21; the duplicate clause waits on the next `png` release
 - **Class:** dependency drift. `cargo update --dry-run --verbose` in `rust/` had 21 compatible
   updates pending on 2026-10-14, and `brotli-decompressor` held at 6.0.1 (6.1.0 available).
 - **Why now:** routine hygiene; a held-back transitive is how a duplicate major starts. Most of
@@ -138,26 +138,59 @@ each item report nothing pending.
   see below); the gate is green (met). The remaining clause, `cargo tree -d` empty, is recorded
   as blocked below rather than claimed: ONE real duplicate remains, `miniz_oxide 0.8.9` (via
   `png 0.18.1`) beside `0.9.1` (via `flate2 1.1.10`), re-measured 2026-10-21 and unchanged by
-  the refresh. Note `libc v0.2.191` appears twice in that output but is ONE version reached by
+  the refresh. The ONE in-tree route to it worth trying — swapping `flate2` to its `zlib-rs`
+  backend, which does not use `miniz_oxide` at all — was tried on 2026-10-21 and MEASURED not to
+  reach it; the measurement and its cause are below, so the next reader does not spend the round
+  again. Note `libc v0.2.191` appears twice in that output but is ONE version reached by
   two kinds of edge: the first block is the normal-dependency tree (`camoufox-rs`,
   `core-foundation`, `dirs-sys`, …), the second the build-dependency tree (`cc`, `jobserver`).
   Same version, two places it is required — reading the raw output as a count of duplicates
   would have "fixed" nothing. The vendored lockfile has no duplicate at all
   (`cargo tree -d` there prints "nothing to print").
-- **The held-back line, named:** `brotli-decompressor v6.0.1 (available: v6.1.0)`, held by its
+- **The held-back line, named:** `brotli-decompressor v6.0.1 (available: v6.1.1)`, held by its
   parent **`brotli v9.0.0`**, a direct dependency (`brotli = "9"` in `rust/Cargo.toml`).
-  9.0.0 is the newest release of `brotli` and its requirement is `brotli-decompressor ~6.0`,
-  which EXCLUDES 6.1.0 — that is the whole reason, not "it pins the 6.0 line". It is the only
-  `Unchanged … available` line `cargo update --verbose` prints in `rust/`; the vendored
-  lockfile prints none. A refresh adds a held-back line whenever a parent stops accepting a
-  newer child, so this list is re-derived, never inherited.
-- **Blocked by:** an upstream `png` release. Re-measured 2026-10-21: `png`'s newest release on
-  crates.io is STILL 0.18.1, published 2026-02-14 — there is no 0.18.2 and no 0.19 — and 0.18.1
-  requires `miniz_oxide ^0.8` (its normal deps are `bitflags ^2.0`, `crc32fast ^1.2.0`,
-  `fdeflate ^0.3.3`, `flate2 ^1.0.35`, `miniz_oxide ^0.8`). That `^0.8` is what holds the
-  `miniz_oxide` 0.8 line, and `cargo update -p png --dry-run --verbose` locks 0 packages, so
-  the line cannot move until `png` adopts 0.9. Re-measure rather than assume: if a `png` has
-  shipped, the refresh is one `cargo update` and this row goes.
+  9.0.0 is the newest release of `brotli` and its requirement is `brotli-decompressor ~6.0`
+  (with `default-features = false`), which EXCLUDES the 6.1 line — that is the whole reason,
+  not "it pins the 6.0 line". It is the only `Unchanged … available` line `cargo update --verbose`
+  prints in `rust/`; the vendored lockfile prints none. A refresh adds a held-back line whenever
+  a parent stops accepting a newer child, so this list is re-derived, never inherited. Re-measured
+  2026-10-21: the AVAILABLE version moved from 6.1.0 to 6.1.1; the hold itself is unchanged.
+- **Blocked by:** the next `png` release — and by nothing in this repo's own manifests. Re-measured
+  2026-10-21 with the backend swap applied and then reverted: BOTH copies of `miniz_oxide` sit
+  inside `png 0.18.1`'s OWN dependency edge, so no change to THIS manifest removes either one.
+    - `png 0.18.1` declares `miniz_oxide = { version = "0.8", features = ["simd"] }` — hard, not
+      optional — and its SOURCE NEVER USES IT. The only occurrence outside its manifest and
+      lockfile is one stale doc comment (`src/decoder/zlib.rs` in the registry copy), and png's
+      own changelog says "Removed remaining uses of miniz_oxide for decoding". Upstream agrees:
+      image-rs/image-png commit `b2f10c6a7e` ("Remove import of miniz_oxide, unused since
+      0.17.12", merged 2026-09-23) deletes exactly that line from png's manifest. The published
+      0.18.1 (2026-02-14) predates that commit, so the next `png` release carries the removal —
+      and then the tree holds `miniz_oxide 0.9.1` once and `cargo tree -d` is empty with NO code
+      change here.
+    - `png 0.18.1` also declares `flate2 = "1.0.35"` WITH default features, and cargo unifies
+      features across dependents: that request re-enables `flate2`'s `rust_backend` ->
+      `miniz_oxide ^0.9` whatever this manifest asks for. Measured with the swap applied
+      (`flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }` and
+      `png = { version = "0.18.1", features = ["zlib-rs"] }`), the resolved crate is
+      `flate2 v1.1.10 FEATURES=any_impl,any_zlib,default,miniz_oxide,runtime_detection,rust_backend,zlib-rs`
+      (`cargo tree -f "{p} FEATURES={f}" -e normal`) and `cargo tree -d` STILL prints
+      `miniz_oxide v0.8.9` AND `miniz_oxide v0.9.1`. The swap changes which backend `flate2`
+      COMPILES — `any_zlib` suppresses the `miniz_oxide` backend in `flate2`'s `src/ffi/mod.rs` —
+      so it turns both copies into compiled-and-unused code and removes neither from the graph.
+      It is also a real behaviour change for every `flate2` call in the tree (PNG encoding in the
+      eval path, gzip and deflate in the twitter capture path), so it is not taken on its own: it
+      buys no duplicate.
+    - Re-derive rather than assume: `cargo update -p png --dry-run --verbose` prints
+      `Locking 0 packages` today because 0.18.1 is still the newest release on crates.io (checked
+      against the LIVE index, not a cached one: 0.17.16, 0.18.0-rc, 0.18.0, 0.18.1 — no 0.18.2, no
+      0.19). When it ships, the refresh is one `cargo update` in `rust/` and this row goes.
+    - The only in-tree route TODAY is carrying a fork of the codec: `png` vendored under
+      `vendor/` with upstream's one-line manifest patch applied, which is what `vendor/patches/`
+      is for. NOT taken, and left as an owner decision rather than a change: it makes this repo
+      the owner of a codec's source and its advisories, to close one duplicate that upstream has
+      already fixed and that `rust/deny.toml` records as living outside this repo ("none can be
+      unified without patching `png`, `flate2`, `rusqlite` or a proc-macro crate upstream", which
+      is why `multiple-versions` is `warn` there and not `deny`).
 
 ## Sources consolidated (2026-10-12)
 
