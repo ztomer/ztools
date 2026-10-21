@@ -177,7 +177,9 @@ each item report nothing pending.
       `miniz_oxide v0.8.9` AND `miniz_oxide v0.9.1`. The swap changes which backend `flate2`
       COMPILES — `any_zlib` suppresses the `miniz_oxide` backend in `flate2`'s `src/ffi/mod.rs` —
       so it turns both copies into compiled-and-unused code and removes neither from the graph.
-      It is also a real behaviour change for every `flate2` call in the tree (PNG encoding in the
+      The swap is otherwise SOUND — with it applied the whole suite passes (1089 lib tests, the
+      PNG encode/decode pair among them), so what refuses it is the GRAPH, not the codec. It is
+      also a real behaviour change for every `flate2` call in the tree (PNG encoding in the
       eval path, gzip and deflate in the twitter capture path), so it is not taken on its own: it
       buys no duplicate.
     - Re-derive rather than assume: `cargo update -p png --dry-run --verbose` prints
