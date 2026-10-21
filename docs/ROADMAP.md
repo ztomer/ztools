@@ -31,7 +31,7 @@ cannot fail hides more than a plan that reads oddly, because it is the thing tha
 would have noticed. Phases are SEQUENTIAL where a later phase's evidence depends on an
 earlier one, and each phase says what it depends on.
 
-## Where things stand — 2026-10-16
+## Where things stand — 2026-10-21
 
 A dated summary, not checked by any gate; re-derive it before editing:
 `gh run list --limit 3`, `git log --oneline origin/main..main`, `tools/gate.sh --full`.
@@ -57,9 +57,9 @@ A dated summary, not checked by any gate; re-derive it before editing:
   stdin= or input=" — and with the floor raised to 100 it exits 1 naming the key:
   "`GOH_SUBPROCESS_STDIN_MIN_CALLS` read 20 process call(s) and .gatesrc declares a floor of
   100". As committed it exits 0: "every one of 20 process call(s) declares its stdin".
-- **CI on `main` is GREEN**, run 38899800424 (2026-10-16) — the first green run since
-  2026-10-10, and the `make ci` step inside it is the full 14-step gate. Two reds were behind
-  it and the tree was innocent in both. (1) `Swatinem/rust-cache` caches `~/.cargo/bin`, so the
+- **CI on `main` is GREEN**, run 39566572522 (2026-10-21) — the `make ci` step inside it is
+  the full 14-step gate. Two reds were behind it and the tree was innocent in both. (1)
+  `Swatinem/rust-cache` caches `~/.cargo/bin`, so the
   manifest's `cargo install` met a binary a cache had restored with no record in
   `~/.cargo/.crates.toml`, and `cargo install` refuses exactly that (`binary ... already exists
   in destination`); the
@@ -77,7 +77,7 @@ A dated summary, not checked by any gate; re-derive it before editing:
   parses all four now (`docs/MODEL_QUIRKS.md`, CHANGELOG "B7 (b)"); no citation form seen
   in `rejected/` is left unparsed. The repair shipped in v3.9.0 (2026-10-19) and the
   installed `ztools` is 3.9.0, so scheduled runs run the repair now.
-- Hooks are goh 0.27.0's stock set. Installed: `ztools 3.9.0`.
+- Hooks are goh 0.27.0's stock set. Installed: `ztools 3.9.1`.
 - The previous plan's `P2` (a release can be tagged over a red CI) is closed upstream:
   goh `5c5868e` makes the release kit refuse while CI on HEAD is red, pending or missing,
   and `tools/release.sh` execs that kit. Narrative of earlier phases:

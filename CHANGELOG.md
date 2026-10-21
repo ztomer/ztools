@@ -6,7 +6,14 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
-## Unreleased
+## v3.9.1 — the certificate advisories and the refreshed lockfiles reach the installed binary _(2026-10-21)_
+
+**Two certificate advisories and a lockfile behind its newest release, both of which had
+reached the tree but not the user.** The advisories (RUSTSEC-2026-0382, RUSTSEC-2026-0383)
+were fixed in the tree on 2026-10-20, but the installed binary was still v3.9.0, which does
+not carry the fix: a certificate fix nobody has is not a fix that shipped. The lockfile
+refresh below is the same gap from the other side — currency only reaches a user through
+the tap, and the tap still pointed at the old tree.
 
 ### Changed -- every child process names its stdin, and the gate says so in this repo's file
 - The house's stdin gate (`goh subprocess-stdin`) is named in `.gatesrc`
