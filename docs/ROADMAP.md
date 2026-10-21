@@ -48,6 +48,15 @@ A dated summary, not checked by any gate; re-derive it before editing:
   six calls could go unseen, and the floor is the only thing that says a scan has stopped
   reading its subject. Nothing is seeded: every one of the 20 calls declares its stdin, and
   the check is red the moment one of them does not.
+- **The step is NAMED in `.gatesrc` (`GOH_SUBPROCESS_STDIN=on`), and it is proved red both
+  ways (2026-10-20).** The house turned the check on for every repo on 2026-10-13; writing
+  the key down says this repo chose it, in the file the next reader opens. Red-first, in a
+  clean clone of the tree: with every declaration stripped (20 keywords out of 11 files) the
+  check exits 1 and names the calls — "20 call(s) leave stdin undeclared in tracked source:
+  tools/tests/test_gpu_lock_shell.py:106: subprocess.Popen inherits the caller's stdin; pass
+  stdin= or input=" — and with the floor raised to 100 it exits 1 naming the key:
+  "`GOH_SUBPROCESS_STDIN_MIN_CALLS` read 20 process call(s) and .gatesrc declares a floor of
+  100". As committed it exits 0: "every one of 20 process call(s) declares its stdin".
 - **CI on `main` is GREEN**, run 38899800424 (2026-10-16) — the first green run since
   2026-10-10, and the `make ci` step inside it is the full 14-step gate. Two reds were behind
   it and the tree was innocent in both. (1) `Swatinem/rust-cache` caches `~/.cargo/bin`, so the

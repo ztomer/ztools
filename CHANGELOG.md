@@ -8,6 +8,22 @@ This file starts at v2.2.0 — earlier history is in git.
 
 ## Unreleased
 
+### Changed -- every child process names its stdin, and the gate says so in this repo's file
+- The house's stdin gate (`goh subprocess-stdin`) is named in `.gatesrc`
+  (`GOH_SUBPROCESS_STDIN=on`) rather than inherited: the house turned it on for
+  every repo on 2026-10-13, and a repo that never writes the key down reads as a
+  repo that never chose it. All 20 process calls a full scan reads declare their
+  stdin, each one naming `stdin=subprocess.DEVNULL`; there is no allowlist file
+  and nothing is seeded.
+- The floor is 18 of the 20 calls (nine tenths, the house rule). A scan that
+  stopped reading its subject reads as clean, and the floor is the only thing
+  that says so.
+- Proved red both ways on 2026-10-20, in a clean clone: with every declaration
+  stripped the check exits 1 and names the calls ("20 call(s) leave stdin
+  undeclared in tracked source"), and with the floor raised to 100 it exits 1
+  naming the key (`GOH_SUBPROCESS_STDIN_MIN_CALLS` read 20 process call(s) and
+  .gatesrc declares a floor of 100). As committed it exits 0.
+
 ### Fixed -- two certificate advisories in the Rust tree (RUSTSEC-2026-0382, RUSTSEC-2026-0383)
 - `rustls-webpki` 0.103.15 -> 0.103.16 and `webpki-root-certs` 1.0.9 -> 1.0.10. The
   first could accept a distrusted intermediate when verifying a certificate; the second
