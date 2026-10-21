@@ -57,8 +57,10 @@ A dated summary, not checked by any gate; re-derive it before editing:
   stdin= or input=" — and with the floor raised to 100 it exits 1 naming the key:
   "`GOH_SUBPROCESS_STDIN_MIN_CALLS` read 20 process call(s) and .gatesrc declares a floor of
   100". As committed it exits 0: "every one of 20 process call(s) declares its stdin".
-- **CI on `main` is GREEN**, run 39566572522 (2026-10-21) — the `make ci` step inside it is
-  the full 14-step gate. Two reds were behind it and the tree was innocent in both. (1)
+- **CI on `main` is GREEN**, run 39567984306 (2026-10-21) — the run for `c0f5582`, the commit
+  the v3.9.1 tag names and the one the release kit required before it cut anything. The
+  `make ci` step inside it is the full 14-step gate. Two reds were behind it and the tree
+  was innocent in both. (1)
   `Swatinem/rust-cache` caches `~/.cargo/bin`, so the
   manifest's `cargo install` met a binary a cache had restored with no record in
   `~/.cargo/.crates.toml`, and `cargo install` refuses exactly that (`binary ... already exists
