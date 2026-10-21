@@ -75,9 +75,9 @@ A dated summary, not checked by any gate; re-derive it before editing:
   or env fault -- raptor and `fm` both answered; the gate refused both answers over citation
   FORM (no `@`; time of day only; `;`-joined sources; unbracketed `per @h | ts`). The repair
   parses all four now (`docs/MODEL_QUIRKS.md`, CHANGELOG "B7 (b)"); no citation form seen
-  in `rejected/` is left unparsed. The installed `ztools 3.8.0` predates it, so
-  scheduled runs keep the old repair until the next release is installed.
-- Hooks are goh 0.27.0's stock set. Installed: `ztools 3.8.0`.
+  in `rejected/` is left unparsed. The repair shipped in v3.9.0 (2026-10-19) and the
+  installed `ztools` is 3.9.0, so scheduled runs run the repair now.
+- Hooks are goh 0.27.0's stock set. Installed: `ztools 3.9.0`.
 - The previous plan's `P2` (a release can be tagged over a red CI) is closed upstream:
   goh `5c5868e` makes the release kit refuse while CI on HEAD is red, pending or missing,
   and `tools/release.sh` execs that kit. Narrative of earlier phases:
@@ -116,29 +116,45 @@ Goal: nothing in the stack is behind its newest release without a recorded reaso
 Depends on nothing. Size: S. Exit: the commands named in
 each item report nothing pending.
 
-### H1 — lockfile refresh — the duplicate clause is still blocked, and six updates are pending again
+### H1 — lockfile refresh — refreshed 2026-10-21; the duplicate clause is still blocked upstream
 - **Class:** dependency drift. `cargo update --dry-run --verbose` in `rust/` had 21 compatible
   updates pending on 2026-10-14, and `brotli-decompressor` held at 6.0.1 (6.1.0 available).
 - **Why now:** routine hygiene; a held-back transitive is how a duplicate major starts. Most of
-  this row is done — all 21 updated. Re-measured 2026-10-19: SIX compatible updates are
-  pending again (`cc` 1.8.0→1.9.0, `combine` 4.6.8→4.6.9, `find-msvc-tools` 0.1.14→0.1.15,
-  `libc` 0.2.190→0.2.191, `schannel` 0.1.29→0.1.30, `tokio` 1.53.3→1.54.0), so the
-  zero-pending clause is open again. The clause that matters is still the one below: a
+  this row is done — all 21 updated, and that was the last batch that needed saying twice.
+  Re-measured 2026-10-21: SEVEN compatible updates were pending in `rust/` (`cc` 1.8.0→1.9.0,
+  `combine` 4.6.8→4.6.9, `crc32fast` 1.5.2→1.5.3, `find-msvc-tools` 0.1.14→0.1.15, `libc`
+  0.2.190→0.2.191, `schannel` 0.1.29→0.1.30, `tokio` 1.53.3→1.54.0) and NINE more in the
+  vendored crate's own tracked lockfile (`vendor/camoufox-rs/Cargo.lock` — the one CI's last
+  step builds from, and the one the row's goal covers too: `defmt` 1.1.1→1.2.0, `defmt-macros`
+  1.1.1→1.2.0, `defmt-parser` 1.0.0→1.1.0, `jiff` 0.2.37→0.2.38, `jiff-static` 0.2.37→0.2.38,
+  `libc` 0.2.190→0.2.191, `serde_json` 1.0.151→1.0.154, `syn` 3.0.6→3.0.9, `unicode-ident`
+  1.0.26→1.0.27). All sixteen are in. The clause that matters is still the one below: a
   duplicate major is not hygiene, it is two copies of a library to keep in step.
-- **Done when:** `cargo update --verbose` shows no package `Updating` line (open again — six
-  pending, re-measured 2026-10-19); every `Unchanged … available` line names its parent and
-  reason here (met — see below); the gate is green (met). The remaining clause,
-  `cargo tree -d` empty, is recorded as blocked below rather than claimed: ONE real duplicate
-  remains, `miniz_oxide 0.8.9` (via `png 0.18.1`) beside `0.9.1` (via `flate2 1.1.10`),
-  re-measured 2026-10-19 and unchanged. Note `libc v0.2.190` appears twice in that output but
-  is ONE version reached by two paths (camoufox-rs and core-foundation), not a duplicate —
-  reading the raw output as a count would have "fixed" nothing.
+- **Done when:** `cargo update --verbose` shows no package `Updating` line (met 2026-10-21 —
+  the only `Updating` line left is the crates.io index fetch, in `rust/` and in the vendored
+  lockfile alike); every `Unchanged … available` line names its parent and reason here (met —
+  see below); the gate is green (met). The remaining clause, `cargo tree -d` empty, is recorded
+  as blocked below rather than claimed: ONE real duplicate remains, `miniz_oxide 0.8.9` (via
+  `png 0.18.1`) beside `0.9.1` (via `flate2 1.1.10`), re-measured 2026-10-21 and unchanged by
+  the refresh. Note `libc v0.2.191` appears twice in that output but is ONE version reached by
+  two kinds of edge: the first block is the normal-dependency tree (`camoufox-rs`,
+  `core-foundation`, `dirs-sys`, …), the second the build-dependency tree (`cc`, `jobserver`).
+  Same version, two places it is required — reading the raw output as a count of duplicates
+  would have "fixed" nothing. The vendored lockfile has no duplicate at all
+  (`cargo tree -d` there prints "nothing to print").
 - **The held-back line, named:** `brotli-decompressor v6.0.1 (available: v6.1.0)`, held by its
-  parent **`brotli v9.0.0`**, a direct dependency. 9.0.0 is the newest release and pins the 6.0
-  line.
-- **Blocked by:** an upstream `png` release. `png` 0.18.1 is the newest 0.18.x and
-  `cargo update -p png` locks 0 packages (re-measured 2026-10-19), so the `miniz_oxide` 0.8
-  line cannot move until `png` adopts 0.9. Re-measure rather than assume: if a `png` has
+  parent **`brotli v9.0.0`**, a direct dependency (`brotli = "9"` in `rust/Cargo.toml`).
+  9.0.0 is the newest release of `brotli` and its requirement is `brotli-decompressor ~6.0`,
+  which EXCLUDES 6.1.0 — that is the whole reason, not "it pins the 6.0 line". It is the only
+  `Unchanged … available` line `cargo update --verbose` prints in `rust/`; the vendored
+  lockfile prints none. A refresh adds a held-back line whenever a parent stops accepting a
+  newer child, so this list is re-derived, never inherited.
+- **Blocked by:** an upstream `png` release. Re-measured 2026-10-21: `png`'s newest release on
+  crates.io is STILL 0.18.1, published 2026-02-14 — there is no 0.18.2 and no 0.19 — and 0.18.1
+  requires `miniz_oxide ^0.8` (its normal deps are `bitflags ^2.0`, `crc32fast ^1.2.0`,
+  `fdeflate ^0.3.3`, `flate2 ^1.0.35`, `miniz_oxide ^0.8`). That `^0.8` is what holds the
+  `miniz_oxide` 0.8 line, and `cargo update -p png --dry-run --verbose` locks 0 packages, so
+  the line cannot move until `png` adopts 0.9. Re-measure rather than assume: if a `png` has
   shipped, the refresh is one `cargo update` and this row goes.
 
 ## Sources consolidated (2026-10-12)

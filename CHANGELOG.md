@@ -33,6 +33,28 @@ This file starts at v2.2.0 — earlier history is in git.
   push could pass until the lockfile moved. Two patch releases, four lines of
   `rust/Cargo.lock`, no source change.
 
+### Security and dependencies -- both lockfiles are current again (H1)
+- Sixteen packages were behind their newest release on 2026-10-21 and all sixteen are in.
+  Seven in `rust/Cargo.lock`: `cc` 1.8.0->1.9.0, `combine` 4.6.8->4.6.9, `crc32fast`
+  1.5.2->1.5.3, `find-msvc-tools` 0.1.14->0.1.15, `libc` 0.2.190->0.2.191, `schannel`
+  0.1.29->0.1.30, `tokio` 1.53.3->1.54.0. Nine more in the vendored crate's own tracked
+  lockfile (`vendor/camoufox-rs/Cargo.lock` -- the one CI's last step builds from, and the
+  one that had drifted since the vendor was taken): `defmt` 1.1.1->1.2.0, `defmt-macros`
+  1.1.1->1.2.0, `defmt-parser` 1.0.0->1.1.0, `jiff` 0.2.37->0.2.38, `jiff-static`
+  0.2.37->0.2.38, `libc` 0.2.190->0.2.191, `serde_json` 1.0.151->1.0.154, `syn`
+  3.0.6->3.0.9, `unicode-ident` 1.0.26->1.0.27. `cargo update --verbose` prints no
+  package `Updating` line in either directory now; the only `Updating` line left is the
+  crates.io index fetch.
+- One duplicate major remains in `rust/` and CANNOT be closed here: `miniz_oxide 0.8.9`
+  (via `png 0.18.1`) beside `0.9.1` (via `flate2 1.1.10`). `png` 0.18.1 is still the
+  newest `png` on crates.io (published 2026-02-14) and it requires `miniz_oxide ^0.8`,
+  so `cargo update -p png` locks 0 packages. It closes when `png` ships a release that
+  adopts 0.9. Recorded, with the re-measurement, in `docs/ROADMAP.md` H1.
+- The one held-back line is named with its parent, as the item requires:
+  `brotli-decompressor 6.0.1` is held by `brotli 9.0.0` (a direct dependency), whose
+  `brotli-decompressor ~6.0` requirement excludes 6.1.0. `brotli` 9.0.0 is its newest
+  release.
+
 ### Fixed -- the vendored nav-id-match branch has a test that reaches it (H5)
 - `MainFrame::navigate` in the vendored `camoufox-rs` decides whether a
   `Network.requestWillBeSent` belongs to THIS navigation by comparing the event's
