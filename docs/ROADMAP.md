@@ -57,10 +57,10 @@ A dated summary, not checked by any gate; re-derive it before editing:
   stdin= or input=" — and with the floor raised to 100 it exits 1 naming the key:
   "`GOH_SUBPROCESS_STDIN_MIN_CALLS` read 20 process call(s) and .gatesrc declares a floor of
   100". As committed it exits 0: "every one of 20 process call(s) declares its stdin".
-- **CI on `main` is GREEN**, run 39567984306 (2026-10-21) — the run for `c0f5582`, the commit
-  the v3.9.1 tag names and the one the release kit required before it cut anything. The
-  `make ci` step inside it is the full 14-step gate. Two reds were behind it and the tree
-  was innocent in both. (1)
+- **CI on `main` is GREEN**, run 39699419247 (2026-10-21) — the run for `dc0ff71`, the commit
+  the v3.9.2 tag names and the one the release kit required before it cut anything. The
+  `make ci` step inside it is the full 14-step gate. Two reds were behind the previous run
+  and the tree was innocent in both. (1)
   `Swatinem/rust-cache` caches `~/.cargo/bin`, so the
   manifest's `cargo install` met a binary a cache had restored with no record in
   `~/.cargo/.crates.toml`, and `cargo install` refuses exactly that (`binary ... already exists
@@ -71,15 +71,26 @@ A dated summary, not checked by any gate; re-derive it before editing:
   PATH is a satisfied requirement whoever put it there. (2) The runner's `stable` clippy was
   1.98.0 where this host's is 1.99.0, and 1.98 fires `too_long_first_doc_paragraph` on two doc
   comments 1.99 accepts: the local 14/14 was green on a tree CI refused. Both are in git
-  history; `git log --oneline -6` names them. Re-derive this bullet with `gh run list` rather
+  history; `git log --oneline -6` names them. A THIRD red was behind this run, and the tree
+  WAS at fault: `tokio` 1.54.0, landed by the H1 refresh, was yanked upstream, and the
+  advisory gate (`cargo audit`, `cargo deny`) went red on its own -- the lockfile moved to
+  1.54.1 in `3b5caa4` before this push. Re-derive this bullet with `gh run list` rather
   than trusting it.
 - **Umbrella B7 (b), `twitter-evening` failing, measured 2026-10-17:** not a model, endpoint
   or env fault -- raptor and `fm` both answered; the gate refused both answers over citation
   FORM (no `@`; time of day only; `;`-joined sources; unbracketed `per @h | ts`). The repair
   parses all four now (`docs/MODEL_QUIRKS.md`, CHANGELOG "B7 (b)"); no citation form seen
   in `rejected/` is left unparsed. The repair shipped in v3.9.0 (2026-10-19) and the
-  installed `ztools` is 3.9.0, so scheduled runs run the repair now.
-- Hooks are goh 0.27.0's stock set. Installed: `ztools 3.9.1`.
+  installed `ztools` is 3.9.2, so scheduled runs run the repair now.
+- **The degraded summary banner is ONE line (owner ruling, 2026-10-21).** "way too much
+  text to explain that raptor failed and we're using foundation. keep it all a single
+  line." `rust/src/ztools/twitter/chain.rs` writes it: which model failed and why, which
+  model answered instead, what was repaired before saving, and how far to trust the result
+  -- one line, in the document and on the terminal, by the same function, so the two cannot
+  drift apart. The FULL text of every failure is kept where a reader can open it: the run
+  record (the CLI prints every reason under the notice) and the refused answer's file under
+  `rejected/`, whose header carries the reason the gate gave. Shipped in v3.9.2.
+- Hooks are goh 0.27.0's stock set. Installed: `ztools 3.9.2`.
 - The previous plan's `P2` (a release can be tagged over a red CI) is closed upstream:
   goh `5c5868e` makes the release kit refuse while CI on HEAD is red, pending or missing,
   and `tools/release.sh` execs that kit. Narrative of earlier phases:
