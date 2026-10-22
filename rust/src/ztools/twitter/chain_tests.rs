@@ -118,8 +118,8 @@ fn first_usable_answer_from_the_intended_model_is_primary() {
     assert_eq!(got, "A");
     assert_eq!(prov.tier, Tier::Primary);
     assert!(!prov.degraded());
-    assert_empty!(&prov.reasons);
-    assert_eq!(prov.banner(), "**Model:** a (osaurus, primary)");
+    assert_empty!(prov.reasons());
+    assert_eq!(prov.banner(&[]), "**Model:** a (osaurus, primary)");
 }
 
 #[test]
@@ -131,17 +131,18 @@ fn a_hollow_answer_moves_on_and_is_recorded() {
     .unwrap();
     assert_eq!(got, "b");
     assert_eq!(prov.tier, Tier::Fallback);
-    assert_eq!(
-        prov.reasons,
-        s(&[
-            "model a returned no usable summary",
-            "answered by b instead of the intended a"
-        ])
+    assert_eq!(prov.reasons(), s(&["model a: returned no usable summary"]));
+    let banner = prov.banner(&[]);
+    assert!(banner.starts_with("> ⚠ **DEGRADED** — "), "{banner}");
+    assert!(banner.contains("a failed: no usable summary"), "{banner}");
+    assert!(
+        banner.contains("b (osaurus, fallback) answered instead"),
+        "{banner}"
     );
-    let banner = prov.banner();
-    assert!(banner.starts_with("> ⚠ **DEGRADED OUTPUT**"));
-    assert!(banner.contains("> **Why:** model a returned no usable summary"));
-    assert!(banner.contains("> **Backend:** b (osaurus, fallback)"));
+    assert!(
+        banner.ends_with("treat this summary as lower quality than a normal run"),
+        "{banner}"
+    );
 }
 
 #[test]
@@ -149,13 +150,127 @@ fn a_transport_failure_moves_on_with_the_error_text() {
     let chain = s(&["a", "b"]);
     let ((), prov) = run_chain(&chain, "a", |m| {
         if m == "a" {
-            Err(anyhow::anyhow!("connection refused"))
+            Err(Refusal {
+                verdict: "the call failed".to_string(),
+                detail: "the call failed: connection refused".to_string(),
+            })
         } else {
             Ok(Some(()))
         }
     })
     .unwrap();
-    assert_eq!(prov.reasons[0], "model a failed: connection refused");
+    assert_eq!(
+        prov.reasons()[0],
+        "model a: the call failed: connection refused"
+    );
+}
+
+/// The owner's ruling (2026-10-21): the degraded banner is ONE line, and it
+/// still says everything — which model failed, why, which model answered
+/// instead, what was repaired, and how far to trust the result.
+///
+/// The check is STRUCTURAL, not a string comparison: it fails when the banner
+/// grows a second line, whatever that line says, and it fails when a fact is
+/// dropped, whatever the wording.
+#[test]
+fn the_degraded_banner_is_one_line_and_says_everything() {
+    let chain = s(&["raptor", "foundation"]);
+    let ((), mut prov) = run_chain(&chain, "raptor", |m| {
+        if m == "raptor" {
+            Err(Refusal {
+                verdict: "a repetition loop".to_string(),
+                detail: "3 of 7 bullets repeat an earlier bullet".to_string(),
+            })
+        } else {
+            Ok(Some(()))
+        }
+    })
+    .unwrap();
+    prov.backend = "on-device, fm";
+    let repairs = vec!["dropped 3 bullet(s) that repeat a tweet already cited".to_string()];
+    let banner = prov.banner(&repairs);
+
+    assert!(
+        !banner.contains('\n'),
+        "the degraded banner must be ONE line:\n{banner}"
+    );
+    assert!(banner.starts_with("> ⚠ **DEGRADED** — "), "{banner}");
+    for fact in [
+        "raptor failed: a repetition loop",
+        "foundation (on-device, fm, fallback) answered instead",
+        "repaired before saving: dropped 3 bullet(s) that repeat a tweet already cited",
+        "treat this summary as lower quality than a normal run",
+    ] {
+        assert!(banner.contains(fact), "the banner lost {fact:?}:\n{banner}");
+    }
+}
+
+/// The full text of the failure is NOT in the banner — it is in the run
+/// record (`reasons`) and in the refused answer's file. The short line is
+/// allowed to be short only because the long text is kept somewhere.
+#[test]
+fn the_full_failure_text_survives_in_the_run_record() {
+    let chain = s(&["raptor", "foundation"]);
+    let ((), prov) = run_chain(&chain, "raptor", |m| {
+        if m == "raptor" {
+            Err(Refusal {
+                verdict: "a repetition loop".to_string(),
+                detail: "3 of 7 bullets repeat an earlier bullet".to_string(),
+            })
+        } else {
+            Ok(Some(()))
+        }
+    })
+    .unwrap();
+    assert!(
+        prov.reasons()
+            .iter()
+            .any(|r| r.contains("3 of 7 bullets repeat an earlier bullet")),
+        "{:?}",
+        prov.reasons()
+    );
+}
+
+/// The terminal and the document say the same thing because they are written
+/// by the same code: one writer, one line, no drift.
+#[test]
+fn the_terminal_notice_and_the_document_banner_carry_the_same_line() {
+    let chain = s(&["raptor", "foundation"]);
+    let ((), prov) = run_chain(&chain, "raptor", |m| {
+        if m == "raptor" {
+            Err(Refusal {
+                verdict: "a repetition loop".to_string(),
+                detail: "3 of 7 bullets repeat an earlier bullet".to_string(),
+            })
+        } else {
+            Ok(Some(()))
+        }
+    })
+    .unwrap();
+    let notice = prov.notice(&[]);
+    let banner = prov.banner(&[]);
+    assert!(!notice.contains('\n'), "{notice}");
+    assert_eq!(
+        notice.strip_prefix("Degraded summary: "),
+        banner.strip_prefix("> ⚠ **DEGRADED** — "),
+        "the terminal and the document must say the same line:\n{notice}\n{banner}"
+    );
+}
+
+/// A normal run keeps its one quiet line, and says what was repaired in the
+/// same line rather than in a second paragraph under it.
+#[test]
+fn a_normal_run_says_what_was_repaired_in_its_one_line() {
+    let chain = s(&["a"]);
+    let ((), prov) = run_chain(&chain, "a", |_| Ok(Some(()))).unwrap();
+    let repairs = vec!["dropped 1 bullet(s) citing no tweet the model was given".to_string()];
+    let banner = prov.banner(&repairs);
+    assert!(!banner.contains('\n'), "{banner}");
+    assert_eq!(
+        banner,
+        "**Model:** a (osaurus, primary); repaired before saving: dropped 1 bullet(s) citing \
+         no tweet the model was given"
+    );
 }
 
 #[test]
@@ -165,9 +280,12 @@ fn substituted_target_that_answers_first_is_still_degraded() {
     let chain = s(&["sub"]);
     let ((), prov) = run_chain(&chain, "intended", |_| Ok(Some(()))).unwrap();
     assert_eq!(prov.tier, Tier::Fallback);
-    assert_eq!(
-        prov.reasons,
-        s(&["answered by sub instead of the intended intended"])
+    assert_empty!(prov.reasons());
+    assert!(
+        prov.banner(&[])
+            .contains("sub (osaurus, fallback) answered instead of the intended intended"),
+        "{}",
+        prov.banner(&[])
     );
 }
 
@@ -178,8 +296,8 @@ fn exhausting_the_chain_names_every_attempt() {
         .unwrap_err()
         .to_string();
     assert!(err.contains("a → b"), "{err}");
-    assert!(err.contains("model a returned no usable summary"));
-    assert!(err.contains("model b returned no usable summary"));
+    assert!(err.contains("model a: returned no usable summary"), "{err}");
+    assert!(err.contains("model b: returned no usable summary"), "{err}");
 }
 
 #[test]
@@ -203,19 +321,26 @@ fn a_model_refusing_oversized_prompt_is_skipped_down_the_chain() {
     let chain = s(&["foundation", "qwen3.8"]);
     let huge_prompt = "x".repeat(25_000);
     let ((), prov) = run_chain(&chain, "foundation", |candidate| {
-        crate::ztools::eval::context_fit::context_refusal(candidate, huge_prompt.len())
-            .map_or_else(|| Ok(Some(())), |reason| Err(anyhow::anyhow!("{reason}")))
+        crate::ztools::eval::context_fit::context_refusal(candidate, huge_prompt.len()).map_or_else(
+            || Ok(Some(())),
+            |reason| {
+                Err(Refusal {
+                    verdict: "the prompt does not fit".to_string(),
+                    detail: reason,
+                })
+            },
+        )
     })
     .unwrap();
 
     assert_eq!(prov.tier, Tier::Fallback);
     assert_eq!(prov.model, "qwen3.8");
     assert!(
-        prov.reasons
+        prov.reasons()
             .iter()
             .any(|r| r.contains("prompt does not fit") && r.contains("foundation")),
         "expected reason describing foundation's window overflow: {:?}",
-        prov.reasons
+        prov.reasons()
     );
     drop(env);
 }

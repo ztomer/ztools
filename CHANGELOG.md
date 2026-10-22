@@ -6,6 +6,54 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## v3.9.2 — the degraded banner is ONE line, and it still says everything _(2026-10-21)_
+
+**Eight lines of banner for a one-line fact, and a reader who scrolls past eight lines
+reads none of them.** The degraded summary said what happened in a block quote: a
+heading, a backend line, a `**Why:**` line per failure, a blank quote line and a
+paragraph of advice. The owner's ruling (2026-10-21): "way too much text to explain
+that raptor failed and we're using foundation. keep it all a single line." It is one
+line now, and it says every fact it said before.
+
+### Fixed -- the degraded banner is one line, and it keeps every fact
+- The banner is ONE line: which model failed and why, which model answered instead,
+  what was repaired before saving, and how far to trust the result —
+  `> ⚠ **DEGRADED** — raptor-v0.5-8b-a1b-jang failed: a repetition loop; foundation
+  (on-device, fm, fallback) answered instead; repaired before saving: dropped 3
+  bullet(s) that repeat a tweet already cited; treat this summary as lower quality
+  than a normal run`.
+- The short half is written where the rule fires (`rust/src/ztools/twitter/quality.rs`),
+  never cut out of the long one: every rule that refuses an answer now carries a name
+  ("a repetition loop", "more bullets than tweets", "a cut-off citation", "missing
+  citations", "an empty answer", "no structure", "prose in a topic section") beside the
+  finding it saw. The "too few verified bullets" rule got the same treatment
+  ("only 3 verified bullet(s) for 45 tweets").
+- The FULL text of every failure is still kept where a reader can open it: the run
+  record (the CLI prints every reason under the notice) and the refused answer's file
+  under `rejected/`, whose header carries the reason the gate gave. The short line is
+  short only because the long text is kept.
+- The terminal notice and the document's banner are written by ONE function
+  (`chain::Provenance::banner` and `notice`), so they cannot drift apart: the CLI
+  notice is the same line now, with the reasons under it.
+- A normal run's provenance is still one quiet line, and what the repair changed is
+  in that same line rather than in a paragraph under it.
+
+### Fixed -- the gate that keeps the banner one line
+- `rust/src/ztools/twitter/summary_doc_tests.rs` counts the block-quote lines in the
+  written document and fails when the degraded banner is not exactly one, and it
+  checks that the one line still carries the whole story. A golden alone would not:
+  it would only say that the bytes changed, and a writer that grew a second line
+  and moved the golden with it would pass.
+- `rust/src/ztools/twitter/chain_tests.rs` holds the same rule at the writer: the
+  banner is one line, it names every fact, the full failure text survives in the run
+  record, and the terminal notice and the document banner are the same line.
+
+### Security and dependencies -- a yanked tokio in the lockfile
+- `tokio` 1.54.0 was yanked upstream after the H1 refresh landed it, and the gate
+  that reads the advisory database went red on its own: `cargo audit` and `cargo deny`
+  each name it, so no push could pass until the lockfile moved. It is now 1.54.1.
+  The refresh is H1's job and the yank is what it exists for.
+
 ## v3.9.1 — the certificate advisories and the refreshed lockfiles reach the installed binary _(2026-10-21)_
 
 **Two certificate advisories and a lockfile behind its newest release, both of which had

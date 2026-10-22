@@ -7,6 +7,12 @@
 //! indistinguishable from the primary model's. House rule (honest
 //! placeholders): a degraded state must be visually distinct and say WHY.
 //!
+//! The degraded state says it in ONE line (`Provenance::banner`): which model
+//! failed and why, which model answered instead, what was repaired, and how
+//! far to trust the result. The full text of every failure is kept beside it
+//! -- in the run record and in the refused answer's file -- so the short line
+//! loses no fact.
+//!
 //! The retired tiers are not here: a server restart is ops-side
 //! (`tools/osaurus_one.sh`) and the direct-MLX last resort is replaced by
 //! macOS 27's `fm` (`ztools::on_device`). What remains is the server chain: the intended model, then
@@ -24,6 +30,7 @@ use anyhow::Result;
 use crate::ztools::on_device::ON_DEVICE_MODEL;
 
 use super::fallback::{fallback_chain, resolve_target_model};
+use super::quality::Refusal;
 
 /// Which models to fall back to and how to pick a substitute when the
 /// intended model is not served. Read from `conf/twitter.toml [fallback]`.
@@ -139,6 +146,21 @@ pub enum Tier {
     Fallback,
 }
 
+/// One model that was tried and did not answer with something usable.
+///
+/// Both halves are written where the failure happens, never derived from one
+/// another: `verdict` is what the banner says, `detail` is what the run
+/// record and the refused answer's file keep.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Failure {
+    /// The model that was tried.
+    pub model: String,
+    /// What went wrong, in a few words: "a repetition loop".
+    pub verdict: String,
+    /// What went wrong, in full: "3 of 7 bullets repeat an earlier bullet".
+    pub detail: String,
+}
+
 /// How a summary was produced.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Provenance {
@@ -150,9 +172,13 @@ pub struct Provenance {
     /// Where the kept answer came from: `osaurus` unless the caller says
     /// otherwise (`FallbackPolicy::backend_of`).
     pub backend: &'static str,
-    /// Why the run did not go to plan, in the order things went wrong.
-    pub reasons: Vec<String>,
+    /// Every model that was tried and did not answer, in the order they were
+    /// tried.
+    pub failures: Vec<Failure>,
 }
+
+/// The advice the degraded line carries: how much to trust what follows.
+const ADVICE: &str = "treat this summary as lower quality than a normal run";
 
 impl Provenance {
     #[must_use]
@@ -162,41 +188,105 @@ impl Provenance {
 
     #[must_use]
     pub fn describe(&self) -> String {
-        let tier = match self.tier {
-            Tier::Primary => "primary",
-            Tier::Fallback => "fallback",
-        };
-        format!("{} ({}, {tier})", self.model, self.backend)
+        format!("{} ({}, {})", self.model, self.backend, self.tier_name())
     }
 
-    /// The provenance block for the top of the report. A normal run gets one
-    /// quiet line; a degraded run gets a block that cannot be mistaken for a
-    /// normal one and states the reason.
+    /// Which tier, in the word the banner uses.
     #[must_use]
-    pub fn banner(&self) -> String {
-        if !self.degraded() {
-            return format!("**Model:** {}", self.describe());
+    pub const fn tier_name(&self) -> &'static str {
+        match self.tier {
+            Tier::Primary => "primary",
+            Tier::Fallback => "fallback",
         }
-        let mut lines = vec![
-            "> ⚠ **DEGRADED OUTPUT** — this summary was NOT produced by the primary model."
-                .to_string(),
-            ">".to_string(),
-            format!("> **Backend:** {}", self.describe()),
-        ];
-        for reason in &self.reasons {
-            lines.push(format!("> **Why:** {reason}"));
-        }
-        // Same idiom as above the Backend line: a `>` on its own ends the
-        // paragraph inside the block quote, so the advice is its own paragraph
-        // instead of a fourth continuation of `**Why:**`.
-        lines.push(">".to_string());
-        lines.push(
-            "> Treat the content below as lower quality than a normal run: the \
-             fallback models have smaller context windows and weaker summarisation."
-                .to_string(),
-        );
-        lines.join("\n")
     }
+
+    /// Every failure, in full: "model raptor: the answer was refused: ...".
+    ///
+    /// The banner carries the verdicts; this is the run record, and the half
+    /// that says exactly what the gate saw.
+    #[must_use]
+    pub fn reasons(&self) -> Vec<String> {
+        self.failures
+            .iter()
+            .map(|f| format!("model {}: {}", f.model, f.detail))
+            .collect()
+    }
+
+    /// The line the summary document opens with.
+    ///
+    /// A normal run gets one quiet line; a degraded run gets ONE line that
+    /// cannot be mistaken for a normal one and says everything: which model
+    /// failed and why, which model answered instead, what was repaired, and
+    /// how far to trust the result. It is one line because a reader who
+    /// scrolls past eight lines of banner reads none of them (owner,
+    /// 2026-10-21).
+    #[must_use]
+    pub fn banner(&self, repairs: &[String]) -> String {
+        if !self.degraded() {
+            return self.core(repairs);
+        }
+        format!("> ⚠ **DEGRADED** — {}", self.core(repairs))
+    }
+
+    /// The same line for the terminal, without the document's markdown.
+    ///
+    /// The terminal and the document say the same thing because they are
+    /// written by the same code: one writer, one line, no drift.
+    #[must_use]
+    pub fn notice(&self, repairs: &[String]) -> String {
+        if !self.degraded() {
+            return self.core(repairs);
+        }
+        format!("Degraded summary: {}", self.core(repairs))
+    }
+
+    /// The line's content, without the markdown and without the terminal's
+    /// label: what happened, in one sentence.
+    fn core(&self, repairs: &[String]) -> String {
+        if !self.degraded() {
+            let mut line = format!("**Model:** {}", self.describe());
+            if !repairs.is_empty() {
+                line.push_str("; ");
+                line.push_str(&repairs_clause(repairs));
+            }
+            return line;
+        }
+        let mut clauses: Vec<String> = self
+            .failures
+            .iter()
+            .map(|f| format!("{} failed: {}", f.model, f.verdict))
+            .collect();
+        clauses.push(self.winner_clause());
+        if !repairs.is_empty() {
+            clauses.push(repairs_clause(repairs));
+        }
+        clauses.push(ADVICE.to_string());
+        clauses.join("; ")
+    }
+
+    /// Who answered, and instead of what.
+    ///
+    /// The intended model is named here only when it is not named already, by
+    /// the failure that stopped it: a line that says the same model twice is
+    /// the length the owner asked to have taken out.
+    fn winner_clause(&self) -> String {
+        let answered = format!(
+            "{} ({}, {}) answered instead",
+            self.model,
+            self.backend,
+            self.tier_name()
+        );
+        if self.failures.iter().any(|f| f.model == self.intended) {
+            answered
+        } else {
+            format!("{answered} of the intended {}", self.intended)
+        }
+    }
+}
+
+/// What the repair changed, said in the line the reader starts at.
+fn repairs_clause(repairs: &[String]) -> String {
+    format!("repaired before saving: {}", repairs.join("; "))
 }
 
 /// Build the ordered chain for this run: the intended model resolved against
@@ -212,9 +302,9 @@ pub fn plan_chain(intended: &str, available: &[String], policy: &FallbackPolicy)
 ///
 /// `attempt` returns `Ok(Some(answer))` for a usable answer, `Ok(None)` when
 /// the model answered but produced nothing usable, and `Err` when the call
-/// itself failed; both non-answers become a recorded reason and the chain
-/// moves on. The transport stays with the caller so this is testable without
-/// a server.
+/// itself failed or the answer was refused; both non-answers become a
+/// recorded failure and the chain moves on. The transport stays with the
+/// caller so this is testable without a server.
 ///
 /// # Errors
 ///
@@ -223,19 +313,13 @@ pub fn plan_chain(intended: &str, available: &[String], policy: &FallbackPolicy)
 pub fn run_chain<T>(
     chain: &[String],
     intended: &str,
-    mut attempt: impl FnMut(&str) -> Result<Option<T>>,
+    mut attempt: impl FnMut(&str) -> Result<Option<T>, Refusal>,
 ) -> Result<(T, Provenance)> {
-    let mut reasons = Vec::new();
+    let mut failures: Vec<Failure> = Vec::new();
     for model in chain {
         match attempt(model) {
             Ok(Some(answer)) => {
-                let mut prov_reasons = reasons.clone();
-                if model != intended {
-                    prov_reasons.push(format!(
-                        "answered by {model} instead of the intended {intended}"
-                    ));
-                }
-                let tier = if prov_reasons.is_empty() {
+                let tier = if failures.is_empty() && model == intended {
                     Tier::Primary
                 } else {
                     Tier::Fallback
@@ -247,17 +331,29 @@ pub fn run_chain<T>(
                         intended: intended.to_string(),
                         tier,
                         backend: "osaurus",
-                        reasons: prov_reasons,
+                        failures,
                     },
                 ));
             }
-            Ok(None) => reasons.push(format!("model {model} returned no usable summary")),
-            Err(e) => reasons.push(format!("model {model} failed: {e}")),
+            Ok(None) => failures.push(Failure {
+                model: model.clone(),
+                verdict: "no usable summary".to_string(),
+                detail: "returned no usable summary".to_string(),
+            }),
+            Err(refusal) => failures.push(Failure {
+                model: model.clone(),
+                verdict: refusal.verdict,
+                detail: refusal.detail,
+            }),
         }
     }
     if chain.is_empty() {
         anyhow::bail!("no model to try: the fallback chain is empty");
     }
+    let reasons: Vec<String> = failures
+        .iter()
+        .map(|f| format!("model {}: {}", f.model, f.detail))
+        .collect();
     anyhow::bail!(
         "every model in the chain failed ({}): {}",
         chain.join(" → "),

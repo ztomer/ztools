@@ -204,8 +204,8 @@ fn test_handle_model_output_names_the_rejection() {
     let why = handle_model_output(looped, &given(&[("a", "1"); 10]), false).unwrap_err();
     // T3: the loop's repeats are repaired away, and the one bullet left is too
     // few to save -- the reason names both.
-    assert!(why.contains("repeat a tweet already cited"), "{why}");
-    assert!(why.contains("1 verified bullet"), "{why}");
+    assert!(why.detail.contains("repeat a tweet already cited"), "{why}");
+    assert!(why.detail.contains("1 verified bullet"), "{why}");
 }
 
 /// The tweets the prompt showed, as `(handle, created_at)`.
@@ -227,7 +227,7 @@ fn test_handle_model_output_refuses_citations_of_tweets_it_was_not_given() {
         false,
     )
     .unwrap_err();
-    assert!(why.contains("2 of 3 citations"), "{why}");
+    assert!(why.detail.contains("2 of 3 citations"), "{why}");
 }
 
 /// What is saved is the answer with its recited bullets dropped.

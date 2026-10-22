@@ -8,7 +8,7 @@
 //! answered, a header line that lost a field, or a `## Summary` preamble
 //! stacked on a body that already had a heading would all have passed. Both
 //! provenance shapes are pinned: the normal run's one quiet line and the
-//! degraded run's block that cannot be mistaken for it.
+//! degraded run's ONE line that cannot be mistaken for it.
 //!
 //! PROVENANCE OF THE EXPECTED BYTES: read, not recorded. Each fixture was
 //! generated once and every line checked against the writer and the input that
@@ -270,8 +270,8 @@ fn changing_the_answering_model_moves_the_document_bytes() {
         "a summary from a different model must not be byte-identical to one from the \
          primary: that is the class-C9 defect this golden exists to hold"
     );
-    assert!(!primary.contains("DEGRADED OUTPUT"), "{primary}");
-    assert!(other.contains("DEGRADED OUTPUT"), "{other}");
+    assert!(!primary.contains("DEGRADED"), "{primary}");
+    assert!(other.contains("DEGRADED"), "{other}");
 }
 
 /// The audit that keeps these goldens honest: the fixtures must be the writer's
@@ -312,16 +312,16 @@ fn the_goldens_were_read_not_merely_recorded() {
         "a normal run's provenance is one quiet line:\n{normal}"
     );
     assert!(
-        !normal.contains("DEGRADED OUTPUT"),
+        !normal.contains("DEGRADED"),
         "a primary run must not claim to be degraded:\n{normal}"
     );
-    assert!(degraded.contains("> ⚠ **DEGRADED OUTPUT**"), "{degraded}");
+    assert!(degraded.contains("> ⚠ **DEGRADED** — "), "{degraded}");
     assert!(
-        degraded.contains("> **Backend:** small-fallback-8b (osaurus, fallback)"),
+        degraded.contains("small-fallback-8b (osaurus, fallback) answered instead"),
         "{degraded}"
     );
     assert!(
-        degraded.contains("answered by small-fallback-8b instead of the intended golden-model"),
+        degraded.contains("answered instead of the intended golden-model"),
         "a degraded run must name both models, or the reader cannot tell what happened:\n{degraded}"
     );
 }
@@ -381,25 +381,54 @@ fn the_provenance_block_is_its_own_paragraph() {
         !degraded.contains(&format!("{COUNT}\n> ⚠")),
         "the degraded block quote is glued to the count:\n{degraded}"
     );
+}
 
-    // Inside that block quote the closing advice is its own paragraph: the
-    // banner already put a `>` blank line above its Backend line, and the advice
-    // — the one line that says how much to trust the summary — was left as a
-    // continuation of `**Why:**` instead of standing apart from it.
-    let advice = "> Treat the content below";
-    let stands_apart = degraded
+/// The owner's ruling (2026-10-21): the degraded banner is ONE line.
+///
+/// The check is STRUCTURAL — it counts the lines the banner occupies in the
+/// written document — so it fails when a second line is added to the banner
+/// whatever that line says, and it fails when the banner is dropped entirely.
+/// A golden alone would not: it would only say that the bytes changed, and a
+/// writer that grew a second line and moved the golden with it would pass.
+#[test]
+fn the_degraded_document_states_it_in_one_line() {
+    let (_d, degraded) = run(r#"{"id":"small-fallback-8b"}"#, SUMMARY_BODY);
+    let quoted: Vec<&str> = degraded.lines().filter(|l| l.starts_with('>')).collect();
+    assert_eq!(
+        quoted.len(),
+        1,
+        "the degraded banner must be ONE line, and the advice it carries must not become \
+         a second one:\n{degraded}"
+    );
+    // And that one line carries the whole story.
+    for fact in [
+        "**DEGRADED**",
+        "answered instead of the intended golden-model",
+        "treat this summary as lower quality than a normal run",
+    ] {
+        assert!(
+            quoted[0].contains(fact),
+            "the banner lost {fact:?}:\n{degraded}"
+        );
+    }
+}
+
+/// A normal run's provenance is one quiet line too, and the repairs it
+/// mentions are in that same line rather than in a paragraph under it.
+#[test]
+fn the_normal_document_states_its_provenance_in_one_line() {
+    let (_p, quiet) = run(r#"{"id":"golden-model"}"#, SUMMARY_BODY);
+    let model_lines = quiet
         .lines()
-        .collect::<Vec<_>>()
-        .windows(2)
-        .any(|w| w[0] == ">" && w[1].starts_with(advice));
-    assert!(
-        stands_apart,
-        "the closing advice needs a `>` blank line above it, exactly as the banner has \
-         above its Backend line:\n{degraded}"
+        .filter(|l| l.starts_with("**Model:**"))
+        .count();
+    assert_eq!(
+        model_lines, 1,
+        "the normal run's provenance must be one line:\n{quiet}"
     );
-    // And it is still inside the quote, not escaped out of it.
     assert!(
-        degraded.lines().any(|l| l.starts_with(advice)),
-        "{degraded}"
+        !quiet.contains("> "),
+        "a normal run has no banner:\n{quiet}"
     );
+    assert!(!quiet.contains("Repaired before saving"), "{quiet}");
 }

@@ -350,8 +350,28 @@ fn a_summary_with_its_server_down_falls_back_to_the_on_device_model() {
     );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(0), "{stderr}");
+    // The degraded notice is ONE line (owner, 2026-10-21), and it is the same
+    // line the document opens with: the model that failed, the model that
+    // answered instead, and how far to trust the result.
+    let notice: Vec<&str> = stderr
+        .lines()
+        .filter(|l| l.contains("Degraded summary:"))
+        .collect();
+    assert_eq!(
+        notice.len(),
+        1,
+        "the degraded notice must be ONE line:\n{stderr}"
+    );
     assert!(
-        stderr.contains("Degraded summary: foundation (on-device, fm, fallback)"),
+        notice[0].contains("raptor-v0.5-8b-a1b-jang_6m failed:"),
+        "the notice must name the model that failed:\n{stderr}"
+    );
+    assert!(
+        notice[0].contains("foundation (on-device, fm, fallback) answered instead"),
+        "{stderr}"
+    );
+    assert!(
+        notice[0].contains("treat this summary as lower quality than a normal run"),
         "{stderr}"
     );
     assert!(stderr.contains("on this Mac"), "{stderr}");

@@ -22,7 +22,7 @@ pub use browser_parse::parse_tweets_from_response;
 pub use cookies::{
     Cookie, DEFAULT_DOMAINS, SESSION_COOKIE_NAME, find_firefox_profile_dbs, has_session_cookie,
 };
-pub use quality::{Quality, check_summary_quality, drop_recited, unmatched_citations};
+pub use quality::{Quality, Refusal, check_summary_quality, drop_recited, unmatched_citations};
 
 use std::collections::HashSet;
 use std::fs;
@@ -346,26 +346,39 @@ pub fn run_summary(
             timeout_secs,
             config,
         };
-        let (raw, cut) = route.ask(candidate, &prompt, processed)?;
+        let (raw, cut) = route
+            .ask(candidate, &prompt, processed)
+            .map_err(|e| Refusal {
+                verdict: "the call failed".to_string(),
+                detail: format!("the call failed: {e}"),
+            })?;
         // A reasoning model's `<thinking>` block must not land verbatim in
         // the saved markdown, and an answer the quality gate rejects must not
         // be saved at all: the rejection is this model's recorded reason, and
         // the chain moves on to the next model.
         handle_model_output(&raw, &sources, cut)
             .map(Some)
-            .map_err(|why| {
+            .map_err(|refusal| {
                 let stamp = Local::now().format("%Y-%m-%d_%H%M%S").to_string();
-                let kept = rejected::keep(output_dir, &stamp, candidate, &raw, &why)
+                // The refused answer is kept with the FULL reason in its
+                // header: the banner carries the verdict, this file carries
+                // the finding.
+                let kept = rejected::keep(output_dir, &stamp, candidate, &raw, &refusal.detail)
                     .map(|p| format!(" (answer kept at {})", p.display()))
                     .unwrap_or_default();
-                anyhow::anyhow!("answer rejected by the quality gate: {why}{kept}")
+                Refusal {
+                    verdict: refusal.verdict,
+                    detail: format!("the answer was refused: {}{kept}", refusal.detail),
+                }
             })
     })
     .map_err(|e| chain_failure(e, &plan, &policy, base_url))?;
     provenance.backend = policy.backend_of(&provenance.model);
     if provenance.degraded() {
-        eprintln!("⚠ Degraded summary: {}", provenance.describe());
-        for reason in &provenance.reasons {
+        // The same line the document opens with, then every failure in full:
+        // the line is what a reader sees, the reasons are the run record.
+        eprintln!("⚠ {}", provenance.notice(&answer.repairs));
+        for reason in provenance.reasons() {
             eprintln!("  → {reason}");
         }
     }
@@ -392,26 +405,13 @@ pub fn run_summary(
         now.format("%Y-%m-%d %H:%M %:z"),
         total,
         processed,
-        repaired_banner(&provenance.banner(), &answer.repairs),
+        provenance.banner(&answer.repairs),
         summary_section_for(&answer.body)
     );
 
     fs::write(&out_path, content)?;
     crate::ztools::settings::retain(output_dir, crate::ztools::settings::TWITTER_RETENTION);
     Ok(out_path)
-}
-
-/// The provenance banner, and below it what the repair changed, if anything:
-/// a summary saved from a repaired answer says so where the reader starts.
-fn repaired_banner(banner: &str, repairs: &[String]) -> String {
-    if repairs.is_empty() {
-        banner.to_string()
-    } else {
-        format!(
-            "{banner}\n\n> Repaired before saving: {}.",
-            repairs.join("; ")
-        )
-    }
 }
 
 /// The section under the summary header. The `## Summary` preamble exists only

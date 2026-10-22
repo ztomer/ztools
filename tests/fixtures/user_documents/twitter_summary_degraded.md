@@ -3,12 +3,7 @@
 **Period:** <LOCAL CLOCK> <LOCAL OFFSET>
 **Tweets:** 2 fetched, 2 processed
 
-> ⚠ **DEGRADED OUTPUT** — this summary was NOT produced by the primary model.
->
-> **Backend:** small-fallback-8b (osaurus, fallback)
-> **Why:** answered by small-fallback-8b instead of the intended golden-model
->
-> Treat the content below as lower quality than a normal run: the fallback models have smaller context windows and weaker summarisation.
+> ⚠ **DEGRADED** — small-fallback-8b (osaurus, fallback) answered instead of the intended golden-model; treat this summary as lower quality than a normal run
 
 ## Executive Summary
 

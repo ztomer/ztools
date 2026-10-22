@@ -29,7 +29,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use super::quality::{drop_bullets, drop_recited};
+use super::quality::{Refusal, drop_bullets, drop_recited};
 
 /// A citation in any form the models write: a bracketed group `(@h | ts)`,
 /// `[@h | ts]`, either mixed (`[@h | ts)`), optionally bold, the `@` optional,
@@ -142,7 +142,7 @@ fn parse_source(part: &str) -> Option<(bool, &str, &str)> {
 ///
 /// When more than a third of its citations name no given tweet: the model is
 /// inventing sources, and what is left would be chosen by chance.
-pub fn repair(summary: &str, sources: &[(String, String)]) -> Result<Repaired, String> {
+pub fn repair(summary: &str, sources: &[(String, String)]) -> Result<Repaired, Refusal> {
     let mut total = 0usize;
     let mut unresolved = 0usize;
     let given: HashSet<&str> = sources.iter().map(|(h, _)| h.as_str()).collect();
@@ -174,10 +174,13 @@ pub fn repair(summary: &str, sources: &[(String, String)]) -> Result<Repaired, S
         })
         .into_owned();
     if unresolved * 3 > total {
-        return Err(format!(
-            "{unresolved} of {total} citations name no tweet the model was given \
-             (a garbled or invented handle or timestamp)"
-        ));
+        return Err(Refusal {
+            verdict: "citations that name no given tweet".to_string(),
+            detail: format!(
+                "{unresolved} of {total} citations name no tweet the model was given \
+                 (a garbled or invented handle or timestamp)"
+            ),
+        });
     }
     let known: HashSet<(String, String)> = sources
         .iter()
@@ -237,13 +240,14 @@ pub const MIN_BULLETS: usize = 5;
 ///
 /// # Errors
 ///
-/// The repair's or the gate's reasons, joined, when the answer must not be
-/// saved.
+/// The repair's or the gate's refusal, in both lengths: the short verdict for
+/// the banner and the full detail for the run record and the refused
+/// answer's file.
 pub fn handle_model_output(
     content: &str,
     sources: &[(String, String)],
     cut: bool,
-) -> Result<Answer, String> {
+) -> Result<Answer, Refusal> {
     let processed = sources.len();
     let (thinking, cleaned) = super::extract_thinking(content);
     let body = if thinking.is_empty() {
@@ -261,8 +265,8 @@ pub fn handle_model_output(
         );
     }
     let quality = super::check_summary_quality(&repaired.body, processed);
-    if quality.rejected() {
-        return Err(quality.rejections.join("; "));
+    if let Some(refusal) = quality.refusal() {
+        return Err(refusal);
     }
     let kept = super::quality::bullets(&repaired.body).len();
     if kept < MIN_BULLETS.min(processed.div_ceil(MAX_CITES_PER_BULLET)) {
@@ -271,9 +275,13 @@ pub fn handle_model_output(
         } else {
             format!(" after repair ({})", repairs.join("; "))
         };
-        return Err(format!(
-            "{kept} verified bullet(s){after} for {processed} tweets: too few to stand for the timeline"
-        ));
+        return Err(Refusal {
+            verdict: format!("only {kept} verified bullet(s) for {processed} tweets"),
+            detail: format!(
+                "{kept} verified bullet(s){after} for {processed} tweets: too few to stand for \
+                 the timeline"
+            ),
+        });
     }
     Ok(Answer {
         body: super::merge_thinking_with_summary(&thinking, &repaired.body),

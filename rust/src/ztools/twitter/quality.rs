@@ -183,12 +183,39 @@ fn prose_in_topics(summary: &str) -> usize {
     prose
 }
 
+/// One rule the gate refused an answer by, in the two lengths a reader needs:
+/// the rule in a few words, and what the gate saw.
+///
+/// The two lengths are written at the rule that fires, never derived from one
+/// another, so the summary's banner (the rule's name) and the refused
+/// answer's file (the rule's finding) cannot disagree.
+///
+/// The banner is ONE line (owner, 2026-10-21: "way too much text to explain
+/// that raptor failed and we're using foundation. keep it all a single
+/// line."), so the short half is what the banner says and the long half is
+/// what the refused answer's file and the run record keep.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Refusal {
+    /// The rule in a few words: "a repetition loop".
+    pub verdict: String,
+    /// What the gate saw, in full: "3 of 7 bullets repeat an earlier bullet".
+    pub detail: String,
+}
+
+impl std::fmt::Display for Refusal {
+    /// The full half: a refusal read in a log says what was seen, not the
+    /// rule's name.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.detail)
+    }
+}
+
 /// What the gate found: `warnings` describe a weak answer that is still saved,
 /// `rejections` an answer that must not be.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Quality {
     pub warnings: Vec<String>,
-    pub rejections: Vec<String>,
+    pub rejections: Vec<Refusal>,
 }
 
 impl Quality {
@@ -196,6 +223,31 @@ impl Quality {
     #[must_use]
     pub const fn rejected(&self) -> bool {
         !self.rejections.is_empty()
+    }
+
+    /// The refusal this gate refuses an answer with: every rule that fired,
+    /// in both lengths.
+    ///
+    /// `None` when nothing fired — a refusal is a refusal, not an empty one.
+    #[must_use]
+    pub fn refusal(&self) -> Option<Refusal> {
+        if self.rejections.is_empty() {
+            return None;
+        }
+        Some(Refusal {
+            verdict: self
+                .rejections
+                .iter()
+                .map(|r| r.verdict.as_str())
+                .collect::<Vec<_>>()
+                .join("; "),
+            detail: self
+                .rejections
+                .iter()
+                .map(|r| r.detail.as_str())
+                .collect::<Vec<_>>()
+                .join("; "),
+        })
     }
 }
 
@@ -283,7 +335,10 @@ pub fn duplicate_bullets(bullets: &[String]) -> usize {
 pub fn check_summary_quality(summary: &str, input_tweets: usize) -> Quality {
     let mut quality = Quality::default();
     if summary.trim().is_empty() {
-        quality.rejections.push("Summary is empty".to_string());
+        quality.rejections.push(Refusal {
+            verdict: "an empty answer".to_string(),
+            detail: "the answer is empty: the model wrote nothing".to_string(),
+        });
         return quality;
     }
     let header_count = summary
@@ -308,22 +363,29 @@ pub fn check_summary_quality(summary: &str, input_tweets: usize) -> Quality {
     }
 
     if header_count == 0 && bullets.is_empty() {
-        quality
-            .rejections
-            .push("no ## header and no bullet: the answer has no structure".to_string());
+        quality.rejections.push(Refusal {
+            verdict: "no structure".to_string(),
+            detail: "no ## header and no bullet: the answer has no structure".to_string(),
+        });
     }
     let duplicates = duplicate_bullets(&bullets);
     if duplicates > MAX_DUPLICATE_BULLETS {
-        quality.rejections.push(format!(
-            "{duplicates} of {} bullets repeat an earlier bullet (a repetition loop)",
-            bullets.len()
-        ));
+        quality.rejections.push(Refusal {
+            verdict: "a repetition loop".to_string(),
+            detail: format!(
+                "{duplicates} of {} bullets repeat an earlier bullet (a repetition loop)",
+                bullets.len()
+            ),
+        });
     }
     if bullets.len() > input_tweets {
-        quality.rejections.push(format!(
-            "{} bullets for {input_tweets} input tweets: more bullets than tweets",
-            bullets.len()
-        ));
+        quality.rejections.push(Refusal {
+            verdict: "more bullets than tweets".to_string(),
+            detail: format!(
+                "{} bullets for {input_tweets} input tweets: more bullets than tweets",
+                bullets.len()
+            ),
+        });
     }
     // The model stopped mid-sentence: the last bullet opens a citation it
     // never closes. Seen live 2026-10-10 -- 8 bullets for 45 tweets ending
@@ -334,22 +396,30 @@ pub fn check_summary_quality(summary: &str, input_tweets: usize) -> Quality {
         last.rfind("(@")
             .is_some_and(|open| !last[open..].contains(')'))
     }) {
-        quality.rejections.push(
-            "the last bullet is cut off mid-citation: the answer stops before it ends".to_string(),
-        );
+        quality.rejections.push(Refusal {
+            verdict: "a cut-off citation".to_string(),
+            detail: "the last bullet is cut off mid-citation: the answer stops before it ends"
+                .to_string(),
+        });
     }
     let prose = prose_in_topics(summary);
     if prose > 0 {
-        quality.rejections.push(format!(
-            "{prose} line(s) of prose inside topic sections: the model is talking to itself"
-        ));
+        quality.rejections.push(Refusal {
+            verdict: "prose in a topic section".to_string(),
+            detail: format!(
+                "{prose} line(s) of prose inside topic sections: the model is talking to itself"
+            ),
+        });
     }
     let unattributed = bullets.iter().filter(|b| !is_attributed(b)).count();
     if unattributed * 2 > bullets.len() {
-        quality.rejections.push(format!(
-            "{unattributed} of {} bullets lack the `(@handle | timestamp)` attribution",
-            bullets.len()
-        ));
+        quality.rejections.push(Refusal {
+            verdict: "missing citations".to_string(),
+            detail: format!(
+                "{unattributed} of {} bullets lack the `(@handle | timestamp)` attribution",
+                bullets.len()
+            ),
+        });
     }
     quality
 }

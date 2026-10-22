@@ -54,7 +54,7 @@ fn the_production_repetition_loop_is_rejected() {
     assert!(
         q.rejections
             .iter()
-            .any(|r| r.contains("repeat an earlier bullet")),
+            .any(|r| r.detail.contains("repeat an earlier bullet")),
         "{q:?}"
     );
 }
@@ -69,7 +69,10 @@ fn exact_duplicates_beyond_the_allowance_are_rejected_on_their_own() {
     }
     let q = check_summary_quality(&doc(&lines), 100);
     assert_eq!(q.rejections.len(), 1, "{q:?}");
-    assert!(q.rejections[0].contains("3 of 7 bullets repeat"), "{q:?}");
+    assert!(
+        q.rejections[0].detail.contains("3 of 7 bullets repeat"),
+        "{q:?}"
+    );
 }
 
 #[test]
@@ -114,7 +117,9 @@ fn more_bullets_than_input_tweets_is_rejected_on_its_own() {
     let q = check_summary_quality(&doc(&lines), 4);
     assert_eq!(q.rejections.len(), 1, "{q:?}");
     assert!(
-        q.rejections[0].contains("5 bullets for 4 input tweets"),
+        q.rejections[0]
+            .detail
+            .contains("5 bullets for 4 input tweets"),
         "{q:?}"
     );
     assert!(!check_summary_quality(&doc(&lines), 5).rejected());
@@ -130,7 +135,9 @@ fn square_bracket_attribution_is_rejected() {
     let q = check_summary_quality(&doc(&lines), 10);
     assert_eq!(q.rejections.len(), 1, "{q:?}");
     assert!(
-        q.rejections[0].contains("5 of 5 bullets lack the `(@handle | timestamp)`"),
+        q.rejections[0]
+            .detail
+            .contains("5 of 5 bullets lack the `(@handle | timestamp)`"),
         "{q:?}"
     );
 }
@@ -171,7 +178,7 @@ fn a_following_paragraph_does_not_join_the_bullet() {
 fn the_structural_floor_still_holds() {
     let empty = check_summary_quality("", 3);
     assert!(empty.rejected());
-    assert!(empty.rejections[0].contains("empty"));
+    assert!(empty.rejections[0].detail.contains("empty"));
 
     let raw = check_summary_quality("Just raw text without headers", 3);
     assert!(raw.rejected());
@@ -205,7 +212,7 @@ fn an_answer_cut_off_mid_citation_is_rejected() {
     );
     let q = check_summary_quality(&doc(&lines), 45);
     assert_eq!(q.rejections.len(), 1, "{q:?}");
-    assert!(q.rejections[0].contains("cut off"), "{q:?}");
+    assert!(q.rejections[0].detail.contains("cut off"), "{q:?}");
 
     // A complete last bullet that merely mentions an ellipsis is not cut.
     let mut whole: Vec<String> = (0..7).map(cited).collect();
@@ -246,7 +253,10 @@ fn prose_inside_a_topic_section_is_rejected() {
     lines.push("Actually wait - I realize I've been overthinking this.".into());
     let q = check_summary_quality(&doc(&lines), 10);
     assert_eq!(q.rejections.len(), 1, "{q:?}");
-    assert!(q.rejections[0].contains("talking to itself"), "{q:?}");
+    assert!(
+        q.rejections[0].detail.contains("talking to itself"),
+        "{q:?}"
+    );
     // The Executive Summary paragraph `doc` writes is prose, and allowed.
     let healthy: Vec<String> = (0..6).map(cited).collect();
     assert!(!check_summary_quality(&doc(&healthy), 10).rejected());

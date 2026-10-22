@@ -151,7 +151,7 @@ fn an_answer_that_mostly_invents_its_sources_is_rejected() {
         ));
     }
     let why = repair(&s, &given()).unwrap_err();
-    assert!(why.contains("4 of 5 citations"), "{why}");
+    assert!(why.detail.contains("4 of 5 citations"), "{why}");
 }
 
 /// A bullet citing a tweet it was not given goes; its neighbours stay.
@@ -195,7 +195,7 @@ fn too_few_verified_bullets_is_still_a_rejection() {
         )
     }));
     let why = crate::ztools::twitter::handle_model_output(&s, &sources, false).unwrap_err();
-    assert!(why.contains("3 verified bullet"), "{why}");
+    assert!(why.detail.contains("3 verified bullet"), "{why}");
 }
 
 /// A cut answer says so in what is saved.
@@ -274,7 +274,7 @@ fn one_clean_bullet_for_many_tweets_is_rejected() {
     let g = given();
     let answer = "## Topic\n\n- one (@alice | Sat Oct 10 09:46:22 +0000 2026)\n";
     let why = handle_model_output(answer, &g, false).expect_err("one bullet for eight tweets");
-    assert!(why.contains("too few"), "{why}");
+    assert!(why.detail.contains("too few"), "{why}");
 }
 
 /// Every form a model has written a citation of ONE given tweet in, from the
@@ -448,5 +448,5 @@ fn an_unresolvable_bracketless_citation_still_counts_against_the_answer() {
     let g = given();
     let answer = "## Topic\n\n- a fact, per @mallory | Sat Oct 10 09:46:22 +0000 2026.\n";
     let why = repair(answer, &g).expect_err("the only citation names no given tweet");
-    assert!(why.contains("1 of 1 citations"), "{why}");
+    assert!(why.detail.contains("1 of 1 citations"), "{why}");
 }
