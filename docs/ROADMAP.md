@@ -76,6 +76,13 @@ A dated summary, not checked by any gate; re-derive it before editing:
   advisory gate (`cargo audit`, `cargo deny`) went red on its own -- the lockfile moved to
   1.54.1 in `3b5caa4` before this push. Re-derive this bullet with `gh run list` rather
   than trusting it.
+- **Umbrella rows "ztools CI red on a gitignored `.python-version`" and "tap bump outside the
+  gate (6.8)" are CLOSED, re-derived 2026-10-24.** The first closed in `dbfa60c` (2026-10-14):
+  `.python-version` is tracked and `tools/tests/test_ci_files_tracked.py` fails when any file a
+  workflow reads is untracked; CI on `main` has been green since (latest run 39701639021 for
+  `6bb2166`). The second closed in `3fb24d0`: `tools/release.sh` execs the house kit, whose tap
+  step is the kit's tap_bump.sh, through the tap's own gate; no hand-rolled tap push remains in the tree
+  (`grep homebrew-tap` finds only the kit's `--tap` argument). No release was cut.
 - **Umbrella B7 (b), `twitter-evening` failing, measured 2026-10-17:** not a model, endpoint
   or env fault -- raptor and `fm` both answered; the gate refused both answers over citation
   FORM (no `@`; time of day only; `;`-joined sources; unbracketed `per @h | ts`). The repair
