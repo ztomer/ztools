@@ -24,7 +24,7 @@ pub const CAMOUFOX_BROWSER_PIN: &str = "156.0.1-beta.39";
 pub const TABLE: &[Dependency] = &[
     Dependency {
         name: "brew",
-        pin: "5",
+        pin: "7.0",
         needed_for: "installing every other row",
         probe: Probe::Command("brew"),
         install: &[],
