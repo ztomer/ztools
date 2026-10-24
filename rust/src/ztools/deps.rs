@@ -10,7 +10,7 @@
 //! current bottle; the pip and Camoufox rows install exactly their pin.
 
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use crate::ztools::selfheal::{Dependency, Health, Host, Probe, ensure, switched_off};
 
@@ -101,6 +101,7 @@ impl Host for SystemHost {
             Probe::Command(cmd) => on_path(cmd).map(|p| p.display().to_string()),
             Probe::PythonModule(module) => Command::new("python3")
                 .args(["-c", &format!("import {module}")])
+                .stdin(Stdio::null())
                 .output()
                 .ok()
                 .filter(|o| o.status.success())
@@ -118,6 +119,7 @@ impl Host for SystemHost {
         let (program, rest) = argv.split_first().ok_or("empty install command")?;
         let out = Command::new(program)
             .args(rest)
+            .stdin(Stdio::null())
             .output()
             .map_err(|e| format!("cannot run {program}: {e}"))?;
         if out.status.success() {
@@ -137,20 +139,24 @@ impl Host for SystemHost {
 }
 
 /// An executable named `cmd`: a path with a `/` is checked as is, a bare name
-/// is looked up on `PATH`.
+/// is resolved by the shell's own `command -v` (the lookup every spawn makes,
+/// so the probe and the use cannot disagree about `PATH`).
 #[must_use]
 pub fn on_path(cmd: &str) -> Option<PathBuf> {
-    let executable = |p: &PathBuf| {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+    use std::os::unix::fs::PermissionsExt;
+    let resolved = if cmd.contains('/') {
+        PathBuf::from(cmd)
+    } else {
+        let out = Command::new("/bin/sh")
+            .args(["-c", "command -v \"$1\"", "sh", cmd])
+            .stdin(Stdio::null())
+            .output()
+            .ok()?;
+        PathBuf::from(String::from_utf8_lossy(&out.stdout).trim())
     };
-    if cmd.contains('/') {
-        let p = PathBuf::from(cmd);
-        return executable(&p).then_some(p);
-    }
-    std::env::split_paths(&std::env::var_os("PATH")?)
-        .map(|d| d.join(cmd))
-        .find(executable)
+    std::fs::metadata(&resolved)
+        .is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+        .then_some(resolved)
 }
 
 /// Ensure one row on the real machine.

@@ -88,6 +88,10 @@ pub(super) const CLEARED: &[&str] = &[
     "ZTOOLS_TLS_PROBE",
     "ZTOOLS_TLS_PROBE_URL",
     "ZTOOLS_UPDATE_GOLDENS",
+    // deps::SystemHost: the self-heal switch. Cleared, so an operator's
+    // exported `0` cannot decide what a test sees; no test reaches a real
+    // installer (the shape is tested against a fake host).
+    "ZTOOLS_SELF_HEAL",
 ];
 
 /// Variables read by code OUTSIDE the crate — the house gate's checkout
@@ -135,6 +139,7 @@ pub(super) const MANAGED: &[&str] = &[
     "ZTOOLS_EXE",
     "ZTOOLS_GPU_LOCK_DIR",
     "ZTOOLS_GPU_LOCK_OWNER",
+    "ZTOOLS_SELF_HEAL",
     "ZTOOLS_TLS_PROBE",
     "ZTOOLS_TLS_PROBE_URL",
     "ZTOOLS_UPDATE_GOLDENS",

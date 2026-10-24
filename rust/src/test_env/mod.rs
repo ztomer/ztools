@@ -29,7 +29,7 @@
 //! | `CAMOUFOX_BIN` | `twitter::browser_bin` | unset (no browser to find) |
 //! | `ZTOOLS_EXE` | `manifest::running_exe` | absent path, no checkout above it |
 //! | `ZTOOLS_TLS_PROBE`, `ZTOOLS_TLS_PROBE_URL` | `tests/tls_probe.rs` | unset (the opt-in is off) |
-//! | `EVAL_SAVE_OUTPUTS`, `EVAL_MAX_SAVED_OUTPUT`, `EVAL_DEFAULT_TIMEOUT`, `EVAL_MAX_TIMEOUT`, `EVAL_MODEL_STALL_SECONDS`, `EVAL_ALLOW_OVERSIZE`, `TWITTER_MAX_RUNTIME_S`, `TWITTER_FOLLOWING_TAB`, `TWITTER_FALLBACK_MODELS`, `TWITTER_TEMPERATURE`, `ZTOOLS_UPDATE_GOLDENS` | `eval::outputs`, `eval::signals`, `eval::watchdog`, `eval::oversize`, `twitter`, the golden writers | unset (documented defaults) |
+//! | `EVAL_SAVE_OUTPUTS`, `EVAL_MAX_SAVED_OUTPUT`, `EVAL_DEFAULT_TIMEOUT`, `EVAL_MAX_TIMEOUT`, `EVAL_MODEL_STALL_SECONDS`, `EVAL_ALLOW_OVERSIZE`, `TWITTER_MAX_RUNTIME_S`, `TWITTER_FOLLOWING_TAB`, `TWITTER_FALLBACK_MODELS`, `TWITTER_TEMPERATURE`, `ZTOOLS_UPDATE_GOLDENS`, `ZTOOLS_SELF_HEAL` | `eval::outputs`, `eval::signals`, `eval::watchdog`, `eval::oversize`, `twitter`, the golden writers, `deps` | unset (documented defaults) |
 //!
 //! The last row are POLICY knobs, not paths, and they are cleared for the same
 //! reason: an exported `EVAL_MAX_TIMEOUT=99999` in the operator's shell
