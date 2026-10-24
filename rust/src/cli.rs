@@ -160,6 +160,11 @@ enum Cmd {
     /// model. The `[status]` command in `routines-twitter.toml`.
     #[command(version)]
     TwitterStatus,
+    /// Probe every runtime dependency (browsers, CLIs, Python modules),
+    /// install each missing one at its pinned version, and list their state.
+    /// Exits non-zero when any stays unavailable.
+    #[command(version)]
+    Deps,
     /// Show or change the operator's toggles (retention), in
     /// `~/.config/ztools/settings.toml`: no args lists them, `get KEY`, or
     /// `set KEY true|false`. `--json` is what the routines Settings window reads.
@@ -400,6 +405,7 @@ pub fn run() -> Result<()> {
         } => weekend_exclude(&config, &place, undo),
         Cmd::Status => crate::cli_ztools::status(&config),
         Cmd::TwitterStatus => crate::ztools::twitter_status::run(),
+        Cmd::Deps => crate::ztools::deps::cli(),
         Cmd::Settings { args, json } => crate::ztools::settings::cli(&args, json),
         Cmd::ModelEval {
             model,

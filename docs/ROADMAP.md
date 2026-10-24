@@ -130,6 +130,26 @@ pinned by `rust/tests/cli_weekend_exclude.rs` and `rust/src/ztools/weekend/exclu
   byte-identical. The plan store it validates against is `WEEKEND_OUTPUT_DIR`, the one the tab
   reads.
 
+## Phase S — self-healing runtime dependencies (owner ask O1)
+
+Goal: a missing runtime dependency is installed, never a crash. Depends on nothing. Size: M.
+
+### S1 — every runtime dependency is declared, probed, and installed on a miss
+- **Owner's words (O1, umbrella §0b):** "ztools, app_updates, update_local should be self
+  healing - if a dependency is not available it should be installed."
+- **Class:** a dependency assumed rather than probed. The Camoufox browser was resolved from disk
+  and a miss was a hard error telling the user to run `pip install camoufox && python3 -m camoufox
+  fetch` by hand; `bat` was tried and silently skipped. One table (`rust/src/ztools/deps.rs` (new))
+  declares every external binary, browser and Python module with its pinned version and install
+  command; `rust/src/ztools/selfheal.rs` (new) is the shape (probe, install with a stated reason,
+  re-probe, degrade with a reason) and is the same shape `app_updates` and `sys_updater` carry.
+- **Done when:** the fake-installer tests in `rust/src/ztools/selfheal_tests.rs` (new) pass and
+  were seen red first; `ztools deps` lists every row with its state; one real miss (`bat`,
+  uninstalled with brew) is reinstalled by ztools itself.
+- **Blocked by:** nothing.
+- **Why now:** a fresh machine, or a cleared Camoufox cache, stops the timeline collector until a
+  human reads an error and types an install command.
+
 ## Phase H — currency (house rule: newest release of every layer)
 
 Goal: nothing in the stack is behind its newest release without a recorded reason.

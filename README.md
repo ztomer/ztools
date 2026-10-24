@@ -14,6 +14,7 @@ Detailed architectural deep-dive is available in [ARCHITECTURE.md](ARCHITECTURE.
 |------------|-------|
 | **[Osaurus](https://osaurus.ai/)** server | **Hard runtime dependency.** ZTools communicates with an Osaurus (or OpenAI-compatible) server at `http://localhost:1337`. Start it via `osaurus serve &` or the Osaurus macOS menu app. |
 | **Rust toolchain** | Required when building from source (`cargo` / `rustc`). |
+| Everything else | Installed by ztools itself on first use, at the pinned version in `rust/src/ztools/deps.rs` (Camoufox browser and its Python package, `bat`). `ztools deps` installs and lists them all; `ZTOOLS_SELF_HEAL=0` turns installing off. Homebrew and macOS's `fm` cannot be installed this way and are reported with the reason. |
 
 ---
 

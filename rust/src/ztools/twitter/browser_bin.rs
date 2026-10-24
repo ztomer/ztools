@@ -115,6 +115,25 @@ pub fn resolve() -> Result<PathBuf, BinaryError> {
     resolve_with(&home, env_override.as_deref())
 }
 
+/// The Camoufox browser to launch: `CAMOUFOX_BIN` as given, else the `deps`
+/// table's row, installed at its pin on a miss (owner ask O1).
+///
+/// # Errors
+///
+/// `CAMOUFOX_BIN` names nothing, or the browser is missing and could not be
+/// installed -- the error carries the stated reason.
+pub fn resolve_or_install() -> anyhow::Result<PathBuf> {
+    if std::env::var_os("CAMOUFOX_BIN").is_some() {
+        return Ok(resolve()?);
+    }
+    match crate::ztools::deps::ensure_system("camoufox-browser") {
+        crate::ztools::selfheal::Health::Unavailable(why) => {
+            anyhow::bail!("the Camoufox browser is unavailable — {why}")
+        }
+        health => Ok(PathBuf::from(health.location().unwrap_or_default())),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

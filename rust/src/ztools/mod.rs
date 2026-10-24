@@ -1,5 +1,6 @@
 //! Native Rust port of ztools subsystems: Twitter summarizer and Weekend planner.
 
+pub mod deps;
 pub mod embeddings;
 pub mod eval;
 pub mod image_renamer;
@@ -8,6 +9,7 @@ pub mod model_eval;
 pub mod model_health;
 pub mod on_device;
 pub mod rename;
+pub mod selfheal;
 pub mod settings;
 pub mod status;
 pub mod store;
@@ -20,15 +22,27 @@ pub mod weekend_cache;
 #[cfg(test)]
 mod model_health_tests;
 
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::process::{Command, Stdio};
 
-/// Print formatted markdown to stdout, using `bat` if available for rich terminal rendering.
+/// Print formatted markdown to stdout, using `bat` for rich terminal rendering.
+///
+/// In a terminal a missing `bat` is installed (the `deps` table's row); into
+/// a pipe it is only used when already present, so a scheduled run never
+/// stops to install a cosmetic renderer. Without it the text prints plain.
 pub fn print_formatted_markdown(content: &str) {
-    if let Ok(mut child) = Command::new("bat")
-        .args(["-l", "md", "--color", "always", "--style", "plain"])
-        .stdin(Stdio::piped())
-        .spawn()
+    let bat = if std::io::stdout().is_terminal() {
+        deps::ensure_system("bat")
+            .location()
+            .map(std::path::PathBuf::from)
+    } else {
+        deps::on_path("bat")
+    };
+    if let Some(bat) = bat
+        && let Ok(mut child) = Command::new(bat)
+            .args(["-l", "md", "--color", "always", "--style", "plain"])
+            .stdin(Stdio::piped())
+            .spawn()
         && let Some(mut stdin) = child.stdin.take()
         && stdin.write_all(content.as_bytes()).is_ok()
     {

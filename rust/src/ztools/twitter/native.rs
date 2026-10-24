@@ -113,7 +113,7 @@ fn launch(
     subscribe: impl FnOnce(&camoufox::protocol::client::Connection),
 ) -> Result<Launched> {
     use camoufox::config::LaunchConfig;
-    let binary = browser_bin::resolve()?;
+    let binary = browser_bin::resolve_or_install()?;
     let (dir, guard) = if let Some(d) = persistent_profile {
         std::fs::create_dir_all(&d)?;
         (d, None)

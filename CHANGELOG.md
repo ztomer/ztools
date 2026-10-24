@@ -6,6 +6,32 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## v3.10.0 — a missing dependency is installed, not reported _(2026-10-24)_
+
+**Owner ask O1: "ztools, app_updates, update_local should be self healing - if a
+dependency is not available it should be installed."** A cleared Camoufox cache used to
+stop the timeline collector with an error telling a human which `pip` and `fetch`
+commands to type. ztools now types them itself.
+
+### Added -- one dependency table, and the shape that heals it
+- `rust/src/ztools/deps.rs` declares every runtime dependency ztools shells out to or
+  loads -- Homebrew, `python3`, the `camoufox` Python package (0.5.5), the Camoufox
+  browser (156.0.1-beta.39), `bat`, and macOS's `fm` -- each with its pinned version and
+  install command, in one place.
+- `rust/src/ztools/selfheal.rs` is the shape (the same one `app_updates` and
+  `sys_updater` carry): probe; on a miss install the prerequisites, then the row, with a
+  one-line stated reason (`→ bat 0.26.1 is missing — installing it, needed for …`);
+  probe AGAIN, since an installer that exits 0 and leaves nothing is not a success; and
+  anything that cannot be installed is a stated reason the caller degrades on, never a
+  crash. `ZTOOLS_SELF_HEAL=0` turns installing off.
+- `ztools deps` ensures every row and prints the table; it exits non-zero when a row
+  stays unavailable.
+- The collector's browser launch and the markdown renderer go through it. `bat` is
+  only installed from a terminal: a scheduled run into a pipe never stops to install a
+  cosmetic renderer. `CAMOUFOX_BIN` still wins, as given, with no install.
+- Proven red first against a fake installer (4 of 8 tests fail with the install step
+  removed), and once for real: `brew uninstall bat`, then `ztools deps` reinstalled it.
+
 ## v3.9.2 — the degraded banner is ONE line, and it still says everything _(2026-10-21)_
 
 **Eight lines of banner for a one-line fact, and a reader who scrolls past eight lines
