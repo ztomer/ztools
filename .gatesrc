@@ -134,3 +134,7 @@ GOH_CHECKOUT_CREDENTIALS_MIN_FILES=1    # read 1
 GOH_MD_LINKS_MIN_LINKS=3                # read 4
 GOH_UNREAPED_SPAWN_MIN_FILES=182        # read 203
 GOH_SUBPROCESS_STDIN_MIN_CALLS=18       # read 20 on 2026-10-20, every one declared; red at 100
+
+# A commit that ADDS a test names, in a `Red-run:` trailer, the mutation that
+# turned that test red (goh red-run, BACKLOG 4.11; owner OW.8, 2026-10-31).
+GOH_RED_RUN=1
