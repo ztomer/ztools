@@ -83,3 +83,6 @@ toml_edit = "0.25"
 
 [dev-dependencies]
 serial_test = "4"
+
+[patch.crates-io]
+png = { git = "https://github.com/image-rs/image-png", rev = "b2f10c6a7e3127d4aaf231f3eae731a33e6eb0bc" }

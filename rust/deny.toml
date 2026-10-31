@@ -126,18 +126,18 @@ confidence-threshold = 0.93
 # [bans] -- the duplicate is real, and denying it would be theatre.
 # -----------------------------------------------------------------------------
 # MEASURED, and the measurement is worth stating because the obvious way to make
-# it is wrong: `cargo tree --duplicates` on this host reports ONE duplicated
-# crate, and cargo-deny reports THREE. cargo tree resolves for the HOST triple
-# only, so it cannot see what a Windows or wasm build pulls in. Three crates are
+# it is wrong: `cargo tree --duplicates` on this host reports zero duplicated
+# crates, and cargo-deny reports TWO (miniz_oxide was unified per OW.30 by
+# patching png with image-rs/image-png). cargo tree resolves for the HOST triple
+# only, so it cannot see what a Windows or wasm build pulls in. Two crates are
 # in the lockfile at two versions each:
 #
-#   miniz_oxide  0.8.9 (png 0.18.1)   vs  0.9.1 (flate2 1.1.10)
 #   hashbrown    0.16.1 (rusqlite-vfs) vs 0.17.1 (hashlink, via rusqlite)
 #   syn          2.0.119              vs  3.0.6
 #
-# All three are transitive-to-this-crate and each pair is pinned by a parent's own
-# requirement, so none can be unified without patching `png`, `flate2`,
-# `rusqlite` or a proc-macro crate upstream. `warn` it is, which means all three
+# Both are transitive-to-this-crate and each pair is pinned by a parent's own
+# requirement, so none can be unified without patching `flate2`,
+# `rusqlite` or a proc-macro crate upstream. `warn` it is, which means both
 # PRINT on every run and sit in the output a reviewer reads, rather than being
 # silenced by a `skip` entry or made into a permanently-red `deny` for defects
 # that live outside this repo.
@@ -173,7 +173,9 @@ skip = []
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = []
+allow-git = [
+    "https://github.com/image-rs/image-png",
+]
 
 # -----------------------------------------------------------------------------
 # CALIBRATION -- how each of these was proved able to fail. A `deny.toml` never
