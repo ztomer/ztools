@@ -18,7 +18,7 @@ use crate::ztools::selfheal::{Dependency, Health, Host, Probe, ensure, switched_
 pub const SWITCH: &str = "ZTOOLS_SELF_HEAL";
 
 /// The Camoufox browser build the collector is verified against.
-pub const CAMOUFOX_BROWSER_PIN: &str = "156.0.1-beta.39";
+pub const CAMOUFOX_BROWSER_PIN: &str = "158.0.1-beta.41";
 
 /// Every runtime dependency, prerequisites before the rows that need them.
 pub const TABLE: &[Dependency] = &[
@@ -42,7 +42,7 @@ pub const TABLE: &[Dependency] = &[
     },
     Dependency {
         name: "camoufox-python",
-        pin: "0.5.5",
+        pin: "0.5.9",
         needed_for: "fetching the Camoufox browser",
         probe: Probe::PythonModule("camoufox"),
         install: &[
@@ -52,7 +52,7 @@ pub const TABLE: &[Dependency] = &[
             "install",
             "--user",
             "--break-system-packages",
-            "camoufox==0.5.5",
+            "camoufox==0.5.9",
         ],
         requires: &["python3"],
         manual: "",
@@ -67,7 +67,7 @@ pub const TABLE: &[Dependency] = &[
             "-m",
             "camoufox",
             "fetch",
-            "official/156.0.1-beta.39",
+            "official/158.0.1-beta.41",
         ],
         requires: &["camoufox-python"],
         manual: "",

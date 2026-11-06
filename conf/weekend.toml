@@ -21,6 +21,7 @@ exclude_places = [
   "Sky Zone Toronto",
   "LEGOLAND Discovery Centre Toronto",
   "LEGOLAND Discovery Centre Toronto (Vaughan Mills)",
+  "Haunted Hour 3.0",
 ]
 
 [location]

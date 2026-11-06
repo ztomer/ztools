@@ -39,6 +39,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+: "$ROOT"
 GOH="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
 
 # The output helpers, defined BEFORE the source so a missing tui degrades instead of

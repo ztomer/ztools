@@ -6,6 +6,13 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## v3.11.0 — Camoufox 0.5.9 and browser 158.0.1-beta.41 _(2026-11-05)_
+
+### Changed
+- `rust/src/ztools/deps.rs` bumps Camoufox Python to 0.5.9 and browser pin to 158.0.1-beta.41.
+  Fixes launch-time missing browser self-installation and uses the stable release channel.
+- `tools/osaurus_one.sh` silences unused ROOT variable check.
+
 ## v3.10.0 — a missing dependency is installed, not reported _(2026-10-24)_
 
 **Owner ask O1: "ztools, app_updates, update_local should be self healing - if a
