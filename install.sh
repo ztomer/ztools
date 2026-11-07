@@ -85,7 +85,7 @@ UNAME_ARCH="${ZTOOLS_ARCH:-$(uname -m)}"
 require_commands cargo jq
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 if ! HOUSE_LIB_MANIFEST="$(cargo metadata --manifest-path "$ROOT/rust/Cargo.toml" \
-        --format-version 1 2>/dev/null \
+        --format-version 1 \
         | jq -er '.packages[] | select(.name == "house-lib") | .manifest_path')"; then
     die "cannot find house-lib's platform gate: cargo metadata over $ROOT/rust/Cargo.toml failed, or names no house-lib package."
 fi

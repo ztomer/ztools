@@ -58,6 +58,11 @@ TOOL_COMMANDS = ("cargo", "jq", "brew")
 REAL_CARGO = shutil.which("cargo")
 REAL_JQ = shutil.which("jq")
 
+#: The directory of the real cargo, which every gate PATH carries: cargo
+#: metadata runs `rustc -vV`, and on a rustup install the rustc it finds is the
+#: proxy beside cargo (CI's runner resolved none without it, though this Mac did).
+CARGO_DIR = str(Path(REAL_CARGO).parent) if REAL_CARGO else "/nonexistent"
+
 #: The environment rustup and cargo read, passed through when the caller set it
 #: (CI sets CARGO_HOME / RUSTUP_HOME; the machine-wide build-dir is in HOME).
 PASSTHROUGH = ("CARGO_HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN", "CARGO_NET_OFFLINE")
@@ -258,7 +263,7 @@ def test_the_gate_starts_no_build(tmp_path):
     r = _run(
         "Darwin",
         "arm64",
-        PATH=f"{binroot}:/usr/bin:/bin:/usr/sbin:/sbin",
+        PATH=f"{binroot}:{CARGO_DIR}:/usr/bin:/bin:/usr/sbin:/sbin",
         ZTOOLS_INSTALL_DIR=str(install_dir),
     )
     assert r.returncode == 0, _out(r)
@@ -278,7 +283,7 @@ def test_a_reject_starts_no_build_either(tmp_path):
     r = _run(
         "Darwin",
         "x86_64",
-        PATH=f"{binroot}:/usr/bin:/bin:/usr/sbin:/sbin",
+        PATH=f"{binroot}:{CARGO_DIR}:/usr/bin:/bin:/usr/sbin:/sbin",
         ZTOOLS_INSTALL_DIR=str(tmp_path / "bin"),
     )
     assert r.returncode == 1, _out(r)
@@ -337,7 +342,7 @@ def test_macos_also_names_brew(tmp_path):
     not that it lacks Homebrew). The PATH holds the real cargo and jq and
     nothing else, so the gate runs and brew cannot resolve: the precondition is
     asserted, because a brew on this PATH would make the test build for real."""
-    path = f"{_toolbin(tmp_path / 'toolbin')}:/usr/bin:/bin"
+    path = f"{_toolbin(tmp_path / 'toolbin')}:{CARGO_DIR}:/usr/bin:/bin"
     found = subprocess.run(
         ["/bin/bash", "-c", "command -v brew"],
         capture_output=True,
