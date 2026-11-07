@@ -64,7 +64,7 @@ A dated summary, not checked by any gate; re-derive it before editing:
   `ztomer/house-lib` (owner, umbrella LIB.1, rulings OW.20/OW.22/OW.22b: "new private library
   for common tasks. keep GOH QA only."; made PUBLIC by OW.93 so the tap builds with no
   credential). gates_of_heck keeps QA only. ztools takes `selfheal`, the Camoufox rows and the
-  platform gate (`install.sh` sources its `platform.sh`) from it; B1 landed in v3.12.0.
+  platform gate (`install.sh` sources the library's shell form of it) from it; B1 landed in v3.12.0.
 - **The `png` duplicate is closed by patching to upstream, not by a vendored fork** (owner,
   OW.30, `359dc9b`).
 
