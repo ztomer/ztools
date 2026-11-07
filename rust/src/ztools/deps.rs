@@ -167,10 +167,10 @@ impl Host for SystemHost {
         }
         let stderr = String::from_utf8_lossy(&stderr_bytes);
         let last = stderr.lines().rev().find(|l| !l.trim().is_empty());
-        Err(match last {
-            Some(line) => format!("{}: {}", status, line.trim()),
-            None => status.to_string(),
-        })
+        Err(last.map_or_else(
+            || status.to_string(),
+            |line| format!("{status}: {}", line.trim()),
+        ))
     }
 
     fn say(&self, line: &str) {

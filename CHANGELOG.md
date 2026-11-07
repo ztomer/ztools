@@ -6,6 +6,12 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## v3.11.1 — Non-interactive Camoufox streaming fetch _(2026-11-07)_
+
+### Changed
+- `rust/src/ztools/deps.rs`: camoufox browser fetch uses non-interactive prefix (`printf 'y\n' | python3 -u -c ...`)
+  and streaming progress output, preventing hangs when Camoufox self-heals in unattended runs.
+
 ## v3.11.0 — Camoufox 0.5.9 and browser 158.0.1-beta.41 _(2026-11-05)_
 
 ### Changed
