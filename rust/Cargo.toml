@@ -80,6 +80,13 @@ toml = "1"
 # Format-preserving edits: `ztools weekend exclude` rewrites the operator's
 # conf/weekend.toml and must keep its comments and table order (F1).
 toml_edit = "0.25"
+# The house's shared library (LIB.1): selfheal and the Camoufox dependency rows
+# live there, once, for ztools, sys_updater and app_updates. A git dependency
+# pinned to a TAG -- never a branch, never a path to a sibling checkout (the
+# release kit builds from `git archive HEAD`, where no sibling exists). The repo
+# is private: cargo fetches it through git's credential helper. The version is
+# stated as well as the tag for cargo-deny (`wildcards = "deny"`), as with camoufox.
+house-lib = { git = "https://github.com/ztomer/house-lib", tag = "v0.1.0", version = "0.1.0" }
 
 [dev-dependencies]
 serial_test = "4"

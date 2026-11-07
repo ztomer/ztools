@@ -2,8 +2,10 @@
 //!
 //! The ONE place every external binary, browser and Python module ztools
 //! shells out to or loads is declared, with its install command. The shape that probes and
-//! installs is [`crate::ztools::selfheal`]; this file is only the table and
-//! the real [`Host`].
+//! installs is [`house_lib::selfheal`], and the rows several tools share (brew,
+//! python3, the Camoufox package and browser, with their pins and the fetch
+//! script) are [`house_lib::rows`]; this file is only the table and the real
+//! [`Host`].
 //!
 //! Homebrew cannot pin a formula to an exact version, so a brew row's `pin` is
 //! the version ztools was verified against and `brew install` takes the
@@ -12,75 +14,20 @@
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use crate::ztools::selfheal::{Dependency, Health, Host, Probe, ensure, switched_off};
+use house_lib::rows;
+use house_lib::selfheal::{Dependency, Health, Host, Probe, ensure, switched_off};
 
 /// The switch that turns installing off (`0`/`off`/`no`/`false`).
 pub const SWITCH: &str = "ZTOOLS_SELF_HEAL";
 
-/// The Camoufox browser build the collector is verified against.
-pub const CAMOUFOX_BROWSER_PIN: &str = "158.0.1-beta.41";
-
-/// The first four words of the browser fetch: a shell that answers the
-/// CLI's "Continue with prerelease installation?" prompt, hooks download
-/// progress, and runs the fetch for the spec in `$1`.
-pub const CAMOUFOX_FETCH_PREFIX: [&str; 4] = [
-    "/bin/sh",
-    "-c",
-    "# camoufox fetch\nprintf 'y\\n' | python3 -u -c '\nimport camoufox.pkgman as p\no=p.webdl\ndef w(u,**k):\n l=[-1]\n def c(d,t):\n  if not t:return\n  p=int(d*100/t)\n  if d==t and l[0]!=100:l[0]=100;print(f\"Camoufox download: 100% ({d/1048576:.1f}/{t/1048576:.1f} MB)\",flush=True)\n  elif p!=l[0] and p>0 and p%10==0:l[0]=p;print(f\"Camoufox download: {p}% ({d/1048576:.1f}/{t/1048576:.1f} MB)\",flush=True)\n return o(u,**{**k,\"bar\":False,\"progress_callback\":c})\np.webdl=w\nfrom camoufox.__main__ import cli\ncli()\n' fetch \"$1\"",
-    "sh",
-];
-
 /// Every runtime dependency, prerequisites before the rows that need them.
 pub const TABLE: &[Dependency] = &[
+    rows::BREW,
+    rows::PYTHON3,
+    rows::CAMOUFOX_PACKAGE,
     Dependency {
-        name: "brew",
-        pin: "7.0",
-        needed_for: "installing every other row",
-        probe: Probe::Command("brew"),
-        install: &[],
-        requires: &[],
-        manual: "Homebrew installs itself interactively; run the installer from https://brew.sh once",
-    },
-    Dependency {
-        name: "python3",
-        pin: "3.15",
-        needed_for: "the Camoufox installer",
-        probe: Probe::Command("python3"),
-        install: &["brew", "install", "python@3.15"],
-        requires: &["brew"],
-        manual: "",
-    },
-    Dependency {
-        name: "camoufox-python",
-        pin: "0.5.9",
-        needed_for: "fetching the Camoufox browser",
-        probe: Probe::PythonModule("camoufox"),
-        install: &[
-            "python3",
-            "-m",
-            "pip",
-            "install",
-            "--user",
-            "--break-system-packages",
-            "camoufox==0.5.9",
-        ],
-        requires: &["python3"],
-        manual: "",
-    },
-    Dependency {
-        name: "camoufox-browser",
-        pin: CAMOUFOX_BROWSER_PIN,
         needed_for: "the twitter timeline collector",
-        probe: Probe::Located("camoufox-browser"),
-        install: &[
-            CAMOUFOX_FETCH_PREFIX[0],
-            CAMOUFOX_FETCH_PREFIX[1],
-            CAMOUFOX_FETCH_PREFIX[2],
-            CAMOUFOX_FETCH_PREFIX[3],
-            "official/158.0.1-beta.41",
-        ],
-        requires: &["camoufox-python"],
-        manual: "",
+        ..rows::CAMOUFOX_BROWSER
     },
     Dependency {
         name: "bat",
@@ -211,8 +158,8 @@ pub fn ensure_system(name: &str) -> Health {
 ///
 /// When any row stays unavailable — the table says which, and why.
 pub fn cli() -> anyhow::Result<()> {
-    let rows = crate::ztools::selfheal::ensure_all(TABLE, &SystemHost);
-    print!("{}", crate::ztools::selfheal::render(&rows));
+    let rows = house_lib::selfheal::ensure_all(TABLE, &SystemHost);
+    print!("{}", house_lib::selfheal::render(&rows));
     let down: Vec<&str> = rows
         .iter()
         .filter(|(_, h)| h.location().is_none())
@@ -228,7 +175,7 @@ pub fn cli() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ztools::selfheal::lookup;
+    use house_lib::selfheal::lookup;
 
     #[test]
     fn every_prerequisite_names_a_row_declared_before_it() {
@@ -248,7 +195,7 @@ mod tests {
     #[test]
     fn the_browser_row_installs_exactly_its_pin() {
         let row = lookup(TABLE, "camoufox-browser").unwrap();
-        assert!(row.install.last().unwrap().ends_with(CAMOUFOX_BROWSER_PIN));
+        assert!(row.install.last().unwrap().ends_with(row.pin));
         let pkg = lookup(TABLE, "camoufox-python").unwrap();
         assert!(pkg.install.last().unwrap().ends_with(pkg.pin));
     }

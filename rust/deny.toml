@@ -175,6 +175,8 @@ unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
     "https://github.com/image-rs/image-png",
+    # The house's own shared library (LIB.1), pinned to a tag in Cargo.toml.
+    "https://github.com/ztomer/house-lib",
 ]
 
 # -----------------------------------------------------------------------------

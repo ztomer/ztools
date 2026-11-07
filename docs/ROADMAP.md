@@ -145,7 +145,7 @@ Goal: one private library repo holds the code ztools, sys_updater and app_update
 copies. Depends on nothing in Phase H. Size: L across three repos.
 
 ### B1 — ztools' copies move into the private shared library
-- **Class:** one fact, several tracked copies that can drift. Measured 2026-11-07: `rust/src/ztools/selfheal.rs`
+- **Class:** one fact, several tracked copies that can drift. Measured 2026-11-07: ztools' `selfheal.rs` (deleted on branch `lib1-house-lib`)
   is byte-identical to app_updates' and sys_updater's copies (sha256 `10c5db5e…`, 217 lines each).
   The browser work of v3.11.0 and v3.11.1 WIDENED the duplication: the Camoufox rows in
   `rust/src/ztools/deps.rs` (the `camoufox==0.5.9` pin, the browser pin `158.0.1-beta.41`, and
@@ -155,11 +155,18 @@ copies. Depends on nothing in Phase H. Size: L across three repos.
 - **Why now:** the owner ruled the library (rulings above); every Camoufox bump is now two
   hand-edits that must agree, and nothing checks that they do.
 - **Done when:** the library repo holds `selfheal`, the Camoufox dependency rows and their fetch
-  script; `rust/src/ztools/selfheal.rs` is deleted and ztools depends on the library; a clean
+  script; ztools' own `selfheal.rs` is deleted and ztools depends on the library; a clean
   clone builds (the release kit builds from `git archive`, so the dependency must be reachable
   from a clean clone); ztools is released and installed.
-- **Blocked by:** nothing for the core; the owner's OW.85 answer decides only whether goh-tui
-  moves in too.
+- **State (2026-11-07):** the library exists (`ztomer/house-lib`, PRIVATE, tag `v0.1.0`), and
+  this repo's migration of `selfheal` and the Camoufox rows is on branch `lib1-house-lib`
+  (which also ends the `printf 'y'` drift). NOT on main: `install.sh`'s platform gate still
+  carries its own copy (house-lib's platform.sh replaces it in part 2).
+- **Blocked by:** the owner -- a PRIVATE dependency of a PUBLIC repo. (1) CI cannot fetch it with
+  the job token: it needs a read-only deploy key on house-lib plus an Actions secret here.
+  (2) The public tap formula builds from the tag tarball with `cargo install`, which cannot
+  fetch a private repo for anyone without access. Make house-lib public, ship the tap as a
+  prebuilt binary, or make ztools private. OW.85 is answered: goh-tui stays in goh.
 
 ## Sources consolidated (2026-10-12)
 

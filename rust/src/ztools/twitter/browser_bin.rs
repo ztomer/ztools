@@ -127,7 +127,7 @@ pub fn resolve_or_install() -> anyhow::Result<PathBuf> {
         return Ok(resolve()?);
     }
     match crate::ztools::deps::ensure_system("camoufox-browser") {
-        crate::ztools::selfheal::Health::Unavailable(why) => {
+        house_lib::selfheal::Health::Unavailable(why) => {
             anyhow::bail!("the Camoufox browser is unavailable — {why}")
         }
         health => Ok(PathBuf::from(health.location().unwrap_or_default())),
