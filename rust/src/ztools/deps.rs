@@ -20,6 +20,16 @@ pub const SWITCH: &str = "ZTOOLS_SELF_HEAL";
 /// The Camoufox browser build the collector is verified against.
 pub const CAMOUFOX_BROWSER_PIN: &str = "158.0.1-beta.41";
 
+/// The first four words of the browser fetch: a shell that answers the
+/// CLI's "Continue with prerelease installation?" prompt, hooks download
+/// progress, and runs the fetch for the spec in `$1`.
+pub const CAMOUFOX_FETCH_PREFIX: [&str; 4] = [
+    "/bin/sh",
+    "-c",
+    "# camoufox fetch\nprintf 'y\\n' | python3 -u -c '\nimport camoufox.pkgman as p\no=p.webdl\ndef w(u,**k):\n l=[-1]\n def c(d,t):\n  if not t:return\n  p=int(d*100/t)\n  if d==t and l[0]!=100:l[0]=100;print(f\"Camoufox download: 100% ({d/1048576:.1f}/{t/1048576:.1f} MB)\",flush=True)\n  elif p!=l[0] and p>0 and p%10==0:l[0]=p;print(f\"Camoufox download: {p}% ({d/1048576:.1f}/{t/1048576:.1f} MB)\",flush=True)\n return o(u,**{**k,\"bar\":False,\"progress_callback\":c})\np.webdl=w\nfrom camoufox.__main__ import cli\ncli()\n' fetch \"$1\"",
+    "sh",
+];
+
 /// Every runtime dependency, prerequisites before the rows that need them.
 pub const TABLE: &[Dependency] = &[
     Dependency {
@@ -63,10 +73,10 @@ pub const TABLE: &[Dependency] = &[
         needed_for: "the twitter timeline collector",
         probe: Probe::Located("camoufox-browser"),
         install: &[
-            "python3",
-            "-m",
-            "camoufox",
-            "fetch",
+            CAMOUFOX_FETCH_PREFIX[0],
+            CAMOUFOX_FETCH_PREFIX[1],
+            CAMOUFOX_FETCH_PREFIX[2],
+            CAMOUFOX_FETCH_PREFIX[3],
             "official/158.0.1-beta.41",
         ],
         requires: &["camoufox-python"],
@@ -117,19 +127,49 @@ impl Host for SystemHost {
             return Err(format!("self-heal is off ({SWITCH})"));
         }
         let (program, rest) = argv.split_first().ok_or("empty install command")?;
-        let out = Command::new(program)
+        let mut child = Command::new(program)
             .args(rest)
             .stdin(Stdio::null())
-            .output()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
             .map_err(|e| format!("cannot run {program}: {e}"))?;
-        if out.status.success() {
+
+        let stdout = child.stdout.take();
+        let stderr_reader = {
+            let mut stderr = child.stderr.take();
+            std::thread::spawn(move || {
+                let mut buf = Vec::new();
+                if let Some(ref mut s) = stderr {
+                    let _ = std::io::Read::read_to_end(s, &mut buf);
+                }
+                buf
+            })
+        };
+
+        if let Some(out) = stdout {
+            use std::io::BufRead;
+            for line in std::io::BufReader::new(out).lines().map_while(Result::ok) {
+                let trimmed = line.trim();
+                if !trimmed.is_empty() {
+                    self.say(trimmed);
+                }
+            }
+        }
+
+        let status = child
+            .wait()
+            .map_err(|e| format!("cannot wait for {program}: {e}"))?;
+        let stderr_bytes = stderr_reader.join().unwrap_or_default();
+
+        if status.success() {
             return Ok(());
         }
-        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stderr = String::from_utf8_lossy(&stderr_bytes);
         let last = stderr.lines().rev().find(|l| !l.trim().is_empty());
         Err(match last {
-            Some(line) => format!("{}: {}", out.status, line.trim()),
-            None => out.status.to_string(),
+            Some(line) => format!("{}: {}", status, line.trim()),
+            None => status.to_string(),
         })
     }
 
