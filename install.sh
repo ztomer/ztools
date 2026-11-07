@@ -63,85 +63,58 @@ unset _install_helper
 # ── Platform gate ──────────────────────────────────────────────────────────────
 # House policy: 64-bit only; macOS is Apple silicon ONLY (Intel Macs are dropped);
 # Linux keeps x86_64 and aarch64. Every other combination is a HARD FAILURE, never
-# a warn-and-build-anyway `case` fallback — that silently ships a binary nobody
-# tested on this platform, which is exactly the class this gate exists to stop.
-# "Drop Intel" is macOS-specific: the Linux x86_64 path is still supported, so no
-# x86_64 code path may be deleted without checking that first.
-SUPPORTED_PLATFORMS="macOS/arm64, Linux/x86_64, Linux/aarch64"
-
-# `uname`'s own spellings, so the failure names what was found rather than what we
-# normalised it to. ${VAR:-$(...)} evaluates the substitution only when VAR is
-# unset, so the seam costs no uname call.
+# a warn-and-build-anyway `case` fallback.
+#
+# THE DECISION IS THE SHARED LIBRARY'S (LIB.1), not this file's. house-lib carries
+# the policy once: in Rust (`house_lib::platform::check`, compiled into its
+# build.rs too, so the library refuses to build for a target outside the set) and
+# in shell (`platform.sh` beside its Cargo.toml, held to the Rust form over every
+# spelling by the library's own tests). This script used to carry a third copy,
+# whose spellings had drifted from the other two. It is found through cargo's
+# dependency graph, so the shell gate is always the one from the tag
+# rust/Cargo.toml names, never a sibling checkout. This repo keeps only the seam.
+#
+# `uname`'s own spellings, so the failure names what was found. ${VAR:-$(...)}
+# evaluates the substitution only when VAR is unset, so the seam costs no uname call.
 UNAME_OS="${ZTOOLS_OS:-$(uname -s)}"
 UNAME_ARCH="${ZTOOLS_ARCH:-$(uname -m)}"
 
-# Normalise to ONE spelling per platform, so the accept set below is exactly three
-# pairs rather than a growing list of aliases: macOS reports the silicon as arm64
-# and Linux as aarch64; both call x86-64 x86_64, but Linux may say amd64.
-case "$UNAME_OS" in
-    Darwin) OS="macOS" ;;
-    Linux)  OS="Linux" ;;
-    *)      OS="$UNAME_OS" ;;
-esac
-case "$UNAME_ARCH" in
-    x86_64 | amd64) ARCH="x86_64" ;;
-    arm64 | aarch64)
-        # Same silicon, two names. Keep the macOS spelling on macOS so the pair
-        # printed by the gate is the pair an operator would recognise.
-        if [ "$OS" = "macOS" ]; then ARCH="arm64"; else ARCH="aarch64"; fi
-        ;;
-    *) ARCH="$UNAME_ARCH" ;;
-esac
+# cargo and jq are named BEFORE their first use, which is now the gate itself:
+# `cargo metadata` READS the graph (it fetches house-lib, builds nothing). A host
+# that cannot read the graph does not install unchecked: it stops here, named.
+require_commands cargo jq
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+if ! HOUSE_LIB_MANIFEST="$(cargo metadata --manifest-path "$ROOT/rust/Cargo.toml" \
+        --format-version 1 2>/dev/null \
+        | jq -er '.packages[] | select(.name == "house-lib") | .manifest_path')"; then
+    die "cannot find house-lib's platform gate: cargo metadata over $ROOT/rust/Cargo.toml failed, or names no house-lib package."
+fi
+HOUSE_PLATFORM_SH="${HOUSE_LIB_MANIFEST%/*}/platform.sh"
+[ -f "$HOUSE_PLATFORM_SH" ] \
+    || die "house-lib's platform.sh is not beside its manifest ($HOUSE_LIB_MANIFEST)."
+# shellcheck source=/dev/null
+. "$HOUSE_PLATFORM_SH"
+house_platform_check "$UNAME_OS" "$UNAME_ARCH" || die "refusing to build or install ztools here."
 
-# 64-bit first, on every OS: an arch that is not one of the three 64-bit names is
-# never a warning, whatever the OS says. A 32-bit build has never been compiled,
-# run or tested here.
-case "$ARCH" in
-    arm64 | x86_64 | aarch64) ;;
-    *)
-        die "unsupported platform: ${OS}/${ARCH} (uname reported ${UNAME_OS}/${UNAME_ARCH}).
-  64-bit only — arm64, aarch64 or x86_64; 32-bit is never supported.
-  Supported: ${SUPPORTED_PLATFORMS}."
-        ;;
-esac
-
-case "$OS" in
-    macOS)
-        if [ "$ARCH" != "arm64" ]; then
-            die "unsupported platform: ${OS}/${ARCH} (uname reported ${UNAME_OS}/${UNAME_ARCH}).
-  macOS is Apple silicon ONLY — Intel Macs are dropped.
-  Linux x86_64 and Linux aarch64 remain supported.
-  Supported: ${SUPPORTED_PLATFORMS}."
-        fi
-        ;;
-    Linux) ;;
-    *)
-        die "unsupported platform: ${OS}/${ARCH} (uname reported ${UNAME_OS}/${UNAME_ARCH}).
-  Unsupported OS — macOS (arm64) or Linux (x86_64/aarch64) only.
-  Supported: ${SUPPORTED_PLATFORMS}."
-        ;;
-esac
-
-# Test seam: stop HERE, after the gate and before any build, install or command
-# requirement — so both directions are testable on one machine (reject for every
+# Test seam: stop HERE, after the gate and before any build, install or Homebrew
+# requirement -- so both directions are testable on one machine (reject for every
 # unsupported pair, accept for each supported one) and no test can ever install a
 # binary as a side effect of checking the gate.
 if [ "${ZTOOLS_PLATFORM_CHECK_ONLY:-}" = "1" ]; then
-    ok "gate ok: ${OS}/${ARCH}"
+    ok "gate ok: ${UNAME_OS}/${UNAME_ARCH}"
     exit 0
 fi
 
 # ── Dependencies ───────────────────────────────────────────────────────────────
-# Named, checked, and BEFORE the first use — including before "$(brew --prefix)",
-# which used to be called at the top of the file: on Linux with no Homebrew the
-# script died with "brew: command not found", naming a missing package rather than
-# the unsupported platform it was a symptom of.
-require_commands cargo jq
-if [ "$OS" = "macOS" ]; then
-    require_commands brew
-fi
+# brew is named AFTER the gate and only on macOS: before, on Linux with no
+# Homebrew the script died with "brew: command not found", naming a missing
+# package rather than the unsupported platform it was a symptom of. The gate has
+# accepted the pair, so a Darwin-spelled OS here is Apple silicon.
+case "$UNAME_OS" in
+    Darwin | macOS) require_commands brew ;;
+    *) ;;
+esac
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 # brew --prefix is only reached once brew is known to exist, on the platform whose
 # gate accepts the Homebrew layout at all.
 BIN_DIR="${ZTOOLS_INSTALL_DIR:-$(brew --prefix)/bin}"

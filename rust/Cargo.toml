@@ -84,9 +84,10 @@ toml_edit = "0.25"
 # live there, once, for ztools, sys_updater and app_updates. A git dependency
 # pinned to a TAG -- never a branch, never a path to a sibling checkout (the
 # release kit builds from `git archive HEAD`, where no sibling exists). The repo
-# is private: cargo fetches it through git's credential helper. The version is
-# stated as well as the tag for cargo-deny (`wildcards = "deny"`), as with camoufox.
-house-lib = { git = "https://github.com/ztomer/house-lib", tag = "v0.1.0", version = "0.1.0" }
+# is public (OW.93): cargo fetches it anonymously, here, in CI and in the tap.
+# The version is stated as well as the tag for cargo-deny (`wildcards = "deny"`),
+# as with camoufox.
+house-lib = { git = "https://github.com/ztomer/house-lib", tag = "v0.1.1", version = "0.1.1" }
 
 [dev-dependencies]
 serial_test = "4"

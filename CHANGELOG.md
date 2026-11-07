@@ -6,7 +6,22 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
-## v3.11.1 — Non-interactive Camoufox streaming fetch _(2026-11-07)_
+## v3.12.0 — selfheal, the Camoufox rows and the platform gate come from house-lib _(2026-11-07)_
+
+### Changed
+- `rust/src/ztools/selfheal.rs` (+ tests) and the Camoufox rows in `deps.rs` are deleted;
+  ztools depends on the shared library `house-lib` v0.1.1 (public, a git dependency pinned
+  to a tag; LIB.1). The library's browser fetch types no `y` into the installer (the
+  pinned build is a stable release and asks nothing) and refuses, naming the change, when
+  camoufox's private `pkgman.webdl` stops taking `bar`/`progress_callback`.
+- `install.sh`'s platform gate is the library's `platform.sh` (found through
+  `cargo metadata`, so it is always the tag `rust/Cargo.toml` names), called as
+  `house_platform_check`. Its own copy of the policy, whose spellings had drifted from
+  sys_updater's and app_updates', is gone. The library also accepts `macOS` as an OS
+  spelling; messages are the library's text. cargo and jq are now named BEFORE the gate
+  (it reads the dependency graph); brew is still named only after it, only on macOS.
+
+ Non-interactive Camoufox streaming fetch _(2026-11-07)_
 
 ### Changed
 - `rust/src/ztools/deps.rs`: camoufox browser fetch uses non-interactive prefix (`printf 'y\n' | python3 -u -c ...`)

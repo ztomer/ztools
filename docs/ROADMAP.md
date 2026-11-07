@@ -48,10 +48,7 @@ A dated summary, not checked by any gate; re-derive it before editing:
   (re-measured 2026-11-07). What stays is removing that patch when `png` releases (H6).
 - **The order of the open work, and who can move each item:**
   - agent-runnable now: H1 (the lockfile refresh: cargo reports 39 packages to lock in `rust/`
-    and 5 in `vendor/camoufox-rs/Cargo.lock`), then H7 (the one major behind), then B1 (the
-    shared library, umbrella LIB.1, whose core does not wait on the owner);
-  - owner-gated: one scope question inside B1 (umbrella OW.85: does goh-tui move into the
-    library too?);
+    and 5 in `vendor/camoufox-rs/Cargo.lock`), then H7 (the one major behind);
   - upstream-gated: H6 (a `png` release after 0.18.1 carrying `b2f10c6`).
 - The narrative this section used to carry (the 2026-10-14 to 2026-10-24 gate, stdin floor, CI
   and B7 bullets, and the one-line degraded-banner ruling of 2026-10-21) is history:
@@ -63,9 +60,11 @@ A dated summary, not checked by any gate; re-derive it before editing:
   that raptor failed and we're using foundation. keep it all a single line."). Written by
   `rust/src/ztools/twitter/chain.rs`; the full text of every failure stays in the run record and
   the refused answer's file under `rejected/`.
-- **Duplicated code across ztools, sys_updater and app_updates moves into ONE private shared
-  library** (owner, umbrella LIB.1, rulings OW.20/OW.22/OW.22b: "new private library for common
-  tasks. keep GOH QA only."). gates_of_heck keeps QA only.
+- **Duplicated code across ztools, sys_updater and app_updates lives in ONE shared library**,
+  `ztomer/house-lib` (owner, umbrella LIB.1, rulings OW.20/OW.22/OW.22b: "new private library
+  for common tasks. keep GOH QA only."; made PUBLIC by OW.93 so the tap builds with no
+  credential). gates_of_heck keeps QA only. ztools takes `selfheal`, the Camoufox rows and the
+  platform gate (`install.sh` sources its `platform.sh`) from it; B1 landed in v3.12.0.
 - **The `png` duplicate is closed by patching to upstream, not by a vendored fork** (owner,
   OW.30, `359dc9b`).
 
@@ -138,35 +137,6 @@ Execution order: H1, H7, then H6 when upstream allows.
   `tools/tests/test_miniz_oxide_single_version.py` is still green.
 - **Blocked by:** upstream (the next `png` release after 0.18.1). Umbrella: "a png release
   (ztools H1)" in the umbrella roadmap (`../ROADMAP-consolidated.md`, section 2) names this row's predecessor.
-
-## Phase B — the shared library (umbrella LIB.1)
-
-Goal: one private library repo holds the code ztools, sys_updater and app_updates carry as
-copies. Depends on nothing in Phase H. Size: L across three repos.
-
-### B1 — ztools' copies move into the private shared library
-- **Class:** one fact, several tracked copies that can drift. Measured 2026-11-07: ztools' `selfheal.rs` (deleted on branch `lib1-house-lib`)
-  is byte-identical to app_updates' and sys_updater's copies (sha256 `10c5db5e…`, 217 lines each).
-  The browser work of v3.11.0 and v3.11.1 WIDENED the duplication: the Camoufox rows in
-  `rust/src/ztools/deps.rs` (the `camoufox==0.5.9` pin, the browser pin `158.0.1-beta.41`, and
-  the inline fetch script that answers the prerelease prompt and prints progress) are the same
-  text as app_updates' `crates/core/src/deps.rs`, and the two repos moved them in lockstep by hand
-  (ztools `b861af8`/`7c5911c`, app_updates `13322f4`/`d68d512`).
-- **Why now:** the owner ruled the library (rulings above); every Camoufox bump is now two
-  hand-edits that must agree, and nothing checks that they do.
-- **Done when:** the library repo holds `selfheal`, the Camoufox dependency rows and their fetch
-  script; ztools' own `selfheal.rs` is deleted and ztools depends on the library; a clean
-  clone builds (the release kit builds from `git archive`, so the dependency must be reachable
-  from a clean clone); ztools is released and installed.
-- **State (2026-11-07):** the library exists (`ztomer/house-lib`, PRIVATE, tag `v0.1.0`), and
-  this repo's migration of `selfheal` and the Camoufox rows is on branch `lib1-house-lib`
-  (which also ends the `printf 'y'` drift). NOT on main: `install.sh`'s platform gate still
-  carries its own copy (house-lib's platform.sh replaces it in part 2).
-- **Blocked by:** the owner -- a PRIVATE dependency of a PUBLIC repo. (1) CI cannot fetch it with
-  the job token: it needs a read-only deploy key on house-lib plus an Actions secret here.
-  (2) The public tap formula builds from the tag tarball with `cargo install`, which cannot
-  fetch a private repo for anyone without access. Make house-lib public, ship the tap as a
-  prebuilt binary, or make ztools private. OW.85 is answered: goh-tui stays in goh.
 
 ## Sources consolidated (2026-10-12)
 
