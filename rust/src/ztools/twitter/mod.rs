@@ -151,7 +151,7 @@ pub const SUMMARY_SAMPLING: crate::ztools::llm::Sampling = crate::ztools::llm::S
 };
 
 /// Environment override for the summary's temperature, for one run: the seam
-/// the loop-rate measurement (`docs/MODEL_QUIRKS.md`, roadmap T2) runs
+/// the loop-rate measurement (`docs/MODEL_QUIRKS.md`) runs
 /// through, like `TWITTER_FALLBACK_MODELS` for the chain.
 pub const TEMPERATURE_ENV: &str = "TWITTER_TEMPERATURE";
 

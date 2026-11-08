@@ -1,6 +1,6 @@
 # The gate of record, on every push and pull request.
 #
-# WHY THIS EXISTS (ROADMAP Phase L, item L2 -- decided 2026-10-06). The gate used
+# WHY THIS EXISTS (decided 2026-10-06; the plan that carried it: `git show 6a10475:docs/ROADMAP.md`). The gate used
 # to run only from a pre-push hook, and `core.hooksPath` is local config: a fresh
 # clone had no gate at all, and nothing outside this machine ever checked a commit.
 # This job runs the SAME step list -- `make ci` -> gates_of_heck's local_ci.sh ->
@@ -10,7 +10,7 @@
 # install.sh rejects macOS Intel, and the eval and twitter paths are macOS-first.
 #
 # gates_of_heck is cloned at a NAMED release (GOH_TAG), never main (owner ruling
-# 2026-11-08, CI.PUBLIC; this closes ROADMAP G6). Its install.sh is the documented
+# 2026-11-08, CI.PUBLIC; recorded under "Rulings in force" in docs/ROADMAP.md). Its install.sh is the documented
 # bootstrap: it builds the native `goh` binary the structural layer execs. Raise GOH_TAG
 # deliberately, in its own commit, when ztools adopts a newer gate.
 
@@ -66,7 +66,7 @@ jobs:
             rust
             vendor/camoufox-rs
 
-      # THE TOOLS ONLY THIS REPO'S OWN STEPS NEED (ROADMAP G4). `cargo deny
+      # THE TOOLS ONLY THIS REPO'S OWN STEPS NEED (decided 2026-10-05). `cargo deny
       # --manifest-path rust/Cargo.toml check` is a step .gatesrc added
       # (2026-10-05), and gates_of_heck's manifest cannot name it: it lists the
       # tools ITS gates refuse without, and it has no way to know a consumer grew
@@ -128,7 +128,7 @@ jobs:
         with:
           goh-dir: ${{ env.GOH_DIR }}
 
-      # THE GATE'S OWN MANIFEST, NOT A COPY OF IT (ROADMAP G4). Run 37855122727
+      # THE GATE'S OWN MANIFEST, NOT A COPY OF IT. Run 37855122727
       # died at step 1/12 with `cargo-machete is not installed, and this gate
       # does not pass without the step it runs`, because .gatesrc's rust step
       # needs it and this workflow's hand-copied tool list did not have it. The

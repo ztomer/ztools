@@ -31,13 +31,14 @@ ANNOTATED_DONE = re.compile(r"(?i)\b(closed|shipped|landed|done|fixed)\s+(on\s+)
 # Repo paths worth checking: rooted at a directory this repo has, or a root file.
 PATH_ROOTS = ("rust/", "tools/", "docs/", "conf/", "bin/", "vendor/", ".githooks/", ".cargo/")
 ROOT_FILES = re.compile(r"^[\w.-]+\.(md|toml|sh|jsonc?|lock)$|^\.gatesrc$")
-INBOUND = re.compile(r"ROADMAP(?:\.md)?`?\s+([A-Z]\d+)\b")
+# Case-insensitive on the word: prose writes "roadmap T2" as often as "ROADMAP T2".
+INBOUND = re.compile(r"(?i:ROADMAP)(?:\.md)?`?\s+([A-Z]\d+)\b")
 # The same reference written the other way round, which is how prose usually puts it:
 # "that mechanism is `X6` in `docs/ROADMAP.md`". Both word orders name the same
 # promise, so a check that only knows one of them cannot see half the references
 # it is here to resolve (P4: rust-toolchain.toml's X6, which has never existed).
 INBOUND_REVERSED = re.compile(r"`?([A-Z]\d+)`?\s+(?:in|see|per)\s+`?(?:docs/)?ROADMAP(?:\.md)?`?")
-STALE_INBOUND = re.compile(r"ROADMAP(?:\.md)?`?\s+(?:item|Phase)\s+\w")
+STALE_INBOUND = re.compile(r"(?i:ROADMAP)(?:\.md)?`?\s+(?:item|Phase)\s+\w")
 
 
 def items(text: str) -> dict[str, str]:
@@ -102,25 +103,37 @@ def unresolved_inbound(defined: set[str], sources: dict[str, str]) -> list[str]:
 
 
 def inbound_sources() -> dict[str, str]:
-    globs = [
-        "*.md",
-        # Root *.toml: rust-toolchain.toml carries a roadmap pointer in a comment, and
-        # a check that only globs docs/ cannot see a file the compiler reads (P4).
-        "*.toml",
-        "docs/*.md",
-        "rust/src/**/*.rs",
-        "tools/**/*.py",
-        "tools/**/*.sh",
-        "conf/**/*.toml",
-        "tools/**/*.jsonc",
-    ]
+    """Every tracked text file, from `git ls-files`.
+
+    This used to be a glob list, and each list missed somewhere a pointer lives: root
+    `*.toml` (P4, X6), then `.github/workflows/ci.yml`, which cited `ROADMAP G6`, `G4`
+    and `Phase L` for weeks after the roadmap dropped them. The tracked set is the
+    only list that cannot fall behind the tree.
+    """
+    import subprocess
+
+    listed = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-files", "-z"],
+        capture_output=True,
+        check=True,
+        stdin=subprocess.DEVNULL,
+    ).stdout.decode()
     skip = {ROADMAP, ROOT / "CHANGELOG.md", Path(__file__).resolve()}
     out = {}
-    for g in globs:
-        for p in ROOT.glob(g):
-            if p.resolve() not in skip and ".claude" not in p.parts:
-                out[str(p.relative_to(ROOT))] = p.read_text(errors="replace")
+    for rel in filter(None, listed.split("\0")):
+        p = ROOT / rel
+        if p.resolve() in skip or not p.is_file() or rel.startswith("vendor/"):
+            continue
+        raw = p.read_bytes()
+        if b"\0" in raw[:8192]:
+            continue
+        out[rel] = raw.decode(errors="replace")
     return out
+
+
+def test_inbound_sources_reads_the_workflow() -> None:
+    # The glob list never saw .github/; a source set that loses it again is red here.
+    assert ".github/workflows/ci.yml" in inbound_sources()
 
 
 # --- the real file -------------------------------------------------------------

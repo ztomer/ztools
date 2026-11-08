@@ -1321,7 +1321,7 @@ value does not fight the `(@handle | timestamp)` tokens every bullet repeats. Th
 speculative (DFlash) path carries a "frequency_penalty needs per-step logits" string;
 whether that falls back to ordinary decoding or refuses was not measured.
 
-### Loop rate at temperature 0 and 0.1, measured 2026-10-10 (roadmap T2)
+### Loop rate at temperature 0 and 0.1, measured 2026-10-10
 
 One cached 43-tweet timeline, `raptor-v0.5-8b-a1b-jang_6m`, 5 runs at each setting,
 `TWITTER_TEMPERATURE=<t> TWITTER_FALLBACK_MODELS=no-such-model ztools twitter-summarize
