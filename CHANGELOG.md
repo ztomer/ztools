@@ -6,6 +6,26 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## v3.13.0 — the twitter summarizer verifies its feed and has a tier off this Mac _(2026-11-07)_
+
+### Fixed
+- The Following-tab switch is VERIFIED (RT.TWFAIL a): the old wait accepted "a tab is
+  selected", which For You always is, so a click that fired before the tab bar was ready
+  passed, the run scrolled For You for minutes and failed with "the feed never switched"
+  and no detail (2026-11-01 noon, 2026-11-07 morning). The collector now waits up to 20s for
+  the Following tab, clicks it up to 3 times, and proceeds only when that tab itself is
+  `aria-selected`; otherwise it fails at once naming the selected tab, every tab, which term
+  matched, and the page (`twitter::tabs`). The positional "second tab" fallback is gone: a
+  second tab that is not Following is the wrong feed.
+
+### Added
+- A summary tier OFF this Mac (RT.TWFAIL b): on 2026-11-07 the Osaurus server was not
+  running and `fm`'s terms were not agreed, so both tiers of the chain failed together.
+  `conf/twitter.toml [fallback]` now ends in `pool`, answered by token-pool's free remote
+  pools (class `bulk_read`, never private) through the pool's own MCP server on rmcp
+  (`ztools::pool`); its `pool` key names the command. A test holds the class: the shipped
+  chain must reach a backend that is neither osaurus nor `fm`.
+
 ## v3.12.2 — one ztools on PATH _(2026-11-07)_
 
 ### Fixed

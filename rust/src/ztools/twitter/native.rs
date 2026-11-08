@@ -25,40 +25,18 @@ use super::collect::{
 use super::cookies::{self, Cookie};
 use super::endpoints::load_endpoint_markers;
 use super::session;
+use super::tabs::{TAB_STATE_JS, TabState, click_js, following_terms};
 
 /// Timeline page, wait bounds, and scroll pacing from `browser.py`.
 pub const TWITTER_HOME_URL: &str = "https://x.com/home";
 pub const PAGE_LOAD_TIMEOUT: Duration = Duration::from_secs(30);
 pub const INITIAL_PAGE_WAIT: Duration = Duration::from_secs(3);
-pub const TAB_SWITCH_WAIT: Duration = Duration::from_secs(2);
+pub const TAB_SWITCH_WAIT: Duration = Duration::from_secs(4);
+/// How long the Following tab may take to appear after the page loads.
+pub const TABLIST_WAIT: Duration = Duration::from_secs(20);
+/// Clicks on the Following tab before the switch is declared failed.
+pub const SWITCH_ATTEMPTS: u32 = 3;
 pub const SCROLL_PAUSE: Duration = Duration::from_millis(1800);
-/// Localized "Following" labels, in `browser.py` order, overridable via
-/// `TWITTER_FOLLOWING_TAB` (comma-separated).
-pub const FOLLOWING_TERMS: &[&str] = &[
-    "Following",
-    "Abonnements",
-    "Siguiendo",
-    "Sigo",
-    "Gefolgt",
-    "关注",
-    "フォロー中",
-];
-
-fn following_terms() -> Vec<String> {
-    if let Ok(raw) = std::env::var("TWITTER_FOLLOWING_TAB") {
-        let terms: Vec<String> = raw
-            .split(',')
-            .map(str::trim)
-            .filter(|t| !t.is_empty())
-            .map(str::to_owned)
-            .collect();
-        if !terms.is_empty() {
-            return terms;
-        }
-    }
-    FOLLOWING_TERMS.iter().map(ToString::to_string).collect()
-}
-
 fn extract(value: &serde_json::Value) -> serde_json::Value {
     value
         .get("result")
@@ -210,43 +188,61 @@ fn inject_cookies(ctx: &camoufox::api::BrowserContext, cookies: &[Cookie]) -> Re
     Ok(())
 }
 
-/// Click the Following tab via injected JS (there is no locator API in
-/// `camoufox-rs`; with humanize off a synthetic `.click()` lands — the
-/// animated-cursor timeouts that forced `force=True` in Python do not apply).
-/// Tolerant: a missing tab keeps the current view, exactly like the Python
-/// fallback chain (localized terms → second tab → warn and continue).
-fn switch_to_following(frame: &camoufox::api::MainFrame) {
-    let terms_json = serde_json::to_string(&following_terms()).unwrap_or_else(|_| "[]".to_string());
-    let script = format!(
-        "(function() {{ \
-           const terms = {terms_json}; \
-           const tabs = Array.from(document.querySelectorAll('[role=\"tab\"]')); \
-           for (const term of terms) {{ \
-             const hit = tabs.find(t => (t.innerText || '').includes(term)); \
-             if (hit) {{ hit.click(); return 'term:' + term; }} \
-           }} \
-           if (tabs.length > 1) {{ tabs[1].click(); return 'fallback-index-1'; }} \
-           return 'none'; \
-         }})()"
-    );
-    let clicked = eval_text(frame, &script, "following tab click").unwrap_or_default();
-    if clicked == "none" {
-        eprintln!("· could not locate 'Following' tab (defaulting to current view)");
-        return;
+/// Read the page's tab bar ([`TAB_STATE_JS`]); an unreadable page is an
+/// empty state, which says so when described.
+fn tab_state(frame: &camoufox::api::MainFrame) -> TabState {
+    TabState::parse(&eval_text(frame, TAB_STATE_JS, "tab state").unwrap_or_default())
+}
+
+/// Switch the timeline to Following and VERIFY it: the Following tab itself
+/// must carry `aria-selected="true"`.
+///
+/// Waits up to [`TABLIST_WAIT`] for that tab to exist (the bar renders after
+/// `readyState` is complete), then clicks it, up to [`SWITCH_ATTEMPTS`]
+/// times, each followed by a [`TAB_SWITCH_WAIT`] poll. There is no
+/// positional fallback: a second tab that is not Following is the wrong feed.
+///
+/// # Errors
+///
+/// When the switch is never verified, naming what the page showed: which tab
+/// was selected, which tabs existed and whether a term matched
+/// ([`TabState::describe`]). Scrolling For You for minutes and then reporting
+/// "never switched" with no detail was the failure this replaces.
+fn switch_to_following(frame: &camoufox::api::MainFrame) -> Result<()> {
+    let terms = following_terms();
+    let started = Instant::now();
+    let appear_deadline = started + TABLIST_WAIT;
+    let mut state = tab_state(frame);
+    while state.following_index(&terms).is_none() && Instant::now() < appear_deadline {
+        std::thread::sleep(Duration::from_millis(250));
+        state = tab_state(frame);
     }
-    let deadline = Instant::now() + TAB_SWITCH_WAIT;
-    while Instant::now() < deadline {
-        let selected = eval_text(
-            frame,
-            "document.querySelector('[role=\"tab\"][aria-selected=\"true\"]') !== null",
-            "tab state",
-        )
-        .unwrap_or_default();
-        if selected == "true" {
+    for _ in 0..SWITCH_ATTEMPTS {
+        if state.following_selected(&terms) {
             break;
         }
-        std::thread::sleep(Duration::from_millis(200));
+        let _ = eval_text(frame, &click_js(&terms), "following tab click");
+        let deadline = Instant::now() + TAB_SWITCH_WAIT;
+        loop {
+            std::thread::sleep(Duration::from_millis(200));
+            state = tab_state(frame);
+            if state.following_selected(&terms) || Instant::now() >= deadline {
+                break;
+            }
+        }
     }
+    if state.following_selected(&terms) {
+        eprintln!(
+            "· switched to Following in {:.1}s",
+            started.elapsed().as_secs_f64()
+        );
+        return Ok(());
+    }
+    anyhow::bail!(
+        "the timeline did not switch to Following after {:.0}s ({SWITCH_ATTEMPTS} clicks) \u{2014} {}",
+        started.elapsed().as_secs_f64(),
+        state.describe(&terms)
+    )
 }
 
 /// Open the timeline: navigate, settle, refuse logged-out pages, switch to the
@@ -299,7 +295,7 @@ fn open_timeline(
         );
     }
 
-    switch_to_following(&frame);
+    switch_to_following(&frame)?;
     Ok(frame)
 }
 

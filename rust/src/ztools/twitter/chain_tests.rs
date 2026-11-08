@@ -11,6 +11,7 @@ fn policy() -> FallbackPolicy {
         models: s(&["foundation"]),
         preferred: s(&["foundation", "qwen", "gemma"]),
         on_device: None,
+        pool: None,
     }
 }
 
@@ -343,4 +344,58 @@ fn a_model_refusing_oversized_prompt_is_skipped_down_the_chain() {
         prov.reasons()
     );
     drop(env);
+}
+
+/// The backends that live on this Mac: the Osaurus server and `fm`. On
+/// 2026-11-07 both were down at once and the chain had nowhere else to go.
+const ON_THIS_MAC: [&str; 2] = ["osaurus", "on-device, fm"];
+
+/// The class: the shipped chain must reach a tier that is up when every
+/// service on this Mac is down. (Red before the pool tier: every model was
+/// answered by osaurus or fm.)
+#[test]
+#[serial_test::serial]
+fn the_shipped_chain_reaches_a_tier_off_this_mac() {
+    let _env = TestEnv::new();
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("conf/twitter.toml");
+    let policy = load_fallback_policy(&[path.to_string_lossy().into_owned()]).unwrap();
+    for roster in [vec![], s(&["raptor-v0.5"])] {
+        let plan = plan_chain("raptor-v0.5", &roster, &policy);
+        assert!(
+            plan.iter()
+                .any(|m| !ON_THIS_MAC.contains(&policy.backend_of(m))),
+            "every tier of {plan:?} is on this Mac"
+        );
+    }
+}
+
+#[test]
+fn a_pool_tier_survives_a_known_roster() {
+    let mut p = policy();
+    p.models = s(&["foundation", "pool"]);
+    p.pool = Some(s(&["pool-mcp"]));
+    let chain = plan_chain("gemma-x", &s(&["gemma-x"]), &p);
+    assert_eq!(chain, s(&["gemma-x", "foundation", "pool"]));
+    assert_eq!(p.backend_of("pool"), "token-pool");
+    assert_eq!(p.pool_for("pool"), Some(&s(&["pool-mcp"])[..]));
+    assert_eq!(p.pool_for("gemma-x"), None);
+}
+
+#[test]
+#[serial_test::serial]
+fn the_pool_command_loads_from_the_table() {
+    let dir = tempfile::tempdir().unwrap();
+    let good = write_conf(
+        dir.path(),
+        "[fallback]\nmodels = [\"pool\"]\npool = [\"uv\", \" run \", \"\"]\n",
+    );
+    let _env = TestEnv::new();
+    let got = load_fallback_policy(&[good]).unwrap();
+    assert_eq!(got.pool, Some(s(&["uv", "run"])));
+    // An unset pool is no pool: the name alone never reaches the server.
+    let p = policy();
+    assert_eq!(p.pool_for("pool"), None);
 }
