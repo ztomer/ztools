@@ -52,8 +52,10 @@ Builds the Rust release and installs it (with the same subcommand aliases)
 into `~/.local/bin`; `ZTOOLS_INSTALL_DIR=/elsewhere ./install.sh` targets a
 custom dir. **One owner per path:** `$(brew --prefix)/bin` belongs to the tap
 formula, and install.sh refuses it (a real file it once left there made
-`brew reinstall` fail at `brew link`). Put `~/.local/bin` ahead of the brew bin
-on PATH if the local build should win. It needs
+`brew reinstall` fail at `brew link`). **One owner per name:** when the tap's
+ztools is installed, install.sh refuses (a copy in `~/.local/bin` would shadow
+brew's silently) and names `brew upgrade ztools`; `./install.sh --dev-copy`
+installs a deliberate dev copy and says it shadows brew. It needs
 cargo and jq, and its platform gate is the shared library's (`house-lib`'s
 `platform.sh`, found through `cargo metadata`). These two
 are the only install doors; for an uninstalled dev build use

@@ -62,6 +62,7 @@ def _sandbox(tmp_path):
     (repo / "tools").mkdir(parents=True)
     (repo / "rust").mkdir()
     shutil.copy2(RELEASE, repo / "tools" / "release.sh")
+    shutil.copy2(RELEASE.parent / "path_first_check.sh", repo / "tools" / "path_first_check.sh")
     (repo / "rust" / "Cargo.toml").write_text(MANIFEST)
     (repo / "rust" / "Cargo.lock").write_text("# lock\n")
 
@@ -74,6 +75,12 @@ def _sandbox(tmp_path):
     bindir.mkdir()
     (bindir / "cargo").write_text("#!/bin/bash\nexit 0\n")
     (bindir / "cargo").chmod(0o755)
+    # After the kit, the wrapper upgrades the tap and checks the FIRST ztools on PATH
+    # (ZT.SHADOW). brew logs its argv; the "installed" ztools is the release.
+    (bindir / "brew").write_text(f'#!/bin/bash\nprintf "%s\\n" "$*" >> {tmp_path / "brew.argv"}\n')
+    (bindir / "brew").chmod(0o755)
+    (bindir / "ztools").write_text("#!/bin/sh\necho 'ztools 2.0.0'\n")
+    (bindir / "ztools").chmod(0o755)
 
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "add", "-A")
@@ -110,6 +117,7 @@ def test_dry_run_leaves_manifest_and_history_alone(tmp_path):
     assert "dry-run" in result.stderr
     argv = (tmp_path / "kit.argv").read_text().split("\n")
     assert "--dry-run" in argv
+    assert not (tmp_path / "brew.argv").exists(), "the dry run touched brew"
     assert argv[argv.index("--version") + 1] == "2.0.0"
 
 
@@ -122,3 +130,14 @@ def test_real_run_still_bumps_and_commits(tmp_path):
     assert 'version = "2.0.0"' in (repo / "rust" / "Cargo.toml").read_text()
     assert _git(repo, "log", "-1", "--format=%s") == "chore: version 2.0.0"
     assert "--dry-run" not in (tmp_path / "kit.argv").read_text().split("\n")
+    assert "upgrade ztomer/tap/ztools" in (tmp_path / "brew.argv").read_text()
+
+
+def test_real_run_fails_when_a_stale_copy_shadows_the_tap(tmp_path):
+    repo = _sandbox(tmp_path)
+    (tmp_path / "bin" / "ztools").write_text("#!/bin/sh\necho 'ztools 1.0.0'\n")
+
+    result = _release(repo, "2.0.0")
+
+    assert result.returncode != 0
+    assert "1.0.0" in result.stderr

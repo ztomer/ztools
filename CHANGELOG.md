@@ -6,6 +6,17 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## v3.12.2 — one ztools on PATH _(2026-11-07)_
+
+### Fixed
+- `install.sh` refuses, before building, when the tap's ztools is installed: a second
+  copy in `~/.local/bin` shadowed brew's silently (a stale 3.12.0 ran for every bare
+  `ztools` after 3.12.1 shipped). It names `brew upgrade ztools`; `--dev-copy` installs a
+  deliberate dev copy and says it will shadow brew (ZT.SHADOW).
+- `tools/release.sh` ends by upgrading the tap and running `tools/path_first_check.sh`,
+  which fails unless exactly one ztools is on PATH and it reports the release, naming
+  every copy found with its version.
+
 ## v3.12.1 — install.sh leaves the Homebrew bin to the tap _(2026-11-07)_
 
 ### Fixed

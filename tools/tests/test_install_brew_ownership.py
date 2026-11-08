@@ -70,7 +70,7 @@ def _setup(tmp_path):
     return prefix, stubs
 
 
-def _run(tmp_path, stubs, **extra):
+def _run(tmp_path, stubs, args=(), **extra):
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
     env = {
@@ -85,7 +85,7 @@ def _run(tmp_path, stubs, **extra):
     env.update({k: os.environ[k] for k in PASSTHROUGH if k in os.environ})
     env.update(extra)
     r = subprocess.run(
-        ["/bin/bash", str(INSTALL)],
+        ["/bin/bash", str(INSTALL), *args],
         capture_output=True,
         text=True,
         env=env,
@@ -124,3 +124,44 @@ def test_explicit_brew_bin_is_refused_before_any_write(tmp_path):
     assert r.returncode != 0
     assert "Homebrew" in r.stdout + r.stderr
     assert list((prefix / "bin").iterdir()) == []
+
+
+# ── ZT.SHADOW: two installs on one PATH shadow each other silently ──────────────
+# A stale ~/.local/bin/ztools (install.sh) came before /opt/homebrew/bin in PATH and
+# ran for every bare `ztools` after the tap shipped a newer one; brew only warned.
+# install.sh now refuses when the tap's ztools is installed (the keg's `opt` link in
+# the brew prefix is the seam: the test fakes the prefix), unless --dev-copy says the
+# shadowing is deliberate.
+
+
+def _tap_installed(prefix):
+    (prefix / "opt").mkdir(exist_ok=True)
+    (prefix / "opt" / "ztools").mkdir()
+
+
+def test_refuses_when_the_tap_owns_ztools(tmp_path):
+    prefix, stubs = _setup(tmp_path)
+    _tap_installed(prefix)
+    r, home = _run(tmp_path, stubs)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0, out
+    assert "brew upgrade ztools" in out
+    assert "--dev-copy" in out
+    assert not (home / ".local" / "bin" / "ztools").exists(), "wrote before refusing"
+
+
+def test_dev_copy_installs_and_says_it_shadows(tmp_path):
+    prefix, stubs = _setup(tmp_path)
+    _tap_installed(prefix)
+    r, home = _run(tmp_path, stubs, ["--dev-copy"])
+    out = r.stdout + r.stderr
+    assert r.returncode == 0, out
+    assert "shadow" in out.lower()
+    assert (home / ".local" / "bin" / "ztools").is_file()
+
+
+def test_unknown_argument_is_refused(tmp_path):
+    _, stubs = _setup(tmp_path)
+    r, home = _run(tmp_path, stubs, ["--bogus"])
+    assert r.returncode != 0
+    assert not (home / ".local" / "bin" / "ztools").exists()

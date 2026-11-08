@@ -10,6 +10,17 @@
 # directory: a real file it left there made the next `brew reinstall` fail at
 # `brew link` until someone ran `brew link --overwrite`.
 #
+# ARGUMENTS
+#   --dev-copy   install even though the tap's ztools is installed. The copy in
+#                ~/.local/bin will SHADOW brew's for every bare `ztools` while it
+#                comes first in PATH; the run says so.
+#
+# ONE OWNER PER NAME (ZT.SHADOW): when the tap's ztools is installed (its keg's
+# `opt` link exists under `brew --prefix`), a second copy in ~/.local/bin is a
+# second owner of the name `ztools`. The earlier one in PATH wins silently -- a
+# stale 3.12.0 here ran for every bare `ztools` after 3.12.1 shipped via brew.
+# So this script refuses, before building, unless --dev-copy says it is meant.
+#
 # ENVIRONMENT
 #   ZTOOLS_INSTALL_DIR         target dir; default "$HOME/.local/bin"
 #   ZTOOLS_OS / ZTOOLS_ARCH    OVERRIDE the platform, which otherwise comes from
@@ -62,6 +73,15 @@ else
     warn "set GOH_DIR to your gates_of_heck checkout (or run its install.sh) for the house TUI style."
 fi
 unset _install_helper
+
+DEV_COPY=0
+for _arg in "$@"; do
+    case "$_arg" in
+        --dev-copy) DEV_COPY=1 ;;
+        *) die "unknown argument: $_arg (usage: install.sh [--dev-copy])" ;;
+    esac
+done
+unset _arg
 
 # ── Platform gate ──────────────────────────────────────────────────────────────
 # House policy: 64-bit only; macOS is Apple silicon ONLY (Intel Macs are dropped);
@@ -122,6 +142,15 @@ if command -v brew >/dev/null 2>&1; then
   Use \`brew install ztomer/tap/ztools\` for that path, or leave ZTOOLS_INSTALL_DIR unset (~/.local/bin)."
     fi
     unset _resolved _brew_resolved
+    # ZT.SHADOW: the tap owns the name `ztools` once its keg is installed.
+    if [ -e "$(brew --prefix)/opt/ztools" ]; then
+        if [ "$DEV_COPY" = 1 ]; then
+            warn "--dev-copy: the tap's ztools is installed; $BIN_DIR/ztools will SHADOW $BREW_BIN/ztools wherever $BIN_DIR comes first in PATH."
+        else
+            die "the Homebrew tap's ztools is installed ($BREW_BIN/ztools); a second copy in $BIN_DIR would shadow it silently.
+  Update it with \`brew upgrade ztools\`, or pass --dev-copy to install a deliberate dev copy anyway."
+        fi
+    fi
 fi
 
 info "Building ztools native Rust release binary..."

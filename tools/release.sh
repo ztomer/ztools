@@ -64,14 +64,25 @@ fi
 # (Single-quoted on purpose: the kit runs it, exporting GOH_RELEASE_VERSION.)
 # shellcheck disable=SC2016
 # The binary install.sh just wrote, by path: install.sh never touches the brew bin
-# (ZT.BREWLINK), so a bare `ztools` could resolve to the tap's older copy.
-VERIFY='ZT_DIR="$(mktemp -d)" && ZTOOLS_INSTALL_DIR="$ZT_DIR" ./install.sh >/dev/null
+# (ZT.BREWLINK), so a bare `ztools` could resolve to the tap's older copy. The temp
+# dir is on no PATH, so --dev-copy shadows nothing (ZT.SHADOW).
+VERIFY='ZT_DIR="$(mktemp -d)" && ZTOOLS_INSTALL_DIR="$ZT_DIR" ./install.sh --dev-copy >/dev/null
   [ "$("$ZT_DIR/ztools" --version | awk "{print \$NF}")" = "$GOH_RELEASE_VERSION" ] || { echo "installed ztools is not $GOH_RELEASE_VERSION" >&2; exit 1; }
   ZTOOLS_BIN="$ZT_DIR/ztools" bash bin/ab_test >/dev/null; rc=$?; rm -rf "$ZT_DIR"; exit $rc'
 
-exec "$GOH/tools/release-kit/release.sh" --version "$V" \
+"$GOH/tools/release-kit/release.sh" --version "$V" \
   --gate "make ci" \
   --archive-build "cargo build --release --quiet --manifest-path rust/Cargo.toml" \
   --verify "$VERIFY" \
   --tap ztomer/homebrew-tap --formula ztools \
   "$@"
+
+# ZT.SHADOW: the release is done only when a bare `ztools` runs it. A stale
+# ~/.local/bin copy once came first in PATH after the tap shipped; brew only warned.
+if [ "$DRY_RUN" = 1 ]; then
+  info "[dry-run] would brew upgrade ztomer/tap/ztools and check the first ztools on PATH is $V"
+  exit 0
+fi
+brew update --quiet
+brew upgrade ztomer/tap/ztools || brew install ztomer/tap/ztools
+tools/path_first_check.sh "$V"
