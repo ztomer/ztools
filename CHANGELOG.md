@@ -11,6 +11,8 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+## v3.13.1 -- the twitter fallback stays with Apple's models
+
 ### Changed
 - The twitter summarizer's fallback stays with Apple's models (owner ruling OW.95): the
   `pool` tier (token-pool's free third-party models) and `ztools::pool` with its rmcp and
