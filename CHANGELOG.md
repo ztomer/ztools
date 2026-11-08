@@ -4,7 +4,10 @@ All notable changes to this project. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); entries are added
 with each committed batch.
 
-This file starts at v2.2.0 — earlier history is in git.
+This file starts at v2.2.0 — earlier history is in git. That is the release
+policy's cut-off: the tags before v2.2.0 (v0.4 .. v2.1.17, 56 of them) predate
+this changelog, have no stanza and get no GitHub release; their notes are
+`git log` between tags.
 
 ## v3.13.0 — the twitter summarizer verifies its feed and has a tier off this Mac _(2026-11-07)_
 
@@ -61,7 +64,7 @@ This file starts at v2.2.0 — earlier history is in git.
   spelling; messages are the library's text. cargo and jq are now named BEFORE the gate
   (it reads the dependency graph); brew is still named only after it, only on macOS.
 
- Non-interactive Camoufox streaming fetch _(2026-11-07)_
+## v3.11.1 — non-interactive Camoufox streaming fetch _(2026-11-07)_
 
 ### Changed
 - `rust/src/ztools/deps.rs`: camoufox browser fetch uses non-interactive prefix (`printf 'y\n' | python3 -u -c ...`)
@@ -1342,6 +1345,11 @@ and the sweep turned up a defect that had nothing to do with style.
   different one by construction.
 - **Five identifiers renamed whose leading underscore was a lie** — they were
   read.
+
+## v2.2.1 — history flattened _(2026-09-04)_
+
+- Version bump only (`Cargo.toml`, `Cargo.lock`, `pyproject.toml`); cut after the
+  repository history was flattened. No code change from v2.2.0.
 
 ## v2.2.0 — A Probed Interpreter, and a Gate _(2026-09-02)_
 
