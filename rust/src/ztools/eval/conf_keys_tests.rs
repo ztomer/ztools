@@ -69,7 +69,6 @@ const CONF_FILE_KEYS: &[(&str, &[&str])] = &[
             "fallback",
             "fallback.models",
             "fallback.on_device",
-            "fallback.pool",
             "fallback.preferred",
         ],
     ),

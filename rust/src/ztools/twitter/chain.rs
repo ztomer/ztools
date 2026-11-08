@@ -28,7 +28,6 @@ use std::path::Path;
 use anyhow::Result;
 
 use crate::ztools::on_device::ON_DEVICE_MODEL;
-use crate::ztools::pool::POOL_MODEL;
 
 use super::fallback::{fallback_chain, resolve_target_model};
 use super::quality::Refusal;
@@ -45,11 +44,6 @@ pub struct FallbackPolicy {
     /// The `fm` binary that answers [`ON_DEVICE_MODEL`] without the server
     /// (`[fallback] on_device`, T1). Unset, every model goes to the server.
     pub on_device: Option<String>,
-    /// The command that starts token-pool's MCP server, which answers
-    /// [`POOL_MODEL`] from free pools OFF this Mac (`[fallback] pool`).
-    /// Unset, the name is answered by nobody: it is refused, never sent to
-    /// the server.
-    pub pool: Option<Vec<String>>,
 }
 
 impl FallbackPolicy {
@@ -63,22 +57,11 @@ impl FallbackPolicy {
             .map(Path::new)
     }
 
-    /// The pool server's command when `model` is [`POOL_MODEL`] and one is
-    /// configured.
-    #[must_use]
-    pub fn pool_for(&self, model: &str) -> Option<&[String]> {
-        (model == POOL_MODEL)
-            .then_some(self.pool.as_deref())
-            .flatten()
-    }
-
     /// Where `model` is answered, as the provenance names it.
     #[must_use]
     pub fn backend_of(&self, model: &str) -> &'static str {
         if self.on_device_for(model).is_some() {
             "on-device, fm"
-        } else if self.pool_for(model).is_some() {
-            "token-pool"
         } else {
             "osaurus"
         }
@@ -120,7 +103,6 @@ pub fn load_fallback_policy(paths: &[String]) -> Result<FallbackPolicy> {
                 .map(str::trim)
                 .filter(|s| !s.is_empty())
                 .map(str::to_string),
-            pool: Some(string_list(table.get("pool"))).filter(|c| !c.is_empty()),
         });
         break;
     }

@@ -221,22 +221,6 @@ struct Route<'a> {
 impl Route<'_> {
     /// The candidate's raw answer and whether it was cut at the length limit.
     fn ask(&self, candidate: &str, prompt: &str, processed: usize) -> Result<(String, bool)> {
-        if candidate == crate::ztools::pool::POOL_MODEL {
-            let Some(command) = self.policy.pool_for(candidate) else {
-                anyhow::bail!(
-                    "the chain names `pool` but conf/twitter.toml [fallback] pool is unset"
-                );
-            };
-            eprintln!("· Summarizing {processed} tweets with token-pool's free pools...");
-            let answer = crate::ztools::pool::ask(
-                command,
-                crate::ztools::pool::SUMMARY_CLASS,
-                prompt,
-                std::time::Duration::from_secs(self.timeout_secs),
-            )?;
-            eprintln!("· token-pool answered from {}", answer.tier);
-            return Ok((answer.text, false));
-        }
         if let Some(fm) = self.policy.on_device_for(candidate) {
             eprintln!("· Summarizing {processed} tweets with {candidate} on this Mac...");
             let raw = crate::ztools::on_device::respond(fm, prompt, self.timeout_secs)?;
@@ -268,10 +252,7 @@ fn chain_failure(
     policy: &chain::FallbackPolicy,
     base_url: &str,
 ) -> anyhow::Error {
-    if plan
-        .iter()
-        .any(|m| policy.on_device_for(m).is_some() || policy.pool_for(m).is_some())
-    {
+    if plan.iter().any(|m| policy.on_device_for(m).is_some()) {
         return e.context("no summary written: every model in the fallback chain failed");
     }
     e.context(format!(

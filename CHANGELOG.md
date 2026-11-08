@@ -9,6 +9,17 @@ policy's cut-off: the tags before v2.2.0 (v0.4 .. v2.1.17, 56 of them) predate
 this changelog, have no stanza and get no GitHub release; their notes are
 `git log` between tags.
 
+## Unreleased
+
+### Changed
+- The twitter summarizer's fallback stays with Apple's models (owner ruling OW.95): the
+  `pool` tier (token-pool's free third-party models) and `ztools::pool` with its rmcp and
+  tokio dependencies are removed, and the chain is osaurus -> `foundation` (on-device `fm`).
+  A test holds the class: no tier of the shipped chain may send the timeline to a non-Apple
+  third party. Apple's Private Cloud Compute (`fm respond --model pcc`) was meant to be the
+  tier off this Mac, but `fm` refuses it outside the Terminal app ("not available in this
+  context"), so there is no off-Mac tier for now.
+
 ## v3.13.0 — the twitter summarizer verifies its feed and has a tier off this Mac _(2026-11-07)_
 
 ### Fixed

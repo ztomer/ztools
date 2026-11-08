@@ -19,8 +19,6 @@
 
 // `#[path]` is needed because a `#[path = "tests.rs"]` module resolves its
 // children from the PARENT directory, not from `tests/`.
-#[path = "tests/pool_tier.rs"]
-mod pool_tier;
 #[path = "tests/sampling.rs"]
 mod sampling;
 #[path = "tests/summary.rs"]

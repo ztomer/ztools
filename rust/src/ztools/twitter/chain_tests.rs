@@ -11,7 +11,6 @@ fn policy() -> FallbackPolicy {
         models: s(&["foundation"]),
         preferred: s(&["foundation", "qwen", "gemma"]),
         on_device: None,
-        pool: None,
     }
 }
 
@@ -346,16 +345,41 @@ fn a_model_refusing_oversized_prompt_is_skipped_down_the_chain() {
     drop(env);
 }
 
-/// The backends that live on this Mac: the Osaurus server and `fm`. On
-/// 2026-11-07 both were down at once and the chain had nowhere else to go.
-const ON_THIS_MAC: [&str; 2] = ["osaurus", "on-device, fm"];
+/// Where a tier may send timeline text: this Mac (the Osaurus server, `fm`)
+/// or Apple's own Private Cloud Compute. Owner ruling 2026-11-08 (OW.95): the
+/// fallback stays with Apple's models, never a third party's.
+const APPLE_OR_THIS_MAC: [&str; 2] = ["osaurus", "on-device, fm"];
 
-/// The class: the shipped chain must reach a tier that is up when every
-/// service on this Mac is down. (Red before the pool tier: every model was
-/// answered by osaurus or fm.)
+/// The class: no tier of the shipped chain sends timeline text to a non-Apple
+/// third party. (Red on the `pool` tier: token-pool's free remote models.)
 #[test]
 #[serial_test::serial]
-fn the_shipped_chain_reaches_a_tier_off_this_mac() {
+fn no_shipped_tier_sends_the_timeline_to_a_third_party() {
+    let _env = TestEnv::new();
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("conf/twitter.toml");
+    let policy = load_fallback_policy(&[path.to_string_lossy().into_owned()]).unwrap();
+    for roster in [vec![], s(&["raptor-v0.5"])] {
+        for m in plan_chain("raptor-v0.5", &roster, &policy) {
+            assert!(
+                APPLE_OR_THIS_MAC.contains(&policy.backend_of(&m)),
+                "tier {m} is answered by {}, a third party",
+                policy.backend_of(&m)
+            );
+        }
+    }
+}
+
+/// The class (RT.TWFAIL, narrowed by OW.95): the shipped chain must reach a
+/// tier that is up when the Osaurus server is down. Apple's Private Cloud
+/// Compute would be the tier off this Mac, but `fm` refuses it outside the
+/// Terminal app ("not available in this context", probed 2026-11-08), and the
+/// routines runner is launchd; so the last tier is the on-device model.
+#[test]
+#[serial_test::serial]
+fn the_shipped_chain_reaches_a_tier_outside_the_server() {
     let _env = TestEnv::new();
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -365,37 +389,8 @@ fn the_shipped_chain_reaches_a_tier_off_this_mac() {
     for roster in [vec![], s(&["raptor-v0.5"])] {
         let plan = plan_chain("raptor-v0.5", &roster, &policy);
         assert!(
-            plan.iter()
-                .any(|m| !ON_THIS_MAC.contains(&policy.backend_of(m))),
-            "every tier of {plan:?} is on this Mac"
+            plan.iter().any(|m| policy.backend_of(m) != "osaurus"),
+            "every tier of {plan:?} is the Osaurus server"
         );
     }
-}
-
-#[test]
-fn a_pool_tier_survives_a_known_roster() {
-    let mut p = policy();
-    p.models = s(&["foundation", "pool"]);
-    p.pool = Some(s(&["pool-mcp"]));
-    let chain = plan_chain("gemma-x", &s(&["gemma-x"]), &p);
-    assert_eq!(chain, s(&["gemma-x", "foundation", "pool"]));
-    assert_eq!(p.backend_of("pool"), "token-pool");
-    assert_eq!(p.pool_for("pool"), Some(&s(&["pool-mcp"])[..]));
-    assert_eq!(p.pool_for("gemma-x"), None);
-}
-
-#[test]
-#[serial_test::serial]
-fn the_pool_command_loads_from_the_table() {
-    let dir = tempfile::tempdir().unwrap();
-    let good = write_conf(
-        dir.path(),
-        "[fallback]\nmodels = [\"pool\"]\npool = [\"uv\", \" run \", \"\"]\n",
-    );
-    let _env = TestEnv::new();
-    let got = load_fallback_policy(&[good]).unwrap();
-    assert_eq!(got.pool, Some(s(&["uv", "run"])));
-    // An unset pool is no pool: the name alone never reaches the server.
-    let p = policy();
-    assert_eq!(p.pool_for("pool"), None);
 }

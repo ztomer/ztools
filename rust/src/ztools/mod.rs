@@ -8,7 +8,6 @@ pub mod llm;
 pub mod model_eval;
 pub mod model_health;
 pub mod on_device;
-pub mod pool;
 pub mod rename;
 pub mod settings;
 pub mod status;

@@ -30,8 +30,8 @@ pub fn select_best_model(models: &[String], preferred: &[String]) -> Option<Stri
 /// Ordered deduped fallback chain: the target first, then the extra names.
 ///
 /// When a roster is known, models the server does not serve are dropped —
-/// except `foundation`, the on-device last resort, and `pool`, token-pool's
-/// off-machine tier: neither is the server's to list.
+/// except `foundation`, the on-device last resort: it is not the server's
+/// to list.
 /// With no roster the chain is unfiltered: nothing is known to be absent.
 #[must_use]
 pub fn fallback_chain(
@@ -48,7 +48,6 @@ pub fn fallback_chain(
         if !available.is_empty()
             && !available.iter().any(|m| m == name)
             && !name.to_lowercase().contains("foundation")
-            && name != crate::ztools::pool::POOL_MODEL
         {
             continue;
         }

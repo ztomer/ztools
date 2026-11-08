@@ -21,17 +21,11 @@ following = "HomeLatestTimeline"
 # pools. Both are always kept: neither is the Osaurus server's to list.
 # `TWITTER_FALLBACK_MODELS=a,b` overrides `models` for one run.
 [fallback]
-models = ["foundation", "pool"]
+# Apple's models only (owner ruling OW.95, 2026-11-08): no tier sends the
+# timeline to a third party. PCC (`fm respond --model pcc`) is refused outside
+# the Terminal app, so the on-device model is the last tier.
+models = ["foundation"]
 # The binary that answers `foundation` on this Mac without the Osaurus server
 # (macOS 27's `fm`), so the chain has a fallback outside that server (T1).
 on_device = "/usr/bin/fm"
-# The tier that is up when this Mac's model services are not (2026-11-07: the
-# Osaurus server was not running and `fm`'s terms were not agreed, so every
-# tier failed at once). token-pool's MCP server, which spends free OFF-machine
-# pools (OpenCode Zen, agy Flash) as class `bulk_read`. The PATH is STATED:
-# the routines runner inherits launchd's /usr/bin:/bin, and the pool finds its
-# backends (`opencode`, `agy`) by name in /opt/homebrew/bin. `uv run --frozen`
-# rebuilds a missing venv from the lock before serving (token-pool README).
-# path-ok: token-pool has no installed form; it runs from its checkout through uv (its README).
-pool = ["/usr/bin/env", "PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin", "/opt/homebrew/bin/uv", "run", "--quiet", "--frozen", "--project", "~/Projects/token-pool", "pool-mcp"]
 preferred = ["raptor", "muse", "foundation", "qwen", "gemma"]
