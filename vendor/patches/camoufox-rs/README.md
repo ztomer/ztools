@@ -82,3 +82,39 @@ against the new tree. Then re-record `tools/vendor_lint_baseline.jsonc`.
   every request" reports `None` -- and GREEN with the shipped logic.
 - **Upstream-worthy:** yes, with 0001 and 0002: upstream's suite has no case that reaches
   this arm at all.
+
+## `0004-vendored-tests-wait-on-budget-and-conditions.patch`
+
+- **Upstream state:** the code is this repo's copy, read 2026-11-08; no upstream URL to
+  check against. Owner ruling (same as 0001-0003): fix locally. TEST-ONLY, so it cannot
+  alter the crate's behaviour.
+- **What:** one wall-clock upper bound and a family of sleep-then-check cases.
+  `navigate_wait_until_combined_timeout_is_single_bounded` asserted
+  `elapsed < 400 ms + 150 ms` and failed on CI run 42453070012 attempt 1 at 552.7 ms
+  (a loaded runner; the rerun passed). It was also blind to the very bug it names:
+  double-counting costs `100 ms ack + 400 ms lifecycle = 500 ms`, which is UNDER that
+  550 ms ceiling, so it was green with the bug present and red without it. In
+  `protocol::client` seven cases did `sleep(100 ms)` ("give the reader a moment") before
+  asserting what the reader had done (event delivered, stray message ignored, transport
+  close seen), and one slept 200 ms before counting two global events.
+- **Fix:** the combined-timeout case asserts the BUDGET the lifecycle wait was handed
+  (`wait_for_lifecycle` names it in its timeout message): at least the ack delay is
+  spent before it starts, so it is `<= timeout - ack delay` on any machine; the bug hands
+  it the whole `timeout`. The lower bound stays, because a timeout never fires early.
+  The client cases use `fence` (a marker event sent last is dispatched only after every
+  earlier message, because the single reader thread is FIFO) and `wait_until` (a polled
+  condition, 5 s only to turn a hang into a named failure).
+- **Proof:** with a 200 ms late wake-up injected into `wait_for_lifecycle`'s timeout arm
+  (what a starved runner does), the OLD case fails (`613.67ms (timeout 400ms)`) and the
+  new one passes. With the lifecycle wait handed `timeout` instead of the remaining time
+  (the double-counting bug) the new case is RED (`handed 400ms of a 400ms timeout`) and the
+  old one is green. Real load did not reproduce the failure here (0 of 30 runs at 16
+  spinners, 0 of 30 at 64, on a 16-core Mac), so the stall injection is the proof. The new
+  suite passed 6 of 6 full runs under 16 spinners.
+- **Left as they are, with reasons:** every remaining `elapsed < N` bound is a HANG
+  guard with at least 10x slack over the thing it times (`graceful_shutdown_*` 5 s / 2 s
+  against a 200 ms / 0.15 s event and a 5-minute / 10 s alternative; `returned too
+  late` 5 s against 150-200 ms timeouts; `integration.rs` 10 s against a 30 s timeout,
+  live browser, not in the gate); every `elapsed >=` bound is load-proof. The
+  `integration.rs` 500 ms cookie settle needs a live Camoufox and is not run by the gate.
+- **Upstream-worthy:** yes, with 0001-0003.

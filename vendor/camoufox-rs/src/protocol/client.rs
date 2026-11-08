@@ -993,6 +993,42 @@ mod tests {
             .expect("timed out waiting for outgoing message")
     }
 
+    /// Poll `cond` until it holds. A CONDITION, never a clock: the 5 s bound
+    /// only turns a hang into a failure that names what never happened, so a
+    /// loaded runner cannot make a passing case fail (it only waits longer).
+    fn wait_until(what: &str, cond: impl Fn() -> bool) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !cond() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "never happened: {what}"
+            );
+            thread::sleep(std::time::Duration::from_millis(1));
+        }
+    }
+
+    /// Return only once the reader thread has dispatched EVERYTHING sent before
+    /// this call. The reader handles the channel in FIFO order, synchronously,
+    /// so a marker event sent last is observed only after every earlier message
+    /// has been fully handled. This replaces `sleep(100 ms)` "give the reader a
+    /// moment", which asserted nothing about the reader and failed (positive
+    /// cases) or passed vacuously (negative cases) on a busy runner.
+    fn fence(h: &TestHarness) {
+        let seen = Arc::new(AtomicUsize::new(0));
+        let s = seen.clone();
+        h.conn.on_event(
+            "",
+            "Test.fence",
+            Box::new(move |_| {
+                s.fetch_add(1, Ordering::SeqCst);
+            }),
+        );
+        h.in_tx.send(event_message("Test.fence", None)).unwrap();
+        wait_until("the fence event was dispatched", || {
+            seen.load(Ordering::SeqCst) >= 1
+        });
+    }
+
     /// Clean teardown: drop `in_tx` to unblock reader, then wait.
     fn teardown(mut h: TestHarness) {
         drop(h.in_tx);
@@ -1087,7 +1123,7 @@ mod tests {
             .send(event_message("Browser.attachedToTarget", None))
             .unwrap();
 
-        thread::sleep(std::time::Duration::from_millis(100));
+        fence(&h);
         assert_eq!(received.load(Ordering::SeqCst), 1);
 
         teardown(h);
@@ -1156,7 +1192,7 @@ mod tests {
             .send(success_response(BROWSER_CLOSE_MESSAGE_ID, None))
             .unwrap();
 
-        thread::sleep(std::time::Duration::from_millis(100));
+        fence(&h);
 
         {
             let guard = h.conn.inner.lock().unwrap();
@@ -1199,7 +1235,9 @@ mod tests {
         let root = h.conn.root_session();
 
         drop(h.in_tx);
-        thread::sleep(std::time::Duration::from_millis(100));
+        wait_until("the reader saw the transport close", || {
+            h.conn.inner.lock().unwrap().state.is_closed()
+        });
 
         let result = root.send("Browser.enable", json!({}));
         assert!(result.is_err());
@@ -1214,7 +1252,9 @@ mod tests {
         let root = h.conn.root_session();
 
         drop(h.in_tx);
-        thread::sleep(std::time::Duration::from_millis(100));
+        wait_until("the reader saw the transport close", || {
+            h.conn.inner.lock().unwrap().state.is_closed()
+        });
 
         let result = root.send_may_fail("Browser.enable", json!({}));
         assert!(result.is_none());
@@ -1265,7 +1305,7 @@ mod tests {
             .send(success_response(1, Some("nonexistent-session")))
             .unwrap();
 
-        thread::sleep(std::time::Duration::from_millis(100));
+        fence(&h);
 
         {
             let guard = h.conn.inner.lock().unwrap();
@@ -1394,8 +1434,8 @@ mod tests {
             ))
             .unwrap();
 
-        // Give the reader a moment to process.
-        thread::sleep(std::time::Duration::from_millis(100));
+        // The reader has handled the orphan event before we look.
+        fence(&h);
 
         // Connection should still be Connected and usable for a normal send.
         let session = h.conn.root_session();
@@ -1535,7 +1575,9 @@ mod tests {
             .send(event_message("Page.navigationStarted", Some("p1")))
             .unwrap();
 
-        thread::sleep(std::time::Duration::from_millis(200));
+        wait_until("both events reached the global handler", || {
+            count.load(Ordering::SeqCst) >= 2
+        });
         assert_eq!(count.load(Ordering::SeqCst), 2);
 
         teardown(h);
@@ -1674,8 +1716,8 @@ mod tests {
         // returning false for unknown ids.
         h.in_tx.send(success_response(id, None)).unwrap();
 
-        // Give the reader thread a moment to process.
-        thread::sleep(std::time::Duration::from_millis(100));
+        // The reader thread has handled the late response before we look.
+        fence(&h);
 
         // Connection still healthy.
         {

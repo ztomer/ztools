@@ -1,0 +1,221 @@
+diff --git a/vendor/camoufox-rs/src/api/main_frame.rs b/vendor/camoufox-rs/src/api/main_frame.rs
+index 37232de..9d63090 100644
+--- a/vendor/camoufox-rs/src/api/main_frame.rs
++++ b/vendor/camoufox-rs/src/api/main_frame.rs
+@@ -2211,27 +2211,52 @@ mod tests {
+         h.closed.store(true, Ordering::SeqCst);
+     }
+ 
++    /// Parse the `{duration:?}` text `wait_for_lifecycle` puts in its timeout
++    /// message back into a `Duration` (`Debug` prints `300ms`, `299.5ms`,
++    /// `1.5s`, `12µs`, `0ns`).
++    fn parse_debug_duration(text: &str) -> Duration {
++        let (number, seconds_per_unit) = [("ms", 1e-3), ("µs", 1e-6), ("ns", 1e-9), ("s", 1.0)]
++            .into_iter()
++            .find_map(|(suffix, scale)| text.strip_suffix(suffix).map(|n| (n, scale)))
++            .unwrap_or_else(|| panic!("not a Debug-formatted Duration: {text:?}"));
++        Duration::from_secs_f64(number.parse::<f64>().expect("a number") * seconds_per_unit)
++    }
++
+     /// MUST-FIX regression guard: navigate + `wait_until` is bounded by a SINGLE
+     /// `timeout`, not 2× it.
+     ///
+     /// The responder acks the navigate after a delay, then never emits the
+-    /// lifecycle event. With the double-counting bug, total elapsed could reach
+-    /// ~2× timeout (timeout for the ack wait that succeeds + a fresh full
+-    /// timeout for the lifecycle wait). With the fix, the lifecycle wait only
+-    /// gets the time remaining after the ack, so total ≈ timeout.
++    /// lifecycle event. With the double-counting bug the lifecycle wait gets a
++    /// fresh full `timeout` after the ack wait already spent `ACK_DELAY` of it
++    /// (total ~2× timeout). With the fix it gets only what remains.
++    ///
++    /// ORDERED BY THE BUDGET, NOT BY A CLOCK (local divergence from upstream,
++    /// carried by vendor/patches/camoufox-rs/). Upstream asserted
++    /// `elapsed < timeout + 150 ms`, which a loaded runner breaks without any
++    /// double-counting (CI run 42453070012: 552.7 ms against a 400 ms bound),
++    /// because wall time includes every scheduling delay the wait is subject
++    /// to. The property is about the TIMEOUT HANDED TO THE LIFECYCLE WAIT, and
++    /// that is in the error: `wait_for_lifecycle` names the budget it was given.
++    /// The responder sleeps `ACK_DELAY` before acking and the deadline was set
++    /// before navigate sent anything, so at least `ACK_DELAY` of `timeout` is
++    /// gone when the lifecycle wait starts: its budget is `<= timeout -
++    /// ACK_DELAY` on any machine, however loaded (more load only shrinks it,
++    /// and it saturates at zero), and the double-counting bug hands it the
++    /// whole `timeout`.
+     #[test]
+     fn navigate_wait_until_combined_timeout_is_single_bounded() {
++        const ACK_DELAY: Duration = Duration::from_millis(100);
+         let h = build_mock_frame("page-bound", "frame-bound");
+         let in_tx = h.in_tx.clone();
+         let out_rx = h.out_rx;
+ 
+-        // Ack the navigate ~100 ms in; never emit the lifecycle event.
++        // Ack the navigate ACK_DELAY in; never emit the lifecycle event.
+         let responder = std::thread::spawn(move || {
+             let sent = out_rx
+                 .recv_timeout(Duration::from_secs(5))
+                 .expect("Page.navigate not sent");
+             let id = sent["id"].as_i64().unwrap();
+-            std::thread::sleep(Duration::from_millis(100));
++            std::thread::sleep(ACK_DELAY);
+             in_tx
+                 .send(navigate_success_response(id, "page-bound"))
+                 .unwrap();
+@@ -2253,17 +2278,20 @@ mod tests {
+         let err = result.expect_err("should time out waiting for lifecycle event");
+         assert_eq!(err.kind, ProtocolErrorKind::Timeout);
+ 
+-        // The whole operation must be bounded by ~1× timeout (plus slack), not
+-        // 2× (which would be ~100ms ack + 400ms lifecycle = ~500ms, exceeding
+-        // a 1.5× ceiling). We allow generous slack for CI scheduling.
++        let (_, given) = err
++            .message
++            .rsplit_once(" after ")
++            .expect("the lifecycle timeout names the budget it was given");
++        let budget = parse_debug_duration(given);
+         assert!(
+-            elapsed < timeout + Duration::from_millis(150),
+-            "navigate+wait exceeded a single timeout bound: {elapsed:?} (timeout {timeout:?}); \
+-             double-counting likely regressed"
++            budget <= timeout.saturating_sub(ACK_DELAY),
++            "the lifecycle wait was handed {budget:?} of a {timeout:?} timeout after a \
++             {ACK_DELAY:?} ack: the ack's share was not deducted (double-counting)"
+         );
+-        // And it must not return early before the deadline either.
++        // A lower bound is load-proof (a timeout never fires early), so it
++        // stays: the call may not give up before the single deadline.
+         assert!(
+-            elapsed >= Duration::from_millis(380),
++            elapsed >= timeout.saturating_sub(Duration::from_millis(20)),
+             "returned too early: {elapsed:?}"
+         );
+ 
+diff --git a/vendor/camoufox-rs/src/protocol/client.rs b/vendor/camoufox-rs/src/protocol/client.rs
+index 79ccc55..fb26080 100644
+--- a/vendor/camoufox-rs/src/protocol/client.rs
++++ b/vendor/camoufox-rs/src/protocol/client.rs
+@@ -993,6 +993,42 @@ mod tests {
+             .expect("timed out waiting for outgoing message")
+     }
+ 
++    /// Poll `cond` until it holds. A CONDITION, never a clock: the 5 s bound
++    /// only turns a hang into a failure that names what never happened, so a
++    /// loaded runner cannot make a passing case fail (it only waits longer).
++    fn wait_until(what: &str, cond: impl Fn() -> bool) {
++        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
++        while !cond() {
++            assert!(
++                std::time::Instant::now() < deadline,
++                "never happened: {what}"
++            );
++            thread::sleep(std::time::Duration::from_millis(1));
++        }
++    }
++
++    /// Return only once the reader thread has dispatched EVERYTHING sent before
++    /// this call. The reader handles the channel in FIFO order, synchronously,
++    /// so a marker event sent last is observed only after every earlier message
++    /// has been fully handled. This replaces `sleep(100 ms)` "give the reader a
++    /// moment", which asserted nothing about the reader and failed (positive
++    /// cases) or passed vacuously (negative cases) on a busy runner.
++    fn fence(h: &TestHarness) {
++        let seen = Arc::new(AtomicUsize::new(0));
++        let s = seen.clone();
++        h.conn.on_event(
++            "",
++            "Test.fence",
++            Box::new(move |_| {
++                s.fetch_add(1, Ordering::SeqCst);
++            }),
++        );
++        h.in_tx.send(event_message("Test.fence", None)).unwrap();
++        wait_until("the fence event was dispatched", || {
++            seen.load(Ordering::SeqCst) >= 1
++        });
++    }
++
+     /// Clean teardown: drop `in_tx` to unblock reader, then wait.
+     fn teardown(mut h: TestHarness) {
+         drop(h.in_tx);
+@@ -1087,7 +1123,7 @@ mod tests {
+             .send(event_message("Browser.attachedToTarget", None))
+             .unwrap();
+ 
+-        thread::sleep(std::time::Duration::from_millis(100));
++        fence(&h);
+         assert_eq!(received.load(Ordering::SeqCst), 1);
+ 
+         teardown(h);
+@@ -1156,7 +1192,7 @@ mod tests {
+             .send(success_response(BROWSER_CLOSE_MESSAGE_ID, None))
+             .unwrap();
+ 
+-        thread::sleep(std::time::Duration::from_millis(100));
++        fence(&h);
+ 
+         {
+             let guard = h.conn.inner.lock().unwrap();
+@@ -1199,7 +1235,9 @@ mod tests {
+         let root = h.conn.root_session();
+ 
+         drop(h.in_tx);
+-        thread::sleep(std::time::Duration::from_millis(100));
++        wait_until("the reader saw the transport close", || {
++            h.conn.inner.lock().unwrap().state.is_closed()
++        });
+ 
+         let result = root.send("Browser.enable", json!({}));
+         assert!(result.is_err());
+@@ -1214,7 +1252,9 @@ mod tests {
+         let root = h.conn.root_session();
+ 
+         drop(h.in_tx);
+-        thread::sleep(std::time::Duration::from_millis(100));
++        wait_until("the reader saw the transport close", || {
++            h.conn.inner.lock().unwrap().state.is_closed()
++        });
+ 
+         let result = root.send_may_fail("Browser.enable", json!({}));
+         assert!(result.is_none());
+@@ -1265,7 +1305,7 @@ mod tests {
+             .send(success_response(1, Some("nonexistent-session")))
+             .unwrap();
+ 
+-        thread::sleep(std::time::Duration::from_millis(100));
++        fence(&h);
+ 
+         {
+             let guard = h.conn.inner.lock().unwrap();
+@@ -1394,8 +1434,8 @@ mod tests {
+             ))
+             .unwrap();
+ 
+-        // Give the reader a moment to process.
+-        thread::sleep(std::time::Duration::from_millis(100));
++        // The reader has handled the orphan event before we look.
++        fence(&h);
+ 
+         // Connection should still be Connected and usable for a normal send.
+         let session = h.conn.root_session();
+@@ -1535,7 +1575,9 @@ mod tests {
+             .send(event_message("Page.navigationStarted", Some("p1")))
+             .unwrap();
+ 
+-        thread::sleep(std::time::Duration::from_millis(200));
++        wait_until("both events reached the global handler", || {
++            count.load(Ordering::SeqCst) >= 2
++        });
+         assert_eq!(count.load(Ordering::SeqCst), 2);
+ 
+         teardown(h);
+@@ -1674,8 +1716,8 @@ mod tests {
+         // returning false for unknown ids.
+         h.in_tx.send(success_response(id, None)).unwrap();
+ 
+-        // Give the reader thread a moment to process.
+-        thread::sleep(std::time::Duration::from_millis(100));
++        // The reader thread has handled the late response before we look.
++        fence(&h);
+ 
+         // Connection still healthy.
+         {

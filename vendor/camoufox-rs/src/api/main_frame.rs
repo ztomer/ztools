@@ -2211,27 +2211,52 @@ mod tests {
         h.closed.store(true, Ordering::SeqCst);
     }
 
+    /// Parse the `{duration:?}` text `wait_for_lifecycle` puts in its timeout
+    /// message back into a `Duration` (`Debug` prints `300ms`, `299.5ms`,
+    /// `1.5s`, `12µs`, `0ns`).
+    fn parse_debug_duration(text: &str) -> Duration {
+        let (number, seconds_per_unit) = [("ms", 1e-3), ("µs", 1e-6), ("ns", 1e-9), ("s", 1.0)]
+            .into_iter()
+            .find_map(|(suffix, scale)| text.strip_suffix(suffix).map(|n| (n, scale)))
+            .unwrap_or_else(|| panic!("not a Debug-formatted Duration: {text:?}"));
+        Duration::from_secs_f64(number.parse::<f64>().expect("a number") * seconds_per_unit)
+    }
+
     /// MUST-FIX regression guard: navigate + `wait_until` is bounded by a SINGLE
     /// `timeout`, not 2× it.
     ///
     /// The responder acks the navigate after a delay, then never emits the
-    /// lifecycle event. With the double-counting bug, total elapsed could reach
-    /// ~2× timeout (timeout for the ack wait that succeeds + a fresh full
-    /// timeout for the lifecycle wait). With the fix, the lifecycle wait only
-    /// gets the time remaining after the ack, so total ≈ timeout.
+    /// lifecycle event. With the double-counting bug the lifecycle wait gets a
+    /// fresh full `timeout` after the ack wait already spent `ACK_DELAY` of it
+    /// (total ~2× timeout). With the fix it gets only what remains.
+    ///
+    /// ORDERED BY THE BUDGET, NOT BY A CLOCK (local divergence from upstream,
+    /// carried by vendor/patches/camoufox-rs/). Upstream asserted
+    /// `elapsed < timeout + 150 ms`, which a loaded runner breaks without any
+    /// double-counting (CI run 42453070012: 552.7 ms against a 400 ms bound),
+    /// because wall time includes every scheduling delay the wait is subject
+    /// to. The property is about the TIMEOUT HANDED TO THE LIFECYCLE WAIT, and
+    /// that is in the error: `wait_for_lifecycle` names the budget it was given.
+    /// The responder sleeps `ACK_DELAY` before acking and the deadline was set
+    /// before navigate sent anything, so at least `ACK_DELAY` of `timeout` is
+    /// gone when the lifecycle wait starts: its budget is `<= timeout -
+    /// ACK_DELAY` on any machine, however loaded (more load only shrinks it,
+    /// and it saturates at zero), and the double-counting bug hands it the
+    /// whole `timeout`.
     #[test]
     fn navigate_wait_until_combined_timeout_is_single_bounded() {
+        const ACK_DELAY: Duration = Duration::from_millis(100);
         let h = build_mock_frame("page-bound", "frame-bound");
         let in_tx = h.in_tx.clone();
         let out_rx = h.out_rx;
 
-        // Ack the navigate ~100 ms in; never emit the lifecycle event.
+        // Ack the navigate ACK_DELAY in; never emit the lifecycle event.
         let responder = std::thread::spawn(move || {
             let sent = out_rx
                 .recv_timeout(Duration::from_secs(5))
                 .expect("Page.navigate not sent");
             let id = sent["id"].as_i64().unwrap();
-            std::thread::sleep(Duration::from_millis(100));
+            std::thread::sleep(ACK_DELAY);
             in_tx
                 .send(navigate_success_response(id, "page-bound"))
                 .unwrap();
@@ -2253,17 +2278,20 @@ mod tests {
         let err = result.expect_err("should time out waiting for lifecycle event");
         assert_eq!(err.kind, ProtocolErrorKind::Timeout);
 
-        // The whole operation must be bounded by ~1× timeout (plus slack), not
-        // 2× (which would be ~100ms ack + 400ms lifecycle = ~500ms, exceeding
-        // a 1.5× ceiling). We allow generous slack for CI scheduling.
+        let (_, given) = err
+            .message
+            .rsplit_once(" after ")
+            .expect("the lifecycle timeout names the budget it was given");
+        let budget = parse_debug_duration(given);
         assert!(
-            elapsed < timeout + Duration::from_millis(150),
-            "navigate+wait exceeded a single timeout bound: {elapsed:?} (timeout {timeout:?}); \
-             double-counting likely regressed"
+            budget <= timeout.saturating_sub(ACK_DELAY),
+            "the lifecycle wait was handed {budget:?} of a {timeout:?} timeout after a \
+             {ACK_DELAY:?} ack: the ack's share was not deducted (double-counting)"
         );
-        // And it must not return early before the deadline either.
+        // A lower bound is load-proof (a timeout never fires early), so it
+        // stays: the call may not give up before the single deadline.
         assert!(
-            elapsed >= Duration::from_millis(380),
+            elapsed >= timeout.saturating_sub(Duration::from_millis(20)),
             "returned too early: {elapsed:?}"
         );
 
