@@ -21,7 +21,7 @@ test: ## Run the Rust test suite
 fmt: ## Format all Rust code
 	cargo fmt --manifest-path rust/Cargo.toml --all
 
-install: ## Build and install the binaries to $(brew --prefix)/bin
+install: ## Build and install the binaries to ~/.local/bin (never the brew bin)
 	./install.sh
 
 ci: ## The gate of record — same list the pre-push hook runs

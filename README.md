@@ -49,9 +49,11 @@ have checked out right now instead — a local build, no network, no tap — run
 ```
 
 Builds the Rust release and installs it (with the same subcommand aliases)
-straight into the Homebrew bin, `$(brew --prefix)/bin` (`/opt/homebrew/bin`
-here). This overwrites the prefix entry until the next `brew upgrade`;
-`ZTOOLS_INSTALL_DIR=/elsewhere ./install.sh` targets a custom dir. It needs
+into `~/.local/bin`; `ZTOOLS_INSTALL_DIR=/elsewhere ./install.sh` targets a
+custom dir. **One owner per path:** `$(brew --prefix)/bin` belongs to the tap
+formula, and install.sh refuses it (a real file it once left there made
+`brew reinstall` fail at `brew link`). Put `~/.local/bin` ahead of the brew bin
+on PATH if the local build should win. It needs
 cargo and jq, and its platform gate is the shared library's (`house-lib`'s
 `platform.sh`, found through `cargo metadata`). These two
 are the only install doors; for an uninstalled dev build use

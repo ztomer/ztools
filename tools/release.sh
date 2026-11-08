@@ -63,9 +63,11 @@ fi
 # binary (it also runs the Rust suite and the collect-parity comparator).
 # (Single-quoted on purpose: the kit runs it, exporting GOH_RELEASE_VERSION.)
 # shellcheck disable=SC2016
-VERIFY='./install.sh >/dev/null
-  [ "$(ztools --version | awk "{print \$NF}")" = "$GOH_RELEASE_VERSION" ] || { echo "installed ztools is not $GOH_RELEASE_VERSION" >&2; exit 1; }
-  bash bin/ab_test >/dev/null'
+# The binary install.sh just wrote, by path: install.sh never touches the brew bin
+# (ZT.BREWLINK), so a bare `ztools` could resolve to the tap's older copy.
+VERIFY='ZT_DIR="$(mktemp -d)" && ZTOOLS_INSTALL_DIR="$ZT_DIR" ./install.sh >/dev/null
+  [ "$("$ZT_DIR/ztools" --version | awk "{print \$NF}")" = "$GOH_RELEASE_VERSION" ] || { echo "installed ztools is not $GOH_RELEASE_VERSION" >&2; exit 1; }
+  ZTOOLS_BIN="$ZT_DIR/ztools" bash bin/ab_test >/dev/null; rc=$?; rm -rf "$ZT_DIR"; exit $rc'
 
 exec "$GOH/tools/release-kit/release.sh" --version "$V" \
   --gate "make ci" \

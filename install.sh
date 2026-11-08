@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-# install.sh — Build and install ztools release binaries into the Homebrew bin
+# install.sh — Build and install ztools release binaries into ~/.local/bin
 #
 # The Homebrew tap (maintained by tools/release.sh) is the public install
 # path; this is the LOCAL door: build the Rust release here and install it
-# straight into "$(brew --prefix)/bin" (Apple silicon: /opt/homebrew/bin),
-# no network, no tap. Installing over the prefix entry that the tap formula
-# also populates is intentional until the next brew upgrade.
+# into "$HOME/.local/bin", no network, no tap.
+#
+# ONE OWNER PER PATH (ZT.BREWLINK): "$(brew --prefix)/bin" belongs to the tap
+# formula, which `brew link`s its entries there. This script REFUSES that
+# directory: a real file it left there made the next `brew reinstall` fail at
+# `brew link` until someone ran `brew link --overwrite`.
 #
 # ENVIRONMENT
-#   ZTOOLS_INSTALL_DIR         target dir; default "$(brew --prefix)/bin"
+#   ZTOOLS_INSTALL_DIR         target dir; default "$HOME/.local/bin"
 #   ZTOOLS_OS / ZTOOLS_ARCH    OVERRIDE the platform, which otherwise comes from
 #                              `uname -s` / `uname -m` (see the gate below)
 #   ZTOOLS_PLATFORM_CHECK_ONLY=1   run the platform gate, print it, exit 0 BEFORE
@@ -105,19 +108,21 @@ if [ "${ZTOOLS_PLATFORM_CHECK_ONLY:-}" = "1" ]; then
     exit 0
 fi
 
-# ── Dependencies ───────────────────────────────────────────────────────────────
-# brew is named AFTER the gate and only on macOS: before, on Linux with no
-# Homebrew the script died with "brew: command not found", naming a missing
-# package rather than the unsupported platform it was a symptom of. The gate has
-# accepted the pair, so a Darwin-spelled OS here is Apple silicon.
-case "$UNAME_OS" in
-    Darwin | macOS) require_commands brew ;;
-    *) ;;
-esac
-
-# brew --prefix is only reached once brew is known to exist, on the platform whose
-# gate accepts the Homebrew layout at all.
-BIN_DIR="${ZTOOLS_INSTALL_DIR:-$(brew --prefix)/bin}"
+# ── Install target ─────────────────────────────────────────────────────────────
+# Decided and checked BEFORE the build, so a refusal costs nothing and writes
+# nothing. Homebrew is not required: it is consulted only to name the directory
+# this script must never write into.
+BIN_DIR="${ZTOOLS_INSTALL_DIR:-$HOME/.local/bin}"
+if command -v brew >/dev/null 2>&1; then
+    BREW_BIN="$(brew --prefix)/bin"
+    _resolved="$(cd "$BIN_DIR" 2>/dev/null && pwd -P || printf '%s' "$BIN_DIR")"
+    _brew_resolved="$(cd "$BREW_BIN" 2>/dev/null && pwd -P || printf '%s' "$BREW_BIN")"
+    if [ "$_resolved" = "$_brew_resolved" ]; then
+        die "refusing to install into the Homebrew bin ($BREW_BIN): the tap formula owns it.
+  Use \`brew install ztomer/tap/ztools\` for that path, or leave ZTOOLS_INSTALL_DIR unset (~/.local/bin)."
+    fi
+    unset _resolved _brew_resolved
+fi
 
 info "Building ztools native Rust release binary..."
 (cd "$ROOT/rust" && cargo build --release)

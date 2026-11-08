@@ -6,6 +6,15 @@ with each committed batch.
 
 This file starts at v2.2.0 — earlier history is in git.
 
+## v3.12.1 — install.sh leaves the Homebrew bin to the tap _(2026-11-07)_
+
+### Fixed
+- `install.sh` installs into `~/.local/bin` (was `$(brew --prefix)/bin`) and refuses the
+  Homebrew bin before building: the tap formula owns that path, and the real file
+  install.sh left there made `brew reinstall ztomer/tap/ztools` fail at `brew link` until
+  `brew link --overwrite` (ZT.BREWLINK). Homebrew is no longer required by install.sh.
+  `tools/release.sh`'s verify step runs the binary it installed, by path.
+
 ## v3.12.0 — selfheal, the Camoufox rows and the platform gate come from house-lib _(2026-11-07)_
 
 ### Changed

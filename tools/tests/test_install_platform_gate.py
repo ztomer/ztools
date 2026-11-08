@@ -335,37 +335,6 @@ def test_missing_dependencies_are_named(tmp_path):
     assert "installing binaries" not in out.lower()
 
 
-def test_macos_also_names_brew(tmp_path):
-    """brew is what install.sh's own default BIN_DIR needs, so it is required --
-    but only on the platform whose Homebrew prefix it goes into, and only AFTER
-    the gate has accepted the platform (an Intel Mac is told it is unsupported,
-    not that it lacks Homebrew). The PATH holds the real cargo and jq and
-    nothing else, so the gate runs and brew cannot resolve: the precondition is
-    asserted, because a brew on this PATH would make the test build for real."""
-    path = f"{_toolbin(tmp_path / 'toolbin')}:{CARGO_DIR}:/usr/bin:/bin"
-    found = subprocess.run(
-        ["/bin/bash", "-c", "command -v brew"],
-        capture_output=True,
-        text=True,
-        env={"PATH": path},
-        check=False,
-        timeout=TIMEOUT,
-        stdin=subprocess.DEVNULL,
-    )
-    assert found.returncode != 0, "brew resolves under the tool-only PATH"
-    r = _run(
-        "Darwin",
-        "arm64",
-        PATH=path,
-        ZTOOLS_PLATFORM_CHECK_ONLY="",
-        GOH_DIR=str(tmp_path / "nope"),
-    )
-    assert r.returncode == 1, _out(r)
-    out = _out(r)
-    assert "missing required command(s): brew" in out
-    assert "Building ztools" not in out
-
-
 def test_the_gate_hard_fails_without_the_house_tui(tmp_path):
     """A missing tui/lib.sh must not turn `die` into "die: command not found".
 
