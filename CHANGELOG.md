@@ -11,7 +11,7 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
-## Unreleased
+## v3.13.2 -- the on-device summary tier stops refusing timelines
 
 ### Fixed
 - The on-device tier asks `fm` at its `permissive-content-transformations` guardrail level:
