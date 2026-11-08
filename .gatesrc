@@ -138,3 +138,7 @@ GOH_SUBPROCESS_STDIN_MIN_CALLS=18       # read 20 on 2026-10-20, every one decla
 # A commit that ADDS a test names, in a `Red-run:` trailer, the mutation that
 # turned that test red (goh red-run, BACKLOG 4.11; owner OW.8, 2026-10-31).
 GOH_RED_RUN=1
+
+# The GitHub-release backfill starts at v2.2.0, where CHANGELOG.md starts: the 56 earlier tags
+# have no stanza by policy and are neither backfilled nor warned about (goh v0.64.0, ZT.CHLOG).
+GOH_RELEASE_BACKFILL_FLOOR=v2.2.0
