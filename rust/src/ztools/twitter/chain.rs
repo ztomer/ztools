@@ -354,10 +354,17 @@ pub fn run_chain<T>(
         .iter()
         .map(|f| format!("model {}: {}", f.model, f.detail))
         .collect();
+    // The verdicts again, last: a long line is read clipped to its two ends,
+    // and every model's cause must survive the clip (2026-11-08).
+    let verdicts: Vec<String> = failures
+        .iter()
+        .map(|f| format!("{}: {}", f.model, f.verdict))
+        .collect();
     anyhow::bail!(
-        "every model in the chain failed ({}): {}",
+        "every model in the chain failed ({}): {}; in short: {}",
         chain.join(" → "),
-        reasons.join("; ")
+        reasons.join("; "),
+        verdicts.join("; ")
     )
 }
 

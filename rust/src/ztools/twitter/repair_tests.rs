@@ -300,6 +300,11 @@ fn drifted_forms(handle: &str, full: &str) -> Vec<String> {
         format!("(@{handle} | {time})"),
         format!("(@{handle} | {minute})"),
         format!("({handle} | {time})"),
+        // The source line's own trailing fields, copied whole (2026-11-08).
+        format!("[@{handle} | {full} | 1008 favs, 211 RTs]"),
+        format!("(@{handle} | {full} | -> @bob)"),
+        format!("[@{handle} | {full} | 5 favs, 1 RTs | -> @bob]"),
+        format!("[@{handle} | {year_dropped} | 5 favs, 1 RTs]"),
     ]
 }
 
@@ -449,4 +454,32 @@ fn an_unresolvable_bracketless_citation_still_counts_against_the_answer() {
     let answer = "## Topic\n\n- a fact, per @mallory | Sat Oct 10 09:46:22 +0000 2026.\n";
     let why = repair(answer, &g).expect_err("the only citation names no given tweet");
     assert!(why.detail.contains("1 of 1 citations"), "{why}");
+}
+
+/// The 2026-11-08 noon answer: raptor copied each source line's whole prefix,
+/// engagement counts included -- `[@AtifRMian | Sat Nov 07 17:15:22 +0000 2026
+/// | 1008 favs, 211 RTs]` -- and all 32 of its citations were read as naming
+/// no given tweet, because the counts were taken for part of the timestamp.
+/// The stamp is the field after the handle; what follows it is the line's
+/// metadata, and each citation still names exactly one given tweet.
+#[test]
+fn a_citation_carrying_the_source_lines_counts_is_accepted() {
+    let g = given();
+    let mut answer = String::from("## Executive Summary\n\nA busy Saturday.\n\n## Topic\n\n");
+    for (n, (handle, full)) in g.iter().filter(|(h, _)| h != "grace").enumerate() {
+        let _ = writeln!(
+            answer,
+            "- Fact number {n} from the timeline [@{handle} | {full} | {n}0 favs, {n} RTs]."
+        );
+    }
+    let kept = handle_model_output(&answer, &g, false).unwrap_or_else(|why| panic!("{why}"));
+    assert_eq!(super::super::quality::bullets(&kept.body).len(), 6);
+    assert_empty!(kept.repairs);
+    assert!(
+        kept.body.contains(
+            "- Fact number 0 from the timeline (@alice | Sat Oct 10 09:46:22 +0000 2026)."
+        ),
+        "{}",
+        kept.body
+    );
 }

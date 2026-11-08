@@ -394,3 +394,38 @@ fn the_shipped_chain_reaches_a_tier_outside_the_server() {
         );
     }
 }
+
+/// When every model fails, the error's LAST words say why, model by model.
+///
+/// An unattended run's error is read clipped to its two ends (routines keeps
+/// the head and the tail of a long line), and each model's full detail sits
+/// in the middle: on 2026-11-07 and 11-08 the status line read `every model
+/// in the fallback cha…` and then only foundation's half, raptor's reason cut
+/// away. The tail now restates each model's verdict, so the clip keeps every
+/// model's cause.
+#[test]
+fn every_failure_ends_with_each_models_verdict() {
+    let chain = s(&["raptor", "foundation"]);
+    let err = run_chain::<()>(&chain, "raptor", |m| {
+        Err(if m == "raptor" {
+            Refusal {
+                verdict: "citations that name no given tweet".to_string(),
+                detail: format!("the answer was refused: {}", "x".repeat(400)),
+            }
+        } else {
+            Refusal {
+                verdict: "no attribution".to_string(),
+                detail: "the answer was refused: 4 of 4 bullets lack it (answer kept at /a/b.md)"
+                    .to_string(),
+            }
+        })
+    })
+    .unwrap_err()
+    .to_string();
+    assert!(
+        err.ends_with(
+            "in short: raptor: citations that name no given tweet; foundation: no attribution"
+        ),
+        "{err}"
+    );
+}

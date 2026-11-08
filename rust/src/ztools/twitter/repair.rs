@@ -52,8 +52,14 @@ static ANY_CITATION: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// One source inside a citation group: `@h | ts`, the `@` optional.
-static SOURCE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^\s*(@?)([A-Za-z0-9_]+)\s*\|\s*(.+?)\s*$").expect("valid regex"));
+///
+/// The stamp is the ONE field after the handle. The prompt's source line goes
+/// on with `| 1008 favs, 211 RTs | -> @h`, and a model that copies the prefix
+/// whole writes those too (2026-11-08 noon: 32 of 32 citations unread, each
+/// naming a given tweet); they are the line's metadata, never the stamp.
+static SOURCE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^\s*(@?)([A-Za-z0-9_]+)\s*\|\s*([^|]+?)\s*(?:\|.*)?$").expect("valid regex")
+});
 
 /// A time of day as the source line writes it, to the minute at least:
 /// `04:11:19` or `04:11`.

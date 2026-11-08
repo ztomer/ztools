@@ -350,8 +350,10 @@ pub fn run_summary(
         let (raw, cut) = route
             .ask(candidate, &prompt, processed)
             .map_err(|e| Refusal {
-                verdict: "the call failed".to_string(),
-                detail: format!("the call failed: {e}"),
+                // The root cause, not just "failed": the verdict is what the
+                // status line keeps (`run_chain`'s "in short").
+                verdict: format!("the call failed: {}", e.root_cause()),
+                detail: format!("the call failed: {e:#}"),
             })?;
         // A reasoning model's `<thinking>` block must not land verbatim in
         // the saved markdown, and an answer the quality gate rejects must not

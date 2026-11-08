@@ -11,6 +11,19 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+### Fixed
+- **A citation that copies its source line's counts is read (RT.TWITTERFAIL).** The
+  2026-11-08 noon summary was thrown away whole: raptor cited each tweet as
+  `[@h | ts | 1008 favs, 211 RTs]`, the prompt's own source prefix, and the repair took
+  the counts for part of the timestamp ("32 of 32 citations name no tweet the model was
+  given"). The stamp is now the one field after the handle; trailing `| N favs, M RTs`
+  and `| -> @h` fields are the line's metadata.
+- **"Every model failed" ends with each model's verdict.** The run's error now closes
+  with `in short: <model>: <verdict>; ...`, so a reader that keeps only a long line's
+  ends (the routines status strip) still sees every model's cause; a failed call's
+  verdict names its root cause, and its detail prints the whole error chain (it printed
+  only the outermost context, `error sending request for url (...)`, without the why).
+
 ## v3.13.2 -- the on-device summary tier stops refusing timelines
 
 ### Fixed
