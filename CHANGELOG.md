@@ -11,6 +11,8 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+## v3.13.3 — the 2026-11-08 noon summary was thrown away whole _(2026-11-08)_
+
 ### Fixed
 - **A citation that copies its source line's counts is read (RT.TWITTERFAIL).** The
   2026-11-08 noon summary was thrown away whole: raptor cited each tweet as
