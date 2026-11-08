@@ -36,7 +36,8 @@ earlier one, and each phase says what it depends on.
 A dated summary, not checked by any gate; re-derive it before editing:
 `gh run list --limit 3`, `git log --oneline origin/main..main`, `ztools --version`, `tools/gate.sh --full`.
 
-- **Shipped and installed: v3.11.1** (`cb57715`); `ztools --version` reads `ztools 3.11.1`. CI on
+- **Releases:** https://github.com/ztomer/ztools/releases -- the tags are the record; a machine's
+  own copy is read with `ztools --version`. v3.11.1 (`cb57715`): CI on
   `main` is green for that commit (run 42381838128). Since the previous rephase: v3.10.0 landed
   S1, the self-healing dependency table (`0c97219`: red first with the install step removed, 4 of
   8 fake-installer tests failed; real: `brew uninstall bat`, then `ztools deps` reinstalled bat
