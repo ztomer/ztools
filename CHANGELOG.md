@@ -11,6 +11,13 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+## Unreleased
+
+### Fixed
+- The on-device tier asks `fm` at its `permissive-content-transformations` guardrail level:
+  at the default level it refused two of three real timelines ("The model's safety
+  guardrails were triggered"), and with no tier after it those runs wrote no summary.
+
 ## v3.13.1 -- the twitter fallback stays with Apple's models
 
 ### Changed

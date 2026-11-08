@@ -17,7 +17,7 @@ fn the_prompt_goes_in_on_stdin_and_stdout_is_the_answer() {
     let dir = tempfile::tempdir().unwrap();
     let fm = stub(
         dir.path(),
-        r#"[ "$1 $2" = "respond --no-stream" ] || exit 3; tr a-z A-Z"#,
+        r#"[ "$*" = "respond --no-stream --guardrails permissive-content-transformations" ] || exit 3; tr a-z A-Z"#,
     );
     assert_eq!(respond(&fm, "two words\n", 10).unwrap(), "TWO WORDS");
 }

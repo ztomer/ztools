@@ -40,7 +40,16 @@ pub fn respond(fm: &Path, prompt: &str, timeout_secs: u64) -> Result<String> {
         bail!("{reason}");
     }
     let mut child = Command::new(fm)
-        .args(["respond", "--no-stream"])
+        // A summary transforms text it is handed, which is exactly what
+        // `fm`'s permissive guardrail level is for: at the default level the
+        // model refused two of three real timelines (2026-11-08, "The
+        // model's safety guardrails were triggered").
+        .args([
+            "respond",
+            "--no-stream",
+            "--guardrails",
+            "permissive-content-transformations",
+        ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
