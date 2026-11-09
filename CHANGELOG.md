@@ -11,6 +11,8 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+## v3.14.0 — the shared prompt's example was `[@TechCrunch | 08:00]` -> `(@TechCrunch | 08:00)`, and _(2026-11-09)_
+
 ### Fixed
 - **The citation rule no longer names an account (ZT.TWITTERCHAIN).** The shared prompt's
   example was `[@TechCrunch | 08:00]` -> `(@TechCrunch | 08:00)`, and raptor cited
