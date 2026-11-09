@@ -30,6 +30,14 @@ this changelog, have no stanza and get no GitHub release; their notes are
 - **`--model foundation` is answered by foundation.** It was substituted by the server's
   preferred model, because no server roster lists the on-device one.
 
+- **A keepalive before the first streamed event no longer fails the call.** Osaurus
+  sends SSE comments (`: ping`) through a long prefill; the first was read as a JSON
+  body and a 417 s raptor call failed with "Failed to parse ... JSON, raw: : ping".
+
+Measured on two fixed timelines (a live 47-tweet Following fetch, and the 30 tweets the
+2026-11-08 20:04 rejected raptor answer quoted), each model alone: foundation 5 of 7
+accepted before, 7 of 7 after; raptor 6 of 7 before, 6 of 6 after.
+
 ### Added
 - **Each rejected answer keeps its input.** Beside `rejected/<stamp>_<model>.md` is now
   `<stamp>_<model>.json`, the tweets that model was shown, which `twitter-summarize

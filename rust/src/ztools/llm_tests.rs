@@ -59,6 +59,18 @@ fn streamed_deltas_are_joined_and_reasoning_is_not_the_answer() {
     assert_eq!(answer, "Hello");
 }
 
+/// A long prefill is kept alive with SSE comment lines (`: ping`) before the
+/// first event. The first such line was taken for a non-streamed body and the
+/// call failed as "Failed to parse ... JSON, raw: : ping" (2026-11-09, raptor,
+/// a 417 s call on the reconstructed 2026-11-08 timeline).
+#[test]
+fn a_keepalive_comment_before_the_first_event_is_skipped() {
+    const PINGED: &str = ": ping\n\n: ping\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"Hi\"},\"finish_reason\":\"stop\"}]}\n\n\
+data: [DONE]\n\n";
+    let (url, _rx) = serve(PINGED, "text/event-stream", Duration::ZERO);
+    assert_eq!(chat(&request(&url), &budget()).unwrap(), "Hi");
+}
+
 #[test]
 fn a_plain_completion_body_is_read_too() {
     let (url, _rx) = serve(

@@ -217,10 +217,14 @@ pub fn chat_with(
         }
     };
 
-    // The first non-empty line says which wire shape this is.
+    // The first non-empty line says which wire shape this is. An SSE comment
+    // (`: ping`, the server's keepalive through a long prefill) says nothing
+    // and is skipped: it was read as a JSON body and failed the call
+    // (2026-11-09). A JSON body never opens with `:`.
     let mut first = String::new();
     while let Some(line) = next_line(&rx)? {
-        if !line.trim().is_empty() {
+        let trimmed = line.trim();
+        if !trimmed.is_empty() && !trimmed.starts_with(':') {
             first = line;
             break;
         }
