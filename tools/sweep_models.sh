@@ -39,7 +39,7 @@ if [ -z "${SWEEP_REEXEC:-}" ]; then
   # from it sends every relative path -- tui/lib.sh, tools/osaurus_one.sh --
   # into the temp directory. Caught by running the guard rather than by reading it.
   SWEEP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-  _snapshot="$(mktemp -t sweep_models)"
+  _snapshot="$(mktemp "${TMPDIR:-/tmp}/sweep_models.XXXXXX")"
   cat "${BASH_SOURCE[0]}" > "$_snapshot"
   SWEEP_REEXEC=1 SWEEP_ROOT="$SWEEP_ROOT" exec bash "$_snapshot" "$@"
 fi
