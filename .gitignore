@@ -145,6 +145,8 @@ logs/
 !eval_tasks/**/*.json
 !docs/**/*.json
 !tests/fixtures/**/*.json
+# goh estate seeds are this repository's own tracked facts (GOH.SEEDPRIVATE)
+!/*_seed.json
 *.csv
 *.txt
 !tests/fixtures/**/*.txt
