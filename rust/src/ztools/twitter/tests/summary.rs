@@ -206,10 +206,16 @@ fn test_run_summary_fails_when_model_returns_unusable_summary() {
         .expect("a rejected/ directory")
         .flatten()
         .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "md"))
         .collect();
-    // One per model the chain tried (the fixture chain has two).
+    // One per model the chain tried (the fixture chain has two), each with
+    // the tweets it was shown beside it.
     assert_eq!(kept.len(), 2, "{kept:?}");
     for path in &kept {
+        assert!(
+            path.with_extension("json").is_file(),
+            "{path:?} has no input"
+        );
         let body = std::fs::read_to_string(path).unwrap();
         assert!(body.contains("junk with no structure"), "{body}");
         assert!(why.contains(&path.display().to_string()), "{why}");

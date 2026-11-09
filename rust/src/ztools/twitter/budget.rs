@@ -52,6 +52,35 @@ impl TimeoutInputs {
     }
 }
 
+/// What the prompt's closing worked example adds past the timeline, at most:
+/// one sentence naming the first source line twice.
+const EXAMPLE_ALLOWANCE: usize = 400;
+
+/// Characters of timeline a prompt to `model` may carry.
+///
+/// `configured` (`twitter_prompt_max_chars`), or less when the model has a
+/// documented fixed window that holds prompt AND answer
+/// (`conf/models/<family>.toml` `context_window`): the window less
+/// [`DEFAULT_OUTPUT_TOKENS`] for the answer, at the transport's pessimistic
+/// 3 characters a token, less the instructions and the example.
+///
+/// foundation's window is 4096 tokens, and it was sent the same 24 000
+/// characters as raptor: 47 tweets made a ~14 700-character prompt that left
+/// it no room to answer, and it wrote four uncited paragraphs (2026-11-08
+/// noon, "4 of 4 bullets lack the attribution").
+#[must_use]
+pub fn timeline_chars(model: &str, configured: usize, instructions: &str) -> usize {
+    let Some(window) = crate::ztools::eval::model_resolve::documented_context_window(model) else {
+        return configured;
+    };
+    let room = window.saturating_sub(DEFAULT_OUTPUT_TOKENS)
+        * crate::ztools::eval::transport::CHARS_PER_TOKEN;
+    let room = usize::try_from(room)
+        .unwrap_or(usize::MAX)
+        .saturating_sub(instructions.len() + EXAMPLE_ALLOWANCE);
+    configured.min(room)
+}
+
 /// Dynamic request timeout scaled to input size + expected output.
 ///
 /// `prompt_chars` counts Unicode code points, matching Python `len(prompt)`.

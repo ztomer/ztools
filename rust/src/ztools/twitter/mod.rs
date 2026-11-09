@@ -11,6 +11,8 @@ pub mod cookies;
 pub mod endpoints;
 pub mod fallback;
 pub mod native;
+mod prompt;
+pub use prompt::{build_prompt, build_prompt_shown};
 pub mod quality;
 mod rejected;
 pub mod repair;
@@ -93,43 +95,6 @@ pub fn deduplicate_tweets(tweets: &[Tweet]) -> Vec<Tweet> {
     }
 
     deduped
-}
-
-/// Build executive summary prompt for LLM. `instructions` is the shared
-/// instruction block (canonical text: `conf/prompts.toml` `[twitter.summarize]`).
-#[must_use]
-pub fn build_prompt(tweets: &[Tweet], max_chars: usize, instructions: &str) -> (String, usize) {
-    let deduped = deduplicate_tweets(tweets);
-    let mut lines = Vec::new();
-    let mut used = 0;
-
-    for t in deduped.iter().rev() {
-        let mut prefix_parts = vec![format!("@{} | {}", t.screen_name, t.created_at)];
-        if t.favorite_count > 0 || t.retweet_count > 0 {
-            prefix_parts.push(format!(
-                "{} favs, {} RTs",
-                t.favorite_count, t.retweet_count
-            ));
-        }
-        if let Some(ref r) = t.reply_to {
-            prefix_parts.push(format!("-> @{r}"));
-        }
-        let line = format!("[{}]: {}", prefix_parts.join(" | "), t.text.trim());
-        if used + line.len() + 1 > max_chars {
-            continue;
-        }
-        used += line.len() + 1;
-        lines.push(line);
-    }
-    lines.reverse();
-    let timeline = lines.join("\n");
-
-    let prompt = format!(
-        "{instructions}\n\n\
-        <timeline>\n{timeline}\n</timeline>"
-    );
-
-    (prompt, lines.len())
 }
 
 /// How the summarizer decodes: not greedy, and no frequency penalty.
@@ -263,6 +228,30 @@ fn chain_failure(
     ))
 }
 
+/// What `candidate` is shown: its prompt, the tweets in it, and those
+/// tweets' `(handle, created_at)` pairs -- exactly what its answer may cite.
+///
+/// Each model is shown what fits ITS window: foundation's 4096 tokens hold
+/// prompt AND answer, and the 24 000-character timeline left it no room to
+/// answer in (`budget::timeline_chars`).
+fn prompt_for(
+    candidate: &str,
+    tweets: &[Tweet],
+    config: &crate::config::ZtoolsConfig,
+) -> (String, Vec<Tweet>, Vec<(String, String)>) {
+    let instructions = &config.twitter_summarize_prompt;
+    let (prompt, shown) = build_prompt_shown(
+        tweets,
+        budget::timeline_chars(candidate, config.twitter_prompt_max_chars, instructions),
+        instructions,
+    );
+    let sources = shown
+        .iter()
+        .map(|t| (t.screen_name.clone(), t.created_at.clone()))
+        .collect();
+    (prompt, shown, sources)
+}
+
 /// Run full Twitter summary flow and save the markdown into `output_dir`.
 ///
 /// The directory is REQUIRED, never defaulted here: whether a run writes the
@@ -319,16 +308,6 @@ pub fn run_summary(
         }
     }
 
-    let (prompt, processed) = build_prompt(
-        &final_tweets,
-        config.twitter_prompt_max_chars,
-        &config.twitter_summarize_prompt,
-    );
-    // What the answer may cite: exactly the source lines the prompt showed.
-    let sources: Vec<(String, String)> = final_tweets[..processed.min(final_tweets.len())]
-        .iter()
-        .map(|t| (t.screen_name.clone(), t.created_at.clone()))
-        .collect();
     // The chain: intended model resolved against what the server serves,
     // then the configured fallbacks. A roster the server will not give us is
     // an unknown roster, not an empty one — the intent stands unfiltered.
@@ -336,15 +315,16 @@ pub fn run_summary(
     let available =
         crate::ztools::model_eval::get_available_models(base_url, config).unwrap_or_default();
     let plan = chain::plan_chain(model, &available, &policy);
-    let timeout_secs = budget::estimate_timeout(
-        prompt.chars().count(),
-        &budget::TimeoutInputs::pessimistic(),
-    );
     let (answer, mut provenance) = chain::run_chain(&plan, model, |candidate| {
+        let (prompt, shown, sources) = prompt_for(candidate, &final_tweets, config);
+        let processed = sources.len();
         let route = Route {
             policy: &policy,
             base_url,
-            timeout_secs,
+            timeout_secs: budget::estimate_timeout(
+                prompt.chars().count(),
+                &budget::TimeoutInputs::pessimistic(),
+            ),
             config,
         };
         let (raw, cut) = route
@@ -366,9 +346,10 @@ pub fn run_summary(
                 // The refused answer is kept with the FULL reason in its
                 // header: the banner carries the verdict, this file carries
                 // the finding.
-                let kept = rejected::keep(output_dir, &stamp, candidate, &raw, &refusal.detail)
-                    .map(|p| format!(" (answer kept at {})", p.display()))
-                    .unwrap_or_default();
+                let kept =
+                    rejected::keep(output_dir, &stamp, candidate, &raw, &refusal.detail, &shown)
+                        .map(|p| format!(" (answer kept at {})", p.display()))
+                        .unwrap_or_default();
                 Refusal {
                     verdict: refusal.verdict,
                     detail: format!("the answer was refused: {}{kept}", refusal.detail),
@@ -407,7 +388,7 @@ pub fn run_summary(
         // literal "UTC" after a LOCAL time, which was wrong by the offset.
         now.format("%Y-%m-%d %H:%M %:z"),
         total,
-        processed,
+        answer.processed,
         provenance.banner(&answer.repairs),
         summary_section_for(&answer.body)
     );

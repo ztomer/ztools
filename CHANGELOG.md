@@ -11,6 +11,30 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+### Fixed
+- **The citation rule no longer names an account (ZT.TWITTERCHAIN).** The shared prompt's
+  example was `[@TechCrunch | 08:00]` -> `(@TechCrunch | 08:00)`, and raptor cited
+  `@TechCrunch` on every bullet of timelines that held no such account (2026-10-30: 54 of
+  54 citations refused; 2026-11-08 20:04: 31 of the 33). The rule is now stated in
+  placeholders, and the prompt closes with it worked on the timeline's own first source
+  line, so a copied example still names a tweet that was shown.
+- **foundation is shown what fits its 4096-token window.** It was sent the same
+  24 000-character budget as raptor; 47 tweets made a ~14 700-character prompt that left
+  it no room to answer, and it wrote uncited paragraphs ("4 of 4 bullets lack the
+  attribution", 2026-11-08 noon). Each model in the chain now gets a prompt built for its
+  documented window less the answer's 1 536-token reserve (`budget::timeline_chars`).
+- **What a model may cite is what it was shown.** The prompt builder skips a line over
+  budget and keeps fitting later ones, but the citable set was taken as the first N
+  tweets, so a truncated prompt's correct citations were refused as naming no given
+  tweet.
+- **`--model foundation` is answered by foundation.** It was substituted by the server's
+  preferred model, because no server roster lists the on-device one.
+
+### Added
+- **Each rejected answer keeps its input.** Beside `rejected/<stamp>_<model>.md` is now
+  `<stamp>_<model>.json`, the tweets that model was shown, which `twitter-summarize
+  --json` reads back: the sixteen refusals kept before this had no input to replay.
+
 ## v3.13.3 — the 2026-11-08 noon summary was thrown away whole _(2026-11-08)_
 
 ### Fixed

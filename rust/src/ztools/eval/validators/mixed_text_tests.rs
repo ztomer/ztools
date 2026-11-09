@@ -57,7 +57,7 @@ fn mixed_summary_clean_scores_100_and_reports_coverage() {
     );
     assert_eq!(
         validate_mixed_summary(&out, TWITTER_PROMPT_MIXED),
-        (100, "signal coverage 5/270".to_string())
+        (100, "signal coverage 5/272".to_string())
     );
 }
 
@@ -70,7 +70,7 @@ fn mixed_summary_noise_is_deducted_per_entry() {
         validate_mixed_summary(&out, TWITTER_PROMPT_MIXED),
         (
             50,
-            "included 4/8 noise items; signal coverage 4/270".to_string()
+            "included 4/8 noise items; signal coverage 4/272".to_string()
         )
     );
 }
@@ -85,7 +85,7 @@ fn mixed_summary_empty_and_unrelated() {
         validate_mixed_summary(&json!("the quick brown fox"), TWITTER_PROMPT_MIXED),
         (
             30,
-            "included 1/8 noise items; signal coverage 0/270".to_string()
+            "included 1/8 noise items; signal coverage 0/272".to_string()
         )
     );
 }
