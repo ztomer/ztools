@@ -137,9 +137,9 @@ GOH_SUBPROCESS_STDIN_MIN_CALLS=18       # read 20 on 2026-10-20, every one decla
 
 # The three scanners that declared no floor (ZT.SCANFLOOR, 2026-11-08), each at the count the
 # structural run read that day: a scan of nothing finds nothing, so without a key it passed.
-GOH_TAP_WRITES_MIN_FILES=37             # read 37 (script and workflow files)
-GOH_BUSY_LOOP_MIN_FILES=14              # read 14 (tracked shell sources)
-GOH_INSTALLED_VERSION_MIN_FILES=25      # read 25 (Markdown files that are not dated history)
+GOH_TAP_WRITES_MIN_FILES=33             # read 37 (script and workflow files)
+GOH_BUSY_LOOP_MIN_FILES=12              # read 14 (tracked shell sources)
+GOH_INSTALLED_VERSION_MIN_FILES=22      # read 25 (Markdown files that are not dated history)
 
 # A commit that ADDS a test names, in a `Red-run:` trailer, the mutation that
 # turned that test red (goh red-run, BACKLOG 4.11; owner OW.8, 2026-10-31).
