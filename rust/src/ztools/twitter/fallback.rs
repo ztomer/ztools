@@ -45,10 +45,7 @@ pub fn fallback_chain(
         if name.is_empty() || chain.iter().any(|m: &String| m == name) {
             continue;
         }
-        if !available.is_empty()
-            && !available.iter().any(|m| m == name)
-            && !name.to_lowercase().contains("foundation")
-        {
+        if !available.is_empty() && !available.iter().any(|m| m == name) && !is_on_device(name) {
             continue;
         }
         chain.push(name.to_string());
@@ -56,16 +53,25 @@ pub fn fallback_chain(
     chain
 }
 
+/// The on-device model, which no server roster lists: never "unserved".
+///
+/// One test for both callers. `fallback_chain` had it and
+/// `resolve_target_model` did not, so `--model foundation` was substituted by
+/// the server's preferred model and foundation never answered first.
+fn is_on_device(name: &str) -> bool {
+    name.to_lowercase().contains("foundation")
+}
+
 /// Resolve which model to try first.
 ///
-/// A served target is kept; a missing one resolves through
+/// A served target, or the on-device one, is kept; a missing one resolves through
 /// [`select_best_model`]; with no roster, or no preferred model served, the
 /// target stands — and [`fallback_chain`] then drops it as
 /// unserved, so the chain is the operator's named fallbacks or, when none is
 /// served, empty and refused with a stated reason by `run_chain`.
 #[must_use]
 pub fn resolve_target_model(target: &str, available: &[String], preferred: &[String]) -> String {
-    if !available.is_empty() && !available.iter().any(|m| m == target) {
+    if !available.is_empty() && !available.iter().any(|m| m == target) && !is_on_device(target) {
         select_best_model(available, preferred).unwrap_or_else(|| target.to_string())
     } else {
         target.to_string()
@@ -157,6 +163,21 @@ mod tests {
             vec!["foundation".to_string()]
         );
         crate::assert_empty!(fallback_chain(&target, &available, &[]));
+    }
+
+    /// `--model foundation` asks for the on-device model, which no server
+    /// roster lists. It used to resolve to the server's preferred model, so a
+    /// run that named foundation was answered by raptor (2026-11-09).
+    #[test]
+    fn the_on_device_target_stands_though_no_roster_lists_it() {
+        let available = vec!["raptor-v0.5".to_string()];
+        let preferred = ["raptor".to_string()];
+        let target = resolve_target_model("foundation", &available, &preferred);
+        assert_eq!(target, "foundation".to_string());
+        assert_eq!(
+            fallback_chain(&target, &available, &["foundation".to_string()]),
+            vec!["foundation".to_string()]
+        );
     }
 
     #[test]
