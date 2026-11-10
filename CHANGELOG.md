@@ -11,6 +11,12 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+## v3.14.1 — libsqlite3-sys 0.39.1 for RUSTSEC-2026-0459 _(2026-11-10)_
+
+### Security
+- **libsqlite3-sys 0.39.1 via rusqlite 0.41.1 (SEC.SQLITE.ZTOOLS).** RUSTSEC-2026-0459 hit
+  libsqlite3-sys below 0.39.0; ztools carried 0.38.2. No API change was needed.
+
 ## v3.14.0 — the shared prompt's example was `[@TechCrunch | 08:00]` -> `(@TechCrunch | 08:00)`, and _(2026-11-09)_
 
 ### Fixed
