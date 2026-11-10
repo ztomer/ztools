@@ -51,8 +51,12 @@ fn a_timeout_leaves_nothing_running() {
         dir.path(),
         &format!("sleep 30 & echo $! > {}; wait", pidfile.display()),
     );
-    assert!(respond(&fm, "p", 1).is_err());
-    let pid = std::fs::read_to_string(&pidfile).unwrap();
+    // 5s, not 1s: under the coverage gate's load a 1s timeout fired before the
+    // stub shell had written the pidfile, so the test failed with NotFound
+    // instead of measuring the grandchild (push log 2026-11-10).
+    assert!(respond(&fm, "p", 5).is_err());
+    let pid = std::fs::read_to_string(&pidfile)
+        .unwrap_or_else(|e| panic!("the stub never wrote its grandchild pid: {e}"));
     std::thread::sleep(Duration::from_millis(200));
     let alive = Command::new("/bin/kill")
         .args(["-0", pid.trim()])
