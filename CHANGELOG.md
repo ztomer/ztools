@@ -11,6 +11,8 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+## v3.18.0 — `ztools models refcheck --repair` can repair an `automations[].model` reference _(2026-11-11)_
+
 ### Fixed
 - **`ztools models refcheck --repair` can repair an `automations[].model` reference
   (ZT.REFCHECKGAPS).** Osaurus replaces an automation whole, so the old minimal document
