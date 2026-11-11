@@ -11,6 +11,8 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+## v3.17.0 — osaurus accepted an agent _(2026-11-11)_
+
 ### Added
 - **`ztools models refcheck [--repair|--no-repair]` (LM.REFCHECK).** Osaurus accepted an agent
   ("Disk Audit") pinned to `mlx-community/Qwen3.8-27B-8bit`, a model that was never installed.
