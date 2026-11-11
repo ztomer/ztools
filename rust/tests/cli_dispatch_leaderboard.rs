@@ -1,5 +1,8 @@
 //! CLI dispatch integration tests for `ztools model-eval --leaderboard`.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 #[path = "support/mod.rs"]
 mod support;
 pub use support::*;

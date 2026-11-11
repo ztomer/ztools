@@ -13,6 +13,9 @@
 //! connection that carried no request, which is what makes the probe's
 //! three-request count mean three requests.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 #[path = "support/mod.rs"]
 mod support;
 // See `eval_runner.rs`: the shared module's items are reachable API of this

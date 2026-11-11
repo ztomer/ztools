@@ -11,6 +11,9 @@
 //! Skips loudly when `gates_of_heck` (the shell lib the script sources) is not
 //! checked out; never silently.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};

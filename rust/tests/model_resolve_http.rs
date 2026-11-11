@@ -11,6 +11,9 @@
 //! the condition a client actually needs -- a completed handshake -- under a
 //! deadline that names what never happened.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 #[path = "support/mod.rs"]
 mod support;
 // See `eval_runner.rs`: the shared module's items are reachable API of this

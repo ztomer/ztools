@@ -2,6 +2,9 @@
 //! row button parses -- one JSON object on stdout and an exit status that says
 //! which kind of answer it is (`docs/ROADMAP.md`, "Contracts other repos build on").
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 mod support;
 
 use std::fs;

@@ -8,6 +8,9 @@
 //! condition a client actually needs -- a completed handshake -- with a deadline
 //! that names what never happened.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 #[path = "support/mod.rs"]
 mod support;
 // The support module is shared by seven test binaries that between them use

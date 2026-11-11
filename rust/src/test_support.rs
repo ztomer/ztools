@@ -73,3 +73,45 @@ macro_rules! assert_nonempty {
         assert_ne!(left.len(), 0, $($arg)+);
     }};
 }
+
+/// Refuse to run a test binary built from a different source than the one on
+/// disk (ZT.RESIDFLAKE, ZT.MTIMECLASS).
+///
+/// Cargo rebuilds a test when its file's mtime moves. A mutant restored with
+/// `mv x.bak x` keeps the OLD mtime, so cargo runs the stale mutant against a
+/// file that no longer says it. `file` is the path relative to the crate root
+/// (`file!()`), `compiled` the bytes this binary was built from.
+///
+/// # Panics
+///
+/// When the file cannot be read, or its bytes differ from `compiled`.
+pub fn assert_built_from_disk(file: &str, compiled: &str) {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(file);
+    let on_disk = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("cannot read {} to check the build: {e}", path.display()));
+    assert!(
+        on_disk == compiled,
+        "this test binary was built from a different {file} than the one on disk: a \
+         restore kept an old mtime (`mv x.bak x`), so cargo never rebuilt it. `touch {file}` \
+         and run again; restore a mutant with `cp`, never `mv`"
+    );
+}
+
+/// One `#[test]` that runs [`assert_built_from_disk`] on the invoking file.
+///
+/// Every integration-test target calls `ztools::built_from_disk!();` once at
+/// top level; `tools/tests/test_rust_targets_guarded.py` fails a target that
+/// does not. `file!()` names the invocation site, so the macro needs no
+/// argument.
+#[macro_export]
+macro_rules! built_from_disk {
+    () => {
+        #[test]
+        fn built_from_disk() {
+            $crate::test_support::assert_built_from_disk(
+                file!(),
+                include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", file!())),
+            );
+        }
+    };
+}

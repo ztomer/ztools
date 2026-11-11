@@ -5,6 +5,9 @@
 //! pass on a clean one, and with repair on turn the broken one into a one-agent
 //! plan to the 6D crack and apply exactly that document.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 #[path = "support/mod.rs"]
 mod support;
 pub use support::*;

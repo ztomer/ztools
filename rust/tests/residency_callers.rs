@@ -6,6 +6,9 @@
 //! and "the run ended with `/health` showing nothing resident" are facts about
 //! requests, not about timing.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 #[path = "support/mod.rs"]
 mod support;
 pub use support::*;

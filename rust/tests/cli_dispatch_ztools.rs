@@ -17,6 +17,9 @@
 //! `support` because the refusal and drain suites need the same ones, and one
 //! copy of "a private HOME" is one thing to get right.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 #[path = "support/mod.rs"]
 mod support;
 // The forecast endpoint's stub and the test that pins it, split out because

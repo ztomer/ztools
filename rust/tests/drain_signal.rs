@@ -35,6 +35,9 @@
 //! and "the handler ran" is something the handler printed. Nothing here sleeps
 //! waiting for either.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 #[path = "support/child.rs"]
 mod child;
 #[path = "support/mod.rs"]

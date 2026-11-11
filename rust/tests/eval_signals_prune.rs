@@ -7,6 +7,9 @@
 //! 4. Refuses or dry-runs without modifying files.
 //! 5. Successfully prunes on `--prune` and writes clean JSON back to disk.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 #[path = "support/mod.rs"]
 mod support;
 pub use support::*;

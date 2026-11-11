@@ -33,6 +33,9 @@
 //! bound-then-released so the connection is refused locally), no browser is
 //! launched, no process is signalled, and the GPU lock is never reached.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;

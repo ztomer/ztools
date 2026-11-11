@@ -110,15 +110,7 @@ pub fn bin() -> PathBuf {
 ///
 /// When the file cannot be read, or its bytes differ from `compiled`.
 pub fn assert_built_from_disk(file: &str, compiled: &str) {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(file);
-    let on_disk = fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("cannot read {} to check the build: {e}", path.display()));
-    assert!(
-        on_disk == compiled,
-        "this test binary was built from a different {file} than the one on disk: a \
-         restore kept an old mtime (`mv x.bak x`), so cargo never rebuilt it. `touch {file}` \
-         and run again; restore a mutant with `cp`, never `mv`"
-    );
+    ztools::test_support::assert_built_from_disk(file, compiled);
 }
 
 /// A private `HOME` for one test, named so two tests cannot collide.

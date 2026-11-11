@@ -32,6 +32,9 @@
 //! would make the over-budget refusal stop happening and this file would pass by
 //! testing nothing.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 #[path = "support/mod.rs"]
 mod support;
 // See `eval_runner.rs`: the shared module's items are reachable API of this

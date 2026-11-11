@@ -10,6 +10,9 @@
 //! returns: `weekend_fetch_tests.rs` drives `fetch_duckduckgo_events` against a
 //! loopback chat endpoint and asserts the parsed events field by field.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};

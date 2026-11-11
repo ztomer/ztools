@@ -19,6 +19,9 @@
 //!
 //! Hermetic: no I/O at all, so there is nothing to reach the network for.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 use ztools::{assert_empty, assert_exact, assert_nonempty};
 
 /// Every sanctioned spelling is usable from here, on values each accepts.

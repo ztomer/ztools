@@ -11,6 +11,9 @@
 //! wait at all (see `stream_deadline_enforced_in_wall_clock`), which is the only
 //! reason it survived this long.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 #[path = "support/mod.rs"]
 mod support;
 // The support module is shared by ten test binaries that between them use every

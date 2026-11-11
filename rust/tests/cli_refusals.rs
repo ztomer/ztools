@@ -19,6 +19,9 @@
 //! is never reached (its holder is redirected, and the one refusal that gets
 //! close happens before the lock is taken at all).
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 #[path = "support/mod.rs"]
 mod support;
 // See `eval_runner.rs`: the shared module's items are reachable API of this

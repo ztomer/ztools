@@ -15,6 +15,9 @@
 //! region inputs both filters agreed on; the deliberate divergence (a foreign
 //! city beats a local token) is pinned by `a_foreign_city_beats_any_local_token`.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 use serde_json::Value;
 use ztools::weekend::{
     MAX_BODY_LENGTH, SearchResult, as_candidate_lines, clean_search_results, looks_like_aggregator,

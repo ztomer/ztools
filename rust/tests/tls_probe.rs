@@ -27,6 +27,9 @@
 //! otherwise print `ok` for a test that asserted nothing — which is exactly
 //! how a blind spot stays invisible.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::sync::{Arc, Mutex};

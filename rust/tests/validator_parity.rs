@@ -22,6 +22,9 @@
 //! clean machine and this fixture already covers it: re-abs the deltas and
 //! `traceable` drops to 0/4 here too.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 use serde_json::Value;
 use std::collections::BTreeMap;
 use ztools::eval::validators::{

@@ -7,6 +7,9 @@
 //! (`weekly on <day> at HH:MM`, `routines/src/cadence.rs`) and holds it to the
 //! stated intent: Thursday, in the evening.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 fn manifest() -> toml::Value {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()

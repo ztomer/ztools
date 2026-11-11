@@ -6,6 +6,9 @@
 //! `kill(pid, 0)` and `ps -o lstart=` must agree on a genuine process for the
 //! recycled-PID guard to mean anything.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 use std::ffi::OsStr;
 use std::process::{Child, Command};
 use std::time::Duration;

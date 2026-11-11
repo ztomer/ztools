@@ -14,6 +14,9 @@
 //! connection that carried no request: `await_stub` opens one and sends nothing,
 //! and a phantom request would have been counted as an attempt at some budget.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 #[path = "support/mod.rs"]
 mod support;
 // See `eval_runner.rs`: the shared module's items are reachable API of this

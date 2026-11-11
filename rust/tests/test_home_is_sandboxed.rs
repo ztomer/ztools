@@ -9,6 +9,9 @@
 //! `rust/target/test-home` for every process cargo starts, so a test that
 //! forgets the guard writes into the build directory, never into `~`.
 
+// Refuse a stale build of this file (ZT.MTIMECLASS).
+ztools::built_from_disk!();
+
 use std::process::Command;
 
 /// The operator's home from the password database, which `HOME` cannot move.
