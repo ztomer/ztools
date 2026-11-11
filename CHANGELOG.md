@@ -11,6 +11,26 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.20.0 — potion-multilingual-128M measured and rejected; every tag has its changelog heading _(2026-11-11)_
+
+### Added
+- **The Hebrew half of an embedding calibration (LM.EMBEDHE).** A model's Hebrew tweets
+  may enter clustering only when one threshold puts every labelled same-story Hebrew pair
+  at or above it, every other Hebrew pair below it, and the unrelated median under 0.5.
+  `tests/fixtures/embeddings/potion_multilingual_128m.json` holds 42 synthetic Hebrew
+  tweets (8 labelled pairs) and 10 Latin ones with recorded vectors.
+- **Every v* tag has a `## vX` heading (ZT.CHANGELOGTAGS).** The 68 tags before v2.2.0
+  carry stanzas backfilled from their messages and release commits; the
+  `changelog_tags` seed is empty.
+
+### Not changed, measured
+- **Clustering keeps potion-base-4M.** In-process `minishlab/potion-multilingual-128M`
+  (model2vec-rs 0.4.0) reads Hebrew (unrelated median 0.171 against 0.947) but leaves one
+  of 8 labelled pairs (0.449) under the highest unrelated pair (0.535), so no threshold
+  passes, and on the 266 real Latin tweets it recovers 2 of 4 same-story pairs at zero
+  false merges where potion-base-4M recovers 4. It gets no calibration entry; the next
+  candidate is Qwen3-Embedding-0.6B.
+
 ## v3.19.0 — every Rust test target refuses a stale build of itself _(2026-11-11)_
 
 ### Fixed
