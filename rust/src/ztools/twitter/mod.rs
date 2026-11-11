@@ -302,11 +302,17 @@ pub fn run_summary(
         anyhow::bail!("no tweets to summarise: nothing was collected, and no summary was written");
     }
     let deduped = deduplicate_tweets(&tweets_vec);
-    let clustered = crate::ztools::embeddings::cluster_tweets(&deduped, base_url, config)
-        .unwrap_or_else(|_| deduped.iter().map(|t| vec![t.clone()]).collect());
+    // Clustering off is said, in the run and in the document, never swallowed
+    // into singletons (ZT.EMBEDMODEL: it was off on every run for a refused name).
+    let clustering = crate::ztools::embeddings::cluster_tweets(&deduped, base_url, config);
+    eprintln!("{}", clustering.status_line());
+    let clustering_note = clustering
+        .document_note()
+        .map(|n| format!("{n}\n\n"))
+        .unwrap_or_default();
 
     // Re-flatten from clusters, ordering by cluster size to put biggest narratives first
-    let mut sorted_clusters = clustered;
+    let mut sorted_clusters = clustering.clusters;
     sorted_clusters.sort_by_key(|c| std::cmp::Reverse(c.len()));
 
     let mut final_tweets = Vec::new();
@@ -391,13 +397,14 @@ pub fn run_summary(
          **Period:** {}\n\
          **Tweets:** {} fetched, {} processed\n\n\
          {}\n\n\
-         {}\n",
+         {}{}\n",
         // The local clock, labelled with its real offset. It used to carry a
         // literal "UTC" after a LOCAL time, which was wrong by the offset.
         now.format("%Y-%m-%d %H:%M %:z"),
         total,
         answer.processed,
         provenance.banner(&answer.repairs),
+        clustering_note,
         summary_section_for(&answer.body)
     );
 

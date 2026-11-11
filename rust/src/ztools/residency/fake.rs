@@ -37,6 +37,9 @@ pub struct Spec {
     pub models: String,
     /// `/v1/embeddings`'s body.
     pub embeddings: String,
+    /// `/v1/embeddings` answers 400 with `embeddings` as the body, as Osaurus
+    /// refuses a model it does not serve.
+    pub refuse_embeddings: bool,
     /// The server schedules no idle unload ("Keep Model Loaded").
     pub keep_loaded: bool,
     /// When set, a completion's body is this function of the request body,
@@ -51,7 +54,9 @@ impl Spec {
         Self {
             chat: body.to_string(),
             models: r#"{"data":[]}"#.to_string(),
-            embeddings: r#"{"data": [{"embedding": [0.1, 0.2]}]}"#.to_string(),
+            embeddings: r#"{"model": "potion-base-4M", "data": [{"embedding": [0.1, 0.2]}]}"#
+                .to_string(),
+            refuse_embeddings: false,
             keep_loaded: false,
             answer_for: None,
         }
@@ -105,8 +110,14 @@ impl FakeOsaurus {
             for mut stream in listener.incoming().flatten() {
                 let request = read_request(&mut stream);
                 let reply = answer(&mut shared.lock().unwrap(), &request, &spec);
+                let status = if spec.refuse_embeddings && request.starts_with("POST /v1/embeddings")
+                {
+                    "400 Bad Request"
+                } else {
+                    "200 OK"
+                };
                 let response = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply}",
+                    "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply}",
                     reply.len()
                 );
                 let _ = stream.write_all(response.as_bytes());

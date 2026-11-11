@@ -86,6 +86,12 @@ pub struct ZtoolsConfig {
     pub eval_tasks_dirs: Vec<String>,
     #[serde(default = "default_twitter_model")]
     pub twitter_model: String,
+    /// The embedding model the twitter clustering asks for. `None` (the
+    /// default) asks the server which one it serves: Osaurus names its
+    /// embedding models only in the refusal of a name it does not serve
+    /// (ZT.EMBEDMODEL), so a hard-coded name went stale silently.
+    #[serde(default)]
+    pub twitter_embedding_model: Option<String>,
     #[serde(default = "default_weekend_model")]
     pub weekend_model: String,
     #[serde(default = "default_image_renamer_model")]
@@ -313,6 +319,7 @@ impl Default for ZtoolsConfig {
             eval_conf_dirs: default_eval_conf_dirs(),
             eval_tasks_dirs: default_eval_tasks_dirs(),
             twitter_model: default_twitter_model(),
+            twitter_embedding_model: None,
             weekend_model: default_weekend_model(),
             image_renamer_model: default_image_renamer_model(),
             image_renamer_vlm_model: default_image_renamer_vlm_model(),

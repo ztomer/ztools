@@ -745,6 +745,20 @@ vision. Backlog item 9 covers building a real one.
   `/health` to show the model current and accepting, and releases by waiting out that timer. A
   model still resident past the server's own deadline is an error.
 
+## Osaurus embeddings: one static model, named only in a refusal (measured 2026-11-11, Osaurus 1.0.1)
+
+- `/v1/embeddings` serves `potion-base-4M` (alias `minishlab/potion-base-4M`), 128-d, ~10 ms,
+  never resident. `/v1/models` does NOT list it. The only place the server names it is the
+  400 `unsupported_embedding_model` refusal of any other name: "Use 'potion-base-4M' or
+  'minishlab/potion-base-4M'". `embeddings::cluster_tweets` asks with the configured
+  `twitter_embedding_model` (default none) and uses the served model that has a calibration.
+- **Threshold 0.64, not 0.85.** On 243 real tweets, all four Latin-script pairs at or above
+  0.64 were one story told by two accounts. The next pairs (0.625, 0.623) were related but
+  not the same event. The old 0.85 merged none. The evidence is on
+  `embeddings_calibration.rs`; the fixture is `tests/fixtures/embeddings/potion_base_4m.json`.
+- **It cannot read Hebrew.** Unrelated Hebrew tweets score 0.96-0.99 against each other, so
+  text whose letters are mostly non-Latin is kept out of the comparison.
+
 ## Osaurus Server Rules
 
 1. **Single instance only** - enforce it with `./tools/osaurus_one.sh`, do not rely on

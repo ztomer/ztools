@@ -11,6 +11,20 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+### Fixed
+- **Twitter clustering runs for the first time, with the model the server serves
+  (ZT.EMBEDMODEL).** The embedding model was hard-coded as `nomic-embed-text`. Osaurus refuses
+  that name with 400 `unsupported_embedding_model`, and the refusal was swallowed into one
+  cluster per tweet on every run. The server is now asked. It names its model
+  (`potion-base-4M`) in the refusal, and the served model that has a calibration is used.
+  `twitter_embedding_model` sets a preference. A refused name, or any other reason clustering
+  is off, is printed by the run and written into the summary document as a `> ⚠` line.
+- **The similarity threshold is calibrated for `potion-base-4M`: 0.85 -> 0.64.** Measured on
+  243 tweets quoted in saved summaries: the four pairs at or above 0.64 are each one story,
+  and 0.85 merged none. A committed fixture of recorded vectors pins the calibration and
+  fails at 0.0, at 1.0 and at the old 0.85. Hebrew tweets are kept out of the comparison
+  because the model maps all Hebrew text to nearly the same vector.
+
 ## v3.15.1 — a weekend model left resident fails the run _(2026-11-11)_
 
 ### Fixed

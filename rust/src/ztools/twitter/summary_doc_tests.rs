@@ -106,7 +106,9 @@ fn stub_server(roster: &'static str, content: &'static str) -> String {
         models: format!(r#"{{"data":[{roster}]}}"#),
         // One embedding per tweet, or `cluster_tweets` discards the answer and
         // the clustering path stops being exercised.
-        embeddings: r#"{"data":[{"embedding":[0.1,0.2]},{"embedding":[0.1,0.2]}]}"#.to_string(),
+        embeddings:
+            r#"{"model":"potion-base-4M","data":[{"embedding":[0.1,0.2]},{"embedding":[0.1,0.2]}]}"#
+                .to_string(),
         ..Spec::chat(&format!(
             r#"{{"choices":[{{"message":{{"content":{}}}}}]}}"#,
             serde_json::to_string(content).unwrap()
@@ -418,4 +420,35 @@ fn the_normal_document_states_its_provenance_in_one_line() {
         "a normal run has no banner:\n{quiet}"
     );
     assert!(!quiet.contains("Repaired before saving"), "{quiet}");
+}
+
+/// ZT.EMBEDMODEL: a server that refuses the configured embedding model, and
+/// names none with a calibrated threshold, is a run whose DOCUMENT says
+/// clustering was off and why. It used to say nothing: the refusal was
+/// swallowed into one cluster per tweet on every run.
+#[test]
+fn a_refused_embedding_model_is_named_in_the_document() {
+    use crate::ztools::residency::fake::{FakeOsaurus, Spec};
+    let _env = crate::test_env::TestEnv::new();
+    let tmp = tempfile::tempdir().expect("a temp dir for the summary's output");
+    let url = FakeOsaurus::serve(Spec {
+        models: r#"{"data":[{"id":"golden-model"}]}"#.to_string(),
+        embeddings: r#"{"error":{"code":"unsupported_embedding_model","message":"Embedding model 'nomic-embed-text' is not supported by this endpoint. Use 'mystery-embed'. No embeddings were generated."}}"#.to_string(),
+        refuse_embeddings: true,
+        ..Spec::chat(&format!(
+            r#"{{"choices":[{{"message":{{"content":{}}}}}]}}"#,
+            serde_json::to_string(SUMMARY_BODY).unwrap()
+        ))
+    })
+    .url;
+    let mut cfg = config(&url, tmp.path());
+    cfg.twitter_embedding_model = Some("nomic-embed-text".into());
+    let out = tmp.path().join("summaries");
+    let path = crate::ztools::twitter::run_summary(&tweets(), &out, Some(&url), None, &cfg)
+        .expect("clustering off is not a failed run");
+    let doc = std::fs::read_to_string(path).expect("the summary document");
+    assert!(
+        doc.contains("> ⚠ Clustering off, every tweet is its own cluster: the server refuses embedding model 'nomic-embed-text' and serves [mystery-embed]"),
+        "{doc}"
+    );
 }

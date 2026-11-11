@@ -55,7 +55,7 @@ fn test_cluster_tweets_fallback() {
     let (env, config) = sandboxed_config();
 
     // Using a fake URL so it triggers fallback
-    let result = cluster_tweets(&tweets, "http://127.0.0.1:59999", &config).unwrap();
+    let result = cluster_tweets(&tweets, "http://127.0.0.1:59999", &config).clusters;
 
     // In fallback mode, it puts every tweet in its own cluster
     assert_eq!(result.len(), 2);
@@ -68,7 +68,7 @@ fn test_cluster_tweets_fallback() {
 fn test_cluster_tweets_empty() {
     let tweets: Vec<Tweet> = vec![];
     let (env, config) = sandboxed_config();
-    let result = cluster_tweets(&tweets, "http://127.0.0.1:59999", &config).unwrap();
+    let result = cluster_tweets(&tweets, "http://127.0.0.1:59999", &config).clusters;
     assert_empty!(result);
     drop(env);
 }
@@ -130,17 +130,21 @@ fn serve(status_line: &'static str, body: &'static str) -> String {
 
 #[test]
 fn similar_tweets_merge_into_one_cluster_and_distant_ones_start_their_own() {
-    // t0 and t1 point the same way (cosine ~0.999 >= 0.85 threshold); t2 is
-    // orthogonal to t0 (cosine 0) so it must open a second cluster.
-    let body =
-        r#"{"data":[{"embedding":[1.0,1.0]},{"embedding":[1.0,0.9]},{"embedding":[0.0,1.0]}]}"#;
+    // t0 and t1 point the same way (cosine ~0.999 >= the calibrated
+    // threshold); t2 is orthogonal to t0 (cosine 0) so it must open a second
+    // cluster.
+    let body = r#"{"model":"potion-base-4M","data":[{"embedding":[1.0,1.0]},{"embedding":[1.0,0.9]},{"embedding":[-1.0,1.0]}]}"#;
     let url = serve("HTTP/1.1 200 OK", body);
     let tweets = vec![mock_tweet("t0"), mock_tweet("t1"), mock_tweet("t2")];
     let (env, config) = sandboxed_config();
 
-    let result = cluster_tweets(&tweets, &url, &config).unwrap();
+    let result = cluster_tweets(&tweets, &url, &config).clusters;
 
-    assert_eq!(result.len(), 2, "one merged cluster plus one singleton");
+    assert_eq!(
+        result.len(),
+        2,
+        "one merged cluster plus one singleton: {result:?}"
+    );
     assert_eq!(
         result[0].len(),
         2,
@@ -160,7 +164,7 @@ fn an_http_error_status_falls_back_to_singletons() {
     let tweets = vec![mock_tweet("u1"), mock_tweet("u2"), mock_tweet("u3")];
     let (env, config) = sandboxed_config();
 
-    let result = cluster_tweets(&tweets, &url, &config).unwrap();
+    let result = cluster_tweets(&tweets, &url, &config).clusters;
 
     assert_eq!(
         result.len(),
@@ -175,14 +179,17 @@ fn an_http_error_status_falls_back_to_singletons() {
 fn an_embedding_count_mismatch_falls_back_to_singletons() {
     // Two tweets but only one vector back: clustering would index out of sync
     // with the input, so the code must bail to singletons instead.
-    let body = r#"{"data":[{"embedding":[1.0,0.0]}]}"#;
+    let body = r#"{"model":"potion-base-4M","data":[{"embedding":[1.0,0.0]}]}"#;
     let url = serve("HTTP/1.1 200 OK", body);
     let tweets = vec![mock_tweet("u1"), mock_tweet("u2"), mock_tweet("u3")];
     let (env, config) = sandboxed_config();
 
-    let result = cluster_tweets(&tweets, &url, &config).unwrap();
+    let result = cluster_tweets(&tweets, &url, &config).clusters;
 
     assert_eq!(result.len(), 3);
     assert!(result.iter().all(|c| c.len() == 1));
     drop(env);
 }
+
+#[path = "embeddings_model_tests.rs"]
+mod model_choice;
