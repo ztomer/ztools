@@ -249,13 +249,6 @@
   {
    "root": "6cbea9cb883dbc361e4bff645f4ed3cdcdbe6942",
    "repo": "ztools",
-   "path": "rust/tests/eval_not_measured.rs",
-   "count": 1,
-   "reason": "unreviewed: 1 hedged plural: line 240"
-  },
-  {
-   "root": "6cbea9cb883dbc361e4bff645f4ed3cdcdbe6942",
-   "repo": "ztools",
    "path": "rust/tests/eval_signals_prune.rs",
    "count": 2,
    "reason": "unreviewed: 2 hedged plurals: lines 145, 172"
