@@ -39,11 +39,20 @@ fn sandbox(name: &str, fake: &FakeOsaurus) -> std::path::PathBuf {
     home
 }
 
+/// A pinned memory reading: 64 GB available, no swap. The oversize guard
+/// reads it instead of the host, so whether the eval runs does not depend on
+/// the RAM of the machine the test runs on (CI run 43031264189 refused
+/// `probe-model` on a runner with 4 GB reclaimable).
+const MEMINFO_ROOMY: &str = "MemTotal: 67108864 kB\nMemFree: 60000000 kB\nMemAvailable: 64000000 kB\nSwapTotal: 0 kB\nSwapFree: 0 kB\n";
+
 fn run(home: &Path, args: &[&str]) -> Output {
     let gpu = home.join("gpu-lock");
     fs::create_dir_all(&gpu).unwrap();
+    let meminfo = home.join("meminfo");
+    fs::write(&meminfo, MEMINFO_ROOMY).unwrap();
     std::process::Command::new(bin())
         .env("HOME", home)
+        .env("ZTOOLS_MEMINFO", &meminfo)
         .env("ZTOOLS_GPU_LOCK_DIR", &gpu)
         .env("EVAL_SIGNALS_DIR", home.join("signals"))
         .env("EVAL_OUTPUT_DIR", home.join("outputs"))
@@ -104,8 +113,6 @@ fn the_full_suite_loads_its_model_and_leaves_nothing_resident() {
         .iter()
         .filter(|c| matches!(c, Call::Load(_)))
         .count();
-    let probe_ones = fake.calls().len();
-    assert!(probe_ones > 0);
     assert_eq!(
         loads,
         2,

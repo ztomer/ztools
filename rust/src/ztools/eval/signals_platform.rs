@@ -127,6 +127,25 @@ pub const SYSCTL: &str = "sysctl";
 /// not a `PATH` lookup, so a surprising `PATH` cannot silently redirect it.
 pub const PROC_MEMINFO: &str = "/proc/meminfo";
 
+/// Names a meminfo-format file that IS this host's memory reading.
+///
+/// It feeds [`memory_pressure`] and the oversize guard's headroom. Set, it is the only
+/// source: a missing file is "cannot tell", never a fall-back to the host. It
+/// exists so a test of the binary decides what memory the guard sees: a guard
+/// reading the host made `tests/residency_callers.rs` pass on a 64 GB Mac and
+/// fail on a GitHub runner (ZT.OSAURUSLOAD, CI run 43031264189).
+pub const MEMINFO_ENV: &str = "ZTOOLS_MEMINFO";
+
+/// The `(vm_stat, meminfo)` pair this host's readings come from: the defaults,
+/// or [`MEMINFO_ENV`]'s file with no `vm_stat` at all.
+#[must_use]
+pub fn reading_sources() -> (std::path::PathBuf, std::path::PathBuf) {
+    std::env::var_os(MEMINFO_ENV).map_or_else(
+        || (VM_STAT.into(), PROC_MEMINFO.into()),
+        |file| (std::path::PathBuf::new(), file.into()),
+    )
+}
+
 /// Run `prog` with `args` and hand back its stdout.
 ///
 /// `None` when it cannot be run or produces nothing readable: an unreadable
@@ -254,11 +273,8 @@ impl MemoryPressure {
 /// never as "fine".
 #[must_use]
 pub fn memory_pressure() -> Option<MemoryPressure> {
-    memory_pressure_from(
-        Path::new(VM_STAT),
-        Path::new(SYSCTL),
-        Path::new(PROC_MEMINFO),
-    )
+    let (vm_stat, meminfo) = reading_sources();
+    memory_pressure_from(&vm_stat, Path::new(SYSCTL), &meminfo)
 }
 
 /// [`memory_pressure`] from injected paths: the seam every caller needs.

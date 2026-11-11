@@ -353,3 +353,29 @@ fn a_live_pressure_reading_is_finite_nonnegative_and_platform_coherent() {
     }
     drop(env);
 }
+
+/// `ZTOOLS_MEMINFO` is the WHOLE reading when set: its file decides headroom
+/// and swap, and a missing file is "cannot tell", never the host's reading
+/// (ZT.OSAURUSLOAD: a guard reading the host made a binary test pass on a
+/// 64 GB Mac and fail on a CI runner).
+#[test]
+#[serial]
+fn a_pinned_meminfo_is_the_reading_and_a_missing_one_is_not_the_host() {
+    let env = TestEnv::new();
+    let file = env.root().join("pinned-meminfo");
+    env.set(MEMINFO_ENV, &file.to_string_lossy());
+    assert!(
+        memory_pressure().is_none(),
+        "a missing pinned file must not fall back to the host"
+    );
+    assert!(crate::ztools::eval::oversize::reclaimable_available_gb().is_err());
+    std::fs::write(&file, MEMINFO_SWAPPED).unwrap();
+    let pressure = memory_pressure().expect("the pinned file is read");
+    assert_eq!(pressure.source(), PressureSource::LinuxMeminfo);
+    assert!(
+        (pressure.swap_gb() - 15.0).abs() < 1e-9,
+        "the pinned swap, not the host's"
+    );
+    assert!(crate::ztools::eval::oversize::reclaimable_available_gb().is_ok());
+    drop(env);
+}

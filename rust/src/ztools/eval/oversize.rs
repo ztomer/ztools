@@ -31,7 +31,8 @@ use std::path::Path;
 use crate::units::{unsigned, whole_u64};
 use crate::ztools::eval::model_resolve::model_config_path;
 use crate::ztools::eval::signals::{
-    PROC_MEMINFO, VM_STAT, file_text, memory_pressure, thrashing_verdict, tool_output,
+    PROC_MEMINFO, VM_STAT, file_text, memory_pressure, reading_sources, thrashing_verdict,
+    tool_output,
 };
 
 /// Escape hatch for the deliberate case: measuring whether an oversize model
@@ -129,7 +130,8 @@ fn vm_stat_pages_in(text: &str, label: &str) -> Option<f64> {
 /// likely causes are different per platform and guessing at one is how a
 /// refusal becomes an outage nobody can diagnose.
 pub fn reclaimable_available_gb() -> Result<f64, String> {
-    reclaimable_available_gb_from(Path::new(VM_STAT), Path::new(PROC_MEMINFO))
+    let (vm_stat, meminfo) = reading_sources();
+    reclaimable_available_gb_from(&vm_stat, &meminfo)
 }
 
 /// [`reclaimable_available_gb`] from injected paths, in the pressure reader's precedence.

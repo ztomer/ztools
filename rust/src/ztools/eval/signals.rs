@@ -40,10 +40,10 @@ use crate::ztools::eval::task_fingerprint::{current_task_fingerprint, task_finge
 use crate::ztools::eval::task_loader::EvalTask;
 
 pub use platform::{
-    MAX_CLEAN_RECLAIM_GB, MAX_CLEAN_SWAP_GB, MemoryPressure, PROC_MEMINFO, PressureSource, SYSCTL,
-    VM_STAT, file_text, machine_is_uncontended, memory_pressure, memory_pressure_from,
-    parse_compressor_gb, parse_meminfo_swap_used_gb, parse_swap_used_gb, thrashing_verdict,
-    tool_output, uncontended_verdict,
+    MAX_CLEAN_RECLAIM_GB, MAX_CLEAN_SWAP_GB, MEMINFO_ENV, MemoryPressure, PROC_MEMINFO,
+    PressureSource, SYSCTL, VM_STAT, file_text, machine_is_uncontended, memory_pressure,
+    memory_pressure_from, parse_compressor_gb, parse_meminfo_swap_used_gb, parse_swap_used_gb,
+    reading_sources, thrashing_verdict, tool_output, uncontended_verdict,
 };
 
 #[path = "signals_platform.rs"]
