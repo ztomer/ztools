@@ -11,6 +11,8 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+## v3.15.0 — osaurus 1.0.1 has no load or unload route, so `residency::with_model` _(2026-11-11)_
+
 ### Changed
 - **Every Osaurus caller loads its model and releases it (ZT.OSAURUSLOAD).** Osaurus 1.0.1
   has no load or unload route, so `residency::with_model` (and `residency::Session` for the
