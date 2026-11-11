@@ -193,3 +193,6 @@ fn an_embedding_count_mismatch_falls_back_to_singletons() {
 
 #[path = "embeddings_model_tests.rs"]
 mod model_choice;
+
+#[path = "embeddings_hebrew_tests.rs"]
+mod hebrew_half;

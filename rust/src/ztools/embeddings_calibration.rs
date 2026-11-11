@@ -20,6 +20,18 @@
 //! threshold and fails at 0.0, at 1.0 and at the old 0.85. To regenerate it,
 //! POST its texts to `/v1/embeddings` with model `potion-base-4M` (under the
 //! GPU lock) and record each vector rounded to six decimals.
+//!
+//! `minishlab/potion-multilingual-128M` (LM.EMBEDHE, 2026-11-11, in-process via
+//! `model2vec-rs` 0.4.0): MEASURED AND REJECTED, so it has no entry. On the 266 Latin
+//! tweets of the accepted summaries (35,245 pairs) the median is 0.20 and p99.9 0.65,
+//! and the four same-story pairs above sit at 0.88, 0.75, 0.67 and 0.63 while
+//! related-not-same pairs reach 0.70 and 0.69: at zero false merges it recovers 2 of
+//! the 4, where potion-base-4M recovers all 4. It does read Hebrew (unrelated median
+//! 0.171 on 42 synthetic Hebrew tweets and 0.405 on the 7 real ones, against 0.947 and
+//! 0.981 for potion-base-4M), but one of 8 labelled Hebrew pairs (0.449) is under the
+//! highest unrelated pair (0.535), so no threshold passes the Hebrew half. Pinned by
+//! `embeddings_hebrew_tests.rs` on `tests/fixtures/embeddings/potion_multilingual_128m.json`.
+//! The next candidate is Qwen3-Embedding-0.6B (design section 5's escalation).
 
 /// One embedding model's measured clustering parameters.
 #[derive(Debug, Clone, Copy, PartialEq)]
