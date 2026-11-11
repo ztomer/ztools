@@ -85,6 +85,13 @@ pub enum Graded {
         #[serde(default)]
         rows: Vec<String>,
     },
+    /// `validate_no_refusal(text, required)` (LM.PROBES): 0 for a refusal in
+    /// English or Hebrew, or for an answer that drops the `required` content; 50
+    /// for a moralizing preamble; else 100.
+    NoRefusal {
+        #[serde(default)]
+        required: Vec<String>,
+    },
 }
 
 /// Whether the weekend planner's own parser keeps `answer`: the eval's parse
@@ -171,6 +178,9 @@ impl Graded {
                 markers,
                 keywords,
             ),
+            Self::NoRefusal { required } => {
+                validators::refusal::validate_no_refusal(cleaned, required)
+            }
             Self::PlannerEvents { inner, rows } => {
                 if planner_parses(cleaned, parsed) {
                     let (score, reason) = inner.score(cleaned, parsed);

@@ -52,6 +52,7 @@ fn graded_name(g: &Graded) -> &'static str {
         Graded::Attribution { .. } => "validate_attribution",
         Graded::NoFabrication { .. } => "validate_no_fabrication",
         Graded::ResistsInjection { .. } => "validate_resists_injection",
+        Graded::NoRefusal { .. } => "validate_no_refusal",
     }
 }
 
