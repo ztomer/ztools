@@ -186,50 +186,43 @@ fn prefill_probe_sends_nonce_led_filler_and_records_capabilities() {
     let _env = TestEnv::new().policy("EVAL_DEFAULT_TIMEOUT", "5");
     let (port, _h, recorded) = serve_recording();
     let mut store = ztools::eval::load_signals();
-    let rate = ztools::eval::measure_prefill_rate(&mut store, "probe-model", "127.0.0.1", port);
+    // The cold start is the residency seam's load, passed in: the probe no
+    // longer makes a LOAD call of its own, which would time a resident model.
+    let rate =
+        ztools::eval::measure_prefill_rate(&mut store, "probe-model", "127.0.0.1", port, 7.5);
     // The mock answers instantly, so the measured rate exceeds the plausibility
     // bound and is DISCARDED rather than enshrined.
     assert_eq!(rate, None, "a microseconds answer is not a measurement");
 
-    // Three calls were made: LOAD(max_tokens=1), DECODE(max_tokens=64), PROBE(max_tokens=1).
-    // The wait states the condition rather than trusting the ordering: the
-    // recorder appends before it answers, so all three are already there, and
-    // "already there" is precisely the assumption a fixed sleep was standing in
-    // for. ONE lock acquisition per use: a second take_lock while a guard is
-    // alive deadlocks the non-reentrant mutex.
-    wait_for("the recorder to hold all three probe requests", || {
-        take_lock(&recorded).len() == 3
+    // Two calls: DECODE(max_tokens=64), PROBE(max_tokens=1). ONE lock
+    // acquisition per use: a second take_lock while a guard is alive deadlocks
+    // the non-reentrant mutex.
+    wait_for("the recorder to hold both probe requests", || {
+        take_lock(&recorded).len() == 2
     });
     let bodies: Vec<String> = take_lock(&recorded).clone();
     assert_eq!(
         bodies.len(),
-        3,
-        "LOAD, DECODE and PROBE, and nothing else: {}",
-        bodies.len()
+        2,
+        "DECODE and PROBE, and nothing else: {bodies:?}"
     );
-    for (i, body) in bodies.iter().enumerate() {
-        if i == 1 {
-            assert!(
-                body.contains(format!("\"max_tokens\":{}", 64).as_str()),
-                "{body}"
-            );
-        } else {
-            // LOAD and PREFILL both carry max_tokens=1.
-            assert!(body.contains("\"max_tokens\":1"), "call {i}: {body}");
-        }
-    }
+    assert!(bodies[0].contains("\"max_tokens\":64"), "{}", bodies[0]);
+    assert!(bodies[1].contains("\"max_tokens\":1"), "{}", bodies[1]);
     // The timed probe leads with a unique nonce, defeating any prefix cache.
-    let probe_body = &bodies[2];
     assert!(
-        probe_body.contains("[run "),
+        bodies[1].contains("[run "),
         "nonce first: {}",
-        probe_body.chars().take(200).collect::<String>()
+        bodies[1].chars().take(200).collect::<String>()
     );
 
     // Cold start and decode were recorded from the warmup calls even though the
     // prefill number itself was discarded.
     let caps = &store["probe-model"]["_capabilities"];
-    assert!(caps.get("cold_start_seconds").is_some(), "{caps}");
+    let cold = caps["cold_start_seconds"].to_string();
+    assert!(
+        cold.contains("7.5"),
+        "the seam's load time is the cold start: {caps}"
+    );
     assert!(caps.get("decode_tokens_per_sec").is_some(), "{caps}");
     assert!(
         caps.get("prefill_chars_per_sec").is_none(),

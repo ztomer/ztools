@@ -72,11 +72,15 @@ fn dedupe_path(new_path: &Path) -> PathBuf {
 /// Name one image: OCR / text path when the available text is meaningful, the VLM
 /// when it is not (and a vision model is configured), and a plain clean of the
 /// text otherwise. Mirrors `rename/cli.py::rename_image`.
+///
+/// Each model is held through `session` before it is asked (ZT.OSAURUSLOAD);
+/// a model that cannot be loaded is a failed query, and the plain clean stands.
 fn name_image(
     path: &Path,
     stem: &str,
     max_len: usize,
     config: &crate::config::ZtoolsConfig,
+    session: &mut crate::ztools::residency::Session,
 ) -> String {
     let ocr_text =
         if !config.image_renamer_model.is_empty() || !config.image_renamer_vlm_model.is_empty() {
@@ -88,23 +92,31 @@ fn name_image(
     let meaningful = !is_non_human_readable(text_to_use) && is_meaningful_text(text_to_use, 2);
 
     let candidate = if meaningful {
-        query_llm_filename(
-            &config.osaurus_url,
-            &config.image_renamer_model,
-            text_to_use,
-            config,
-        )
-        .ok()
-        .filter(|n| !is_generic_name(n) && n.len() >= 4)
+        session
+            .hold(&config.image_renamer_model)
+            .and_then(|()| {
+                query_llm_filename(
+                    &config.osaurus_url,
+                    &config.image_renamer_model,
+                    text_to_use,
+                    config,
+                )
+            })
+            .ok()
+            .filter(|n| !is_generic_name(n) && n.len() >= 4)
     } else if !config.image_renamer_vlm_model.is_empty() {
-        query_vlm_for_filename(
-            path,
-            &config.osaurus_url,
-            &config.image_renamer_vlm_model,
-            config,
-        )
-        .ok()
-        .and_then(|raw| acceptable_name(&raw, max_len))
+        session
+            .hold(&config.image_renamer_vlm_model)
+            .and_then(|()| {
+                query_vlm_for_filename(
+                    path,
+                    &config.osaurus_url,
+                    &config.image_renamer_vlm_model,
+                    config,
+                )
+            })
+            .ok()
+            .and_then(|raw| acceptable_name(&raw, max_len))
     } else {
         None
     };
@@ -130,6 +142,10 @@ pub fn scan_and_rename(
         return Ok(candidates);
     }
 
+    let mut session = crate::ztools::residency::Session::new(
+        &config.osaurus_url,
+        crate::ztools::residency::Timing::default(),
+    );
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
@@ -148,7 +164,7 @@ pub fn scan_and_rename(
         }
 
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("image");
-        let cleaned = name_image(&path, stem, max_len, config);
+        let cleaned = name_image(&path, stem, max_len, config, &mut session);
         let new_filename = format!("{cleaned}.{ext}");
         let new_path = dedupe_path(&path.with_file_name(&new_filename));
         let changed = new_path != path;
@@ -164,6 +180,7 @@ pub fn scan_and_rename(
             changed,
         });
     }
+    session.finish()?;
 
     Ok(candidates)
 }

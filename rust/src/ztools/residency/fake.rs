@@ -25,6 +25,9 @@ pub enum Call {
     Other(String),
 }
 
+/// A completion's body as a function of its request body.
+pub type Answerer = Arc<dyn Fn(&str) -> String + Send + Sync>;
+
 /// What the fake answers besides residency.
 #[derive(Clone, Default)]
 pub struct Spec {
@@ -36,6 +39,9 @@ pub struct Spec {
     pub embeddings: String,
     /// The server schedules no idle unload ("Keep Model Loaded").
     pub keep_loaded: bool,
+    /// When set, a completion's body is this function of the request body,
+    /// for a test whose answer depends on the prompt.
+    pub answer_for: Option<Answerer>,
 }
 
 impl Spec {
@@ -47,6 +53,7 @@ impl Spec {
             models: r#"{"data":[]}"#.to_string(),
             embeddings: r#"{"data": [{"embedding": [0.1, 0.2]}]}"#.to_string(),
             keep_loaded: false,
+            answer_for: None,
         }
     }
 }
@@ -210,7 +217,10 @@ fn answer(s: &mut State, request: &str, spec: &Spec) -> String {
         });
         s.resident = Some(model);
         s.shown_since_use = false;
-        return spec.chat.clone();
+        return spec
+            .answer_for
+            .as_ref()
+            .map_or_else(|| spec.chat.clone(), |f| f(body));
     }
     let path = first
         .split_whitespace()

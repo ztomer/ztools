@@ -740,6 +740,7 @@ vision. Backlog item 9 covers building a real one.
 - **`memorySafety.keepModelInMemory`** pins weights WHILE loaded; it does not stop idle unload.
   Measured with it `true`: raptor-v0.5-8b-a1b-jang_6m loaded in 25.4 s, `/health` showed it
   resident with 30 s remaining, and it was gone 56.3 s after the load started.
+  **Owner ruling 2026-11-11: `keepModelInMemory` stays `true`; do not change it.**
 - So `rust/src/ztools/residency.rs` loads with a timed one-token completion, waits for
   `/health` to show the model current and accepting, and releases by waiting out that timer. A
   model still resident past the server's own deadline is an error.

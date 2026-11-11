@@ -83,7 +83,8 @@ fn warm_up_makes_no_call_when_the_model_is_not_installed() {
         weekend_model: "test-model".into(),
         ..crate::config::ZtoolsConfig::default()
     };
-    let health = crate::ztools::weekend::warm_model(&cfg);
+    let (health, held) = crate::ztools::weekend::warm_model(&cfg);
+    assert!(held.is_none(), "nothing was loaded");
     assert!(
         matches!(&health, crate::ztools::weekend::ModelHealth::NotInstalled { model, .. } if model == "test-model"),
         "{health:?}"

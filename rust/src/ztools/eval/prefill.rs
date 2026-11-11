@@ -57,7 +57,9 @@ fn spec<'a>(
 ///
 /// THREE calls, one quantity each -- sharing a call between two measurements is
 /// how every previous version got a wrong number:
-/// 1. LOAD (`max_tokens=1)`: pays cold start; timed as `cold_start_seconds`.
+/// 1. LOAD: the residency seam's one-token load (`residency::Held::load_seconds`),
+///    passed in as `cold_start_seconds`. Timing a load HERE would time a model
+///    the seam has already made resident: a warm load filed as a cold start.
 /// 2. DECODE (`max_tokens=WARMUP_TOKENS)`: weights resident, tiny prompt, so
 ///    elapsed time is generation -> `decode_tokens_per_sec`.
 /// 3. PREFILL (nonce-led filler, `max_tokens=1)`: isolated ingestion rate.
@@ -69,16 +71,11 @@ pub fn measure_prefill_rate(
     model: &str,
     host: &str,
     port: u16,
+    cold_start_seconds: f64,
 ) -> Option<f64> {
-    // 1. LOAD.
+    // 1. LOAD, done by the seam.
     let load_msgs = vec![ChatMessage::user(WARMUP_PROMPT)];
-    let load_started = Instant::now();
-    let loaded = call(&spec(model, &load_msgs, host, port, 1), false);
-    let load_elapsed = load_started.elapsed().as_secs_f64();
-    if loaded.error.is_some() {
-        return None;
-    }
-    record_capability_sample(signals, model, "cold_start_seconds", load_elapsed);
+    record_capability_sample(signals, model, "cold_start_seconds", cold_start_seconds);
 
     // 2. DECODE.
     let decode_started = Instant::now();

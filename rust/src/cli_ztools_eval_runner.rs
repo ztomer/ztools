@@ -117,7 +117,16 @@ pub(super) fn run_full_suite(
             thinking,
             ..Default::default()
         };
-        let outcomes = crate::ztools::eval::run_eval_with_signals(&model_name, &tasks, &cfg);
+        let run = measure_held(url, &model_name, &tasks, &cfg);
+        let outcomes = match run {
+            Ok(outcomes) => outcomes,
+            Err(e) => {
+                let why = format!("{e:#}");
+                not_measured.push(format!("{model_name}: {why}"));
+                note_unmeasured(&model_name, &why, json_output);
+                continue;
+            }
+        };
 
         if let Some(why) = crate::ztools::model_eval::tasks_unmeasured_reason(&outcomes) {
             not_measured.push(format!("{model_name}: {why}"));
@@ -147,4 +156,28 @@ pub(super) fn run_full_suite(
         );
     }
     Ok(())
+}
+
+/// One model's full-suite run, loaded explicitly and released after it
+/// (ZT.OSAURUSLOAD). The seam's load is the cold start the run records, so a
+/// warm second load is never filed as one.
+fn measure_held(
+    url: &str,
+    model_name: &str,
+    tasks: &[crate::ztools::eval::EvalTask],
+    cfg: &crate::ztools::eval::RunnerConfig,
+) -> Result<Vec<crate::ztools::eval::TaskOutcome>> {
+    crate::ztools::residency::with_model(
+        url,
+        model_name,
+        crate::ztools::residency::Timing::default(),
+        |held| {
+            Ok(crate::ztools::eval::run_eval_with_signals(
+                model_name,
+                tasks,
+                cfg,
+                held.load_seconds(),
+            ))
+        },
+    )
 }

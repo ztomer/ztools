@@ -16,9 +16,7 @@ mod support;
 // test binary, so one consumer not needing one is not dead code.
 pub use support::*;
 
-use std::io::{Read, Write};
-use std::net::TcpListener;
-use std::thread;
+use ztools::ztools::residency::fake::{FakeOsaurus, Spec};
 
 use ztools::config::ZtoolsConfig;
 
@@ -28,42 +26,18 @@ use ztools::config::ZtoolsConfig;
 /// sends one per model on top of that. A server that answered once and stopped
 /// left every later request failing, so the per-case scoring closures never ran
 /// and the test looked green while checking almost nothing.
-fn mock_llm_server() -> (u16, thread::JoinHandle<()>) {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
-    let handle = thread::spawn(move || {
-        for stream in listener.incoming() {
-            let Ok(mut stream) = stream else { continue };
-            let mut buf = [0u8; 8192];
-            let n = stream.read(&mut buf).unwrap_or(0);
-            let req = String::from_utf8_lossy(&buf[..n]);
-
-            // Route based on path.
-            let response = if req.contains("GET /v1/models") {
-                r#"{"data":[{"id":"llama-3"},{"id":"foundation-model"},{"id":"diffusion-xl"},{"id":"qwen-7b"}]}"#.to_string()
-            } else if req.contains("POST /v1/chat/completions") {
-                // Well-formed JSON with exactly the two named events the
-                // extraction case looks for, so the JSON-shape check parses
-                // rather than bailing out at the first `from_str` error.
-                let content = r#"{\"transient_events\":[{\"name\":\"Summer Rib Fest\"},{\"name\":\"Magic Show\"}]}"#;
-                format!(r#"{{"choices":[{{"message":{{"content":"{content}"}}}}]}}"#)
-            } else {
-                "{}".to_string()
-            };
-
-            // `Connection: close` keeps the client from holding the socket open
-            // for a second request this one-shot-per-connection loop never reads.
-            let http = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{}",
-                response.len(),
-                response
-            );
-            let _ = stream.write_all(http.as_bytes());
-            let _ = stream.flush();
-        }
+fn mock_llm_server() -> (u16, FakeOsaurus) {
+    // Well-formed JSON with exactly the two named events the extraction case
+    // looks for, so the JSON-shape check parses rather than bailing out at the
+    // first `from_str` error. The Osaurus fake answers `/health` and the
+    // residency seam's load as the real server does (ZT.OSAURUSLOAD).
+    let content =
+        r#"{\"transient_events\":[{\"name\":\"Summer Rib Fest\"},{\"name\":\"Magic Show\"}]}"#;
+    let fake = FakeOsaurus::serve(Spec {
+        models: r#"{"data":[{"id":"llama-3"},{"id":"foundation-model"},{"id":"diffusion-xl"},{"id":"qwen-7b"}]}"#.to_string(),
+        ..Spec::chat(&format!(r#"{{"choices":[{{"message":{{"content":"{content}"}}}}]}}"#))
     });
-    await_stub(port);
-    (port, handle)
+    (port_of(&fake), fake)
 }
 
 fn default_config() -> ZtoolsConfig {
@@ -139,32 +113,23 @@ fn eval_all_models_evaluates_every_available_model() {
 /// Same as `mock_llm_server`, but the image-renamer answer is wrapped in a
 /// ` thinking... response` block, so its `NotContains(" ")` check can only pass
 /// if `eval_model` cleans the output before judging it.
-fn mock_llm_server_with_thinking() -> (u16, thread::JoinHandle<()>) {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
-    let handle = thread::spawn(move || {
-        for stream in listener.incoming() {
-            let Ok(mut stream) = stream else { continue };
-            let mut buf = [0u8; 8192];
-            let _ = stream.read(&mut buf);
-            let req = String::from_utf8_lossy(&buf);
+fn mock_llm_server_with_thinking() -> (u16, FakeOsaurus) {
+    let fake = FakeOsaurus::serve(Spec {
+        answer_for: Some(std::sync::Arc::new(|req: &str| {
             let content = if req.contains("red sports car") {
                 r"<think>inner</think> red_car.jpg"
             } else {
                 r#"{"transient_events":[{"name":"Summer Rib Fest"},{"name":"Magic Show"}]}"#
             };
-            let response = format!(r#"{{"choices":[{{"message":{{"content":"{content}"}}}}]}}"#);
-            let http = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{}",
-                response.len(),
-                response
-            );
-            let _ = stream.write_all(http.as_bytes());
-            let _ = stream.flush();
-        }
+            format!(r#"{{"choices":[{{"message":{{"content":"{content}"}}}}]}}"#)
+        })),
+        ..Spec::chat("{}")
     });
-    await_stub(port);
-    (port, handle)
+    (port_of(&fake), fake)
+}
+
+fn port_of(fake: &FakeOsaurus) -> u16 {
+    fake.url.rsplit(':').next().unwrap().parse().unwrap()
 }
 
 #[test]

@@ -263,9 +263,14 @@ pub fn fetch_duckduckgo_events(
     // pair by name in the store.
     let run = chrono::Local::now().naive_local();
     let (corpus, search) = fetch_events_corpus(run, (d1, d2), config);
-    let model = warm.join().unwrap_or_else(|_| ModelHealth::Unavailable {
-        model: config.weekend_model.clone(),
-        reason: "the warm-up thread panicked".to_string(),
+    let (model, held) = warm.join().unwrap_or_else(|_| {
+        (
+            ModelHealth::Unavailable {
+                model: config.weekend_model.clone(),
+                reason: "the warm-up thread panicked".to_string(),
+            },
+            None,
+        )
     });
     match &model {
         ModelHealth::Ready { model, secs } => println!("\u{2192} Model {model} ready ({secs}s)"),
@@ -303,6 +308,12 @@ pub fn fetch_duckduckgo_events(
         },
     );
     crate::ztools::store_corpus::record_phases(run, &log, (d1, d2), &config.weekend_model);
+    // Released once the phases are done; an early return drops it instead.
+    if let Some(held) = held
+        && let Err(e) = held.release()
+    {
+        eprintln!("\u{2717} {e:#}");
+    }
 
     (events, corpus, health)
 }

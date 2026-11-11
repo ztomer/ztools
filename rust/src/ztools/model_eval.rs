@@ -186,6 +186,27 @@ pub fn eval_model(
 
     let mut results = Vec::new();
 
+    // Loaded explicitly, released after the roster (ZT.OSAURUSLOAD). A load
+    // that fails is every case's reason: nothing reached the model.
+    let held = match crate::ztools::residency::load(
+        base_url,
+        model_name,
+        crate::ztools::residency::Timing::default(),
+    ) {
+        Ok(held) => held,
+        Err(e) => {
+            let reason = format!("{e:#}");
+            for case in get_test_cases() {
+                let answer = Answer::Refused {
+                    reason: reason.clone(),
+                    detail: reason.clone(),
+                };
+                results.push(row_for(model_name, &case, answer, 0));
+            }
+            return Ok(results);
+        }
+    };
+
     // The loop does not stop at the first refusal. A server that dies halfway
     // through has still been asked about the tasks before it, and throwing those
     // away would trade one kind of missing data for another; the verdict is
@@ -204,6 +225,7 @@ pub fn eval_model(
         let elapsed = crate::units::millis(start.elapsed());
         results.push(row_for(model_name, &case, answer, elapsed));
     }
+    held.release()?;
 
     Ok(results)
 }

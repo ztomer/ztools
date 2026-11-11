@@ -394,6 +394,8 @@ fn names(h: &Health) -> String {
 // integration tests under `rust/tests/` drive the binary against it and see
 // only the library's public API.
 pub mod fake;
+mod session;
+pub use session::Session;
 
 #[cfg(test)]
 #[path = "residency_tests.rs"]

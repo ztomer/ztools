@@ -221,12 +221,15 @@ pub fn run_eval(model: &str, tasks: &[EvalTask], cfg: &RunnerConfig) -> Vec<Task
 /// no task completion within the stall ceiling.
 ///
 /// Signals are loaded from and saved back to `eval_signals.json` by this
-/// function.
+/// function. `cold_start_seconds` is the residency seam's load
+/// (`residency::Held::load_seconds`): the model is already resident when this
+/// runs, so a load timed here would be a warm one recorded as a cold start.
 #[must_use]
 pub fn run_eval_with_signals(
     model: &str,
     tasks: &[EvalTask],
     cfg: &RunnerConfig,
+    cold_start_seconds: f64,
 ) -> Vec<TaskOutcome> {
     let mut signals = load_signals();
 
@@ -236,7 +239,8 @@ pub fn run_eval_with_signals(
     // request per model per run -- skipped for embedding models, which have
     // no ingestion rate to measure (judged by their config, not their name).
     if is_generative_model(model) {
-        let rate = measure_prefill_rate(&mut signals, model, &cfg.host, cfg.port);
+        let rate =
+            measure_prefill_rate(&mut signals, model, &cfg.host, cfg.port, cold_start_seconds);
         record_prefill_rate(&mut signals, model, rate);
     }
 

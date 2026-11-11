@@ -98,40 +98,41 @@ pub fn resolve_weekend_model(
 /// disconnects mid-load makes the server cancel the load — so the next call
 /// starts it again, and the model never becomes ready. One call with the
 /// warm-up budget, before any phase, turns that livelock into one wait.
+///
+/// The warm-up IS the explicit load (ZT.OSAURUSLOAD): it goes through the
+/// residency seam, and the returned [`Held`](crate::ztools::residency::Held)
+/// keeps the model for the phases and releases it when dropped, on every exit
+/// path.
 #[must_use]
-pub fn warm_model(config: &crate::config::ZtoolsConfig) -> super::ModelHealth {
+pub fn warm_model(
+    config: &crate::config::ZtoolsConfig,
+) -> (super::ModelHealth, Option<crate::ztools::residency::Held>) {
     let model = match resolve_weekend_model(&config.osaurus_url, &config.weekend_model) {
         Ok(model) => model,
-        Err(not_installed) => return not_installed,
+        Err(not_installed) => return (not_installed, None),
     };
     let started = std::time::Instant::now();
-    // The stall guard IS the budget here: no token until the model has
+    // The load's budget is the warm-up budget: no token until the model has
     // loaded is the expected shape of a cold start, not a stalled server.
-    let outcome = crate::ztools::llm::chat(
-        &crate::ztools::llm::ChatRequest {
-            base_url: &config.osaurus_url,
-            model: &model,
-            system: None,
-            user: "Reply with the single word: ready",
-            json: false,
-        },
-        &crate::ztools::llm::ChatBudget {
-            stall_secs: config.llm_warmup_timeout_secs,
-            cap_secs: config.llm_warmup_timeout_secs,
-            max_tokens: 8,
-        },
-    );
+    let timing = crate::ztools::residency::Timing {
+        load_request: std::time::Duration::from_secs(config.llm_warmup_timeout_secs),
+        ..crate::ztools::residency::Timing::default()
+    };
+    let outcome = crate::ztools::residency::load(&config.osaurus_url, &model, timing);
     let secs = started.elapsed().as_secs();
     match outcome {
-        Ok(_) => super::ModelHealth::Ready { model, secs },
-        Err(e) => super::ModelHealth::Unavailable {
-            model,
-            reason: format!(
-                "no answer within {secs}s of a {}s warm-up budget: {}",
-                config.llm_warmup_timeout_secs,
-                first_line(&e.to_string())
-            ),
-        },
+        Ok(held) => (super::ModelHealth::Ready { model, secs }, Some(held)),
+        Err(e) => (
+            super::ModelHealth::Unavailable {
+                model,
+                reason: format!(
+                    "no answer within {secs}s of a {}s warm-up budget: {}",
+                    config.llm_warmup_timeout_secs,
+                    first_line(&format!("{e:#}"))
+                ),
+            },
+            None,
+        ),
     }
 }
 

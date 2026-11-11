@@ -387,40 +387,14 @@ fn test_scan_and_rename_skips_directories() {
     drop(env);
 }
 
-/// Serve one canned OpenAI-style chat completion, as the other LLM-layer mocks do.
-fn spawn_single_shot_server(body: &'static str) -> String {
-    fn serve_one(mut stream: TcpStream, body: &str) {
-        let mut buf = [0u8; 8192];
-        let _ = stream.read(&mut buf);
-        let resp = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-            body.len(),
-            body
-        );
-        let _ = stream.write_all(resp.as_bytes());
-    }
-
-    use std::io::{Read, Write};
-    use std::net::{TcpListener, TcpStream};
-
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let addr = listener.local_addr().unwrap();
-    std::thread::spawn(move || {
-        let Ok((stream, _)) = listener.accept() else {
-            return;
-        };
-        serve_one(stream, body);
-    });
-    format!("http://{addr}")
-}
-
 #[test]
 #[serial]
 fn test_name_image_uses_vlm_branch_for_unmeaningful_stem() {
     let env = TestEnv::new();
-    let base_url = spawn_single_shot_server(
+    let fake = crate::ztools::residency::fake::FakeOsaurus::start(
         r#"{"choices": [{"message": {"content": "Here is the filename: White Goose Grass"}}]}"#,
     );
+    let base_url = fake.url.clone();
     let config = crate::config::ZtoolsConfig {
         osaurus_url: base_url,
         image_renamer_model: String::new(),
@@ -435,9 +409,13 @@ fn test_name_image_uses_vlm_branch_for_unmeaningful_stem() {
     let img_path = dir.path().join("IMG_9999.png");
     std::fs::write(&img_path, b"\x89PNG\r\n\x1a\nnot really a png").unwrap();
 
-    let named = name_image(&img_path, "IMG_9999", 30, &config);
+    let mut session = crate::ztools::residency::Session::new(&fake.url, fast_timing());
+    let named = name_image(&img_path, "IMG_9999", 30, &config, &mut session);
+    session.finish().unwrap();
 
     assert_eq!(named, "white_goose_grass");
+    assert_eq!(fake.loads(), vec!["vlm-test-model".to_string()]);
+    assert_eq!(fake.last_health(), Some(vec![]));
     drop(env);
 }
 
@@ -462,8 +440,21 @@ fn test_name_image_falls_back_to_cleaned_stem_when_vlm_unreachable() {
         "IMG_9999",
         40,
         &config,
+        &mut crate::ztools::residency::Session::new(&config.osaurus_url, fast_timing()),
     );
 
     assert_eq!(named, "img_9999");
     drop(env);
+}
+
+fn fast_timing() -> crate::ztools::residency::Timing {
+    crate::ztools::residency::Timing {
+        lock_wait: std::time::Duration::from_secs(2),
+        load_request: std::time::Duration::from_secs(5),
+        settle: std::time::Duration::from_millis(300),
+        release_grace: std::time::Duration::from_millis(300),
+        release_cap: std::time::Duration::from_secs(2),
+        poll_min: std::time::Duration::from_millis(5),
+        poll_max: std::time::Duration::from_millis(20),
+    }
 }

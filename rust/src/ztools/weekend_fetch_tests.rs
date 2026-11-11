@@ -145,29 +145,22 @@ fn serve_html(body: &'static str) -> String {
 /// only one carrying "STRICTLY this weekend"; every other phase gets an empty
 /// content so `call_llm_text` filters it out and the draft phase fails.
 fn serve_chat(monolithic_content: &'static str) -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let addr = listener.local_addr().unwrap();
-    std::thread::spawn(move || {
-        while let Ok((mut stream, _)) = listener.accept() {
-            let request = read_request(&mut stream);
+    use crate::ztools::residency::fake::{FakeOsaurus, Spec};
+    FakeOsaurus::serve(Spec {
+        answer_for: Some(std::sync::Arc::new(move |request: &str| {
             let content = if request.contains("STRICTLY this weekend") {
                 monolithic_content
             } else {
                 ""
             };
-            let body = format!(
+            format!(
                 r#"{{"choices":[{{"message":{{"content":"{}"}}}}]}}"#,
                 content.replace('\\', "\\\\").replace('"', "\\\"")
-            );
-            let resp = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-                body.len(),
-                body
-            );
-            let _ = stream.write_all(resp.as_bytes());
-        }
-    });
-    format!("http://{addr}")
+            )
+        })),
+        ..Spec::chat("")
+    })
+    .url
 }
 
 const SNIPPETS_HTML: &str = "<html><body>\

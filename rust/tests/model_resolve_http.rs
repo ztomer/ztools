@@ -305,7 +305,7 @@ fn the_learning_path_records_signals_and_answers_through_a_substitute() {
         ..Default::default()
     };
 
-    let outcome = run_eval_with_signals("gone-model", &[task("t1")], &cfg);
+    let outcome = run_eval_with_signals("gone-model", &[task("t1")], &cfg, 1.0);
 
     let o = &outcome[0];
     assert_eq!(o.error, None, "substitute should have answered: {o:?}");

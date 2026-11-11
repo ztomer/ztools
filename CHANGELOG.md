@@ -11,6 +11,17 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+### Changed
+- **Every Osaurus caller loads its model and releases it (ZT.OSAURUSLOAD).** Osaurus 1.0.1
+  has no load or unload route, so `residency::with_model` (and `residency::Session` for the
+  renamer) loads with a timed one-token completion under the GPU lock, waits for `/health`
+  to show the model current, runs, and waits for `/health` to show it gone on every exit
+  path. The twitter first tier, `model-eval` (spot and `--suite full`), the weekend planner
+  and the image renamer all go through it. A model still resident past the server's own
+  idle deadline is an error.
+- **The eval's `cold_start_seconds` is the seam's load.** The prefill probe no longer makes
+  its own one-token LOAD call, which would have timed a model already resident.
+
 ## v3.14.1 — libsqlite3-sys 0.39.1 for RUSTSEC-2026-0459 _(2026-11-10)_
 
 ### Security

@@ -82,6 +82,35 @@ fn stub_server(body: &'static str) -> u16 {
     port
 }
 
+/// The recording Osaurus fake answering every request with `body`, as
+/// `stub_server` does, `/health` and the load included.
+fn osaurus_fake(body: &str) -> ztools::ztools::residency::fake::FakeOsaurus {
+    use ztools::ztools::residency::fake::{FakeOsaurus, Spec};
+    FakeOsaurus::serve(Spec {
+        models: body.to_string(),
+        embeddings: body.to_string(),
+        ..Spec::chat(body)
+    })
+}
+
+fn port_of(fake: &ztools::ztools::residency::fake::FakeOsaurus) -> u16 {
+    fake.url.rsplit(':').next().unwrap().parse().unwrap()
+}
+
+/// Some model was loaded before the first completion that named it, and the
+/// last `/health` showed nothing resident.
+fn assert_loaded_then_released(fake: &ztools::ztools::residency::fake::FakeOsaurus) {
+    use ztools::ztools::residency::fake::Call;
+    let calls = fake.calls();
+    let load = calls.iter().position(|c| matches!(c, Call::Load(_)));
+    let chat = calls.iter().position(|c| matches!(c, Call::Chat(_)));
+    assert!(
+        matches!((load, chat), (Some(l), Some(c)) if l < c),
+        "the model must be loaded before it is asked: {calls:?}"
+    );
+    assert_eq!(fake.last_health(), Some(vec![]), "left resident: {calls:?}");
+}
+
 const LLM_TEXT: &str = r###"{"choices":[{"message":{"content":"## Highlights\n- one thing happened\n- another thing happened\n- a third thing happened"}}]}"###;
 
 /// The summarizer's stub answer: one bullet per input tweet, each citing its
@@ -224,7 +253,8 @@ fn weekend_plan_renders_and_writes_the_markdown() {
     // shape as a search that returned nothing useful. The forecast goes to the
     // same stub through `weather_url` -- before that endpoint was config, this
     // test made a real HTTPS request to api.open-meteo.com on every run.
-    let port = stub_server(LLM_EVENTS);
+    let fake = osaurus_fake(LLM_EVENTS);
+    let port = port_of(&fake);
     let family = write_weekend_family(&home);
     write_config(&home, &(weekend_config(port, port, &home) + &family));
 
@@ -257,6 +287,38 @@ fn weekend_plan_renders_and_writes_the_markdown() {
     assert!(stdout.contains("fits none of the children (9)"), "{stdout}");
     assert!(!doc.contains("Things to Do - Oct 2026"), "{doc}");
     assert!(doc.contains("1 unsuitable, 0 duplicate._"), "{doc}");
+    assert_loaded_then_released(&fake);
+}
+
+/// The renamer's model is loaded before it is asked and released after
+/// (ZT.OSAURUSLOAD).
+#[test]
+fn image_renamer_loads_its_model_and_leaves_nothing_resident() {
+    let home = fresh("img-residency");
+    let fake = osaurus_fake(
+        r#"{"choices":[{"message":{"content":"sunny_beach_holiday"},"finish_reason":"stop"}]}"#,
+    );
+    write_config(
+        &home,
+        &format!(
+            "osaurus_url = \"{}\"\nimage_renamer_model = \"namer-model\"\n",
+            fake.url
+        ),
+    );
+    let pics = home.join("pics");
+    fs::create_dir_all(&pics).unwrap();
+    fs::write(pics.join("My Vacation Photo.PNG"), b"x").unwrap();
+    let out = ztool(&home)
+        .arg("image-renamer")
+        .arg(&pics)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_loaded_then_released(&fake);
 }
 
 #[test]
@@ -330,31 +392,14 @@ fn image_renamer_dry_run_on_empty_dir() {
 #[test]
 fn model_eval_all_evaluates_every_discovered_model() {
     let home = fresh("model-eval-all");
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
-    thread::spawn(move || {
-        for stream in listener.incoming().flatten() {
-            thread::spawn(move || {
-                let mut stream = stream;
-                let mut buf = [0u8; 16384];
-                let n = stream.read(&mut buf).unwrap_or(0);
-                let req = String::from_utf8_lossy(&buf[..n]).into_owned();
-                let body = if req.contains("GET /v1/models") {
-                    r#"{"data":[{"id":"stub-a"},{"id":"foundation-skip"}]}"#.to_string()
-                } else {
-                    LLM_TEXT.to_string()
-                };
-                let http = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{}",
-                    body.len(),
-                    body
-                );
-                let _ = stream.write_all(http.as_bytes());
-                let _ = stream.flush();
-            });
-        }
-    });
-    await_stub(port);
+    let fake = {
+        use ztools::ztools::residency::fake::{FakeOsaurus, Spec};
+        FakeOsaurus::serve(Spec {
+            models: r#"{"data":[{"id":"stub-a"},{"id":"foundation-skip"}]}"#.to_string(),
+            ..Spec::chat(LLM_TEXT)
+        })
+    };
+    let port = port_of(&fake);
 
     write_config(
         &home,
@@ -371,6 +416,13 @@ fn model_eval_all_evaluates_every_discovered_model() {
         !stdout.contains("foundation-skip"),
         "foundation models must be filtered out of discovery: {stdout}"
     );
+    assert_eq!(
+        fake.loads(),
+        vec!["stub-a".to_string()],
+        "{:?}",
+        fake.calls()
+    );
+    assert_loaded_then_released(&fake);
 }
 
 /// A weekend with nothing on must say so, not render an empty table. This is

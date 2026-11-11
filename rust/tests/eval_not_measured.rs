@@ -178,7 +178,9 @@ fn a_single_model_eval_against_a_dead_server_fails_and_scores_nothing() {
             // The URL it dialled and the verdict: "an error happened" alone
             // leaves three candidates (server down, wrong port, wrong machine).
             &dialled,
-            "gave no answer",
+            // The residency seam's load is the first request (ZT.OSAURUSLOAD),
+            // so the verdict names the load that got no answer.
+            "loading probe-model",
         ],
     );
 
@@ -237,14 +239,17 @@ fn a_full_suite_eval_against_a_dead_server_fails_and_prints_no_mean() {
             "ztools:",
             NOT_MEASURED,
             "probe-full-model",
-            "0 of 2 task(s) reached the model",
+            // The load is refused before any task is sent (ZT.OSAURUSLOAD).
+            "loading probe-full-model",
         ],
     );
 
     let stdout = String::from_utf8_lossy(&out.stdout);
+    // No task table: the load was refused, so no task was sent, and the run's
+    // own output says the model was not measured and why.
     assert!(
-        stdout.contains(NO_SCORE) && stdout.contains(NOT_MEASURED),
-        "the task table must show that no task reached the model:\n{stdout}"
+        stdout.contains(NOT_MEASURED) && stdout.contains("loading probe-full-model"),
+        "the run's output must show the model was not measured:\n{stdout}"
     );
     assert!(
         !stdout.contains("mean score"),

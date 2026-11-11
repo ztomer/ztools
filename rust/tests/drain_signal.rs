@@ -120,6 +120,10 @@ fn blocking_stub() -> Stub {
     let (probes_c, tasks_c) = (Arc::clone(&probes), Arc::clone(&tasks));
     let (open_probes_c, open_tasks_c) = (Arc::clone(&open_probes), Arc::clone(&open_tasks));
 
+    // The resident model, and whether `/health` has shown it since its last
+    // use: shown once, then gone, as the Osaurus idle timer behaves (the
+    // residency seam loads before the run and waits it out after).
+    let resident: Arc<std::sync::Mutex<(Option<String>, bool)>> = Arc::default();
     thread::spawn(move || {
         for stream in listener.incoming().flatten() {
             let mut stream = stream;
@@ -133,6 +137,32 @@ fn blocking_stub() -> Stub {
             let request = String::from_utf8_lossy(&buf[..n]).to_string();
             let first = request.lines().next().unwrap_or("").to_string();
 
+            if first.starts_with("GET /health") {
+                let mut r = support::take_lock(&resident);
+                let rows = r.0.as_ref().map_or_else(String::new, |m| {
+                    format!(r#"{{"name":"{m}","is_current":true,"idle_seconds_remaining":0}}"#)
+                });
+                if r.1 {
+                    r.0 = None;
+                }
+                r.1 = r.0.is_some();
+                drop(r);
+                let body = format!(r#"{{"resident_models":[{rows}]}}"#);
+                let http = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = stream.write_all(http.as_bytes());
+                continue;
+            }
+            if let Some(model) = request
+                .split("\r\n\r\n")
+                .nth(1)
+                .and_then(|b| serde_json::from_str::<serde_json::Value>(b).ok())
+                .and_then(|v| v["model"].as_str().map(str::to_string))
+            {
+                *support::take_lock(&resident) = (Some(model), false);
+            }
             if !first.starts_with("GET /v1/models") {
                 let is_probe =
                     request.contains("\"max_tokens\":1") || request.contains("\"max_tokens\":64");
