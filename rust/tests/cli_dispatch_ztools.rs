@@ -144,7 +144,10 @@ fn weekend_config(model_port: u16, weather_port: u16, home: &std::path::Path) ->
 #[test]
 fn twitter_summarize_writes_a_summary_and_an_md_copy() {
     let home = fresh("twitter");
-    let port = stub_server(TWITTER_LLM_TEXT);
+    // The Osaurus fake, not the plain stub: the summarizer's tier loads its
+    // model and waits for `/health` to show it gone (ZT.OSAURUSLOAD).
+    let fake = ztools::ztools::residency::fake::FakeOsaurus::start(TWITTER_LLM_TEXT);
+    let port: u16 = fake.url.rsplit(':').next().unwrap().parse().unwrap();
     write_config(
         &home,
         &format!(
@@ -198,6 +201,18 @@ fn twitter_summarize_writes_a_summary_and_an_md_copy() {
     assert!(
         !home.join("Documents/twitter_summaries").exists(),
         "a --json run wrote the production store, which the dashboard reads as the latest summary"
+    );
+    assert_eq!(
+        fake.loads(),
+        vec!["stub-model".to_string()],
+        "{:?}",
+        fake.calls()
+    );
+    assert_eq!(
+        fake.last_health(),
+        Some(vec![]),
+        "left resident: {:?}",
+        fake.calls()
     );
 }
 

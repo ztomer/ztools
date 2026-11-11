@@ -390,7 +390,9 @@ fn names(h: &Health) -> String {
     }
 }
 
-#[cfg(test)]
+// Unconditional, NOT `#[cfg(test)]`, for the reason `test_env` is: the
+// integration tests under `rust/tests/` drive the binary against it and see
+// only the library's public API.
 pub mod fake;
 
 #[cfg(test)]
