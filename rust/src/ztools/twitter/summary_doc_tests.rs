@@ -101,36 +101,18 @@ fn without_the_clock(doc: &str) -> String {
 /// intended model is what keeps a run on the primary tier, so the two fixtures
 /// differ by one roster entry and nothing else.
 fn stub_server(roster: &'static str, content: &'static str) -> String {
-    use std::io::{Read, Write};
-
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let addr = listener.local_addr().unwrap();
-    std::thread::spawn(move || {
-        while let Ok((mut stream, _)) = listener.accept() {
-            let mut buf = vec![0u8; 64 * 1024];
-            let n = stream.read(&mut buf).unwrap_or(0);
-            let req = String::from_utf8_lossy(&buf[..n]).to_string();
-            let body = if req.starts_with("GET /v1/models") {
-                format!(r#"{{"data":[{roster}]}}"#)
-            } else if req.contains("/v1/embeddings") {
-                // One embedding per tweet, or `cluster_tweets` discards the
-                // answer and the clustering path stops being exercised.
-                r#"{"data":[{"embedding":[0.1,0.2]},{"embedding":[0.1,0.2]}]}"#.to_string()
-            } else {
-                format!(
-                    r#"{{"choices":[{{"message":{{"content":{}}}}}]}}"#,
-                    serde_json::to_string(content).unwrap()
-                )
-            };
-            let resp = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
-                body.len()
-            );
-            let _ = stream.write_all(resp.as_bytes());
-            let _ = stream.flush();
-        }
-    });
-    format!("http://{addr}")
+    use crate::ztools::residency::fake::{FakeOsaurus, Spec};
+    FakeOsaurus::serve(Spec {
+        models: format!(r#"{{"data":[{roster}]}}"#),
+        // One embedding per tweet, or `cluster_tweets` discards the answer and
+        // the clustering path stops being exercised.
+        embeddings: r#"{"data":[{"embedding":[0.1,0.2]},{"embedding":[0.1,0.2]}]}"#.to_string(),
+        ..Spec::chat(&format!(
+            r#"{{"choices":[{{"message":{{"content":{}}}}}]}}"#,
+            serde_json::to_string(content).unwrap()
+        ))
+    })
+    .url
 }
 
 /// A structured answer that passes `check_summary_quality`: its own `##`
@@ -207,7 +189,12 @@ fn config(base_url: &str, tmp: &std::path::Path) -> crate::config::ZtoolsConfig 
 }
 
 /// Run the whole summary path against a stub and return (path, document).
+///
+/// Under the env sandbox: the load, run, release seam takes the GPU lock, and
+/// `ZTOOLS_GPU_LOCK_DIR` is read from the process environment a peer test may
+/// be pointing at its own temp dir.
 fn run(roster: &'static str, content: &'static str) -> (std::path::PathBuf, String) {
+    let _env = crate::test_env::TestEnv::new();
     let tmp = tempfile::tempdir().expect("a temp dir for the summary's output");
     let out = tmp.path().join("summaries");
     let base_url = stub_server(roster, content);

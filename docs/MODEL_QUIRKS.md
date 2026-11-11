@@ -729,6 +729,21 @@ vision. Backlog item 9 covers building a real one.
 
 ---
 
+## Osaurus model residency: no load or unload route (measured 2026-11-11, Osaurus 1.0.1)
+
+- **Load** has no route: the first completion naming a model loads it (`power.jitLoad`).
+  `POST /agents/{id}/warm` loads too, but only for the owner over the Secure Channel.
+- **Unload** has no route. The weights go when the idle policy fires
+  (`modelIdleResidencyPolicy` in `~/.osaurus/config/server.json`: `after_seconds` 30 here), or
+  when strict one-model eviction loads another. `/health` lists each resident model with
+  `idle_seconds_remaining`; `null` means no unload is scheduled.
+- **`memorySafety.keepModelInMemory`** pins weights WHILE loaded; it does not stop idle unload.
+  Measured with it `true`: raptor-v0.5-8b-a1b-jang_6m loaded in 25.4 s, `/health` showed it
+  resident with 30 s remaining, and it was gone 56.3 s after the load started.
+- So `rust/src/ztools/residency.rs` loads with a timed one-token completion, waits for
+  `/health` to show the model current and accepting, and releases by waiting out that timer. A
+  model still resident past the server's own deadline is an error.
+
 ## Osaurus Server Rules
 
 1. **Single instance only** - enforce it with `./tools/osaurus_one.sh`, do not rely on

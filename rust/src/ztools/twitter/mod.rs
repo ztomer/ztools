@@ -195,12 +195,20 @@ impl Route<'_> {
             "· Summarizing {processed} tweets with {candidate} on {}...",
             self.base_url
         );
-        repair::ask(
+        // Loaded explicitly, released on every exit path (ZT.OSAURUSLOAD).
+        crate::ztools::residency::with_model(
             self.base_url,
             candidate,
-            prompt,
-            self.timeout_secs,
-            self.config,
+            crate::ztools::residency::Timing::default(),
+            |_| {
+                repair::ask(
+                    self.base_url,
+                    candidate,
+                    prompt,
+                    self.timeout_secs,
+                    self.config,
+                )
+            },
         )
     }
 }

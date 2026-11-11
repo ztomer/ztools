@@ -222,3 +222,38 @@ fn test_run_summary_fails_when_model_returns_unusable_summary() {
     }
     drop(env);
 }
+
+/// The first tier runs through the load, run, release seam (ZT.OSAURUSLOAD):
+/// the model is loaded before the summary request and the run ends with
+/// `/health` showing nothing resident.
+#[test]
+#[serial]
+fn the_osaurus_tier_loads_its_model_and_leaves_nothing_resident() {
+    use crate::ztools::residency::fake::{Call, FakeOsaurus};
+    let env = TestEnv::new();
+    let fake = FakeOsaurus::start(CHAT_BODY);
+    let output = tempfile::tempdir().unwrap();
+    let cfg = sandboxed_config(&env.root().join("cfg"));
+    let tweets = [tweet("routine_user", "Residency seam", "14:00", 3, 1)];
+    run_summary(
+        &tweets,
+        output.path(),
+        Some(&fake.url),
+        Some("mock-model"),
+        &cfg,
+    )
+    .expect("the fake answered");
+    let calls = fake.calls();
+    let load = calls
+        .iter()
+        .position(|c| *c == Call::Load("mock-model".into()));
+    let chat = calls
+        .iter()
+        .position(|c| *c == Call::Chat("mock-model".into()));
+    assert!(
+        matches!((load, chat), (Some(l), Some(c)) if l < c),
+        "the model must be loaded before it is asked: {calls:?}"
+    );
+    assert_eq!(fake.last_health(), Some(vec![]), "left resident: {calls:?}");
+    drop(env);
+}

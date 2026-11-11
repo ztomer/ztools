@@ -1,9 +1,6 @@
 //! The sandbox config and the loopback stub the `run_summary` tests share.
 
-use std::io::{Read, Write};
-use std::net::TcpListener;
 use std::path::{Path, PathBuf};
-use std::thread;
 
 use crate::config::ZtoolsConfig;
 
@@ -39,30 +36,11 @@ pub(super) fn sandboxed_config(root: &Path) -> ZtoolsConfig {
     }
 }
 
-/// A one-shot loopback HTTP stub on `127.0.0.1`, answering every request with
-/// `body` until dropped. Loopback only: no test may touch the real network.
+/// A loopback stub on `127.0.0.1` answering every completion with `body`:
+/// the recording Osaurus fake, so `/health` and the load behave as the real
+/// server's do. Loopback only: no test may touch the real network.
 pub(super) fn stub_server(body: &'static str) -> String {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
-    thread::spawn(move || {
-        for mut stream in listener.incoming().flatten() {
-            let mut buf = vec![0u8; 4096];
-            let _ = stream.read(&mut buf);
-            let request = String::from_utf8_lossy(&buf);
-            let reply = if request.contains("/v1/embeddings") {
-                r#"{"data": [{"embedding": [0.1, 0.2]}]}"#.to_string()
-            } else {
-                body.to_string()
-            };
-            let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{reply}",
-                reply.len()
-            );
-            let _ = stream.write_all(response.as_bytes());
-            let _ = stream.flush();
-        }
-    });
-    format!("http://127.0.0.1:{port}")
+    crate::ztools::residency::fake::FakeOsaurus::start(body).url
 }
 
 /// The stub's chat answer for a summariser test: a body that already opens

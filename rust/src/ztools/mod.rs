@@ -9,6 +9,7 @@ pub mod model_eval;
 pub mod model_health;
 pub mod on_device;
 pub mod rename;
+pub mod residency;
 pub mod settings;
 pub mod status;
 pub mod store;

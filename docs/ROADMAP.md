@@ -100,6 +100,21 @@ pinned by `rust/tests/cli_weekend_exclude.rs` and `rust/src/ztools/weekend/exclu
   byte-identical. The plan store it validates against is `WEEKEND_OUTPUT_DIR`, the one the tab
   reads.
 
+## Phase R — model residency (owner ruling 2026-11-11, ZT.OSAURUSLOAD)
+
+### R1 — the eval runner, weekend and rename still reach Osaurus outside the residency seam
+- **Class:** a resource acquired without a paired release. `rust/src/ztools/residency.rs` is the
+  one load, run, release seam and the twitter first tier runs through it; `ztools model-eval`
+  (`rust/src/cli_ztools_eval_runner.rs`, `rust/src/ztools/model_eval.rs`), the weekend phases
+  (`rust/src/ztools/weekend/phases.rs`) and the renamer VLM (`rust/src/ztools/rename/mod.rs`) do not.
+- **Why now:** each leaves its model resident until the server's 30 s idle timer, unseen; the eval's
+  `cold_start_seconds` must become `Held::load_seconds` when it moves, or the seam's load makes
+  the eval's own LOAD call warm and records a false cold start.
+- **Done when:** every caller of `osaurus_url` runs inside `residency::with_model`, each with a
+  fake-server test that goes red without it, and the integration mocks under `rust/tests/` answer
+  `/health` the way `rust/src/ztools/residency/fake.rs` does; the gate is green.
+- **Blocked by:** nothing.
+
 ## Phase H — currency (house rule: newest release of every layer)
 
 Why first: it depends on nothing, is small, and a held-back transitive is how a duplicate major
