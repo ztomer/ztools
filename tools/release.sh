@@ -60,15 +60,19 @@ fi
 
 # Install, then prove the binary on PATH is this version and that every
 # subcommand answers. bin/ab_test is the smoke harness over the INSTALLED
-# binary (it also runs the Rust suite and the collect-parity comparator).
+# binary (it also runs the Rust suite and the collect-parity comparator). Neither step's
+# output is discarded (ZTL.RELQUIET): install.sh writes a per-run log whose path is printed,
+# and ab_test prints its own suite log's path and names any failing test on stderr.
 # (Single-quoted on purpose: the kit runs it, exporting GOH_RELEASE_VERSION.)
 # shellcheck disable=SC2016
 # The binary install.sh just wrote, by path: install.sh never touches the brew bin
 # (ZT.BREWLINK), so a bare `ztools` could resolve to the tap's older copy. The temp
 # dir is on no PATH, so --dev-copy shadows nothing (ZT.SHADOW).
-VERIFY='ZT_DIR="$(mktemp -d)" && ZTOOLS_INSTALL_DIR="$ZT_DIR" ./install.sh --dev-copy >/dev/null
-  [ "$("$ZT_DIR/ztools" --version | awk "{print \$NF}")" = "$GOH_RELEASE_VERSION" ] || { echo "installed ztools is not $GOH_RELEASE_VERSION" >&2; exit 1; }
-  ZTOOLS_BIN="$ZT_DIR/ztools" bash bin/ab_test >/dev/null; rc=$?; rm -rf "$ZT_DIR"; exit $rc'
+VERIFY='ZT_DIR="$(mktemp -d)"; LOG="$(mktemp "${TMPDIR:-/tmp}/ztools-release-install.XXXXXX")"
+  echo "install log: $LOG"
+  ZTOOLS_INSTALL_DIR="$ZT_DIR" ./install.sh --dev-copy >"$LOG" 2>&1 || { echo "install.sh --dev-copy failed (full log: $LOG); its last 40 lines:" >&2; tail -n 40 "$LOG" >&2; rm -rf "$ZT_DIR"; exit 1; }
+  [ "$("$ZT_DIR/ztools" --version | awk "{print \$NF}")" = "$GOH_RELEASE_VERSION" ] || { echo "installed ztools is not $GOH_RELEASE_VERSION" >&2; rm -rf "$ZT_DIR"; exit 1; }
+  ZTOOLS_BIN="$ZT_DIR/ztools" bash bin/ab_test; rc=$?; rm -rf "$ZT_DIR"; exit $rc'
 
 "$GOH/tools/release-kit/release.sh" --version "$V" \
   --gate "make ci" \

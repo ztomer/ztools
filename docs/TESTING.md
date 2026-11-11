@@ -452,3 +452,18 @@ assertion that compares two values read through two root resolutions. Both pins
 now render with `*_from(&repo_root())`, one root per test, as the file's own
 header says every non-live pin must.
 
+
+## The release's suite run names its failures, and the v3.14.1 flake did not reproduce (2026-11-11)
+
+A v3.14.1 release attempt stopped at its install-and-test step with only "Rust ztools tests
+failed": `bin/ab_test` ran `cargo test --quiet` and `tools/release.sh` sent ab_test's stdout to
+/dev/null, so the failing test went unnamed. Now ab_test writes the suite's full output to a
+per-run log (`$ZTOOLS_AB_LOG_DIR`, else `$TMPDIR`, `ztools-rust-suite.XXXXXX`), prints its path,
+and on failure names the `... FAILED` tests on stderr, or prints the log's last 40 lines when no
+test is named (`tools/tests/test_ab_test_suite_log.py`).
+
+The hunt: the 25 prebuilt test binaries (`cargo test --all-features --no-run`), run in order
+under `load.py 8` on 16 cores, passed 20 runs in a row, so the flake is still unexplained. The
+next failure will name its test. Running a test binary directly skips cargo's `[env]`, so set
+`HOME=rust/target/test-home` yourself, or `test_home_is_sandboxed` fails (it did, on the first
+attempt).

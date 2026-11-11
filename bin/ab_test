@@ -47,27 +47,49 @@ run_cli_test() {
 
     section "CLI surface: $name"
 
-    local t0 t1 rust_ms rust_status
+    local t0 t1 rust_ms rust_status out
+    out="$(mktemp "$LOG_DIR/ztools-cli-help.XXXXXX")"
     t0=$(now_ms)
-    "$RUST" "$subcommand" --help > /tmp/rust_output.txt 2>&1 && rust_status=0 || rust_status=$?
+    "$RUST" "$subcommand" --help >"$out" 2>&1 && rust_status=0 || rust_status=$?
     t1=$(now_ms)
     rust_ms=$((t1 - t0))
-    if [ "$rust_status" -eq 0 ] && grep -qi "$expect" /tmp/rust_output.txt; then
+    if [ "$rust_status" -eq 0 ] && grep -qi "$expect" "$out"; then
         ok "$subcommand --help answers in ${rust_ms}ms"
     else
-        err "$subcommand --help failed (exit $rust_status) or lacks '$expect'"
+        err "$subcommand --help failed (exit $rust_status) or lacks '$expect' (output: $out)"
         failures=$((failures + 1))
+        return 0
     fi
+    rm -f "$out"
 }
+
+# Each run's own logs (ZTL.RELQUIET): a v3.14.1 release stopped at "Rust ztools
+# tests failed" with the suite's output gone, so the flaky test had no name. The
+# suite's FULL output goes to a per-run log whose path is always printed, and a
+# failure names its tests on stderr, which a caller hiding stdout still shows.
+LOG_DIR="${ZTOOLS_AB_LOG_DIR:-${TMPDIR:-/tmp}}"
+LOG_DIR="${LOG_DIR%/}"
 
 run_rust_suite() {
     section "Rust suite (unit, integration, frozen-golden parity)"
-    if (cd "$ROOT/rust" && cargo test --quiet --all-features); then
+    local log names
+    log="$(mktemp "$LOG_DIR/ztools-rust-suite.XXXXXX")"
+    info "suite log: $log"
+    if (cd "$ROOT/rust" && cargo test --all-features) >"$log" 2>&1; then
         ok "Rust ztools unit, integration & parity tests passed"
-    else
-        err "Rust ztools tests failed"
-        failures=$((failures + 1))
+        return 0
     fi
+    failures=$((failures + 1))
+    names="$(sed -n 's/^test \(.*\) \.\.\. FAILED$/\1/p' "$log" | sort -u)"
+    if [ -n "$names" ]; then
+        err "Rust ztools tests failed (full log: $log):"
+        local name
+        while IFS= read -r name; do printf '    %s\n' "$name" >&2; done <<<"$names"
+    else
+        err "Rust ztools tests failed and named no test (full log: $log); its last 40 lines:"
+        tail -n 40 "$log" >&2
+    fi
+    grep -E '^error: test failed' "$log" >&2 || true
 }
 
 compare_collect_records() {
