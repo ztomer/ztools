@@ -11,6 +11,8 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+## v3.16.1 — only the per-model chat was inside it, so a summary run could send requests to the server _(2026-11-11)_
+
 ### Fixed
 - **The twitter summary's embeddings and roster requests are made under the GPU lock
   (ZT.TWGPULOCK).** Only the per-model chat was inside it, so a summary run could send
