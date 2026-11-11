@@ -11,6 +11,8 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+## v3.16.0 — the embedding model was hard-coded as `nomic-embed-text` _(2026-11-11)_
+
 ### Fixed
 - **Twitter clustering runs for the first time, with the model the server serves
   (ZT.EMBEDMODEL).** The embedding model was hard-coded as `nomic-embed-text`. Osaurus refuses
