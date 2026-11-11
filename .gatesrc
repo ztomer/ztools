@@ -145,8 +145,9 @@ GOH_INSTALLED_VERSION_MIN_FILES=22      # read 25 (Markdown files that are not d
 # turned that test red (goh red-run, BACKLOG 4.11; owner OW.8, 2026-10-31).
 GOH_RED_RUN=1
 
-# The GitHub-release backfill starts at v2.2.0, where CHANGELOG.md starts: the 56 earlier tags
-# have no stanza by policy and are neither backfilled nor warned about (goh v0.64.0, ZT.CHLOG).
+# The GitHub-release backfill starts at v2.2.0, where release-time stanzas start: the 68 earlier
+# tags carry stanzas backfilled from their release commits (ZT.CHANGELOGTAGS, 2026-11-11), but no
+# GitHub release is cut for them (goh v0.64.0, ZT.CHLOG).
 GOH_RELEASE_BACKFILL_FLOOR=v2.2.0
 
 # The one plan (goh roadmap, GOH.ROADMAPGATE): open entries only; debt in roadmap_seed.json.

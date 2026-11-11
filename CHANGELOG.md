@@ -4,10 +4,10 @@ All notable changes to this project. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/); entries are added
 with each committed batch.
 
-This file starts at v2.2.0 — earlier history is in git. That is the release
-policy's cut-off: the tags before v2.2.0 (v0.4 .. v2.1.17, 56 of them) predate
-this changelog, have no stanza and get no GitHub release; their notes are
-`git log` between tags.
+Stanzas from v2.2.0 on were written at release time. The tags before it
+(v0.1 .. v2.1.17, 68 of them) predate this changelog: their stanzas were
+backfilled on 2026-11-11 from each tag's message and release commits, and
+they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
@@ -1615,3 +1615,1016 @@ and the sweep turned up a defect that had nothing to do with style.
   sake rather than because the logic deserves isolation. The floor is a
   ratchet: it bites today, and it rises when a live-server integration harness
   exists.
+
+## v2.1.17 — feat(cli): add --version and -V flag to all ztools subcommands and binaries _(2026-08-31)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.16..v2.1.17`)._
+
+- chore: version 2.1.17 (`abbe47d`)
+- feat(cli): add --version and -V flag to all ztools subcommands and binaries (`dad3b1e`)
+
+## v2.1.16 — fix(weekend): tune batch sizing and candidate coverage in extract phase _(2026-08-31)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.15..v2.1.16`)._
+
+- chore: version 2.1.16 (`42ee338`)
+- fix(weekend): tune batch sizing and candidate coverage in extract phase (`db1a2e7`)
+
+## v2.1.15 — fix(weekend): clean crates.io dependencies and live event scraping _(2026-08-31)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.14..v2.1.15`)._
+
+- chore: version 2.1.15 (`a712359`)
+- fix(weekend): clean crates.io dependencies and live event scraping (`0b13c57`)
+
+## v2.1.14 — fix(weekend): pure-Rust Camoufox search, qwen3.8 model fallback, and date boundary fix _(2026-08-31)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.13..v2.1.14`)._
+
+- chore: version 2.1.14 (`b5fe630`)
+- fix(weekend): pure-Rust Camoufox search, qwen3.8 model fallback, and date boundary fix (`6f6b94a`)
+
+## v2.1.13 — fix(twitter): never prepend a ## heading the model body already has _(2026-08-30)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.12..v2.1.13`)._
+
+- chore: version 2.1.13 (`d87bbe7`)
+- fix(twitter): never prepend a ## heading the model body already has (`aa1fdf2`)
+- fix(install): stage+mv over the brew symlink instead of writing through it (`46e0a47`)
+
+## v2.1.12 — feat(routines): advertise ztools-weekend refresh in the tab manifest _(2026-08-29)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.11..v2.1.12`)._
+
+- chore: version 2.1.12 (`aee41fa`)
+- feat(routines): advertise ztools-weekend refresh in the tab manifest (`e47503e`)
+
+## v2.1.11 — feat(twitter/weekend): reading a stored result back — --fetch-latest and --last-updated _(2026-08-29)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.10..v2.1.11`)._
+
+- chore: version 2.1.11 (`897b6fe`)
+- feat(twitter/weekend): reading a stored result back — --fetch-latest and --last-updated (`f357202`)
+
+## v2.1.10 — chore: replace U+25BC diagram arrows with the Kare ↓ to clear the emoji gate _(2026-08-29)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.9..v2.1.10`)._
+
+- chore: version 2.1.10 (`6958eb9`)
+- chore: replace U+25BC diagram arrows with the Kare ↓ to clear the emoji gate (`2f2b8a3`)
+- chore: commit install.sh as the local install door, into the Homebrew bin (`417b0b6`)
+
+## v2.1.9 — status/tabs: twitter summaries found by mtime, not a prefix that matched nothing _(2026-08-29)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.8..v2.1.9`)._
+
+- chore: version 2.1.9 (`e87c082`)
+- status/tabs: twitter summaries found by mtime, not a prefix that matched nothing (`fc0e70f`)
+- structural: consume gates_of_heck directly (`33887b6`)
+- File size gate: 500 lines, no exemptions for tests or any directory (`e6f2979`)
+- Reasoning-overrun retry escalation was re-bought every task; exclude ornith-9b (`2481a5f`)
+- A test fixture wrote a real 15GiB file per run; it filled the disk to 100% (`24d1074`)
+- gpu_lock could never time out: restore tui/lib.sh and make `die` always abort (`1f05c66`)
+- chore: sync Cargo.lock to version 2.1.8 (`43933de`)
+
+## v2.1.8 — chore: trim and prune -- remove the Python TUI and GH Actions; release.sh owns the tap _(2026-08-21)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.7..v2.1.8`)._
+
+- chore: version 2.1.8 (`5b5eb87`)
+- chore: trim and prune -- remove the Python TUI and GH Actions; release.sh owns the tap (`29ddbac`)
+- feat(eval): port the bookkeeping layer to Rust; clean dead packaging (`0ae11c4`)
+- ci: disable GitHub Actions quality gate -- local pre-push hook is a strict superset (`f0a10ab`)
+- feat: Rust coverage 83% -> 94.8%, gated at 94; two production bugs found by the coverage work (`621bfd0`)
+
+## v2.1.7 — feat(eval): failure categories, reasoning-retry escalation, architecture-based family resolution _(2026-08-21)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.6..v2.1.7`)._
+
+- chore: version 2.1.7 (`9726c5d`)
+- feat(eval): failure categories, reasoning-retry escalation, architecture-based family resolution (`daadf59`)
+- chore: Cargo.lock after version bump (`a5dac7b`)
+- docs(roadmap): parity matrix widened to three models; CI drift gate live; divergences closed (`a139396`)
+- feat(eval): oversize refusal, generative gate, timeout table, CI validator-parity gate (`a06c9b0`)
+
+## v2.1.6 — docs(roadmap): live A/B parity passed 6/6; remaining work is widening the model matrix _(2026-08-21)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.5..v2.1.6`)._
+
+- chore: version 2.1.6 (`f41dc51`)
+- docs(roadmap): live A/B parity passed 6/6; remaining work is widening the model matrix (`0c0cd42`)
+- feat(eval): missing-model substitution, learning path, config budgets, rubric validators (`07de98f`)
+- port model quirks to the Rust eval loop (`a42a6e5`)
+- graded validator scores flow through as task scores (`f6e6f75`)
+- A/B eval parity harness + two real parity defects it caught (`21698f6`)
+- roadmap: signal/prefill port complete (`5a67f7f`)
+- port eval signals store + prefill probe from Python references (`3b78dc2`)
+- wire full-suite eval runner into ztools model-eval --suite full (`006e911`)
+- migrate python 3.11 -> 3.14; bake gate env isolation into conftest (`8bd2da7`)
+- rewrite eval runner against real modules, compiling from first commit (`e12e7e6`)
+- port eval transport: blocking call + SSE reasoning-overrun guard (`98a7320`)
+- roadmap: phase 4 prompts now generated from source of truth with parity gate (`1ee9d2c`)
+- generate eval prompts from Python source of truth + byte-parity drift gate (`b60f7cc`)
+- correct roadmap: runner.rs is an uncompiled draft, prompts.rs parity unverified (`8d79beb`)
+- fix import order in check_no_allow.py for ruff gate (`0c9f64d`)
+- finish eval-to-Rust conversion: update ROADMAP.md milestones (`958d916`)
+- finish Phase 3: add Rust eval discrimination module + update runner, mod.rs; update ROADMAP.md milestones (`69de737`)
+- start Phase 2: add Rust eval runner module ported from references/eval/run.py (`a971710`)
+- add eval-to-Rust conversion plan section to ROADMAP.md (`69c8ebe`)
+- update roadmap remaining work sections for items 1-4 (`27172d3`)
+- fix import order in check_no_allow.py (`39804e6`)
+- fix import order in check_no_allow.py (`19afe15`)
+- fix import order in check_no_allow.py (`c6a2626`)
+- update roadmap with implementation status and testing plans for items 1-4; add derive_best_models(), check_no_allow.py gate, mutant renamer tests (`7cda7bd`)
+- ci: remove Python-only gates; quality-gate runs Rust only; config-debt.yml removed (`61868e8`)
+- roadmap: consolidate into single forward-facing file; remove RUST_PORT_PLAN.md, PLAN.md, BACKLOG.md (`0561f98`)
+- roadmap: consolidate into single forward-facing file; remove RUST_PORT_PLAN.md, PLAN.md, BACKLOG.md (`460a729`)
+- roadmap: forward-facing only, items 1-4 active; items 5-10 pruned to history (`2bb2bd0`)
+- Update roadmap docs: reflect Rust-primary state, mark all 10 items complete (`fc46f83`)
+
+## v2.1.5 — chore: update parity ledger — Rust primary, Python reference only, all gaps closed _(2026-08-20)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.4..v2.1.5`)._
+
+- chore: version 2.1.5 (`83a9ef4`)
+- chore: update parity ledger — Rust primary, Python reference only, all gaps closed (`8a48d16`)
+- docs: add ARCHITECTURE.md and update README and PORT_PARITY for native Rust release (`28bd16c`)
+- docs: add ARCHITECTURE.md and update README and PORT_PARITY for native Rust release (`9b8323c`)
+
+## v2.1.4 — Release v2.1.4 with resilient DuckDuckGo scraping, clippy fixes and Rust git hooks _(2026-08-20)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.3..v2.1.4`)._
+
+- chore(release): bump version to 2.1.4 (`e64c78a`)
+- fix(weekend): resilient DDG HTML snippet parser and DDG Lite fallback (`3d081e8`)
+
+## v2.1.3 — Release v2.1.3 with DuckDuckGo GET search fix and clippy gates _(2026-08-20)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.2..v2.1.3`)._
+
+- fix(clippy): allow too_many_arguments on twitter_summarize and add Rust gates to pre-commit/pre-push hooks (`5f6c5ed`)
+- fix(weekend): try GET request first for DuckDuckGo search snippets (`87c0d00`)
+
+## v2.1.2 — Release v2.1.2 with live Twitter browser scraping and UTF-8 fixes _(2026-08-20)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.1..v2.1.2`)._
+
+- chore(release): bump version to 2.1.2 (`470b61c`)
+- feat(twitter): implement live browser scraping, fix UTF-8 slicing and stdin block (`c77ef74`)
+
+## v2.1.1 — Release v2.1.1: Native Rust standalone ztools with macOS CI gate and multicall support _(2026-08-20)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.1.0..v2.1.1`)._
+
+- ci(github): fix quality-gate runner to macos-latest and track eval_baseline.json (`3bc29af`)
+- feat(cli): support multicall symlink dispatch (weekend, twitter, oeval, rename_images) (`eb9da94`)
+- chore(release): bump version to v2.1.1 (`815f244`)
+- fix(weekend): retain [THIS WEEKEND] marked lines in extract_sources filter (`657a8c3`)
+
+## v2.1.0 — Release v2.1.0: Native standalone Rust ztools crate with complete evaluator and algorithm parity _(2026-08-20)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v2.0.0..v2.1.0`)._
+
+- chore(release): bump version to v2.1.0 (`b52cae7`)
+- test(ab_test): add cross-language parity vectors for Phase 4 validators and rename helpers (`ce20797`)
+- test(gpu_lock): check combined caplog and capsys output in test_the_refusal_says_who_and_why (`f5c243f`)
+- test(gpu_lock): cleanly release lock in hold test and capture stderr in refusal test (`9c7e9d2`)
+- feat(eval): implement Phase 4 deep validators (text_match, defects, contract, json_validator, adversarial, attribution, taxes_grounded) (`795c746`)
+- feat(rust): implement Phase 3 roadmap (eval task loader, GPU lock, samples median, watchdog, OCR, twitter parser) (`659af4f`)
+- docs: schedule remaining port work in execution order with impl/test/parity plans (`12fbbd8`)
+- docs: rewrite Phase 3 around native Rust browser/OCR — no Python in the port (`17b63da`)
+- eval: port content_processing cleaning + validate_file_summary, data-driven tasks (`c01dd34`)
+- docs: mark Phase 2 rename port done in RUST_PORT_PLAN (`39b429b`)
+- rename: port helpers.py text cleaning + VLM naming path into rename/ package (`6867a73`)
+- test(ab): pin weekend enforcement parity fixtures in the A/B gate (`e979722`)
+- feat(weekend): port the 4-phase prompt pipeline and supply prioritisation (`f808173`)
+- feat(weekend): port supply in-window prioritisation and counting (`a021c77`)
+- feat(weekend): port C7 provenance gate and split enforcement modules (`28f0b32`)
+- feat(weekend): port C3 window enforcement and day-reconcile into Rust (`cdf34d8`)
+- feat(weekend): port C5 weather-label correction and C4 constant-column detection (`8e5d135`)
+- feat(weekend): port C8 exclusion enforcement into Rust (parity with enforce.py) (`e1f87c8`)
+- feat(conf): one canonical home for the twitter summarize prompt (`a54ef9c`)
+- chore(bin): retarget launchers and A/B harness from routines to the ztools crate (`84049da`)
+- feat(rust): relocate the ztools Rust port into this repo (`017fc86`)
+
+## v2.0.0 — Release v2.0.0 - Native Rust engine integration and best model matrix sync _(2026-08-19)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v1.5.0..v2.0.0`)._
+
+- feat(parity): synchronize best model matrix, defect detection, and native routines shims (`928f167`)
+- docs: qwen3.8-27b-mxfp8 IS an MTP build -- confirmed, still not proven as the cause (`b301853`)
+- eval/memory: revert to the fail-safe guard -- the rate signal is bursty and clears contaminated machines 19 times in 20 (`6c9374d`)
+- eval/memory: thrashing is a RATE, not a level -- a reboot was never the fix (`30edbde`)
+- docs: the compressor fills after a thrashing model and does not drain (`8bbd7f1`)
+- qwen3.8-27b-mxfp8: measured at 0.11 tok/s -- the tag now holds a different build (`22e2b07`)
+- eval/memory: fail on an unsupported platform instead of degrading into a number (`4ab0183`)
+- docs: a plan for the four open items, and the misreading it corrects (`d7015f3`)
+- eval: three instruments that could each report a confident wrong number (`beef404`)
+
+## v1.5.0 — docs: prune the backlog to what still teaches, correct a script comment that lied _(2026-08-19)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v1.4.0..v1.5.0`)._
+
+- chore: version 1.5.0 (`000b4b0`)
+- docs: prune the backlog to what still teaches, correct a script comment that lied (`1a1a3a2`)
+- Record what the sweep actually measured, including where I was wrong (`a24cb89`)
+- Watchdog the eval: a derived timeout grows when the machine is least able to meet it (`0ef8d20`)
+- Lock the osaurus server and GPU across every session on this Mac (`23d9d4a`)
+- Fix the eval's restart path: it started a SECOND osaurus and called it recovery (`97ce790`)
+- docs: the "contaminated measurement is permanent" rule stopped being true (`90db8d6`)
+- Wire the three grounded Taxes tasks, delete the unread rename model keys (`bea345f`)
+- docs: vendor the Taxes eval snapshots, record what is left to wire them (`48edb0d`)
+- Nest the grounded tasks' evidence under one grounding key, drop model_hint (`3dec443`)
+- config: restore foundation as the last filename fallback, risk accepted (`2c4fcb2`)
+- test(validators): kill mutation survivors in the code changed this week (`356ef84`)
+- docs: fold the phase plan into the backlog and delete it (`0d899fb`)
+- Vendor three grounded Taxes eval tasks (yoy_narrative, qa, slip_qa) (`086a24c`)
+- fix(rename): a screenshot could name your files (`82a9556`)
+- fix(resolve): corroboration dropped an installed model, against its own docstring (`d56fdf3`)
+- feat(eval): two adversarial tasks, and rn obeys prompt injection (`a2af325`)
+- fix(eval): make performance measurements able to recover from a bad reading (`41cd438`)
+- feat(eval): image_real, the first task that actually shows a model an image (`d6f15d5`)
+- fix(rename): rn was renaming images from hallucinated descriptions (`db4c582`)
+- fix(rename): bring rn inside the transport perimeter (`218e464`)
+- feat(resolve): corroborate the roster against disk before trusting it (`59f02f2`)
+- feat(config): derive best_models from the corrected sweep (`6cd9880`)
+- fix(scorer): stop weekend_fixed_mixed punishing models for obeying the prompt (`d9f5a7a`)
+- feat(eval): check the single-server invariant per task, and plan the next phase (`60e2900`)
+- fix(config): retract the "27GB does not fit this host" threshold (`6f9b085`)
+- tools: queue a nemotron re-run with a raised per-model ceiling (`00da974`)
+- fix(llm): give the streamed path a wall-clock deadline (`8aaf66a`)
+- docs: record why our leaderboard disagreed with published benchmarks (`27a7d83`)
+- fix(eval): the token budget was deciding scores, not the models (`0aa628c`)
+- ... and 35 more commits
+
+## v1.4.0 — ztools 1.4.0 - measurement and scoring correctness _(2026-08-12)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v1.3.0..v1.4.0`)._
+
+- chore(release): 1.4.0 (`dc85e97`)
+- fix(test): unblock the pre-push gate, and record what the "hang" really was (`fc752cf`)
+- fix(test): stop saved eval outputs from landing in the real config dir (`5bde09e`)
+- feat(eval): keep the model's answer, not just the score it earned (`2ec4ff5`)
+- fix(test): restore the OCR tests to the coverage gate, which could not pass (`0c2f595`)
+- fix(eval): score fact coverage on what was said, not what was copied (`297f897`)
+- fix(eval): derive the request timeout from three measured quantities (`f20d42b`)
+- fix(eval): treat a 5xx as the server failing, and stop flogging a dead one (`28a43ce`)
+- docs: record the eval decoding policy and what it costs (`c5f6b84`)
+- fix(eval): pin decoding to greedy, and record why ornith returns nothing (`c3d7167`)
+- feat(eval): make the scorer able to tell good output from bad (`2146b84`)
+- fix: stop trading context for ingestion time, and warm the probe before timing (`1bb9ee0`)
+- test: gate the suite against reaching the real model server (`2ba3246`)
+- feat(eval): measure model capabilities instead of assuming them (`16043b7`)
+- fix(prompts+pipeline): make rn, tw and ev measure and produce real output (`bfb8574`)
+- fix: make the coverage gate pass, and psutil a real dependency (`6672ef2`)
+
+## v1.3.0 — test: drop identity mocks of the pure text processors _(2026-08-11)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v1.2.0..v1.3.0`)._
+
+- test: drop identity mocks of the pure text processors (`d8cb5a1`)
+- test(rename): run the real text helpers instead of mocking them (`7de98a4`)
+- refactor: split the three oversized modules, and stop testing through globals (`07aa676`)
+- fix(eval): stop the file-summary prompt naming files that do not exist (`48bac1b`)
+- fix(tests): the last eight red tests were the same layout bug (`b945e83`)
+- test: replace eight tests that could not fail (`0922541`)
+- chore: version 1.3.0 (`69335e1`)
+- feat(twitter): add --fetch-only to collect tweets without summarizing (`274b11c`)
+- fix: resolve shipped-resource paths by layout, not by __file__ (`b23ea20`)
+- fix(twitter): default to 24h lookback if last_run was less than 4h ago (`b2dd2a7`)
+- feat(ab-test): update ab_test script with schema parity checks (`4f532f2`)
+
+## v1.2.0 — v1.2.0 — Native Rust launchers & A/B test suite integration _(2026-08-06)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v1.1.1..v1.2.0`)._
+
+- release: v1.2.0 — Native Rust launchers & A/B test suite integration (`fa21d53`)
+- feat(ab-test): add ztools A/B test runner script (`d0d85f0`)
+- refactor: move Python tests directory to references/tests/ (`8c69e44`)
+- refactor: move Python modules to references/ and add build.sh for native Rust launchers (`13de435`)
+- feat(twitter): add tweet content deduplication and budget-preserving iteration (`a081e16`)
+- fix(tests): update test_osaurus_port to accept stopped status exit code (`b02ade0`)
+- feat(routines): add routines-twitter.toml manifest and routines_twitter_status.py reporter (`4478cd8`)
+- feat(tw/wk): report processed tweet count for C11 and add wedged Osaurus readiness check (5.9/6.3) (`a58d220`)
+
+## v1.1.1 — Release v1.1.1: pre-compiled regex performance optimizations, multi-persona review enhancements, and zero-finding quality release _(2026-08-05)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v1.1.0..v1.1.1`)._
+
+- chore(release): bump version to 1.1.1 (`f7f1b01`)
+- perf(enforce): pre-compile date matching regexes at module level (`b51beb0`)
+- chore(lock): update version in uv.lock to 1.1.0 (`7bd67d5`)
+
+## v1.1.0 — Release v1.1.0: seasonal activity search expansion, venue exclusion exceptions, prompt zero-literal audit, and Twitter summarizer enhancements _(2026-08-05)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v1.0.0..v1.1.0`)._
+
+- chore(release): bump version to 1.1.0 (`2c4cc01`)
+- feat(enforce): add seasonal event exception to venue exclusions (Item 5.5) (`ce99a34`)
+- feat(prompts): enhance activity descriptions & feature highlighting in weekend prompts (`bf9a62f`)
+- fix(conf): remove hardcoded example values from gemma_versions prompt (`9047648`)
+- feat(weekend): add seasonal search query expansion and outdoor/indoor balance steering (`4119d59`)
+- test(ztools): add edge case tests for config, foundation, protocol, restart (`df54efb`)
+- fix(tests): scope real TW sample checks to historical 2026-07 samples (`ef07440`)
+- conf(ztools): update best_models in config.toml with empirical benchmark winners (`11f354d`)
+- docs(ztools): record task-899 empirical validation scores (summarize 98.5%, file_summary 91.6%, filename 100%) (`3c847a4`)
+- fix(ztools): propagate prompt steering rules across all 7 model configs & update docs (`ea03017`)
+- fix(ztools): resolve weakness classes C2a, C10, C13, elevate summarize quality to 91.5%, update eval steering & docs (`63c954c`)
+- fix(ztools): resolve weakness classes C2a, C10, C13, elevate summarize quality to 91.5%, update eval steering & docs (`8dcc0ca`)
+- docs(C4): record the constant-column detector in the class catalogue (`d2b0ca0`)
+- feat(G3 5.3): assert no column is answered from the prompt (`60fe824`)
+- feat(G3 5.1): make in-window candidates visible without starving the draft (`90b4d40`)
+- feat(routines): join the harness -- report the last plan, never generate one (`829ab2b`)
+- feat(G3 C19): catch fabricated rows; the revert alone restored real events (`7c50112`)
+- Revert "fix(G3 C18): constrain candidates to the plan window BEFORE the structure phase" (`73cf73d`)
+- fix(G3): C7 read dates from the wrong column -- a false green on real output (`2e3922d`)
+- fix(G3 C18): constrain candidates to the plan window BEFORE the structure phase (`46bd65a`)
+- feat(G3 C18): an empty plan must fail, not pass every check (`b08f75c`)
+- test: bring the coverage gate back over 95 by testing this session's own code (`6403caa`)
+- feat(G3 C14 follow-up): read the events OUT of aggregator pages (`a396f51`)
+- test(G3 C4): assert the SHAPE of the class -- a column that echoes config (`dacc9a5`)
+- docs+test(G3): close C16 -- source scoping verified, xfail dropped (`32eca68`)
+- fix(G3 C16): revert the province anchor on EVENT queries; stop family ages leaking (`7b7a91c`)
+- fix(G3 C16): positive in-region evidence, scoped at source (`b6e5c36`)
+- feat(G3 C16): name the out-of-region class; strengthen the WHERE rule (`246dd56`)
+- fix(G3 C4): the location column leaked "unknown" too (`d475b41`)
+- fix(G3 C4): the word "unknown" must not reach the table (`afd79a1`)
+- ... and 16 more commits
+
+## v1.0.0 — chore(deps): lock camoufox and its transitive deps _(2026-07-25)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.23..v1.0.0`)._
+
+- chore(deps): lock camoufox and its transitive deps (`fa07f35`)
+- docs+release: document camoufox path, trim always-resident CLAUDE.md, sync version on release (`9f87254`)
+- test: gate real browsers/cookies and tracked-config writes in conftest (`679775a`)
+- feat(twitter): camoufox backend, multi-browser session discovery, bounded scroll (`9c2681d`)
+- test(rename): fix stale VLM default assertion; split main() tests out (`b6944bd`)
+- fix(hooks): resolve pre-commit ROOT from git, not the hook's own path (`c68f789`)
+
+## v0.9.23 — fix(mlx): harden mlx-vlm fallback; document upstream dependency blocker _(2026-07-20)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.22..v0.9.23`)._
+
+- fix(mlx): harden mlx-vlm fallback; document upstream dependency blocker (`9155caf`)
+
+## v0.9.22 — feat(mlx): load Osaurus models via mlx-vlm; reorder twitter fallback _(2026-07-20)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.21..v0.9.22`)._
+
+- feat(mlx): load Osaurus models via mlx-vlm; reorder twitter fallback (`2d029fb`)
+- gitignore: ignore ztools-*.tar.gz release tarballs (`71bb2aa`)
+
+## v0.9.21 — Fix twitter LLM fallback chain: MLX NameError, foundation context overflow, dynamic timeout _(2026-07-20)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.20..v0.9.21`)._
+
+- Fix twitter LLM fallback chain: MLX NameError, foundation context overflow, dynamic timeout (`b0c1787`)
+- Add tools/release.sh — automated tag→push→sha→brew-tap pipeline (`93f9a3d`)
+
+## v0.9.20 — Fix TUI model-select overwrite: use per-tool defaults, not models[0] _(2026-07-16)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.19..v0.9.20`)._
+
+- Fix TUI model-select overwrite: use per-tool defaults, not models[0] (`fe91528`)
+- UX panel round 2: Rams/Kare/Hashimoto fixes (`b67ff97`)
+- Split tui/app.py into app_views.py and app_actions.py (under 500 lines) (`0bfe066`)
+
+## v0.9.19 — Remove stale QUALITY_EVAL_FINDINGS.md — historical eval report, no actionable content _(2026-07-16)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.18..v0.9.19`)._
+
+- Remove stale QUALITY_EVAL_FINDINGS.md — historical eval report, no actionable content (`6885bd9`)
+- Remove all stale .yaml references and retired review doc (`76720b2`)
+- #14 #16: Config migration cleanup + test fixes (`da7e023`)
+- Remove retired CONFIG_DEBT.md — audit trail lives in git history (`76e3e72`)
+- Config debt: all 90 items fixed — CI checker now returns zero violations (`2c4d69b`)
+- Fix pre-existing ruff issues in weekend/config.py (import sort, line length) (`8fc644f`)
+- Retire fragile_elements.md and expert_reviews.md — all items resolved (`e36cfb7`)
+- Add top-level ./ztools script, ztools-local alias, doc updates (`11755fb`)
+- P2: fix remaining config debt items (9 env vars, doc cleanup) (`bf3cc88`)
+- Quality gates: pre-commit now runs ruff + syntax check; pre-push handles missing tooling gracefully (`a0b1c8f`)
+- Fix lint: sorted imports, line lengths, remove unused json import (`0b923cf`)
+- Extract shared eval prompts to lib/eval_data.py; split tasks_core 640→253+302 lines (`443a077`)
+- Config debt doc: 48/90 fixed (P2: +6 twitter/weekend env var items) (`27dcbf3`)
+- P2: twitter timeouts/constants via TWITTER_* env vars (`452e514`)
+- P2: weekend/llm.py timeouts/retries via WEEKEND_* env vars (`4295b5b`)
+- Fix: add __all__ to config_core.py for F401 compliance on re-exported fallbacks (`be67876`)
+- P1 triple-defined constants: remove dead TIMEOUTS/MAX_TOKENS dicts, clean up fallback imports P2 env-var fixes: OSAURUS_APP in weekend/config.py, WEATHER_API_URL in weekend/data.py TUI: ⚠→! warning icon, status() rewrite sans Rich spinner Config debt doc: 42/90 items fixed (`1af3fae`)
+- Prune completed plan documents (`a617f3b`)
+- Prune completed plan: TUI_CLEANUP_PLAN.md → git history (`90b4f86`)
+- Phase 4.1: prevent mid-word wrapping in TUI result areas (`5d1bf8a`)
+- Phase 2: replace decorative banner in signal handler, mark all remaining plan items as done/verified (`2bc05c5`)
+- TUI cleanup: prefix standardization, README de-fluff (`f07dd91`)
+- Consolidate and merge TUI observations and cleanup plan. Delete obsolete entries. (`a29820c`)
+- Add env isolation to pre-push hook to match CI runner exactly (`4290f92`)
+
+## v0.9.18 — Fix weekend server check mock in tests for CI _(2026-07-16)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.17..v0.9.18`)._
+
+- Fix weekend server check mock in tests for CI (`5e0a23f`)
+
+## v0.9.17 — Fix remote quality gate and release workflows _(2026-07-16)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.16..v0.9.17`)._
+
+- Fix remote quality gate and release workflows (`f7f04f4`)
+
+## v0.9.16 — Fix Quality Gate CI by resolving ruff warnings and adding a pre-push local quality gate hook _(2026-07-16)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.15..v0.9.16`)._
+
+- Fix Quality Gate CI by resolving ruff warnings and adding a pre-push local quality gate hook (`5d6c97f`)
+
+## v0.9.15 — Add background Task Scheduler tab to TUI dashboard _(2026-07-16)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.14..v0.9.15`)._
+
+- Add background Task Scheduler tab to TUI dashboard (`aff468c`)
+
+## v0.9.14 — Add global model parameter settings tab to TUI dashboard _(2026-07-16)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.13..v0.9.14`)._
+
+- Add global model parameter settings tab to TUI dashboard (`259d3a1`)
+
+## v0.9.13 — Add interactive History Archive explorer tab in TUI dashboard _(2026-07-16)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.12..v0.9.13`)._
+
+- Add interactive History Archive explorer tab in TUI dashboard (`bd30d74`)
+
+## v0.9.12 — Enforce 95% test coverage by omitting dev explorer tool _(2026-07-16)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.11..v0.9.12`)._
+
+- Enforce 95% test coverage by omitting dev explorer tool (`ebd4862`)
+
+## v0.9.11 — Add dual-pixel colored ANSI image previews to TUI renamer _(2026-07-16)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.10..v0.9.11`)._
+
+- Add dual-pixel colored ANSI image previews to TUI renamer (`0c880c2`)
+
+## v0.9.10 — Add collapsible LLM reasoning blocks in TUI dashboard _(2026-07-16)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.9..v0.9.10`)._
+
+- Add collapsible LLM reasoning blocks in TUI dashboard (`69c2c8f`)
+
+## v0.9.9 — Add unified interactive Textual TUI dashboard and bootstrap wrapper _(2026-07-16)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.8..v0.9.9`)._
+
+- Add unified interactive Textual TUI dashboard and bootstrap wrapper (`7faaa87`)
+
+## v0.9.8 — Upgrade TUI UX with Rich status spinners and high-fidelity output layouts _(2026-07-16)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.7..v0.9.8`)._
+
+- Upgrade TUI UX with Rich status spinners and high-fidelity output layouts (`71259ac`)
+
+## v0.9.7 — Update docs/FRAGILE_ELEMENTS.md showing all elements resolved in v0.9.7 _(2026-07-16)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.6..v0.9.7`)._
+
+- Update docs/FRAGILE_ELEMENTS.md showing all elements resolved in v0.9.7 (`c392e2f`)
+- Resolve remaining fragile elements: optimize browser delays, self-heal sessions, consolidate constants (`815c2ab`)
+- Update docs/FRAGILE_ELEMENTS.md to reflect v0.9.7 hardening status (`59fd901`)
+- Fix generic sha256 pattern in upgrade_tap.py (`78e9833`)
+- Harden codebase against platform and browser differences and automate Homebrew tap upgrades (`6bfa194`)
+
+## v0.9.6 — add factual_accuracy and factual_coverage summarization tests _(2026-07-12)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.5..v0.9.6`)._
+
+```text
+add factual_accuracy and factual_coverage summarization tests
+
+New tasks for summarization quality differentiation:
+- summarize_factual_accuracy: 3 planted falsehoods in timeline.
+  Gradated score (100/67/34/0) based on how many falsehoods the model
+  parrots. Discrimination spectrum across 8 models:
+  - 100%: qwen-agentworld, ornith (resist all falsehoods)
+  - 67%: gemma-4-12b (resists 2/3)
+  - 34%: diffusiongemma, qwen3.6-35b, qwen3.6-27b (resist 1/3)
+  - 0%: foundation, gemma-4-e4b (parrot all 3)
+- summarize_factual_coverage: counts how many of 18 key verifiable facts
+  appear in the output. Measures thoroughness vs selectivity.
+
+All 1614 tests pass.
+```
+
+- add factual_accuracy and factual_coverage summarization tests (`6b92933`)
+
+## v0.9.5 — update best models per task from v0.9.4 sweep; fix calibration report _(2026-07-12)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.4..v0.9.5`)._
+
+```text
+update best models per task from v0.9.4 sweep; fix calibration report
+
+Config changes:
+- best_models.json → foundation (100% on all weekend tasks, fastest at 8s)
+- best_models.summarize → qwen-agentworld-35b (65% summarize + 100%
+  contradiction resistance, 15s; prev gemma-4-12b was 0% contradiction)
+- filename_models → [foundation, qwen-agentworld, qwen3.6-35b]
+  (removed stale nemotron/gemma-4-31b entries no longer on server)
+
+Documentation:
+- Calibration report: full sweep table with image_rename, qwen3.6-35b mean
+  recalculated (92%), summarize_contradiction stochasticity noted
+- MODEL_QUIRKS: correction — qwen3.6-35b/stochastic-contradiction, not tied
+  best for summarization
+
+Verification: all 1614 tests pass
+```
+
+- update best models per task from v0.9.4 sweep; fix calibration report (`680e9bc`)
+
+## v0.9.4 — re-add image_rename tasks with proper messages keys _(2026-07-12)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.3..v0.9.4`)._
+
+```text
+re-add image_rename tasks with proper messages keys
+
+- image_rename: 8 OCR-style text snippets → JSON array of filenames
+- image_rename_mixed: same 8 snippets + 4 noise items to filter out
+- Both use validate_mixed_filename with parse_json: True (same pattern as
+  rename_mixed / filename_mixed)
+- Verified: foundation scores 100% on both; qwen3.6-35b scores 100% on both
+- All 1614 tests pass
+```
+
+- re-add image_rename tasks with proper messages keys (`e211345`)
+
+## v0.9.3 — fix file_summary INFRA crash; remove dead image_rename tasks; full 8-model sweep _(2026-07-12)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.2..v0.9.3`)._
+
+```text
+fix file_summary INFRA crash; remove dead image_rename tasks; full 8-model sweep
+
+- Guard validate_file_summary and benchmark_quality.score_file_summary against
+  list-of-strings responses (was crashing with 'str' object has no attribute get')
+- Remove dead image_rename / image_rename_mixed entries from TASKS dict (had
+  test_cases instead of messages, silently skipped every run)
+- Full 8-model sweep: diffusiongemma-26b leads (93.4%), ornith trails (73.6%)
+- summarize_contradiction is strongest discriminator: 5 models parrot (0%),
+  3 resist (100%)
+- All 1614 tests pass
+```
+
+- fix file_summary INFRA crash; remove dead image_rename tasks; full 8-model sweep (`1c118dc`)
+
+## v0.9.2 — skip non-LLM models during eval discovery; add discrimination data _(2026-07-11)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.1..v0.9.2`)._
+
+```text
+skip non-LLM models during eval discovery; add discrimination data
+
+- Filter out model2vec/potion/embedding models during discovery (potion-base-4m
+  is a static embedding model, not an LLM — was causing HTTP 500 on every task)
+- Add multi-model discrimination data: summarize_contradiction separates
+  foundation (0%, parrots falsehood) from qwen3.6-35b (100%, resists it)
+- filename task: foundation 30% vs qwen3.6-35b 55%
+- Verify all 1614 tests pass, all 4 main scripts importable
+```
+
+- skip non-LLM models during eval discovery; add discrimination data (`abb9a83`)
+
+## v0.9.1 — wire up --config-tasks flag; default to full 18-task suite _(2026-07-11)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.9.0..v0.9.1`)._
+
+```text
+wire up --config-tasks flag; default to full 18-task suite
+
+--config-tasks was dead code: parsed but never referenced. build_tasks_from_model
+ran unconditionally and overrode the hardcoded TASKS dict, limiting every eval
+run to only 5 config tasks.
+
+Fix: --config-tasks now switches between:
+  - Default (no flag): 18 hardcoded tasks from tasks_core.py including
+    discrimination tasks (contradiction probe, leak detection, schema
+    strictness, mixed signal/noise variants)
+  - --config-tasks: 5 model-specific tasks with per-family prompt tuning
+
+Also fixed the default fallback prompts in config_getters.py (filename had
+no TEXT placeholder, weekend_fixed didn't pass venue list).
+
+Default filename score dropped from 100% to 30% (harder prompt), summarize
+from 90% to 55%. summarize_contradiction reveals foundation parrots planted
+falsehoods (0%).
+```
+
+- wire up --config-tasks flag; default to full 18-task suite (`4ac9526`)
+
+## v0.9.0 — fix detailed_json source grounding: pass venue list in prompt _(2026-07-11)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.8.10..v0.9.0`)._
+
+```text
+fix detailed_json source grounding: pass venue list in prompt
+
+detailed_json (weekend_fixed task) used {location} substitution which
+passed only 'Vaughan' to the model. The source validator compared model
+output against the full 8-venue eval input (Vaughan Sports Arena,
+Central Park Zoo, etc.) — zero overlap, every model capped at 15%.
+
+Fix: change weekend_fixed prompt to use {} for the full venue list.
+Model now sees the source data and can extract/format from it. Source
+grounding now works as intended.
+
+Also:
+- Fix _safe_format_prompt to handle {} alongside {location}/{age_range}
+- Fix {date_range} not being substituted in weekend_transient prompts
+- Fix default fallback filename prompt to include TEXT placeholder
+- Fix default fallback weekend_fixed prompt to use {} for venue list
+
+detailed_json: 15% → 100% (all capable models)
+```
+
+- fix detailed_json source grounding: pass venue list in prompt (`6884ab5`)
+
+## v0.8.10 — restore source grounding for detailed_json (extractive task) _(2026-07-11)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.8.9..v0.8.10`)._
+
+```text
+restore source grounding for detailed_json (extractive task)
+
+detailed_json (weekend_fixed) asks models to format known venues into
+JSON — the model's output SHOULD overlap with the source data, so source
+grounding is appropriate. Only json (weekend_transient) is generative
+and should skip source matching.
+```
+
+- restore source grounding for detailed_json (extractive task) (`7112b97`)
+- eval: remove source grounding from generative json/detailed_json tasks (`5513db6`)
+
+## v0.8.9 — eval: fix validate_summary() rejecting source_text kwarg _(2026-07-11)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.8.8..v0.8.9`)._
+
+```text
+eval: fix validate_summary() rejecting source_text kwarg
+
+All non-JSON validators are called with source_text=source from
+eval/run.py line 153, but validate_summary's signature only accepted
+(data). Added optional source_text='' parameter for API compatibility
+(same pattern as validate_detailed_json and validate_file_summary).
+
+Fixes: 'INFRA - Validation error: validate_summary() got an unexpected
+keyword argument source_text' on every model for the summarize task.
+```
+
+- eval: fix validate_summary() rejecting source_text kwarg (`b9c76f5`)
+
+## v0.8.8 — twitter: extract engagement, reply context, URLs; wire _PROMPT_RULES; add 'most notable' instruction _(2026-07-11)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.8.7..v0.8.8`)._
+
+```text
+twitter: extract engagement, reply context, URLs; wire _PROMPT_RULES; add 'most notable' instruction
+
+- browser.py: pull favorite_count, retweet_count, reply_count, id_str,
+  in_reply_to_screen_name from GraphQL legacy response
+- summarize.py: tweet prefix now includes engagement ("42 favs, 12 RTs")
+  and → @reply_user context; wire previously-dead _PROMPT_RULES into
+  prompt; fallback prompt asks for "5 most notable tweets"
+- Tests: update fixtures and assertions for new fields and prompt format
+- 1613 passed, 3 skipped
+```
+
+- twitter: extract engagement, reply context, URLs; wire _PROMPT_RULES; add 'most notable' instruction (`ad53e2a`)
+
+## v0.8.7 — Fix: create cache dirs before writing, add full-flow integration test _(2026-07-11)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.8.6..v0.8.7`)._
+
+```text
+Fix: create cache dirs before writing, add full-flow integration test
+
+- save_events_cache / save_venues_cache now mkdir(parents=True, exist_ok=True)
+  on the parent dir before writing, preventing FileNotFoundError when
+  ~/.cache/weekend/ doesn't exist yet
+- Rewrite test_save_events_cache to use tmp_path + monkeypatch
+- Add test_save_events_cache_creates_dir and
+  test_save_venues_cache_creates_dir regression tests (fail without fix)
+- Add test_fetch_data_creates_cache_dirs integration test (mocked LLM)
+- Add test_fetch_data_with_cache_uses_cached integration test
+- Add test_main_runs_with_mocked_deps full-flow integration test
+  exercising main() through output file writing
+- 1613 passed, 3 skipped
+```
+
+- Fix: create cache dirs before writing, add full-flow integration test (`19bad71`)
+
+## v0.8.6 — v0.8.6: TOML migration, pyyaml removal, fix import-time flake _(2026-07-11)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.8.5..v0.8.6`)._
+
+```text
+v0.8.6: TOML migration, pyyaml removal, fix import-time flake
+
+- conf/*.yaml → conf/*.toml, pyyaml → tomli-w dependency
+- lib/config_toml.py: TOML-only loader (no YAML fallback)
+- lib/config_core.py, config_getters.py, config_tasks.py: drop YAML fallback paths
+- lib/quality_runner.py: from lib import osaurus_lib (fix import-time
+  llm_call binding flake — MockLLM patches osaurus_lib.call, not a
+  snapshot reference)
+- eval/cli.py: update_config uses tomli_w.dump() instead of manual
+  string building
+- All tests updated from YAML→TOML syntax and fixture references
+- 1608 passed, 3 skipped
+```
+
+- v0.8.6: TOML migration, pyyaml removal, fix import-time flake (`909ed32`)
+
+## v0.8.5 — v0.8.5: fix remaining 4 review findings, add weekend scorer tests _(2026-07-11)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.8.4..v0.8.5`)._
+
+```text
+v0.8.5: fix remaining 4 review findings, add weekend scorer tests
+
+FIXED:
+- eval/__init__.py: trim to public API surface only (main, run_eval, TASKS)
+- Shared Console: 5 instances consolidated to 1 in lib/tui.py with
+  capture_console() context manager
+- TASK_SCORERS decorator registry: @register_scorer() replaces hardcoded
+  dict + *_WEEKEND merge; weekend_transient/weekend_fixed share 5 scorers
+  via multi-task registration instead of duplicate lists
+- Tests for quality_weekend_scorers.py: 47 tests covering _extract_items,
+  _parse_reference, _has_field, _age_overlap, all 5 scorer functions,
+  and integration (TASK_SCORERS dict, full workflow)
+
+BUGS FIXED WHILE TESTING:
+- _score_weekend_exclusions: empty-string substring bug ('' in 'x' = True)
+  caused items without location to match all exclusions
+- _score_weekend_source_grounding: case mismatch between lowered item
+  names and raw source names; lowered source names at parse time
+
+DOCS: TESTING.md updated with both bug findings.
+
+PENDING: TOML config migration (14 YAML/JSON files)
+```
+
+- v0.8.5: fix remaining 4 review findings, add weekend scorer tests (`783b0d8`)
+
+## v0.8.4 — v0.8.4: fix 10/15 review findings, update review doc _(2026-07-11)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.8.3..v0.8.4`)._
+
+```text
+v0.8.4: fix 10/15 review findings, update review doc
+
+FIXED (this commit):
+- Dead import ScoreCard in quality_weekend_scorers.py
+- Test imports ScoreCard from wrong module (quality_entry -> quality_models)
+- weekend/output.py forced terminal flags removed
+- TUI lib: NO_COLOR/isatty, ~/.config/zstyle fallback, functional helpers
+- GENERIC_FILENAMES dedup (3 copies -> 1 in quality_models.py)
+- _eval_inputs_cache: expose clear_eval_inputs_cache()
+- Architecture inversion: remove try/except ImportError fallback in config_tasks
+- Circular dependency: print_memory_usage as on_complete callback
+- Mutable globals: remove eval.run.DEFAULT_EVAL_TIMEOUT cross-module mutation
+- flush_between_models() closure -> module-level function
+
+PENDING (future):
+- Shared Console() instance + _with_console() context manager
+- TASK_SCORERS decorator registry
+- eval/__init__.py export surface
+- YAML/JSON -> TOML config migration
+- Tests for quality_weekend_scorers.py
+- test_query_model_success test isolation flake
+```
+
+- v0.8.4: fix 10/15 review findings, update review doc (`7109d23`)
+
+## v0.8.3 — v0.8.3: fix test harness + CI shell bug _(2026-07-11)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.8.2..v0.8.3`)._
+
+```text
+v0.8.3: fix test harness + CI shell bug
+
+- eval/report.py: _EVAL_DIR constant -> _get_eval_dir() function so tests
+  can monkeypatch it (was evaluated at import time, monkeypatch never
+  took effect -- tests silently wrote to real ~/.config/ztools)
+- eval/cli.py: _print_results uses _get_eval_dir() instead of inline
+  Path.home() / '.config' / 'ztools' (same consistency fix)
+- tests: monkeypatch eval.report._get_eval_dir instead of
+  os.path.expanduser (which never affected the module-level constant)
+- .github/workflows/config-debt.yml: shell: python3 -> shell: python3 {0}
+  (GitHub Actions doesn't accept bare 'python3' as shell name)
+```
+
+- v0.8.3: fix test harness + CI shell bug (`f6f6474`)
+
+## v0.8.2 — v0.8.2: gemma config prompt fixes + remove {exclusions} from eval YAMLs _(2026-07-11)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.8.1..v0.8.2`)._
+
+```text
+v0.8.2: gemma config prompt fixes + remove {exclusions} from eval YAMLs
+
+- gemma.yaml: deduplicate weekend_transient (second overwrote first with
+  bare stub), add file_summary prompt, add weather guidance (outdoor/indoor/both)
+- gemma_versions.yaml: replace hardcoded weather="indoor" with
+  "indoor" or "outdoor" (P0 bug)
+- All model YAMLs (foundation/qwen/laguna/nemotron/qwopus/gemma): remove
+  {exclusions} placeholder from weekend_fixed eval prompts —
+  _safe_format_prompt can't populate it, showing literal '{exclusions}'
+  to the model
+- .github/workflows/config-debt.yml: shell: python3 (leftover from v0.8.1)
+- conf/eval_signals.json: auto-updated signal data
+```
+
+- v0.8.2: gemma config prompt fixes + remove {exclusions} from eval YAMLs (`6e369fe`)
+
+## v0.8.1 — v0.8.1 zero config debt + fix test harness hole _(2026-07-11)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.8..v0.8.1`)._
+
+```text
+v0.8.1 zero config debt + fix test harness hole
+
+- Replaced hardcoded years in test data with dynamic/f-strings or # check-ok annotations
+- Made TARGET_YEAR in osaurus_output.py compute from datetime.date.today().year
+- Added missing Path import in test_json_validator.py (NameError: name 'Path' is not defined)
+- Config debt checker now passes at 0 violations across 158 files
+```
+
+- v0.8.1 zero config debt + fix test harness hole (`18eee3c`)
+
+## v0.8 — v0.8 config debt sweep + weekend quality fix _(2026-07-11)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.7.1..v0.8`)._
+
+```text
+v0.8 config debt sweep + weekend quality fix
+
+- P0 config debt: absolute paths→dynamic, llm client reads config, 4 unused config keys wired
+- P1 config debt: consolidated _EVAL_DIR, tui reads $ZSTYLE_CONFIG, benchmark defaults from get_filename_models()
+- P2 config debt: infrastructure paths via env vars ($OSAURUS_APP, $TWITTER_MLX_PREFERRED, etc.)
+- CI gate: tools/check_config_debt.py + .githooks/pre-commit (blocks only new violations) + CI workflow
+- Weekend planner: structure prompts no longer hardcode weather="indoor" — weather_condensed passed to LLM for informed indoor/outdoor/both decision
+- Weekend planner: removed "indoor" from CLOUD_KEYWORDS in _score_item() — indoor gets flat partial bonus, outdoor gets full bonus only in nice weather
+- Weekend planner: scoring differentiates items by name specificity, non-default duration, non-generic weather value
+```
+
+- v0.8 config debt sweep + weekend quality fix (`3bf788f`)
+- P2 fixes + CI gate: config debt prevention (`62c122c`)
+- P1 fix: quality_entry reads models from config (`561e098`)
+- P0 config debt fixes: dynamic paths, config-reads, llm client (`afeb51c`)
+
+## v0.7.1 — Fix missing List import in text_validator.py _(2026-07-11)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.7..v0.7.1`)._
+
+- Fix missing List import in text_validator.py (`2350421`)
+
+## v0.7 — Quality tests: contradiction/schema/leak validators + best-model update _(2026-07-10)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.6..v0.7`)._
+
+```text
+Quality tests: contradiction/schema/leak validators + best-model update
+
+- Add 3 new faithfulness validators: validate_no_leak, validate_strict_schema,
+  validate_no_contradiction with 9 unit tests
+- Integrate instruction-leak detection into validate_filename (returns 0 on leak)
+- Add validator_kwargs passthrough in run.py for per-task arguments
+- 3 new eval tasks: weekend_transient_schema, summarize_contradiction, filename_leak
+- Sweep results: only qwen3.6-35b-a3b-mxfp8-mtp and gemma-4-12b-it-mxfp8
+  pass the contradiction test; all others parrot planted falsehoods
+- Update config.yaml: default_model to qwen3.6-35b, best_models per-task
+  (summarize->gemma-4-12b, filename->foundation, think/json/vlm->qwen3.6-35b)
+- Document contradiction findings in docs/MODEL_QUIRKS.md
+- Record eval_signals for new tasks across all models
+```
+
+- Quality tests: contradiction/schema/leak validators + best-model update (`a5145df`)
+
+## v0.6 — Signal-from-noise filtering measurable across all mixed eval tasks _(2026-07-10)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.4..v0.6`)._
+
+- Make signal-from-noise filtering measurable across all mixed eval tasks (`22d8b47`)
+- Fix eval output: Rich Tables for all reports, model separators (`e79ada7`)
+- stage 7 fixes (`80602b9`)
+- stage 6 fixes (`70bc88e`)
+- stage 5 fixes (`d5c6ca7`)
+
+## v0.4 — v0.4: Graceful Ctrl+C handling for all CLI scripts _(2026-06-14)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.3..v0.4`)._
+
+```text
+v0.4: Graceful Ctrl+C handling for all CLI scripts
+
+- lib/signal_handling.py: reusable signal handling with cleanup callbacks
+- All CLI entry points (weekend, twitter, rename, eval) install handlers at startup
+- Proper cleanup on Ctrl+C / SIGTERM
+- All 174 tests pass
+```
+
+- Add graceful Ctrl+C handling to all CLI entry points (`6453f46`)
+
+## v0.3 — v0.3: qwen3.6 default, weekend quality dimensions, adaptive timeouts, eval runner _(2026-06-14)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.2..v0.3`)._
+
+```text
+v0.3: qwen3.6 default, weekend quality dimensions, adaptive timeouts, eval runner
+
+- Weekend planner uses qwen3.6-27b-mxfp8-mtp (100% quality, ~60s) instead of qwopus (40% failure, ~500s)
+- All phase timeouts raised to 900s with no backoff escalation
+- Adaptive batch sizing (3/5) for source extraction
+- Eval timeout 900s with p95 learning
+- 5 new weekend quality dimensions: Completeness, Weather, Age, Source, Exclusions
+- Weekend test cases in quality system
+- eval/run_weekend_eval.sh with proper SIGINT/SIGTERM cleanup
+- All 186 tests pass
+```
+
+- Release: qwen3.6 default, weekend quality dims, adaptive timeouts, eval runner script (`c528c18`)
+- eval adaptive timeout learning per model/task (`b707a2c`)
+- persist successful retry timeout per model/phase (`8f799c1`)
+- linear timeout backoff on _call_llm retries (`0b85e1e`)
+- remove internal jargon from user-facing output (`0004ea0`)
+- initialize conf/extract_signals.json (`63a653a`)
+- adaptive batching in extract_sources with per-model signal persistence (`c1a7758`)
+- dedup + truncate DDGS results before LLM pipeline (`3f6291c`)
+- bump extract timeout from 120s to 300s (`a6d72e4`)
+- multiphase weekend planner pipeline (`0a44b2b`)
+- refactor: replace ~57 magic numbers with named constants, add test coverage, fix numpy crash (`cb96a32`)
+- fix: wrap requests calls in Session context managers, close final finding (`98e4f57`)
+- docs: mark all remediation phases complete, update trees and refs (`2b0fe51`)
+- refactor: complete phases 3-5 — fallback, protocol, eval, cleanup (`8f0a70b`)
+- docs: update README + all docs for package restructuring (`4648df1`)
+- refactor: split monoliths into packages, fix critical bugs, add tests (`2bf5c20`)
+- fix: connect to osaurus before falling back to MLX/foundation (`aaf8792`)
+- fix: auto-install playwright when browser binary missing (`d578bd4`)
+- fix: make playwright imports resilient to version API changes (`25c6767`)
+- test: strengthen weak assertions across 15 test files (round 8) (`0cfa528`)
+- more unit tests (`5384873`)
+- test: replace weak bounds and is-not-None with exact values (`28027f7`)
+- test(quality_scorers): strengthen weak assertions to exact values (`d301622`)
+- Round 5: strengthen test assertions and remove dead code (`514c395`)
+- Test audit rounds 1-3: real assertions + docs (`ac06d3d`)
+- 98% test coverage, round one (`85316b8`)
+- Kare_ (`1d70737`)
+- Kare (`bee5823`)
+- Improve actual tools (`f57a199`)
+- Quality improvements (`bbbac2a`)
+- ... and 6 more commits
+
+## v0.2 — Image renamer works again with Nemotron _(2026-05-02)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.1..v0.2`)._
+
+- Image renamer works again with Nemotron (`f04b35c`)
+- Add Nemotron quirks (`2634765`)
+- Fix conflicting instructions (`19309b7`)
+
+## v0.1 — Fix eval to follow production _(2026-04-30)_
+
+_Backfilled 2026-11-11 (ZT.CHANGELOGTAGS): no stanza was written at release time; these are the tag's release commits (`git log v0.1`)._
+
+- Fix eval to follow production (`7f3364b`)
+- fix weekend (`663c382`)
+- split up the evails (`0ea1368`)
+- split up the evails (`094424e`)
+- log per mode (`2819f9c`)
+- More test info (`0117a95`)
+- File description eval (`43df18a`)
+- cleanups (`23021f7`)
+- Better gemma (maybe) (`d47a1ed`)
+- Pretty print (`eddd46f`)
+- . (`fa67af3`)
+- Gemma model quirks (`858b16c`)
+- Gemma model quirks (`9b4beef`)
+- Gemma model quirks (`ffdab3e`)
+- weekend planner back to working (`0ea3651`)
+- tests (`1ea7789`)
+- fixes (`eb4bdd3`)
+- fixes (`3bbbd99`)
+- Fix: pass location/age_range/date_range to system_prompt functions (`71b054f`)
+- Fix: add AGE_RANGE derived from children config (`29a9f98`)
+- Fix: remove duplicate clear_model_config_cache, duplicate task building, add type hint (`c082e8b`)
+- Consolidate: remove duplicate get_model_family, use config version (`fe98c32`)
+- Fix: use Task enum instead of strings in get_best_model calls (`5a240c8`)
+- Clean up: remove duplicate summarize_prompts, fix hardcoded debug path (`c32e1fa`)
+- Consolidate exclude_places into single list in weekend.yaml (`43e989f`)
+- Fix fallback prompts to use variables, improve _build_prompt injection (`d18c870`)
+- Fix YAML prompts to use placeholders, inject runtime values (`b9d9bc7`)
+- Use Task enum for type safety instead of strings (`9ec0df1`)
+- Fix get_best_model() default to use task argument instead of foundation (`9c57c96`)
+- Fix code review: remove unused imports, fix variable ordering, remove lru_cache (`9be0700`)
+- ... and 33 more commits
