@@ -11,6 +11,14 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+## v3.19.0 — every Rust test target refuses a stale build of itself _(2026-11-11)_
+
+### Fixed
+- **No integration-test binary runs stale after a `mv x.bak x` restore (ZT.MTIMECLASS).**
+  `ztools::built_from_disk!()` adds one test per target comparing the bytes it was compiled
+  from with the file on disk; all 25 targets call it, and
+  `tools/tests/test_rust_targets_guarded.py` fails a target that does not.
+
 ## v3.18.0 — `ztools models refcheck --repair` can repair an `automations[].model` reference _(2026-11-11)_
 
 ### Fixed
