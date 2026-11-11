@@ -91,6 +91,36 @@ pub fn bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_ztools"))
 }
 
+/// Fail unless this test binary was compiled from the test file on disk.
+///
+/// Cargo decides a target is fresh by MTIME: a source older than the last
+/// build is not looked at. A red-run that mutates a test with `sed -i.bak`,
+/// builds the mutant and restores with `mv x.bak x` puts back the ORIGINAL
+/// mtime, older than the mutant's build, so every later `cargo test` runs the
+/// mutant against a file that no longer says it. That is what turned
+/// `residency_callers` red for 5 runs on 2026-11-11 (ZT.RESIDFLAKE): the
+/// stale binary's fake watched `home/nope`, so every request read as made
+/// without the GPU lock, until an unrelated edit forced a rebuild.
+///
+/// `file` is the caller's `file!()` (relative to the crate root) and
+/// `compiled` its `include_str!` of itself: the bytes this binary was built
+/// from, compared with the bytes on disk now.
+///
+/// # Panics
+///
+/// When the file cannot be read, or its bytes differ from `compiled`.
+pub fn assert_built_from_disk(file: &str, compiled: &str) {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(file);
+    let on_disk = fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("cannot read {} to check the build: {e}", path.display()));
+    assert!(
+        on_disk == compiled,
+        "this test binary was built from a different {file} than the one on disk: a \
+         restore kept an old mtime (`mv x.bak x`), so cargo never rebuilt it. `touch {file}` \
+         and run again; restore a mutant with `cp`, never `mv`"
+    );
+}
+
 /// A private `HOME` for one test, named so two tests cannot collide.
 ///
 /// The name is qualified by this process's pid because each integration-test

@@ -19,11 +19,20 @@ use ztools::ztools::residency::fake::{Call, FakeOsaurus, Spec};
 const ANSWER: &str =
     r#"{"choices":[{"message":{"content":"{\"ok\": true}"},"finish_reason":"stop"}]}"#;
 
+/// The GPU lock directory the spawned binary holds and the fake watches: ONE
+/// derivation, so the two cannot name different directories.
+fn gpu_lock(home: &Path) -> std::path::PathBuf {
+    home.join("gpu-lock")
+}
+
 fn sandbox(name: &str, fake: &FakeOsaurus) -> std::path::PathBuf {
+    // A stale build of this file is the one way the fake and the binary have
+    // disagreed about the lock (ZT.RESIDFLAKE): refuse it by name.
+    assert_built_from_disk(file!(), include_str!("residency_callers.rs"));
     let home = fresh(name);
     // The lock the spawned binary will hold (see `run`): the fake records any
     // request that reaches it while that lock is free (ZT.TWGPULOCK).
-    fake.watching_lock(&home.join("gpu-lock"));
+    fake.watching_lock(&gpu_lock(&home));
     let conf = home.join("conf");
     fs::create_dir_all(&conf).unwrap();
     let checkout = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
@@ -49,7 +58,7 @@ fn sandbox(name: &str, fake: &FakeOsaurus) -> std::path::PathBuf {
 const MEMINFO_ROOMY: &str = "MemTotal: 67108864 kB\nMemFree: 60000000 kB\nMemAvailable: 64000000 kB\nSwapTotal: 0 kB\nSwapFree: 0 kB\n";
 
 fn run(home: &Path, args: &[&str]) -> Output {
-    let gpu = home.join("gpu-lock");
+    let gpu = gpu_lock(home);
     fs::create_dir_all(&gpu).unwrap();
     let meminfo = home.join("meminfo");
     fs::write(&meminfo, MEMINFO_ROOMY).unwrap();

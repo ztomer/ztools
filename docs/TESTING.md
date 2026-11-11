@@ -481,3 +481,18 @@ stub roster that lacked it, once in 1174, and passed alone. Reproduce with
 `ZTOOLS_GPU_LOCK_DIR=/nonexistent/a/b cargo test --lib a_model_that_is_not_installed`.
 The audit now lists `resolve_weekend_model(` as a hazard (`test_env/audit/text.rs`), so
 a test that calls it with no `TestEnv` fails `every_hazard_test_constructs_a_test_env`.
+
+## A mutant restored with `mv` keeps running: the residency_callers "flake" (2026-11-11)
+
+`tests/residency_callers.rs` was red in 5 runs straight, then green, with no code change. It
+was not shared state. The ZT.TWGPULOCK red-run mutated line 26 with `sed -i.bak` (the fake
+watched `home/nope`), built and ran the mutant, then restored with `mv residency_callers.rs.bak
+residency_callers.rs`. `mv` puts back the ORIGINAL mtime, older than the mutant's build, and
+cargo judges freshness by mtime, so every later `cargo test` (the full suite included) ran the
+mutant: its fake never saw the lock directory the binary held, so all requests read as made
+without the GPU lock (`fake.rs:120`). An unrelated edit to `fake.rs` forced the rebuild that
+"fixed" it. Reproduce: the same `sed -i.bak` / `cargo test` / `mv` sequence, then run again.
+
+The test now calls `support::assert_built_from_disk(file!(), include_str!(...))`, which fails
+naming the restore when the binary's source differs from the file on disk. Restore a mutant
+with `cp` (which stamps now) or `touch` it, never `mv`.
