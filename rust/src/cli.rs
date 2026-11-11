@@ -257,6 +257,11 @@ enum Cmd {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Local-model housekeeping (`ztools models refcheck`).
+    Models {
+        #[command(subcommand)]
+        cmd: crate::cli_models::ModelsCmd,
+    },
 }
 
 /// The subcommand a program's own NAME implies, if any.
@@ -464,6 +469,7 @@ pub fn run() -> Result<()> {
                 },
             )
         }
+        Cmd::Models { cmd } => crate::cli_models::run(&config, &cmd),
         Cmd::EvalSignals {
             prune,
             path,

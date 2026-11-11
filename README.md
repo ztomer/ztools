@@ -126,6 +126,28 @@ oeval --model qwen3.8-27b-8bit
 - Evaluates models against 29 automated task suites (financial analysis, adversarial resistance, JSON extraction, entity grounding).
 - Uses kernel-level GPU locking (`gpu_lock`) to synchronize access across concurrent tasks.
 
+### 5. Model reference check (`ztools models refcheck`)
+
+```bash
+ztools models refcheck               # check, and repair a missing Osaurus reference
+ztools models refcheck --no-repair   # check only, change nothing
+```
+
+Every model named in `osaurus config export` (`model_defaults.core_model` and
+`compaction_model`, `default_agent.model`, `configurator.model`, `agents[].model`,
+`automations[].model`) and in `[best_models]` must be installed (the export's
+`models`, `~/MLXModels/<org>/<name>/config.json`, `osaurus list`), `null`,
+`foundation`, or a model of an enabled cloud provider. A miss is an `ERROR` line
+naming the exact path, e.g. `agents[Disk Audit].model = mlx-community/Qwen3.8-27B-8bit:
+not installed`. An Osaurus reference is repointed to the best installed member of
+its family (the Hugging Face `base_model` tag, cached in
+`~/.local/state/ztools/models/families.json`, else the name stem; best = highest
+think-slot score in `eval_history.json`, a cracked build wins a tie) through a
+one-section document: `osaurus config plan` must show only that reference, then
+`apply`, then a re-check. Never `--prune`, never the full export (it is not
+re-appliable). Exit 0 clean, 3 found and repaired, 1 still wrong. `[best_models]`
+errors are reported, not repaired.
+
 ---
 
 ## Testing & Quality Gates

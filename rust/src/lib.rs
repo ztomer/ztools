@@ -27,6 +27,7 @@ pub mod test_support;
 pub mod test_env;
 
 pub mod cli;
+pub mod cli_models;
 pub mod cli_ztools;
 pub mod cli_ztools_twitter;
 pub mod config;

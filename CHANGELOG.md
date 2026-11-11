@@ -11,6 +11,16 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+### Added
+- **`ztools models refcheck [--repair|--no-repair]` (LM.REFCHECK).** Osaurus accepted an agent
+  ("Disk Audit") pinned to `mlx-community/Qwen3.8-27B-8bit`, a model that was never installed.
+  Every model reference in the Osaurus export and in `[best_models]` is now checked against
+  what is installed; a miss is an ERROR line naming the exact path. An Osaurus reference is
+  repaired to the best installed member of its family through a minimal one-section document
+  (`plan` must show only that reference, then `apply`, then a re-check); the osaurus CLI, the
+  filesystem and Hugging Face sit behind a seam, so the fixture tests fail on the pinned 8bit
+  and pass on a clean export.
+
 ## v3.16.1 — only the per-model chat was inside it, so a summary run could send requests to the server _(2026-11-11)_
 
 ### Fixed
