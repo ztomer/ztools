@@ -13,6 +13,12 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## v3.17.0 — osaurus accepted an agent _(2026-11-11)_
 
+### Fixed
+- **The weekend roster tests own the GPU-lock directory.** `a_model_that_is_not_installed_is_named_never_substituted`
+  read `ZTOOLS_GPU_LOCK_DIR` without `TestEnv`, so under load a concurrent test's sandbox made the lock
+  unavailable, the roster went unread, and the 3.17.0 release suite saw `Ok("raptor-v0.5-8b")`. The tests now
+  take `TestEnv`, and the test_env audit lists `resolve_weekend_model(` as a hazard.
+
 ### Added
 - **`ztools models refcheck [--repair|--no-repair]` (LM.REFCHECK).** Osaurus accepted an agent
   ("Disk Audit") pinned to `mlx-community/Qwen3.8-27B-8bit`, a model that was never installed.
