@@ -30,7 +30,16 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     dot / (norm_a * norm_b)
 }
 
-/// Use Ollama API to semantically cluster tweets that discuss the same event.
+/// Use the Osaurus embeddings endpoint to cluster tweets that discuss the same event.
+///
+/// OUTSIDE the residency seam on purpose (ZT.EMBEDSEAM, measured 2026-11-11
+/// against Osaurus 1.0.1 under the GPU lock): `/v1/embeddings` serves a static
+/// embedding model (`potion-base-4M`) that answers in ~10 ms and never appears
+/// in `/health`'s `resident_models` or `loaded`, not right after the call and
+/// not 40 s later, so there is no weight to load and none to release.
+/// The configured `nomic-embed-text` is NOT served: the endpoint answers 400
+/// `unsupported_embedding_model` and the fallback below makes every tweet its
+/// own cluster.
 ///
 /// # Errors
 ///

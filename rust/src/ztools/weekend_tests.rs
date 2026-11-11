@@ -397,6 +397,8 @@ mod weekend_model_tests;
 
 mod weekend_fetch_tests;
 
+mod weekend_release_tests;
+
 mod weekend_search_tests;
 
 mod weekend_followup_tests;

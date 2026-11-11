@@ -107,6 +107,16 @@ pub fn resolve_weekend_model(
 pub fn warm_model(
     config: &crate::config::ZtoolsConfig,
 ) -> (super::ModelHealth, Option<crate::ztools::residency::Held>) {
+    warm_model_at(config, crate::ztools::residency::Timing::default())
+}
+
+/// [`warm_model`] with the seam's timings given, so a test can shorten the
+/// release wait; `load_request` is still the config's warm-up budget.
+#[must_use]
+pub fn warm_model_at(
+    config: &crate::config::ZtoolsConfig,
+    base: crate::ztools::residency::Timing,
+) -> (super::ModelHealth, Option<crate::ztools::residency::Held>) {
     let model = match resolve_weekend_model(&config.osaurus_url, &config.weekend_model) {
         Ok(model) => model,
         Err(not_installed) => return (not_installed, None),
@@ -116,7 +126,7 @@ pub fn warm_model(
     // loaded is the expected shape of a cold start, not a stalled server.
     let timing = crate::ztools::residency::Timing {
         load_request: std::time::Duration::from_secs(config.llm_warmup_timeout_secs),
-        ..crate::ztools::residency::Timing::default()
+        ..base
     };
     let outcome = crate::ztools::residency::load(&config.osaurus_url, &model, timing);
     let secs = started.elapsed().as_secs();

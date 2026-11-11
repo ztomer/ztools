@@ -11,6 +11,23 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+## v3.15.1 — a weekend model left resident fails the run _(2026-11-11)_
+
+### Fixed
+- **A failed release fails the weekend plan, with its reason (ZT.EMBEDSEAM).** The planner
+  only printed the error when releasing its model failed after the phases, and the plan was
+  still saved as a success. `fetch_duckduckgo_events` now returns a `Result`, and a model
+  still resident past the server's idle deadline (or one the server keeps loaded) is the
+  run's error.
+
+### Measured
+- **Twitter's `/v1/embeddings` clustering call needs no residency seam.** Under the GPU
+  lock, Osaurus 1.0.1 answered an embeddings call in ~10 ms with its static `potion-base-4M`
+  model, and `/health` listed nothing resident or loaded before, right after, and 40 s
+  after. The finding is recorded on `embeddings::cluster_tweets`. The same measurement
+  showed the configured `nomic-embed-text` is rejected with 400 `unsupported_embedding_model`,
+  so clustering has been falling back to one cluster per tweet.
+
 ## v3.15.0 — osaurus 1.0.1 has no load or unload route, so `residency::with_model` _(2026-11-11)_
 
 ### Changed

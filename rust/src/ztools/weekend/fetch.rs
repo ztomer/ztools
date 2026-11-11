@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use chrono::{Datelike, NaiveDate};
 
 use super::WeekendEvent;
@@ -7,7 +8,7 @@ use super::{
     PhaseLog, PlanContext, SearchResult, build_search_queries, condense_weather, draft_activities,
     extract_sources, in_window_count, prioritise_in_window, refine_draft, structure_to_json,
 };
-use super::{follow_aggregators, search_engines_in, warm_model};
+use super::{follow_aggregators, search_engines_in, warm_model_at};
 
 /// Body truncation bound, mirrored from `WEEKEND_MAX_BODY_LENGTH`.
 ///
@@ -246,7 +247,12 @@ fn monolithic_transient(
 ///
 /// Returns the structured events, the corpus they were judged against, and
 /// the health record the plan's warning is written from.
-#[must_use]
+///
+/// # Errors
+///
+/// When the model is still resident after the phases (the release the
+/// residency seam waits for failed): a model left in memory while idle is the
+/// run's failure, not a printed aside.
 pub fn fetch_duckduckgo_events(
     location: &str,
     d1: NaiveDate,
@@ -254,10 +260,33 @@ pub fn fetch_duckduckgo_events(
     weather_str: &str,
     ctx: &PlanContext,
     config: &crate::config::ZtoolsConfig,
-) -> (Vec<WeekendEvent>, String, PlanHealth) {
+) -> Result<(Vec<WeekendEvent>, String, PlanHealth)> {
+    fetch_duckduckgo_events_at(
+        location,
+        (d1, d2),
+        weather_str,
+        ctx,
+        config,
+        crate::ztools::residency::Timing::default(),
+    )
+}
+
+/// [`fetch_duckduckgo_events`] with the residency seam's timings given.
+///
+/// # Errors
+///
+/// As [`fetch_duckduckgo_events`].
+pub fn fetch_duckduckgo_events_at(
+    location: &str,
+    (d1, d2): (NaiveDate, NaiveDate),
+    weather_str: &str,
+    ctx: &PlanContext,
+    config: &crate::config::ZtoolsConfig,
+    timing: crate::ztools::residency::Timing,
+) -> Result<(Vec<WeekendEvent>, String, PlanHealth)> {
     let warm = {
         let config = config.clone();
-        std::thread::spawn(move || warm_model(&config))
+        std::thread::spawn(move || warm_model_at(&config, timing))
     };
     // One stamp for the run's records, so its corpus and its model answers
     // pair by name in the store.
@@ -291,7 +320,7 @@ pub fn fetch_duckduckgo_events(
         provenance: super::Provenance::default(),
     };
     if !health.model.is_ready() {
-        return (Vec::new(), corpus, health);
+        return Ok((Vec::new(), corpus, health));
     }
 
     let log = PhaseLog::new();
@@ -308,14 +337,15 @@ pub fn fetch_duckduckgo_events(
         },
     );
     crate::ztools::store_corpus::record_phases(run, &log, (d1, d2), &config.weekend_model);
-    // Released once the phases are done; an early return drops it instead.
-    if let Some(held) = held
-        && let Err(e) = held.release()
-    {
-        eprintln!("\u{2717} {e:#}");
+    // Released once the phases are done; an early return drops it instead. A
+    // model left resident FAILS the run, with the seam's reason: an idle Mac
+    // must not hold it, and a plan reported as a success would hide that.
+    if let Some(held) = held {
+        held.release()
+            .context("the weekend model was not released after the plan's phases")?;
     }
 
-    (events, corpus, health)
+    Ok((events, corpus, health))
 }
 
 /// Fallback forecast when the fetch fails.

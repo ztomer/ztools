@@ -18,7 +18,7 @@ use std::net::{TcpListener, TcpStream};
 use crate::test_env::TestEnv;
 use serial_test::serial;
 
-fn ctx() -> PlanContext {
+pub(super) fn ctx() -> PlanContext {
     PlanContext {
         location: "Vaughan".into(),
         ages: "6-12".into(),
@@ -47,7 +47,7 @@ fn checkout_weekend_toml() -> String {
 
 /// A closed loopback port: refused immediately, so an engine that is
 /// supposed to be dead costs no wall clock and cannot reach the internet.
-const DEAD: &str = "http://127.0.0.1:1";
+pub(super) const DEAD: &str = "http://127.0.0.1:1";
 
 /// The config these tests share, pointing every operator-visible location
 /// somewhere harmless.
@@ -57,7 +57,7 @@ const DEAD: &str = "http://127.0.0.1:1";
 /// three, so one test's recorded demotions decided the next test's engine
 /// order. Each sandbox now gets its own record, inside a directory that is
 /// removed when the guard drops.
-fn sandboxed_config(
+pub(super) fn sandboxed_config(
     env: &TestEnv,
     search: &str,
     osaurus: &str,
@@ -85,7 +85,7 @@ fn sandboxed_config(
     }
 }
 
-fn window() -> (chrono::NaiveDate, chrono::NaiveDate) {
+pub(super) fn window() -> (chrono::NaiveDate, chrono::NaiveDate) {
     (
         chrono::NaiveDate::parse_from_str("2026-08-07", "%Y-%m-%d").unwrap(),
         chrono::NaiveDate::parse_from_str("2026-08-09", "%Y-%m-%d").unwrap(),
@@ -182,7 +182,8 @@ fn corpus_building_dedupes_keeps_only_region_backed_snippets_and_counts_them() {
     // dropped for lacking region evidence, and the candidate counter must see
     // exactly one line (the operator println path).
     let (events, corpus, _health) =
-        fetch_duckduckgo_events("Vaughan", window().0, window().1, "sunny", &ctx(), &config);
+        fetch_duckduckgo_events("Vaughan", window().0, window().1, "sunny", &ctx(), &config)
+            .unwrap();
 
     assert_eq!(
         corpus.matches("- Vaughan Fall Fair:").count(),
@@ -231,7 +232,8 @@ fn a_dead_draft_phase_falls_back_to_the_monolithic_prompt_and_parses_real_events
     let config = sandboxed_config(&env, DEAD, &serve_chat(monolithic_json), DEAD);
 
     let (events, corpus, _health) =
-        fetch_duckduckgo_events("Vaughan", window().0, window().1, "sunny", &ctx(), &config);
+        fetch_duckduckgo_events("Vaughan", window().0, window().1, "sunny", &ctx(), &config)
+            .unwrap();
 
     assert!(corpus.is_empty(), "search is dead, so no corpus: {corpus}");
     assert_eq!(events.len(), 1, "{events:?}");
@@ -279,7 +281,8 @@ fn test_fetch_duckduckgo_events() {
     let env = TestEnv::new();
     let config = sandboxed_config(&env, DEAD, DEAD, DEAD);
     let (events, corpus, health) =
-        fetch_duckduckgo_events("Vaughan", window().0, window().1, "sunny", &ctx(), &config);
+        fetch_duckduckgo_events("Vaughan", window().0, window().1, "sunny", &ctx(), &config)
+            .unwrap();
     assert!(
         events.is_empty(),
         "unreachable search and model must yield nothing, not invented events: {events:?}"

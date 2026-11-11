@@ -96,7 +96,7 @@ pub(crate) fn weekend_plan(
         &weather_str,
         &ctx,
         config,
-    );
+    )?;
     let (mut fixed, mut transient) = gate_rows(
         transient,
         &corpus,
