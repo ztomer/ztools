@@ -22,6 +22,9 @@ pub mod weekend_cache;
 #[cfg(test)]
 mod model_health_tests;
 
+#[cfg(test)]
+mod gpu_lock_callers_tests;
+
 use std::io::{IsTerminal, Write};
 use std::process::{Command, Stdio};
 

@@ -758,6 +758,10 @@ vision. Backlog item 9 covers building a real one.
   `embeddings_calibration.rs`; the fixture is `tests/fixtures/embeddings/potion_base_4m.json`.
 - **It cannot read Hebrew.** Unrelated Hebrew tweets score 0.96-0.99 against each other, so
   text whose letters are mostly non-Latin is kept out of the comparison.
+  Named limit (2026-11-11): Hebrew tweets stay out of clustering until a multilingual
+  embedding model is served; `potion-base-4M` maps all Hebrew text to nearly one vector.
+- The embeddings request is made under the machine-wide GPU lock (ZT.TWGPULOCK) like every
+  other request ztools sends the server, though it loads and releases nothing.
 
 ## Osaurus Server Rules
 

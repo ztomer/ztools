@@ -67,3 +67,38 @@ fn a_model_the_server_unloads_leaves_the_run_a_success() {
     assert_eq!(fake.last_health(), Some(vec![]), "{:?}", fake.calls());
     drop(env);
 }
+
+/// ZT.TWGPULOCK, the weekend planner's entry: the roster, the warm-up load,
+/// every phase's completion and the release polls are all made while the GPU
+/// lock is held.
+#[test]
+#[serial]
+fn a_weekend_run_makes_no_request_outside_the_gpu_lock() {
+    use crate::ztools::residency::fake::FakeOsaurus;
+    let env = TestEnv::new();
+    let fake = FakeOsaurus::start(r#"{"choices":[{"message":{"content":""}}]}"#);
+    let config = sandboxed_config(&env, DEAD, &fake.url, DEAD);
+
+    let outcome = fetch_duckduckgo_events_at(
+        "Vaughan",
+        window(),
+        "sunny",
+        &ctx(),
+        &config,
+        quick_release(),
+    );
+
+    assert!(outcome.is_ok(), "{:?}", outcome.err());
+    assert!(
+        fake.calls().len() > 3,
+        "the run must have reached the server: {:?}",
+        fake.calls()
+    );
+    assert_eq!(
+        fake.unlocked_requests(),
+        Vec::<String>::new(),
+        "{:?}",
+        fake.calls()
+    );
+    drop(env);
+}

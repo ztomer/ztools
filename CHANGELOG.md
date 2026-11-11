@@ -11,6 +11,25 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+### Fixed
+- **The twitter summary's embeddings and roster requests are made under the GPU lock
+  (ZT.TWGPULOCK).** Only the per-model chat was inside it, so a summary run could send
+  requests to the server in the middle of another session's measurement. Both now go through
+  the one seam (`residency::locked`), as do the weekend planner's roster request and the
+  `capabilities` roster. A lock another session holds is waited for, then refused with the
+  holder named.
+
+### Added
+- **A class check for the lock.** The Osaurus fake records every request that arrives while
+  nobody holds the GPU lock (`unlocked_requests`). `gpu_lock_callers_tests.rs` lists every
+  production file that calls the server and the test that drives it, and fails on a file that
+  calls the server without being listed, a listed file that no longer does, and a row naming a
+  test that does not exist. The table has no known-violation rows.
+
+### Documented
+- Named limit: `potion-base-4M` maps all Hebrew text to nearly one vector, so Hebrew tweets stay
+  out of clustering until a multilingual embedding model is served (README, `docs/MODEL_QUIRKS.md`).
+
 ## v3.16.0 — the embedding model was hard-coded as `nomic-embed-text` _(2026-11-11)_
 
 ### Fixed

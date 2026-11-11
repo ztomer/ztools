@@ -439,13 +439,23 @@ pub fn get_test_cases() -> Vec<EvalTask> {
 
 /// # Errors
 ///
-/// When the HTTP client cannot be built, and when the `/v1/models` endpoint
+/// When the GPU lock is held by another session past the wait, when the HTTP
+/// client cannot be built, and when the `/v1/models` endpoint
 /// cannot be reached or does not answer JSON. A well-formed answer listing
 /// no usable models is `Ok(vec![])`.
 pub fn get_available_models(
     base_url: &str,
     config: &crate::config::ZtoolsConfig,
 ) -> Result<Vec<String>> {
+    // A request to the server, so made under the GPU lock (ZT.TWGPULOCK).
+    crate::ztools::residency::locked(
+        "ztools model roster",
+        crate::ztools::residency::Timing::default(),
+        || fetch_roster(base_url, config),
+    )?
+}
+
+fn fetch_roster(base_url: &str, config: &crate::config::ZtoolsConfig) -> Result<Vec<String>> {
     let client = Client::builder()
         .timeout(Duration::from_secs(config.llm_quick_timeout_secs))
         .build()?;

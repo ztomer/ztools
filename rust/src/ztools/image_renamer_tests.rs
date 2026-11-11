@@ -458,3 +458,36 @@ fn fast_timing() -> crate::ztools::residency::Timing {
         poll_max: std::time::Duration::from_millis(20),
     }
 }
+
+/// ZT.TWGPULOCK, the renamer's entry: every request its text and vision paths
+/// make is made while the GPU lock is held.
+#[test]
+#[serial]
+fn a_rename_makes_no_request_outside_the_gpu_lock() {
+    let env = TestEnv::new();
+    let fake = crate::ztools::residency::fake::FakeOsaurus::start(
+        r#"{"choices": [{"message": {"content": "White Goose Grass"}}]}"#,
+    );
+    let config = crate::config::ZtoolsConfig {
+        osaurus_url: fake.url.clone(),
+        image_renamer_model: String::new(),
+        image_renamer_vlm_model: "vlm-test-model".to_string(),
+        ..Default::default()
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let img_path = dir.path().join("IMG_9999.png");
+    std::fs::write(&img_path, b"\x89PNG\r\n\x1a\nnot really a png").unwrap();
+
+    let mut session = crate::ztools::residency::Session::new(&fake.url, fast_timing());
+    name_image(&img_path, "IMG_9999", 30, &config, &mut session);
+    session.finish().unwrap();
+
+    assert!(fake.calls().len() > 2, "{:?}", fake.calls());
+    assert_eq!(
+        fake.unlocked_requests(),
+        Vec::<String>::new(),
+        "{:?}",
+        fake.calls()
+    );
+    drop(env);
+}

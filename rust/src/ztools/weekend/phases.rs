@@ -65,13 +65,24 @@ pub fn resolve_weekend_model(
     configured: &str,
 ) -> Result<String, super::ModelHealth> {
     let url = format!("{}/v1/models", base_url.trim_end_matches('/'));
-    let roster = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(2))
-        .build()
-        .ok()
-        .and_then(|client| client.get(&url).send().ok())
-        .filter(|r| r.status().is_success())
-        .and_then(|r| r.json::<serde_json::Value>().ok());
+    // A request to the server, so made under the GPU lock (ZT.TWGPULOCK). A
+    // lock that cannot be taken leaves the roster unread, which the warm-up
+    // that follows reports with the holder's name.
+    let roster = crate::ztools::residency::locked(
+        "ztools weekend roster",
+        crate::ztools::residency::Timing::default(),
+        || {
+            reqwest::blocking::Client::builder()
+                .timeout(std::time::Duration::from_secs(2))
+                .build()
+                .ok()
+                .and_then(|client| client.get(&url).send().ok())
+                .filter(|r| r.status().is_success())
+                .and_then(|r| r.json::<serde_json::Value>().ok())
+        },
+    )
+    .ok()
+    .flatten();
     let installed: Vec<String> = roster
         .as_ref()
         .and_then(|json| json.get("data"))

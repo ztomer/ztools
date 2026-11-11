@@ -257,3 +257,38 @@ fn the_osaurus_tier_loads_its_model_and_leaves_nothing_resident() {
     assert_eq!(fake.last_health(), Some(vec![]), "left resident: {calls:?}");
     drop(env);
 }
+
+/// ZT.TWGPULOCK: the embeddings and roster requests of a summary run used to
+/// reach the server with nobody holding the machine-wide GPU lock (only the
+/// per-model chat was inside it), so a run could land in the middle of another
+/// session's measurement.
+#[test]
+#[serial]
+fn a_summary_run_makes_no_request_outside_the_gpu_lock() {
+    let env = TestEnv::new();
+    let fake = crate::ztools::residency::fake::FakeOsaurus::start(CHAT_BODY);
+    let output = tempfile::tempdir().unwrap();
+    let cfg = sandboxed_config(&env.root().join("cfg"));
+
+    run_summary(
+        &[tweet("routine_user", "Locked summary run", "14:00", 3, 1)],
+        output.path(),
+        Some(&fake.url),
+        Some("mock-model"),
+        &cfg,
+    )
+    .expect("the stub answered, so the summary is written");
+
+    assert!(
+        fake.calls().len() > 3,
+        "the run must have reached the server (embeddings, roster, load, chat): {:?}",
+        fake.calls()
+    );
+    assert_eq!(
+        fake.unlocked_requests(),
+        Vec::<String>::new(),
+        "every request of the run is made while the GPU lock is held: {:?}",
+        fake.calls()
+    );
+    drop(env);
+}

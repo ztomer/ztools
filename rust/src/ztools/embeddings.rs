@@ -1,6 +1,6 @@
 //! Cluster tweets that discuss the same event, by the embeddings Osaurus serves.
 //!
-//! OUTSIDE the residency seam on purpose (ZT.EMBEDSEAM, measured 2026-11-11
+//! OUTSIDE the residency seam's load and release on purpose (ZT.EMBEDSEAM, measured 2026-11-11
 //! against Osaurus 1.0.1 under the GPU lock): `/v1/embeddings` serves a static
 //! embedding model (`potion-base-4M`) that answers in ~10 ms and never appears
 //! in `/health`'s `resident_models` or `loaded`, not right after the call and
@@ -250,6 +250,23 @@ pub fn cluster_tweets(
             },
         };
     }
+    // No weight to load, but still a request to the server: made under the
+    // machine-wide GPU lock like every other (ZT.TWGPULOCK).
+    match crate::ztools::residency::locked(
+        "ztools embeddings (cluster tweets)",
+        crate::ztools::residency::Timing::default(),
+        || cluster_locked(tweets, base_url, config),
+    ) {
+        Ok(clustering) => clustering,
+        Err(e) => singletons(tweets, format!("{e:#}")),
+    }
+}
+
+fn cluster_locked(
+    tweets: &[Tweet],
+    base_url: &str,
+    config: &crate::config::ZtoolsConfig,
+) -> Clustering {
     let client = match Client::builder().timeout(Duration::from_secs(3)).build() {
         Ok(c) => c,
         Err(e) => return singletons(tweets, format!("no HTTP client ({e})")),

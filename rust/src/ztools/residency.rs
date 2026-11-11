@@ -223,12 +223,7 @@ impl Drop for Held {
 /// within [`Timing::settle`]. A failed load is still released before the error
 /// returns: a half-finished load can leave weights behind.
 pub fn load(base_url: &str, model: &str, timing: Timing) -> Result<Held> {
-    let gpu = GpuLockGuard::acquire(
-        &format!("ztools {model} (load, run, release)"),
-        timing.lock_wait,
-        Duration::from_secs(DEFAULT_MAX_IDLE_SECS),
-    )
-    .map_err(|e| anyhow::anyhow!("GPU lock unavailable: {e}"))?;
+    let gpu = take_gpu_lock(&format!("ztools {model} (load, run, release)"), timing)?;
     let mut held = Held {
         base_url: base_url.to_string(),
         model: model.to_string(),
@@ -242,6 +237,34 @@ pub fn load(base_url: &str, model: &str, timing: Timing) -> Result<Held> {
     held.load_seconds = started.elapsed().as_secs_f64();
     wait_loaded(base_url, model, &timing)?;
     Ok(held)
+}
+
+/// The machine-wide GPU lock, or the reason it is unavailable. The ONE place
+/// ztools takes it for the server: [`load`] and [`locked`] both come here.
+fn take_gpu_lock(label: &str, timing: Timing) -> Result<GpuLockGuard> {
+    GpuLockGuard::acquire(
+        label,
+        timing.lock_wait,
+        Duration::from_secs(DEFAULT_MAX_IDLE_SECS),
+    )
+    .map_err(|e| anyhow::anyhow!("GPU lock unavailable: {e}"))
+}
+
+/// Run `body` -- a request to the model server that loads no model, such as
+/// the roster or the embeddings -- while holding the GPU lock (ZT.TWGPULOCK).
+///
+/// Every request ztools makes to the server is made under the lock, so a
+/// request cannot land in the middle of another session's measurement. A
+/// caller that already holds it (an eval, a [`Held`] model) inherits it, and
+/// the lock stays with that holder.
+///
+/// # Errors
+///
+/// When the lock is held by another session past [`Timing::lock_wait`]; `body`
+/// has not run.
+pub fn locked<T>(label: &str, timing: Timing, body: impl FnOnce() -> T) -> Result<T> {
+    let _gpu = take_gpu_lock(label, timing)?;
+    Ok(body())
 }
 
 /// Load `model`, run `body` with it, release it: the one seam.

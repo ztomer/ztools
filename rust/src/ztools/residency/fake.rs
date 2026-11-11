@@ -68,6 +68,10 @@ struct State {
     resident: Option<String>,
     shown_since_use: bool,
     calls: Vec<Call>,
+    /// The GPU lock directory whose `owner` file says a session holds it.
+    lock_dir: std::path::PathBuf,
+    /// The request lines that arrived while nobody held that lock.
+    unlocked: Vec<String>,
 }
 
 /// The running fake. Dropping it leaves the thread serving until the test
@@ -104,12 +108,21 @@ impl FakeOsaurus {
     pub fn serve(spec: Spec) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        let state = Arc::new(Mutex::new(State::default()));
+        let state = Arc::new(Mutex::new(State {
+            lock_dir: crate::ztools::eval::gpu_lock::lock_dir(),
+            ..State::default()
+        }));
         let shared = Arc::clone(&state);
         thread::spawn(move || {
             for mut stream in listener.incoming().flatten() {
                 let request = read_request(&mut stream);
-                let reply = answer(&mut shared.lock().unwrap(), &request, &spec);
+                let mut state = shared.lock().unwrap();
+                if !state.lock_dir.join("owner").exists() {
+                    let line = request.lines().next().unwrap_or_default().to_string();
+                    state.unlocked.push(line);
+                }
+                let reply = answer(&mut state, &request, &spec);
+                drop(state);
                 let status = if spec.refuse_embeddings && request.starts_with("POST /v1/embeddings")
                 {
                     "400 Bad Request"
@@ -138,6 +151,30 @@ impl FakeOsaurus {
     #[must_use]
     pub fn calls(&self) -> Vec<Call> {
         self.state.lock().unwrap().calls.clone()
+    }
+
+    /// Watch `dir` for the GPU lock instead of the one the environment names
+    /// now: for a fake started before the sandbox that a spawned binary will
+    /// hold the lock in exists.
+    ///
+    /// # Panics
+    ///
+    /// When the serving thread panicked holding the state.
+    pub fn watching_lock(&self, dir: &std::path::Path) {
+        self.state.lock().unwrap().lock_dir = dir.to_path_buf();
+    }
+
+    /// The request lines (`POST /v1/embeddings HTTP/1.1`) that reached the
+    /// server while NO session held the GPU lock. A caller that goes through
+    /// the one seam leaves this empty (ZT.TWGPULOCK): a request made outside
+    /// the lock can land in the middle of another session's measurement.
+    ///
+    /// # Panics
+    ///
+    /// When the serving thread panicked holding the state.
+    #[must_use]
+    pub fn unlocked_requests(&self) -> Vec<String> {
+        self.state.lock().unwrap().unlocked.clone()
     }
 
     /// The models loaded, in order.

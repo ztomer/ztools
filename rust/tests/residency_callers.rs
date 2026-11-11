@@ -21,6 +21,9 @@ const ANSWER: &str =
 
 fn sandbox(name: &str, fake: &FakeOsaurus) -> std::path::PathBuf {
     let home = fresh(name);
+    // The lock the spawned binary will hold (see `run`): the fake records any
+    // request that reaches it while that lock is free (ZT.TWGPULOCK).
+    fake.watching_lock(&home.join("gpu-lock"));
     let conf = home.join("conf");
     fs::create_dir_all(&conf).unwrap();
     let checkout = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
@@ -76,6 +79,11 @@ fn assert_loaded_then_released(fake: &FakeOsaurus, model: &str, out: &Output) {
         String::from_utf8_lossy(&out.stderr)
     );
     assert_eq!(fake.last_health(), Some(vec![]), "left resident: {calls:?}");
+    assert_eq!(
+        fake.unlocked_requests(),
+        Vec::<String>::new(),
+        "every request is made while the GPU lock is held: {calls:?}"
+    );
 }
 
 #[test]
