@@ -141,3 +141,38 @@ def test_real_run_fails_when_a_stale_copy_shadows_the_tap(tmp_path):
 
     assert result.returncode != 0
     assert "1.0.0" in result.stderr
+
+
+def test_a_refused_bump_commit_leaves_the_index_and_tree_as_found(tmp_path):
+    # ZT.RESIDFLAKE: a pre-commit hook refused the "chore: version" commit (the red_run
+    # trailer check), release.sh exited 1, and the bump stayed STAGED for the operator to
+    # discard by hand. A failed bump must leave the manifest, the lock and the index as
+    # they were, and name what happened.
+    repo = _sandbox(tmp_path)
+    head = _git(repo, "rev-parse", "HEAD")
+    hook = repo / ".git" / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\necho 'refused by the test hook' >&2\nexit 1\n")
+    hook.chmod(0o755)
+
+    result = _release(repo, "2.0.0")
+
+    assert result.returncode != 0, result.stderr
+    assert _git(repo, "rev-parse", "HEAD") == head
+    assert _git(repo, "status", "--porcelain") == "", "the failed bump left changes behind"
+    assert (repo / "rust" / "Cargo.toml").read_text() == MANIFEST
+    assert "version bump" in result.stderr
+    assert not (tmp_path / "kit.argv").exists(), "the kit ran after a failed bump"
+
+
+def test_a_bump_refuses_a_manifest_with_uncommitted_changes(tmp_path):
+    # Restoring the manifest on failure is only safe when nothing else lives in it, so a
+    # bump onto local manifest edits is refused before anything is touched.
+    repo = _sandbox(tmp_path)
+    (repo / "rust" / "Cargo.lock").write_text("# lock, edited\n")
+
+    result = _release(repo, "2.0.0")
+
+    assert result.returncode != 0
+    assert (repo / "rust" / "Cargo.lock").read_text() == "# lock, edited\n"
+    assert (repo / "rust" / "Cargo.toml").read_text() == MANIFEST
+    assert "uncommitted" in result.stderr

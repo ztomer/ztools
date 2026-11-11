@@ -48,14 +48,25 @@ CURRENT_V=$(grep -m1 '^version = ' rust/Cargo.toml | cut -d'"' -f2)
 if [ "$CURRENT_V" != "$V" ] && [ "$DRY_RUN" = 1 ]; then
   info "[dry-run] would bump rust/Cargo.toml version: $CURRENT_V → $V and commit 'chore: version $V'"
 elif [ "$CURRENT_V" != "$V" ]; then
+  # A bump that fails part-way must leave the manifest, the lock and the index as it found
+  # them (ZT.RESIDFLAKE): a pre-commit hook once refused the commit and the bump stayed STAGED
+  # for the operator to discard by hand. Restoring both files to HEAD is only safe when they
+  # carry nothing else, so local edits to either are refused before anything is touched.
+  BUMPED=(rust/Cargo.toml rust/Cargo.lock)
+  git diff --quiet HEAD -- "${BUMPED[@]}" \
+    || die "rust/Cargo.toml or rust/Cargo.lock has uncommitted changes; commit or drop them before a version bump"
+  restore_bump() { git restore --source=HEAD --staged --worktree -- "${BUMPED[@]}"; }
+  trap 'restore_bump; exit 130' INT TERM
   info "rust/Cargo.toml version: $CURRENT_V → $V"
-  /usr/bin/sed -i '' "s|^version = \".*\"|version = \"$V\"|" rust/Cargo.toml
-  cargo update --manifest-path rust/Cargo.toml -p ztools --quiet
-  git add rust/Cargo.toml rust/Cargo.lock
   # No --no-verify (U4). This is the commit every release tags, and it is the one place a
   # staged-scope check is exact: the pre-commit gate reads the index, so it sees the version
   # bump as staged. Bypassing it meant the tag could point at a commit no hook ever looked at.
-  git commit -q -m "chore: version $V"
+  { /usr/bin/sed -i '' "s|^version = \".*\"|version = \"$V\"|" rust/Cargo.toml \
+      && cargo update --manifest-path rust/Cargo.toml -p ztools --quiet \
+      && git add -- "${BUMPED[@]}" \
+      && git commit -q -m "chore: version $V"; } \
+    || { restore_bump; die "the version bump to $V was not committed (above); rust/Cargo.toml, rust/Cargo.lock and the index are as they were"; }
+  trap - INT TERM
 fi
 
 # Install, then prove the binary on PATH is this version and that every
