@@ -109,8 +109,7 @@ fn warm_up_makes_no_call_when_the_model_is_not_installed() {
 #[test]
 fn an_unavailable_gpu_lock_leaves_the_roster_unread_and_the_model_unchecked() {
     let (url, seen) = roster_stub(ROSTER_WITHOUT_CONFIGURED);
-    let env = crate::test_env::TestEnv::new();
-    env.set_managed(
+    let _env = crate::test_env::TestEnv::new().with(
         "ZTOOLS_GPU_LOCK_DIR",
         std::ffi::OsStr::new("/nonexistent/parent/gpu.lock"),
     );
@@ -118,5 +117,6 @@ fn an_unavailable_gpu_lock_leaves_the_roster_unread_and_the_model_unchecked() {
         crate::ztools::weekend::resolve_weekend_model(&url, "raptor-v0.5-8b"),
         Ok("raptor-v0.5-8b".to_string())
     );
-    assert_empty!(seen.lock().unwrap());
+    let requests = seen.lock().unwrap().clone();
+    assert_empty!(requests);
 }
