@@ -760,6 +760,19 @@ vision. Backlog item 9 covers building a real one.
   text whose letters are mostly non-Latin is kept out of the comparison.
   Named limit (2026-11-11): Hebrew tweets stay out of clustering until a multilingual
   embedding model is served; `potion-base-4M` maps all Hebrew text to nearly one vector.
+- **Both in-process multilingual candidates fail the Hebrew half (LM.EMBEDHE, 2026-11-11).**
+  On one 52-text fixture (42 synthetic Hebrew tweets, 8 labelled same-story pairs, 4
+  related-not-same tweets), threshold swept 0.00-1.00:
+  - `potion-multilingual-128M` (model2vec-rs, CPU): unrelated median 0.171, but the
+    Knesset pair told with different verb forms (0.449) sits under an unrelated pair (0.535).
+  - `Qwen3-Embedding-0.6B` (candle, Metal, last-token pooling): unrelated median 0.277, and
+    every same-story pair (lowest 0.579) clears every other story (highest 0.530), but a
+    story's neighbour merges with it (Maccabi TA football vs basketball 0.641, Nvidia vs
+    Apple earnings 0.637). The Qwen instruction prompt raises the unrelated median to 0.534.
+  - Latin, 266 real tweets, at zero false merges: both recover 2 of the 4 known pairs, where
+    `potion-base-4M` recovers 4. Its Latin median is high (0.30, p99.9 0.74): topic, not event.
+  So Hebrew stays out of clustering; the next step is a model that separates EVENTS, not
+  topics, or an upstream Osaurus multi-model embeddings feature.
 - The embeddings request is made under the machine-wide GPU lock (ZT.TWGPULOCK) like every
   other request ztools sends the server, though it loads and releases nothing.
 

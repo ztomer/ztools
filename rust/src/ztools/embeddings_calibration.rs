@@ -31,7 +31,22 @@
 //! 0.981 for potion-base-4M), but one of 8 labelled Hebrew pairs (0.449) is under the
 //! highest unrelated pair (0.535), so no threshold passes the Hebrew half. Pinned by
 //! `embeddings_hebrew_tests.rs` on `tests/fixtures/embeddings/potion_multilingual_128m.json`.
-//! The next candidate is Qwen3-Embedding-0.6B (design section 5's escalation).
+//! The next candidate was Qwen3-Embedding-0.6B (design section 5's escalation).
+//!
+//! `Qwen/Qwen3-Embedding-0.6B` (LM.EMBEDHE, 2026-11-11, in-process via candle 0.11.1
+//! on Metal under the GPU lock, last-token pooling, revision 97b0c614): MEASURED AND
+//! REJECTED, so it has no entry either. It reads Hebrew best of the three (unrelated
+//! median 0.277 on the same 42 synthetic tweets, 0.357 on the 7 real ones) and every
+//! labelled pair (lowest 0.579) clears every pair from different stories (highest
+//! 0.530), but it merges neighbouring stories: Maccabi Tel Aviv's football win with
+//! its basketball loss at 0.641, Nvidia's earnings with Apple's at 0.637, so no
+//! threshold passes the half. With the instruction prompt it is worse (unrelated
+//! median 0.534). On the 266 Latin tweets (median 0.30, p99.9 0.74) different stories
+//! merge at 0.742, above two of the four known pairs (0.928, 0.893, 0.704, 0.681):
+//! 2 of 4 at zero false merges, where potion-base-4M recovers all 4. Pinned by
+//! `embeddings_hebrew_tests.rs` on `tests/fixtures/embeddings/qwen3_embedding_0_6b.json`.
+//! Both escalations named by design section 5 have failed, so clustering stays on
+//! potion-base-4M with `latin_only`; the model files were deleted.
 
 /// One embedding model's measured clustering parameters.
 #[derive(Debug, Clone, Copy, PartialEq)]
