@@ -1,8 +1,9 @@
 //! The real osaurus CLI, filesystem and Hugging Face behind [`Env`].
 
-use super::{CmdOut, Env};
+use super::{CmdOut, Env, ThinkScores};
 use crate::ztools::eval::leaderboard::task_slot;
 use crate::ztools::eval::report::{HistoryEntry, default_eval_dir, load_history_entries};
+use crate::ztools::eval::task_fingerprint::{TaskIdentities, standing_of};
 use anyhow::{Context, Result};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -20,14 +21,15 @@ pub struct LiveEnv {
     pub families: PathBuf,
     pub hf_base: String,
     pub best: BTreeMap<String, String>,
-    pub scores: BTreeMap<String, f64>,
+    pub scores: ThinkScores,
 }
 
 impl LiveEnv {
     /// The machine's own locations: `osaurus` on the PATH, `~/MLXModels`,
-    /// `~/.local/state/ztools/models/families.json`, the eval history.
+    /// `~/.local/state/ztools/models/families.json`, the eval history read
+    /// against `current`, the roster's task fingerprints as they stand now.
     #[must_use]
-    pub fn from_home(best: BTreeMap<String, String>) -> Self {
+    pub fn from_home(best: BTreeMap<String, String>, current: &TaskIdentities) -> Self {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
         Self {
             osaurus: PathBuf::from("osaurus"),
@@ -35,7 +37,7 @@ impl LiveEnv {
             families: home.join(".local/state/ztools/models/families.json"),
             hf_base: HF_BASE.to_string(),
             best,
-            scores: think_scores(&load_history_entries(Some(&default_eval_dir()))),
+            scores: think_scores(&load_history_entries(Some(&default_eval_dir())), current),
         }
     }
 
@@ -174,7 +176,7 @@ impl Env for LiveEnv {
         Some(base)
     }
 
-    fn think_scores(&self) -> BTreeMap<String, f64> {
+    fn think_scores(&self) -> ThinkScores {
         self.scores.clone()
     }
 
@@ -187,30 +189,54 @@ impl Env for LiveEnv {
     }
 }
 
-/// Each model's think-slot score: the mean of its latest complete run that
-/// has think rows. Not gated on task fingerprints: the think rows of every
-/// model on this machine predate the current fingerprints, and a ranking of
-/// the members of ONE family only needs them comparable to each other.
+/// Each model's think-slot score: the mean of its latest complete run that has
+/// think rows, preferring rows taken on the CURRENT task (their fingerprint is
+/// the roster's now, as `model-eval --leaderboard` requires).
+///
+/// A model with no current think rows falls back to its latest run whatever
+/// the fingerprints, and is named in [`ThinkScores::stale`] so the report can
+/// say the ranking rests on it: on 2026-11-11 every think row on this machine
+/// predated the current fingerprints, and a ranking of the members of ONE
+/// family only needs them comparable to each other.
 #[must_use]
-pub fn think_scores(history: &BTreeMap<String, Vec<HistoryEntry>>) -> BTreeMap<String, f64> {
-    let mut out = BTreeMap::new();
+pub fn think_scores(
+    history: &BTreeMap<String, Vec<HistoryEntry>>,
+    current: &TaskIdentities,
+) -> ThinkScores {
+    let mut out = ThinkScores::default();
     for (model, entries) in history {
         let think: Vec<&HistoryEntry> = entries
             .iter()
             .filter(|e| e.complete && task_slot(&e.task) == Some("think"))
             .collect();
-        let Some(latest) = think.iter().map(|e| e.timestamp).max_by(f64::total_cmp) else {
+        let is_current =
+            |e: &&HistoryEntry| standing_of(e.fingerprint.as_deref(), current, &e.task).counts();
+        let fresh: Vec<&HistoryEntry> = think.iter().copied().filter(is_current).collect();
+        let (rows, stale) = if fresh.is_empty() {
+            (think, true)
+        } else {
+            (fresh, false)
+        };
+        let Some(mean) = latest_run_mean(&rows) else {
             continue;
         };
-        let run: Vec<f64> = think
-            .iter()
-            .filter(|e| (e.timestamp - latest).abs() < 2.0)
-            .map(|e| crate::units::signed(e.score))
-            .collect();
-        out.insert(
-            model.to_lowercase(),
-            run.iter().sum::<f64>() / crate::units::count(run.len()),
-        );
+        let key = model.to_lowercase();
+        if stale {
+            out.stale.push(key.clone());
+        }
+        out.scores.insert(key, mean);
     }
     out
+}
+
+/// The mean score of the newest run among `rows` (rows within 2 s of the
+/// newest are one run).
+fn latest_run_mean(rows: &[&HistoryEntry]) -> Option<f64> {
+    let latest = rows.iter().map(|e| e.timestamp).max_by(f64::total_cmp)?;
+    let run: Vec<f64> = rows
+        .iter()
+        .filter(|e| (e.timestamp - latest).abs() < 2.0)
+        .map(|e| crate::units::signed(e.score))
+        .collect();
+    Some(run.iter().sum::<f64>() / crate::units::count(run.len()))
 }

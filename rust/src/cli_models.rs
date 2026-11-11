@@ -62,6 +62,23 @@ fn finish(report: &Report) -> Result<()> {
     }
 }
 
+/// The roster's task fingerprints as they stand now, the ones
+/// `model-eval --leaderboard` scores against. A roster that cannot be loaded
+/// leaves none, so every think score is reported as the fallback.
+fn current_tasks(config: &ZtoolsConfig) -> crate::ztools::eval::TaskIdentities {
+    let tasks_dir = config.eval_tasks_dir();
+    config
+        .eval_roster_inputs()
+        .and_then(|inputs| crate::ztools::eval::load_all_eval_tasks(&inputs, tasks_dir.as_deref()))
+        .map(|tasks| {
+            tasks
+                .iter()
+                .map(|t| (t.name.clone(), crate::ztools::eval::task_fingerprint(t)))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Run a `models` subcommand.
 ///
 /// # Errors
@@ -70,7 +87,7 @@ fn finish(report: &Report) -> Result<()> {
 pub fn run(config: &ZtoolsConfig, cmd: &ModelsCmd) -> Result<()> {
     match cmd {
         ModelsCmd::Refcheck { no_repair, .. } => {
-            let env = LiveEnv::from_home(best_models(config));
+            let env = LiveEnv::from_home(best_models(config), &current_tasks(config));
             finish(&refcheck::run(&env, !no_repair)?)
         }
     }

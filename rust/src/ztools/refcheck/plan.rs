@@ -46,7 +46,7 @@ pub fn edit_for(slot: &Slot) -> Option<Edit> {
 /// # Errors
 ///
 /// When the slot is not an Osaurus setting, or an automation cannot be found
-/// in the export (its `instructions` are required by the document).
+/// in the export (the document restates the whole entity).
 pub fn minimal_doc(export: &Value, slot: &Slot, new: &str) -> Result<Value, String> {
     let version = export.get("version").cloned().unwrap_or_else(|| json!(1));
     let body = match slot {
@@ -56,15 +56,20 @@ pub fn minimal_doc(export: &Value, slot: &Slot, new: &str) -> Result<Value, Stri
         Slot::Configurator => json!({"configurator": {"model": new}}),
         Slot::Agent(name) => json!({"agents": [{"name": name, "model": new}]}),
         Slot::Automation(name) => {
-            let instructions = export
+            // Osaurus replaces an automation whole: a key the document leaves
+            // out is unset (`fresh_session: true -> (unset)` in the plan), so
+            // the document is the export's own entity with the one field
+            // changed and every other key kept.
+            let mut entity = export
                 .get("automations")
                 .and_then(Value::as_array)
                 .into_iter()
                 .flatten()
                 .find(|a| a.get("name").and_then(Value::as_str) == Some(name))
-                .and_then(|a| a.get("instructions").cloned())
-                .ok_or_else(|| format!("automation {name} has no instructions in the export"))?;
-            json!({"automations": [{"name": name, "instructions": instructions, "model": new}]})
+                .cloned()
+                .ok_or_else(|| format!("automation {name} is not in the export"))?;
+            entity["model"] = json!(new);
+            json!({"automations": [entity]})
         }
         Slot::Best(_) => return Err("[best_models] is not an Osaurus setting".into()),
     };

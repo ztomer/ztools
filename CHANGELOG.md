@@ -11,6 +11,24 @@ this changelog, have no stanza and get no GitHub release; their notes are
 
 ## Unreleased
 
+### Fixed
+- **`ztools models refcheck --repair` can repair an `automations[].model` reference
+  (ZT.REFCHECKGAPS).** Osaurus replaces an automation whole, so the old minimal document
+  (`name`, `instructions`, `model`) planned `fresh_session: true -> (unset)` and the plan guard
+  aborted every automation repair. The document is now the export's own entity with only
+  `model` changed; agents still merge by key.
+- **Refcheck says what its think ranking rests on.** Think scores prefer rows taken on the
+  current task fingerprints; a model with none falls back to its older rows and the report
+  names it (`· think ranking: ... predate the current task fingerprints`), or says the family
+  was ranked by cracked build and name when there are no think scores at all.
+- **A failed version bump in `tools/release.sh` leaves the tree and index as it found them.**
+  A refused `chore: version` commit used to leave the bump staged; it is now restored to HEAD,
+  and a bump onto local edits of `rust/Cargo.toml` or `rust/Cargo.lock` is refused up front.
+- **`residency_callers` refuses a stale build of itself (ZT.RESIDFLAKE).** Its 5 red runs on
+  2026-11-11 were a red-run mutant (`fake.watching_lock(home/nope)`) restored with `mv x.bak x`:
+  the old mtime made cargo keep the mutant binary. The test now checks it was compiled from the
+  file on disk (`support::assert_built_from_disk`) and names the restore when it was not.
+
 ## v3.17.0 — osaurus accepted an agent _(2026-11-11)_
 
 ### Fixed

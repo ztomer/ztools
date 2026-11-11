@@ -21,6 +21,8 @@ mod repair;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_automation;
+#[cfg(test)]
 mod tests_live;
 
 pub use live::LiveEnv;
@@ -58,8 +60,9 @@ pub trait Env {
     fn best_models(&self) -> BTreeMap<String, String>;
     /// The cached Hugging Face base model of `repo`, if known.
     fn base_model(&self, repo: &str) -> Option<String>;
-    /// Think-slot score by lowercased short model name.
-    fn think_scores(&self) -> BTreeMap<String, f64>;
+    /// Think-slot scores by lowercased short model name, and which of them
+    /// fell back to rows that predate the current task fingerprints.
+    fn think_scores(&self) -> ThinkScores;
     /// `osaurus config plan <doc>` (a dry run).
     ///
     /// # Errors
@@ -72,6 +75,39 @@ pub trait Env {
     ///
     /// When osaurus cannot be run.
     fn apply(&self, doc: &Value) -> Result<CmdOut>;
+}
+
+/// The think-slot scores a repair ranks a family by, and where they came from.
+#[derive(Debug, Clone, Default)]
+pub struct ThinkScores {
+    /// Score by lowercased short model name.
+    pub scores: BTreeMap<String, f64>,
+    /// Models whose score is from rows that predate the current task
+    /// fingerprints, because they have no current think rows.
+    pub stale: Vec<String>,
+}
+
+impl ThinkScores {
+    /// The line a report carries when the ranking is not on current rows:
+    /// `None` when every score was taken on the current tasks.
+    #[must_use]
+    pub fn fallback_line(&self) -> Option<String> {
+        if self.scores.is_empty() {
+            return Some(
+                "  · think ranking: no think scores on record, so the family was ranked by \
+                 cracked build, then by name"
+                    .into(),
+            );
+        }
+        if self.stale.is_empty() {
+            return None;
+        }
+        Some(format!(
+            "  · think ranking: {} scored from runs that predate the current task \
+             fingerprints (`ztools model-eval --leaderboard` has no current think rows for them)",
+            self.stale.join(", ")
+        ))
+    }
 }
 
 /// The result of one refcheck.
@@ -141,15 +177,15 @@ fn repair_one(
     export: &Value,
     installed: &Installed,
     r: &Reference,
+    scores: &BTreeMap<String, f64>,
 ) -> Result<(String, bool), String> {
     let edit = plan::edit_for(&r.slot)
         .ok_or_else(|| "[best_models] is a ztools setting, not an Osaurus one".to_string())?;
-    let scores = env.think_scores();
     let (target, fallback) = if let Some(t) = choose(
         &r.model,
         &installed.local_ids(),
         &|id| env.base_model(id),
-        &scores,
+        scores,
     ) {
         (t, false)
     } else {
@@ -179,6 +215,8 @@ pub fn run(env: &dyn Env, repair: bool) -> Result<Report> {
         ..Report::default()
     };
     let mut repaired: Vec<(String, String, String)> = Vec::new();
+    let think = env.think_scores();
+    let mut ranked = false;
     for r in &missing {
         report
             .lines
@@ -186,7 +224,8 @@ pub fn run(env: &dyn Env, repair: bool) -> Result<Report> {
         if !repair {
             continue;
         }
-        match repair_one(env, &export, &installed, r) {
+        ranked |= plan::edit_for(&r.slot).is_some();
+        match repair_one(env, &export, &installed, r, &think.scores) {
             Ok((to, false)) => repaired.push((r.path.clone(), r.model.clone(), to)),
             Ok((to, true)) => report.lines.push(format!(
                 "  ⚠ {}: no installed member of the family; pointed at core_model {to}, \
@@ -197,6 +236,9 @@ pub fn run(env: &dyn Env, repair: bool) -> Result<Report> {
                 .lines
                 .push(format!("  ⚠ {} not repaired: {why}", r.path)),
         }
+    }
+    if ranked && let Some(line) = think.fallback_line() {
+        report.lines.push(line);
     }
     if repair && !repaired.is_empty() {
         let (_, still, _) = look(env)?;

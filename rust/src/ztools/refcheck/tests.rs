@@ -42,7 +42,7 @@ pub struct Fake {
     pub listed: Vec<String>,
     pub disk: Vec<String>,
     pub bases: BTreeMap<String, String>,
-    pub scores: BTreeMap<String, f64>,
+    pub scores: ThinkScores,
     /// When set, `plan` prints this whatever the document is.
     pub plan_text: Option<String>,
     pub plan_code: i32,
@@ -67,7 +67,10 @@ impl Fake {
                 (BROKEN.into(), "Qwen/Qwen3.8-27B".into()),
                 (CRACK.into(), "Qwen/Qwen3.8-27B".into()),
             ]),
-            scores: BTreeMap::from([("qwen3.8-27b-jang_6d-crack".into(), 82.5)]),
+            scores: ThinkScores {
+                scores: BTreeMap::from([("qwen3.8-27b-jang_6d-crack".into(), 82.5)]),
+                stale: Vec::new(),
+            },
             plan_text: None,
             plan_code: 0,
             plans: RefCell::default(),
@@ -102,20 +105,15 @@ impl Env for Fake {
     fn base_model(&self, repo: &str) -> Option<String> {
         self.bases.get(repo).cloned()
     }
-    fn think_scores(&self) -> BTreeMap<String, f64> {
+    fn think_scores(&self) -> ThinkScores {
         self.scores.clone()
     }
     fn plan(&self, doc: &Value) -> Result<CmdOut> {
         self.plans.borrow_mut().push(doc.clone());
-        let text = self.plan_text.clone().unwrap_or_else(|| {
-            let a = &doc["agents"][0];
-            let name = a["name"].as_str().unwrap_or("?");
-            format!(
-                "agents:\n  ~ {name}\n      model: {} -> {}\n",
-                self.agent_model(name),
-                a["model"].as_str().unwrap_or("?")
-            )
-        });
+        let text = self
+            .plan_text
+            .clone()
+            .unwrap_or_else(|| super::tests_automation::simulated_plan(&self.export.borrow(), doc));
         Ok(CmdOut {
             code: self.plan_code,
             text,
@@ -123,16 +121,7 @@ impl Env for Fake {
     }
     fn apply(&self, doc: &Value) -> Result<CmdOut> {
         self.applies.borrow_mut().push(doc.clone());
-        let mut e = self.export.borrow_mut();
-        if let Some(agents) = doc["agents"].as_array() {
-            for a in agents {
-                for x in e["agents"].as_array_mut().into_iter().flatten() {
-                    if x["name"] == a["name"] {
-                        x["model"] = a["model"].clone();
-                    }
-                }
-            }
-        }
+        super::tests_automation::simulated_apply(&mut self.export.borrow_mut(), doc);
         Ok(CmdOut {
             code: 0,
             text: "applied".into(),
@@ -293,7 +282,7 @@ fn an_unconfirmed_repair_stays_an_error() {
         fn base_model(&self, r: &str) -> Option<String> {
             self.0.base_model(r)
         }
-        fn think_scores(&self) -> BTreeMap<String, f64> {
+        fn think_scores(&self) -> ThinkScores {
             self.0.think_scores()
         }
         fn plan(&self, d: &Value) -> Result<CmdOut> {
@@ -432,8 +421,8 @@ fn the_minimal_document_holds_only_the_one_entity() {
     assert_eq!(
         doc(Slot::Automation("code-simplifier:Code Simplifier".into())),
         json!({"version": 1, "automations": [{
-            "name": "code-simplifier:Code Simplifier",
-            "instructions": "Simplify.", "model": CRACK}]})
+            "name": "code-simplifier:Code Simplifier", "enabled": false,
+            "fresh_session": true, "instructions": "Simplify.", "model": CRACK}]})
     );
     assert!(plan::minimal_doc(&export, &Slot::Automation("ghost".into()), CRACK).is_err());
     assert!(plan::minimal_doc(&export, &Slot::Best("think".into()), CRACK).is_err());

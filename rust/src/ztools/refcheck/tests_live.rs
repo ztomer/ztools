@@ -1,7 +1,7 @@
 //! `LiveEnv` against a stub `osaurus` script, a fixture `~/MLXModels` and a
 //! stub Hugging Face server: the real argv, the real files, no real machine.
 
-use super::tests::{BROKEN, CRACK, export_with};
+use super::tests::{BROKEN, CRACK, Fake, export_with};
 use super::*;
 use crate::ztools::eval::report::HistoryEntry;
 use std::io::{Read, Write};
@@ -37,7 +37,7 @@ fn env_in(dir: &Path, hf_base: &str) -> LiveEnv {
         families: dir.join("state/models/families.json"),
         hf_base: hf_base.to_string(),
         best: BTreeMap::new(),
-        scores: BTreeMap::new(),
+        scores: ThinkScores::default(),
     }
 }
 
@@ -208,14 +208,16 @@ fn think_scores_are_the_mean_of_the_latest_complete_run_with_think_rows() {
         ),
         ("no-think".to_string(), vec![row("json", 100, 1.0, true)]),
     ]);
-    let scores = super::live::think_scores(&history);
-    assert_eq!(scores.len(), 1);
-    assert_exact!(scores["qwen3.8-27b-jang_6d-crack"], 75.0);
+    // No current fingerprints: every score is the fallback, and says so.
+    let think = super::live::think_scores(&history, &BTreeMap::new());
+    assert_eq!(think.scores.len(), 1);
+    assert_exact!(think.scores["qwen3.8-27b-jang_6d-crack"], 75.0);
+    assert_eq!(think.stale, vec!["qwen3.8-27b-jang_6d-crack".to_string()]);
 }
 
 #[test]
 fn from_home_points_at_the_operators_own_locations() {
-    let env = LiveEnv::from_home(BTreeMap::new());
+    let env = LiveEnv::from_home(BTreeMap::new(), &BTreeMap::new());
     assert_eq!(env.osaurus, PathBuf::from("osaurus"));
     assert!(env.models_root.ends_with("MLXModels"));
     assert!(
@@ -223,4 +225,51 @@ fn from_home_points_at_the_operators_own_locations() {
             .ends_with(".local/state/ztools/models/families.json")
     );
     assert_eq!(env.hf_base, "https://huggingface.co");
+}
+
+fn fp_row(task: &str, score: i64, ts: f64, fingerprint: &str) -> HistoryEntry {
+    HistoryEntry {
+        fingerprint: Some(fingerprint.into()),
+        ..row(task, score, ts, true)
+    }
+}
+
+#[test]
+fn a_current_think_run_wins_over_a_newer_superseded_one_and_is_not_named_stale() {
+    let history = BTreeMap::from([(
+        "Qwen3.8-27B-JANG_6D".to_string(),
+        vec![
+            fp_row("taxes_qa", 60, 1.0, "now"),
+            fp_row("taxes_qa", 90, 100.0, "before"),
+        ],
+    )]);
+    let current = BTreeMap::from([("taxes_qa".to_string(), "now".to_string())]);
+    let think = super::live::think_scores(&history, &current);
+    assert_exact!(think.scores["qwen3.8-27b-jang_6d"], 60.0);
+    assert_empty!(&think.stale);
+    assert_eq!(think.fallback_line(), None);
+}
+
+#[test]
+fn a_repair_ranked_on_stale_or_missing_think_scores_says_so() {
+    let mut env = Fake::new(export_with(BROKEN));
+    env.scores.stale = vec!["qwen3.8-27b-jang_6d-crack".into()];
+    let r = run(&env, true).unwrap();
+    let text = r.lines.join("\n");
+    assert_eq!(r.repaired, 1, "{text}");
+    assert!(
+        text.contains("think ranking: qwen3.8-27b-jang_6d-crack scored from runs that predate"),
+        "{text}"
+    );
+    env.scores = ThinkScores::default();
+    *env.export.borrow_mut() = export_with(BROKEN);
+    let text = run(&env, true).unwrap().lines.join("\n");
+    assert!(
+        text.contains("think ranking: no think scores on record"),
+        "{text}"
+    );
+    // A clean export ranks nothing, so it states no ranking.
+    *env.export.borrow_mut() = export_with(CRACK);
+    let text = run(&env, true).unwrap().lines.join("\n");
+    assert!(!text.contains("think ranking"), "{text}");
 }
