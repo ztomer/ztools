@@ -467,3 +467,17 @@ under `load.py 8` on 16 cores, passed 20 runs in a row, so the flake is still un
 next failure will name its test. Running a test binary directly skips cargo's `[env]`, so set
 `HOME=rust/target/test-home` yourself, or `test_home_is_sandboxed` fails (it did, on the first
 attempt).
+
+## A test that reaches the model server owns the GPU-lock directory (2026-11-11)
+
+Every request to the model server is made under the machine-wide GPU lock, whose
+directory is the process-global `ZTOOLS_GPU_LOCK_DIR`. A test that calls
+`resolve_weekend_model` (or anything else that takes the lock) without
+`TestEnv::new()` follows whichever sandbox another test has set at that instant, or
+the machine's real `/tmp/mac-osaurus-gpu.lock`. A lock that cannot be taken leaves the
+roster unread, and an unread roster checks nothing, so the call returns
+`Ok(configured)`: the 3.17.0 release suite failed on `Ok("raptor-v0.5-8b")` against a
+stub roster that lacked it, once in 1174, and passed alone. Reproduce with
+`ZTOOLS_GPU_LOCK_DIR=/nonexistent/a/b cargo test --lib a_model_that_is_not_installed`.
+The audit now lists `resolve_weekend_model(` as a hazard (`test_env/audit/text.rs`), so
+a test that calls it with no `TestEnv` fails `every_hazard_test_constructs_a_test_env`.

@@ -342,6 +342,12 @@ pub(super) const HAZARDS: &[&str] = &[
     // `~/.twitter_summary_debug_cache.json` that way, and a fixture run's
     // summary became what the dashboard showed.
     "dirs::home_dir()",
+    // A request to the model server is made under the machine-wide GPU lock, whose
+    // directory is the process-global `ZTOOLS_GPU_LOCK_DIR` (2026-11-11). A test that
+    // reaches it without the guard follows whichever sandbox another test has set at
+    // that instant, and a lock that cannot be taken leaves the roster unread: the 3.17.0
+    // release suite failed on `Ok("raptor-v0.5-8b")` that way.
+    "resolve_weekend_model(",
     "twitter_store_dir()",
     "twitter_output_dir()",
     "weekend_store_dir()",

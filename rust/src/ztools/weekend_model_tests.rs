@@ -7,6 +7,9 @@
 
 #[test]
 fn resolve_weekend_model_unreachable_endpoint_returns_preferred() {
+    // The roster read takes the GPU lock, whose directory is process-global
+    // env: without the sandbox this test took the machine's real lock.
+    let _env = crate::test_env::TestEnv::new();
     let chosen =
         crate::ztools::weekend::resolve_weekend_model("http://127.0.0.1:1", "qwen3.8-27b-8bit");
     assert_eq!(chosen, Ok("qwen3.8-27b-8bit".to_string()));
@@ -50,6 +53,12 @@ const ROSTER_WITHOUT_CONFIGURED: &str =
 /// for a configured name with no family match.)
 #[test]
 fn a_model_that_is_not_installed_is_named_never_substituted() {
+    // Owns the GPU-lock directory. Without it the roster read follows whatever
+    // `ZTOOLS_GPU_LOCK_DIR` another test's sandbox has set at that instant (or
+    // the machine's real lock), and a lock that cannot be taken leaves the
+    // roster unread, which `resolve_weekend_model` answers with `Ok(configured)`:
+    // the 3.17.0 release suite failed here with `Ok("raptor-v0.5-8b")`.
+    let _env = crate::test_env::TestEnv::new();
     let (url, _) = roster_stub(ROSTER_WITHOUT_CONFIGURED);
     for configured in ["qwen3.8-27b-8bit", "raptor-v0.5-8b"] {
         assert_eq!(
@@ -91,4 +100,23 @@ fn warm_up_makes_no_call_when_the_model_is_not_installed() {
     );
     let requests = seen.lock().unwrap().clone();
     assert_eq!(requests, vec!["GET /v1/models HTTP/1.1".to_string()]);
+}
+
+/// The mechanism behind that failure, pinned: a GPU lock that cannot be taken
+/// leaves the roster unread, and an unread roster checks nothing. That is the
+/// designed behaviour (the warm-up that follows reports the lock's holder), so
+/// the only defence for a test is to own its lock directory, as above.
+#[test]
+fn an_unavailable_gpu_lock_leaves_the_roster_unread_and_the_model_unchecked() {
+    let (url, seen) = roster_stub(ROSTER_WITHOUT_CONFIGURED);
+    let env = crate::test_env::TestEnv::new();
+    env.set_managed(
+        "ZTOOLS_GPU_LOCK_DIR",
+        std::ffi::OsStr::new("/nonexistent/parent/gpu.lock"),
+    );
+    assert_eq!(
+        crate::ztools::weekend::resolve_weekend_model(&url, "raptor-v0.5-8b"),
+        Ok("raptor-v0.5-8b".to_string())
+    );
+    assert_empty!(seen.lock().unwrap());
 }
