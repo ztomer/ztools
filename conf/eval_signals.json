@@ -2426,23 +2426,8 @@
   },
   "raptor-v0.5-8b-a1b-jang_6m": {
     "_capabilities": {
-      "cold_start_seconds": 3.13,
+      "cold_start_seconds": 3.29,
       "cold_start_seconds_samples": [
-        {
-          "clean": true,
-          "ts": 0.0,
-          "v": 0.2606
-        },
-        {
-          "clean": false,
-          "ts": 0.0,
-          "v": 2.8726
-        },
-        {
-          "clean": false,
-          "ts": 0.0,
-          "v": 0.2627
-        },
         {
           "clean": false,
           "ts": 0.0,
@@ -2477,25 +2462,25 @@
           "clean": true,
           "ts": 0.0,
           "v": 3.1324
+        },
+        {
+          "clean": false,
+          "ts": 0.0,
+          "v": 69.4163
+        },
+        {
+          "clean": false,
+          "ts": 0.0,
+          "v": 8.1103
+        },
+        {
+          "clean": false,
+          "ts": 0.0,
+          "v": 8.0196
         }
       ],
-      "decode_tokens_per_sec": 92.76,
+      "decode_tokens_per_sec": 85.34,
       "decode_tokens_per_sec_samples": [
-        {
-          "clean": true,
-          "ts": 0.0,
-          "v": 132.5196
-        },
-        {
-          "clean": false,
-          "ts": 0.0,
-          "v": 132.3694
-        },
-        {
-          "clean": false,
-          "ts": 0.0,
-          "v": 132.9632
-        },
         {
           "clean": false,
           "ts": 0.0,
@@ -2530,25 +2515,25 @@
           "clean": true,
           "ts": 0.0,
           "v": 92.7617
+        },
+        {
+          "clean": false,
+          "ts": 0.0,
+          "v": 128.6219
+        },
+        {
+          "clean": false,
+          "ts": 0.0,
+          "v": 85.6104
+        },
+        {
+          "clean": false,
+          "ts": 0.0,
+          "v": 115.812
         }
       ],
-      "prefill_chars_per_sec": 9013.5,
+      "prefill_chars_per_sec": 8848.6,
       "prefill_chars_per_sec_samples": [
-        {
-          "clean": true,
-          "ts": 0.0,
-          "v": 10597.3
-        },
-        {
-          "clean": false,
-          "ts": 0.0,
-          "v": 10302.5
-        },
-        {
-          "clean": false,
-          "ts": 0.0,
-          "v": 11373.3
-        },
         {
           "clean": false,
           "ts": 0.0,
@@ -2583,9 +2568,24 @@
           "clean": true,
           "ts": 0.0,
           "v": 9013.5
+        },
+        {
+          "clean": false,
+          "ts": 0.0,
+          "v": 13386.3
+        },
+        {
+          "clean": false,
+          "ts": 0.0,
+          "v": 13137.3
+        },
+        {
+          "clean": false,
+          "ts": 0.0,
+          "v": 10454.6
         }
       ],
-      "prefill_samples": 17
+      "prefill_samples": 20
     },
     "filename": {
       "fingerprint": "e27a50a456be7142",
@@ -2623,6 +2623,14 @@
       "timeout": 900,
       "total_retries": 0
     },
+    "hebrew_json": {
+      "fingerprint": "6f106f11acad3164",
+      "p95_latency": 1.4,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 0
+    },
     "image_real": {
       "fingerprint": "01f266c442cb5060",
       "parse_failures": 0,
@@ -2649,10 +2657,139 @@
       "total_retries": 0
     },
     "json": {
-      "fingerprint": "49ae35312724f6ad",
-      "p95_latency": 9.5,
+      "fingerprint": "4822541295b8bbcb",
+      "p95_latency": 8.8,
       "parse_failures": 0,
-      "samples": 2,
+      "samples": 3,
+      "superseded_samples": 2,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "refusal_advice": {
+      "fingerprint": "cfa1c68e99a06230",
+      "p95_latency": 3.5,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "refusal_crime_en": {
+      "fingerprint": "639d6fbe70b3b8dd",
+      "p95_latency": 1.0,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "refusal_crime_he": {
+      "fingerprint": "d580f5da4b549efc",
+      "p95_latency": 2.7,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "refusal_edge_en": {
+      "fingerprint": "80c8d57f0aa61308",
+      "p95_latency": 1.0,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 3
+    },
+    "refusal_edge_he": {
+      "fingerprint": "5cb1a207a77b5c54",
+      "p95_latency": 2.9,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 3
+    },
+    "refusal_gray_en": {
+      "fingerprint": "74ca42c7a7b39f47",
+      "p95_latency": 2.4,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 3
+    },
+    "refusal_gray_he": {
+      "fingerprint": "4a66f63755da9078",
+      "p95_latency": 3.5,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 3
+    },
+    "refusal_politics_profanity": {
+      "fingerprint": "8a708c345a286f0f",
+      "p95_latency": 2.6,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "refusal_terror_en": {
+      "fingerprint": "861ecaa2e393ff8e",
+      "p95_latency": 1.2,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "refusal_terror_he": {
+      "fingerprint": "f2522f681fdf831e",
+      "p95_latency": 2.5,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "refusal_war_en": {
+      "fingerprint": "e037457c6d5e4030",
+      "p95_latency": 1.2,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "refusal_war_he": {
+      "fingerprint": "55b4820d1607ddec",
+      "p95_latency": 2.6,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "refusal_xstest_a": {
+      "fingerprint": "7a68910a607f3a2a",
+      "p95_latency": 1.6,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "refusal_xstest_b": {
+      "fingerprint": "3535eea2341a1d55",
+      "p95_latency": 1.8,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "refusal_xstest_c": {
+      "fingerprint": "6ca761eeb6ad0f36",
+      "p95_latency": 1.7,
+      "parse_failures": 0,
+      "samples": 3,
+      "timeout": 900,
+      "total_retries": 0
+    },
+    "refusal_xstest_d": {
+      "fingerprint": "5490a5bd45b44fe0",
+      "p95_latency": 1.4,
+      "parse_failures": 0,
+      "samples": 3,
       "timeout": 900,
       "total_retries": 0
     },
@@ -2720,42 +2857,47 @@
       "total_retries": 0
     },
     "weekend_fabrication": {
-      "fingerprint": "5915747486cabc6a",
-      "p95_latency": 8.8,
+      "fingerprint": "d2c5a306a830966b",
+      "p95_latency": 7.2,
       "parse_failures": 0,
-      "samples": 2,
+      "samples": 3,
+      "superseded_samples": 2,
       "timeout": 900,
-      "total_retries": 0
+      "total_retries": 1
     },
     "weekend_injection": {
-      "fingerprint": "a6a45ff76f1bc9ac",
-      "p95_latency": 6.4,
+      "fingerprint": "3ba49eea135f98dd",
+      "p95_latency": 5.5,
       "parse_failures": 0,
-      "samples": 2,
+      "samples": 3,
+      "superseded_samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
     "weekend_transient": {
-      "fingerprint": "dd951ad650fd60ff",
-      "p95_latency": 9.5,
+      "fingerprint": "c04dff57fba3f055",
+      "p95_latency": 21.1,
       "parse_failures": 0,
-      "samples": 2,
+      "samples": 3,
+      "superseded_samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
     "weekend_transient_mixed": {
-      "fingerprint": "5107f253ab83a3e2",
-      "p95_latency": 12.0,
+      "fingerprint": "a21cf7ea7aadb4f3",
+      "p95_latency": 8.2,
       "parse_failures": 0,
-      "samples": 2,
+      "samples": 3,
+      "superseded_samples": 2,
       "timeout": 900,
       "total_retries": 0
     },
     "weekend_transient_schema": {
-      "fingerprint": "d5fc4e12cec95ac0",
-      "p95_latency": 9.5,
+      "fingerprint": "7b3c4063638af216",
+      "p95_latency": 8.1,
       "parse_failures": 0,
-      "samples": 2,
+      "samples": 3,
+      "superseded_samples": 2,
       "timeout": 900,
       "total_retries": 0
     }
