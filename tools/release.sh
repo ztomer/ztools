@@ -47,6 +47,27 @@ unset _arg
 CURRENT_V=$(grep -m1 '^version = ' rust/Cargo.toml | cut -d'"' -f2)
 if [ "$CURRENT_V" != "$V" ] && [ "$DRY_RUN" = 1 ]; then
   info "[dry-run] would bump rust/Cargo.toml version: $CURRENT_V → $V and commit 'chore: version $V'"
+  # The kit's first step asks that HEAD already DECLARE the version it tags, and a dry run
+  # applies no bump -- so a preview of any real release failed there, every time
+  # (ZT.TOOLFIX). The preview therefore runs the kit from a throwaway detached worktree that
+  # carries the bump as a commit; this repo's HEAD, index, manifest and refs are untouched,
+  # and the worktree is removed on every exit path. The commit is disposable and never
+  # tagged, so it skips the hooks (the real bump below does not: U4).
+  PREVIEW_WT="$(mktemp -d "${TMPDIR:-/tmp}/ztools-release-preview.XXXXXX")"
+  REAL_TOP="$PWD"
+  preview_cleanup() {
+    cd "$REAL_TOP" 2>/dev/null || true
+    git worktree remove --force "$PREVIEW_WT" >/dev/null 2>&1 || rm -rf "$PREVIEW_WT"
+    git worktree prune >/dev/null 2>&1 || true
+  }
+  trap preview_cleanup EXIT
+  trap 'exit 130' INT TERM
+  { git worktree add --detach -q "$PREVIEW_WT" HEAD \
+      && cd "$PREVIEW_WT" \
+      && /usr/bin/sed -i '' "s|^version = \".*\"|version = \"$V\"|" rust/Cargo.toml \
+      && git add -- rust/Cargo.toml \
+      && git commit -q --no-verify -m "chore: version $V"; } \
+    || die "could not prepare the dry-run preview worktree for $V"
 elif [ "$CURRENT_V" != "$V" ]; then
   # A bump that fails part-way must leave the manifest, the lock and the index as it found
   # them (ZT.RESIDFLAKE): a pre-commit hook once refused the commit and the bump stayed STAGED

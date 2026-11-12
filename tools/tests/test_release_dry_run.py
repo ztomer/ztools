@@ -176,3 +176,74 @@ def test_a_bump_refuses_a_manifest_with_uncommitted_changes(tmp_path):
     assert (repo / "rust" / "Cargo.lock").read_text() == "# lock, edited\n"
     assert (repo / "rust" / "Cargo.toml").read_text() == MANIFEST
     assert "uncommitted" in result.stderr
+
+
+def _strict_kit(tmp_path):
+    """A kit that does what the real one's version step does: refuse unless the manifest
+    in the tree it runs from, AT HEAD, declares --version. It also records where it ran."""
+    kit = tmp_path / "goh" / "tools" / "release-kit" / "release.sh"
+    kit.write_text(
+        "#!/bin/bash\n"
+        'v=""; while [ $# -gt 0 ]; do [ "$1" = --version ] && v="$2"; shift; done\n'
+        f'pwd -P > "{tmp_path / "kit.cwd"}"\n'
+        'declared="$(git show HEAD:rust/Cargo.toml | grep -m1 "^version = " | cut -d\\" -f2)"\n'
+        '[ "$declared" = "$v" ] || '
+        '{ echo "HEAD does not declare $v (declares $declared)" >&2; exit 1; }\n'
+    )
+    kit.chmod(0o755)
+
+
+def test_a_dry_run_of_a_pending_bump_passes_the_kits_version_step(tmp_path):
+    # ZT.TOOLFIX: the kit's first step asks that HEAD already declare the version, and a dry
+    # run applies no bump, so `release.sh 3.22.0 --dry-run` always failed there and could
+    # never preview a release. The preview now runs the kit from a throwaway worktree that
+    # carries the bump, and leaves the real repo exactly as it found it.
+    repo = _sandbox(tmp_path)
+    _strict_kit(tmp_path)
+    head = _git(repo, "rev-parse", "HEAD")
+
+    result = _release(repo, "2.0.0", "--dry-run")
+
+    assert result.returncode == 0, result.stderr
+    assert (repo / "rust" / "Cargo.toml").read_text() == MANIFEST
+    assert _git(repo, "rev-parse", "HEAD") == head, "the dry run committed"
+    assert _git(repo, "status", "--porcelain") == "", "the dry run left the tree dirty"
+    assert _git(repo, "worktree", "list", "--porcelain").count("worktree ") == 1, (
+        "the preview worktree was left behind"
+    )
+    assert Path((tmp_path / "kit.cwd").read_text().strip()) != repo.resolve(), (
+        "the kit ran in the real tree"
+    )
+    assert not (tmp_path / "brew.argv").exists()
+
+
+def test_a_dry_run_of_the_current_version_runs_in_place(tmp_path):
+    repo = _sandbox(tmp_path)
+    _strict_kit(tmp_path)
+
+    result = _release(repo, "1.0.0", "--dry-run")
+
+    assert result.returncode == 0, result.stderr
+    assert Path((tmp_path / "kit.cwd").read_text().strip()) == repo.resolve()
+    assert _git(repo, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
+def test_a_real_run_still_fails_when_head_does_not_declare_the_version(tmp_path):
+    # The strict kit is only a fair instrument if it can say no: a kit run against a tree
+    # whose manifest is not bumped must fail, or the dry-run test above proves nothing.
+    repo = _sandbox(tmp_path)
+    _strict_kit(tmp_path)
+
+    kit = tmp_path / "goh" / "tools" / "release-kit" / "release.sh"
+    r = subprocess.run(
+        [str(kit), "--version", "9.9.9"],
+        cwd=str(repo),
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        env=_env(repo.parent),
+        timeout=TIMEOUT,
+        check=False,
+    )
+    assert r.returncode == 1
+    assert "does not declare 9.9.9" in r.stderr
