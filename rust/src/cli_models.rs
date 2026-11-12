@@ -40,6 +40,70 @@ pub enum ModelsCmd {
         #[arg(long)]
         all_pairs: bool,
     },
+    /// Propose who could replace each slot's model (LM.SCOUT): read the HF Hub
+    /// and the Osaurus catalog, filter by publisher, format, memory fit and
+    /// disk. PROPOSE-ONLY: it never downloads, installs or switches a model.
+    ///
+    /// Exit 0 = every feed answered, 3 = some read `unverified`.
+    Scout {
+        /// Record every feed's (reduced) answer and the local facts into this
+        /// directory as `feeds.jsonl` and `local.json`.
+        #[arg(long, conflicts_with = "fixtures")]
+        record: Option<std::path::PathBuf>,
+        /// Read a recorded directory instead of the network and this Mac.
+        #[arg(long)]
+        fixtures: Option<std::path::PathBuf>,
+    },
+}
+
+/// Run the scout live, recorded, or over a recorded directory.
+fn scout(
+    config: &ZtoolsConfig,
+    record: Option<&std::path::Path>,
+    fixtures: Option<&std::path::Path>,
+) -> Result<()> {
+    use crate::ztools::scout::{self, Fixture, Live, Local};
+    let proposal = if let Some(dir) = fixtures {
+        let local: Local = serde_json::from_str(&std::fs::read_to_string(dir.join("local.json"))?)?;
+        scout::scout(&Fixture::load(&dir.join("feeds.jsonl"))?, &local)
+    } else {
+        let local = Local::from_home(best_models(config));
+        let record = match record {
+            Some(dir) => {
+                std::fs::create_dir_all(dir)?;
+                std::fs::write(
+                    dir.join("local.json"),
+                    serde_json::to_string_pretty(&local)? + "\n",
+                )?;
+                let feeds = dir.join("feeds.jsonl");
+                std::fs::write(&feeds, "")?;
+                Some(feeds)
+            }
+            None => None,
+        };
+        let live = Live {
+            hf: scout::feeds::HF.to_string(),
+            osaurus_url: config.osaurus_url.clone(),
+            record,
+        };
+        scout::scout(&live, &local)
+    };
+    for line in scout::render(&proposal) {
+        println!("{line}");
+    }
+    if proposal.refused.is_empty() {
+        Ok(())
+    } else {
+        Err(Exit {
+            code: 3,
+            reason: format!(
+                "scout: {} of {} feeds unverified",
+                proposal.refused.len(),
+                proposal.asked
+            ),
+        }
+        .into())
+    }
 }
 
 /// Run and score one Hebrew judge calibration.
@@ -165,6 +229,9 @@ pub fn run(config: &ZtoolsConfig, cmd: &ModelsCmd) -> Result<()> {
             out,
             all_pairs,
         } => hebrew_pairing(config, fixture, out, *all_pairs),
+        ModelsCmd::Scout { record, fixtures } => {
+            scout(config, record.as_deref(), fixtures.as_deref())
+        }
     }
 }
 

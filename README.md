@@ -148,6 +148,28 @@ one-section document: `osaurus config plan` must show only that reference, then
 re-appliable). Exit 0 clean, 3 found and repaired, 1 still wrong. `[best_models]`
 errors are reported, not repaired.
 
+### 6. Model scout (`ztools models scout`, propose-only)
+
+```bash
+ztools models scout                       # who could replace each slot's model
+ztools models scout --record DIR          # the same, recording every feed into DIR
+ztools models scout --fixtures DIR        # read a recorded DIR instead of the network
+```
+
+For each `[best_models]` incumbent it takes the Hugging Face `base_model` family
+and every Osaurus catalog successor of a retired incumbent, then filters each
+candidate: the publisher allowlist (`dealignai OsaurusAI mlx-community
+lmstudio-community Jackrong google LiquidAI`; a re-upload of an allowlisted name is a
+mirror and is dropped), a format Osaurus is shown to load (a `model_type` from the
+installed Osaurus version's catalog source or an installed model; JANG, MLX affine,
+mxfp8/mxfp4, OptiQ; GGUF, nvfp4, GPTQ and other foreign formats dropped), memory fit
+(`weights + KV(32k) + 4 GiB <= 0.85 * gpu_budget`, Osaurus's `ram_feasibility` at
+load), and disk (at least 15 GiB free after the download, one staged candidate). It
+reads with plain unauthenticated GETs and never downloads, installs or switches a
+model; the most it says is the ONE candidate it would stage. A feed that refuses
+reads `unverified`, counted against the feeds asked. Exit 0 every feed answered, 3
+some unverified.
+
 ---
 
 ## Testing & Quality Gates

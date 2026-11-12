@@ -11,6 +11,7 @@ pub mod on_device;
 pub mod refcheck;
 pub mod rename;
 pub mod residency;
+pub mod scout;
 pub mod settings;
 pub mod status;
 pub mod store;

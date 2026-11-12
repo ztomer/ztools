@@ -32,3 +32,16 @@ fn a_report_exits_by_its_status() {
     report.unresolved = 1;
     assert_eq!(code(&report), Some(1));
 }
+
+#[test]
+fn the_scout_reads_a_recorded_directory_and_exits_3_when_a_feed_refused() {
+    let _env = crate::test_env::TestEnv::new();
+    let recorded = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures/scout");
+    let config = ZtoolsConfig::default();
+    assert!(scout(&config, None, Some(&recorded)).is_ok());
+    let dir = tempfile::tempdir().expect("tempdir");
+    std::fs::copy(recorded.join("local.json"), dir.path().join("local.json")).expect("copy");
+    std::fs::write(dir.path().join("feeds.jsonl"), "").expect("write");
+    let err = scout(&config, None, Some(dir.path())).unwrap_err();
+    assert_eq!(err.downcast_ref::<Exit>().map(|e| e.code), Some(3));
+}

@@ -1,0 +1,34 @@
+{
+  "slots": {
+    "filename": "qwen3.8-27b-jang_6d-crack",
+    "json": "raptor-v0.5-8b-a1b-jang_6m",
+    "summarize": "raptor-v0.5-8b-a1b-jang_6m",
+    "think": "qwen3.8-27b-jang_6d-crack",
+    "vlm": "qwen3.8-27b-jang_6d-crack"
+  },
+  "installed": [
+    {
+      "repo": "OsaurusAI/Raptor-v0.5-8B-A1B-JANG_6M",
+      "model_type": "bailing_hybrid"
+    },
+    {
+      "repo": "OsaurusAI/gemma-4-12B-it-MXFP8",
+      "model_type": "gemma4_unified"
+    },
+    {
+      "repo": "OsaurusAI/gemma-4-E4B-it-8bit",
+      "model_type": "gemma4"
+    },
+    {
+      "repo": "dealignai/Qwen3.8-27B-JANG_6D-CRACK",
+      "model_type": "qwen3_5"
+    },
+    {
+      "repo": "mlx-community/LFM2.5-350M-OptiQ-4bit",
+      "model_type": "lfm2"
+    }
+  ],
+  "free_bytes": 84921585664,
+  "staged": 0,
+  "osaurus_version": "1.0.1"
+}

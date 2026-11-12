@@ -11,6 +11,23 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Added
+
+- LM.SCOUT: `ztools models scout`, PROPOSE-ONLY (LM.DESIGN sections 1-2). It reads the HF Hub
+  API (each incumbent's card for its `base_model`, the family per allowlisted publisher, a name
+  search where mirrors show up, each candidate's file tree and `config.json`), the Osaurus
+  catalog (its OsaurusAI org fetch and the curated and retired lists in the Osaurus source at
+  the installed tag) and `/health`'s `gpu_budget`, and filters by provenance, format, memory
+  fit and disk. It never downloads, installs or switches a model, and sends no token. On feeds
+  recorded 2026-11-12 (`tests/fixtures/scout`, 85 reduced GETs) it names
+  `dealignai/Qwen3.8-27B-JANG_6D-CRACK` the think incumbent, passes its JANG_2D, JANG_4D and
+  MXFP8 CRACK siblings on fit (16.9 / 22.9 / 32.8 GiB of a 40.8 GiB line) and disk (79.1 GiB
+  free), drops the GGUF, nvfp4, `qwen3_5_mtp` builds and the Openintelligent123 mirror,
+  rejects the bf16 builds on fit (57 GiB), and flags `OsaurusAI/Raptor-v0.5-8B-A1B-JANG_6M`
+  (json, summarize) as retired from the Osaurus 1.0.1 catalog, nominating
+  `OsaurusAI/Raptor-0.6-4B-JANG_6M` as the one it would stage. A refusing feed reads
+  `unverified` with the count answered of the count asked.
+
 ## v3.25.0 — refusal probe reads each item and separates the controls (stock gemma-4-12b 10/80 refused, 27B crack 0/80); real-answer calibration; bench door + 12B/27B bench rows _(2026-11-12)_
 
 ### Added

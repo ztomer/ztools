@@ -87,6 +87,11 @@ const ENTRY_POINTS: &[EntryPoint] = &[
         covered_by: &["a_summary_run_makes_no_request_outside_the_gpu_lock"],
     },
     EntryPoint {
+        file: "ztools/scout/feeds.rs",
+        how: "its one server read, /health for gpu_budget, takes the lock itself (residency::locked)",
+        covered_by: &["the_scouts_health_read_is_made_under_the_gpu_lock"],
+    },
+    EntryPoint {
         file: "ztools/twitter/mod.rs",
         how: "with_model per candidate; the roster and embeddings take the lock",
         covered_by: &["a_summary_run_makes_no_request_outside_the_gpu_lock"],
