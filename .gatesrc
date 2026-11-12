@@ -152,3 +152,8 @@ GOH_RELEASE_BACKFILL_FLOOR=v2.2.0
 
 # The one plan (goh roadmap, GOH.ROADMAPGATE): open entries only; debt in roadmap_seed.json.
 GOH_ROADMAP=docs/ROADMAP.md
+
+# goh ship's release step (GOH.SHIP): ztools tags releases, so `goh ship` refuses without its
+# kit named. tools/release.sh syncs rust/Cargo.toml, runs the house release kit (gate, archive
+# build, install check, changelog stanza as the tag message, push, GitHub release, tap bump).
+GOH_SHIP_RELEASE='tools/release.sh {version}'
