@@ -62,11 +62,40 @@ pub fn simulated_plan(export: &Value, doc: &Value) -> String {
             }
         }
     }
+    for section in ["model_defaults", "default_agent", "configurator"] {
+        let Some(new) = doc[section].as_object() else {
+            continue;
+        };
+        let changed: Vec<String> = new
+            .iter()
+            .filter(|(k, v)| export[section].get(k.as_str()) != Some(*v))
+            .map(|(k, v)| {
+                format!(
+                    "      {k}: {} -> {}",
+                    shown(export[section].get(k.as_str())),
+                    shown(Some(v))
+                )
+            })
+            .collect();
+        if !changed.is_empty() {
+            lines.push(format!("{section}:"));
+            lines.push(format!("  ~ {section}"));
+            lines.extend(changed);
+        }
+    }
+    if lines.is_empty() {
+        return "No changes \u{2014} current state already matches the document.\n".into();
+    }
     lines.iter().flat_map(|l| [l.as_str(), "\n"]).collect()
 }
 
 /// `apply` of `doc` to `export`, merging as [`simulated_plan`] describes.
 pub fn simulated_apply(export: &mut Value, doc: &Value) {
+    for section in ["model_defaults", "default_agent", "configurator"] {
+        if let (Some(o), Some(n)) = (export[section].as_object_mut(), doc[section].as_object()) {
+            o.extend(n.clone());
+        }
+    }
     for section in ["agents", "automations"] {
         for new in doc[section].as_array().into_iter().flatten() {
             for old in export[section].as_array_mut().into_iter().flatten() {

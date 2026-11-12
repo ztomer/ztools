@@ -24,6 +24,17 @@ pub enum ModelsCmd {
         #[arg(long)]
         no_repair: bool,
     },
+    /// Point Osaurus's `model_defaults.core_model` and `default_agent.model` at
+    /// the think slot's model: each key through a minimal one-section document
+    /// whose plan must be that one key, with a rollback document that plans
+    /// clean first (saved under `~/.local/state/ztools/models/`). Never prunes.
+    ///
+    /// Exit 0 = done or nothing to do, 1 = refused or failed.
+    FollowThink {
+        /// Plan only; apply nothing.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Record the summarize model's Hebrew same-story calibration (LM.EMBEDHE):
     /// judge the Hebrew fixture's pairs under the GPU lock, print the verdict,
     /// and write the record.
@@ -215,6 +226,36 @@ fn finish(report: &Report) -> Result<()> {
     }
 }
 
+/// Print a follow-think report, save its rollback documents, and exit by it.
+///
+/// # Errors
+///
+/// When the rollback cannot be saved, or an [`Exit`] for a refusal.
+fn follow_finish(report: &refcheck::FollowReport) -> Result<()> {
+    for line in &report.lines {
+        println!("{line}");
+    }
+    if !report.rollback.is_empty() {
+        let dir = dirs::home_dir()
+            .unwrap_or_default()
+            .join(".local/state/ztools/models");
+        std::fs::create_dir_all(&dir)?;
+        for (i, doc) in report.rollback.iter().enumerate() {
+            let path = dir.join(format!("osaurus_rollback_{i}.json"));
+            std::fs::write(&path, serde_json::to_string_pretty(doc)?)?;
+            println!("  · rollback: osaurus config plan {}", path.display());
+        }
+    }
+    match report.exit_code() {
+        0 => Ok(()),
+        code => Err(Exit {
+            code,
+            reason: "follow-think refused or failed".into(),
+        }
+        .into()),
+    }
+}
+
 /// The roster's task fingerprints as they stand now, the ones
 /// `model-eval --leaderboard` scores against. A roster that cannot be loaded
 /// leaves none, so every think score is reported as the fallback.
@@ -246,6 +287,14 @@ pub fn run(config: &ZtoolsConfig, cmd: &ModelsCmd) -> Result<()> {
                 &current_tasks(config),
             );
             finish(&refcheck::run(&env, !no_repair)?)
+        }
+        ModelsCmd::FollowThink { dry_run } => {
+            let env = LiveEnv::from_home(
+                &config.osaurus_url,
+                best_models(config),
+                &current_tasks(config),
+            );
+            follow_finish(&refcheck::follow_think(&env, !dry_run)?)
         }
         ModelsCmd::HebrewPairing {
             fixture,

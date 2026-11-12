@@ -20,6 +20,7 @@
 //! which first checks `/health`.
 
 mod door;
+mod follow;
 mod live;
 mod plan;
 mod refs;
@@ -28,12 +29,15 @@ mod repair;
 #[cfg(test)]
 mod door_tests;
 #[cfg(test)]
+mod follow_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod tests_automation;
 #[cfg(test)]
 mod tests_live;
 
+pub use follow::{FollowReport, follow_think};
 pub use live::LiveEnv;
 pub use refs::{Installed, Reference, Slot, collect, short_name};
 pub use repair::{choose, family_key, is_cracked, stem};
