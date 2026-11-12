@@ -1,5 +1,5 @@
 //! The weekend planner's release of its model (ZT.EMBEDSEAM): a model left
-//! resident after the phases fails the run, against the Osaurus fake.
+//! resident after the phases is said beside the plan, against the Osaurus fake.
 
 use super::weekend_fetch_tests::{DEAD, ctx, sandboxed_config, window};
 use crate::test_env::TestEnv;
@@ -17,12 +17,13 @@ fn quick_release() -> crate::ztools::residency::Timing {
     }
 }
 
-/// A model left resident after the plan's phases is the run's FAILURE, with
-/// the server's reason: the release error used to be printed and the plan
-/// returned as a success, so a model kept in memory while idle went unnoticed.
+/// A model left resident after the plan's phases keeps the plan, with the
+/// server's reason in its health (ZT.CHAINRELEASE). It used to be the run's
+/// failure, which threw away a finished plan while the model stayed resident
+/// all the same; before that, the error was printed and nobody saw it.
 #[test]
 #[serial]
-fn a_model_left_resident_after_the_phases_fails_the_run_with_its_reason() {
+fn a_model_left_resident_after_the_phases_keeps_the_plan_and_says_why() {
     use crate::ztools::residency::fake::FakeOsaurus;
     let env = TestEnv::new();
     let fake = FakeOsaurus::keeping_loaded(r#"{"choices":[{"message":{"content":""}}]}"#);
@@ -37,8 +38,8 @@ fn a_model_left_resident_after_the_phases_fails_the_run_with_its_reason() {
         quick_release(),
     );
 
-    let err = outcome.expect_err("a model left resident must fail the run");
-    let reason = format!("{err:#}");
+    let (_, _, health) = outcome.expect("a finished plan is kept when its model outstays it");
+    let reason = health.release_fault.expect("the release fault is said");
     assert!(reason.contains("still resident"), "{reason}");
     assert!(reason.contains("Keep Model Loaded"), "{reason}");
     drop(env);

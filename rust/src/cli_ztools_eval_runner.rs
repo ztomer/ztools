@@ -197,8 +197,7 @@ fn measure_held_at(
             held.load_seconds(),
         ))
     })?;
-    if let Err(e) = ran.released {
-        eprintln!("⚠ {model_name}: its scores are kept, but {e:#}");
-    }
+    ran.released
+        .report(&format!("{model_name}: its scores are kept"));
     ran.out
 }

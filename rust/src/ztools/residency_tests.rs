@@ -24,13 +24,14 @@ fn fast() -> Timing {
 fn with_model_loads_first_and_ends_with_nothing_resident() {
     let _env = TestEnv::new();
     let fake = FakeOsaurus::start(BODY);
-    let out = with_model(&fake.url, "m1", fast(), |held| {
+    let ran = with_model_kept(&fake.url, "m1", fast(), |held| {
         assert_eq!(held.model(), "m1");
         assert!(held.load_seconds() >= 0.0);
         Ok(7)
     })
     .unwrap();
-    assert_eq!(out, 7);
+    assert_eq!(ran.out.unwrap(), 7);
+    assert!(ran.released.fault().is_none(), "{:?}", ran.released);
     assert_eq!(fake.loads(), vec!["m1".to_string()]);
     assert_eq!(fake.calls().first(), Some(&Call::Load("m1".to_string())));
     assert_eq!(fake.last_health(), Some(vec![]), "{:?}", fake.calls());
@@ -40,9 +41,11 @@ fn with_model_loads_first_and_ends_with_nothing_resident() {
 fn a_failing_body_is_still_released() {
     let _env = TestEnv::new();
     let fake = FakeOsaurus::start(BODY);
-    let err = with_model(&fake.url, "m1", fast(), |_| -> Result<()> {
+    let err = with_model_kept(&fake.url, "m1", fast(), |_| -> Result<()> {
         bail!("body broke")
     })
+    .unwrap()
+    .out
     .unwrap_err();
     assert!(err.to_string().contains("body broke"), "{err:#}");
     assert_eq!(fake.last_health(), Some(vec![]), "{:?}", fake.calls());
@@ -54,7 +57,7 @@ fn a_panicking_body_is_still_released() {
     let fake = FakeOsaurus::start(BODY);
     let url = fake.url.clone();
     let joined = std::thread::spawn(move || {
-        let _ = with_model(&url, "m1", fast(), |_| -> Result<()> { panic!("boom") });
+        let _ = with_model_kept(&url, "m1", fast(), |_| -> Result<()> { panic!("boom") });
     })
     .join();
     assert!(joined.is_err(), "the body panicked");
@@ -62,11 +65,12 @@ fn a_panicking_body_is_still_released() {
 }
 
 #[test]
-fn a_server_that_keeps_the_model_loaded_is_an_error_not_a_pass() {
+fn a_server_that_keeps_the_model_loaded_is_a_fault_beside_the_kept_result() {
     let _env = TestEnv::new();
     let fake = FakeOsaurus::keeping_loaded(BODY);
-    let err = with_model(&fake.url, "m1", fast(), |_| Ok(())).unwrap_err();
-    let text = format!("{err:#}");
+    let ran = with_model_kept(&fake.url, "m1", fast(), |_| Ok(7)).unwrap();
+    assert_eq!(ran.out.unwrap(), 7, "the finished result is kept");
+    let text = ran.released.fault_text().expect("the model outstayed it");
     assert!(text.contains("no idle unload"), "{text}");
     assert_eq!(fake.last_health(), Some(vec!["m1".to_string()]));
 }
@@ -75,11 +79,12 @@ fn a_server_that_keeps_the_model_loaded_is_an_error_not_a_pass() {
 fn a_dead_server_fails_the_load_without_running_the_body() {
     let _env = TestEnv::new();
     let mut ran = false;
-    let err = with_model("http://127.0.0.1:9", "m1", fast(), |_| {
+    let err = with_model_kept("http://127.0.0.1:9", "m1", fast(), |_| {
         ran = true;
         Ok(())
     })
-    .unwrap_err();
+    .err()
+    .expect("a dead server fails the load");
     assert!(!ran);
     assert!(format!("{err:#}").contains("loading m1"), "{err:#}");
 }

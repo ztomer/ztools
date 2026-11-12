@@ -191,12 +191,50 @@ impl Held {
 
     /// Release the model and wait until `/health` shows it gone.
     ///
-    /// # Errors
-    ///
-    /// As [`wait_released`].
-    pub fn release(mut self) -> Result<()> {
+    /// The outcome is a [`Released`], never a `Result`: a model that outstays
+    /// its work cannot be `?`-ed into the caller's error, so no caller can
+    /// lose a finished result to it (ZT.CHAINRELEASE).
+    pub fn release(mut self) -> Released {
         self.released = true;
-        wait_released(&self.base_url, &self.model, &self.timing)
+        Released(wait_released(&self.base_url, &self.model, &self.timing).err())
+    }
+}
+
+/// How a release went: clean, or the fault of a model still resident (as
+/// [`wait_released`] says it).
+///
+/// Deliberately NOT a `Result`. ZT.EVALRESIDENT and ZT.CHAINRELEASE were one
+/// class: a release error `?`-ed (or matched) into the run's error threw away
+/// the finished scores, then the finished summary. A fault here is reported
+/// BESIDE the result the caller already has; the type has no `?` path.
+#[must_use = "a release fault is reported beside the result, never dropped"]
+#[derive(Debug)]
+pub struct Released(Option<anyhow::Error>);
+
+impl Released {
+    /// A release that went cleanly (nothing was held, or it left).
+    pub const fn clean() -> Self {
+        Self(None)
+    }
+
+    /// The model still resident, if it is.
+    #[must_use]
+    pub const fn fault(&self) -> Option<&anyhow::Error> {
+        self.0.as_ref()
+    }
+
+    /// The fault as one line for a document or a record.
+    #[must_use]
+    pub fn fault_text(&self) -> Option<String> {
+        self.0.as_ref().map(|e| format!("{e:#}"))
+    }
+
+    /// Print the fault, if any, as `⚠ {kept}, but {fault}`; `kept` says what
+    /// the caller kept ("its scores are kept").
+    pub fn report(&self, kept: &str) {
+        if let Some(e) = &self.0 {
+            eprintln!("⚠ {kept}, but {e:#}");
+        }
     }
 }
 
@@ -267,48 +305,21 @@ pub fn locked<T>(label: &str, timing: Timing, body: impl FnOnce() -> T) -> Resul
     Ok(body())
 }
 
-/// Load `model`, run `body` with it, release it: the one seam.
-///
-/// The body's error wins over a release error, which is still printed; a
-/// release error after a successful body is the run's error, because the
-/// model left in memory is exactly what this seam exists to prevent.
-///
-/// # Errors
-///
-/// From [`load`], from `body`, and from the release.
-pub fn with_model<T>(
-    base_url: &str,
-    model: &str,
-    timing: Timing,
-    body: impl FnOnce(&Held) -> Result<T>,
-) -> Result<T> {
-    let Ran { out, released } = with_model_kept(base_url, model, timing, body)?;
-    match (out, released) {
-        (Ok(v), Ok(())) => Ok(v),
-        (Ok(_), Err(e)) => Err(e),
-        (Err(e), released) => {
-            if let Err(r) = released {
-                eprintln!("✗ {r:#}");
-            }
-            Err(e)
-        }
-    }
-}
-
 /// What [`with_model_kept`]'s body produced, and the release after it, apart.
 pub struct Ran<T> {
     /// The body's result.
     pub out: Result<T>,
-    /// The release: an error is a model still resident after the body.
-    pub released: Result<()>,
+    /// The release: a fault is a model still resident after the body.
+    pub released: Released,
 }
 
-/// [`with_model`] for a caller whose body's result is worth keeping when the
-/// release fails.
+/// Load `model`, run `body` with it, release it: the one seam.
 ///
-/// ZT.EVALRESIDENT: a finished measurement is still a
-/// measurement when the model outstays it, so the caller gets both and says
-/// the release error rather than losing the result to it.
+/// The body's result and the release come back apart. ZT.EVALRESIDENT and
+/// ZT.CHAINRELEASE: a finished measurement or summary is still finished when
+/// the model outstays it, so the caller keeps it and reports the release
+/// fault beside it. The seam that made a release error the run's error
+/// (`with_model`) is gone, so no caller can be written that drops the result.
 ///
 /// # Errors
 ///

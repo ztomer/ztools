@@ -227,9 +227,8 @@ pub fn eval_model(
     }
     // A model that outstays its finished roster keeps the roster's rows
     // (ZT.EVALRESIDENT): the release error is said, not made the result.
-    if let Err(e) = held.release() {
-        eprintln!("⚠ {model_name}: its scores are kept, but {e:#}");
-    }
+    held.release()
+        .report(&format!("{model_name}: its scores are kept"));
 
     Ok(results)
 }

@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use chrono::{Datelike, NaiveDate};
 
 use super::WeekendEvent;
@@ -314,10 +314,11 @@ pub fn fetch_duckduckgo_events_at(
             );
         }
     }
-    let health = PlanHealth {
+    let mut health = PlanHealth {
         search,
         model,
         provenance: super::Provenance::default(),
+        release_fault: None,
     };
     if !health.model.is_ready() {
         return Ok((Vec::new(), corpus, health));
@@ -338,11 +339,15 @@ pub fn fetch_duckduckgo_events_at(
     );
     crate::ztools::store_corpus::record_phases(run, &log, (d1, d2), &config.weekend_model);
     // Released once the phases are done; an early return drops it instead. A
-    // model left resident FAILS the run, with the seam's reason: an idle Mac
-    // must not hold it, and a plan reported as a success would hide that.
+    // model left resident is said in the plan beside its events, with the
+    // seam's reason (ZT.CHAINRELEASE): failing the run threw away a finished
+    // plan, and the model stayed resident either way.
     if let Some(held) = held {
-        held.release()
-            .context("the weekend model was not released after the plan's phases")?;
+        let released = held.release();
+        released.report("the weekend plan is kept");
+        health.release_fault = released
+            .fault_text()
+            .map(|f| format!("the weekend model was not released after the plan's phases: {f}"));
     }
 
     Ok((events, corpus, health))

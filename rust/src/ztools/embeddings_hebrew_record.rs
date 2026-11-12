@@ -255,9 +255,7 @@ pub fn run(base_url: &str, model: &str, rows: &[Row], all_pairs: bool) -> Result
             pairs: judged,
         })
     })?;
-    if let Err(e) = ran.released {
-        eprintln!("⚠ the record is kept, but {e:#}");
-    }
+    ran.released.report("the record is kept");
     ran.out
 }
 

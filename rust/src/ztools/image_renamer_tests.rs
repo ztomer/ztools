@@ -411,7 +411,7 @@ fn test_name_image_uses_vlm_branch_for_unmeaningful_stem() {
 
     let mut session = crate::ztools::residency::Session::new(&fake.url, fast_timing());
     let named = name_image(&img_path, "IMG_9999", 30, &config, &mut session);
-    session.finish().unwrap();
+    assert!(session.finish().fault().is_none(), "released");
 
     assert_eq!(named, "white_goose_grass");
     assert_eq!(fake.loads(), vec!["vlm-test-model".to_string()]);
@@ -480,7 +480,7 @@ fn a_rename_makes_no_request_outside_the_gpu_lock() {
 
     let mut session = crate::ztools::residency::Session::new(&fake.url, fast_timing());
     name_image(&img_path, "IMG_9999", 30, &config, &mut session);
-    session.finish().unwrap();
+    assert!(session.finish().fault().is_none(), "released");
 
     assert!(fake.calls().len() > 2, "{:?}", fake.calls());
     assert_eq!(

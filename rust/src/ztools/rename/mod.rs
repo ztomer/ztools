@@ -180,7 +180,9 @@ pub fn scan_and_rename(
             changed,
         });
     }
-    session.finish()?;
+    // The renames are done (and applied): a model that outstays them is
+    // reported beside them, never made the run's error (ZT.CHAINRELEASE).
+    session.finish().report("the renames are kept");
 
     Ok(candidates)
 }

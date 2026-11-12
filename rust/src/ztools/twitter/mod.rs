@@ -15,6 +15,8 @@ mod prompt;
 pub use prompt::{build_prompt, build_prompt_shown};
 pub mod quality;
 mod rejected;
+mod route;
+use route::Route;
 pub mod repair;
 pub use repair::{Answer, MIN_BULLETS, handle_model_output};
 pub mod session;
@@ -174,45 +176,6 @@ pub fn call_osaurus(
     )
 }
 
-/// Where one candidate is asked: the on-device model by `fm` when the policy
-/// routes it there, every other model by the server.
-struct Route<'a> {
-    policy: &'a chain::FallbackPolicy,
-    base_url: &'a str,
-    timeout_secs: u64,
-    config: &'a crate::config::ZtoolsConfig,
-}
-
-impl Route<'_> {
-    /// The candidate's raw answer and whether it was cut at the length limit.
-    fn ask(&self, candidate: &str, prompt: &str, processed: usize) -> Result<(String, bool)> {
-        if let Some(fm) = self.policy.on_device_for(candidate) {
-            eprintln!("· Summarizing {processed} tweets with {candidate} on this Mac...");
-            let raw = crate::ztools::on_device::respond(fm, prompt, self.timeout_secs)?;
-            return Ok((raw, false));
-        }
-        eprintln!(
-            "· Summarizing {processed} tweets with {candidate} on {}...",
-            self.base_url
-        );
-        // Loaded explicitly, released on every exit path (ZT.OSAURUSLOAD).
-        crate::ztools::residency::with_model(
-            self.base_url,
-            candidate,
-            crate::ztools::residency::Timing::default(),
-            |_| {
-                repair::ask(
-                    self.base_url,
-                    candidate,
-                    prompt,
-                    self.timeout_secs,
-                    self.config,
-                )
-            },
-        )
-    }
-}
-
 /// The run's error when every model in `plan` failed.
 ///
 /// When every model is served by the ONE server at `base_url`, "every model
@@ -280,6 +243,30 @@ pub fn run_summary(
     model: Option<&str>,
     config: &crate::config::ZtoolsConfig,
 ) -> Result<PathBuf> {
+    run_summary_at(
+        tweets,
+        output_dir,
+        base_url,
+        model,
+        config,
+        crate::ztools::residency::Timing::default(),
+    )
+}
+
+/// [`run_summary`] with the residency seam's timings given, so a test can
+/// shorten the release wait.
+///
+/// # Errors
+///
+/// As [`run_summary`].
+pub fn run_summary_at(
+    tweets: &[Tweet],
+    output_dir: &Path,
+    base_url: Option<&str>,
+    model: Option<&str>,
+    config: &crate::config::ZtoolsConfig,
+    timing: crate::ztools::residency::Timing,
+) -> Result<PathBuf> {
     let default_url = config.osaurus_url.clone();
     let default_model = config.twitter_model.clone();
     let base_url = base_url.unwrap_or(&default_url);
@@ -306,7 +293,7 @@ pub fn run_summary(
     // into singletons (ZT.EMBEDMODEL: it was off on every run for a refused name).
     let clustering = crate::ztools::embeddings::cluster_tweets(&deduped, base_url, config);
     eprintln!("{}", clustering.status_line());
-    let clustering_note = clustering
+    let mut notes = clustering
         .document_note()
         .map(|n| format!("{n}\n\n"))
         .unwrap_or_default();
@@ -329,7 +316,7 @@ pub fn run_summary(
     let available =
         crate::ztools::model_eval::get_available_models(base_url, config).unwrap_or_default();
     let plan = chain::plan_chain(model, &available, &policy);
-    let (answer, mut provenance) = chain::run_chain(&plan, model, |candidate| {
+    let ((answer, release_fault), mut provenance) = chain::run_chain(&plan, model, |candidate| {
         let (prompt, shown, sources) = prompt_for(candidate, &final_tweets, config);
         let processed = sources.len();
         let route = Route {
@@ -340,21 +327,27 @@ pub fn run_summary(
                 &budget::TimeoutInputs::pessimistic(),
             ),
             config,
+            timing,
         };
-        let (raw, cut) = route
-            .ask(candidate, &prompt, processed)
-            .map_err(|e| Refusal {
-                // The root cause, not just "failed": the verdict is what the
-                // status line keeps (`run_chain`'s "in short").
-                verdict: format!("the call failed: {}", e.root_cause()),
-                detail: format!("the call failed: {e:#}"),
-            })?;
+        let (raw, cut, released) =
+            route
+                .ask(candidate, &prompt, processed)
+                .map_err(|e| Refusal {
+                    // The root cause, not just "failed": the verdict is what the
+                    // status line keeps (`run_chain`'s "in short").
+                    verdict: format!("the call failed: {}", e.root_cause()),
+                    detail: format!("the call failed: {e:#}"),
+                })?;
         // A reasoning model's `<thinking>` block must not land verbatim in
         // the saved markdown, and an answer the quality gate rejects must not
         // be saved at all: the rejection is this model's recorded reason, and
         // the chain moves on to the next model.
+        released.report(&format!("{candidate}'s answer is kept"));
+        let release_fault = released
+            .fault_text()
+            .map(|f| format!("{candidate} was still resident after its answer: {f}"));
         handle_model_output(&raw, &sources, cut)
-            .map(Some)
+            .map(|answer| Some((answer, release_fault.clone())))
             .map_err(|refusal| {
                 let stamp = Local::now().format("%Y-%m-%d_%H%M%S").to_string();
                 // The refused answer is kept with the FULL reason in its
@@ -364,14 +357,22 @@ pub fn run_summary(
                     rejected::keep(output_dir, &stamp, candidate, &raw, &refusal.detail, &shown)
                         .map(|p| format!(" (answer kept at {})", p.display()))
                         .unwrap_or_default();
+                let resident = release_fault
+                    .as_ref()
+                    .map(|f| format!("; {f}"))
+                    .unwrap_or_default();
                 Refusal {
                     verdict: refusal.verdict,
-                    detail: format!("the answer was refused: {}{kept}", refusal.detail),
+                    detail: format!("the answer was refused: {}{kept}{resident}", refusal.detail),
                 }
             })
     })
     .map_err(|e| chain_failure(e, &plan, &policy, base_url))?;
     provenance.backend = policy.backend_of(&provenance.model);
+    // The summary is kept; the model it outstayed is said beside it.
+    if let Some(fault) = &release_fault {
+        notes = format!("{notes}> ⚠ {fault}\n\n");
+    }
     if provenance.degraded() {
         // The same line the document opens with, then every failure in full:
         // the line is what a reader sees, the reasons are the run record.
@@ -381,12 +382,22 @@ pub fn run_summary(
         }
     }
 
+    write_summary(output_dir, tweets_vec.len(), &answer, &provenance, &notes)
+}
+
+/// Write the summary document into `output_dir` and prune the store.
+fn write_summary(
+    output_dir: &Path,
+    total: usize,
+    answer: &repair::Answer,
+    provenance: &chain::Provenance,
+    notes: &str,
+) -> Result<PathBuf> {
     let now = Local::now();
     let filename = format!("{}_summary.md", now.format("%Y-%m-%d_%H%M"));
     fs::create_dir_all(output_dir)?;
     let out_path = output_dir.join(filename);
 
-    let total = tweets_vec.len();
     // The blank line before `{banner}` is load-bearing, not spacing: without it
     // `**Model:**` is a lazy continuation of the `**Tweets:**` paragraph and
     // every CommonMark renderer folds the two into one run-on line. `>` may
@@ -404,7 +415,7 @@ pub fn run_summary(
         total,
         answer.processed,
         provenance.banner(&answer.repairs),
-        clustering_note,
+        notes,
         summary_section_for(&answer.body)
     );
 

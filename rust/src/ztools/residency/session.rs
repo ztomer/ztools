@@ -7,7 +7,7 @@
 
 use anyhow::Result;
 
-use super::{Held, Timing, load, same_model};
+use super::{Held, Released, Timing, load, same_model};
 
 /// The models a run holds, one at a time.
 pub struct Session {
@@ -41,20 +41,21 @@ impl Session {
         {
             return Ok(());
         }
-        if let Some(previous) = self.held.take() {
-            previous.release()?;
+        // Nothing finished is lost here: the previous model's work is already
+        // the caller's. A model that will not leave stops the next load.
+        if let Some(previous) = self.held.take()
+            && let Some(e) = previous.release().fault()
+        {
+            anyhow::bail!("{e:#}");
         }
         self.held = Some(load(&self.base_url, model, self.timing)?);
         Ok(())
     }
 
     /// Release whatever is held. Dropping the session does the same, and
-    /// can only print a failure.
-    ///
-    /// # Errors
-    ///
-    /// From the release.
-    pub fn finish(mut self) -> Result<()> {
-        self.held.take().map_or(Ok(()), Held::release)
+    /// can only print a failure. A fault is reported beside the run's
+    /// results, never in place of them (ZT.CHAINRELEASE).
+    pub fn finish(mut self) -> Released {
+        self.held.take().map_or_else(Released::clean, Held::release)
     }
 }

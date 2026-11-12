@@ -11,6 +11,18 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Fixed
+
+- ZT.CHAINRELEASE: a model still resident after it FINISHED its work no longer
+  costs the work. `Held::release`, `Session::finish` and `Ran::released` now
+  return a `Released` (a fault beside the result, with no `?` path) instead of
+  a `Result`, and the discarding seam `with_model` is gone, so the class cannot
+  be written again. The twitter chain keeps a finished summary and says the
+  fault in the document (`> ⚠ ... was still resident after its answer`); the
+  weekend plan keeps its events and carries the fault as a `> [!WARNING]` (it
+  used to fail the run); the renamer keeps its applied renames (it used to
+  return an error after renaming); the evals and the Hebrew pairing print it.
+
 ## v3.23.0 — Hebrew tweets paired by the summarize model under the GPU lock (raptor calibrated 861/861 pipeline on the 42-tweet fixture); a model resident after a finished eval keeps its scores (ZT.EVALRESIDENT); tools/ ruff-clean under the house set _(2026-11-11)_
 
 ### Added

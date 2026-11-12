@@ -176,6 +176,9 @@ pub struct PlanHealth {
     pub search: SearchHealth,
     pub model: ModelHealth,
     pub provenance: Provenance,
+    /// The model still resident after the phases, when it was: said in the
+    /// plan beside its events, never in place of them (ZT.CHAINRELEASE).
+    pub release_fault: Option<String>,
 }
 
 impl PlanHealth {
@@ -190,6 +193,7 @@ impl PlanHealth {
                 secs: 0,
             },
             provenance: Provenance::default(),
+            release_fault: None,
         }
     }
 
@@ -313,6 +317,7 @@ mod tests {
                 reason: "no answer within 900s".into(),
             },
             provenance: Provenance::default(),
+            release_fault: None,
         };
         let reason = health.degraded_reason();
         assert!(
@@ -338,6 +343,7 @@ mod tests {
                 installed: vec!["qwen3.8-27b".into(), "embed-small".into()],
             },
             provenance: Provenance::default(),
+            release_fault: None,
         };
         assert!(!health.model.is_ready());
         let reason = health.degraded_reason();

@@ -281,6 +281,9 @@ pub fn format_weekend_plan(
     // in `docs/MODEL_QUIRKS.md` ("The weekend provenance ledger, read 2026-10-08"),
     // and its finding is why this line stays: `unsourced` reads 0 whenever
     // `extracted` does, so the line is only a reading once something was extracted.
+    if let Some(fault) = &health.release_fault {
+        let _ = write!(out, "> [!WARNING]\n> {fault}\n\n");
+    }
     out.push_str(&health.provenance.line());
     out.push('\n');
 

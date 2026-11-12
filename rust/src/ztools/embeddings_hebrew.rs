@@ -415,8 +415,8 @@ pub fn pair_hebrew(
             },
         );
     }
-    // `with_model_kept`, not `with_model`: that seam drops the body's value
-    // when the release fails, and the value is every tweet of the run.
+    // The release comes back beside the value, which is every tweet of the
+    // run: a model that outstays the pairing must not cost the clusters.
     let mut kept = Some(clusters);
     let run = crate::ztools::residency::with_model_kept(base_url, model, timing, |_| {
         let mut judge = LlmJudge { base_url, model };
@@ -428,9 +428,7 @@ pub fn pair_hebrew(
             out: Ok((joined, _, pairing)),
             released,
         }) => {
-            if let Err(e) = released {
-                eprintln!("✗ {e:#}");
-            }
+            released.report("the Hebrew pairing is kept");
             let model = model.to_string();
             (
                 joined,

@@ -181,6 +181,7 @@ fn populated_case() -> String {
                 unsuitable: 2,
                 duplicate: 1,
             },
+            release_fault: None,
         },
     )
 }
@@ -226,6 +227,7 @@ fn degraded_case() -> String {
                 unsuitable: 0,
                 duplicate: 0,
             },
+            release_fault: None,
         },
     )
 }

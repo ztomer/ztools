@@ -292,3 +292,46 @@ fn a_summary_run_makes_no_request_outside_the_gpu_lock() {
     );
     drop(env);
 }
+
+/// ZT.CHAINRELEASE: a model still resident after it FINISHED a summary keeps
+/// that summary. `Route::ask` went through `with_model`, which made the
+/// release error the call's error, so the chain filed a written summary as a
+/// failed call, moved on, and the run wrote nothing (Osaurus kept raptor 30 s
+/// past a run while `/health` said 0 s to its idle unload). The release fault
+/// is said beside the summary, in the document.
+#[test]
+#[serial]
+fn a_model_still_resident_after_its_summary_keeps_the_summary_and_says_why() {
+    use crate::ztools::residency::fake::FakeOsaurus;
+    let env = TestEnv::new();
+    let fake = FakeOsaurus::keeping_loaded(CHAT_BODY);
+    let output = tempfile::tempdir().unwrap();
+    let cfg = sandboxed_config(&env.root().join("cfg"));
+    let timing = crate::ztools::residency::Timing {
+        release_grace: std::time::Duration::from_millis(200),
+        settle: std::time::Duration::from_secs(5),
+        ..crate::ztools::residency::Timing::default()
+    };
+
+    let path = run_summary_at(
+        &[tweet("routine_user", "Kept summary", "14:00", 3, 1)],
+        output.path(),
+        Some(&fake.url),
+        Some("mock-model"),
+        &cfg,
+        timing,
+    )
+    .expect("a finished summary is kept when its model outstays it");
+
+    let content = std::fs::read_to_string(&path).unwrap();
+    assert!(content.contains("## Section"), "{content}");
+    assert!(
+        content.contains("**Model:** mock-model") || content.contains("mock-model"),
+        "{content}"
+    );
+    assert!(
+        content.contains("still resident") && content.contains("Keep Model Loaded"),
+        "the release fault is reported beside the summary: {content}"
+    );
+    drop(env);
+}
