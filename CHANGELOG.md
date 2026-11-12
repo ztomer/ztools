@@ -11,6 +11,8 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.29.4 — cargo run reads the real HOME: the test HOME sandbox moves from cargo [env] to a test-only runner _(2026-11-12)_
+
 ### Fixed
 - **`cargo run` read a fake machine (ZT.CARGORUNHOME).** The test sandbox `HOME=rust/target/test-home`
   was a `[env]` entry in `.cargo/config.toml`, and cargo applies `[env]` to `cargo run` too, so
