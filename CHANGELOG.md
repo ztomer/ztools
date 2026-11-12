@@ -11,6 +11,16 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Fixed
+- ZT.EVALSIGNALS: a run never dirties the tree. `model-eval` (and the scheduled models run) loaded
+  and saved back the TRACKED `conf/eval_signals.json`, so every run left the checkout modified and
+  blocked the next ship. The live store is now `~/.local/state/ztools/eval/eval_signals.json`
+  (`EVAL_SIGNALS_DIR` still overrides, and then names the whole store); the tracked file is a
+  read-only seed a machine with no state starts from. `eval-signals --prune` reads the same
+  source and writes the live store. The class gate `tests/eval_tree_untouched.rs` runs the spot
+  eval, the full suite and the prune from a sandbox `HOME` and asserts the checkout's
+  `git status` and the seed's bytes are unchanged (red on the old code).
+
 ## v3.28.0 — the automatic local-model switch, shipped propose-only: selection file, 3-run canary with rollback, ledger, rollback command, kill switch, rate limits _(2026-11-12)_
 
 ### Added

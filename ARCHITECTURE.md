@@ -50,7 +50,7 @@ ztools/
 │   ├── prompts.toml         # Canonical LLM prompts across tools
 │   ├── weekend.toml         # Excluded venues and default activity seeds
 │   ├── eval_inputs.toml, eval_vision.toml, rename.toml, twitter.toml
-│   ├── eval_signals.json    # Per-model learned rates (JSON: outside the 500-line cap)
+│   ├── eval_signals.json    # Shipped read-only SEED of the per-model learned rates; the live store is ~/.local/state/ztools/eval/ (JSON: outside the 500-line cap)
 │   └── models/<family>.toml # Per-model caps, resolved from eval_signals
 ├── docs/                    # Developer documentation and quality specs
 │   ├── TESTING.md           # Test patterns, mock infrastructure, coverage rules

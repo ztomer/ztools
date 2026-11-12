@@ -247,7 +247,7 @@ enum Cmd {
         /// Prune task records whose fingerprints do not match current task definitions.
         #[arg(long)]
         prune: bool,
-        /// Explicit path to eval signals JSON file (default: `conf/eval_signals.json`).
+        /// Explicit path to eval signals JSON file (default: the live store under `~/.local/state/ztools/eval/`, seeded from `conf/eval_signals.json`).
         #[arg(long)]
         path: Option<PathBuf>,
         /// Directory containing task definitions (defaults to `conf/` and `eval_tasks/data`).

@@ -90,9 +90,16 @@ pub fn cli_eval_signals(
     prune: bool,
     dry_run: bool,
 ) -> Result<()> {
+    // Read from the explicit path, else the live store, else the shipped seed;
+    // a prune writes back to the explicit path or the live store, never the seed.
     let store_path =
         explicit_path.map_or_else(crate::ztools::eval::signals_path, Path::to_path_buf);
-    if !store_path.exists() {
+    let read_path = if explicit_path.is_some() {
+        store_path.clone()
+    } else {
+        crate::ztools::eval::store_source().unwrap_or_else(|| store_path.clone())
+    };
+    if !read_path.exists() {
         anyhow::bail!("eval signals store not found at {}", store_path.display());
     }
 
@@ -103,10 +110,10 @@ pub fn cli_eval_signals(
     crate::ztools::eval::remember_current_tasks(&tasks);
     let current = crate::ztools::eval::current_task_identities();
 
-    let text = std::fs::read_to_string(&store_path)
-        .map_err(|e| anyhow::anyhow!("cannot read {}: {e}", store_path.display()))?;
+    let text = std::fs::read_to_string(&read_path)
+        .map_err(|e| anyhow::anyhow!("cannot read {}: {e}", read_path.display()))?;
     let mut store: SignalStore = serde_json::from_str(&text)
-        .map_err(|e| anyhow::anyhow!("cannot parse {}: {e}", store_path.display()))?;
+        .map_err(|e| anyhow::anyhow!("cannot parse {}: {e}", read_path.display()))?;
 
     let report = prune_signals(&mut store, &current);
 
@@ -133,7 +140,7 @@ pub fn cli_eval_signals(
             store_path.display()
         );
     } else {
-        println!("Eval signals store: {}", store_path.display());
+        println!("Eval signals store: {}", read_path.display());
         println!("Models: {}", report.total_models);
         println!("Active task records: {}", report.kept_task_records);
         println!(

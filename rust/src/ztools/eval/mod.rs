@@ -99,7 +99,8 @@ pub use samples::{SAMPLE_WINDOW, Sample, add_sample, clean_estimate, estimate_fr
 pub use signals::{
     MAX_EVAL_TIMEOUT, SignalStore, default_eval_timeout, derived_timeout, effective_timeout,
     load_signals, machine_is_uncontended, memory_pressure, record_capability_sample, record_signal,
-    record_task_signal, save_signals, series_fingerprint, signals_path, superseded_samples,
+    record_task_signal, save_signals, seed_path, series_fingerprint, signals_path, store_source,
+    superseded_samples,
 };
 pub use signals_prune::{PruneReport, cli_eval_signals, prune_signals};
 pub use task_fingerprint::{

@@ -29,9 +29,6 @@
 //! clean -- inventing a healthy reading is exactly how a contended machine's
 //! numbers got enshrined in the Python original's history.
 
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-
 use serde_json::Value;
 
 use crate::units::{count, whole_u64};
@@ -48,6 +45,10 @@ pub use platform::{
 
 #[path = "signals_platform.rs"]
 mod platform;
+
+#[path = "signals_store.rs"]
+mod store;
+pub use store::{SignalStore, load_signals, save_signals, seed_path, signals_path, store_source};
 
 /// A POLICY ceiling, not an estimate: past this a request is assumed wedged.
 /// Deliberately not derived -- its job is to bound the damage when the
@@ -71,52 +72,6 @@ pub fn default_eval_timeout() -> u64 {
 #[must_use]
 pub fn max_eval_timeout() -> u64 {
     env_u64("EVAL_MAX_TIMEOUT", 7200)
-}
-
-/// Where `eval_signals.json` lives. Env-overridable so tests can point it at tmp.
-///
-/// Anchored on the CHECKOUT that built the binary (`CARGO_MANIFEST_DIR/../conf`)
-/// rather than the process working directory: a sweep launched from anywhere
-/// else used to read -- and worse, CREATE -- a relative `conf/eval_signals.json`
-/// in whatever directory it started from, silently losing every recorded
-/// capability and forking the store. The home fallback covers an installed
-/// binary with no checkout nearby.
-#[must_use]
-pub fn signals_path() -> PathBuf {
-    let dir = std::env::var("EVAL_SIGNALS_DIR").unwrap_or_else(|_| {
-        let candidates = [
-            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .map(|p| p.join("conf")),
-            dirs::home_dir().map(|h| h.join("Projects/ztools/conf")),
-        ];
-        candidates
-            .into_iter()
-            .flatten()
-            .find(|p| p.is_dir())
-            .map_or_else(|| "conf".to_string(), |p| p.to_string_lossy().to_string())
-    });
-    PathBuf::from(dir).join("eval_signals.json")
-}
-
-pub type SignalStore = BTreeMap<String, Value>;
-
-#[must_use]
-pub fn load_signals() -> SignalStore {
-    let path = signals_path();
-    std::fs::read_to_string(&path).map_or_else(
-        |_| SignalStore::new(),
-        |text| serde_json::from_str(&text).unwrap_or_default(),
-    )
-}
-
-pub fn save_signals(signals: &SignalStore) {
-    if let Some(parent) = signals_path().parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    if let Ok(text) = serde_json::to_string_pretty(signals) {
-        let _ = std::fs::write(signals_path(), text);
-    }
 }
 
 /// Add one observation of `key` under the model's capabilities, re-derive the

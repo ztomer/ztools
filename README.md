@@ -244,7 +244,7 @@ secrets scan.
 - **CI**: the full gate on every push to `main` and every pull request, on
   Apple-silicon macOS.
 
-Eval results live in `~/.config/ztools/` (`eval_results.csv`, `eval_history.json`, `eval_signals.json`, and the raw-answer archive under `outputs/`). To track:
+Eval results live in `~/.config/ztools/` (`eval_results.csv`, `eval_history.json` and the raw-answer archive under `outputs/`); the learned per-model rates live in `~/.local/state/ztools/eval/eval_signals.json`, seeded on first run from the tracked, read-only `conf/eval_signals.json` (a run never writes the checkout). To track:
 
 ```bash
 git add -f ~/.config/ztools/eval_results.json ~/.config/ztools/eval_history.json

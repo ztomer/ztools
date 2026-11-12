@@ -41,16 +41,71 @@ fn signals_path_honors_the_env_dir_and_the_documented_default() {
         env.path("EVAL_SIGNALS_DIR").join("eval_signals.json")
     );
     env.unset("EVAL_SIGNALS_DIR");
-    // Without the env override the path is anchored on the CHECKOUT that built
-    // the binary (manifest/../conf), never the process working directory -- a
-    // relative conf/ once forked the store into whatever directory a sweep
-    // happened to start from.
-    let anchored = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("manifest has a parent")
-        .join("conf")
-        .join("eval_signals.json");
-    assert_eq!(signals_path(), anchored);
+    // Without the env override the LIVE store is state under `$HOME`, never a
+    // file in the checkout: a run's learned rates in a tracked config dirtied
+    // the tree on every scheduled models run (ZT.EVALSIGNALS).
+    assert_eq!(
+        signals_path(),
+        env.path("HOME")
+            .join(".local/state/ztools/eval/eval_signals.json")
+    );
+    drop(env);
+}
+
+/// The shipped file is a read-only SEED: a machine with no live store starts
+/// from it, the first save lands in state, and the seed's bytes never change.
+#[test]
+#[serial]
+fn a_fresh_machine_starts_from_the_seed_and_saves_to_state_only() {
+    let (env, conf) = TestEnv::new()
+        .without("EVAL_SIGNALS_DIR")
+        .fixture("ZTOOLS_CONF_DIR", "conf-seed");
+    let seed_text = r#"{"seeded-model": {"task": {"timeout": 7}}}"#;
+    std::fs::write(conf.join("eval_signals.json"), seed_text).unwrap();
+
+    let first = load_signals();
+    assert_eq!(first["seeded-model"]["task"]["timeout"], 7, "seed is read");
+
+    let mut store = first;
+    store.insert("run-model".to_string(), serde_json::json!({"t": {"x": 1}}));
+    save_signals(&store);
+
+    assert_eq!(
+        std::fs::read_to_string(conf.join("eval_signals.json")).unwrap(),
+        seed_text,
+        "the seed is never written"
+    );
+    assert!(signals_path().is_file(), "the live store was created");
+    let again = load_signals();
+    assert!(again.contains_key("seeded-model") && again.contains_key("run-model"));
+    drop(env);
+}
+
+/// Once a live store exists the seed no longer participates: a model pruned
+/// from state does not come back from the shipped file.
+#[test]
+#[serial]
+fn the_live_store_outranks_the_seed() {
+    let (env, conf) = TestEnv::new()
+        .without("EVAL_SIGNALS_DIR")
+        .fixture("ZTOOLS_CONF_DIR", "conf-seed");
+    std::fs::write(conf.join("eval_signals.json"), r#"{"seeded-model": {}}"#).unwrap();
+    let live = signals_path();
+    std::fs::create_dir_all(live.parent().unwrap()).unwrap();
+    std::fs::write(&live, r#"{"live-model": {}}"#).unwrap();
+    let keys: Vec<String> = load_signals().keys().cloned().collect();
+    assert_eq!(keys, vec!["live-model".to_string()]);
+    drop(env);
+}
+
+/// An explicit `EVAL_SIGNALS_DIR` is the whole store: no seed is mixed in.
+#[test]
+#[serial]
+fn an_explicit_signals_dir_is_not_seeded() {
+    let (env, conf) = TestEnv::new().fixture("ZTOOLS_CONF_DIR", "conf-seed");
+    std::fs::write(conf.join("eval_signals.json"), r#"{"seeded-model": {}}"#).unwrap();
+    assert!(seed_path().is_none());
+    assert_empty!(load_signals(), "an explicit dir with no file is empty");
     drop(env);
 }
 
