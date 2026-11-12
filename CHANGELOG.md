@@ -11,6 +11,8 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.29.1 — the documented gate runs what the push runs; scanners carry floors _(2026-11-12)_
+
 ### Fixed
 - ZT.GATEHYG: `tools/gate.sh` with no scope is the FULL gate (it fell through to the structural layer, so the entry point the docs name skipped clippy, the Rust suite, coverage and audit); `--staged` is the one named cheap scope; an unknown scope exits 2. `tools/tests/test_gate_entry.py` pins the routing.
 - ZT.GATEHYG: the four scanners with no floor in `.gatesrc` now carry one (release-quiet, mktemp-portable, plural-hedge, workflow-pins), each at nine tenths of its read count.
