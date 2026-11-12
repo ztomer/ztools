@@ -11,6 +11,8 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.28.0 — the automatic local-model switch, shipped propose-only: selection file, 3-run canary with rollback, ledger, rollback command, kill switch, rate limits _(2026-11-12)_
+
 ### Added
 - LM.AUTOSWITCH (LM.DESIGN section 6, phase 5), shipped PROPOSE-ONLY (D5): a switch the
   nightly's rule chose writes one slot of the machine-local selection file
