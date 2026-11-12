@@ -11,6 +11,15 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Fixed
+- **`cargo run` read a fake machine (ZT.CARGORUNHOME).** The test sandbox `HOME=rust/target/test-home`
+  was a `[env]` entry in `.cargo/config.toml`, and cargo applies `[env]` to `cargo run` too, so
+  `cargo run -- models scout` saw no installed models and no free disk. The sandbox is now a cargo
+  runner (`tools/cargo_test_runner.sh`) that sets HOME only for test binaries; `cargo run` reads the
+  real HOME. `tools/tests/test_cargo_run_home.py` drives real cargo against a scratch crate with the
+  repo's config and fails if a run sees the sandbox or a test does not;
+  `rust/tests/test_home_is_sandboxed.rs` still fails a test process on the real HOME.
+
 ## v3.29.3 — osaurus bench rows for all five models re-read with load at each start; Hebrew discrimination re-checked; clippy 1.100 map_or_default fixes _(2026-11-12)_
 
 ### Changed

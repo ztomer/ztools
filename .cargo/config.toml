@@ -1,8 +1,13 @@
-# Every process cargo starts for this crate -- test binaries, the binaries
-# integration tests spawn, `cargo run` -- sees HOME as rust/target/test-home,
-# never the operator's real home. Tests that forgot `TestEnv` used to write
-# fixtures into ~/Documents/twitter_summaries; now they cannot reach it.
-# `rust/tests/test_home_is_sandboxed.rs` fails if this stops holding. A live
-# run uses the installed binary (`./install.sh`), which this does not touch.
-[env]
-HOME = { value = "rust/target/test-home", relative = true, force = true }
+# Every TEST process cargo starts -- the lib's unit tests, the integration-test binaries, and the
+# binaries those spawn -- sees HOME as rust/target/test-home, never the operator's real home.
+# Tests that forgot `TestEnv` used to write fixtures into ~/Documents/twitter_summaries; now they
+# cannot reach it. `rust/tests/test_home_is_sandboxed.rs` fails if this stops holding.
+#
+# It is a RUNNER, not an `[env]` entry, on purpose (ZT.CARGORUNHOME, 2026-11-12): cargo applies
+# `[env]` to `cargo run` as well, so a dev run of `cargo run -- models scout` read a fake machine
+# (no installed models, no free disk). The runner sets HOME only for binaries cargo keeps in
+# `deps/` (tests) and leaves `cargo run` on the real home. `tools/tests/test_cargo_run_home.py`
+# fails if `cargo run` sees the sandbox. A live run uses the installed binary (`./install.sh`),
+# which this does not touch.
+[target.'cfg(unix)']
+runner = "tools/cargo_test_runner.sh"

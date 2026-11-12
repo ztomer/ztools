@@ -5,9 +5,12 @@
 //! `~/Documents/twitter_summaries`, `{"screen_name":"u"}` in
 //! `~/.twitter_summary_debug_cache.json` -- each time because one test
 //! resolved `~` without `TestEnv`. The audit catches the spellings it knows;
-//! this removes the cause: `.cargo/config.toml` points `HOME` at
-//! `rust/target/test-home` for every process cargo starts, so a test that
-//! forgets the guard writes into the build directory, never into `~`.
+//! this removes the cause: `.cargo/config.toml` names a cargo runner
+//! (`tools/cargo_test_runner.sh`) that points `HOME` at `rust/target/test-home`
+//! for every TEST binary cargo runs, so a test that forgets the guard writes into
+//! the build directory, never into `~`. It is a runner and not an `[env]` entry
+//! because `[env]` also reached `cargo run` (ZT.CARGORUNHOME);
+//! `tools/tests/test_cargo_run_home.py` pins that half.
 
 // Refuse a stale build of this file (ZT.MTIMECLASS).
 ztools::built_from_disk!();
@@ -34,7 +37,7 @@ fn a_test_process_home_is_the_sandbox_not_the_operators() {
     assert_ne!(home, real, "a test process sees the operator's real home");
     assert!(
         home.ends_with("target/test-home"),
-        "HOME is {home}, expected the cargo [env] sandbox"
+        "HOME is {home}, expected the cargo test runner sandbox (tools/cargo_test_runner.sh)"
     );
     // A spawned binary inherits it too: what an integration test runs.
     let child = Command::new("sh")

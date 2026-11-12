@@ -473,7 +473,7 @@ test is named (`tools/tests/test_ab_test_suite_log.py`).
 
 The hunt: the 25 prebuilt test binaries (`cargo test --all-features --no-run`), run in order
 under `load.py 8` on 16 cores, passed 20 runs in a row, so the flake is still unexplained. The
-next failure will name its test. Running a test binary directly skips cargo's `[env]`, so set
+next failure will name its test. Running a test binary directly skips cargo's runner (`tools/cargo_test_runner.sh`, which sets the test HOME since ZT.CARGORUNHOME; it was an `[env]` entry before), so set
 `HOME=rust/target/test-home` yourself, or `test_home_is_sandboxed` fails (it did, on the first
 attempt).
 
