@@ -11,6 +11,8 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.29.3 — osaurus bench rows for all five models re-read with load at each start; Hebrew discrimination re-checked; clippy 1.100 map_or_default fixes _(2026-11-12)_
+
 ### Changed
 - **The five `osaurus bench` speed rows, re-read (LM.BENCHROWS).** `docs/osaurus_bench.json` now
   holds lfm2.5-350m, gemma-4-e4b, raptor-v0.5-8b-a1b, gemma-4-12b and the 27B crack at 1024 and
