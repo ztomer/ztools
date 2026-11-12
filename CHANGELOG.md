@@ -11,6 +11,13 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Fixed
+- Shell tools reach the osaurus CLI only through `tools/osaurus_door.sh` (ZT.OSAURUSSHELL):
+  `osaurus_door` requires `/health` first, `osaurus_door_serve` refuses a start while a server
+  answers, and `sweep_models.sh` reads the model list over HTTP (`/v1/models`) with no CLI.
+  `bench.sh`, `osaurus_one.sh` (stop, serve) and `sweep_models.sh` use it, and
+  `tools/check_osaurus_door.py` (in the gate) refuses a bare `osaurus` call anywhere else.
+
 ## v3.29.1 — the documented gate runs what the push runs; scanners carry floors _(2026-11-12)_
 
 ### Fixed

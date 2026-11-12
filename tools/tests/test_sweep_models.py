@@ -111,7 +111,16 @@ class Sweep:
             'if [ -f "$FAKE_EVAL_DIR/$model.rc" ]; then rc=$(cat "$FAKE_EVAL_DIR/$model.rc"); fi\n'
             'exit "$rc"',
         )
-        _stub(self.bin, "osaurus", '[ "$1" = "list" ] || exit 1\ncat "$FAKE_MODELS"')
+        # The model list comes over HTTP (GET /v1/models), never the CLI (ZT.OSAURUSSHELL):
+        # the stub CLI fails loudly, and curl replays FAKE_MODELS as the server's JSON.
+        _stub(self.bin, "osaurus", 'echo "osaurus CLI called: $*" >&2\nexit 99')
+        _stub(
+            self.bin,
+            "curl",
+            'case "$*" in *"/v1/models"*) ;; *) exit 7 ;; esac\n'
+            'python3 -c \'import json,sys; print(json.dumps({"data": [{"id": l} for l in '
+            'open(sys.argv[1]).read().split()]}))\' "$FAKE_MODELS"',
+        )
         _stub(self.bin, "sleep", "exit 0")
         # Not on this script's path today. They are here so that a test can never read
         # the live machine even if the sweep grows a pressure probe, and so that no test

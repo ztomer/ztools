@@ -103,6 +103,10 @@ while [ $# -gt 0 ]; do
 done
 
 require_commands osaurus lsof pgrep
+# The CLI only through the health-checked door (ZT.OSAURUSSHELL), aimed at this port.
+export OSAURUS_URL="http://127.0.0.1:$PORT"
+# shellcheck source=tools/osaurus_door.sh
+source "$ROOT/tools/osaurus_door.sh"
 
 # Every osaurus PROCESS, whether or not it holds a socket.
 #
@@ -155,7 +159,9 @@ wait_until_serving() {
 
 stop_all() {
   local pids="$1"
-  osaurus stop >/dev/null 2>&1 || true
+  # Through the door: with no /health answering, the CLI would open a second app, and the
+  # kill loop below frees the processes either way.
+  osaurus_door stop >/dev/null 2>&1 || true
   sleep 3
   # `osaurus stop` releases the socket but leaves the process resident, so the loop
   # below is the part that actually frees the memory -- and it is why this function
@@ -264,7 +270,7 @@ elif [ "$COUNT" -eq 1 ]; then
 fi
 
 info "starting osaurus on port $PORT (log: $LOG)"
-nohup osaurus serve --port "$PORT" >"$LOG" 2>&1 &
+nohup bash -c 'source "$1"; shift; osaurus_door_serve "$@"' _ "$ROOT/tools/osaurus_door.sh" --port "$PORT" >"$LOG" 2>&1 &
 disown || true
 
 if ! wait_until_serving; then

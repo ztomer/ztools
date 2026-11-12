@@ -116,7 +116,8 @@ ONLY_MODEL=""
 # call site. A PERMANENT exclusion belongs here instead: --skip is only applied by an
 # operator who remembers to pass it, and a bare `./tools/sweep_models.sh` re-running a
 # model already known unrunnable is how 10 GPU-hours went into ornith-9b on 2026-08-23.
-SKIP_RE="${SWEEP_SKIP:-^potion-|-mtp|^ornith-1\.0-9b-mxfp8$}"
+# `foundation` is the system model /v1/models lists and `osaurus list` never did.
+SKIP_RE="${SWEEP_SKIP:-^foundation$|^potion-|-mtp|^ornith-1\.0-9b-mxfp8$}"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -145,11 +146,14 @@ touch "$STATUS"
 
 # One server, or the numbers are worthless. See tools/osaurus_one.sh.
 "$OSAURUS_ONE" >/dev/null || die "could not establish a single osaurus server"
+# shellcheck source=tools/osaurus_door.sh
+source "$ROOT/tools/osaurus_door.sh"
 
 if [ -n "$ONLY_MODEL" ]; then
   MODELS="$ONLY_MODEL"
 else
-  MODELS="$(osaurus list 2>/dev/null | grep -vE "$SKIP_RE" | grep -v '^$')"
+  # Over HTTP, never the CLI (ZT.OSAURUSSHELL): the CLI can open a second Osaurus app.
+  MODELS="$(osaurus_door_models | grep -vE "$SKIP_RE" | grep -v '^$')"
 fi
 [ -n "$MODELS" ] || die "no models to sweep (skip pattern: $SKIP_RE)"
 info "skipping: $SKIP_RE"
