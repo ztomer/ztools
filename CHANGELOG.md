@@ -11,6 +11,23 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.21.0 — Qwen3-Embedding-0.6B measured and rejected; the EN+HE refusal scorer _(2026-11-11)_
+
+### Added
+- **The refusal scorer (LM.PROBES).** `Graded::NoRefusal` reads an answer's opening 220
+  characters for an English or Hebrew refusal (quoted spans blanked, since summaries quote
+  tweets), and counts an empty answer or one that drops the required content as a refusal;
+  a moralizing preamble scores 50. Calibrated on 30 labelled refusals (30 flagged) and 30
+  labelled compliances (0 flagged); the bars are at least 90% and at most 5%.
+
+### Not changed, measured
+- **Clustering keeps potion-base-4M, Latin-only (LM.EMBEDHE).** The escalation,
+  `Qwen/Qwen3-Embedding-0.6B` in-process via candle on Metal under the GPU lock, on the same
+  fixture: unrelated Hebrew median 0.277 and every labelled pair (lowest 0.579) above every
+  other story (highest 0.530), but neighbouring stories merge (0.641, 0.637), so no threshold
+  passes; on the 266 real Latin tweets it recovers 2 of 4 same-story pairs at zero false
+  merges (potion-base-4M: 4). Pinned on `tests/fixtures/embeddings/qwen3_embedding_0_6b.json`.
+
 ## v3.20.0 — potion-multilingual-128M measured and rejected; every tag has its changelog heading _(2026-11-11)_
 
 ### Added
