@@ -11,6 +11,8 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.25.0 — refusal probe reads each item and separates the controls (stock gemma-4-12b 10/80 refused, 27B crack 0/80); real-answer calibration; bench door + 12B/27B bench rows _(2026-11-12)_
+
 ### Added
 
 - LM.PROBES: `docs/osaurus_bench.json`, the first osaurus bench speed rows (`tools/bench.sh`,
