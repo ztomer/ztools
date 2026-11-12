@@ -28,6 +28,14 @@ done
 [ "${#MODELS[@]}" -gt 0 ] || die "usage: tools/bench.sh --model NAME [--model NAME ...]"
 mkdir -p "$OUT"
 
+# THE CLI ONLY THROUGH A HEALTH-CHECKED DOOR (ZT.OSAURUSDUP). The osaurus CLI probes the
+# server for 0.5 s and, when it does not answer, has LaunchServices open a SECOND Osaurus app.
+# So /health must answer within HEALTH_WAIT seconds (ten times that probe) before each bench;
+# otherwise that model is refused with the reason and the CLI is never started.
+OSAURUS_URL="${OSAURUS_URL:-http://127.0.0.1:1337}"
+HEALTH_WAIT="${BENCH_HEALTH_WAIT:-5}"
+health_ok() { curl -fsS -m "$HEALTH_WAIT" -o /dev/null "$OSAURUS_URL/health" 2>/dev/null; }
+
 GPU_LOCK_TIMEOUT="${GPU_LOCK_TIMEOUT:-900}"
 # Seconds a child gets after SIGTERM before it is sent SIGKILL.
 KILL_GRACE="${BENCH_KILL_GRACE:-10}"
@@ -72,6 +80,11 @@ trap 'exit 129' HUP
 FAILED=0
 for m in "${MODELS[@]}"; do
   info "bench $m"
+  if ! health_ok; then
+    warn "$m: refused, $OSAURUS_URL/health did not answer within ${HEALTH_WAIT}s (the osaurus CLI would start a second app)"
+    FAILED=1
+    continue
+  fi
   osaurus bench --model "$m" --prompt-tokens "$PROMPT_TOKENS" --runs "$RUNS" \
     --json "$OUT/bench.$m.json" > "$OUT/bench.$m.log" 2>&1 &
   CHILD=$!

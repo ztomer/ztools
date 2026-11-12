@@ -11,6 +11,14 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Fixed
+
+- `tools/bench.sh` runs `osaurus bench` only through the ZT.OSAURUSDUP door: `/health` (at
+  `OSAURUS_URL`, default `http://127.0.0.1:1337`) must answer within 5 s before each model, or
+  that model is refused with the reason and the CLI is never started, since a CLI that finds the
+  server silent opens a second Osaurus app. Its tests now serve their own `/health` and never
+  read the real server.
+
 ## v3.24.1 — refcheck reads Osaurus over HTTP and runs the CLI only through a health-checked door, so it no longer opens a second app _(2026-11-12)_
 
 ### Fixed

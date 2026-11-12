@@ -12,15 +12,52 @@ bench.sh has exited. A fake `osaurus` stands in for the real one; nothing here l
 """
 
 import contextlib
+import http.server
 import os
 import signal
+import socket
 import subprocess
+import threading
 import time
 from pathlib import Path
+
+import pytest
 
 REPO = Path(__file__).resolve().parent.parent.parent
 BENCH = REPO / "tools" / "bench.sh"
 WAIT = 20
+
+
+class _Health(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):  # noqa: N802 (the stdlib's name)
+        code = 200 if self.path == "/health" else 404
+        self.send_response(code)
+        self.end_headers()
+        self.wfile.write(b'{"status":"ok"}')
+
+    def log_message(self, *_args):
+        pass
+
+
+@pytest.fixture(autouse=True)
+def osaurus_url(monkeypatch):
+    """A /health that answers, so no test here ever reads the real server on :1337."""
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Health)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_address[1]}"
+    monkeypatch.setenv("OSAURUS_URL", url)
+    yield url
+    server.shutdown()
+    server.server_close()
+
+
+def _dead_url():
+    """A loopback port nothing listens on: bound, closed, and handed back."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    return f"http://127.0.0.1:{port}"
 
 
 def _alive(pid):
@@ -176,4 +213,37 @@ def test_a_failing_bench_is_a_failing_run(tmp_path):
         timeout=60,
     )
     assert r.returncode != 0
+    assert not lock.exists()
+
+
+def test_no_bench_starts_when_the_server_does_not_answer_health(tmp_path):
+    """ZT.OSAURUSDUP's door, for the bench: the osaurus CLI probes the server for 0.5 s and,
+    when it does not answer, has LaunchServices open a SECOND Osaurus app. So bench.sh asks
+    /health first (5 s, ten times the CLI's probe) and refuses with the reason instead of
+    starting the CLI at all."""
+    lock = tmp_path / "gpu.lock"
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    calls = tmp_path / "calls.log"
+    (bindir / "osaurus").write_text(f'#!/bin/bash\necho "$*" >> "{calls}"\n')
+    (bindir / "osaurus").chmod(0o755)
+    env = {
+        **os.environ,
+        "PATH": f"{bindir}:{os.environ['PATH']}",
+        "ZTOOLS_GPU_LOCK_DIR": str(lock),
+        "OSAURUS_URL": _dead_url(),
+        "NO_COLOR": "1",
+    }
+    r = subprocess.run(
+        ["bash", str(BENCH), "--model", "a", "--model", "b", "--out", str(tmp_path / "out")],
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        timeout=60,
+    )
+    assert r.returncode != 0
+    assert not calls.exists(), f"the osaurus CLI ran with a dead /health: {calls.read_text()}"
+    assert "health" in r.stderr
     assert not lock.exists()
