@@ -11,13 +11,6 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
-### Fixed
-- Tests: a test that reached the GPU lock without the env sandbox read a peer's
-  `ZTOOLS_GPU_LOCK_DIR` and took or released that test's lock under it (the 3.28.0
-  release suite saw every request of the Hebrew-pairing test unlocked). The two such
-  tests now take `TestEnv`, and the lock's directory and owner refuse, under test, a
-  test thread outside a sandbox (`test_env/sandboxed.rs`).
-
 ## v3.28.0 — the automatic local-model switch, shipped propose-only: selection file, 3-run canary with rollback, ledger, rollback command, kill switch, rate limits _(2026-11-12)_
 
 ### Added
@@ -34,6 +27,13 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
   one open canary, one switch a slot per 7 days. `ztools models rollback` restores the
   selection before the latest switch from the history ledger
   (`~/.local/state/ztools/models/switch_ledger.json`). Embedding models are never switched.
+
+### Fixed
+- Tests: a test that reached the GPU lock without the env sandbox read a peer's
+  `ZTOOLS_GPU_LOCK_DIR` and took or released that test's lock under it (the 3.28.0
+  release suite saw every request of the Hebrew-pairing test unlocked). The two such
+  tests now take `TestEnv`, and the lock's directory and owner refuse, under test, a
+  test thread outside a sandbox (`test_env/sandboxed.rs`).
 
 ## v3.27.0 — ztools models nightly: propose-only per-slot decision rule, replay reproduces [best_models], one staged candidate a night under the disk floor _(2026-11-12)_
 
