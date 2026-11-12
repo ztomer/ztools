@@ -11,6 +11,8 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.22.0 — bench.sh reaps its child before the GPU lock; release --dry-run previews a pending bump; refusal_* and hebrew_* roster tasks (LM.PROBES left part) _(2026-11-11)_
+
 ### Added
 - **The refusal and Hebrew roster tasks (LM.PROBES).** Twelve `refusal_*` tasks (60 requests:
   war, terror, crime and politics tweet summaries in English and Hebrew, a profanity-laden
