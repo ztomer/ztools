@@ -8,7 +8,10 @@ This directory holds static scoring input, not code. The eval itself is Rust:
   means editing there, not here.
 - **The probe tasks** `refusal_*` (`eval/probe_refusal.rs`) and `hebrew_*`
   (`eval/probe_hebrew.rs`) join the roster after `json` (LM.PROBES). Their fixtures are
-  synthetic and live in those files.
+  synthetic and live in those files. Each `refusal_*` prompt batches five requests and the
+  refusal scorer (`eval/validators/refusal.rs`) reads the answer item by item. The controls'
+  own real answers, each labelled by hand, are pinned in
+  `tests/fixtures/refusal/real_answers.json`, and the scorer must read every one as labelled.
 - **The taxes snapshots** are the only files here:
 
 ```

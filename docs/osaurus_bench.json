@@ -1,0 +1,89 @@
+{
+ "about": "osaurus bench speed rows (LM.PROBES; LM.DESIGN section 4's speed floor). One row per model and prompt size: medians of 3 uncached requests (greedy, 128 max tokens), from tools/bench.sh under the GPU lock (osaurus bench --prompt-tokens 1024,8192 --runs 3 --json). load_1m is the machine's 1-minute load average at the start and end of that model's run: other agents share this Mac, so a row read under load is slow, never fast, and the 27B 8192 decode samples (13.8, 7.0, 11.4) show it. OPEN: raptor-v0.5-8b-a1b-jang_6m, gemma-4-e4b-it-8bit and lfm2.5-350m-optiq-4bit, refused at load 46 (their /health did not answer within 5 s), and a quiet-machine rerun of these four rows.",
+ "rows": [
+  {
+   "date": "2026-11-12",
+   "model": "gemma-4-12b-it-mxfp8",
+   "chip": "Apple M4 Max",
+   "prompt_tokens": 1024,
+   "actual_prompt_tokens": 796,
+   "runs": 3,
+   "prefill_tps": 325.2,
+   "decode_tps": 68.0,
+   "decode_tps_samples": [
+    62.9,
+    68.0,
+    68.0
+   ],
+   "ttft_ms": 2450,
+   "cached_ttft_ms": 485,
+   "load_1m": [
+    15.8,
+    17.6
+   ]
+  },
+  {
+   "date": "2026-11-12",
+   "model": "gemma-4-12b-it-mxfp8",
+   "chip": "Apple M4 Max",
+   "prompt_tokens": 8192,
+   "actual_prompt_tokens": 6069,
+   "runs": 3,
+   "prefill_tps": 358.4,
+   "decode_tps": 58.4,
+   "decode_tps_samples": [
+    59.3,
+    58.4,
+    56.6
+   ],
+   "ttft_ms": 16931,
+   "cached_ttft_ms": 729,
+   "load_1m": [
+    15.8,
+    17.6
+   ]
+  },
+  {
+   "date": "2026-11-12",
+   "model": "qwen3.8-27b-jang_6d-crack",
+   "chip": "Apple M4 Max",
+   "prompt_tokens": 1024,
+   "actual_prompt_tokens": 839,
+   "runs": 3,
+   "prefill_tps": 148.9,
+   "decode_tps": 15.3,
+   "decode_tps_samples": [
+    16.2,
+    15.3,
+    15.0
+   ],
+   "ttft_ms": 5619,
+   "cached_ttft_ms": 892,
+   "load_1m": [
+    7.6,
+    15.8
+   ]
+  },
+  {
+   "date": "2026-11-12",
+   "model": "qwen3.8-27b-jang_6d-crack",
+   "chip": "Apple M4 Max",
+   "prompt_tokens": 8192,
+   "actual_prompt_tokens": 6112,
+   "runs": 3,
+   "prefill_tps": 137.5,
+   "decode_tps": 11.4,
+   "decode_tps_samples": [
+    13.8,
+    7.0,
+    11.4
+   ],
+   "ttft_ms": 44433,
+   "cached_ttft_ms": 1312,
+   "load_1m": [
+    7.6,
+    15.8
+   ]
+  }
+ ]
+}
