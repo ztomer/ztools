@@ -11,6 +11,8 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.23.0 — Hebrew tweets paired by the summarize model under the GPU lock (raptor calibrated 861/861 pipeline on the 42-tweet fixture); a model resident after a finished eval keeps its scores (ZT.EVALRESIDENT); tools/ ruff-clean under the house set _(2026-11-11)_
+
 ### Added
 - **Hebrew tweets enter clustering, paired by the summarize model (LM.EMBEDHE, owner ruling
   2026-11-12 "Use the local llm for Hebrew pairing").** `potion-base-4M` still embeds the
