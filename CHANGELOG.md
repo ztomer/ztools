@@ -11,6 +11,8 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.29.0 — Osaurus's core model and default agent follow the think slot _(2026-11-12)_
+
 - `ztools models follow-think [--dry-run]`: Osaurus `model_defaults.core_model` and `default_agent.model` follow the think slot, each via a minimal one-section document whose plan must be that one key; the rollback document plans clean before any apply and is saved under `~/.local/state/ztools/models/`; a re-export must plan clean after (LM.CORE).
 
 ## v3.28.1 — A model-eval run no longer rewrites the tracked eval_signals.json; the live store is in state _(2026-11-12)_
