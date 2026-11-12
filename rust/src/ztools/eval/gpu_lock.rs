@@ -44,6 +44,8 @@ unsafe extern "C" {
 /// make that true by construction rather than by coincidence; it is not done
 /// here because nothing can currently reach the state it would fix.
 fn record_owner(pid: u32) {
+    #[cfg(test)]
+    crate::test_env::assert_sandboxed("the GPU lock owner (ZTOOLS_GPU_LOCK_OWNER)");
     // SAFETY: no other thread reads the environment while this runs. Two
     // threads in this process write it at all, and they are these two
     // functions, called from the thread that acquires or drops the guard --
@@ -73,6 +75,8 @@ fn record_owner(pid: u32) {
 /// holder so a later sibling in the same session is not told its own parent
 /// holds a foreign lock.
 fn forget_owner() {
+    #[cfg(test)]
+    crate::test_env::assert_sandboxed("the GPU lock owner (ZTOOLS_GPU_LOCK_OWNER)");
     // SAFETY: as `record_owner`, and the same reasoning about which thread
     // this runs on.
     unsafe { std::env::remove_var(OWNER_ENV) }
@@ -80,6 +84,8 @@ fn forget_owner() {
 
 #[must_use]
 pub fn lock_dir() -> PathBuf {
+    #[cfg(test)]
+    crate::test_env::assert_sandboxed("the GPU lock directory (ZTOOLS_GPU_LOCK_DIR)");
     if let Ok(val) = std::env::var(DIR_ENV)
         && !val.is_empty()
     {

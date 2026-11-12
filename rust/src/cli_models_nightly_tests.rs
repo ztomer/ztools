@@ -47,6 +47,9 @@ fn foundation_is_always_installed() {
 
 #[test]
 fn a_night_whose_scout_reaches_nothing_writes_its_findings_line() {
+    // The night reads the GPU lock: without the sandbox it reads a peer
+    // test's `ZTOOLS_GPU_LOCK_DIR` (or the machine's real lock).
+    let _env = crate::test_env::TestEnv::new();
     let tmp = tempfile::tempdir().unwrap();
     let state = tmp.path().join("state");
     let mut live = crate::ztools::select::live::LiveNight {

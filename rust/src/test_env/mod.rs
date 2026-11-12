@@ -84,7 +84,10 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 mod audit;
 #[cfg(test)]
 mod restore_tests;
+mod sandboxed;
 mod table;
+
+pub use sandboxed::{assert_sandboxed, in_sandbox};
 
 use table::{CLEARED, MANAGED, Point, REDIRECTED};
 
@@ -225,6 +228,7 @@ impl TestEnv {
             saved.push((key, std::env::var_os(key)));
             clear(key);
         }
+        sandboxed::enter();
         Self {
             saved,
             dir,
@@ -467,5 +471,6 @@ impl Drop for TestEnv {
                 None => clear(key),
             }
         }
+        sandboxed::leave();
     }
 }

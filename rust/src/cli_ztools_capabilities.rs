@@ -102,6 +102,8 @@ mod tests {
     /// printing an empty table that reads like "no models installed".
     #[test]
     fn asking_for_all_models_without_a_server_is_an_error_not_an_empty_table() {
+        // The roster read takes the GPU lock, whose directory is process-global.
+        let _env = crate::test_env::TestEnv::new();
         let err = print_capabilities("http://127.0.0.1:1", "all")
             .expect_err("an unreachable server cannot be reported as zero models");
         assert_nonempty!(err.to_string(), "the failure says something");

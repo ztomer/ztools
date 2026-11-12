@@ -120,6 +120,15 @@ loudly — one eval test simply started comparing one peer's sandbox against ano
 documents that the lock is what makes its write sound, and a write taken before the lock is
 the one case where that is untrue.
 
+**The GPU lock refuses a test outside the sandbox, at runtime.** The textual audit sees
+`dirs::home_dir()` in a test body; it cannot see a lock reached three calls down. So
+`gpu_lock::lock_dir()` and the owner writes call `test_env::assert_sandboxed` under
+`cfg(test)`: a libtest thread (named after its test) must hold a `TestEnv` itself, and an
+unnamed thread a test spawned passes while some sandbox is live. Found when two unguarded
+tests (`cli_models_nightly`, `cli_ztools_capabilities`) read a peer's `ZTOOLS_GPU_LOCK_DIR`
+and took that peer's lock, so its reentrant acquire returned `acquired: false` and every
+request it made after the stranger released was unlocked (3.28.0 release suite).
+
 ## Golden parity tests
 
 The Python implementation is gone; where it was the reference, its last verdicts are
