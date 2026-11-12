@@ -19,7 +19,7 @@ pub const ALLOWLIST: [&str; 7] = [
     "LiquidAI",
 ];
 
-const GIB: u64 = 1 << 30;
+pub const GIB: u64 = 1 << 30;
 /// The design point: house prompts are about 8k tokens, so 32k is 2x headroom.
 pub const CTX_TOKENS: u64 = 32_768;
 /// The runtime's own share on top of weights and KV.

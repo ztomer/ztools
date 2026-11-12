@@ -11,6 +11,18 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Added
+- `ztools models nightly` (LM.SELECT, propose-only): one candidate a night. It stages the
+  scout's candidate only when the download leaves the 15 GiB disk floor (else it records
+  `no room`), runs it and each incumbent it would replace 3 times on the slot's tasks and the
+  refusal probe, decides every slot by the LM.DESIGN rule (every gate, `max(3.0, 2*sd)` or
+  the 2.0-point cracked band, and a second agreeing measure), deletes a rejected candidate
+  that night (only a directory its own ledger names), and appends one findings line to
+  `~/.local/state/ztools/models/findings.md`. It never switches a slot.
+- `ztools models nightly --replay [--record F | --fixture F]`: the rule over
+  `eval_history.json` must reproduce `[best_models]` exactly (it does: every slot kept;
+  a 0.0 margin switches think to gemma-4-e4b, so the check can go red).
+
 ## v3.26.0 — propose-only model scout: HF + Osaurus catalog reads, provenance/format/fit/disk filters, refusing feeds read unverified _(2026-11-12)_
 
 ### Added

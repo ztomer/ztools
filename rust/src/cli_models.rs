@@ -54,6 +54,25 @@ pub enum ModelsCmd {
         #[arg(long)]
         fixtures: Option<std::path::PathBuf>,
     },
+    /// One candidate a night (LM.SELECT), PROPOSE-ONLY: stage the scout's
+    /// candidate under the 15 GiB disk floor (or record `no room`), evaluate it
+    /// and each incumbent it would replace 3 times on the slot's tasks and the
+    /// refusal probe, decide by the rule, and delete a rejected candidate.
+    ///
+    /// `--replay` instead proves the rule: replaying `eval_history.json` must
+    /// reproduce `[best_models]` exactly. Exit 0 = reproduced / decided,
+    /// 1 = not reproduced / the night failed.
+    Nightly {
+        /// Replay the rule over history instead of running a night.
+        #[arg(long)]
+        replay: bool,
+        /// With `--replay`: write the replay's input to this JSON file.
+        #[arg(long, requires = "replay", conflicts_with = "fixture")]
+        record: Option<std::path::PathBuf>,
+        /// With `--replay`: read a recorded input instead of this Mac.
+        #[arg(long, requires = "replay")]
+        fixture: Option<std::path::PathBuf>,
+    },
 }
 
 /// Run the scout live, recorded, or over a recorded directory.
@@ -231,6 +250,22 @@ pub fn run(config: &ZtoolsConfig, cmd: &ModelsCmd) -> Result<()> {
         } => hebrew_pairing(config, fixture, out, *all_pairs),
         ModelsCmd::Scout { record, fixtures } => {
             scout(config, record.as_deref(), fixtures.as_deref())
+        }
+        ModelsCmd::Nightly {
+            replay,
+            record,
+            fixture,
+        } => {
+            if *replay {
+                crate::cli_models_nightly::replay(
+                    record.as_deref(),
+                    fixture.as_deref(),
+                    &best_models(config),
+                    &current_tasks(config),
+                )
+            } else {
+                crate::cli_models_nightly::night(config, best_models(config), current_tasks(config))
+            }
         }
     }
 }
