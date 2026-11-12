@@ -280,8 +280,8 @@ fn run_eval_inner(
         // kept, what is not is not started (eval/drain.rs).
         if super::drain::requested() {
             eprintln!(
-                "⚠ Stopping {model} on request after {} task(s); the run is recorded as truncated",
-                outcomes.len()
+                "⚠ Stopping {model} on request after {}; the run is recorded as truncated",
+                crate::plural::counted(outcomes.len(), "task")
             );
             break;
         }

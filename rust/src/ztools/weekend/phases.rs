@@ -389,9 +389,14 @@ pub fn structure_to_json(
         match resp.as_ref().and_then(super::parse_llm_events) {
             Some(found) => events.get_or_insert_with(Vec::new).extend(found),
             None => eprintln!(
-                "\u{26a0} structure batch {} of {total}: no usable answer; its {} row(s) are lost",
+                "\u{26a0} structure batch {} of {total}: no usable answer; its {} {} lost",
                 n + 1,
-                batch.lines().count()
+                crate::plural::counted(batch.lines().count(), "row"),
+                if batch.lines().count() == 1 {
+                    "is"
+                } else {
+                    "are"
+                }
             ),
         }
     }

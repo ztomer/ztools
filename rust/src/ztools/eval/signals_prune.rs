@@ -119,11 +119,11 @@ pub fn cli_eval_signals(
 
     if dry_run {
         println!(
-            "Dry run: would prune {} task record(s) across {} model(s) ({} active records kept, {} emptied model(s) removed). Store not modified.",
-            report.pruned_task_records,
-            report.models_affected,
+            "Dry run: would prune {} across {} ({} active records kept; emptied and removed: {}). Store not modified.",
+            crate::plural::counted(report.pruned_task_records, "task record"),
+            crate::plural::counted(report.models_affected, "model"),
             report.kept_task_records,
-            report.models_removed
+            crate::plural::counted(report.models_removed, "model")
         );
     } else if prune {
         if let Some(parent) = store_path.parent() {
@@ -132,11 +132,11 @@ pub fn cli_eval_signals(
         let formatted = serde_json::to_string_pretty(&store)?;
         std::fs::write(&store_path, formatted)?;
         println!(
-            "✓ Pruned {} task record(s) across {} model(s) ({} active records kept, {} emptied model(s) removed). Saved to {}.",
-            report.pruned_task_records,
-            report.models_affected,
+            "✓ Pruned {} across {} ({} active records kept; emptied and removed: {}). Saved to {}.",
+            crate::plural::counted(report.pruned_task_records, "task record"),
+            crate::plural::counted(report.models_affected, "model"),
             report.kept_task_records,
-            report.models_removed,
+            crate::plural::counted(report.models_removed, "model"),
             store_path.display()
         );
     } else {

@@ -17,6 +17,20 @@ fn quick_release() -> crate::ztools::residency::Timing {
     }
 }
 
+/// The seam's timings for a run whose model the server DOES unload: the grace
+/// is ten minutes, so the verdict is decided by the fake's poll count (it drops
+/// the model on the third `/health`) and never by how fast the runner is. With
+/// `quick_release`'s 200 ms a slow runner reached the deadline before the third
+/// poll, the run kept its plan with the reason in its health, and the test saw a
+/// non-empty last health (ZT.WEEKENDFLAKE, run 43243904948, 2026-11-12).
+fn patient_release() -> crate::ztools::residency::Timing {
+    use std::time::Duration;
+    crate::ztools::residency::Timing {
+        release_grace: Duration::from_mins(10),
+        ..quick_release()
+    }
+}
+
 /// A model left resident after the plan's phases keeps the plan, with the
 /// server's reason in its health (ZT.CHAINRELEASE). It used to be the run's
 /// failure, which threw away a finished plan while the model stayed resident
@@ -61,7 +75,7 @@ fn a_model_the_server_unloads_leaves_the_run_a_success() {
         "sunny",
         &ctx(),
         &config,
-        quick_release(),
+        patient_release(),
     );
 
     assert!(outcome.is_ok(), "{:?}", outcome.err());
@@ -86,7 +100,7 @@ fn a_weekend_run_makes_no_request_outside_the_gpu_lock() {
         "sunny",
         &ctx(),
         &config,
-        quick_release(),
+        patient_release(),
     );
 
     assert!(outcome.is_ok(), "{:?}", outcome.err());

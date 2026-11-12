@@ -80,7 +80,7 @@ mod tests {
 
         let defects = probe_model_dir_defects(&model_dir);
         assert_eq!(defects.len(), 1);
-        assert!(defects[0].contains("unintegrated MTP speculative shard(s)"));
+        assert!(defects[0].contains("unintegrated MTP speculative shard"));
     }
 
     #[test]
@@ -104,7 +104,7 @@ mod tests {
 
         let defects = probe_model_dir_defects(&model_dir);
         assert_eq!(defects.len(), 1);
-        assert!(defects[0].contains("missing 1 safetensor shard(s)"));
+        assert!(defects[0].contains("missing 1 safetensor shard"));
         assert!(defects[0].contains("model-00002-of-00002.safetensors"));
     }
 

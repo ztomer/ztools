@@ -196,20 +196,23 @@ pub fn repair(summary: &str, sources: &[(String, String)]) -> Result<Repaired, R
     let (body, invented) = drop_bullets(&body, |cites| cites.iter().all(|c| known.contains(c)));
     if invented > 0 {
         notes.push(format!(
-            "dropped {invented} bullet(s) citing no tweet the model was given"
+            "dropped {} citing no tweet the model was given",
+            crate::plural::counted(invented, "bullet")
         ));
     }
     let (body, run_on) = drop_bullets(&body, |cites| cites.len() <= MAX_CITES_PER_BULLET);
     if run_on > 0 {
         notes.push(format!(
-            "dropped {run_on} bullet(s) citing more than {MAX_CITES_PER_BULLET} tweets \
-             (unrelated claims run together)"
+            "dropped {} citing more than {MAX_CITES_PER_BULLET} tweets \
+             (unrelated claims run together)",
+            crate::plural::counted(run_on, "bullet")
         ));
     }
     let (body, recited) = drop_recited(&body);
     if recited > 0 {
         notes.push(format!(
-            "dropped {recited} bullet(s) that repeat a tweet already cited (a repetition loop)"
+            "dropped {} that repeat a tweet already cited (a repetition loop)",
+            crate::plural::counted(recited, "bullet")
         ));
     }
     Ok(Repaired { body, notes })
@@ -282,10 +285,14 @@ pub fn handle_model_output(
             format!(" after repair ({})", repairs.join("; "))
         };
         return Err(Refusal {
-            verdict: format!("only {kept} verified bullet(s) for {processed} tweets"),
+            verdict: format!(
+                "only {} for {processed} tweets",
+                crate::plural::counted(kept, "verified bullet")
+            ),
             detail: format!(
-                "{kept} verified bullet(s){after} for {processed} tweets: too few to stand for \
-                 the timeline"
+                "{}{after} for {processed} tweets: too few to stand for \
+                 the timeline",
+                crate::plural::counted(kept, "verified bullet")
             ),
         });
     }

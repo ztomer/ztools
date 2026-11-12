@@ -78,7 +78,10 @@ pub fn clean_search_results(
         cleaned.push(format!("- {label}: {body}"));
     }
     if dropped > 0 {
-        println!("\u{2192} Dropped {dropped} out-of-region search result(s)");
+        println!(
+            "\u{2192} Dropped {} out-of-region",
+            crate::plural::counted(dropped, "search result")
+        );
     }
     cleaned.join("\n")
 }

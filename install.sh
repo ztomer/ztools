@@ -62,7 +62,7 @@ declare -F require_commands >/dev/null 2>&1 || require_commands() {
         command -v "$_cmd" >/dev/null 2>&1 || missing+=("$_cmd")
     done
     if [ "${#missing[@]}" -gt 0 ]; then
-        die "missing required command(s): ${missing[*]}"
+        die "missing required $(plural_noun "${#missing[@]}" command): ${missing[*]}"
     fi
 }
 if [ -f "$GOH/tui/lib.sh" ]; then
@@ -73,6 +73,11 @@ else
     warn "set GOH_DIR to your gates_of_heck checkout (or run its install.sh) for the house TUI style."
 fi
 unset _install_helper
+
+# Without the house lib the counted-noun helpers do not exist either; a plain stand-in keeps the
+# messages right (ZT.GATEHYG, GOH.PLURALHEDGE).
+declare -F counted >/dev/null 2>&1 || counted() { printf '%s %s' "$1" "$(plural_noun "$1" "$2")"; }
+declare -F plural_noun >/dev/null 2>&1 || plural_noun() { if [ "$1" = 1 ]; then printf '%s' "$2"; else printf '%s' "${2}s"; fi; }
 
 DEV_COPY=0
 for _arg in "$@"; do

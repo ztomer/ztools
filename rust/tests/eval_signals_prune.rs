@@ -145,7 +145,7 @@ fn eval_signals_prune_cli_workflow() {
         String::from_utf8_lossy(&dry_out.stderr)
     );
     let dry_stdout = String::from_utf8_lossy(&dry_out.stdout);
-    assert!(dry_stdout.contains("Dry run: would prune 2 task record(s)"));
+    assert!(dry_stdout.contains("Dry run: would prune 2 task records"));
     assert!(dry_stdout.contains("1 active records kept"));
 
     // File on disk must still contain stale and unrecorded tasks
@@ -172,7 +172,7 @@ fn eval_signals_prune_cli_workflow() {
         String::from_utf8_lossy(&prune_out.stderr)
     );
     let prune_stdout = String::from_utf8_lossy(&prune_out.stdout);
-    assert!(prune_stdout.contains("Pruned 2 task record(s)"));
+    assert!(prune_stdout.contains("Pruned 2 task records"));
 
     // Read back file from disk
     let text_after_prune = fs::read_to_string(&signals_file).unwrap();

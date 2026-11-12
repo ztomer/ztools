@@ -293,7 +293,7 @@ fn report_constant_columns(
 ) {
     let mut suspects: std::collections::HashMap<String, Vec<String>> =
         std::collections::HashMap::new();
-    suspects.insert("Target Age(s)".to_string(), vec![ages.to_string()]);
+    suspects.insert("Target Ages".to_string(), vec![ages.to_string()]);
     for (label, values) in crate::ztools::weekend::PROMPT_CONSTANTS {
         suspects.insert(
             label.to_string(),
@@ -319,8 +319,8 @@ pub(crate) fn image_renamer(config: &ZtoolsConfig, dir: &Path, apply: bool) -> R
         crate::ztools::image_renamer::scan_and_rename(dir, "*", apply, max_len, config)?;
     let mode = if apply { "APPLIED" } else { "DRY-RUN" };
     println!(
-        "image-renamer ({mode}): {} file(s) processed",
-        candidates.len()
+        "image-renamer ({mode}): {} processed",
+        crate::plural::counted(candidates.len(), "file")
     );
     for c in candidates {
         if c.changed {

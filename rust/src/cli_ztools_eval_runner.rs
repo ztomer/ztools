@@ -143,14 +143,19 @@ pub(super) fn run_full_suite(
     report_suite(&runs, started_at);
     if crate::ztools::eval::drain::requested() {
         anyhow::bail!(
-            "interrupted by Ctrl-C after {} model run(s); outcomes recorded as truncated",
-            runs.len()
+            "interrupted by Ctrl-C after {}; outcomes recorded as truncated",
+            crate::plural::counted(runs.len(), "model run")
         );
     }
     if !not_measured.is_empty() {
         anyhow::bail!(
-            "{} model run(s) were {} — nothing was measured for them: {}",
-            not_measured.len(),
+            "{} {} {} — nothing was measured for them: {}",
+            crate::plural::counted(not_measured.len(), "model run"),
+            if not_measured.len() == 1 {
+                "was"
+            } else {
+                "were"
+            },
             crate::ztools::model_eval::NOT_MEASURED,
             not_measured.join(" | ")
         );

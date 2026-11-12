@@ -11,6 +11,13 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Fixed
+- ZT.GATEHYG: `tools/gate.sh` with no scope is the FULL gate (it fell through to the structural layer, so the entry point the docs name skipped clippy, the Rust suite, coverage and audit); `--staged` is the one named cheap scope; an unknown scope exits 2. `tools/tests/test_gate_entry.py` pins the routing.
+- ZT.GATEHYG: the four scanners with no floor in `.gatesrc` now carry one (release-quiet, mktemp-portable, plural-hedge, workflow-pins), each at nine tenths of its read count.
+- ZT.GATEHYG: every hedged plural (`file(s)`) in a string is counted through `plural::counted` / `plural_noun` / `counted`; the 43-entry `plural_hedge_seed.json` is empty. User-visible: the weekend table column is `Target Ages` (as the detail block already said) and the eval CSV column is `Seconds`.
+- ZT.DENYDUPES: `cargo deny` duplicates are errors; the two that remain (`hashbrown` 0.16.1 via rusqlite's wasm VFS, `syn` 2.0.119 via Android/Windows-only crates) are `skip` entries with their reasons; the unused `BSD-2-Clause` allowance is gone and `unused-allowed-license` and `-D warnings` make a stale one an error.
+- ZT.WEEKENDFLAKE: the weekend release tests whose fake server unloads the model use a ten-minute grace, so the verdict is the fake's poll count and not the runner's speed (0 failures in 50 runs under 8 spinners).
+
 ## v3.29.0 — Osaurus's core model and default agent follow the think slot _(2026-11-12)_
 
 - `ztools models follow-think [--dry-run]`: Osaurus `model_defaults.core_model` and `default_agent.model` follow the think slot, each via a minimal one-section document whose plan must be that one key; the rollback document plans clean before any apply and is saved under `~/.local/state/ztools/models/`; a re-export must plan clean after (LM.CORE).

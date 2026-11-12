@@ -407,7 +407,8 @@ pub fn check_summary_quality(summary: &str, input_tweets: usize) -> Quality {
         quality.rejections.push(Refusal {
             verdict: "prose in a topic section".to_string(),
             detail: format!(
-                "{prose} line(s) of prose inside topic sections: the model is talking to itself"
+                "{} of prose inside topic sections: the model is talking to itself",
+                crate::plural::counted(prose, "line")
             ),
         });
     }

@@ -6,7 +6,7 @@
 
 ### Fixed / Year-Round Activities (Ranked by Fit Score)
 
-| Score | Activity & Location | Dates | Target Age(s) | Estimated Price (CAD) | Weather Appropriateness | Why It Fits |
+| Score | Activity & Location | Dates | Target Ages | Estimated Price (CAD) | Weather Appropriateness | Why It Fits |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | * 4.0/5 | **Kortright Centre** | — | all ages | Free | outdoor | Forty-five kilometres of trails. |
 

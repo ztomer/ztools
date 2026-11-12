@@ -76,6 +76,15 @@ POLICY = ("clippy::all", "clippy::pedantic", "clippy::nursery")
 PACKAGE = "camoufox"
 
 
+def counted(n: int, singular: str) -> str:
+    """`1 unit`, `0 units`: a count meets its noun, never the hedged spelling (GOH.PLURALHEDGE).
+
+    Local, not `tui.lib.counted`: this gate must still report when the house checkout is
+    unreachable (see `_tui`), and every noun it counts takes a plain `s`.
+    """
+    return f"{n} {singular if n == 1 else singular + 's'}"
+
+
 def _tui():
     """The house TUI (icons, restrained colour, NO_COLOR/non-tty aware).
 
@@ -344,8 +353,9 @@ def record(
     payload = "\n".join(header + ([""] if header else []) + [json.dumps(data, indent=2)]) + "\n"
     baseline_path.write_text(payload, encoding="utf-8")
     OK(
-        f"recorded {len(entries)} lint kind(s) into {baseline_path} "
-        f"({carried} existing reason(s) carried over, {len(header)} header line(s) kept)"
+        f"recorded {counted(len(entries), 'lint kind')} into {baseline_path} "
+        f"({counted(carried, 'existing reason')} carried over, "
+        f"{counted(len(header), 'header line')} kept)"
     )
     WARN(f"{len(entries) - carried} entry/entries still carry a FILL IN reason — write them")
     return 0
@@ -383,8 +393,8 @@ def main() -> int:
     rel_manifest = args.manifest.relative_to(REPO_ROOT)
     INFO(f"crate {PACKAGE!r} ({rel_manifest}) vs baseline {args.baseline.relative_to(REPO_ROOT)}")
     INFO(
-        f"policy {' + '.join(POLICY)}; {rebuilt} unit(s) rebuilt; "
-        f"{sum(current.values())} finding(s)"
+        f"policy {' + '.join(POLICY)}; {counted(rebuilt, 'unit')} rebuilt; "
+        f"{counted(sum(current.values()), 'finding')}"
     )
     SECTION("per-lint counts compared (lint: baseline -> measured)")
     for name, entry in sorted(baseline["lints"].items()):
@@ -398,8 +408,8 @@ def main() -> int:
     total_ceiling = sum(e["count"] for e in baseline["lints"].values())
     if verdict["rose"] or verdict["new"]:
         ERR(
-            f"[vendor_lint] {len(verdict['rose'])} ceiling(s) exceeded, "
-            f"{len(verdict['new'])} new lint kind(s) — this gate is shrink-only:"
+            f"[vendor_lint] {counted(len(verdict['rose']), 'ceiling')} exceeded, "
+            f"{counted(len(verdict['new']), 'new lint kind')} — this gate is shrink-only:"
         )
         for name, ceiling, measured in verdict["rose"]:
             ERR(f"    {name}: {ceiling} -> {measured}  (+{measured - ceiling})")
@@ -423,7 +433,7 @@ def main() -> int:
     if verdict["shrank"]:
         detail = " (" + ", ".join(f"{n} {c}->{m}" for n, c, m in verdict["shrank"]) + ")"
     OK(
-        f"[vendor_lint] OK — {len(baseline['lints'])} lint kind(s) within ceilings; "
+        f"[vendor_lint] OK — {counted(len(baseline['lints']), 'lint kind')} within ceilings; "
         f"{sum(current.values())} of {total_ceiling} recorded findings remain{detail}"
     )
     if verdict["shrank"]:

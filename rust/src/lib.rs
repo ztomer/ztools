@@ -33,6 +33,7 @@ pub mod cli_ztools;
 pub mod cli_ztools_twitter;
 pub mod config;
 pub mod manifest;
+pub mod plural;
 pub mod units;
 pub mod ztools;
 

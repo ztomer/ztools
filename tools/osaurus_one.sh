@@ -64,7 +64,7 @@ declare -F require_commands >/dev/null 2>&1 || require_commands() {
     command -v "$_cmd" >/dev/null 2>&1 || missing+=("$_cmd")
   done
   if [ "${#missing[@]}" -gt 0 ]; then
-    die "missing required command(s): ${missing[*]}"
+    die "missing required $(plural_noun "${#missing[@]}" command): ${missing[*]}"
   fi
 }
 if [ -f "$GOH/tui/lib.sh" ]; then
@@ -75,6 +75,11 @@ else
   warn "set GOH_DIR to your gates_of_heck checkout (or run its install.sh) for the house TUI style."
 fi
 unset _osaurus_helper
+
+# Without the house lib the counted-noun helpers do not exist either; a plain stand-in keeps the
+# messages right (ZT.GATEHYG, GOH.PLURALHEDGE).
+declare -F counted >/dev/null 2>&1 || counted() { printf '%s %s' "$1" "$(plural_noun "$1" "$2")"; }
+declare -F plural_noun >/dev/null 2>&1 || plural_noun() { if [ "$1" = 1 ]; then printf '%s' "$2"; else printf '%s' "${2}s"; fi; }
 
 # The house GPU lock, not a private copy (U2). It was born here as
 # tools/gpu_lock.sh and was promoted to gates_of_heck/lib/gpu_lock/ on 2026-10-10;
@@ -232,7 +237,7 @@ gpu_lock_acquire "osaurus_one.sh --$MODE (port $PORT)"
 survey
 
 if [ "$MODE" = "restart" ] && [ "$COUNT" -gt 0 ]; then
-  info "restart requested; stopping $COUNT server(s) on port $PORT"
+  info "restart requested; stopping $(counted "$COUNT" server) on port $PORT"
   stop_all "$FOUND"
   COUNT=0
 fi

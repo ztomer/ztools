@@ -233,7 +233,7 @@ fn an_event_without_a_location_renders_as_its_name_alone() {
 #[test]
 fn a_single_row_flags_no_constant_columns() {
     let suspects =
-        std::collections::HashMap::from([("Target Age(s)".to_string(), vec!["6-12".to_string()])]);
+        std::collections::HashMap::from([("Target Ages".to_string(), vec!["6-12".to_string()])]);
     assert_empty!(flag_constant_columns(&[], &suspects));
     assert_empty!(flag_constant_columns(
         &[event("Solo", "Vaughan", "d")],
@@ -244,16 +244,13 @@ fn a_single_row_flags_no_constant_columns() {
 #[test]
 fn identical_columns_across_rows_are_flagged_only_when_a_suspect_value() {
     let suspects =
-        std::collections::HashMap::from([("Target Age(s)".to_string(), vec!["6-12".to_string()])]);
+        std::collections::HashMap::from([("Target Ages".to_string(), vec!["6-12".to_string()])]);
     // target_ages = "6-12" on both rows AND it is the configured suspect -> flagged.
     let flags = flag_constant_columns(
         &[event("A", "Vaughan", "d"), event("B", "Markham", "d")],
         &suspects,
     );
-    assert!(
-        flags.iter().any(|f| f.contains("Target Age(s)")),
-        "{flags:?}"
-    );
+    assert!(flags.iter().any(|f| f.contains("Target Ages")), "{flags:?}");
     // Same constant but no suspect configured -> NOT the C4 defect.
     let none: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
     assert_empty!(flag_constant_columns(

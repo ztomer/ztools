@@ -28,7 +28,7 @@ const PLAN: &str = "# Weekend Plan: Oct 16 to Oct 18 (Vaughan/Toronto)
 
 ### Fixed / Year-Round Activities (Ranked by Fit Score)
 
-| Score | Activity & Location | Dates | Target Age(s) |
+| Score | Activity & Location | Dates | Target Ages |
 | :--- | :--- | :--- | :--- |
 | * 3.0/5 | **Kortright Centre for Conservation** (Vaughan) | Year-Round | All Ages |
 | * 3.0/5 | **Air Riderz Trampoline Park** (Vaughan) | Year-Round | 6-13 |

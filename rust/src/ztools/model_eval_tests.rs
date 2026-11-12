@@ -258,7 +258,7 @@ fn the_report_renders_no_score_for_an_unmeasured_row() {
         "the reason must reach the table: {report}"
     );
     assert!(
-        report.contains("1 of 2 row(s) hold no score"),
+        report.contains("1 of 2 rows hold no score"),
         "the summary must count the rows that hold no score: {report}"
     );
     // The scored row is untouched: the fix is not "print a dash for everything".

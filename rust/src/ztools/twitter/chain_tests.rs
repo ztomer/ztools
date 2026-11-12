@@ -187,7 +187,7 @@ fn the_degraded_banner_is_one_line_and_says_everything() {
     })
     .unwrap();
     prov.backend = "on-device, fm";
-    let repairs = vec!["dropped 3 bullet(s) that repeat a tweet already cited".to_string()];
+    let repairs = vec!["dropped 3 bullets that repeat a tweet already cited".to_string()];
     let banner = prov.banner(&repairs);
 
     assert!(
@@ -198,7 +198,7 @@ fn the_degraded_banner_is_one_line_and_says_everything() {
     for fact in [
         "raptor failed: a repetition loop",
         "foundation (on-device, fm, fallback) answered instead",
-        "repaired before saving: dropped 3 bullet(s) that repeat a tweet already cited",
+        "repaired before saving: dropped 3 bullets that repeat a tweet already cited",
         "treat this summary as lower quality than a normal run",
     ] {
         assert!(banner.contains(fact), "the banner lost {fact:?}:\n{banner}");
@@ -263,12 +263,12 @@ fn the_terminal_notice_and_the_document_banner_carry_the_same_line() {
 fn a_normal_run_says_what_was_repaired_in_its_one_line() {
     let chain = s(&["a"]);
     let ((), prov) = run_chain(&chain, "a", |_| Ok(Some(()))).unwrap();
-    let repairs = vec!["dropped 1 bullet(s) citing no tweet the model was given".to_string()];
+    let repairs = vec!["dropped 1 bullet citing no tweet the model was given".to_string()];
     let banner = prov.banner(&repairs);
     assert!(!banner.contains('\n'), "{banner}");
     assert_eq!(
         banner,
-        "**Model:** a (osaurus, primary); repaired before saving: dropped 1 bullet(s) citing \
+        "**Model:** a (osaurus, primary); repaired before saving: dropped 1 bullet citing \
          no tweet the model was given"
     );
 }

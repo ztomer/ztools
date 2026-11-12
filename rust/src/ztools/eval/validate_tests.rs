@@ -68,7 +68,7 @@ fn generic_description_counted() {
     let (score, msg) = validate_file_summary(data);
     // 3/4 detailed >= 0.5 -> 85
     assert_eq!(score, 85);
-    assert!(msg.contains("1 generic description(s)"));
+    assert!(msg.contains("1 generic description"));
 }
 
 #[test]
@@ -81,7 +81,7 @@ fn filename_echo_counted() {
     ]"#;
     let (score, msg) = validate_file_summary(data);
     assert_eq!(score, 85);
-    assert!(msg.contains("1 filename-only description(s)"));
+    assert!(msg.contains("1 filename-only description"));
 }
 
 #[test]

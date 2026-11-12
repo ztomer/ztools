@@ -20,8 +20,8 @@ use std::fmt::Write as _;
 pub const FIXED_SECTION_HEADING: &str = "### Fixed / Year-Round Activities (Ranked by Fit Score)";
 pub const TRANSIENT_SECTION_HEADING: &str =
     "### Transient / Limited-Time Events (Ranked by Fit Score)";
-pub const FIXED_TABLE_HEADER: &str = "| Score | Activity & Location | Dates | Target Age(s) | Estimated Price (CAD) | Weather Appropriateness | Why It Fits |";
-pub const TRANSIENT_TABLE_HEADER: &str = "| Score | Event & Location | Dates | Day & Time | Target Age(s) | Estimated Price (CAD) | Why It Fits |";
+pub const FIXED_TABLE_HEADER: &str = "| Score | Activity & Location | Dates | Target Ages | Estimated Price (CAD) | Weather Appropriateness | Why It Fits |";
+pub const TRANSIENT_TABLE_HEADER: &str = "| Score | Event & Location | Dates | Day & Time | Target Ages | Estimated Price (CAD) | Why It Fits |";
 
 /// The separator row under both tables.
 ///

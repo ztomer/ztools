@@ -218,8 +218,8 @@ pub fn retain(dir: &Path, key: &str) {
             let gone = prune(dir, Duration::from_hours(days * 24), SystemTime::now());
             if !gone.is_empty() {
                 println!(
-                    "→ removed {} file(s) older than {days} days ({key})",
-                    gone.len()
+                    "→ removed {} older than {days} days ({key})",
+                    crate::plural::counted(gone.len(), "file")
                 );
             }
         }

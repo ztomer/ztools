@@ -292,10 +292,10 @@ pub fn unmeasured_reason(results: &[ModelEvalResult]) -> Option<String> {
         causes.push(format!("…and {rest} more"));
     }
     Some(format!(
-        "{NOT_MEASURED}: {} of {} row(s) hold no score, so this run measured \
+        "{NOT_MEASURED}: {} of {} hold no score, so this run measured \
          nothing about them: {}",
         rows.len(),
-        results.len(),
+        crate::plural::counted(results.len(), "row"),
         causes.join("; ")
     ))
 }

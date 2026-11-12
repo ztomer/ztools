@@ -18,7 +18,7 @@ pub fn export_csv(runs: &[ModelRun], output_file: &Path) -> std::io::Result<()> 
     let mut file = std::io::BufWriter::new(std::fs::File::create(output_file)?);
     writeln!(
         file,
-        "Model,Task,Score,Status,Time(s),Failure,Failure_Category"
+        "Model,Task,Score,Status,Seconds,Failure,Failure_Category"
     )?;
     for run in runs {
         for o in &run.outcomes {
@@ -65,7 +65,7 @@ mod tests {
         let mut lines = text.lines();
         assert_eq!(
             lines.next(),
-            Some("Model,Task,Score,Status,Time(s),Failure,Failure_Category")
+            Some("Model,Task,Score,Status,Seconds,Failure,Failure_Category")
         );
         let row = lines.next().unwrap();
         // Quoted because the error contains a comma.

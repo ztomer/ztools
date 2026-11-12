@@ -231,7 +231,7 @@ fn sandbox(name: &str) -> (PathBuf, PathBuf) {
 /// `--task weekend_transient,json` narrows the run to TWO tasks, and that is what
 /// makes the drain observable: the first Ctrl-C arrives while the first task is in
 /// flight, it finishes, and the boundary before the second is where the run stops
-/// -- so "after 1 task(s)" is a statement about a known number rather than about
+/// -- so "after 1 task" is a statement about a known number rather than about
 /// however many of two dozen the stub happened to have answered. A run of ONE task
 /// has no next boundary and cannot show a drain at all. This read `--task json`,
 /// which said "ONE task" and matched two by suffix (`json` and `detailed_json`);
@@ -309,10 +309,10 @@ fn the_first_ctrl_c_drains_the_task_in_flight_and_exits_1_naming_the_interrupt()
             BANNER,
             // The drain verdict, with the task count in it: one task ran and the
             // second alias of it was never started.
-            &format!("Stopping {MODEL} on request after 1 task(s)"),
+            &format!("Stopping {MODEL} on request after 1 task"),
             "recorded as truncated",
             // And the top-level refusal, which is what files the run as FAILED.
-            "interrupted by Ctrl-C after 1 model run(s)",
+            "interrupted by Ctrl-C after 1 model run",
         ],
     );
 
@@ -376,7 +376,7 @@ fn a_second_ctrl_c_within_the_drain_window_exits_130() {
 }
 
 /// A Ctrl-C that lands during the measurement phase drains NOTHING, and still
-/// refuses. `after 0 task(s)` and `after 1 task(s)` are different facts about the
+/// refuses. `after 0 tasks` and `after 1 task` are different facts about the
 /// world and only one of them is true here.
 ///
 /// Deterministic because the stub holds the measurement request: the run cannot
@@ -407,7 +407,7 @@ fn a_ctrl_c_during_measurement_drains_nothing_and_still_refuses() {
         1,
         &[
             BANNER,
-            "on request after 0 task(s)",
+            "on request after 0 tasks",
             "the run is recorded as truncated",
             "interrupted by Ctrl-C",
         ],

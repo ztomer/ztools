@@ -249,7 +249,7 @@ class TestTheSweepVerdict:
         sweep.plan("nemotron", rows=17, rc=124)
         r = sweep.run("--model", "nemotron")
         assert r.returncode == 1, sweep.all_output(r)
-        assert "1 model(s) did not finish" in sweep.all_output(r)
+        assert "1 model did not finish" in sweep.all_output(r)
         assert sweep.states("nemotron") == ["TRUNCATED"]
         assert _score_of(sweep.rows()[0]) == 17
 
@@ -258,7 +258,7 @@ class TestTheSweepVerdict:
         sweep.plan("bonsai", rows=3, rc=101)
         r = sweep.run("--model", "bonsai")
         assert r.returncode == 1, sweep.all_output(r)
-        assert "1 model(s) did not finish" in sweep.all_output(r)
+        assert "1 model did not finish" in sweep.all_output(r)
         assert sweep.states("bonsai") == ["FAILED"]
 
     def test_every_unfinished_model_is_counted_not_just_the_first(self, sweep):
@@ -269,7 +269,7 @@ class TestTheSweepVerdict:
         sweep.plan("bonsai", rows=0, rc=7)
         r = sweep.run()
         assert r.returncode == 1, sweep.all_output(r)
-        assert "2 model(s) did not finish" in sweep.all_output(r)
+        assert "2 models did not finish" in sweep.all_output(r)
         assert sweep.states("nemotron") == ["TRUNCATED"]
         assert sweep.states("bonsai") == ["FAILED"]
 
@@ -379,7 +379,7 @@ class TestResume:
         sweep.plan("bonsai", rows=23)
         r = sweep.run()
         assert sweep.ran() == ["bonsai"], sweep.all_output(r)
-        assert "Sweeping 1 model(s)" in sweep.all_output(r)
+        assert "Sweeping 1 model" in sweep.all_output(r)
 
 
 class TestTheSweepRefusesToMeasureWrong:

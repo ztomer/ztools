@@ -96,7 +96,8 @@ pub fn probe_model_dir_defects(dir: &Path) -> Vec<String> {
         }
     } else if !mtp_shards.is_empty() {
         defects.push(format!(
-            "unintegrated MTP speculative shard(s) present without runtime config: {}",
+            "unintegrated MTP speculative {} present without runtime config: {}",
+            crate::plural::noun(mtp_shards.len(), "shard"),
             mtp_shards.join(", ")
         ));
     }
@@ -123,8 +124,8 @@ pub fn probe_model_dir_defects(dir: &Path) -> Vec<String> {
         if !missing.is_empty() {
             missing.sort();
             defects.push(format!(
-                "missing {} safetensor shard(s) in index: {:?}",
-                missing.len(),
+                "missing {} in index: {:?}",
+                crate::plural::counted(missing.len(), "safetensor shard"),
                 missing
             ));
         }
@@ -159,8 +160,8 @@ pub fn probe_model_dir_defects(dir: &Path) -> Vec<String> {
     }
     if !incomplete.is_empty() {
         defects.push(format!(
-            "incomplete download artifacts ({} .incomplete file(s) present)",
-            incomplete.len()
+            "incomplete download artifacts ({} present)",
+            crate::plural::counted(incomplete.len(), ".incomplete file")
         ));
     }
 

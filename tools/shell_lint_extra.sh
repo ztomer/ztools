@@ -58,6 +58,11 @@ else
 fi
 unset _lint_helper
 
+# Without the house lib the counted-noun helpers do not exist either; a plain stand-in keeps the
+# messages right (ZT.GATEHYG, GOH.PLURALHEDGE).
+declare -F counted >/dev/null 2>&1 || counted() { printf '%s %s' "$1" "$(plural_noun "$1" "$2")"; }
+declare -F plural_noun >/dev/null 2>&1 || plural_noun() { if [ "$1" = 1 ]; then printf '%s' "$2"; else printf '%s' "${2}s"; fi; }
+
 # WHAT IS CHECKED, and the one thing that is explicitly not: `bin/ab_test` is
 # listed because it is shell and outside the house globs, and it is READ-ONLY
 # here on purpose — it is under active development elsewhere, so a lint failure
@@ -74,7 +79,7 @@ if [ "$#" -gt 0 ]; then
     TARGETS=("$@")
 fi
 
-info "shell lint — ${#TARGETS[@]} path(s): ${TARGETS[*]}"
+info "shell lint — $(counted "${#TARGETS[@]}" path): ${TARGETS[*]}"
 
 command -v shellcheck >/dev/null 2>&1 || die \
     "shellcheck is not installed, so this step cannot check: ${TARGETS[*]}
@@ -107,7 +112,7 @@ for t in "${TARGETS[@]}"; do
 done
 
 if [ "$failed" -gt 0 ]; then
-    die "$failed of ${#TARGETS[@]} path(s) failed shellcheck at --severity=error"
+    die "$failed of $(counted "${#TARGETS[@]}" path) failed shellcheck at --severity=error"
 fi
 
 # WHAT THIS STEP DOES NOT CATCH, counted rather than asserted, because the honest
@@ -121,8 +126,8 @@ fi
 # `error` and the rest is reported instead.
 for t in "${TARGETS[@]}"; do
     nits=$(shellcheck -x --severity=style --format=gcc "$t" 2>/dev/null | grep -c . || true)
-    [ "$nits" -gt 0 ] && warn "$t: $nits finding(s) below the failing floor (style/warning/info) — not failures"
+    [ "$nits" -gt 0 ] && warn "$t: $(counted "$nits" finding) below the failing floor (style/warning/info) — not failures"
 done
 unset nits
 
-ok "shell lint clean — bash -n + shellcheck --severity=error over ${#TARGETS[@]} path(s)"
+ok "shell lint clean — bash -n + shellcheck --severity=error over $(counted "${#TARGETS[@]}" path)"

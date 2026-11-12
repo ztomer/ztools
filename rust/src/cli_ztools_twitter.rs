@@ -216,8 +216,8 @@ pub(crate) fn twitter_summarize(config: &ZtoolsConfig, command: TwitterCommand) 
                 eprintln!("⚠ {warning}");
             }
             println!(
-                "· Cleanup complete: {} .md file(s) removed from {}.",
-                report.deleted,
+                "· Cleanup complete: {} removed from {}.",
+                crate::plural::counted(report.deleted, ".md file"),
                 dir.display()
             );
             return Ok(());

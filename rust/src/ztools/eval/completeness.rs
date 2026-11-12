@@ -51,8 +51,8 @@ fn reason(missing: &[String], outcomes: &[TaskOutcome]) -> String {
         head.push("...".to_string());
     }
     format!(
-        "abandoned after {} task(s); {} not run ({}); last failure category {}",
-        outcomes.len(),
+        "abandoned after {}; {} not run ({}); last failure category {}",
+        crate::plural::counted(outcomes.len(), "task"),
         missing.len(),
         head.join(", "),
         last_category
@@ -137,8 +137,8 @@ pub fn tasks_unmeasured_reason(outcomes: &[TaskOutcome]) -> Option<String> {
     };
     if missed.len() == outcomes.len() {
         return Some(format!(
-            "0 of {} task(s) reached the model, so this run holds no score for it ({})",
-            outcomes.len(),
+            "0 of {} reached the model, so this run holds no score for it ({})",
+            crate::plural::counted(outcomes.len(), "task"),
             causes(&missed)
         ));
     }
@@ -150,9 +150,9 @@ pub fn tasks_unmeasured_reason(outcomes: &[TaskOutcome]) -> Option<String> {
         return None;
     }
     Some(format!(
-        "{} of {} task(s) never reached the model ({}); the other {} hold its scores",
+        "{} of {} never reached the model ({}); the other {} hold its scores",
         outages.len(),
-        outcomes.len(),
+        crate::plural::counted(outcomes.len(), "task"),
         causes(&outages),
         outcomes.len() - outages.len()
     ))
@@ -189,11 +189,7 @@ mod tests {
         let c = Completeness::derive(&expected, &outcomes);
         assert!(!c.complete);
         assert_eq!(c.missing, vec!["c".to_string()]);
-        assert!(
-            c.reason.contains("abandoned after 2 task(s)"),
-            "{}",
-            c.reason
-        );
+        assert!(c.reason.contains("abandoned after 2 tasks"), "{}", c.reason);
         assert!(
             c.reason.contains("last failure category INFRA"),
             "{}",

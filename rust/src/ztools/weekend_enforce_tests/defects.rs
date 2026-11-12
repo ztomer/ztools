@@ -12,7 +12,7 @@ fn suspects(ages: &str) -> HashMap<String, Vec<String>> {
             vec!["$18-35".to_string(), "18-35".to_string()],
         ),
         ("Duration".to_string(), vec!["2-3 hours".to_string()]),
-        ("Target Age(s)".to_string(), vec![ages.to_string()]),
+        ("Target Ages".to_string(), vec![ages.to_string()]),
     ])
 }
 
@@ -36,7 +36,7 @@ fn rows_with(n: usize, field: &str, value: &str) -> Vec<WeekendEvent> {
 fn the_shipped_target_age_constant_is_flagged() {
     let notes = flag_constant_columns(&rows_with(5, "target_ages", "6-13"), &suspects("6-13"));
     assert_eq!(notes.len(), 1, "{notes:?}");
-    assert!(notes[0].contains("Target Age(s)"), "{notes:?}");
+    assert!(notes[0].contains("Target Ages"), "{notes:?}");
     assert!(notes[0].contains("6-13"), "{notes:?}");
     // The note must say the rows were kept, or a reader will assume a drop.
     assert!(notes[0].to_lowercase().contains("kept"), "{notes:?}");
@@ -83,7 +83,7 @@ fn empty_cells_are_not_a_constant_column() {
     ));
     let mut pathological = suspects("6-13");
     pathological.insert(
-        "Target Age(s)".to_string(),
+        "Target Ages".to_string(),
         vec!["6-13".to_string(), String::new()],
     );
     assert_empty!(flag_constant_columns(
@@ -111,6 +111,6 @@ fn matching_is_case_and_space_insensitive() {
         ev.duration = "2-3 Hours".into();
     }
     let joined = flag_constant_columns(&rows, &suspects("6-13")).join(" ");
-    assert!(joined.contains("Target Age(s)"), "{joined}");
+    assert!(joined.contains("Target Ages"), "{joined}");
     assert!(joined.contains("Duration"), "{joined}");
 }

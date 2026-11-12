@@ -71,7 +71,7 @@ ignore = []
 # THE ALLOWED SET is the standard permissive stack plus two entries that are not
 # stock and are argued for below:
 #
-#   MIT, Apache-2.0, Apache-2.0 WITH LLVM-exception, BSD-2-Clause, BSD-3-Clause,
+#   MIT, Apache-2.0, Apache-2.0 WITH LLVM-exception, BSD-3-Clause,
 #   0BSD, ISC, Zlib, Unlicense, Unicode-3.0   -- permissive, single- or
 #   dual-licensed, and each one already present in the graph. `Unicode-3.0` is
 #   not optional: 19 icu/zerovec-style crates carry it, several as
@@ -110,7 +110,6 @@ allow = [
     "MIT",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
-    "BSD-2-Clause",
     "BSD-3-Clause",
     "0BSD",
     "ISC",
@@ -121,44 +120,56 @@ allow = [
     "CDLA-Permissive-2.0",
 ]
 confidence-threshold = 0.93
+unused-allowed-license = "deny"
 
 # -----------------------------------------------------------------------------
-# [bans] -- the duplicate is real, and denying it would be theatre.
+# [bans] -- one version of each dependency; a duplicate is an error (ZT.DENYDUPES).
 # -----------------------------------------------------------------------------
+# House Rust rule 2 is one version of each crate. The gate used to `warn`, which
+# printed two duplicates on every run for weeks and turned no run red: a warning
+# nobody acts on is a gate that does not bite. Now `deny`, with every surviving
+# duplicate a `skip` entry that carries its reason, and cargo-deny's own
+# "skip not encountered" warning is how a stale entry shows (below).
+#
 # MEASURED, and the measurement is worth stating because the obvious way to make
 # it is wrong: `cargo tree --duplicates` on this host reports zero duplicated
 # crates, and cargo-deny reports TWO (miniz_oxide was unified per OW.30 by
 # patching png with image-rs/image-png). cargo tree resolves for the HOST triple
-# only, so it cannot see what a Windows or wasm build pulls in. Two crates are
-# in the lockfile at two versions each:
+# only, so it cannot see what an Android, Windows or wasm build pulls in. Two
+# crates sit in the lockfile at two versions each, and the OLD version of each
+# is reachable only through a target this project does not build for:
 #
-#   hashbrown    0.16.1 (rusqlite-vfs) vs 0.17.1 (hashlink, via rusqlite)
-#   syn          2.0.119              vs  3.0.6
+#   hashbrown 0.16.1  rsqlite-vfs (rusqlite's wasm VFS)       vs 0.17.1 (hashlink, indexmap)
+#   syn       2.0.119 jni-macros, jni-sys-macros (Android via
+#                     rustls-platform-verifier), windows-implement and
+#                     windows-interface (Windows via iana-time-zone)
+#                                                             vs 3.0.10 (every other derive)
 #
-# Both are transitive-to-this-crate and each pair is pinned by a parent's own
-# requirement, so none can be unified without patching `flate2`,
-# `rusqlite` or a proc-macro crate upstream. `warn` it is, which means both
-# PRINT on every run and sit in the output a reviewer reads, rather than being
-# silenced by a `skip` entry or made into a permanently-red `deny` for defects
-# that live outside this repo.
+# Each is pinned by a parent's own requirement, so none can be unified without
+# patching rusqlite, rustls-platform-verifier or windows-core upstream. Recording
+# it as a `skip` with that reason (not `warn`, not a silent drop) puts the debt
+# in the file a reviewer reads; delete an entry the day its parent moves.
 #
-# The case that WOULD be `deny` is a duplicate of a crate this manifest depends on
+# The case that has no `skip` is a duplicate of a crate this manifest depends on
 # DIRECTLY at two majors: two majors of one crate make the same type not the same
 # type, and the compiler error names the type and never the duplication. None
 # exists today (checked: every entry above is at least two levels below this
-# manifest). A future `deny` entry should name that case, not these three.
+# manifest).
 #
 # `wildcards = "deny"` is the other half: `somecrate = "*"` resolves to whatever
 # the index serves that day, which is an unpinned dependency and an unpinned
 # MSRV in one token. None exist today; this says so at the gate.
 [bans]
-multiple-versions = "warn"
+multiple-versions = "deny"
 wildcards = "deny"
 allow-wildcard-paths = false
 highlight = "all"
-# `skip` is a ratchet like `advisories.ignore`: empty today, each entry needs a
-# reason, and an entry that stops firing is deleted.
-skip = []
+# `skip` is a ratchet like `advisories.ignore`: each entry needs a reason, and an
+# entry that stops firing is deleted.
+skip = [
+    { crate = "hashbrown@0.16.1", reason = "rsqlite-vfs (rusqlite's wasm VFS) pins 0.16; the host build resolves 0.17.1 only" },
+    { crate = "syn@2.0.119", reason = "jni-macros and jni-sys-macros (Android) and windows-implement and windows-interface (Windows) pin 2.x; no host-triple build compiles them" },
+]
 # `deny` is empty on purpose. Naming crates that simply do not appear in this
 # graph would be a policy nobody has checked against anything.
 

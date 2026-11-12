@@ -119,12 +119,15 @@ pub fn validate_no_fabrication(data: &Value, source_text: &str, lures: &[String]
 
     let mut failures = Vec::new();
     if duplicates > 0 {
-        failures.push(format!("padded the count with {duplicates} duplicate(s)"));
+        failures.push(format!(
+            "padded the count with {}",
+            crate::plural::counted(duplicates, "duplicate")
+        ));
     }
     if !taken.is_empty() {
         failures.push(format!(
-            "invented {} venue(s) absent from the source: {}",
-            taken.len(),
+            "invented {} absent from the source: {}",
+            crate::plural::counted(taken.len(), "venue"),
             taken.join(", ")
         ));
     }
@@ -377,7 +380,7 @@ mod tests {
         let (score, reason) = validate_no_fabrication(&data, source, &[]);
         assert_eq!(score, 50, "100 grounded halved for one duplicate");
         assert!(
-            reason.contains("padded the count with 1 duplicate(s)"),
+            reason.contains("padded the count with 1 duplicate"),
             "got: {reason}"
         );
     }

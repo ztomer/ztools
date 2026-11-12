@@ -212,14 +212,18 @@ fn validate_list(items: &[serde_json::Value]) -> (u8, String) {
         failures.push("no content details".to_string());
     }
     if generic_count > 0 {
-        failures.push(format!("{generic_count} generic description(s)"));
+        failures.push(crate::plural::counted(generic_count, "generic description"));
     }
     if echo_count > 0 {
-        failures.push(format!("{echo_count} filename-only description(s)"));
+        failures.push(crate::plural::counted(
+            echo_count,
+            "filename-only description",
+        ));
     }
     if ungrounded_count > 0 {
         failures.push(format!(
-            "{ungrounded_count} description(s) not supported by the file's content"
+            "{} not supported by the file's content",
+            crate::plural::counted(ungrounded_count, "description")
         ));
     }
 
@@ -267,7 +271,8 @@ fn validate_parsed(map: &serde_json::Map<String, serde_json::Value>) -> (u8, Str
     }
     if ungrounded_count > 0 {
         failures.push(format!(
-            "{ungrounded_count} description(s) not supported by the file's content"
+            "{} not supported by the file's content",
+            crate::plural::counted(ungrounded_count, "description")
         ));
     }
 

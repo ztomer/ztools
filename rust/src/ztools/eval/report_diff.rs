@@ -133,9 +133,9 @@ pub fn render_deltas(report: &DeltaReport) -> Vec<String> {
             .map(|(model, task)| format!("{model}/{task}"))
             .collect();
         lines.push(format!(
-            "Set aside: {} task(s) whose only earlier entries describe a superseded version \
+            "Set aside: {} whose only earlier entries describe a superseded version \
              of the task (fingerprint absent or different): {}",
-            report.superseded.len(),
+            crate::plural::counted(report.superseded.len(), "task"),
             pairs.join(", ")
         ));
     }
@@ -300,7 +300,7 @@ mod tests {
         let lines = render_deltas(&report);
         assert_eq!(lines[0], "Changed since the last run: nothing moved");
         assert!(
-            lines[1].starts_with("Set aside: 1 task(s)") && lines[1].contains("m/file_summary"),
+            lines[1].starts_with("Set aside: 1 task whose") && lines[1].contains("m/file_summary"),
             "{lines:?}"
         );
     }

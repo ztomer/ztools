@@ -101,8 +101,8 @@ pub fn call_llm_text(prompt: &str, config: &crate::config::ZtoolsConfig) -> Opti
                     return Err(e);
                 };
                 println!(
-                    "\u{2192} llm text call: {cut}; kept its {} whole line(s)",
-                    kept.lines().count()
+                    "\u{2192} llm text call: {cut}; kept its {} whole",
+                    crate::plural::counted(kept.lines().count(), "line")
                 );
                 kept
             }

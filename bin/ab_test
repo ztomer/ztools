@@ -230,5 +230,5 @@ hr
 if [ "$failures" -eq 0 ]; then
     ok "smoke + parity harness passed"
 else
-    die "harness failed — $failures check(s) did not pass"
+    die "harness failed — $(counted "$failures" check) did not pass"
 fi

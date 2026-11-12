@@ -435,9 +435,9 @@ fn every_listed_row_has_pinned_ground_truth() {
     for (row, facts) in FILE_SUMMARY_GROUND_TRUTH {
         assert!(
             facts.len() >= 2,
-            "{row} carries {} pinned phrase(s); the table's documented shape is two, \
+            "{row} carries {}; the table's documented shape is two, \
              and fewer makes the row unscoreable while looking like a bad answer",
-            facts.len()
+            crate::plural::counted(facts.len(), "pinned phrase")
         );
         for fact in *facts {
             assert!(

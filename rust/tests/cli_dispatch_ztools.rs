@@ -341,7 +341,7 @@ fn image_renamer_dry_run_proposes_names_without_touching_files() {
             .unwrap(),
     );
     assert!(stdout.contains("DRY-RUN"), "{stdout}");
-    assert!(stdout.contains("1 file(s) processed"), "{stdout}");
+    assert!(stdout.contains("1 file processed"), "{stdout}");
     assert!(stdout.contains("my_vacation_photo.png"), "{stdout}");
     assert!(
         pics.join("My Vacation Photo.PNG").exists(),
@@ -386,7 +386,7 @@ fn image_renamer_dry_run_on_empty_dir() {
             .output()
             .unwrap(),
     );
-    assert!(stdout.contains("0 file(s) processed"), "{stdout}");
+    assert!(stdout.contains("0 files processed"), "{stdout}");
     assert!(stdout.contains("DRY-RUN"), "{stdout}");
 }
 

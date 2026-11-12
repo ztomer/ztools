@@ -204,7 +204,7 @@ def test_the_step_parse_finds_the_steps_this_file_exists_for():
     letting the file quietly check nothing.
     """
     steps = _gatesrc_steps(GATESRC.read_text())
-    assert len(steps) > 2, f"parsed {len(steps)} step(s), which is too few to be the gate"
+    assert len(steps) > 2, f"parsed {len(steps)} steps, which is too few to be the gate"
     for command in ("cargo deny",):
         assert any(step.startswith(command) for step in steps), (
             f"no {KEY} step runs `{command}`, which ci_tools.tsv exists to serve"

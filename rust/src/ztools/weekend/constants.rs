@@ -10,7 +10,7 @@ use super::WeekendEvent;
 /// These are the columns a model fills mechanically when it has nothing real to
 /// say.
 pub const CONSTANT_COLUMN_FIELDS: &[(&str, &[&str])] = &[
-    ("Target Age(s)", &["target_ages", "age_group"]),
+    ("Target Ages", &["target_ages", "age_group"]),
     ("Estimated Price", &["price", "cost"]),
     ("Duration", &["duration"]),
 ];

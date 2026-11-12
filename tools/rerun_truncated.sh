@@ -47,6 +47,11 @@ else
 fi
 unset _rerun_helper
 
+# Without the house lib the counted-noun helpers do not exist either; a plain stand-in keeps the
+# messages right (ZT.GATEHYG, GOH.PLURALHEDGE).
+declare -F counted >/dev/null 2>&1 || counted() { printf '%s %s' "$1" "$(plural_noun "$1" "$2")"; }
+declare -F plural_noun >/dev/null 2>&1 || plural_noun() { if [ "$1" = 1 ]; then printf '%s' "$2"; else printf '%s' "${2}s"; fi; }
+
 # Seams, so this script is testable without a 27GB server, without the machine's real
 # /tmp and without writing the repo's own .sweep_status. `SWEEP_STATUS` is the SAME
 # variable sweep_models.sh reads, so the two scripts default to one status file and a
@@ -156,13 +161,13 @@ for MODEL in "${MODELS[@]}"; do
   [[ "$DONE_COUNT" =~ ^[0-9]+$ ]] || DONE_COUNT=0
 
   if [ "$CODE" -eq 124 ]; then
-    warn "$MODEL TRUNCATED AGAIN at ${CEILING}s after $DONE_COUNT task(s) — raise RERUN_TIMEOUT"
+    warn "$MODEL TRUNCATED AGAIN at ${CEILING}s after $(counted "$DONE_COUNT" task) — raise RERUN_TIMEOUT"
     STATE=TRUNCATED
   elif [ "$CODE" -ne 0 ]; then
-    warn "$MODEL exited $CODE after ${ELAPSED}s, $DONE_COUNT task(s)"
+    warn "$MODEL exited $CODE after ${ELAPSED}s, $(counted "$DONE_COUNT" task)"
     STATE=FAILED
   else
-    ok "$MODEL complete: $DONE_COUNT task(s) in ${ELAPSED}s"
+    ok "$MODEL complete: $(counted "$DONE_COUNT" task) in ${ELAPSED}s"
     STATE=DONE
   fi
   printf '%s\t%s\t%ss\ttasks=%s\texit=%s\n' \

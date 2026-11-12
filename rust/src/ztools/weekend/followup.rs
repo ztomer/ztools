@@ -285,7 +285,10 @@ pub fn follow_aggregators(results: &[SearchResult], region: &RegionLists) -> Str
         }
     }
     if !followed.is_empty() {
-        println!("\u{2192} Followed {} event listing page(s)", followed.len());
+        println!(
+            "\u{2192} Followed {}",
+            crate::plural::counted(followed.len(), "event listing page")
+        );
     }
     followed.join("\n")
 }

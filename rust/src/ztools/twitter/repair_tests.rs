@@ -263,7 +263,7 @@ fn a_run_on_bullet_is_dropped() {
     assert!(fixed.body.contains("- two"), "three citations is a bullet");
     assert_eq!(
         fixed.notes,
-        vec!["dropped 1 bullet(s) citing more than 3 tweets (unrelated claims run together)"]
+        vec!["dropped 1 bullet citing more than 3 tweets (unrelated claims run together)"]
     );
 }
 

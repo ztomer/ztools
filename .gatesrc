@@ -87,7 +87,10 @@ GOH_PYTHON_FORMATTED=1
 # THREE REPO-LOCAL STEPS (2026-10-05), each calibrated red before it was trusted:
 #   cargo deny        licences, sources and bans (rust/deny.toml); `cargo audit`
 #                     stays as well, because its ignore list is the ratchet the
-#                     house rules name. Red: multiple-versions = "deny" -> exit 2.
+#                     house rules name. Red: multiple-versions = "deny" -> exit 2. Duplicates and an unused
+#                     licence allowance are errors, and `-D warnings` makes the rest
+#                     (an unmatched `skip`) bite too (ZT.DENYDUPES, 2026-11-12; calibrated:
+#                     a dropped skip, a returned BSD-2-Clause and a stale skip each -> exit 1).
 #   shell_lint_extra  bash -n + shellcheck over .githooks/* and bin/ab_test, which
 #                     structural.sh's `*.sh` + `hooks/*` selection cannot see.
 #                     Red: a stray `fi` appended to .githooks/pre-push -> exit 1.
@@ -110,7 +113,7 @@ GOH_PYTHON_FORMATTED=1
 # Steps are COLON-separated by the runner, so no step string may contain a
 # colon -- hence $GOH_DIR resolved here.
 export GOH_DIR="${GOH_DIR:-$HOME/Projects/gates_of_heck}"
-GOH_CI_STEPS='"$GOH_DIR/gates/rust_gate.sh" . rust:python3 "$GOH_DIR/lib/advisory_db.py" run --fetch -- cargo audit --file rust/Cargo.lock:cargo deny --manifest-path rust/Cargo.toml check:tools/shell_lint_extra.sh:python3 tools/vendor_lint_ratchet.py:"$GOH_DIR/gates/structural.sh" --full:cargo test --manifest-path rust/Cargo.toml --all-features --doc:python3 -m pytest tools/tests -q:"$GOH_DIR/gates/coverage_gate.sh" --lang rust --floor 95 --floors-json "$PWD/tools/coverage_floors.jsonc" rust:ruff check tools/:ruff format --check tools/:"$GOH_DIR/gates/goh.sh" status-markers:cargo test --manifest-path vendor/camoufox-rs/Cargo.toml --all-features:"$GOH_DIR/gates/goh.sh" secrets'
+GOH_CI_STEPS='"$GOH_DIR/gates/rust_gate.sh" . rust:python3 "$GOH_DIR/lib/advisory_db.py" run --fetch -- cargo audit --file rust/Cargo.lock:cargo deny --manifest-path rust/Cargo.toml check -D warnings:tools/shell_lint_extra.sh:python3 tools/vendor_lint_ratchet.py:"$GOH_DIR/gates/structural.sh" --full:cargo test --manifest-path rust/Cargo.toml --all-features --doc:python3 -m pytest tools/tests -q:"$GOH_DIR/gates/coverage_gate.sh" --lang rust --floor 95 --floors-json "$PWD/tools/coverage_floors.jsonc" rust:ruff check tools/:ruff format --check tools/:"$GOH_DIR/gates/goh.sh" status-markers:cargo test --manifest-path vendor/camoufox-rs/Cargo.toml --all-features:"$GOH_DIR/gates/goh.sh" secrets'
 
 # Every child process names where its stdin comes from (`goh
 # subprocess-stdin`). The house turned this one on for every repo on 2026-10-13;
@@ -140,6 +143,13 @@ GOH_SUBPROCESS_STDIN_MIN_CALLS=18       # read 20 on 2026-10-20, every one decla
 GOH_TAP_WRITES_MIN_FILES=33             # read 37 (script and workflow files)
 GOH_BUSY_LOOP_MIN_FILES=12              # read 14 (tracked shell sources)
 GOH_INSTALLED_VERSION_MIN_FILES=22      # read 25 (Markdown files that are not dated history)
+
+# The four that were still without a floor (ZT.GATEHYG, 2026-11-12; the structural run's
+# "declare no floor" line named them), each at nine tenths of what that run read.
+GOH_RELEASE_QUIET_MIN_FILES=1           # read 1
+GOH_MKTEMP_PORTABLE_MIN_FILES=13        # read 15
+GOH_PLURAL_HEDGE_MIN_FILES=341          # read 379
+GOH_WORKFLOW_PINS_MIN_REFS=5            # read 6
 
 # A commit that ADDS a test names, in a `Red-run:` trailer, the mutation that
 # turned that test red (goh red-run, BACKLOG 4.11; owner OW.8, 2026-10-31).

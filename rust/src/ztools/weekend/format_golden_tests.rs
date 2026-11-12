@@ -388,7 +388,7 @@ fn the_saved_plan_says_when_every_event_is() {
         .expect("the transient table header");
     assert_eq!(
         header,
-        "| Score | Event & Location | Dates | Day & Time | Target Age(s) | Estimated Price (CAD) | \
+        "| Score | Event & Location | Dates | Day & Time | Target Ages | Estimated Price (CAD) | \
          Why It Fits |"
     );
     // The two `dates` values `populated_case` supplied, on their own rows: a

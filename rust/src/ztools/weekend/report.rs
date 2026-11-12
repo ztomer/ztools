@@ -166,14 +166,14 @@ mod tests {
 
 ### Fixed / Year-Round Activities (Ranked by Fit Score)
 
-| Score | Activity & Location | Dates | Target Age(s) | Estimated Price (CAD) | Weather Appropriateness | Why It Fits |
+| Score | Activity & Location | Dates | Target Ages | Estimated Price (CAD) | Weather Appropriateness | Why It Fits |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | * 2.5/5 | **Air Riderz** (Vaughan, ON) | — | 5 and up | — | outdoor | Indoor inflatable park |
 | * 1.9/5 | **Kortright Centre** (Toronto, ON) | Year-Round | 5 and up | — | indoor | Trails and a centre for discovery |
 
 ### Transient / Limited-Time Events (Ranked by Fit Score)
 
-| Score | Event & Location | Dates | Day & Time | Target Age(s) | Estimated Price (CAD) | Why It Fits |
+| Score | Event & Location | Dates | Day & Time | Target Ages | Estimated Price (CAD) | Why It Fits |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | * 4.0/5 | **Maple Syrup Festival** | April 11 to 12 | Saturday 10am-4pm | 6-13 | By donation | Fresh maple, made on site |
 

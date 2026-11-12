@@ -132,10 +132,10 @@ fn test_flag_constant_columns() {
     // The column is constant AND carries the configured family range, so it is
     // flagged as answered from the prompt.
     let mut suspects = std::collections::HashMap::new();
-    suspects.insert("Target Age(s)".to_string(), vec!["6-13".to_string()]);
+    suspects.insert("Target Ages".to_string(), vec!["6-13".to_string()]);
     let constants = flag_constant_columns(&events, &suspects);
     assert_eq!(constants.len(), 1, "{constants:?}");
-    assert!(constants[0].contains("Target Age(s)"), "{constants:?}");
+    assert!(constants[0].contains("Target Ages"), "{constants:?}");
     assert!(
         constants[0].to_lowercase().contains("kept"),
         "{constants:?}"

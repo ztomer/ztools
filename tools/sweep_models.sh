@@ -71,6 +71,11 @@ else
 fi
 unset _sweep_helper
 
+# Without the house lib the counted-noun helpers do not exist either; a plain stand-in keeps the
+# messages right (ZT.GATEHYG, GOH.PLURALHEDGE).
+declare -F counted >/dev/null 2>&1 || counted() { printf '%s %s' "$1" "$(plural_noun "$1" "$2")"; }
+declare -F plural_noun >/dev/null 2>&1 || plural_noun() { if [ "$1" = 1 ]; then printf '%s' "$2"; else printf '%s' "${2}s"; fi; }
+
 # The server guard, as a PATH-INDEPENDENT seam. This runs unattended for hours and its
 # results are worthless without exactly one server, so the guarantee is this file
 # succeeding -- and a test must be able to prove the sweep REFUSES without one without
@@ -154,7 +159,7 @@ info "skipping: $SKIP_RE"
 # when nothing matched, so a value built from it is only correct by accident, and a
 # `|| echo 0` fallback turns "0" into the two-line string "0\n0".
 TOTAL="$(printf '%s\n' "$MODELS" | awk 'NF { n++ } END { printf "%d\n", n + 0 }')"
-section "Sweeping $TOTAL model(s)"
+section "Sweeping $(counted "$TOTAL" model)"
 info "status: $STATUS"
 info "logs:   $LOGDIR"
 
@@ -229,14 +234,14 @@ for MODEL in $MODELS; do
     warn "[$i/$TOTAL] $MODEL — REFUSED, nothing scored: ${REASON:-see $LOG}"
   elif [ "$CODE" -eq 0 ]; then
     printf 'DONE\t%s\t%ss\ttasks=%s\texit=0\n' "$MODEL" "$ELAPSED" "$TASKS_DONE" >> "$STATUS"
-    ok "[$i/$TOTAL] $MODEL — done in ${ELAPSED}s, $TASKS_DONE task(s) scored"
+    ok "[$i/$TOTAL] $MODEL — done in ${ELAPSED}s, $(counted "$TASKS_DONE" task) scored"
   elif [ "$CODE" -eq 124 ]; then
     printf 'TRUNCATED\t%s\t%ss\ttasks=%s\texit=124(timeout)\n' "$MODEL" "$ELAPSED" "$TASKS_DONE" >> "$STATUS"
-    warn "[$i/$TOTAL] $MODEL — TRUNCATED at ${PER_MODEL_TIMEOUT}s after $TASKS_DONE task(s);" \
+    warn "[$i/$TOTAL] $MODEL — TRUNCATED at ${PER_MODEL_TIMEOUT}s after $(counted "$TASKS_DONE" task);" \
          "its scores cover a SUBSET and are not comparable with a complete run"
   else
     printf 'FAILED\t%s\t%ss\ttasks=%s\texit=%s\n' "$MODEL" "$ELAPSED" "$TASKS_DONE" "$CODE" >> "$STATUS"
-    err "[$i/$TOTAL] $MODEL — FAILED (exit $CODE) after $TASKS_DONE task(s); see $LOG"
+    err "[$i/$TOTAL] $MODEL — FAILED (exit $CODE) after $(counted "$TASKS_DONE" task); see $LOG"
   fi
 done
 
@@ -259,7 +264,7 @@ cat "$STATUS"
 INCOMPLETE="$(awk '/^(TRUNCATED|FAILED)/ { n++ } END { printf "%d\n", n + 0 }' "$STATUS")" \
   || die "could not read the status file at $STATUS — not claiming the sweep completed"
 if [ "$INCOMPLETE" -gt 0 ]; then
-  warn "$INCOMPLETE model(s) did not finish — do NOT rank those against complete runs"
+  warn "$(counted "$INCOMPLETE" model) did not finish — do NOT rank those against complete runs"
   exit 1
 fi
 ok "every model completed"
