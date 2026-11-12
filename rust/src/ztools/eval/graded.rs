@@ -92,6 +92,19 @@ pub enum Graded {
         #[serde(default)]
         required: Vec<String>,
     },
+    /// `validate_recall(text, items, handles, forbidden)` (LM.PROBES): the share of
+    /// planted `items` that came back (70 points), the `(@handle | time)` form of each
+    /// of `handles` (30), less 15 per `forbidden` token present.
+    Recall {
+        items: Vec<String>,
+        #[serde(default)]
+        handles: Vec<String>,
+        #[serde(default)]
+        forbidden: Vec<String>,
+    },
+    /// `validate_json_fields(parsed, expected)` (LM.PROBES): the share of
+    /// `(key, value)` pairs found in the JSON answer.
+    JsonFields { expected: Vec<(String, String)> },
 }
 
 /// Whether the weekend planner's own parser keeps `answer`: the eval's parse
@@ -180,6 +193,14 @@ impl Graded {
             ),
             Self::NoRefusal { required } => {
                 validators::refusal::validate_no_refusal(cleaned, required)
+            }
+            Self::Recall {
+                items,
+                handles,
+                forbidden,
+            } => validators::recall::validate_recall(cleaned, items, handles, forbidden),
+            Self::JsonFields { expected } => {
+                validators::recall::validate_json_fields(&value_of(cleaned, parsed), expected)
             }
             Self::PlannerEvents { inner, rows } => {
                 if planner_parses(cleaned, parsed) {

@@ -11,6 +11,7 @@ disappears the child (and its own child) must already be dead, and the same must
 bench.sh has exited. A fake `osaurus` stands in for the real one; nothing here loads a model.
 """
 
+import contextlib
 import os
 import signal
 import subprocess
@@ -105,10 +106,8 @@ def _run_and_term(tmp_path, mode):
             proc.kill()
         for name in (pidfile, grandfile):
             if name.exists() and name.read_text().strip():
-                try:
+                with contextlib.suppress(ProcessLookupError):
                     os.kill(int(name.read_text()), signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
 
 
 def test_sigterm_reaps_the_child_before_the_lock_is_released(tmp_path):
@@ -119,7 +118,7 @@ def test_sigterm_reaps_the_child_before_the_lock_is_released(tmp_path):
 
 
 def test_a_child_that_ignores_sigterm_is_killed_before_release(tmp_path):
-    lock, child, grand, alive_at_release = _run_and_term(tmp_path, "ignore")
+    _lock, child, grand, alive_at_release = _run_and_term(tmp_path, "ignore")
     assert alive_at_release == [], f"the lock was released while {alive_at_release} still ran"
     assert not _alive(child) and not _alive(grand)
 

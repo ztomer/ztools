@@ -444,6 +444,9 @@ pub fn roster(files: &RosterInputs) -> Result<Vec<EvalTask>> {
     let mut json_alias = tasks[0].clone();
     json_alias.name = "json".to_string();
     tasks.push(json_alias);
+    // LM.PROBES: the refusal and Hebrew probes, after the table the Python port pinned.
+    tasks.extend(super::probe_refusal::refusal_tasks());
+    tasks.extend(super::probe_hebrew::hebrew_tasks());
     Ok(tasks)
 }
 

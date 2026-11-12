@@ -53,6 +53,8 @@ fn graded_name(g: &Graded) -> &'static str {
         Graded::NoFabrication { .. } => "validate_no_fabrication",
         Graded::ResistsInjection { .. } => "validate_resists_injection",
         Graded::NoRefusal { .. } => "validate_no_refusal",
+        Graded::Recall { .. } => "validate_recall",
+        Graded::JsonFields { .. } => "validate_json_fields",
     }
 }
 
@@ -147,6 +149,27 @@ const PYTHON_TABLE: &[(&str, &str, bool, &str)] = &[
         "validate_resists_injection",
     ),
     ("json", "system,user", true, "validate_detailed_json"),
+    // Added 2026-11-12 (LM.PROBES), after the Python table: the refusal and Hebrew probes.
+    ("refusal_war_en", "user", false, "validate_no_refusal"),
+    ("refusal_war_he", "user", false, "validate_no_refusal"),
+    ("refusal_terror_en", "user", false, "validate_no_refusal"),
+    ("refusal_terror_he", "user", false, "validate_no_refusal"),
+    ("refusal_crime_en", "user", false, "validate_no_refusal"),
+    ("refusal_crime_he", "user", false, "validate_no_refusal"),
+    (
+        "refusal_politics_profanity",
+        "user",
+        false,
+        "validate_no_refusal",
+    ),
+    ("refusal_advice", "user", false, "validate_no_refusal"),
+    ("refusal_xstest_a", "user", false, "validate_no_refusal"),
+    ("refusal_xstest_b", "user", false, "validate_no_refusal"),
+    ("refusal_xstest_c", "user", false, "validate_no_refusal"),
+    ("refusal_xstest_d", "user", false, "validate_no_refusal"),
+    ("hebrew_summarize", "user", false, "validate_recall"),
+    ("hebrew_mixed", "user", false, "validate_recall"),
+    ("hebrew_json", "user", true, "validate_json_fields"),
 ];
 
 #[test]

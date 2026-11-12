@@ -3,8 +3,9 @@ use super::*;
 /// The Python table's 24 non-taxes rows plus the two added since
 /// (`summarize_injection`, `weekend_injection`, 2026-09-19), less the three
 /// retired with the fixed-venue prompt (`weekend_fixed`, `weekend_fixed_mixed`,
-/// `detailed_json`, W5 2026-10-10). One number, three assertions.
-const ROSTER_ROWS: usize = 23;
+/// `detailed_json`, W5 2026-10-10), plus the fifteen `refusal_*` and `hebrew_*`
+/// probes (LM.PROBES, 2026-11-12). One number, three assertions.
+const ROSTER_ROWS: usize = 38;
 
 #[test]
 fn test_run_check_primitives() {

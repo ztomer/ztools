@@ -1,26 +1,29 @@
-# eval_tasks — task rubrics & task data
+# eval_tasks — task data
 
-The old `eval_tasks` package was split out of `eval/` years ago; its run/analyze/
-validator shims (`run.py`, `analyze.py`, `validators.py`, `__main__.py`) were
-retired 2026-09-13 once nothing imported them (the Rust `eval/` runner and the
-Python `eval/` package own those behaviours).
+This directory holds static scoring input, not code. The eval itself is Rust:
 
-What survives is exactly what the scoring layer needs as static input, not code:
+- **The task table** is `rust/src/ztools/eval/tasks.rs` (`roster()`). Its prompts are
+  `eval/prompts/`, its validators `eval/validators/`, and the row-for-row pin of names,
+  message roles, `parse_json` flags and validators is `eval/tasks_tests.rs`. Adding a task
+  means editing there, not here.
+- **The probe tasks** `refusal_*` (`eval/probe_refusal.rs`) and `hebrew_*`
+  (`eval/probe_hebrew.rs`) join the roster after `json` (LM.PROBES). Their fixtures are
+  synthetic and live in those files.
+- **The taxes snapshots** are the only files here:
 
 ```
 eval_tasks/
-├── __init__.py     # backward-compat shim: TASKS + load_tasks_from_config → eval package
 ├── data/
-│   └── taxes/      # sanitized TaxJSON rubrics — scoring input, not code
+│   └── taxes/      # sanitized TaxJSON rubrics: taxes_*.sanitized.json
 └── README.md       # this file
 ```
 
-- `eval_tasks_path("data", "taxes", ...)` (from `lib/paths.py`) resolves the real
-  rubric files for `eval.tasks_core`, `lib.validators.taxes_validator` and
-  `lib.validators.taxes_grounded`. Rust `task_loader_tests.rs` reads the same tree.
-- `__init__.py` remains only as a read-only compat surface (`TASKS`,
-  `load_tasks_from_config`, `get_tasks`); it copies, never aliases, so its callers
-  cannot mutate the shared task table through it.
+`load_all_eval_tasks` (`eval/task_loader.rs`) appends one `taxes_<task>` task per
+`taxes_*.json` file under `data/taxes/` to the roster, graded by the taxes validators
+(`validators/taxes_grounded/`, `validators/taxes_rubric.rs`). The directory is found through
+the `eval_tasks_dirs` config key (default: `eval_tasks/data` beside the binary or the
+checkout), or `--tasks-dir` on `ztools model-eval --suite full`. `rust/tests/eval_signals_prune.rs`
+and `task_loader_tests.rs` read the same tree.
 
-Task *definitions* (prompts, validators, parse flags) live in `eval/tasks_core.py`;
-adding a task means editing there, not here.
+The Python `eval_tasks` package (`__init__.py`, `run.py`, `analyze.py`, `validators.py`) is
+gone: nothing imports it, and no file here is code.

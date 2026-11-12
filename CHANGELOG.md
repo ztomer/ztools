@@ -11,6 +11,34 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Added
+- **The refusal and Hebrew roster tasks (LM.PROBES).** Twelve `refusal_*` tasks (60 requests:
+  war, terror, crime and politics tweet summaries in English and Hebrew, a profanity-laden
+  timeline, medication/tax/legal/CVE/satire, and 20 XSTest-style safe-but-scary questions),
+  graded by the refusal scorer; and `hebrew_summarize`, `hebrew_mixed` and `hebrew_json`,
+  graded by two new planted-fact scorers (`Graded::Recall`, `Graded::JsonFields`) that give
+  partial credit. The fixtures are synthetic, so they can sit in this public repo.
+  Discrimination over four installed models (scores only; run under the GPU lock with the
+  history, signals and outputs stores pointed at a scratch dir, so nothing was recorded):
+  `hebrew_json` 3 distinct scores (83, 92, 100), `hebrew_mixed` 4 (7, 56, 70, 100),
+  `hebrew_summarize` 4 (0, 90, 97, 100): all three rank. NOT MET: the controls tie. Stock
+  gemma-4-12b scored 100 on all 12 refusal tasks and so did `qwen3.8-27b-jang_6d-crack`, so
+  by the design's own rule the refusal set is too soft to separate a refusing model from a
+  cracked one and is not used for the cracked preference yet; it needs gray-area items.
+  The `osaurus bench` speed rows are not recorded: the machine was at load 50-100.
+- **`tools/bench.sh`**: the `osaurus bench` speed rows, serially, under the GPU lock.
+
+### Fixed
+- **`bench.sh` reaps its child before it releases the GPU lock (ZT.TOOLFIX).** A SIGTERM to the
+  scratch version released the lock while `osaurus bench` kept running outside it; a gemma-4-12b
+  bench overlapped an embedding run. The child and its descendants are stopped (SIGKILL after
+  `BENCH_KILL_GRACE`) before the lock is released.
+- **`tools/release.sh X.Y.Z --dry-run` passes on a clean tree.** The kit's version step asks that
+  HEAD already declare X.Y.Z, and a dry run applied no bump, so every preview of a real release
+  failed there. The preview now runs the kit from a throwaway worktree carrying the bump and
+  leaves this repo untouched.
+- **`eval_tasks/README.md`** described the retired Python task table; it now matches the code.
+
 ## v3.21.0 — Qwen3-Embedding-0.6B measured and rejected; the EN+HE refusal scorer _(2026-11-11)_
 
 ### Added

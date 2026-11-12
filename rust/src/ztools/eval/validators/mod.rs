@@ -11,6 +11,7 @@
 //! - `filename`: filename-quality scorer with leak and relevance gates.
 //! - `mixed_text`: signal-from-noise scorers and the factual probes.
 //! - `refusal`: the EN+HE refusal scorer behind the `refusal_*` tasks.
+//! - `recall`: planted-fact scorers behind the `hebrew_*` tasks.
 //! - `planner_fields`: a weekend answer's fields, graded by the planner's own parse.
 //! - `summary`: summary-quality scorer with misattribution and placeholder caps.
 //! - `taxes_grounded`: arithmetic and citation grounding for financial tasks.
@@ -24,6 +25,7 @@ pub mod filename;
 pub mod json_validator;
 pub mod mixed_text;
 pub mod planner_fields;
+pub mod recall;
 pub mod refusal;
 pub mod summary;
 pub mod taxes_grounded;

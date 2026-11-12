@@ -19,6 +19,8 @@ pub mod model_resolve;
 pub mod outputs;
 pub mod oversize;
 pub mod prefill;
+pub mod probe_hebrew;
+pub mod probe_refusal;
 pub mod prompts;
 pub mod quirks;
 pub mod report;
