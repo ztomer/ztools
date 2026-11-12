@@ -157,3 +157,9 @@ GOH_ROADMAP=docs/ROADMAP.md
 # kit named. tools/release.sh syncs rust/Cargo.toml, runs the house release kit (gate, archive
 # build, install check, changelog stanza as the tag message, push, GitHub release, tap bump).
 GOH_SHIP_RELEASE='tools/release.sh {version}'
+
+# goh ship's CHANGELOG contract: tools/release.sh execs the house release kit, whose step 0b
+# (release.sh "the stanza is cut from Unreleased by the kit") cuts the `## vX` stanza from the
+# `## Unreleased` entries, i.e. goh's `cut` contract; every ztools release is written that way
+# (git log -- CHANGELOG.md: 72a9f03 adds the entry under Unreleased, 95ec96f is the cut).
+GOH_SHIP_CHANGELOG=cut
