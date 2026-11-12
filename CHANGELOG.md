@@ -11,6 +11,8 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.29.2 — shell tools reach the osaurus CLI only through the health-checked door _(2026-11-12)_
+
 ### Fixed
 - Shell tools reach the osaurus CLI only through `tools/osaurus_door.sh` (ZT.OSAURUSSHELL):
   `osaurus_door` requires `/health` first, `osaurus_door_serve` refuses a start while a server
