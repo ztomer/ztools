@@ -11,6 +11,8 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.27.0 — ztools models nightly: propose-only per-slot decision rule, replay reproduces [best_models], one staged candidate a night under the disk floor _(2026-11-12)_
+
 ### Added
 - `ztools models nightly` (LM.SELECT, propose-only): one candidate a night. It stages the
   scout's candidate only when the download leaves the 15 GiB disk floor (else it records
