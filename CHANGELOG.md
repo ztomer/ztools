@@ -11,6 +11,8 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.24.1 — refcheck reads Osaurus over HTTP and runs the CLI only through a health-checked door, so it no longer opens a second app _(2026-11-12)_
+
 ### Fixed
 
 - ZT.OSAURUSDUP: the 30-minute `models-refcheck` no longer opens a second Osaurus app. It ran
