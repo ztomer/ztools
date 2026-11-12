@@ -225,7 +225,11 @@ pub fn eval_model(
         let elapsed = crate::units::millis(start.elapsed());
         results.push(row_for(model_name, &case, answer, elapsed));
     }
-    held.release()?;
+    // A model that outstays its finished roster keeps the roster's rows
+    // (ZT.EVALRESIDENT): the release error is said, not made the result.
+    if let Err(e) = held.release() {
+        eprintln!("⚠ {model_name}: its scores are kept, but {e:#}");
+    }
 
     Ok(results)
 }

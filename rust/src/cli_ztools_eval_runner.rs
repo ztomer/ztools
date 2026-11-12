@@ -161,23 +161,44 @@ pub(super) fn run_full_suite(
 /// One model's full-suite run, loaded explicitly and released after it
 /// (ZT.OSAURUSLOAD). The seam's load is the cold start the run records, so a
 /// warm second load is never filed as one.
+///
+/// A model still resident after a FINISHED run keeps its outcomes
+/// (ZT.EVALRESIDENT): gemma-4-12b's scores were written and its JSON came out
+/// empty because the release error replaced them. The release error is said,
+/// as a warning on stderr, and the scores stand.
 fn measure_held(
     url: &str,
     model_name: &str,
     tasks: &[crate::ztools::eval::EvalTask],
     cfg: &crate::ztools::eval::RunnerConfig,
 ) -> Result<Vec<crate::ztools::eval::TaskOutcome>> {
-    crate::ztools::residency::with_model(
+    measure_held_at(
         url,
         model_name,
+        tasks,
+        cfg,
         crate::ztools::residency::Timing::default(),
-        |held| {
-            Ok(crate::ztools::eval::run_eval_with_signals(
-                model_name,
-                tasks,
-                cfg,
-                held.load_seconds(),
-            ))
-        },
     )
+}
+
+/// [`measure_held`] with the residency seam's timings given.
+fn measure_held_at(
+    url: &str,
+    model_name: &str,
+    tasks: &[crate::ztools::eval::EvalTask],
+    cfg: &crate::ztools::eval::RunnerConfig,
+    timing: crate::ztools::residency::Timing,
+) -> Result<Vec<crate::ztools::eval::TaskOutcome>> {
+    let ran = crate::ztools::residency::with_model_kept(url, model_name, timing, |held| {
+        Ok(crate::ztools::eval::run_eval_with_signals(
+            model_name,
+            tasks,
+            cfg,
+            held.load_seconds(),
+        ))
+    })?;
+    if let Err(e) = ran.released {
+        eprintln!("⚠ {model_name}: its scores are kept, but {e:#}");
+    }
+    ran.out
 }

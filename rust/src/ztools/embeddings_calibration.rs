@@ -45,8 +45,15 @@
 //! merge at 0.742, above two of the four known pairs (0.928, 0.893, 0.704, 0.681):
 //! 2 of 4 at zero false merges, where potion-base-4M recovers all 4. Pinned by
 //! `embeddings_hebrew_tests.rs` on `tests/fixtures/embeddings/qwen3_embedding_0_6b.json`.
-//! Both escalations named by design section 5 have failed, so clustering stays on
+//! Both escalations named by design section 5 have failed, so the VECTORS stay on
 //! potion-base-4M with `latin_only`; the model files were deleted.
+//!
+//! HEBREW IS PAIRED BY THE LOCAL MODEL INSTEAD (owner ruling 2026-11-12, "Use the
+//! local llm for Hebrew pairing"): `latin_only` here still says what this vector
+//! model can read, and the Hebrew tweets it cannot are judged pair by pair by the
+//! summarize slot's model when that model passed its own calibration
+//! (`embeddings_hebrew.rs`). Clustering as a whole is Latin-only only while the
+//! summarize model has no passing record.
 
 /// One embedding model's measured clustering parameters.
 #[derive(Debug, Clone, Copy, PartialEq)]

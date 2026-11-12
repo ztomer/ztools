@@ -282,9 +282,7 @@ pub fn with_model<T>(
     timing: Timing,
     body: impl FnOnce(&Held) -> Result<T>,
 ) -> Result<T> {
-    let held = load(base_url, model, timing)?;
-    let out = body(&held);
-    let released = held.release();
+    let Ran { out, released } = with_model_kept(base_url, model, timing, body)?;
     match (out, released) {
         (Ok(v), Ok(())) => Ok(v),
         (Ok(_), Err(e)) => Err(e),
@@ -295,6 +293,36 @@ pub fn with_model<T>(
             Err(e)
         }
     }
+}
+
+/// What [`with_model_kept`]'s body produced, and the release after it, apart.
+pub struct Ran<T> {
+    /// The body's result.
+    pub out: Result<T>,
+    /// The release: an error is a model still resident after the body.
+    pub released: Result<()>,
+}
+
+/// [`with_model`] for a caller whose body's result is worth keeping when the
+/// release fails.
+///
+/// ZT.EVALRESIDENT: a finished measurement is still a
+/// measurement when the model outstays it, so the caller gets both and says
+/// the release error rather than losing the result to it.
+///
+/// # Errors
+///
+/// From [`load`] only: the body has not run.
+pub fn with_model_kept<T>(
+    base_url: &str,
+    model: &str,
+    timing: Timing,
+    body: impl FnOnce(&Held) -> Result<T>,
+) -> Result<Ran<T>> {
+    let held = load(base_url, model, timing)?;
+    let out = body(&held);
+    let released = held.release();
+    Ok(Ran { out, released })
 }
 
 /// The load request: a one-token completion naming the model.

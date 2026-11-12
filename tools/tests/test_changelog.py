@@ -19,6 +19,7 @@ Rules, each run against the real file AND a synthetic violation it must reject:
 
 from __future__ import annotations
 
+import itertools
 import re
 from pathlib import Path
 
@@ -55,7 +56,7 @@ def problems(text: str) -> list[str]:
             )
     if not versions:
         out.append("no release headings found")
-    for a, b in zip(versions, versions[1:], strict=False):
+    for a, b in itertools.pairwise(versions):
         if not a > b:
             out.append(f"versions not strictly descending: {a} then {b}")
     return out

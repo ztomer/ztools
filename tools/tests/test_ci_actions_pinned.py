@@ -43,7 +43,7 @@ def _offenders_in(name: str, text: str) -> list[str]:
     are exempt: neither is a supply-chain dependency on someone else's moving tag."""
     out = []
     for n, line, ref in _uses_lines(text):
-        if ref.startswith("./") or ref.startswith("docker://"):
+        if ref.startswith(("./", "docker://")):
             continue
         if "@" not in ref:
             out.append(f"{name}:{n}: `{ref}` names no ref at all")

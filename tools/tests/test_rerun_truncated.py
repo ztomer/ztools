@@ -213,7 +213,7 @@ class Rerun:
         """What the run reached, in order: pgrep / pressure / server --restart / eval M."""
         if not self.marker.exists():
             return []
-        return [line for line in self.marker.read_text().splitlines()]
+        return list(self.marker.read_text().splitlines())
 
     def evaluated(self):
         return [c.split(" ", 1)[1] for c in self.calls() if c.startswith("eval ")]

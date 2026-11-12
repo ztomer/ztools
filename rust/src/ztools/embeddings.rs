@@ -26,6 +26,10 @@ use std::time::Duration;
 mod calibration;
 pub use calibration::{Calibration, calibration_for};
 
+#[path = "embeddings_hebrew.rs"]
+pub mod hebrew;
+pub use hebrew::Hebrew;
+
 #[derive(Serialize)]
 struct EmbedRequest<'a> {
     model: &'a str,
@@ -74,8 +78,10 @@ pub enum Outcome {
     Clustered {
         model: String,
         threshold: f32,
-        /// Tweets the model cannot represent, left as their own clusters.
+        /// Tweets the model cannot represent, left out of the comparison.
         unembeddable: usize,
+        /// The Hebrew ones among them: paired by the local model, or why not.
+        hebrew: Hebrew,
         /// Set when the run did not get what was configured (a refused name).
         notice: Option<String>,
     },
@@ -99,6 +105,7 @@ impl Clustering {
                 model,
                 threshold,
                 unembeddable,
+                hebrew,
                 notice,
             } => {
                 let mut line = format!(
@@ -106,9 +113,14 @@ impl Clustering {
                     self.clusters.iter().map(Vec::len).sum::<usize>(),
                     self.clusters.len()
                 );
-                if *unembeddable > 0 {
+                if let Some(clause) = hebrew.clause() {
                     line.push_str("; ");
-                    line.push_str(&unembeddable.to_string());
+                    line.push_str(&clause);
+                }
+                let other = unembeddable.saturating_sub(hebrew.tweets());
+                if other > 0 {
+                    line.push_str("; ");
+                    line.push_str(&other.to_string());
                     line.push_str(" tweets in a script the model cannot read kept apart");
                 }
                 if let Some(n) = notice {
@@ -124,6 +136,17 @@ impl Clustering {
     #[must_use]
     pub fn document_note(&self) -> Option<String> {
         match &self.outcome {
+            Outcome::Clustered {
+                notice,
+                hebrew: hebrew @ Hebrew::Apart { fault: true, .. },
+                ..
+            } => {
+                let lead = notice
+                    .as_ref()
+                    .map(|n| format!("> ⚠ {n}\n"))
+                    .unwrap_or_default();
+                Some(format!("{lead}> ⚠ {}", hebrew.clause().unwrap_or_default()))
+            }
             Outcome::Clustered { notice, .. } => notice.as_ref().map(|n| format!("> ⚠ {n}")),
             Outcome::Off { reason } => Some(format!("> ⚠ {}", off_sentence(reason))),
         }
@@ -252,13 +275,62 @@ pub fn cluster_tweets(
     }
     // No weight to load, but still a request to the server: made under the
     // machine-wide GPU lock like every other (ZT.TWGPULOCK).
-    match crate::ztools::residency::locked(
+    let clustering = match crate::ztools::residency::locked(
         "ztools embeddings (cluster tweets)",
         crate::ztools::residency::Timing::default(),
         || cluster_locked(tweets, base_url, config),
     ) {
         Ok(clustering) => clustering,
-        Err(e) => singletons(tweets, format!("{e:#}")),
+        Err(e) => return singletons(tweets, format!("{e:#}")),
+    };
+    with_hebrew(
+        clustering,
+        base_url,
+        &config.twitter_model,
+        hebrew::CALIBRATED_JUDGES,
+        crate::ztools::residency::Timing::default(),
+    )
+}
+
+/// The Hebrew phase: the tweets the embedding model could not read, paired by
+/// the summarize slot's `model` ([`hebrew`]). A clustering that is off stays
+/// off.
+#[must_use]
+pub fn with_hebrew(
+    clustering: Clustering,
+    base_url: &str,
+    model: &str,
+    calibrated: &[&str],
+    timing: crate::ztools::residency::Timing,
+) -> Clustering {
+    let Outcome::Clustered {
+        model: embedder,
+        threshold,
+        unembeddable,
+        notice,
+        ..
+    } = clustering.outcome
+    else {
+        return clustering;
+    };
+    let unreadable = |t: &Tweet| calibration_for(&embedder).is_some_and(|c| !c.can_read(&t.text));
+    let (clusters, hebrew) = hebrew::pair_hebrew(
+        clustering.clusters,
+        unreadable,
+        base_url,
+        model,
+        calibrated,
+        timing,
+    );
+    Clustering {
+        clusters,
+        outcome: Outcome::Clustered {
+            model: embedder,
+            threshold,
+            unembeddable,
+            hebrew,
+            notice,
+        },
     }
 }
 
@@ -347,6 +419,7 @@ fn cluster_locked(
             model,
             threshold: cal.threshold,
             unembeddable,
+            hebrew: Hebrew::None,
             notice,
         },
     }

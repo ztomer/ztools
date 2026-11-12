@@ -46,6 +46,11 @@ const ENTRY_POINTS: &[EntryPoint] = &[
         covered_by: &["clustering_requests_embeddings_under_the_gpu_lock"],
     },
     EntryPoint {
+        file: "ztools/embeddings_hebrew.rs",
+        how: "the Hebrew judge asks inside with_model (Held), never outside it",
+        covered_by: &["a_calibrated_summarize_model_pairs_under_the_lock_and_is_released"],
+    },
+    EntryPoint {
         file: "ztools/eval/transport.rs",
         how: "the eval holds the lock (GpuLockGuard) around its roster",
         covered_by: &["the_spot_eval_loads_its_model_and_leaves_nothing_resident"],

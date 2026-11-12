@@ -496,3 +496,18 @@ without the GPU lock (`fake.rs:120`). An unrelated edit to `fake.rs` forced the 
 The test now calls `support::assert_built_from_disk(file!(), include_str!(...))`, which fails
 naming the restore when the binary's source differs from the file on disk. Restore a mutant
 with `cp` (which stamps now) or `touch` it, never `mv`.
+
+## A seam that turns a release error into the run's error drops the run (2026-11-11)
+
+`residency::with_model` returns the release error when the body succeeded, and the body's
+value goes with it. Three callers lost finished work that way: the full-suite eval (a model
+still resident 30 s after its run filed its written scores as NOT MEASURED, with an empty
+JSON), the smoke eval (`held.release()?`), and the first all-pairs Hebrew judge calibration
+(861 recorded answers, lost to the same release error). A caller whose result stands on its
+own uses `residency::with_model_kept`, which hands back the body's result and the release
+apart, and says the release error. Pinned by
+`a_model_still_resident_after_its_run_keeps_its_scores_and_json` (FakeOsaurus
+`keeping_loaded`; red on the old `?`: 31.6 s, 1 failed) and `a_failed_release_keeps_the_pairing`.
+The weekend planner keeps the strict rule on purpose (`weekend/fetch.rs`: a resident model
+fails the plan). The twitter chain (`twitter/mod.rs` `Route::ask`) still uses `with_model`, so
+a release error after a good summary fails that candidate: open, not yet ruled.

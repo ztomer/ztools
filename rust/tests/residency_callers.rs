@@ -140,3 +140,111 @@ fn the_full_suite_loads_its_model_and_leaves_nothing_resident() {
         fake.calls()
     );
 }
+
+/// A model still resident after a FINISHED run keeps its scores and its JSON
+/// (ZT.EVALRESIDENT): gemma-4-12b's were written, then filed NOT MEASURED with
+/// an empty JSON because the release check came after them.
+#[test]
+fn a_model_still_resident_after_its_run_keeps_its_scores_and_json() {
+    let fake = FakeOsaurus::keeping_loaded(ANSWER);
+    let home = sandbox("residency-kept", &fake);
+    for args in [
+        &[
+            "model-eval",
+            "--suite",
+            "full",
+            "--model",
+            "probe-model",
+            "--task",
+            "json",
+            "--json-output",
+        ][..],
+        &["model-eval", "--model", "probe-model", "--json-output"][..],
+    ] {
+        let out = run(&home, args);
+        let (stdout, stderr) = (
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr),
+        );
+        assert!(
+            stderr.contains("its scores are kept"),
+            "{args:?}\nstderr: {stderr}"
+        );
+        assert!(
+            !stderr.contains("NOT MEASURED"),
+            "{args:?}\nstderr: {stderr}"
+        );
+        assert!(
+            stdout.contains("probe-model"),
+            "{args:?}: the JSON is there\nstdout: {stdout}"
+        );
+        assert!(out.status.success(), "{args:?}\nstderr: {stderr}");
+    }
+}
+
+/// A Hebrew fixture of one labelled pair and its neighbouring story.
+fn hebrew_fixture(home: &Path) -> std::path::PathBuf {
+    let path = home.join("hebrew.json");
+    let rows = serde_json::json!({"tweets": [
+        {"group": "he_football", "text": "מכבי תל אביב גברה 2:1 על הפועל באר שבע עם שער ניצחון בדקה ה-90"},
+        {"group": "he_football", "text": "איזה סיום! שער בדקה ה-90 העניק למכבי תל אביב ניצחון 2:1 על הפועל באר שבע"},
+        {"group": "he_football_basket", "text": "מכבי תל אביב הפסידה 85:80 לריאל מדריד ביורוליג אחרי הארכה"},
+        {"group": "latin", "text": "Rust 1.95 is out today"},
+    ]});
+    fs::write(&path, rows.to_string()).unwrap();
+    path
+}
+
+/// A judge that says yes when both tweets name the 90th minute, or always.
+fn judging(always_yes: bool) -> Spec {
+    Spec {
+        answer_for: Some(std::sync::Arc::new(move |body: &str| {
+            let yes = always_yes || body.matches("ה-90").count() >= 2;
+            let word = if yes { "yes" } else { "no" };
+            format!(r#"{{"choices":[{{"message":{{"content":"{word}"}}}}]}}"#)
+        })),
+        ..Spec::chat(ANSWER)
+    }
+}
+
+/// `ztools models hebrew-pairing` judges under the lock, records every pair,
+/// and exits 0 only when the labelled pair is yes and the trap no (LM.EMBEDHE).
+#[test]
+fn the_hebrew_calibration_records_its_pairs_and_fails_a_judge_that_merges_neighbours() {
+    for (always_yes, passes) in [(false, true), (true, false)] {
+        let fake = FakeOsaurus::serve(judging(always_yes));
+        let home = sandbox("residency-hebrew", &fake);
+        let fixture = hebrew_fixture(&home);
+        let out_path = home.join("record.json");
+        let out = run(
+            &home,
+            &[
+                "models",
+                "hebrew-pairing",
+                "--all-pairs",
+                "--fixture",
+                fixture.to_str().unwrap(),
+                "--out",
+                out_path.to_str().unwrap(),
+            ],
+        );
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert_eq!(
+            out.status.success(),
+            passes,
+            "{stdout}\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let record: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&out_path).unwrap()).unwrap();
+        assert_eq!(
+            record["pairs"].as_array().unwrap().len(),
+            3,
+            "three Hebrew pairs"
+        );
+        assert!(stdout.contains("same 1/1"), "{stdout}");
+        let traps = if passes { "traps 2/2" } else { "traps 0/2" };
+        assert!(stdout.contains(traps), "{stdout}");
+        assert_loaded_then_released(&fake, "raptor-v0.5-8b-a1b-jang_6m", &out);
+    }
+}

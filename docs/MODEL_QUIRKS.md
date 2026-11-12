@@ -771,8 +771,20 @@ vision. Backlog item 9 covers building a real one.
     Apple earnings 0.637). The Qwen instruction prompt raises the unrelated median to 0.534.
   - Latin, 266 real tweets, at zero false merges: both recover 2 of the 4 known pairs, where
     `potion-base-4M` recovers 4. Its Latin median is high (0.30, p99.9 0.74): topic, not event.
-  So Hebrew stays out of clustering; the next step is a model that separates EVENTS, not
-  topics, or an upstream Osaurus multi-model embeddings feature.
+  So Hebrew stays out of the VECTOR comparison.
+- **Hebrew is paired by the summarize model instead (owner ruling 2026-11-12, LM.EMBEDHE).**
+  `embeddings_hebrew.rs`: a character-trigram Jaccard prefilter (floor 0.08; the fixture's
+  lowest labelled pair is 0.225) picks candidate pairs, at most 60 a run, and the summarize
+  slot's model answers a one-word yes/no same-story prompt for each, loaded and released by
+  the residency seam under the GPU lock. Only a model with a passing recorded calibration
+  judges (`CALIBRATED_JUDGES`; `ztools models hebrew-pairing` records one); any other keeps
+  Hebrew apart and says so. `raptor-v0.5-8b-a1b-jang_6m`, all 861 pairs of the 42-tweet
+  fixture asked (load average 20-85 on 16 cores): the pipeline is right on all 861 (8/8
+  labelled pairs, 8/8 neighbouring-story traps including Maccabi football/basketball and
+  Nvidia/Apple, 845/845 unrelated); the model ALONE said yes to 3 unrelated pairs (a train
+  closure and a general strike twice, the strike and potted herbs), all three below the
+  prefilter floor (overlap 0.033-0.053), so the prefilter is load-bearing, not just cost.
+  Median 0.10 s a pair, mean 0.48 s (one 67 s outlier under load), cold load 3.2 s.
 - The embeddings request is made under the machine-wide GPU lock (ZT.TWGPULOCK) like every
   other request ztools sends the server, though it loads and releases nothing.
 

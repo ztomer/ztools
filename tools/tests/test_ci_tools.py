@@ -111,7 +111,7 @@ def _step_needing(tool: str, steps: list[str]) -> str | None:
     """
     for step in steps:
         spaced = tool.replace("-", " ")
-        if step.startswith(tool) or step.startswith(spaced):
+        if step.startswith((tool, spaced)):
             return step
         if re.search(rf"run --fetch -- {re.escape(spaced)}\b", step):
             return step

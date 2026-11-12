@@ -11,6 +11,29 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Added
+- **Hebrew tweets enter clustering, paired by the summarize model (LM.EMBEDHE, owner ruling
+  2026-11-12 "Use the local llm for Hebrew pairing").** `potion-base-4M` still embeds the
+  Latin tweets; the Hebrew ones it cannot read go through a character-trigram prefilter
+  (floor 0.08, at most 60 pairs a run) to the summarize slot's model, which answers a strict
+  one-word yes/no same-story prompt per pair under the GPU lock (residency seam); yes pairs
+  join as connected components. Only a model with a passing recorded calibration judges;
+  any other keeps Hebrew apart and the run says why. `ztools models hebrew-pairing
+  --fixture F --out R [--all-pairs]` records a calibration. `raptor-v0.5-8b-a1b-jang_6m` on
+  the committed 42-tweet fixture, all 861 pairs (load average 20-85): 8/8 labelled pairs,
+  8/8 neighbouring-story traps, 845/845 unrelated right for the pipeline; the model alone
+  said 3 wrong yeses, all below the prefilter. Median 0.10 s a pair. Record:
+  `tests/fixtures/embeddings/hebrew_judge_raptor_v0_5_8b_a1b_jang_6m.json`.
+
+### Fixed
+- **A model still resident after a finished eval keeps its scores and JSON (ZT.EVALRESIDENT).**
+  `residency::with_model` made the release error the run's error and dropped the body's
+  value, so gemma-4-12b's written scores were filed NOT MEASURED with an empty JSON. The full
+  suite, the smoke eval and the Hebrew calibration now use `with_model_kept`: the scores
+  stand and the release error is printed as a warning.
+- `tools/` is clean under the house ruff set (six findings: RUF007, PIE810 x2, SIM300, C416,
+  RUF100).
+
 ## v3.22.0 — bench.sh reaps its child before the GPU lock; release --dry-run previews a pending bump; refusal_* and hebrew_* roster tasks (LM.PROBES left part) _(2026-11-11)_
 
 ### Added

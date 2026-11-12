@@ -87,7 +87,7 @@ def _tui():
     if (Path(goh) / "tui" / "lib.py").is_file():
         sys.path.insert(0, goh)
         try:
-            from tui.lib import err, info, ok, section, warn  # noqa: PLC0415
+            from tui.lib import err, info, ok, section, warn
 
             return info, ok, err, warn, section
         except ImportError:

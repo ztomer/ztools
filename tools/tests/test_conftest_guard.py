@@ -46,7 +46,7 @@ def test_the_guarded_path_is_the_lock_gpu_lock_shell_falls_back_to(tmp_path):
     source = (goh / "lib" / "gpu_lock" / "gpu_lock.sh").read_text()
     match = re.search(r'GPU_LOCK_DIR="\$\{ZTOOLS_GPU_LOCK_DIR:-([^}]+)\}"', source)
     assert match, "tools/gpu_lock.sh no longer sets GPU_LOCK_DIR the way it did"
-    assert DEFAULT_REAL_GPU_LOCK == Path(match.group(1))
+    assert Path(match.group(1)) == DEFAULT_REAL_GPU_LOCK
 
 
 def _run(argv, cwd):
