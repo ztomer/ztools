@@ -11,6 +11,15 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Changed
+- **The five `osaurus bench` speed rows, re-read (LM.BENCHROWS).** `docs/osaurus_bench.json` now
+  holds lfm2.5-350m, gemma-4-e4b, raptor-v0.5-8b-a1b, gemma-4-12b and the 27B crack at 1024 and
+  8192 prompt tokens, one model per GPU lock, each row carrying the load at its start and end and
+  a `quiet` flag (both under 4). Rows read over 4 were rerun once; raptor (3.88-4.25) and
+  gemma-4-12b (4.81-3.67) stayed over 4 in both runs and say so. Hebrew discrimination re-checked
+  over four installed models (scores only, stores in a scratch dir): `hebrew_summarize` 4 distinct
+  (0, 90, 97, 100), `hebrew_mixed` 4 (7, 56, 70, 100), `hebrew_json` 3 (83, 92, 100).
+
 ## v3.29.2 — shell tools reach the osaurus CLI only through the health-checked door _(2026-11-12)_
 
 ### Fixed

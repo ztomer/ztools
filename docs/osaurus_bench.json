@@ -1,6 +1,140 @@
 {
- "about": "osaurus bench speed rows (LM.PROBES; LM.DESIGN section 4's speed floor). One row per model and prompt size: medians of 3 uncached requests (greedy, 128 max tokens), from tools/bench.sh under the GPU lock (osaurus bench --prompt-tokens 1024,8192 --runs 3 --json). load_1m is the machine's 1-minute load average at the start and end of that model's run: other agents share this Mac, so a row read under load is slow, never fast, and the 27B 8192 decode samples (13.8, 7.0, 11.4) show it. OPEN: raptor-v0.5-8b-a1b-jang_6m, gemma-4-e4b-it-8bit and lfm2.5-350m-optiq-4bit, refused at load 46 (their /health did not answer within 5 s), and a quiet-machine rerun of these four rows.",
+ "about": "osaurus bench speed rows (LM.PROBES, LM.BENCHROWS; LM.DESIGN section 4's speed floor). One row per model and prompt size: medians of 3 uncached requests (greedy, 128 max tokens), from tools/bench.sh under the GPU lock (osaurus bench --prompt-tokens 1024,8192 --runs 3 --json), one model per lock. load_1m is the 1-minute load average at the start and end of that model's run; quiet is true only when both were under 4. A row over 4 was rerun once; where neither run was quiet the row says so in note. Other agents share this Mac, so a loaded row is slow, never fast.",
  "rows": [
+  {
+   "date": "2026-11-12",
+   "model": "lfm2.5-350m-optiq-4bit",
+   "chip": "Apple M4 Max",
+   "prompt_tokens": 1024,
+   "actual_prompt_tokens": 787,
+   "runs": 3,
+   "prefill_tps": 10717.9,
+   "decode_tps": 1016.1,
+   "decode_tps_samples": [
+    1054.6,
+    1016.1,
+    972.4
+   ],
+   "ttft_ms": 74,
+   "cached_ttft_ms": 38,
+   "load_1m": [
+    3.19,
+    3.33
+   ],
+   "quiet": true
+  },
+  {
+   "date": "2026-11-12",
+   "model": "lfm2.5-350m-optiq-4bit",
+   "chip": "Apple M4 Max",
+   "prompt_tokens": 8192,
+   "actual_prompt_tokens": 6063,
+   "runs": 3,
+   "prefill_tps": 13500.5,
+   "decode_tps": 772.2,
+   "decode_tps_samples": [
+    813.3,
+    761.5,
+    772.2
+   ],
+   "ttft_ms": 449,
+   "cached_ttft_ms": 234,
+   "load_1m": [
+    3.19,
+    3.33
+   ],
+   "quiet": true
+  },
+  {
+   "date": "2026-11-12",
+   "model": "gemma-4-e4b-it-8bit",
+   "chip": "Apple M4 Max",
+   "prompt_tokens": 1024,
+   "actual_prompt_tokens": 797,
+   "runs": 3,
+   "prefill_tps": 1384.8,
+   "decode_tps": 319.9,
+   "decode_tps_samples": [
+    312.2,
+    320.2,
+    319.9
+   ],
+   "ttft_ms": 576,
+   "cached_ttft_ms": 258,
+   "load_1m": [
+    3.33,
+    3.88
+   ],
+   "quiet": true
+  },
+  {
+   "date": "2026-11-12",
+   "model": "gemma-4-e4b-it-8bit",
+   "chip": "Apple M4 Max",
+   "prompt_tokens": 8192,
+   "actual_prompt_tokens": 6070,
+   "runs": 3,
+   "prefill_tps": 1900.0,
+   "decode_tps": 281.5,
+   "decode_tps_samples": [
+    281.5,
+    285.1,
+    280.2
+   ],
+   "ttft_ms": 3195,
+   "cached_ttft_ms": 369,
+   "load_1m": [
+    3.33,
+    3.88
+   ],
+   "quiet": true
+  },
+  {
+   "date": "2026-11-12",
+   "model": "raptor-v0.5-8b-a1b-jang_6m",
+   "chip": "Apple M4 Max",
+   "prompt_tokens": 1024,
+   "actual_prompt_tokens": 809,
+   "runs": 3,
+   "prefill_tps": 417.7,
+   "decode_tps": 167.6,
+   "decode_tps_samples": [
+    176.3,
+    167.6,
+    160.4
+   ],
+   "ttft_ms": 1932,
+   "cached_ttft_ms": 115,
+   "load_1m": [
+    3.88,
+    4.25
+   ],
+   "quiet": false,
+   "note": "rerun once at load 4.26-4.81, slower start; this first run kept"
+  },
+  {
+   "date": "2026-11-12",
+   "model": "raptor-v0.5-8b-a1b-jang_6m",
+   "chip": "Apple M4 Max",
+   "prompt_tokens": 8192,
+   "actual_prompt_tokens": 6082,
+   "runs": 3,
+   "prefill_tps": 3555.6,
+   "decode_tps": 153.1,
+   "decode_tps_samples": [
+    153.1,
+    153.3,
+    150.0
+   ],
+   "ttft_ms": 1711,
+   "cached_ttft_ms": 380,
+   "load_1m": [
+    3.88,
+    4.25
+   ],
+   "quiet": false,
+   "note": "rerun once at load 4.26-4.81, slower start; this first run kept"
+  },
   {
    "date": "2026-11-12",
    "model": "gemma-4-12b-it-mxfp8",
@@ -8,19 +142,21 @@
    "prompt_tokens": 1024,
    "actual_prompt_tokens": 796,
    "runs": 3,
-   "prefill_tps": 325.2,
-   "decode_tps": 68.0,
+   "prefill_tps": 373.0,
+   "decode_tps": 68.4,
    "decode_tps_samples": [
-    62.9,
-    68.0,
-    68.0
+    68.4,
+    68.8,
+    68.4
    ],
-   "ttft_ms": 2450,
+   "ttft_ms": 2131,
    "cached_ttft_ms": 485,
    "load_1m": [
-    15.8,
-    17.6
-   ]
+    4.81,
+    3.67
+   ],
+   "quiet": false,
+   "note": "first run at load 4.25-5.14; rerun once at 4.81-3.67, neither quiet"
   },
   {
    "date": "2026-11-12",
@@ -29,61 +165,67 @@
    "prompt_tokens": 8192,
    "actual_prompt_tokens": 6069,
    "runs": 3,
-   "prefill_tps": 358.4,
-   "decode_tps": 58.4,
+   "prefill_tps": 422.5,
+   "decode_tps": 60.3,
    "decode_tps_samples": [
-    59.3,
-    58.4,
-    56.6
+    60.4,
+    60.3,
+    59.8
    ],
-   "ttft_ms": 16931,
-   "cached_ttft_ms": 729,
+   "ttft_ms": 14365,
+   "cached_ttft_ms": 704,
    "load_1m": [
-    15.8,
-    17.6
-   ]
+    4.81,
+    3.67
+   ],
+   "quiet": false,
+   "note": "first run at load 4.25-5.14; rerun once at 4.81-3.67, neither quiet"
   },
   {
    "date": "2026-11-12",
    "model": "qwen3.8-27b-jang_6d-crack",
    "chip": "Apple M4 Max",
    "prompt_tokens": 1024,
-   "actual_prompt_tokens": 839,
+   "actual_prompt_tokens": 838,
    "runs": 3,
-   "prefill_tps": 148.9,
-   "decode_tps": 15.3,
+   "prefill_tps": 176.3,
+   "decode_tps": 17.2,
    "decode_tps_samples": [
-    16.2,
-    15.3,
-    15.0
+    17.2,
+    17.2,
+    17.1
    ],
-   "ttft_ms": 5619,
-   "cached_ttft_ms": 892,
+   "ttft_ms": 4754,
+   "cached_ttft_ms": 759,
    "load_1m": [
-    7.6,
-    15.8
-   ]
+    3.67,
+    2.55
+   ],
+   "quiet": true,
+   "note": "first run at load 5.14-4.57; rerun once, quiet"
   },
   {
    "date": "2026-11-12",
    "model": "qwen3.8-27b-jang_6d-crack",
    "chip": "Apple M4 Max",
    "prompt_tokens": 8192,
-   "actual_prompt_tokens": 6112,
+   "actual_prompt_tokens": 6111,
    "runs": 3,
-   "prefill_tps": 137.5,
-   "decode_tps": 11.4,
+   "prefill_tps": 203.6,
+   "decode_tps": 15.7,
    "decode_tps_samples": [
-    13.8,
-    7.0,
-    11.4
+    15.7,
+    16.7,
+    15.4
    ],
-   "ttft_ms": 44433,
-   "cached_ttft_ms": 1312,
+   "ttft_ms": 30009,
+   "cached_ttft_ms": 851,
    "load_1m": [
-    7.6,
-    15.8
-   ]
+    3.67,
+    2.55
+   ],
+   "quiet": true,
+   "note": "first run at load 5.14-4.57; rerun once, quiet"
   }
  ]
 }
