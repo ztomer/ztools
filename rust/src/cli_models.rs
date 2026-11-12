@@ -153,7 +153,11 @@ fn current_tasks(config: &ZtoolsConfig) -> crate::ztools::eval::TaskIdentities {
 pub fn run(config: &ZtoolsConfig, cmd: &ModelsCmd) -> Result<()> {
     match cmd {
         ModelsCmd::Refcheck { no_repair, .. } => {
-            let env = LiveEnv::from_home(best_models(config), &current_tasks(config));
+            let env = LiveEnv::from_home(
+                &config.osaurus_url,
+                best_models(config),
+                &current_tasks(config),
+            );
             finish(&refcheck::run(&env, !no_repair)?)
         }
         ModelsCmd::HebrewPairing {

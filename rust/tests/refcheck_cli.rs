@@ -13,6 +13,7 @@ mod support;
 pub use support::*;
 
 use std::fs;
+use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
@@ -32,6 +33,38 @@ fn export(disk_audit: &str) -> String {
         "providers": []
     })
     .to_string()
+}
+
+/// A stub Osaurus over HTTP: `/health`, `/v1/models`, and the config export read
+/// from `<home>/export.json` on every request (so the stub CLI's `apply` shows).
+fn serve_osaurus(home: &Path) -> u16 {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let home = home.to_path_buf();
+    std::thread::spawn(move || {
+        for mut stream in listener.incoming().flatten() {
+            let mut buf = [0u8; 4096];
+            let n = stream.read(&mut buf).unwrap_or(0);
+            let head = String::from_utf8_lossy(&buf[..n]).into_owned();
+            let line = head.lines().next().unwrap_or("");
+            let body = if line.starts_with("GET /admin/config/export") {
+                let doc = fs::read_to_string(home.join("export.json")).unwrap_or_default();
+                serde_json::json!({ "json": doc }).to_string()
+            } else if line.starts_with("GET /v1/models") {
+                let ids = ["raptor-v0.5-8b-a1b-jang_6m", "qwen3.8-27b-jang_6d-crack"];
+                let data: Vec<_> = ids.iter().map(|i| serde_json::json!({"id": i})).collect();
+                serde_json::json!({"object": "list", "data": data}).to_string()
+            } else {
+                "{}".to_string()
+            };
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = stream.write_all(resp.as_bytes());
+        }
+    });
+    port
 }
 
 /// A home holding the stub, the fixture models and the seeded cache.
@@ -68,7 +101,11 @@ esac
     let osaurus = bin.join("osaurus");
     fs::write(&osaurus, script).unwrap();
     fs::set_permissions(&osaurus, fs::Permissions::from_mode(0o755)).unwrap();
-    write_config(&home, "");
+    let port = serve_osaurus(&home);
+    write_config(
+        &home,
+        &format!("osaurus_url = \"http://127.0.0.1:{port}\"\n"),
+    );
     home
 }
 
@@ -99,9 +136,12 @@ fn a_clean_config_passes_with_exit_zero_and_changes_nothing() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(String::from_utf8_lossy(&out.stdout).contains("✓ refcheck"));
-    assert!(
-        !argv_log(&home).contains("config plan"),
-        "a clean run must not plan"
+    // The CLI opens a second Osaurus app when the server is busy (ZT-4): a run that
+    // only reads never runs it, so the stub that records every call has no log.
+    assert_eq!(
+        argv_log(&home),
+        "",
+        "a clean run must not run the osaurus CLI"
     );
 }
 
@@ -139,6 +179,9 @@ fn repair_applies_a_one_agent_document_pointing_at_the_6d_crack() {
     }
     let log = argv_log(&home);
     assert!(!log.contains("--prune"), "{log}");
+    // Reads are HTTP; the CLI ran only for plan and apply (2 runs x 2 verbs).
+    let verbs: Vec<&str> = log.lines().filter_map(|l| l.split(' ').nth(1)).collect();
+    assert_eq!(verbs, ["plan", "apply", "plan", "apply"], "{log}");
     // The second run, on the repaired config, is clean.
     let again = refcheck(&home, &[]);
     assert_eq!(exit_code(&again), 0);

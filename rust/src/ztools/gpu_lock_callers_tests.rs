@@ -77,6 +77,11 @@ const ENTRY_POINTS: &[EntryPoint] = &[
         covered_by: &["a_rename_makes_no_request_outside_the_gpu_lock"],
     },
     EntryPoint {
+        file: "ztools/refcheck/door.rs",
+        how: "each of its reads and the CLI door takes the lock itself (residency::locked)",
+        covered_by: &["every_request_the_door_makes_is_made_under_the_gpu_lock"],
+    },
+    EntryPoint {
         file: "ztools/residency.rs",
         how: "the seam itself: load, with_model and locked take the lock",
         covered_by: &["a_summary_run_makes_no_request_outside_the_gpu_lock"],

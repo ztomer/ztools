@@ -11,6 +11,18 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Fixed
+
+- ZT.OSAURUSDUP: the 30-minute `models-refcheck` no longer opens a second Osaurus app. It ran
+  `osaurus config export` and `osaurus list`; that CLI probes the server for only 0.5 s and,
+  when the server is busy, has LaunchServices open another app (`--launched-by-cli`; the system
+  log showed the CLI probing :1337 twice, then a new app 1 s later). Refcheck now reads the export
+  (`GET /admin/config/export?format=json`) and the model list (`GET /v1/models`) over HTTP from
+  `osaurus_url`, and the CLI that remains (`config plan`, `config apply`, repairs only) runs
+  through one door that first requires `/health` to answer within 5 s and otherwise refuses with
+  that reason. A normal run makes no CLI call. The only other `osaurus` spawns are in shell tools
+  (`tools/bench.sh`, `tools/sweep_models.sh`), not in the Rust crate.
+
 ## v3.24.0 — a model resident after finished work keeps the work in every residency caller (Released type, with_model removed) _(2026-11-12)_
 
 ### Fixed

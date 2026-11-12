@@ -1,14 +1,13 @@
-//! The real osaurus CLI, filesystem and Hugging Face behind [`Env`].
+//! The real Osaurus server, filesystem and Hugging Face behind [`Env`].
 
-use super::{CmdOut, Env, ThinkScores};
+use super::{CmdOut, Env, ThinkScores, door};
 use crate::ztools::eval::leaderboard::task_slot;
 use crate::ztools::eval::report::{HistoryEntry, default_eval_dir, load_history_entries};
 use crate::ztools::eval::task_fingerprint::{TaskIdentities, standing_of};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::Duration;
 
 const HF_BASE: &str = "https://huggingface.co";
@@ -17,6 +16,9 @@ const HF_TIMEOUT: Duration = Duration::from_secs(5);
 /// Every path and program the check touches, each replaceable by a test.
 pub struct LiveEnv {
     pub osaurus: PathBuf,
+    /// The Osaurus server (`osaurus_url`): read over HTTP, and probed before
+    /// the CLI is ever run.
+    pub base_url: String,
     pub models_root: PathBuf,
     pub families: PathBuf,
     pub hf_base: String,
@@ -29,10 +31,15 @@ impl LiveEnv {
     /// `~/.local/state/ztools/models/families.json`, the eval history read
     /// against `current`, the roster's task fingerprints as they stand now.
     #[must_use]
-    pub fn from_home(best: BTreeMap<String, String>, current: &TaskIdentities) -> Self {
+    pub fn from_home(
+        base_url: &str,
+        best: BTreeMap<String, String>,
+        current: &TaskIdentities,
+    ) -> Self {
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
         Self {
             osaurus: PathBuf::from("osaurus"),
+            base_url: base_url.to_string(),
             models_root: home.join("MLXModels"),
             families: home.join(".local/state/ztools/models/families.json"),
             hf_base: HF_BASE.to_string(),
@@ -41,30 +48,18 @@ impl LiveEnv {
         }
     }
 
-    fn osaurus_run(&self, args: &[&str], file: Option<&Path>) -> Result<CmdOut> {
-        let mut cmd = Command::new(&self.osaurus);
-        cmd.args(args);
-        if let Some(f) = file {
-            cmd.arg(f);
-        }
-        let out = cmd
-            .output()
-            .with_context(|| format!("cannot run {}", self.osaurus.display()))?;
-        let mut text = String::from_utf8_lossy(&out.stdout).into_owned();
-        text.push_str(&String::from_utf8_lossy(&out.stderr));
-        Ok(CmdOut {
-            code: out.status.code().unwrap_or(-1),
-            text,
-        })
-    }
-
     fn with_doc(&self, verb: &str, doc: &Value) -> Result<CmdOut> {
         let file = tempfile::Builder::new()
             .prefix("refcheck-")
             .suffix(".json")
             .tempfile()?;
         std::fs::write(file.path(), serde_json::to_string(doc)?)?;
-        self.osaurus_run(&["config", verb], Some(file.path()))
+        door::run(
+            &self.base_url,
+            &self.osaurus,
+            &["config", verb],
+            Some(file.path()),
+        )
     }
 
     fn cached(&self) -> BTreeMap<String, String> {
@@ -99,33 +94,11 @@ impl LiveEnv {
 
 impl Env for LiveEnv {
     fn export(&self) -> Result<Value> {
-        let file = tempfile::Builder::new()
-            .prefix("refcheck-")
-            .suffix(".json")
-            .tempfile()?;
-        let out = self.osaurus_run(
-            &["config", "export", "--format", "json", "-o"],
-            Some(file.path()),
-        )?;
-        anyhow::ensure!(
-            out.code == 0,
-            "osaurus config export exited {}: {}",
-            out.code,
-            out.text.trim()
-        );
-        serde_json::from_str(&std::fs::read_to_string(file.path())?)
-            .context("osaurus config export is not JSON")
+        door::export(&self.base_url)
     }
 
     fn osaurus_list(&self) -> Result<Vec<String>> {
-        let out = self.osaurus_run(&["list"], None)?;
-        anyhow::ensure!(out.code == 0, "osaurus list exited {}", out.code);
-        Ok(out
-            .text
-            .lines()
-            .map(|l| l.trim().to_string())
-            .filter(|l| !l.is_empty())
-            .collect())
+        door::models(&self.base_url)
     }
 
     fn disk_models(&self) -> Vec<String> {

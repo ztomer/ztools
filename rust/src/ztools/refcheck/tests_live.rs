@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 /// A stub that logs its argv, copies a fixture for `export`, and prints
 /// canned text for `list`, `plan` and `apply`.
-fn stub_osaurus(dir: &Path, export: &Value) -> PathBuf {
+pub(super) fn stub_osaurus(dir: &Path, export: &Value) -> PathBuf {
     std::fs::write(dir.join("export.json"), export.to_string()).unwrap();
     let script = format!(
         r#"#!/bin/sh
@@ -30,9 +30,10 @@ exit 0
     path
 }
 
-fn env_in(dir: &Path, hf_base: &str) -> LiveEnv {
+pub(super) fn env_in(dir: &Path, hf_base: &str) -> LiveEnv {
     LiveEnv {
         osaurus: stub_osaurus(dir, &export_with(BROKEN)),
+        base_url: "http://127.0.0.1:1".to_string(),
         models_root: dir.join("MLXModels"),
         families: dir.join("state/models/families.json"),
         hf_base: hf_base.to_string(),
@@ -41,7 +42,7 @@ fn env_in(dir: &Path, hf_base: &str) -> LiveEnv {
     }
 }
 
-fn hf_stub(body: &'static str, status: &'static str) -> String {
+pub(super) fn hf_stub(body: &'static str, status: &'static str) -> String {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = listener.local_addr().unwrap();
     std::thread::spawn(move || {
@@ -57,63 +58,6 @@ fn hf_stub(body: &'static str, status: &'static str) -> String {
         }
     });
     format!("http://{addr}")
-}
-
-#[test]
-fn export_list_plan_and_apply_use_the_real_argv_and_never_prune() {
-    let dir = tempfile::tempdir().unwrap();
-    let env = env_in(dir.path(), "http://127.0.0.1:1");
-    assert_eq!(env.export().unwrap()["agents"][2]["model"], BROKEN);
-    assert_eq!(
-        env.osaurus_list().unwrap(),
-        vec!["foundation", "qwen3.8-27b-jang_6d-crack"]
-    );
-    let doc = serde_json::json!({"version": 1, "agents": [{"name": "Disk Audit", "model": CRACK}]});
-    assert_eq!(env.plan(&doc).unwrap().code, 0);
-    assert_eq!(env.apply(&doc).unwrap().text.trim(), "agents:");
-    let log = std::fs::read_to_string(dir.path().join("argv.log")).unwrap();
-    let lines: Vec<&str> = log.lines().collect();
-    assert!(
-        lines[0].starts_with("config export --format json -o "),
-        "{log}"
-    );
-    assert_eq!(lines[1], "list");
-    assert!(
-        lines[2].starts_with("config plan ") && lines[2].contains(".json"),
-        "{log}"
-    );
-    assert!(
-        lines[3].starts_with("config apply ") && lines[3].contains(".json"),
-        "{log}"
-    );
-    assert!(!log.contains("--prune") && !log.contains("--yes"), "{log}");
-    // The document osaurus was handed is the minimal one, byte for byte.
-    let sent: Value =
-        serde_json::from_str(&std::fs::read_to_string(dir.path().join("last-apply.json")).unwrap())
-            .unwrap();
-    assert_eq!(sent, doc);
-}
-
-#[test]
-fn a_missing_osaurus_or_a_failed_export_is_an_error_not_a_pass() {
-    let dir = tempfile::tempdir().unwrap();
-    let mut env = env_in(dir.path(), "http://127.0.0.1:1");
-    env.osaurus = dir.path().join("no-such-osaurus");
-    assert!(env.export().is_err());
-    assert!(env.osaurus_list().is_err());
-    let dir2 = tempfile::tempdir().unwrap();
-    let mut env = env_in(dir2.path(), "http://127.0.0.1:1");
-    std::fs::write(dir2.path().join("export.json"), "not json").unwrap();
-    assert!(env.export().unwrap_err().to_string().contains("not JSON"));
-    // A non-zero export exit is reported with its code.
-    env.osaurus = {
-        let p = dir2.path().join("failing");
-        std::fs::write(&p, "#!/bin/sh\nexit 2\n").unwrap();
-        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
-        p
-    };
-    assert!(env.export().unwrap_err().to_string().contains("exited 2"));
-    assert!(env.osaurus_list().is_err());
 }
 
 #[test]
@@ -217,8 +161,9 @@ fn think_scores_are_the_mean_of_the_latest_complete_run_with_think_rows() {
 
 #[test]
 fn from_home_points_at_the_operators_own_locations() {
-    let env = LiveEnv::from_home(BTreeMap::new(), &BTreeMap::new());
+    let env = LiveEnv::from_home("http://localhost:1337", BTreeMap::new(), &BTreeMap::new());
     assert_eq!(env.osaurus, PathBuf::from("osaurus"));
+    assert_eq!(env.base_url, "http://localhost:1337");
     assert!(env.models_root.ends_with("MLXModels"));
     assert!(
         env.families

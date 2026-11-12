@@ -10,14 +10,23 @@
 //! minimal one-section document: `plan` (whose diff must touch only that
 //! reference), `apply`, then a re-check. Never `--prune`, never the full export.
 //!
-//! Everything impure sits behind [`Env`]: the osaurus CLI, the filesystem, the
+//! Everything impure sits behind [`Env`]: the Osaurus server, the filesystem, the
 //! families cache and the eval history, so the tests run on fixtures.
+//!
+//! The `osaurus` CLI is a last resort, never a reader: it probes the server for
+//! 0.5 s and, when a busy server misses that, opens a SECOND Osaurus app
+//! (2026-11-12). The export and the model list are read over HTTP; `config
+//! plan` and `apply` have no HTTP form and run the CLI only through [`door`],
+//! which first checks `/health`.
 
+mod door;
 mod live;
 mod plan;
 mod refs;
 mod repair;
 
+#[cfg(test)]
+mod door_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
@@ -42,17 +51,17 @@ pub struct CmdOut {
 
 /// The seam: everything refcheck reads or does outside its own memory.
 pub trait Env {
-    /// `osaurus config export` as JSON.
+    /// The Osaurus config export as JSON (`GET /admin/config/export`).
     ///
     /// # Errors
     ///
-    /// When osaurus cannot be run or its export is not JSON.
+    /// When the server cannot be read or its export is not JSON.
     fn export(&self) -> Result<Value>;
-    /// The names `osaurus list` prints.
+    /// The names of the installed models (`GET /v1/models`).
     ///
     /// # Errors
     ///
-    /// When osaurus cannot be run.
+    /// When the server cannot be read.
     fn osaurus_list(&self) -> Result<Vec<String>>;
     /// `org/name` of every `~/MLXModels/<org>/<name>/config.json`.
     fn disk_models(&self) -> Vec<String>;
