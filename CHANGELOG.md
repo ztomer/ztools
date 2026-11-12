@@ -11,6 +11,8 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.28.1 — A model-eval run no longer rewrites the tracked eval_signals.json; the live store is in state _(2026-11-12)_
+
 ### Fixed
 - ZT.EVALSIGNALS: a run never dirties the tree. `model-eval` (and the scheduled models run) loaded
   and saved back the TRACKED `conf/eval_signals.json`, so every run left the checkout modified and
