@@ -87,12 +87,11 @@ pub fn resolve_weekend_model(
         .as_ref()
         .and_then(|json| json.get("data"))
         .and_then(|d| d.as_array())
-        .map(|arr| {
+        .map_or_default(|arr| {
             arr.iter()
                 .filter_map(|m| m.get("id").and_then(|id| id.as_str()).map(String::from))
                 .collect()
-        })
-        .unwrap_or_default();
+        });
     if installed.is_empty() || installed.iter().any(|m| m == configured) {
         return Ok(configured.to_string());
     }

@@ -295,8 +295,7 @@ pub fn run_summary_at(
     eprintln!("{}", clustering.status_line());
     let mut notes = clustering
         .document_note()
-        .map(|n| format!("{n}\n\n"))
-        .unwrap_or_default();
+        .map_or_default(|n| format!("{n}\n\n"));
 
     // Re-flatten from clusters, ordering by cluster size to put biggest narratives first
     let mut sorted_clusters = clustering.clusters;
@@ -355,12 +354,8 @@ pub fn run_summary_at(
                 // the finding.
                 let kept =
                     rejected::keep(output_dir, &stamp, candidate, &raw, &refusal.detail, &shown)
-                        .map(|p| format!(" (answer kept at {})", p.display()))
-                        .unwrap_or_default();
-                let resident = release_fault
-                    .as_ref()
-                    .map(|f| format!("; {f}"))
-                    .unwrap_or_default();
+                        .map_or_default(|p| format!(" (answer kept at {})", p.display()));
+                let resident = release_fault.as_ref().map_or_default(|f| format!("; {f}"));
                 Refusal {
                     verdict: refusal.verdict,
                     detail: format!("the answer was refused: {}{kept}{resident}", refusal.detail),
@@ -457,8 +452,7 @@ pub fn extract_thinking(text: &str) -> (String, String) {
     };
     let thinking = caps
         .get(1)
-        .map(|m| m.as_str().trim().to_string())
-        .unwrap_or_default();
+        .map_or_default(|m| m.as_str().trim().to_string());
     let cleaned = crate::ztools::eval::clean::remove_thinking_blocks(text);
     (thinking, cleaned)
 }

@@ -141,10 +141,7 @@ impl Clustering {
                 hebrew: hebrew @ Hebrew::Apart { fault: true, .. },
                 ..
             } => {
-                let lead = notice
-                    .as_ref()
-                    .map(|n| format!("> ⚠ {n}\n"))
-                    .unwrap_or_default();
+                let lead = notice.as_ref().map_or_default(|n| format!("> ⚠ {n}\n"));
                 Some(format!("{lead}> ⚠ {}", hebrew.clause().unwrap_or_default()))
             }
             Outcome::Clustered { notice, .. } => notice.as_ref().map(|n| format!("> ⚠ {n}")),
@@ -250,8 +247,7 @@ fn ask(client: &Client, url: &str, model: &str, texts: &[&str]) -> Answer {
         status.as_u16(),
         detail
             .and_then(|d| d.code)
-            .map(|c| format!(" {c}"))
-            .unwrap_or_default()
+            .map_or_default(|c| format!(" {c}"))
     ))
 }
 

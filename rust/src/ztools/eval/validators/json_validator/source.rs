@@ -62,8 +62,7 @@ pub fn check_source_extraction(items: &[Value], source_text: &str) -> f64 {
                 .get("name")
                 .or_else(|| map.get("event"))
                 .or_else(|| map.get("title"))
-                .map(|v| v.to_string().trim_matches('"').to_string())
-                .unwrap_or_default(),
+                .map_or_default(|v| v.to_string().trim_matches('"').to_string()),
             _ => String::new(),
         };
         let search = if primary.is_empty() {

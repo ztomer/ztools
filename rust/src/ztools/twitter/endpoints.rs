@@ -53,22 +53,20 @@ pub fn load_endpoint_markers(paths: &[String]) -> Result<EndpointMarkers> {
         let following = table
             .get("following")
             .and_then(|v| v.as_str())
-            .map(str::trim)
-            .unwrap_or_default();
+            .map_or_default(str::trim);
         if following.is_empty() {
             continue;
         }
         let timeline: Vec<String> = table
             .get("timeline")
             .and_then(|v| v.as_array())
-            .map(|arr| {
+            .map_or_default(|arr| {
                 arr.iter()
                     .filter_map(|v| v.as_str())
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty())
                     .collect()
-            })
-            .unwrap_or_default();
+            });
         return Ok(EndpointMarkers {
             timeline,
             following: following.to_string(),

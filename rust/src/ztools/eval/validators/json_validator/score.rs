@@ -113,8 +113,7 @@ fn name_duplicate_points(items: &[Value]) -> (i64, Option<String>) {
         .map(|i| match i {
             Value::Object(m) => m
                 .get("name")
-                .map(|v| v.to_string().trim_matches('"').to_string())
-                .unwrap_or_default(),
+                .map_or_default(|v| v.to_string().trim_matches('"').to_string()),
             Value::String(s) => s.clone(),
             // Python names non-dict scalars with str(item): numbers keep
             // their text ("7", not ""). Bool/None render in JSON spelling
@@ -271,8 +270,7 @@ pub fn validate_mixed_signal(
                 .get("name")
                 .or_else(|| map.get("event"))
                 .or_else(|| map.get("title"))
-                .map(|v| v.to_string().trim_matches('"').to_string())
-                .unwrap_or_default(),
+                .map_or_default(|v| v.to_string().trim_matches('"').to_string()),
             Value::String(s) => s.clone(),
             other => other.to_string(),
         };

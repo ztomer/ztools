@@ -132,11 +132,10 @@ fn build_status(
     let modified = std::fs::metadata(&plan)
         .and_then(|m| m.modified())
         .ok()
-        .map(|t| {
+        .map_or_default(|t| {
             let dt: chrono::DateTime<Local> = t.into();
             dt.format("%Y-%m-%dT%H:%M:%S%:z").to_string()
-        })
-        .unwrap_or_default();
+        });
 
     serde_json::json!({
         "name": NAME,

@@ -133,14 +133,13 @@ pub fn load_region_lists(paths: &[String]) -> RegionLists {
             region
                 .get(key)
                 .and_then(|v| v.as_array())
-                .map(|arr| {
+                .map_or_default(|arr| {
                     arr.iter()
                         .filter_map(|v| v.as_str())
                         .map(|s| s.trim().to_lowercase())
                         .filter(|s| !s.is_empty())
                         .collect()
                 })
-                .unwrap_or_default()
         };
         return RegionLists {
             cities,

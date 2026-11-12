@@ -63,14 +63,12 @@ pub fn constant_column_ratio(items: &[Value]) -> (f64, Vec<String>) {
     for key in names {
         let first_val = rows[0]
             .get(key)
-            .map(|v| v.to_string().trim_matches('"').trim().to_lowercase())
-            .unwrap_or_default();
+            .map_or_default(|v| v.to_string().trim_matches('"').trim().to_lowercase());
         if !first_val.is_empty() {
             let all_same = rows.iter().all(|r| {
                 let v = r
                     .get(key)
-                    .map(|val| val.to_string().trim_matches('"').trim().to_lowercase())
-                    .unwrap_or_default();
+                    .map_or_default(|val| val.to_string().trim_matches('"').trim().to_lowercase());
                 v == first_val
             });
             if all_same {
@@ -138,8 +136,7 @@ pub fn near_duplicate_ratio(items: &[Value]) -> f64 {
         .map(|item| match item {
             Value::Object(m) => m
                 .get("name")
-                .map(|v| v.to_string().trim_matches('"').to_string())
-                .unwrap_or_default(),
+                .map_or_default(|v| v.to_string().trim_matches('"').to_string()),
             Value::String(s) => s.clone(),
             _ => String::new(),
         })

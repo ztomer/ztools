@@ -124,17 +124,14 @@ pub fn load_fallback_policy(paths: &[String]) -> Result<FallbackPolicy> {
 }
 
 fn string_list(value: Option<&toml::Value>) -> Vec<String> {
-    value
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str())
-                .map(str::trim)
-                .filter(|s| !s.is_empty())
-                .map(str::to_string)
-                .collect()
-        })
-        .unwrap_or_default()
+    value.and_then(|v| v.as_array()).map_or_default(|arr| {
+        arr.iter()
+            .filter_map(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect()
+    })
 }
 
 /// Which tier answered.

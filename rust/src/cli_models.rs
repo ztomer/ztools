@@ -264,13 +264,12 @@ fn current_tasks(config: &ZtoolsConfig) -> crate::ztools::eval::TaskIdentities {
     config
         .eval_roster_inputs()
         .and_then(|inputs| crate::ztools::eval::load_all_eval_tasks(&inputs, tasks_dir.as_deref()))
-        .map(|tasks| {
+        .map_or_default(|tasks| {
             tasks
                 .iter()
                 .map(|t| (t.name.clone(), crate::ztools::eval::task_fingerprint(t)))
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 /// Run a `models` subcommand.

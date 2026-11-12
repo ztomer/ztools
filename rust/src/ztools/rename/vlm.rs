@@ -124,8 +124,7 @@ pub fn query_vlm_for_filename(
     let bytes = std::fs::read(image_path)?;
     let suffix = image_path
         .extension()
-        .map(|e| e.to_string_lossy().to_lowercase())
-        .unwrap_or_default();
+        .map_or_default(|e| e.to_string_lossy().to_lowercase());
     let mime = if suffix == "png" {
         "image/png"
     } else {

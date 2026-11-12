@@ -162,13 +162,12 @@ pub fn is_generative_model(model: &str) -> bool {
     let arches = cfg
         .get("architectures")
         .and_then(|a| a.as_array())
-        .map(|a| {
+        .map_or_default(|a| {
             a.iter()
                 .filter_map(|v| v.as_str())
                 .map(str::to_lowercase)
                 .collect::<Vec<String>>()
-        })
-        .unwrap_or_default();
+        });
     !arches
         .iter()
         .any(|a| NON_GENERATIVE_ARCHITECTURES.contains(&a.as_str()))

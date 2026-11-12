@@ -211,7 +211,7 @@ fn every_row_grounds_on_its_content_and_none_on_its_name() {
             cleared_by_name.push(path.to_string());
         }
         if !grounded(facts, &read_desc) {
-            missed_by_read.push((path.to_string(), read_desc.clone()));
+            missed_by_read.push((path.to_string(), read_desc));
         }
     }
     assert_empty!(

@@ -53,7 +53,6 @@ pub fn fetch_roster(host: &str, port: u16) -> Vec<RosterEntry> {
     let entries: Vec<RosterEntry> = data
         .get("models")
         .and_then(|m| m.as_array())
-        .map(|arr| arr.iter().filter_map(RosterEntry::from_json).collect())
-        .unwrap_or_default();
+        .map_or_default(|arr| arr.iter().filter_map(RosterEntry::from_json).collect());
     drop_uncorroborated(entries)
 }

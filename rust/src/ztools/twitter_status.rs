@@ -63,11 +63,10 @@ fn build_status_in(directory: &Path) -> serde_json::Value {
     };
     let ran_at = std::fs::metadata(&summary_file)
         .and_then(|m| m.modified())
-        .map(|t| {
+        .map_or_default(|t| {
             chrono::DateTime::<chrono::Local>::from(t)
                 .to_rfc3339_opts(chrono::SecondsFormat::Micros, false)
-        })
-        .unwrap_or_default();
+        });
 
     let stem = summary_file
         .file_stem()

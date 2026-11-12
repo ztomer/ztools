@@ -95,12 +95,11 @@ fn top_level_list(text: &str) -> Vec<String> {
     value
         .get("exclude_places")
         .and_then(toml::Value::as_array)
-        .map(|a| {
+        .map_or_default(|a| {
             a.iter()
                 .filter_map(|v| v.as_str().map(str::to_string))
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 fn assert_no_nested_list(text: &str) {

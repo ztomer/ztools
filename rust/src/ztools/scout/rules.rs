@@ -219,8 +219,7 @@ pub fn kv_bytes(config: &Value, ctx: u64) -> Result<u64, String> {
     let types: Vec<&str> = t
         .get("layer_types")
         .and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(Value::as_str).collect())
-        .unwrap_or_default();
+        .map_or_default(|a| a.iter().filter_map(Value::as_str).collect());
     let (full, sliding) = if types.is_empty() {
         match num(t, "full_attention_interval") {
             Some(n) if n > 0 => (layers / n, 0),

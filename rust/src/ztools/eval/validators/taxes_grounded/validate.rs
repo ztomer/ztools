@@ -193,25 +193,22 @@ pub fn validate_taxes_qa(output: &Value, explicit_grounding: Option<&Value>) -> 
     let known_ids: HashSet<String> = grounding
         .get("known_fact_ids")
         .and_then(|v| v.as_array())
-        .map(|a| {
+        .map_or_default(|a| {
             a.iter()
                 .map(|v| v.to_string().trim_matches('"').to_string())
                 .collect()
-        })
-        .unwrap_or_default();
+        });
 
-    let cited: Vec<String> = citations
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|c| {
-                    c.as_object()?
-                        .get("fact_id")?
-                        .as_str()
-                        .map(std::string::ToString::to_string)
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let cited: Vec<String> = citations.map_or_default(|arr| {
+        arr.iter()
+            .filter_map(|c| {
+                c.as_object()?
+                    .get("fact_id")?
+                    .as_str()
+                    .map(std::string::ToString::to_string)
+            })
+            .collect()
+    });
 
     let cite_score = if !cited.is_empty() {
         let hits = cited.iter().filter(|c| known_ids.contains(*c)).count();
@@ -277,20 +274,17 @@ pub fn validate_taxes_slip_qa(output: &Value, explicit_grounding: Option<&Value>
     let known_flags: HashSet<String> = grounding
         .get("known_flag_ids")
         .and_then(|v| v.as_array())
-        .map(|a| {
+        .map_or_default(|a| {
             a.iter()
                 .map(|v| v.to_string().trim_matches('"').to_string())
                 .collect()
-        })
-        .unwrap_or_default();
+        });
 
-    let reported_ids: Vec<String> = ids
-        .map(|arr| {
-            arr.iter()
-                .map(|v| v.to_string().trim_matches('"').to_string())
-                .collect()
-        })
-        .unwrap_or_default();
+    let reported_ids: Vec<String> = ids.map_or_default(|arr| {
+        arr.iter()
+            .map(|v| v.to_string().trim_matches('"').to_string())
+            .collect()
+    });
 
     let flag_score = if reported_ids.is_empty() {
         let s = if known_flags.is_empty() { 35 } else { 0 };

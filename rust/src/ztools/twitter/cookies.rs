@@ -40,9 +40,7 @@ impl Cookie {
 /// Find potential Firefox profile cookie databases.
 #[must_use]
 pub fn find_firefox_profile_dbs() -> Vec<PathBuf> {
-    dirs::home_dir()
-        .map(|home| find_profile_dbs_under(&home))
-        .unwrap_or_default()
+    dirs::home_dir().map_or_default(|home| find_profile_dbs_under(&home))
 }
 
 /// Scan `home` for Firefox profile cookie databases.
@@ -266,12 +264,10 @@ pub fn find_session_cookies(app_support: &Path, domains: &[&str]) -> (Vec<Cookie
                 .and_then(|p| p.parent())
                 .and_then(|p| p.parent())
                 .and_then(|p| p.file_name())
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_default(),
+                .map_or_default(|s| s.to_string_lossy().into_owned()),
             db.parent()
                 .and_then(|p| p.file_name())
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_default()
+                .map_or_default(|s| s.to_string_lossy().into_owned())
         );
         if has_session_cookie(&cookies) {
             return (cookies, source);

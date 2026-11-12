@@ -51,10 +51,7 @@ pub fn source_lines_by_author(source_text: &str) -> HashMap<(String, String), St
         if let Some(caps) = SOURCE_LINE_RE.captures(raw) {
             let handle = caps.get(1).unwrap().as_str().to_lowercase();
             let stamp = caps.get(2).unwrap().as_str().trim().to_string();
-            let content = caps
-                .get(3)
-                .map(|m| m.as_str().to_string())
-                .unwrap_or_default();
+            let content = caps.get(3).map_or_default(|m| m.as_str().to_string());
             lines.insert((handle, stamp), content);
         }
     }

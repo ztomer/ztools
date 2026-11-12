@@ -203,8 +203,7 @@ fn load_averages() -> String {
         .args(["-n", "vm.loadavg"])
         .output()
         .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_default()
+        .map_or_default(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
 }
 
 /// Ask `model` about `rows`' pairs, loaded and released by the residency

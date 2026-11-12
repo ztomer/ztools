@@ -113,21 +113,19 @@ pub fn validate_taxes_task(output: &str, task_name: &str) -> (i64, String) {
     let expected: Vec<String> = rubric
         .get("expected_signals")
         .and_then(|v| v.as_array())
-        .map(|a| {
+        .map_or_default(|a| {
             a.iter()
                 .filter_map(|s| s.as_str().map(String::from))
                 .collect()
-        })
-        .unwrap_or_default();
+        });
     let forbidden: Vec<String> = rubric
         .get("gt_forbidden")
         .and_then(|v| v.as_array())
-        .map(|a| {
+        .map_or_default(|a| {
             a.iter()
                 .filter_map(|s| s.as_str().map(String::from))
                 .collect()
-        })
-        .unwrap_or_default();
+        });
 
     let (g_score, g_hits) = grounding_score(output, &expected);
     let l_score = no_leak_score(output, &forbidden);
@@ -182,12 +180,11 @@ pub fn validate_taxes_synthesis(output: &Value) -> (i64, String) {
     let expected_sections: Vec<String> = load_rubric("synthesis")
         .get("expected_sections")
         .and_then(|v| v.as_array())
-        .map(|a| {
+        .map_or_default(|a| {
             a.iter()
                 .filter_map(|s| s.as_str().map(String::from))
                 .collect()
-        })
-        .unwrap_or_default();
+        });
     if !expected_sections.is_empty() {
         let hits = expected_sections
             .iter()
