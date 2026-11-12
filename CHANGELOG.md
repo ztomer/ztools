@@ -11,6 +11,8 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.24.0 — a model resident after finished work keeps the work in every residency caller (Released type, with_model removed) _(2026-11-12)_
+
 ### Fixed
 
 - ZT.CHAINRELEASE: a model still resident after it FINISHED its work no longer
