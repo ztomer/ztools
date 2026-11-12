@@ -11,6 +11,21 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Added
+- LM.AUTOSWITCH (LM.DESIGN section 6, phase 5), shipped PROPOSE-ONLY (D5): a switch the
+  nightly's rule chose writes one slot of the machine-local selection file
+  `~/.config/ztools/config.toml [best_models]` (seeded with every slot, other keys and
+  comments kept) only when `~/.config/ztools/models_auto` says `on`; with no file, `off`
+  there, or `ZTOOLS_MODEL_AUTO=0`, it is only proposed on the findings line. A switch opens
+  a canary: the next 3 real runs of the slot's consumer (twitter-summarize for `summarize`,
+  the weekend plan for `json`) must succeed, pass the consumer's own gate (no DEGRADED
+  summary; rows out of the structure phase) and stay within the speed floor (600 s / 30 min).
+  A failure restores the previous selection in that same run, bars the candidate 30 days
+  (the nightly deletes a barred staged candidate) and writes a findings line. Rate limits:
+  one open canary, one switch a slot per 7 days. `ztools models rollback` restores the
+  selection before the latest switch from the history ledger
+  (`~/.local/state/ztools/models/switch_ledger.json`). Embedding models are never switched.
+
 ## v3.27.0 — ztools models nightly: propose-only per-slot decision rule, replay reproduces [best_models], one staged candidate a night under the disk floor _(2026-11-12)_
 
 ### Added

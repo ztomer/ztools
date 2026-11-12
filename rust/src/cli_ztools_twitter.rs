@@ -175,6 +175,29 @@ fn tweets_from_named_source(path_or_dash: &str) -> Result<Vec<crate::ztools::twi
     Ok(tweets)
 }
 
+/// Summarise, and let the summarize slot's canary count the run when it is a
+/// real one with the selected model (LM.AUTOSWITCH).
+fn summarize_watched(
+    tweets: &[crate::ztools::twitter::Tweet],
+    dir: &std::path::Path,
+    destination: Destination,
+    model: Option<&str>,
+    config: &ZtoolsConfig,
+) -> Result<std::path::PathBuf> {
+    use crate::ztools::autoswitch::canary;
+    let started = std::time::Instant::now();
+    let result = crate::ztools::twitter::run_summary(tweets, dir, None, model, config);
+    if destination == Destination::Production && model.is_none() {
+        canary::observe_live(
+            "summarize",
+            &config.twitter_model,
+            canary::twitter_verdict(&result),
+            started.elapsed().as_secs_f64(),
+        );
+    }
+    result
+}
+
 pub(crate) fn twitter_summarize(config: &ZtoolsConfig, command: TwitterCommand) -> Result<()> {
     let opts = match command {
         TwitterCommand::Latest { last_updated } => {
@@ -274,7 +297,7 @@ pub(crate) fn twitter_summarize(config: &ZtoolsConfig, command: TwitterCommand) 
             crate::ztools::store::twitter_output_dir().display()
         );
     }
-    let path = crate::ztools::twitter::run_summary(&tweets, &dir, None, model.as_deref(), config)?;
+    let path = summarize_watched(&tweets, &dir, destination, model.as_deref(), config)?;
     if let Ok(doc) = std::fs::read_to_string(&path) {
         println!("{doc}");
     }

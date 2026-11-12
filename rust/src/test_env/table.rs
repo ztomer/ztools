@@ -93,6 +93,9 @@ pub(super) const CLEARED: &[&str] = &[
     // installer (the shape is tested against a fake host).
     "ZTOOLS_SELF_HEAL",
     "ZTOOLS_MEMINFO",
+    // autoswitch::mode: the kill switch. Cleared, so an operator's exported
+    // `0` cannot decide whether a test's switch is made or only proposed.
+    "ZTOOLS_MODEL_AUTO",
 ];
 
 /// Variables read by code OUTSIDE the crate — the house gate's checkout
@@ -141,6 +144,7 @@ pub(super) const MANAGED: &[&str] = &[
     "ZTOOLS_GPU_LOCK_DIR",
     "ZTOOLS_GPU_LOCK_OWNER",
     "ZTOOLS_MEMINFO",
+    "ZTOOLS_MODEL_AUTO",
     "ZTOOLS_SELF_HEAL",
     "ZTOOLS_TLS_PROBE",
     "ZTOOLS_TLS_PROBE_URL",

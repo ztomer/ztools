@@ -5,6 +5,7 @@
 //! their own crate; the functions now take `&ZtoolsConfig` directly instead of
 //! the routines `Config` wrapper they used to be handed.
 
+use crate::ztools::autoswitch::canary::Verdict;
 use anyhow::Result;
 use chrono::Local;
 use std::path::{Path, PathBuf};
@@ -28,6 +29,16 @@ pub(crate) fn task_matches_filter(task_name: &str, filter: &str) -> bool {
         .map(str::trim)
         .filter(|n| !n.is_empty())
         .any(|n| task_name == n || task_name.ends_with(n))
+}
+
+/// The json slot's canary counts this weekend run (LM.AUTOSWITCH).
+fn watch_json(config: &ZtoolsConfig, started: std::time::Instant, verdict: Verdict) {
+    crate::ztools::autoswitch::canary::observe_live(
+        "json",
+        &config.weekend_model,
+        verdict,
+        started.elapsed().as_secs_f64(),
+    );
 }
 
 pub(crate) fn weekend_plan(
@@ -89,14 +100,23 @@ pub(crate) fn weekend_plan(
         exclusions: exclusions_str,
     };
 
-    let (transient, corpus, mut health) = crate::ztools::weekend::fetch_duckduckgo_events(
+    let started = std::time::Instant::now();
+    let fetched = crate::ztools::weekend::fetch_duckduckgo_events(
         location,
         friday,
         sunday,
         &weather_str,
         &ctx,
         config,
-    )?;
+    );
+    if let Err(e) = &fetched {
+        watch_json(
+            config,
+            started,
+            Verdict::Failed(format!("the run failed: {}", e.root_cause())),
+        );
+    }
+    let (transient, corpus, mut health) = fetched?;
     let (mut fixed, mut transient) = gate_rows(
         transient,
         &corpus,
@@ -106,6 +126,11 @@ pub(crate) fn weekend_plan(
         &mut health,
     );
     report_constant_columns(&fixed, &transient, &ages_label);
+    watch_json(
+        config,
+        started,
+        crate::ztools::autoswitch::canary::weekend_verdict(&health),
+    );
 
     crate::ztools::weekend::apply_scores(&mut fixed, &weather_str, &ages);
     crate::ztools::weekend::apply_scores(&mut transient, &weather_str, &ages);

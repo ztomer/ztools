@@ -89,23 +89,22 @@ pub fn night(
     finish_night(&mut live, &state_dir)
 }
 
-/// Run `live`'s night and append its findings line under `state_dir`.
+/// Run `live`'s night, act on the slots the rule switched (by the mode:
+/// propose-only unless the owner turned the automatic mode on), and append
+/// its findings line under `state_dir`.
 ///
 /// # Errors
 /// An [`Exit`] when the night failed, or the findings cannot be written.
 pub fn finish_night(live: &mut LiveNight, state_dir: &Path) -> Result<()> {
     let outcome = nightly::run(live, &Rule::DESIGN);
-    let finding = findings_line(
-        &chrono::Local::now().format("%Y-%m-%d").to_string(),
-        &outcome,
-    );
+    let clock = crate::ztools::autoswitch::clock();
+    let finding = act_on(live, &outcome, (clock.0, &clock.1));
     println!("{finding}");
-    std::fs::create_dir_all(state_dir)?;
-    let path = state_dir.join("findings.md");
-    let mut text = std::fs::read_to_string(&path).unwrap_or_default();
-    text.push_str(&finding);
-    text.push('\n');
-    std::fs::write(&path, text)?;
+    let paths = crate::ztools::autoswitch::Paths {
+        state: state_dir.to_path_buf(),
+        ..live.switch_paths()
+    };
+    paths.append_finding(&finding)?;
     match outcome {
         Outcome::Failed(why) => Err(Exit {
             code: 1,
@@ -114,6 +113,55 @@ pub fn finish_night(live: &mut LiveNight, state_dir: &Path) -> Result<()> {
         .into()),
         _ => Ok(()),
     }
+}
+
+/// The night's findings line, after acting on every slot the rule switched:
+/// promoted (auto mode) or proposed, and a switched-in candidate unstaged.
+#[must_use]
+pub fn act_on(live: &LiveNight, outcome: &Outcome, (now, date): (f64, &str)) -> String {
+    use crate::ztools::autoswitch::{self, night as act};
+    use crate::ztools::select::nightly::Night as _;
+    use std::fmt::Write as _;
+    let mut finding = findings_line(date, outcome);
+    if let Outcome::Decided {
+        candidate,
+        decisions,
+        ..
+    } = outcome
+    {
+        let paths = live.switch_paths();
+        let mode = autoswitch::mode(&paths);
+        let acts = act::act(&paths, &mode, (now, date), &live.slots, decisions);
+        for (_, line) in &acts {
+            finding.push_str("; ");
+            finding.push_str(line);
+        }
+        if act::switched_to(&acts, candidate)
+            && let Some(s) = live.staged().into_iter().find(|s| &s.model == candidate)
+            && let Err(e) = live.unstage(&s.repo)
+        {
+            let _ = write!(finding, "; ⚠ {} still staged: {e}", s.repo);
+        }
+    }
+    finding
+}
+
+/// `ztools models rollback`: restore the selection before the latest switch.
+///
+/// # Errors
+/// When the ledger records no switch, or a file cannot be written.
+pub fn rollback() -> Result<()> {
+    use crate::ztools::autoswitch;
+    let paths = autoswitch::Paths::from_home();
+    let (now, date) = autoswitch::clock();
+    let ev = autoswitch::switch::rollback(&paths, (now, &date), "ztools models rollback")?;
+    let line = format!(
+        "LM {date}: {} rolled back {} -> {} (by hand)",
+        ev.slot, ev.from, ev.to
+    );
+    paths.append_finding(&line)?;
+    println!("✓ {line}");
+    Ok(())
 }
 
 #[cfg(test)]

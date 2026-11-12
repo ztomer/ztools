@@ -1,5 +1,6 @@
 //! Native Rust port of ztools subsystems: Twitter summarizer and Weekend planner.
 
+pub mod autoswitch;
 pub mod deps;
 pub mod embeddings;
 pub mod eval;

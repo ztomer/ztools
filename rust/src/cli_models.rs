@@ -73,6 +73,10 @@ pub enum ModelsCmd {
         #[arg(long, requires = "replay")]
         fixture: Option<std::path::PathBuf>,
     },
+    /// Restore the selection file (`~/.config/ztools/config.toml
+    /// [best_models]`) as it was before the latest automatic switch, bar that
+    /// candidate if its canary was still open, and record it in the ledger.
+    Rollback,
 }
 
 /// Run the scout live, recorded, or over a recorded directory.
@@ -251,6 +255,7 @@ pub fn run(config: &ZtoolsConfig, cmd: &ModelsCmd) -> Result<()> {
         ModelsCmd::Scout { record, fixtures } => {
             scout(config, record.as_deref(), fixtures.as_deref())
         }
+        ModelsCmd::Rollback => crate::cli_models_nightly::rollback(),
         ModelsCmd::Nightly {
             replay,
             record,

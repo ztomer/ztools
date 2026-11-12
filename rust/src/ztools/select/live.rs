@@ -40,6 +40,38 @@ impl LiveNight {
         self.models_root.join(repo)
     }
 
+    /// The autoswitch paths whose state is this night's.
+    #[must_use]
+    pub fn switch_paths(&self) -> crate::ztools::autoswitch::Paths {
+        crate::ztools::autoswitch::Paths {
+            state: self.state_dir.clone(),
+            ..crate::ztools::autoswitch::Paths::under(&self.home())
+        }
+    }
+
+    /// The home the models root hangs off (`~/MLXModels`).
+    fn home(&self) -> PathBuf {
+        self.models_root
+            .parent()
+            .map_or_else(|| PathBuf::from("."), Path::to_path_buf)
+    }
+
+    /// A switched-in candidate is no longer staged: its ledger moves to
+    /// `switched/`, so the next night neither re-evaluates nor deletes it,
+    /// and it stays this job's own directory.
+    ///
+    /// # Errors
+    /// When the ledger cannot be moved.
+    pub fn unstage(&self, repo: &str) -> std::io::Result<()> {
+        let from = self.ledger_dir(repo);
+        let to = self
+            .state_dir
+            .join("switched")
+            .join(repo.replace('/', "--"));
+        std::fs::create_dir_all(self.state_dir.join("switched"))?;
+        std::fs::rename(from, to)
+    }
+
     fn partial(&self, repo: &str) -> PathBuf {
         self.models_root.join(format!("{repo}.partial"))
     }
@@ -185,6 +217,13 @@ impl Night for LiveNight {
 
     fn delete(&mut self, staged: &Staged) -> Result<(), String> {
         delete_staged(self, staged)
+    }
+
+    fn barred(&self, model: &str) -> Option<String> {
+        let (now, _) = crate::ztools::autoswitch::clock();
+        crate::ztools::autoswitch::Ledger::load(&self.switch_paths())
+            .ok()?
+            .bar(model, now)
     }
 }
 

@@ -73,6 +73,11 @@ pub trait Night {
     /// # Errors
     /// When it could not be removed.
     fn delete(&mut self, staged: &Staged) -> Result<(), String>;
+    /// Why `model` is barred (its canary failed), if it is: a barred staged
+    /// candidate is deleted, never evaluated again (LM.AUTOSWITCH).
+    fn barred(&self, _model: &str) -> Option<String> {
+        None
+    }
 }
 
 /// How a night ended.
@@ -213,6 +218,12 @@ pub fn run(night: &mut dyn Night, rule: &Rule) -> Outcome {
             return Outcome::Failed(format!("{} candidates staged, the limit is 1", many.len()));
         }
     };
+    if let Some(why) = night.barred(&staged.model) {
+        return match night.delete(&staged) {
+            Ok(()) => Outcome::Nothing(format!("{why}; deleted")),
+            Err(e) => Outcome::Failed(format!("{why}, but not deleted: {e}")),
+        };
+    }
     let outcome = evaluate(night, &staged, rule, since);
     match outcome {
         Outcome::Decided { deleted: true, .. } => match night.delete(&staged) {
