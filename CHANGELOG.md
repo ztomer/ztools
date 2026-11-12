@@ -11,6 +11,8 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.26.0 — propose-only model scout: HF + Osaurus catalog reads, provenance/format/fit/disk filters, refusing feeds read unverified _(2026-11-12)_
+
 ### Added
 
 - LM.SCOUT: `ztools models scout`, PROPOSE-ONLY (LM.DESIGN sections 1-2). It reads the HF Hub
