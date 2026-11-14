@@ -11,6 +11,8 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.31.0 — A rule-rejected candidate is not re-nominated until its revision, a slot's measure or Osaurus changes; one nightly at a time, and a failed eval names its reason (LM.INCUMBENTFAIL) _(2026-11-14)_
+
 ### Fixed
 - **A candidate the rule rejected is not nominated again until something its rejection rested on
   changes (LM.RENOMINATE).** The night deleted a rejected candidate and forgot the verdict, so the
