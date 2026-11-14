@@ -86,7 +86,10 @@ pub trait Night {
     fn reject(&mut self, staged: &Staged, why: &str) -> Result<(), String>;
     /// Whether Osaurus still answers `/health`: a candidate that failed to
     /// load may have wedged it whole.
-    fn osaurus_answers(&self) -> bool;
+    ///
+    /// # Errors
+    /// Why it did not answer (or could not be asked).
+    fn osaurus_answers(&self) -> Result<(), String>;
 }
 
 /// How a night ended.
@@ -271,8 +274,10 @@ fn reject_unloadable(night: &mut dyn Night, staged: &Staged, why: String) -> Out
     if let Err(e) = night.delete(staged) {
         faults.push(format!("not deleted: {e}"));
     }
-    if !night.osaurus_answers() {
-        faults.push("Osaurus does not answer /health: it is wedged, restart it".into());
+    if let Err(e) = night.osaurus_answers() {
+        faults.push(format!(
+            "Osaurus /health did not answer ({e}): if it is wedged, restart it"
+        ));
     }
     if faults.is_empty() {
         Outcome::Rejected {

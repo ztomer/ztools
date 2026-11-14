@@ -92,8 +92,12 @@ impl Night for Fake {
         self.rejected.push(format!("{}: {why}", s.repo));
         Ok(())
     }
-    fn osaurus_answers(&self) -> bool {
-        !self.wedged
+    fn osaurus_answers(&self) -> Result<(), String> {
+        if self.wedged {
+            Err("no answer".into())
+        } else {
+            Ok(())
+        }
     }
 }
 

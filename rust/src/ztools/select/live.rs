@@ -269,12 +269,9 @@ impl Night for LiveNight {
         super::unloadable::record(&self.state_dir, &staged.repo, rec).map_err(|e| e.to_string())
     }
 
-    fn osaurus_answers(&self) -> bool {
-        reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .and_then(|c| c.get(format!("{}/health", self.osaurus_url)).send())
-            .is_ok_and(|r| r.status().is_success())
+    fn osaurus_answers(&self) -> Result<(), String> {
+        // The scout's own /health read, which takes the GPU lock itself.
+        self.feed().get(scout::feeds::HEALTH).map(|_| ())
     }
 }
 
