@@ -243,16 +243,32 @@ impl Night for LiveNight {
     }
 
     fn eval(&mut self, model: &str, tasks: &[String]) -> Result<(), String> {
-        let status = std::process::Command::new(&self.exe)
+        use std::io::BufRead as _;
+        let mut child = std::process::Command::new(&self.exe)
             .args(["model-eval", "--model", model, "--suite", "full", "--task"])
             .arg(tasks.join(","))
             .stdin(std::process::Stdio::null())
-            .status()
+            .stderr(std::process::Stdio::piped())
+            .spawn()
             .map_err(|e| e.to_string())?;
+        // Its stderr still reaches ours, and its last line is the reason a
+        // failed eval gives: "exited 1" alone named nothing (LM.INCUMBENTFAIL).
+        let mut last = String::new();
+        if let Some(err) = child.stderr.take() {
+            for line in std::io::BufReader::new(err).lines().map_while(Result::ok) {
+                eprintln!("{line}");
+                if !line.trim().is_empty() {
+                    last = line.trim().to_string();
+                }
+            }
+        }
+        let status = child.wait().map_err(|e| e.to_string())?;
         if status.success() {
             Ok(())
-        } else {
+        } else if last.is_empty() {
             Err(format!("model-eval exited {status}"))
+        } else {
+            Err(format!("model-eval exited {status}: {last}"))
         }
     }
 

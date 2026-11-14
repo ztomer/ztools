@@ -97,6 +97,15 @@ pub fn night(
 /// # Errors
 /// An [`Exit`] when the night failed, or the findings cannot be written.
 pub fn finish_night(live: &mut LiveNight, state_dir: &Path) -> Result<()> {
+    // One night at a time: a second start beside a running night failed its
+    // incumbent's eval on the GPU lock three times (LM.INCUMBENTFAIL).
+    let _night = match crate::ztools::select::once::claim(state_dir)? {
+        crate::ztools::select::once::Claim::Ours(lock) => lock,
+        crate::ztools::select::once::Claim::Held(by) => {
+            println!("· {by} is running; this start does nothing");
+            return Ok(());
+        }
+    };
     let outcome = nightly::run(live, &Rule::DESIGN);
     let clock = crate::ztools::autoswitch::clock();
     let mut finding = act_on(live, &outcome, (clock.0, &clock.1));

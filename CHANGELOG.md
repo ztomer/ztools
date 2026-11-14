@@ -19,6 +19,19 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
   it was downloaded at, each slot's incumbent and task identities, and the Osaurus version; the
   nominee and a staged copy skip it until one of those changes. An input unknown on either side
   does not lift it. A rejection that cannot be recorded fails the night.
+- **One night at a time, and a failed eval names its reason (LM.INCUMBENTFAIL).** The three
+  `✗ eval raptor-v0.5-8b-a1b-jang_6m on json: model-eval exited exit status: 1` lines of
+  2026-11-13 and 2026-11-14 were second starts of `models nightly` beside the running 02:30
+  night: the routines runner stamps a task only when its run ends, so another tick started the
+  night again while the first ran, and the second start's incumbent eval waited its 5 s for the
+  GPU lock the first night held and exited having asked Osaurus nothing (reproduced: `model-eval`
+  beside a held lock exits 1 after 5 s with `GPU lock unavailable`). The incumbent was not broken:
+  each night's incumbent runs are complete in `eval_history.json` (11-13 02:32, 02:34, 02:36;
+  11-14 02:33, 02:35, 02:37), and every such `✗` line precedes the running night's own closing
+  line in `findings.md`. The night now claims
+  `state/nightly.lock` for its whole run (a dead night's claim is taken over), a second start
+  says so and does nothing, and a failed eval's findings line carries the last line `model-eval`
+  wrote to stderr.
 
 ## v3.30.0 — A candidate that fails to load (Raptor-0.7 wedged Osaurus 1.0.3) is recorded, deleted and never loaded again on that Osaurus; models bar; a slot with no canary floor refuses to switch; a replaced incumbent's weights go on day 14 _(2026-11-14)_
 
