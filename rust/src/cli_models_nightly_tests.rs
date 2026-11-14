@@ -88,6 +88,7 @@ fn decided_night(dir: &std::path::Path) -> (crate::ztools::select::live::LiveNig
         slots: vec!["json".into()],
         bytes: 1,
         date: "d".into(),
+        revision: None,
     })
     .unwrap();
     let outcome = Outcome::Decided {

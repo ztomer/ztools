@@ -166,7 +166,12 @@ pub fn reduce(key: &str, v: &Value) -> Value {
         );
     }
     if key.starts_with("/api/models/") {
-        return listing_row(v);
+        // The card's commit, which a rule's rejection rests on (LM.RENOMINATE).
+        let mut row = listing_row(v);
+        if let Some(sha) = v.get("sha").filter(|s| s.is_string()) {
+            row["sha"] = sha.clone();
+        }
+        return row;
     }
     v.clone()
 }

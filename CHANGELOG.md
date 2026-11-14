@@ -11,6 +11,15 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Fixed
+- **A candidate the rule rejected is not nominated again until something its rejection rested on
+  changes (LM.RENOMINATE).** The night deleted a rejected candidate and forgot the verdict, so the
+  scout could nominate the same repo the next night and re-download it to the same answer. The
+  rejection is now recorded in `~/.local/state/ztools/models/rejected.json` with the Hub revision
+  it was downloaded at, each slot's incumbent and task identities, and the Osaurus version; the
+  nominee and a staged copy skip it until one of those changes. An input unknown on either side
+  does not lift it. A rejection that cannot be recorded fails the night.
+
 ## v3.30.0 — A candidate that fails to load (Raptor-0.7 wedged Osaurus 1.0.3) is recorded, deleted and never loaded again on that Osaurus; models bar; a slot with no canary floor refuses to switch; a replaced incumbent's weights go on day 14 _(2026-11-14)_
 
 ### Changed

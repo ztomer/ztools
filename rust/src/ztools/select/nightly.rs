@@ -36,6 +36,10 @@ pub struct Staged {
     pub slots: Vec<String>,
     pub bytes: u64,
     pub date: String,
+    /// The Hub commit it was downloaded at, when the Hub said: a rule's
+    /// rejection stands until it changes (LM.RENOMINATE).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision: Option<String>,
 }
 
 /// The machine, as the night sees it.
@@ -84,6 +88,17 @@ pub trait Night {
     /// # Errors
     /// When the record cannot be written.
     fn reject(&mut self, staged: &Staged, why: &str) -> Result<(), String>;
+    /// Record that the rule rejected `staged`, so it is not nominated again
+    /// until its revision, a slot's measure or the Osaurus version changes
+    /// (LM.RENOMINATE).
+    ///
+    /// # Errors
+    /// When the record cannot be written.
+    fn reject_by_rule(&mut self, staged: &Staged, why: &str) -> Result<(), String>;
+    /// The repo's current Hub revision, when it can be read.
+    fn revision(&mut self, _repo: &str) -> Option<String> {
+        None
+    }
     /// Whether Osaurus still answers `/health`: a candidate that failed to
     /// load may have wedged it whole.
     ///
@@ -162,6 +177,7 @@ fn stage(night: &mut dyn Night) -> Result<Staged, Outcome> {
     let files = night
         .files(&nominee.repo)
         .map_err(|why| Outcome::Failed(format!("{}: {why}", nominee.repo)))?;
+    let revision = night.revision(&nominee.repo);
     let bytes = rules::download_bytes(&files);
     let disk = rules::disk(bytes, night.free_bytes(), 0);
     match disk {
@@ -177,6 +193,7 @@ fn stage(night: &mut dyn Night) -> Result<Staged, Outcome> {
         slots: nominee.slots,
         bytes,
         date: night.date(),
+        revision,
     };
     night
         .download(&staged, &files)
@@ -254,13 +271,46 @@ pub fn run(night: &mut dyn Night, rule: &Rule) -> Outcome {
     }
     let outcome = evaluate(night, &staged, rule, since);
     match outcome {
-        Outcome::Decided { deleted: true, .. } => match night.delete(&staged) {
-            Ok(()) => outcome,
-            Err(why) => Outcome::Failed(format!("{} rejected but not deleted: {why}", staged.repo)),
-        },
+        Outcome::Decided {
+            deleted: true,
+            ref decisions,
+            ..
+        } => {
+            let mut faults = Vec::new();
+            if let Err(e) = night.reject_by_rule(&staged, &rule_why(&staged.model, decisions)) {
+                faults.push(format!("not recorded: {e}"));
+            }
+            if let Err(e) = night.delete(&staged) {
+                faults.push(format!("not deleted: {e}"));
+            }
+            if faults.is_empty() {
+                outcome
+            } else {
+                Outcome::Failed(format!(
+                    "{} rejected, but {}",
+                    staged.repo,
+                    faults.join("; ")
+                ))
+            }
+        }
         Outcome::Rejected { why, .. } => reject_unloadable(night, &staged, why),
         other => other,
     }
+}
+
+/// Why the rule rejected `candidate`, slot by slot.
+fn rule_why(candidate: &str, decisions: &[Decision]) -> String {
+    decisions
+        .iter()
+        .map(|d| {
+            let j = d.judged.iter().find(|j| j.model == candidate);
+            j.map_or_else(
+                || format!("{}: not measured", d.slot),
+                |j| format!("{}: {:+.1}, {}", d.slot, j.delta, j.why),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 /// Record a candidate that failed to load, delete it, and say whether it left

@@ -108,6 +108,7 @@ fn staged_raptor(night: &LiveNight) -> Staged {
         slots: vec!["json".into()],
         bytes: 1,
         date: "2026-11-14".into(),
+        revision: None,
     };
     night.write_ledger(&s).unwrap();
     std::fs::create_dir_all(night.model_dir(RAPTOR)).unwrap();

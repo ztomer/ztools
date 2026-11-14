@@ -7,12 +7,15 @@
 pub mod live;
 pub mod measure;
 pub mod nightly;
+pub mod rejected;
 pub mod replay;
 pub mod rule;
 pub mod unloadable;
 
 #[cfg(test)]
 mod nightly_tests;
+#[cfg(test)]
+mod rejected_tests;
 #[cfg(test)]
 mod replay_tests;
 #[cfg(test)]

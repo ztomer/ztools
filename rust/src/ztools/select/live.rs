@@ -76,12 +76,22 @@ impl LiveNight {
     }
 
     /// Why `name` (a repo id or its short name) is not to be loaded: it
-    /// failed to load on this Osaurus, or its canary bar is still running.
+    /// failed to load on this Osaurus, the rule rejected it and nothing that
+    /// rested on has changed, or its canary bar is still running.
     #[must_use]
     pub fn excluded(&self, name: &str) -> Option<String> {
         if let Some(why) =
             super::unloadable::why(&self.state_dir, name, self.osaurus_version.as_deref())
         {
+            return Some(why);
+        }
+        let now = super::rejected::Now {
+            revision: &|repo| self.hub_revision(repo),
+            osaurus: self.osaurus_version.as_deref(),
+            slots: &self.slots,
+            current: &self.current,
+        };
+        if let Some(why) = super::rejected::why(&self.state_dir, name, &now) {
             return Some(why);
         }
         let (now, _) = crate::ztools::autoswitch::clock();
@@ -105,6 +115,13 @@ impl LiveNight {
                     switched.join(s.repo.replace('/', "--")),
                 ]
             })
+    }
+
+    /// The repo's current commit on the Hub, from its model card.
+    #[must_use]
+    pub fn hub_revision(&self, repo: &str) -> Option<String> {
+        let card = self.feed().get(&scout::feeds::model_key(repo)).ok()?;
+        Some(card.get("sha")?.as_str()?.to_string())
     }
 
     fn partial(&self, repo: &str) -> PathBuf {
@@ -267,6 +284,22 @@ impl Night for LiveNight {
             why: why.to_string(),
         };
         super::unloadable::record(&self.state_dir, &staged.repo, rec).map_err(|e| e.to_string())
+    }
+
+    fn reject_by_rule(&mut self, staged: &Staged, why: &str) -> Result<(), String> {
+        let rec = super::rejected::Rejected {
+            model: staged.model.clone(),
+            revision: staged.revision.clone(),
+            osaurus: self.osaurus_version.clone(),
+            slots: super::rejected::basis(&self.current, &self.slots, &staged.slots),
+            date: self.date(),
+            why: why.to_string(),
+        };
+        super::rejected::record(&self.state_dir, &staged.repo, rec).map_err(|e| e.to_string())
+    }
+
+    fn revision(&mut self, repo: &str) -> Option<String> {
+        self.hub_revision(repo)
     }
 
     fn osaurus_answers(&self) -> Result<(), String> {

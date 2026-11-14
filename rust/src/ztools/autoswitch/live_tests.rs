@@ -27,6 +27,7 @@ fn staged() -> Staged {
         slots: vec!["json".into()],
         bytes: 1,
         date: "d".into(),
+        revision: None,
     }
 }
 

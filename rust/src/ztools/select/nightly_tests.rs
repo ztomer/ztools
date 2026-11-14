@@ -24,6 +24,9 @@ pub(super) struct Fake {
     pub(super) downloads: usize,
     pub(super) deleted: Vec<String>,
     pub(super) rejected: Vec<String>,
+    /// Rule rejections recorded, as `repo: why`.
+    pub(super) ruled: Vec<String>,
+    pub(super) unrecordable: bool,
     pub(super) wedged: bool,
 }
 
@@ -86,6 +89,13 @@ impl Night for Fake {
     }
     fn delete(&mut self, s: &Staged) -> Result<(), String> {
         self.deleted.push(s.repo.clone());
+        Ok(())
+    }
+    fn reject_by_rule(&mut self, s: &Staged, why: &str) -> Result<(), String> {
+        if self.unrecordable {
+            return Err("read-only state".into());
+        }
+        self.ruled.push(format!("{}: {why}", s.repo));
         Ok(())
     }
     fn reject(&mut self, s: &Staged, why: &str) -> Result<(), String> {
@@ -180,6 +190,7 @@ fn a_staged_candidate_is_evaluated_before_any_new_download() {
         slots: vec!["think".into()],
         bytes: 1,
         date: "2026-11-12".into(),
+        revision: None,
     }];
     let _ = run(&mut f, &Rule::DESIGN);
     assert_eq!(f.downloads, 0);
@@ -226,6 +237,7 @@ fn only_a_ledgered_directory_is_deleted() {
         slots: vec!["think".into()],
         bytes: 1,
         date: "2026-11-13".into(),
+        revision: None,
     };
     let weights = night.model_dir(CAND);
     std::fs::create_dir_all(&weights).unwrap();
@@ -301,13 +313,14 @@ fn the_live_night_reads_its_own_state_and_runs_the_eval_binary() {
         slots: vec![],
         bytes: 0,
         date: "d".into(),
+        revision: None,
     };
     assert!(night.delete(&staged).is_err(), "no ledger, nothing deleted");
     let _ = night.history();
 }
 
 /// A server that answers every request with `body`, `n` times.
-fn serve(n: usize, body: &'static str) -> String {
+pub(super) fn serve(n: usize, body: &'static str) -> String {
     use std::io::{Read, Write};
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
@@ -337,6 +350,7 @@ fn a_download_lands_whole_under_its_ledger_and_is_deletable() {
         slots: vec!["think".into()],
         bytes: 7,
         date: "d".into(),
+        revision: None,
     };
     let files = vec![
         File {

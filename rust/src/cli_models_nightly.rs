@@ -209,6 +209,7 @@ pub fn bar_with(live: &mut LiveNight, repo: &str, why: &str) -> Result<String> {
         slots: vec![],
         bytes: 0,
         date: date.clone(),
+        revision: None,
     });
     live.reject(&target, why).map_err(anyhow::Error::msg)?;
     let mut finding = format!(

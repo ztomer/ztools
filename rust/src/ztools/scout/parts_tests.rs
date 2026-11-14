@@ -136,7 +136,7 @@ fn a_live_answer_is_reduced_before_it_is_read_or_recorded() {
     let got = live.get(&key).expect("answers");
     assert_eq!(
         got,
-        serde_json::json!({"id": "org/x", "downloads": 3, "tags": ["base_model:org/base"]})
+        serde_json::json!({"id": "org/x", "downloads": 3, "sha": "def", "tags": ["base_model:org/base"]})
     );
     assert_eq!(Fixture::load(&rec).expect("recorded").get(&key), Ok(got));
     let refusing = Live {
