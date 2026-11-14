@@ -11,6 +11,8 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+## v3.30.0 — A candidate that fails to load (Raptor-0.7 wedged Osaurus 1.0.3) is recorded, deleted and never loaded again on that Osaurus; models bar; a slot with no canary floor refuses to switch; a replaced incumbent's weights go on day 14 _(2026-11-14)_
+
 ### Changed
 - **A slot with no canary speed floor refuses to switch (LM.CANARYFLOORS).** Before, a canary run
   on `think`, `filename` or `vlm` was "not counted" and a switch there stayed open with no way to
