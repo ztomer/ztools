@@ -91,6 +91,22 @@ impl LiveNight {
             .bar(&short, now)
     }
 
+    /// The directories this job staged for `model` and then switched in:
+    /// its weights and its ledger. `None` when it staged none of them.
+    #[must_use]
+    pub fn owned_dirs(&self, model: &str) -> Option<Vec<PathBuf>> {
+        let switched = self.state_dir.join("switched");
+        read_ledgers(&switched)
+            .into_iter()
+            .find(|s| s.model == model)
+            .map(|s| {
+                vec![
+                    self.model_dir(&s.repo),
+                    switched.join(s.repo.replace('/', "--")),
+                ]
+            })
+    }
+
     fn partial(&self, repo: &str) -> PathBuf {
         self.models_root.join(format!("{repo}.partial"))
     }

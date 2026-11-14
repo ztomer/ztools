@@ -10,8 +10,14 @@ use super::{CANARY_RUNS, Event, Kind, Ledger, Paths, switch};
 /// included (`Rule::DESIGN.summarize_max_seconds`, 600 s); the summarize
 /// step is one such call. `json`: the weekend plan's whole pipeline, which
 /// makes a structure call per batch plus the search, at most 30 minutes.
-/// The others have no consumer this job watches yet: no floor, so a run there
-/// is inconclusive rather than passing on nothing.
+/// The others have no floor, and a slot with no floor REFUSES to switch
+/// (`switch::refusal`), because no consumer run could confirm or roll it back:
+/// - `filename` and `vlm`: the image renamer is their consumer and counts each
+///   run (`rename/watch.rs`, the slowest call, cold load included), but no
+///   such run has been measured on a quiet machine yet; 2026-11-14's attempt
+///   met a load average of 249 and an Osaurus that did not answer `/health`.
+/// - `think`: no ztools run uses it; Osaurus's chat (`core_model`) follows it,
+///   and that run is Osaurus's own, which this job cannot time or judge.
 #[must_use]
 pub fn floor_seconds(slot: &str) -> Option<f64> {
     match slot {
@@ -115,6 +121,11 @@ pub fn observe(paths: &Paths, (now, date): (f64, &str), run: &Run) -> anyhow::Re
     });
     if kind == Kind::Confirm {
         ledger.canary = None;
+        ledger.retired.push(super::Retired {
+            model: canary.incumbent.clone(),
+            slot: canary.slot.clone(),
+            since: now,
+        });
         ledger.save(paths)?;
         let line = format!(
             "LM {date}: {} -> {} confirmed (canary {CANARY_RUNS}/{CANARY_RUNS})",

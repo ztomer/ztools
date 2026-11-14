@@ -18,9 +18,12 @@
 
 pub mod canary;
 pub mod night;
+pub mod retire;
 pub mod selection;
 pub mod switch;
 
+#[cfg(test)]
+mod floors_tests;
 #[cfg(test)]
 mod live_tests;
 #[cfg(test)]
@@ -34,13 +37,17 @@ use std::path::{Path, PathBuf};
 pub const CANARY_RUNS: u32 = 3;
 /// Days a candidate whose canary failed is barred.
 pub const BAR_DAYS: f64 = 30.0;
+/// Days a replaced incumbent's weights are kept after its successor is
+/// confirmed, before they are deleted (LM.DESIGN section 6).
+pub const RETIRE_DAYS: f64 = 14.0;
 /// Days between two switches of one slot.
 pub const SLOT_DAYS: f64 = 7.0;
 /// The slots this job may switch: ztools' five. Nothing else, and never an
 /// embedding model.
 pub const SWITCHABLE: &[&str] = &["think", "json", "summarize", "filename", "vlm"];
 
-const DAY: f64 = 86_400.0;
+/// Seconds in a day.
+pub const DAY: f64 = 86_400.0;
 
 /// Epoch seconds and the local date, now.
 #[must_use]
@@ -188,6 +195,19 @@ pub struct Ledger {
     /// Model to the time its bar lifts.
     #[serde(default)]
     pub barred: BTreeMap<String, f64>,
+    /// Incumbents a confirmed switch replaced, oldest first: their weights
+    /// go [`RETIRE_DAYS`] days after.
+    #[serde(default)]
+    pub retired: Vec<Retired>,
+}
+
+/// An incumbent a confirmed switch replaced.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Retired {
+    pub model: String,
+    pub slot: String,
+    /// When its successor was confirmed.
+    pub since: f64,
 }
 
 impl Ledger {

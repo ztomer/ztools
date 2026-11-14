@@ -99,7 +99,8 @@ pub fn night(
 pub fn finish_night(live: &mut LiveNight, state_dir: &Path) -> Result<()> {
     let outcome = nightly::run(live, &Rule::DESIGN);
     let clock = crate::ztools::autoswitch::clock();
-    let finding = act_on(live, &outcome, (clock.0, &clock.1));
+    let mut finding = act_on(live, &outcome, (clock.0, &clock.1));
+    sweep_retired(live, clock.0, &mut finding);
     println!("{finding}");
     let paths = crate::ztools::autoswitch::Paths {
         state: state_dir.to_path_buf(),
@@ -113,6 +114,28 @@ pub fn finish_night(live: &mut LiveNight, state_dir: &Path) -> Result<()> {
         }
         .into()),
         _ => Ok(()),
+    }
+}
+
+/// Delete the weights of incumbents replaced [`RETIRE_DAYS`] days ago that
+/// this job staged, and say each on the findings line.
+///
+/// [`RETIRE_DAYS`]: crate::ztools::autoswitch::RETIRE_DAYS
+pub fn sweep_retired(live: &LiveNight, now: f64, finding: &mut String) {
+    let in_use = live.slots.values().cloned().collect();
+    match crate::ztools::autoswitch::retire::sweep(&live.switch_paths(), now, &in_use, &|m| {
+        live.owned_dirs(m)
+    }) {
+        Ok(swept) => {
+            for s in swept {
+                finding.push_str("; ");
+                finding.push_str(&s.line());
+            }
+        }
+        Err(e) => {
+            use std::fmt::Write as _;
+            let _ = write!(finding, "; ⚠ retired weights not swept: {e:#}");
+        }
     }
 }
 

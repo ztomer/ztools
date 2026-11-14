@@ -8,6 +8,7 @@
 pub mod helpers;
 pub mod ocr;
 pub mod vlm;
+pub mod watch;
 
 pub use helpers::{
     clean_filename, is_generic_name, is_meaningful_text, is_non_human_readable,
@@ -81,6 +82,7 @@ fn name_image(
     max_len: usize,
     config: &crate::config::ZtoolsConfig,
     session: &mut crate::ztools::residency::Session,
+    watch: &mut watch::Watch,
 ) -> String {
     let ocr_text =
         if !config.image_renamer_model.is_empty() || !config.image_renamer_vlm_model.is_empty() {
@@ -91,35 +93,35 @@ fn name_image(
     let text_to_use = ocr_text.as_deref().unwrap_or(stem);
     let meaningful = !is_non_human_readable(text_to_use) && is_meaningful_text(text_to_use, 2);
 
-    let candidate = if meaningful {
-        session
-            .hold(&config.image_renamer_model)
-            .and_then(|()| {
-                query_llm_filename(
-                    &config.osaurus_url,
-                    &config.image_renamer_model,
-                    text_to_use,
-                    config,
-                )
-            })
+    let started = std::time::Instant::now();
+    let (slot, model, answer) = if meaningful {
+        let m = &config.image_renamer_model;
+        let answer = session
+            .hold(m)
+            .and_then(|()| query_llm_filename(&config.osaurus_url, m, text_to_use, config));
+        let accepted = answer
+            .as_ref()
             .ok()
             .filter(|n| !is_generic_name(n) && n.len() >= 4)
+            .cloned();
+        ("filename", m, answer.map(|_| accepted))
     } else if !config.image_renamer_vlm_model.is_empty() {
-        session
-            .hold(&config.image_renamer_vlm_model)
-            .and_then(|()| {
-                query_vlm_for_filename(
-                    path,
-                    &config.osaurus_url,
-                    &config.image_renamer_vlm_model,
-                    config,
-                )
-            })
-            .ok()
-            .and_then(|raw| acceptable_name(&raw, max_len))
+        let m = &config.image_renamer_vlm_model;
+        let answer = session
+            .hold(m)
+            .and_then(|()| query_vlm_for_filename(path, &config.osaurus_url, m, config));
+        ("vlm", m, answer.map(|raw| acceptable_name(&raw, max_len)))
     } else {
-        None
+        return clean_filename(text_to_use, max_len);
     };
+    let candidate = answer.as_ref().ok().cloned().flatten();
+    watch.push(watch::Ask {
+        slot,
+        model: model.clone(),
+        answered: answer.is_ok(),
+        accepted: candidate.is_some(),
+        seconds: started.elapsed().as_secs_f64(),
+    });
 
     candidate.unwrap_or_else(|| clean_filename(text_to_use, max_len))
 }
@@ -146,6 +148,7 @@ pub fn scan_and_rename(
         &config.osaurus_url,
         crate::ztools::residency::Timing::default(),
     );
+    let mut watch = watch::Watch::default();
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
@@ -164,7 +167,7 @@ pub fn scan_and_rename(
         }
 
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("image");
-        let cleaned = name_image(&path, stem, max_len, config, &mut session);
+        let cleaned = name_image(&path, stem, max_len, config, &mut session, &mut watch);
         let new_filename = format!("{cleaned}.{ext}");
         let new_path = dedupe_path(&path.with_file_name(&new_filename));
         let changed = new_path != path;
@@ -183,6 +186,8 @@ pub fn scan_and_rename(
     // The renames are done (and applied): a model that outstays them is
     // reported beside them, never made the run's error (ZT.CHAINRELEASE).
     session.finish().report("the renames are kept");
+    // Each slot the run asked is a canary run of that slot (LM.CANARYFLOORS).
+    watch.report();
 
     Ok(candidates)
 }

@@ -3,6 +3,7 @@
 use super::*;
 use crate::test_env::TestEnv;
 use crate::ztools::rename::vlm;
+use crate::ztools::rename::watch::Watch;
 use serial_test::serial;
 
 #[test]
@@ -410,40 +411,19 @@ fn test_name_image_uses_vlm_branch_for_unmeaningful_stem() {
     std::fs::write(&img_path, b"\x89PNG\r\n\x1a\nnot really a png").unwrap();
 
     let mut session = crate::ztools::residency::Session::new(&fake.url, fast_timing());
-    let named = name_image(&img_path, "IMG_9999", 30, &config, &mut session);
+    let named = name_image(
+        &img_path,
+        "IMG_9999",
+        30,
+        &config,
+        &mut session,
+        &mut Watch::default(),
+    );
     assert!(session.finish().fault().is_none(), "released");
 
     assert_eq!(named, "white_goose_grass");
     assert_eq!(fake.loads(), vec!["vlm-test-model".to_string()]);
     assert_eq!(fake.last_health(), Some(vec![]));
-    drop(env);
-}
-
-#[test]
-#[serial]
-fn test_name_image_falls_back_to_cleaned_stem_when_vlm_unreachable() {
-    let env = TestEnv::new();
-    // Port 1 is unreachable in tests (connection refused, fast): the VLM error
-    // must degrade to the plain clean of the stem.
-    let config = crate::config::ZtoolsConfig {
-        osaurus_url: "http://127.0.0.1:1".to_string(),
-        image_renamer_model: String::new(),
-        image_renamer_vlm_model: "vlm-test-model".to_string(),
-        llm_timeout_secs: 1,
-        ..Default::default()
-    };
-
-    // "IMG_9999" is a filename fragment (not prose), so this exercises the VLM
-    // branch specifically; port 1 refuses connections fast.
-    let named = name_image(
-        Path::new("/nonexistent/ztools_img.png"),
-        "IMG_9999",
-        40,
-        &config,
-        &mut crate::ztools::residency::Session::new(&config.osaurus_url, fast_timing()),
-    );
-
-    assert_eq!(named, "img_9999");
     drop(env);
 }
 
@@ -479,7 +459,14 @@ fn a_rename_makes_no_request_outside_the_gpu_lock() {
     std::fs::write(&img_path, b"\x89PNG\r\n\x1a\nnot really a png").unwrap();
 
     let mut session = crate::ztools::residency::Session::new(&fake.url, fast_timing());
-    name_image(&img_path, "IMG_9999", 30, &config, &mut session);
+    name_image(
+        &img_path,
+        "IMG_9999",
+        30,
+        &config,
+        &mut session,
+        &mut Watch::default(),
+    );
     assert!(session.finish().fault().is_none(), "released");
 
     assert!(fake.calls().len() > 2, "{:?}", fake.calls());

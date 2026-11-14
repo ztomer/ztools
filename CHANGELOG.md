@@ -11,6 +11,19 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Changed
+- **A slot with no canary speed floor refuses to switch (LM.CANARYFLOORS).** Before, a canary run
+  on `think`, `filename` or `vlm` was "not counted" and a switch there stayed open with no way to
+  confirm or roll back. Now only `json` (30 min) and `summarize` (600 s) have floors and may
+  switch; `think` has no ztools consumer to watch (Osaurus's chat follows it), and `filename` and
+  `vlm` refuse until a renamer run is measured on a quiet machine. The image renamer now counts
+  each run as a canary run of the slot it asked (slowest call, cold load included, judged by the
+  renamer's own gate) and prints that time.
+- **A replaced incumbent's weights are deleted 14 days after its successor is confirmed.** The
+  ledger keeps each confirmed switch's incumbent; the nightly deletes its directory (`rm -rf`) on
+  day 14 when this job staged it, keeps and says it when the owner installed it or a slot
+  selects it again, and retries a removal that fails.
+
 ### Fixed
 - **A candidate that wedges Osaurus is recorded, deleted and never loaded again (LM.RAPTOR07HANG).**
   `OsaurusAI/Raptor-0.7-4B-JANG_6M` (`spark2_5`, the same `model_type` as the Raptor-0.6 that

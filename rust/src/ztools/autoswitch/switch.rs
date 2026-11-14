@@ -51,6 +51,11 @@ fn refusal(ledger: &Ledger, slot: &str, from: &str, to: &str, now: f64) -> Optio
     if !SWITCHABLE.contains(&slot) {
         return Some(format!("{slot} is not a switchable slot"));
     }
+    if super::canary::floor_seconds(slot).is_none() {
+        return Some(format!(
+            "{slot} has no canary speed floor, so no consumer run could confirm or roll it back"
+        ));
+    }
     if from == to {
         return Some("already selected".into());
     }

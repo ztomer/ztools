@@ -158,3 +158,47 @@ fn rollback_by_hand_needs_a_switch_and_then_restores_it() {
     );
     drop(sandbox);
 }
+
+#[test]
+fn the_night_deletes_a_switched_in_incumbent_14_days_after_its_successor() {
+    use crate::ztools::autoswitch::{DAY, Ledger, RETIRE_DAYS, Retired};
+    let sandbox = crate::test_env::TestEnv::new();
+    let tmp = tempfile::tempdir().unwrap();
+    let (live, _) = decided_night(tmp.path());
+    std::fs::create_dir_all(live.model_dir("org/Cand")).unwrap();
+    live.unstage("org/Cand").unwrap();
+    assert_eq!(live.owned_dirs("cand").map(|d| d.len()), Some(2));
+    assert_eq!(live.owned_dirs("old"), None, "the owner's own");
+    let paths = live.switch_paths();
+    let ledger = Ledger {
+        retired: vec![
+            Retired {
+                model: "cand".into(),
+                slot: "json".into(),
+                since: 0.0,
+            },
+            Retired {
+                model: "mine".into(),
+                slot: "vlm".into(),
+                since: 0.0,
+            },
+        ],
+        ..Ledger::default()
+    };
+    ledger.save(&paths).unwrap();
+    let mut finding = String::from("LM d: x");
+    super::sweep_retired(&live, RETIRE_DAYS.mul_add(DAY, -1.0), &mut finding);
+    assert_eq!(finding, "LM d: x", "not yet");
+    super::sweep_retired(&live, RETIRE_DAYS * DAY, &mut finding);
+    assert!(
+        finding.contains("; cand replaced 14 days ago: weights deleted"),
+        "{finding}"
+    );
+    assert!(
+        finding.contains("; replaced mine kept (not staged by this job"),
+        "{finding}"
+    );
+    assert!(!live.model_dir("org/Cand").exists());
+    assert_eq!(live.owned_dirs("cand"), None);
+    drop(sandbox);
+}

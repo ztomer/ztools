@@ -255,7 +255,7 @@ fn three_passes_confirm_then_the_rate_limits_hold() {
         "new-sum",
     )
     .unwrap();
-    let other = promote(&paths, &Mode::Auto, (T0, "d0"), &base(), "think", "t2").unwrap();
+    let other = promote(&paths, &Mode::Auto, (T0, "d0"), &base(), "json", "j2").unwrap();
     assert!(matches!(other, Promotion::Refused { ref why, .. } if why.contains("canary is open")));
     assert_eq!(
         observe(&paths, (T0, "d"), &pass("summarize", "inc-sum", 1.0)).unwrap(),
