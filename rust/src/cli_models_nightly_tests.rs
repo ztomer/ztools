@@ -60,6 +60,7 @@ fn a_night_whose_scout_reaches_nothing_writes_its_findings_line() {
         models_root: tmp.path().join("MLXModels"),
         state_dir: state.clone(),
         exe: "/nonexistent".into(),
+        osaurus_version: None,
     };
     let _ = finish_night(&mut live, &state);
     let _ = finish_night(&mut live, &state);
@@ -79,6 +80,7 @@ fn decided_night(dir: &std::path::Path) -> (crate::ztools::select::live::LiveNig
         models_root: dir.join("MLXModels"),
         state_dir: dir.join(".local/state/ztools/models"),
         exe: "/nonexistent".into(),
+        osaurus_version: None,
     };
     live.write_ledger(&Staged {
         repo: "org/Cand".into(),

@@ -85,6 +85,7 @@ pub fn night(
         models_root: home().join("MLXModels"),
         state_dir: state_dir.clone(),
         exe: std::env::current_exe()?,
+        osaurus_version: crate::ztools::scout::local::osaurus_version(),
     };
     finish_night(&mut live, &state_dir)
 }
@@ -144,6 +145,62 @@ pub fn act_on(live: &LiveNight, outcome: &Outcome, (now, date): (f64, &str)) -> 
         }
     }
     finding
+}
+
+/// `ztools models bar <repo> --why <text>`: record `repo` as unloadable on
+/// this Osaurus (the nightly's own record, LM.RAPTOR07HANG) and delete its
+/// staged copy when this job staged it. Nothing is loaded.
+///
+/// # Errors
+/// When the record, the deletion or the findings line cannot be written.
+pub fn bar(config: &ZtoolsConfig, repo: &str, why: &str) -> Result<()> {
+    let state_dir = home().join(".local/state/ztools/models");
+    let mut live = LiveNight {
+        hf: crate::ztools::scout::feeds::HF.to_string(),
+        osaurus_url: config.osaurus_url.clone(),
+        slots: BTreeMap::new(),
+        current: BTreeMap::new(),
+        models_root: home().join("MLXModels"),
+        state_dir,
+        exe: std::env::current_exe()?,
+        osaurus_version: crate::ztools::scout::local::osaurus_version(),
+    };
+    println!("✓ {}", bar_with(&mut live, repo, why)?);
+    Ok(())
+}
+
+/// [`bar`] on `live`: the findings line it wrote.
+///
+/// # Errors
+/// When the record, the deletion or the findings line cannot be written.
+pub fn bar_with(live: &mut LiveNight, repo: &str, why: &str) -> Result<String> {
+    use crate::ztools::select::nightly::{Night as _, Staged};
+    let date = live.date();
+    let staged = live
+        .staged()
+        .into_iter()
+        .find(|s| s.repo.eq_ignore_ascii_case(repo));
+    let target = staged.clone().unwrap_or_else(|| Staged {
+        repo: repo.to_string(),
+        model: crate::ztools::refcheck::short_name(repo),
+        slots: vec![],
+        bytes: 0,
+        date: date.clone(),
+    });
+    live.reject(&target, why).map_err(anyhow::Error::msg)?;
+    let mut finding = format!(
+        "LM {date}: {} barred by hand ({why}): recorded unloadable on Osaurus {}",
+        target.repo,
+        live.osaurus_version
+            .as_deref()
+            .unwrap_or("of unknown version")
+    );
+    if let Some(s) = staged {
+        live.delete(&s).map_err(anyhow::Error::msg)?;
+        finding.push_str("; its staged copy deleted");
+    }
+    live.switch_paths().append_finding(&finding)?;
+    Ok(finding)
 }
 
 /// `ztools models rollback`: restore the selection before the latest switch.

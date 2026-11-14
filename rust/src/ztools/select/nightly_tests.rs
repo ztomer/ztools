@@ -8,21 +8,23 @@ use crate::ztools::eval::task_fingerprint::TaskIdentities;
 use crate::ztools::scout::rules::{Check, File, GIB};
 use std::collections::BTreeMap;
 
-const CAND: &str = "org/Cand-1B-4bit";
+pub(super) const CAND: &str = "org/Cand-1B-4bit";
 
 #[derive(Default)]
-struct Fake {
-    free: Option<u64>,
-    staged: Vec<Staged>,
-    nominee: Option<Nominee>,
-    files: Vec<File>,
+pub(super) struct Fake {
+    pub(super) free: Option<u64>,
+    pub(super) staged: Vec<Staged>,
+    pub(super) nominee: Option<Nominee>,
+    pub(super) files: Vec<File>,
     /// Model to its score on every task.
-    scores: BTreeMap<String, i64>,
-    clock: f64,
-    rows: BTreeMap<String, Vec<HistoryEntry>>,
-    evals: Vec<String>,
-    downloads: usize,
-    deleted: Vec<String>,
+    pub(super) scores: BTreeMap<String, i64>,
+    pub(super) clock: f64,
+    pub(super) rows: BTreeMap<String, Vec<HistoryEntry>>,
+    pub(super) evals: Vec<String>,
+    pub(super) downloads: usize,
+    pub(super) deleted: Vec<String>,
+    pub(super) rejected: Vec<String>,
+    pub(super) wedged: bool,
 }
 
 fn current() -> TaskIdentities {
@@ -86,9 +88,16 @@ impl Night for Fake {
         self.deleted.push(s.repo.clone());
         Ok(())
     }
+    fn reject(&mut self, s: &Staged, why: &str) -> Result<(), String> {
+        self.rejected.push(format!("{}: {why}", s.repo));
+        Ok(())
+    }
+    fn osaurus_answers(&self) -> bool {
+        !self.wedged
+    }
 }
 
-fn fake(cand_score: i64, free_gib: u64) -> Fake {
+pub(super) fn fake(cand_score: i64, free_gib: u64) -> Fake {
     Fake {
         free: Some(free_gib * GIB),
         nominee: Some(Nominee {
@@ -190,7 +199,7 @@ fn nothing_nominated_and_a_failing_eval_are_said() {
     assert_eq!(f.deleted.len(), 0, "a failed night deletes nothing");
 }
 
-fn live(dir: &std::path::Path) -> LiveNight {
+pub(super) fn live(dir: &std::path::Path) -> LiveNight {
     LiveNight {
         hf: "http://127.0.0.1:9".into(),
         osaurus_url: "http://127.0.0.1:9".into(),
@@ -199,6 +208,7 @@ fn live(dir: &std::path::Path) -> LiveNight {
         models_root: dir.join("MLXModels"),
         state_dir: dir.join("state"),
         exe: "/nonexistent".into(),
+        osaurus_version: None,
     }
 }
 
@@ -254,7 +264,7 @@ fn the_nominee_passes_every_filter_but_disk() {
         stage: None,
         notes: vec![],
     };
-    let n = first_nominee(&p).unwrap();
+    let n = first_nominee(&p, &|_| false).unwrap();
     assert_eq!((n.repo.as_str(), n.slots.len()), ("a/Fits", 2));
 }
 

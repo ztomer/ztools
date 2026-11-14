@@ -11,6 +11,18 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Fixed
+- **A candidate that wedges Osaurus is recorded, deleted and never loaded again (LM.RAPTOR07HANG).**
+  `OsaurusAI/Raptor-0.7-4B-JANG_6M` (`spark2_5`, the same `model_type` as the Raptor-0.6 that
+  loads) wedged Osaurus 1.0.3 whole on 2026-11-14, and the night left it staged to be loaded
+  again the next night. Now a candidate whose own eval fails after its incumbent's passed is
+  recorded in `~/.local/state/ztools/models/unloadable.json` with the Osaurus version, its weights
+  are deleted, the night says whether Osaurus still answers `/health` (and fails, naming the
+  restart, when it does not), and neither the scout's nominee nor a staged copy of it is loaded
+  again until Osaurus changes version. The scout's nominee also skips a canary-barred model.
+  `ztools models bar <repo> --why TEXT` records one by hand and deletes its staged copy, loading
+  nothing.
+
 ## v3.29.4 — cargo run reads the real HOME: the test HOME sandbox moves from cargo [env] to a test-only runner _(2026-11-12)_
 
 ### Fixed

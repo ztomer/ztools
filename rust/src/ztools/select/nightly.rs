@@ -78,6 +78,15 @@ pub trait Night {
     fn barred(&self, _model: &str) -> Option<String> {
         None
     }
+    /// Record that `staged` failed its own eval after its incumbent passed:
+    /// it is not loaded again on this Osaurus (LM.RAPTOR07HANG).
+    ///
+    /// # Errors
+    /// When the record cannot be written.
+    fn reject(&mut self, staged: &Staged, why: &str) -> Result<(), String>;
+    /// Whether Osaurus still answers `/health`: a candidate that failed to
+    /// load may have wedged it whole.
+    fn osaurus_answers(&self) -> bool;
 }
 
 /// How a night ended.
@@ -86,6 +95,12 @@ pub enum Outcome {
     Nothing(String),
     NoRoom(String),
     Failed(String),
+    /// The candidate's own eval failed after its incumbent's passed: it is
+    /// recorded as unloadable and deleted.
+    Rejected {
+        candidate: String,
+        why: String,
+    },
     Decided {
         candidate: String,
         decisions: Vec<Decision>,
@@ -101,6 +116,9 @@ pub fn findings_line(date: &str, outcome: &Outcome) -> String {
         Outcome::Nothing(why) => format!("nothing staged ({why})"),
         Outcome::NoRoom(why) => format!("no room ({why})"),
         Outcome::Failed(why) => format!("✗ {why}"),
+        Outcome::Rejected { candidate, why } => format!(
+            "✗ {candidate} failed its own eval ({why}): recorded unloadable on this Osaurus, deleted"
+        ),
         Outcome::Decided {
             candidate,
             decisions,
@@ -179,7 +197,14 @@ fn evaluate(night: &mut dyn Night, staged: &Staged, rule: &Rule, since: f64) -> 
         for model in [inc.as_str(), staged.model.as_str()] {
             for _ in 0..REPEATS {
                 if let Err(why) = night.eval(model, &tasks) {
-                    return Outcome::Failed(format!("eval {model} on {slot}: {why}"));
+                    let why = format!("eval {model} on {slot}: {why}");
+                    if model == staged.model {
+                        return Outcome::Rejected {
+                            candidate: staged.model.clone(),
+                            why,
+                        };
+                    }
+                    return Outcome::Failed(why);
                 }
             }
         }
@@ -230,6 +255,35 @@ pub fn run(night: &mut dyn Night, rule: &Rule) -> Outcome {
             Ok(()) => outcome,
             Err(why) => Outcome::Failed(format!("{} rejected but not deleted: {why}", staged.repo)),
         },
+        Outcome::Rejected { why, .. } => reject_unloadable(night, &staged, why),
         other => other,
+    }
+}
+
+/// Record a candidate that failed to load, delete it, and say whether it left
+/// Osaurus wedged. Any of the three going wrong fails the night, so the
+/// routines failure line carries it.
+fn reject_unloadable(night: &mut dyn Night, staged: &Staged, why: String) -> Outcome {
+    let mut faults = Vec::new();
+    if let Err(e) = night.reject(staged, &why) {
+        faults.push(format!("not recorded: {e}"));
+    }
+    if let Err(e) = night.delete(staged) {
+        faults.push(format!("not deleted: {e}"));
+    }
+    if !night.osaurus_answers() {
+        faults.push("Osaurus does not answer /health: it is wedged, restart it".into());
+    }
+    if faults.is_empty() {
+        Outcome::Rejected {
+            candidate: staged.model.clone(),
+            why,
+        }
+    } else {
+        Outcome::Failed(format!(
+            "{} failed its own eval ({why}); {}",
+            staged.repo,
+            faults.join("; ")
+        ))
     }
 }

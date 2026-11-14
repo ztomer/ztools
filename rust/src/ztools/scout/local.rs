@@ -97,6 +97,15 @@ pub fn plist_version(xml: &str) -> Option<String> {
     Some(v.trim().to_string()).filter(|v| !v.is_empty())
 }
 
+/// The installed `/Applications/Osaurus.app`'s version.
+#[must_use]
+pub fn osaurus_version() -> Option<String> {
+    std::fs::read_to_string("/Applications/Osaurus.app/Contents/Info.plist")
+        .ok()
+        .as_deref()
+        .and_then(plist_version)
+}
+
 impl Local {
     /// This Mac: `~/MLXModels`, the staging directory under
     /// `~/.local/state/ztools/models/staged`, `/Applications/Osaurus.app`.
@@ -109,12 +118,7 @@ impl Local {
             installed: installed(&root),
             free_bytes: free_bytes(&root),
             staged: subdirs(&home.join(".local/state/ztools/models/staged")).len(),
-            osaurus_version: std::fs::read_to_string(
-                "/Applications/Osaurus.app/Contents/Info.plist",
-            )
-            .ok()
-            .as_deref()
-            .and_then(plist_version),
+            osaurus_version: osaurus_version(),
         }
     }
 }

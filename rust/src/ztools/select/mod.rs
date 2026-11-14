@@ -9,6 +9,7 @@ pub mod measure;
 pub mod nightly;
 pub mod replay;
 pub mod rule;
+pub mod unloadable;
 
 #[cfg(test)]
 mod nightly_tests;
@@ -16,6 +17,8 @@ mod nightly_tests;
 mod replay_tests;
 #[cfg(test)]
 mod rule_tests;
+#[cfg(test)]
+mod unloadable_tests;
 
 pub use replay::{Replay, ReplayInput, replay};
 pub use rule::{Decision, Measure, Rule, decide};

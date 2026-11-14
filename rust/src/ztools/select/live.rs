@@ -25,6 +25,9 @@ pub struct LiveNight {
     pub state_dir: PathBuf,
     /// The `ztools` binary that runs the eval.
     pub exe: PathBuf,
+    /// The installed Osaurus version: a candidate recorded unloadable on it
+    /// is not loaded again until it changes.
+    pub osaurus_version: Option<String>,
 }
 
 impl LiveNight {
@@ -72,6 +75,22 @@ impl LiveNight {
         std::fs::rename(from, to)
     }
 
+    /// Why `name` (a repo id or its short name) is not to be loaded: it
+    /// failed to load on this Osaurus, or its canary bar is still running.
+    #[must_use]
+    pub fn excluded(&self, name: &str) -> Option<String> {
+        if let Some(why) =
+            super::unloadable::why(&self.state_dir, name, self.osaurus_version.as_deref())
+        {
+            return Some(why);
+        }
+        let (now, _) = crate::ztools::autoswitch::clock();
+        let short = crate::ztools::refcheck::short_name(name);
+        crate::ztools::autoswitch::Ledger::load(&self.switch_paths())
+            .ok()?
+            .bar(&short, now)
+    }
+
     fn partial(&self, repo: &str) -> PathBuf {
         self.models_root.join(format!("{repo}.partial"))
     }
@@ -97,12 +116,13 @@ impl LiveNight {
     }
 }
 
-/// The first candidate that passes every filter but disk, and the slots it is
-/// a candidate for.
+/// The first candidate that passes every filter but disk and is not
+/// `excluded` (unloadable here, or barred), and the slots it is a candidate for.
 #[must_use]
-pub fn first_nominee(p: &scout::Proposal) -> Option<Nominee> {
+pub fn first_nominee(p: &scout::Proposal, excluded: &dyn Fn(&str) -> bool) -> Option<Nominee> {
     let ok = |c: &&scout::Candidate| {
-        c.provenance.passed()
+        !excluded(&c.repo)
+            && c.provenance.passed()
             && c.format.as_ref().is_some_and(scout::Check::passed)
             && c.fit.as_ref().is_some_and(scout::Check::passed)
     };
@@ -161,7 +181,7 @@ impl Night for LiveNight {
 
     fn nominate(&mut self) -> Result<Option<Nominee>, String> {
         let p = scout::scout(&self.feed(), &Local::from_home(self.slots.clone()));
-        Ok(first_nominee(&p))
+        Ok(first_nominee(&p, &|repo| self.excluded(repo).is_some()))
     }
 
     fn files(&mut self, repo: &str) -> Result<Vec<File>, String> {
@@ -220,10 +240,25 @@ impl Night for LiveNight {
     }
 
     fn barred(&self, model: &str) -> Option<String> {
-        let (now, _) = crate::ztools::autoswitch::clock();
-        crate::ztools::autoswitch::Ledger::load(&self.switch_paths())
-            .ok()?
-            .bar(model, now)
+        self.excluded(model)
+    }
+
+    fn reject(&mut self, staged: &Staged, why: &str) -> Result<(), String> {
+        let rec = super::unloadable::Unloadable {
+            model: staged.model.clone(),
+            osaurus: self.osaurus_version.clone(),
+            date: self.date(),
+            why: why.to_string(),
+        };
+        super::unloadable::record(&self.state_dir, &staged.repo, rec).map_err(|e| e.to_string())
+    }
+
+    fn osaurus_answers(&self) -> bool {
+        reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .and_then(|c| c.get(format!("{}/health", self.osaurus_url)).send())
+            .is_ok_and(|r| r.status().is_success())
     }
 }
 

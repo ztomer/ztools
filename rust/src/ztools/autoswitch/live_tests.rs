@@ -16,6 +16,7 @@ fn live(dir: &std::path::Path) -> LiveNight {
         models_root: dir.join("MLXModels"),
         state_dir: dir.join("state"),
         exe: "/nonexistent".into(),
+        osaurus_version: None,
     }
 }
 

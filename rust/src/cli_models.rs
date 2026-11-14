@@ -88,6 +88,17 @@ pub enum ModelsCmd {
     /// [best_models]`) as it was before the latest automatic switch, bar that
     /// candidate if its canary was still open, and record it in the ledger.
     Rollback,
+    /// Record a model as unloadable on the installed Osaurus, so neither the
+    /// scout's nominee nor a staged copy of it is loaded again until Osaurus
+    /// changes version, and delete its staged copy if the nightly staged it.
+    /// Loads nothing.
+    Bar {
+        /// The HF repo id, e.g. `OsaurusAI/Raptor-0.7-4B-JANG_6M`.
+        repo: String,
+        /// Why, for the record and the findings line.
+        #[arg(long)]
+        why: String,
+    },
 }
 
 /// Run the scout live, recorded, or over a recorded directory.
@@ -304,6 +315,7 @@ pub fn run(config: &ZtoolsConfig, cmd: &ModelsCmd) -> Result<()> {
             scout(config, record.as_deref(), fixtures.as_deref())
         }
         ModelsCmd::Rollback => crate::cli_models_nightly::rollback(),
+        ModelsCmd::Bar { repo, why } => crate::cli_models_nightly::bar(config, repo, why),
         ModelsCmd::Nightly {
             replay,
             record,
