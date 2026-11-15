@@ -255,8 +255,8 @@ pub fn extract_sources(
         if failures >= EXTRACT_FAILURE_BREAKER {
             eprintln!(
                 "\u{26a0} extract: {failures} consecutive model failures; passing the \
-                 remaining {} line(s) through raw",
-                lines.len() - i
+                 remaining {} through raw",
+                crate::plural::counted(lines.len() - i, "line")
             );
             results.extend(lines[i..].iter().map(ToString::to_string));
             break;
