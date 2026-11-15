@@ -1,0 +1,12 @@
+{
+  "why": "goh layer-parity (GOH.LAYERPARITY, 2026-11-15): a language goh's commit gate lints with no goh push layer. Keyed by root commit; path tools/gate.sh:<lang>; judged from 2026-11-23 (crate::grace). Seeded warns; unseeded or stale is red. Done is an empty list.",
+  "entries": [
+    {
+      "root": "6cbea9cb883dbc361e4bff645f4ed3cdcdbe6942",
+      "repo": "ztools",
+      "path": "tools/gate.sh:python",
+      "count": 1,
+      "reason": "unreviewed: 28 tracked python files are linted at commit and no goh push layer judges them whole; add it to tools/gate.sh --full (GOH.LAYERPARITY seed, 2026-11-15)"
+    }
+  ]
+}

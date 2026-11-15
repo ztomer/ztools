@@ -74,7 +74,7 @@ elif [ "$CURRENT_V" != "$V" ]; then
   # for the operator to discard by hand. Restoring both files to HEAD is only safe when they
   # carry nothing else, so local edits to either are refused before anything is touched.
   BUMPED=(rust/Cargo.toml rust/Cargo.lock)
-  git diff --quiet HEAD -- "${BUMPED[@]}" \
+  GIT_OPTIONAL_LOCKS=0 git diff --quiet HEAD -- "${BUMPED[@]}" \
     || die "rust/Cargo.toml or rust/Cargo.lock has uncommitted changes; commit or drop them before a version bump"
   restore_bump() { git restore --source=HEAD --staged --worktree -- "${BUMPED[@]}"; }
   trap 'restore_bump; exit 130' INT TERM

@@ -173,3 +173,12 @@ GOH_SHIP_RELEASE='tools/release.sh {version}'
 # `## Unreleased` entries, i.e. goh's `cut` contract; every ztools release is written that way
 # (git log -- CHANGELOG.md: 72a9f03 adds the entry under Unreleased, 95ec96f is the cut).
 GOH_SHIP_CHANGELOG=cut
+
+# Every scanner's floor, at nine tenths of what it read at GOH_GRACE=over
+# on 2026-11-15 (GOH.FLOORREQ; required from 2026-11-23, GOH.GRACEEND).
+GOH_BARE_OPEN_MIN_FILES=40
+GOH_GIT_DEADLINE_MIN_FILES=18
+
+# The step tool local_ci.sh and the hosted install must know (GOH.REQTOOLS);
+# ci.yml installs it from tools/ci_tools.tsv.
+GOH_STEP_TOOLS='cargo-deny'
