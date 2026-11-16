@@ -32,7 +32,8 @@ fn tweet(user: &str, text: &str, at: &str, fav: u64, rt: u64) -> Tweet {
 fn test_call_osaurus_invalid_host() {
     let env = TestEnv::new();
     let cfg = sandboxed_config(&env.root().join("cfg"));
-    let res = call_osaurus("http://127.0.0.1:59999", "model", "prompt", 5, &cfg);
+    let dead = crate::dead_endpoint::DeadEndpoint::hold();
+    let res = call_osaurus(dead.url(), "model", "prompt", 5, &cfg);
     assert!(
         res.is_err(),
         "an unreachable endpoint is an error, not a document"
@@ -126,14 +127,9 @@ fn test_run_summary_empty_fallback() {
         .into_owned();
     cfg.twitter_collector_dir = empty.path().to_string_lossy().into_owned();
     let output = tempfile::tempdir().unwrap();
+    let dead = crate::dead_endpoint::DeadEndpoint::hold();
 
-    let res = run_summary(
-        &[],
-        output.path(),
-        Some("http://127.0.0.1:59999"),
-        None,
-        &cfg,
-    );
+    let res = run_summary(&[], output.path(), Some(dead.url()), None, &cfg);
     assert!(
         res.is_err(),
         "an unreachable LLM with nothing to summarise must fail, not produce a document"

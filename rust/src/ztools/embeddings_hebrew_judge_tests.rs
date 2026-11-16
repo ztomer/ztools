@@ -302,10 +302,11 @@ fn an_uncalibrated_summarize_model_keeps_hebrew_apart_and_loads_nothing() {
 #[serial]
 fn a_model_that_will_not_load_keeps_every_tweet_and_says_why() {
     let env = TestEnv::new();
+    let dead = crate::dead_endpoint::DeadEndpoint::hold();
     let (out, hebrew) = pair_hebrew(
         the_pairs(),
         |_| true,
-        "http://127.0.0.1:59998",
+        dead.url(),
         "raptor",
         &["raptor"],
         fast(),
@@ -353,20 +354,14 @@ fn a_failed_release_keeps_the_pairing() {
 #[test]
 fn no_hebrew_or_no_candidate_loads_nothing() {
     let latin = vec![vec![tweet("Rust 1.95 is out")]];
-    let (out, hebrew) = pair_hebrew(
-        latin,
-        |_| true,
-        "http://127.0.0.1:59997",
-        "m",
-        &["m"],
-        fast(),
-    );
+    let dead = crate::dead_endpoint::DeadEndpoint::hold();
+    let (out, hebrew) = pair_hebrew(latin, |_| true, dead.url(), "m", &["m"], fast());
     assert_eq!((out.len(), hebrew), (1, Hebrew::None));
     let far = vec![
         vec![tweet("החתול שלנו אכל עוף")],
         vec![tweet("הביטקוין ירד היום")],
     ];
-    let (_, hebrew) = pair_hebrew(far, |_| true, "http://127.0.0.1:59997", "m", &["m"], fast());
+    let (_, hebrew) = pair_hebrew(far, |_| true, dead.url(), "m", &["m"], fast());
     assert!(
         matches!(&hebrew, Hebrew::Paired { pairing, .. } if pairing.judged == 0),
         "{hebrew:?}"

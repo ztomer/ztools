@@ -520,3 +520,18 @@ apart, and says the release error. Pinned by
 The weekend planner keeps the strict rule on purpose (`weekend/fetch.rs`: a resident model
 fails the plan). The twitter chain (`twitter/mod.rs` `Route::ask`) still uses `with_model`, so
 a release error after a good summary fails that candidate: open, not yet ruled.
+
+## A dead endpoint is a held port, never a literal one (2026-11-15, EST.DEADPORT)
+
+`test_call_osaurus_invalid_host` dialled `http://127.0.0.1:59999` to prove an
+unreachable server is an error, and failed the push gate: 59999 is inside the
+ephemeral range (macOS 49152-65535, Linux 32768-60999), so anything on the
+machine may hold it and answer. Reproduced by serving a completion on 59999.
+Every "unreachable" test now uses `crate::dead_endpoint::DeadEndpoint::hold()`
+(a port held by a connected pair whose listener is closed: refused at once, and
+nothing picks the port by chance), and
+`no_source_dials_a_literal_takeable_loopback_port` fails on any
+`"http(s)://<loopback>:<port>` literal with a port >= 32768. The obvious
+design, bind and never listen, is WRONG on macOS: a SYN to a bound, closed
+socket is dropped, so the connect waits out its timeout instead of being
+refused (probed; the helper's own test went red with `TimedOut`).

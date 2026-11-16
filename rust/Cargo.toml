@@ -91,6 +91,9 @@ house-lib = { git = "https://github.com/ztomer/house-lib", tag = "v0.1.1", versi
 
 [dev-dependencies]
 serial_test = "4"
+# A bound socket that never listens (`dead_endpoint`): std's `TcpListener::bind`
+# always listens. Already in the graph through hyper at this version.
+socket2 = "0.6"
 
 [patch.crates-io]
 png = { git = "https://github.com/image-rs/image-png", rev = "b2f10c6a7e3127d4aaf231f3eae731a33e6eb0bc" }

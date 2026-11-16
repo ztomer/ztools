@@ -129,7 +129,8 @@ fn a_refusal_with_no_calibrated_model_degrades_with_the_reason_in_the_output() {
 #[test]
 fn an_unreachable_server_says_so_rather_than_clustering_silently() {
     let (env, config) = sandboxed_config();
-    let got = cluster_tweets(&[mock_tweet("a")], "http://127.0.0.1:59999", &config);
+    let dead = crate::dead_endpoint::DeadEndpoint::hold();
+    let got = cluster_tweets(&[mock_tweet("a")], dead.url(), &config);
     assert!(
         matches!(&got.outcome, Outcome::Off { reason } if reason.contains("unreachable")),
         "{:?}",

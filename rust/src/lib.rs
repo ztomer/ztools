@@ -26,6 +26,11 @@ pub mod test_support;
 // developer's real `$HOME`.
 pub mod test_env;
 
+// Test-only: `socket2` is a dev-dependency. A refused loopback endpoint that no
+// other process can take for the test's life (EST.DEADPORT).
+#[cfg(test)]
+pub mod dead_endpoint;
+
 pub mod cli;
 pub mod cli_models;
 pub mod cli_models_nightly;

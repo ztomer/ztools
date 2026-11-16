@@ -54,8 +54,9 @@ fn test_cluster_tweets_fallback() {
 
     let (env, config) = sandboxed_config();
 
-    // Using a fake URL so it triggers fallback
-    let result = cluster_tweets(&tweets, "http://127.0.0.1:59999", &config).clusters;
+    // A refused endpoint, so it triggers fallback
+    let dead = crate::dead_endpoint::DeadEndpoint::hold();
+    let result = cluster_tweets(&tweets, dead.url(), &config).clusters;
 
     // In fallback mode, it puts every tweet in its own cluster
     assert_eq!(result.len(), 2);
@@ -68,7 +69,8 @@ fn test_cluster_tweets_fallback() {
 fn test_cluster_tweets_empty() {
     let tweets: Vec<Tweet> = vec![];
     let (env, config) = sandboxed_config();
-    let result = cluster_tweets(&tweets, "http://127.0.0.1:59999", &config).clusters;
+    let dead = crate::dead_endpoint::DeadEndpoint::hold();
+    let result = cluster_tweets(&tweets, dead.url(), &config).clusters;
     assert_empty!(result);
     drop(env);
 }
