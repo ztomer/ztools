@@ -187,6 +187,7 @@ GOH_SHIP_CHANGELOG=cut
 # on 2026-11-15 (GOH.FLOORREQ; required from 2026-11-23, GOH.GRACEEND).
 GOH_BARE_OPEN_MIN_FILES=40
 GOH_GIT_DEADLINE_MIN_FILES=18
+GOH_DEAD_PORT_MIN_FILES=252             # read 280 (2026-11-16, GOH.FLOORREQ)
 
 # The step tool local_ci.sh and the hosted install must know (GOH.REQTOOLS);
 # ci.yml installs it from tools/ci_tools.tsv.
