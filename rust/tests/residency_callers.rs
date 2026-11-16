@@ -18,6 +18,12 @@ use std::path::Path;
 use std::process::Output;
 
 use ztools::ztools::residency::fake::{Call, FakeOsaurus, Spec};
+use ztools::ztools::residency::{RELEASE_GRACE_ENV, Timing};
+
+/// The release grace every spawned binary gets: a fake that keeps its model
+/// loaded is waited out for the whole grace, and the production 30 s made this
+/// file take a minute (CIP.ZTOOLS). The verdict is the same at one second.
+const RELEASE_GRACE_SECS: u64 = 1;
 
 const ANSWER: &str =
     r#"{"choices":[{"message":{"content":"{\"ok\": true}"},"finish_reason":"stop"}]}"#;
@@ -72,6 +78,7 @@ fn run(home: &Path, args: &[&str]) -> Output {
         .env("EVAL_SIGNALS_DIR", home.join("signals"))
         .env("EVAL_OUTPUT_DIR", home.join("outputs"))
         .env_remove("EVAL_ALLOW_OVERSIZE")
+        .env(RELEASE_GRACE_ENV, RELEASE_GRACE_SECS.to_string())
         .arg("--config")
         .arg(home.join("ztools.toml"))
         .args(args)
@@ -161,7 +168,16 @@ fn a_model_still_resident_after_its_run_keeps_its_scores_and_json() {
         ][..],
         &["model-eval", "--model", "probe-model", "--json-output"][..],
     ] {
+        let started = std::time::Instant::now();
         let out = run(&home, args);
+        // Under the production grace this run cannot end sooner: so the
+        // variable reached the binary.
+        assert!(
+            started.elapsed() < Timing::default().release_grace,
+            "{args:?} waited the production release grace ({:?}): {RELEASE_GRACE_ENV} \
+             did not reach the binary",
+            started.elapsed()
+        );
         let (stdout, stderr) = (
             String::from_utf8_lossy(&out.stdout),
             String::from_utf8_lossy(&out.stderr),

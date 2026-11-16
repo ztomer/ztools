@@ -270,7 +270,7 @@ impl Live {
     fn fetch(&self, key: &str) -> Result<Value, String> {
         if key == HEALTH {
             let url = format!("{}/health", self.osaurus_url.trim_end_matches('/'));
-            let timing = crate::ztools::residency::Timing::default();
+            let timing = crate::ztools::residency::Timing::from_env();
             return crate::ztools::residency::locked(
                 "ztools models scout: /health",
                 timing,

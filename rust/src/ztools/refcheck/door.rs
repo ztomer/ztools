@@ -39,7 +39,7 @@ fn get(url: &str, timeout: Duration) -> Result<reqwest::blocking::Response> {
 /// Run `body` under the GPU lock; a lock another session holds past the wait is
 /// an error, and `body` has not run.
 fn under_lock<T>(label: &str, body: impl FnOnce() -> Result<T>) -> Result<T> {
-    residency::locked(label, Timing::default(), body)?
+    residency::locked(label, Timing::from_env(), body)?
 }
 
 fn url(base: &str, path: &str) -> String {

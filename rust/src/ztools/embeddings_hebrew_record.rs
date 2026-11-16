@@ -219,7 +219,7 @@ fn load_averages() -> String {
 pub fn run(base_url: &str, model: &str, rows: &[Row], all_pairs: bool) -> Result<Record> {
     let load = load_averages();
     let pairs = pairs_to_judge(rows, all_pairs);
-    let timing = crate::ztools::residency::Timing::default();
+    let timing = crate::ztools::residency::Timing::from_env();
     let ran = crate::ztools::residency::with_model_kept(base_url, model, timing, |held| {
         let mut judged = Vec::with_capacity(pairs.len());
         for (n, &(i, j)) in pairs.iter().enumerate() {

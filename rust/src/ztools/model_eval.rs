@@ -191,7 +191,7 @@ pub fn eval_model(
     let held = match crate::ztools::residency::load(
         base_url,
         model_name,
-        crate::ztools::residency::Timing::default(),
+        crate::ztools::residency::Timing::from_env(),
     ) {
         Ok(held) => held,
         Err(e) => {
@@ -453,7 +453,7 @@ pub fn get_available_models(
     // A request to the server, so made under the GPU lock (ZT.TWGPULOCK).
     crate::ztools::residency::locked(
         "ztools model roster",
-        crate::ztools::residency::Timing::default(),
+        crate::ztools::residency::Timing::from_env(),
         || fetch_roster(base_url, config),
     )?
 }

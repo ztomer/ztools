@@ -45,7 +45,7 @@ use crate::ztools::eval::{DEFAULT_MAX_IDLE_SECS, GpuLockGuard};
 
 /// How long the steps may take. Production values are [`Timing::default`];
 /// a test shortens them so a fake server answers in milliseconds.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Timing {
     /// Waiting for another session's GPU lock.
     pub lock_wait: Duration,
@@ -75,6 +75,39 @@ impl Default for Timing {
             poll_min: Duration::from_millis(50),
             poll_max: Duration::from_secs(1),
         }
+    }
+}
+
+/// Whole seconds that replace [`Timing::release_grace`] in the binary: the tests that drive a
+/// server keeping its model loaded wait the grace out, so they set it short. Unset is the default.
+pub const RELEASE_GRACE_ENV: &str = "ZTOOLS_RELEASE_GRACE_SECS";
+
+impl Timing {
+    /// The production timings: [`Timing::default`] with [`RELEASE_GRACE_ENV`] applied. Every
+    /// caller outside the tests takes this, so the variable reaches every path of the binary.
+    /// A value that is not whole seconds is said on stderr, by name, and the default stands.
+    #[must_use]
+    pub fn from_env() -> Self {
+        Self::from_lookup(|k| std::env::var(k).ok()).unwrap_or_else(|e| {
+            eprintln!("warning: {e:#}; the release grace stays at its default");
+            Self::default()
+        })
+    }
+
+    /// [`Timing::from_env`] reading through `get`.
+    ///
+    /// # Errors
+    ///
+    /// When `get` gives anything but whole seconds for [`RELEASE_GRACE_ENV`].
+    pub fn from_lookup(get: impl Fn(&str) -> Option<String>) -> Result<Self> {
+        let mut timing = Self::default();
+        if let Some(raw) = get(RELEASE_GRACE_ENV) {
+            let secs: u64 = raw.parse().with_context(|| {
+                format!("{RELEASE_GRACE_ENV}={raw:?} is not a whole number of seconds")
+            })?;
+            timing.release_grace = Duration::from_secs(secs);
+        }
+        Ok(timing)
     }
 }
 

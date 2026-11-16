@@ -144,3 +144,61 @@ fn a_model_that_never_shows_resident_fails_the_load_and_names_what_is() {
         .expect("must not load");
     assert!(format!("{err:#}").contains("resident: none"), "{err:#}");
 }
+
+/// The binary's release grace comes from [`RELEASE_GRACE_ENV`] and nothing else moves: the
+/// integration tests that drive a server keeping its model loaded wait the grace out, and the
+/// production 30 s made one test file take a minute (CIP.ZTOOLS).
+#[test]
+fn the_release_grace_comes_from_its_variable_and_nothing_else_moves() {
+    let two = Timing::from_lookup(|k| (k == RELEASE_GRACE_ENV).then(|| "2".to_string())).unwrap();
+    assert_eq!(
+        two,
+        Timing {
+            release_grace: Duration::from_secs(2),
+            ..Timing::default()
+        }
+    );
+    assert_eq!(Timing::from_lookup(|_| None).unwrap(), Timing::default());
+}
+
+#[test]
+fn a_release_grace_that_is_not_whole_seconds_is_refused_by_name() {
+    for bad in ["soon", "1.5", "-1", ""] {
+        let err = Timing::from_lookup(|_| Some(bad.to_string())).unwrap_err();
+        assert!(
+            format!("{err:#}").contains(RELEASE_GRACE_ENV),
+            "{bad:?}: {err:#}"
+        );
+    }
+}
+
+/// The class guard: no production caller builds its timings any way but [`Timing::from_env`], so
+/// the release grace cannot again reach one path of the binary and not another (the spot eval's
+/// load took `Timing::default()` while the suite's took the variable; CIP.ZTOOLS).
+#[test]
+fn no_production_caller_takes_the_default_timings() {
+    fn walk(dir: &std::path::Path, out: &mut Vec<String>) {
+        for entry in std::fs::read_dir(dir).unwrap().flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if path.is_dir() {
+                if name != "tests" {
+                    walk(&path, out);
+                }
+            } else if path.extension().is_some_and(|ext| ext == "rs")
+                && !name.ends_with("_tests.rs")
+                && std::fs::read_to_string(&path)
+                    .unwrap()
+                    .contains(concat!("Timing::", "default()"))
+            {
+                out.push(path.display().to_string());
+            }
+        }
+    }
+    let mut found = Vec::new();
+    walk(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+        &mut found,
+    );
+    assert_eq!(found, Vec::<String>::new(), "use Timing::from_env()");
+}

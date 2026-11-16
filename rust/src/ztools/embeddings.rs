@@ -273,7 +273,7 @@ pub fn cluster_tweets(
     // machine-wide GPU lock like every other (ZT.TWGPULOCK).
     let clustering = match crate::ztools::residency::locked(
         "ztools embeddings (cluster tweets)",
-        crate::ztools::residency::Timing::default(),
+        crate::ztools::residency::Timing::from_env(),
         || cluster_locked(tweets, base_url, config),
     ) {
         Ok(clustering) => clustering,
@@ -284,7 +284,7 @@ pub fn cluster_tweets(
         base_url,
         &config.twitter_model,
         hebrew::CALIBRATED_JUDGES,
-        crate::ztools::residency::Timing::default(),
+        crate::ztools::residency::Timing::from_env(),
     )
 }
 

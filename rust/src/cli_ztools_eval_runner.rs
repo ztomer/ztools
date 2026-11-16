@@ -182,7 +182,7 @@ fn measure_held(
         model_name,
         tasks,
         cfg,
-        crate::ztools::residency::Timing::default(),
+        crate::ztools::residency::Timing::from_env(),
     )
 }
 

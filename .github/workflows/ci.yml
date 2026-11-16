@@ -111,9 +111,11 @@ jobs:
       # ruff and shellcheck are NOT installed here any more. The manifest step
       # below names both (measured 2026-10-08), so installing them twice in one
       # job is two paths for one tool -- the drift G4 is about, in miniature.
+      # pytest-xdist: the step runs `-n auto` (CIP.ZTOOLS), pinned at the release the local gate
+      # measured with.
       - name: Python and shell tools
         run: |
-          python -m pip install --upgrade pytest
+          python -m pip install --upgrade pytest pytest-xdist==3.8.0
 
       - name: gates_of_heck
         run: |

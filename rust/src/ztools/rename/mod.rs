@@ -146,7 +146,7 @@ pub fn scan_and_rename(
 
     let mut session = crate::ztools::residency::Session::new(
         &config.osaurus_url,
-        crate::ztools::residency::Timing::default(),
+        crate::ztools::residency::Timing::from_env(),
     );
     let mut watch = watch::Watch::default();
     for entry in fs::read_dir(dir)? {

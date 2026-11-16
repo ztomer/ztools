@@ -11,6 +11,16 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Changed
+- **The push gate's Rust coverage step no longer waits a minute on one test file (CIP.ZTOOLS).**
+  `tests/residency_callers.rs` drove a fake server that keeps its model loaded, and the binary
+  waited the production 30 s release grace on each of two runs (62 s of the 92 s suite). The
+  grace is now read from `ZTOOLS_RELEASE_GRACE_SECS` by every production caller
+  (`Timing::from_env`; a source-walking test refuses `Timing::default()` outside the tests), and
+  the integration tests set it to 1 s: the same verdicts, 4 s. The gate runs two steps at once
+  (`GOH_CI_JOBS=2`, coverage first, steps sharing a cargo target tagged apart) and pytest on
+  pytest-xdist (`-n auto`, same 228 passed).
+
 ## v3.31.0 — A rule-rejected candidate is not re-nominated until its revision, a slot's measure or Osaurus changes; one nightly at a time, and a failed eval names its reason (LM.INCUMBENTFAIL) _(2026-11-14)_
 
 ### Fixed

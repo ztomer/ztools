@@ -70,7 +70,7 @@ pub fn resolve_weekend_model(
     // that follows reports with the holder's name.
     let roster = crate::ztools::residency::locked(
         "ztools weekend roster",
-        crate::ztools::residency::Timing::default(),
+        crate::ztools::residency::Timing::from_env(),
         || {
             reqwest::blocking::Client::builder()
                 .timeout(std::time::Duration::from_secs(2))
@@ -117,7 +117,7 @@ pub fn resolve_weekend_model(
 pub fn warm_model(
     config: &crate::config::ZtoolsConfig,
 ) -> (super::ModelHealth, Option<crate::ztools::residency::Held>) {
-    warm_model_at(config, crate::ztools::residency::Timing::default())
+    warm_model_at(config, crate::ztools::residency::Timing::from_env())
 }
 
 /// [`warm_model`] with the seam's timings given, so a test can shorten the

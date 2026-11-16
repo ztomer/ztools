@@ -249,7 +249,7 @@ pub fn run_summary(
         base_url,
         model,
         config,
-        crate::ztools::residency::Timing::default(),
+        crate::ztools::residency::Timing::from_env(),
     )
 }
 

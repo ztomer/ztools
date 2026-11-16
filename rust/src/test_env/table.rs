@@ -96,6 +96,9 @@ pub(super) const CLEARED: &[&str] = &[
     // autoswitch::mode: the kill switch. Cleared, so an operator's exported
     // `0` cannot decide whether a test's switch is made or only proposed.
     "ZTOOLS_MODEL_AUTO",
+    // residency::Timing::from_env: the release grace. Cleared, so an operator's exported value
+    // cannot shorten or lengthen what a release test waits.
+    "ZTOOLS_RELEASE_GRACE_SECS",
 ];
 
 /// Variables read by code OUTSIDE the crate — the house gate's checkout
@@ -145,6 +148,7 @@ pub(super) const MANAGED: &[&str] = &[
     "ZTOOLS_GPU_LOCK_OWNER",
     "ZTOOLS_MEMINFO",
     "ZTOOLS_MODEL_AUTO",
+    "ZTOOLS_RELEASE_GRACE_SECS",
     "ZTOOLS_SELF_HEAL",
     "ZTOOLS_TLS_PROBE",
     "ZTOOLS_TLS_PROBE_URL",

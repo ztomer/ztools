@@ -270,7 +270,7 @@ pub fn fetch_duckduckgo_events(
         weather_str,
         ctx,
         config,
-        crate::ztools::residency::Timing::default(),
+        crate::ztools::residency::Timing::from_env(),
     )
 }
 
