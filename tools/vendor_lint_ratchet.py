@@ -79,8 +79,7 @@ PACKAGE = "camoufox"
 def counted(n: int, singular: str) -> str:
     """`1 unit`, `0 units`: a count meets its noun, never the hedged spelling (GOH.PLURALHEDGE).
 
-    Local, not `tui.lib.counted`: this gate must still report when the house checkout is
-    unreachable (see `_tui`), and every noun it counts takes a plain `s`.
+    Local, not `tui.lib.counted`: every noun this gate counts takes a plain `s`.
     """
     return f"{n} {singular if n == 1 else singular + 's'}"
 
@@ -88,34 +87,16 @@ def counted(n: int, singular: str) -> str:
 def _tui():
     """The house TUI (icons, restrained colour, NO_COLOR/non-tty aware).
 
-    Falls back to plain prints with the same glyphs when the house checkout is
-    not reachable, so a missing sibling gate directory can never stop this one
-    from reporting a verdict.
+    No local fallback: a hand-rolled copy of the marks is the class GOH.TUIMARKS
+    forbids, and this gate only ever runs as a goh CI step, where GOH_DIR is set.
+    An unreachable house checkout is a loud failure with the reason, never a
+    quietly re-styled verdict.
     """
     goh = os.environ.get("GOH_DIR") or str(Path.home() / "Projects" / "gates_of_heck")
-    if (Path(goh) / "tui" / "lib.py").is_file():
-        sys.path.insert(0, goh)
-        try:
-            from tui.lib import err, info, ok, section, warn
-
-            return info, ok, err, warn, section
-        except ImportError:
-            pass
-
-    def info(m):
-        print(f"→ {m}", flush=True)
-
-    def ok(m):
-        print(f"✓ {m}", flush=True)
-
-    def err(m):
-        print(f"✗ {m}", file=sys.stderr, flush=True)
-
-    def warn(m):
-        print(f"⚠ {m}", file=sys.stderr, flush=True)
-
-    def section(t):
-        print(f"\n→ {t}", flush=True)
+    if not (Path(goh) / "tui" / "lib.py").is_file():
+        sys.exit(f"vendor_lint_ratchet: house TUI not found at {goh}/tui/lib.py; set GOH_DIR")
+    sys.path.insert(0, goh)
+    from tui.lib import err, info, ok, section, warn
 
     return info, ok, err, warn, section
 

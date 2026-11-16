@@ -149,7 +149,10 @@ mod tests {
         assert_eq!(source_has_takeable_port(&lit(1337)), None);
         assert_eq!(source_has_takeable_port(&lit(0)), None);
         // Prose quoting an error message is not an endpoint a test dials.
-        assert_eq!(source_has_takeable_port("/// 127.0.0.1:54055, Os"), None);
+        assert_eq!(
+            source_has_takeable_port(&format!("/// 127.0.0.1:{}, Os", 54_055)),
+            None
+        );
     }
 
     fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
