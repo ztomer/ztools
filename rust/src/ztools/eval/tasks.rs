@@ -19,7 +19,6 @@
 //! `conf/eval_vision.toml` at load time (see [`super::vision`]).
 
 use anyhow::{Context, Result};
-use chrono::Datelike;
 use std::path::Path;
 
 use super::graded::Graded;
@@ -118,7 +117,7 @@ fn planner_rows(check: Graded) -> Graded {
 fn weekend_structure_prompt() -> (String, String) {
     let (start, _) = weekend_eval_window();
     (
-        crate::ztools::weekend::structure_system(start.year()),
+        crate::ztools::weekend::structure_system(i32::from(start.year())),
         crate::ztools::weekend::structure_user(WEEKEND_STRUCTURE_ROWS),
     )
 }
@@ -135,7 +134,7 @@ fn weekend_monolithic_over(results: &str) -> (String, String) {
     let (start, end) = weekend_eval_window();
     let corpus = crate::ztools::weekend::prioritise_in_window(results, start, end);
     (
-        crate::ztools::weekend::structure_system(start.year()),
+        crate::ztools::weekend::structure_system(i32::from(start.year())),
         crate::ztools::weekend::monolithic_user(&corpus, WEEKEND_EVAL_LOCATION, start, end),
     )
 }

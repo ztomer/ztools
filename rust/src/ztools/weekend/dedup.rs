@@ -29,7 +29,7 @@
 
 use std::collections::HashSet;
 
-use chrono::NaiveDate;
+use jiff::civil::Date;
 
 use super::WeekendEvent;
 use super::enforce::significant_tokens;
@@ -57,7 +57,7 @@ fn richness(ev: &WeekendEvent) -> usize {
     .count()
 }
 
-fn span(ev: &WeekendEvent, year: i32) -> Option<(NaiveDate, NaiveDate)> {
+fn span(ev: &WeekendEvent, year: i32) -> Option<(Date, Date)> {
     let first = super::dates::parse_any_date(&ev.start_date, year);
     let last = super::dates::parse_any_date(&ev.end_date, year);
     match (first, last) {

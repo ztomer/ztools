@@ -1,12 +1,12 @@
 //! "Float in-window lines to the top, drop nothing" transient-corpus behavior.
 
 use crate::ztools::weekend::in_window_count;
-fn friday() -> chrono::NaiveDate {
-    chrono::NaiveDate::parse_from_str("2026-08-07", "%Y-%m-%d").unwrap()
+fn friday() -> jiff::civil::Date {
+    jiff::civil::Date::strptime("%Y-%m-%d", "2026-08-07").unwrap()
 }
 
-fn sunday() -> chrono::NaiveDate {
-    chrono::NaiveDate::parse_from_str("2026-08-09", "%Y-%m-%d").unwrap()
+fn sunday() -> jiff::civil::Date {
+    jiff::civil::Date::strptime("%Y-%m-%d", "2026-08-09").unwrap()
 }
 
 /// In-window candidates float to the top marked, order preserved within each
@@ -74,8 +74,8 @@ fn a_followed_pages_entry_is_marked_in_place_and_never_split() {
     ]
     .join("\n");
     let (fri, mon) = (
-        chrono::NaiveDate::from_ymd_opt(2026, 10, 9).unwrap(),
-        chrono::NaiveDate::from_ymd_opt(2026, 10, 12).unwrap(),
+        crate::ztools::weekend::dates::ymd(2026, 10, 9).unwrap(),
+        crate::ztools::weekend::dates::ymd(2026, 10, 12).unwrap(),
     );
     let out = crate::ztools::weekend::prioritise_in_window(&corpus, fri, mon);
     let lines: Vec<&str> = out.lines().collect();

@@ -371,8 +371,8 @@ pub fn format_weather_display(raw: &str) -> String {
         }
         if let Some((date_part, rest)) = line.split_once(':') {
             let date_str = date_part.trim();
-            if let Ok(ndt) = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
-                let day_name = ndt.format("%a").to_string();
+            if let Ok(ndt) = jiff::civil::Date::strptime("%Y-%m-%d", date_str) {
+                let day_name = ndt.strftime("%a").to_string();
                 let rest_clean = rest.trim();
                 if let Some(pos) = rest_clean.find("°C") {
                     let temp = &rest_clean[..pos].trim();

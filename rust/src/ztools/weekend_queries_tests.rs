@@ -2,8 +2,8 @@
 
 use super::*;
 
-fn d(y: i32, m: u32, day: u32) -> chrono::NaiveDate {
-    chrono::NaiveDate::from_ymd_opt(y, m, day).unwrap()
+fn d(y: i32, m: u32, day: u32) -> jiff::civil::Date {
+    crate::ztools::weekend::dates::ymd(y, m, day).unwrap()
 }
 
 #[test]

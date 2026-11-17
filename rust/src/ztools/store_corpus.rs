@@ -47,18 +47,18 @@ pub fn corpus_dir(store: &Path) -> PathBuf {
 /// `2026-10-10_143005_corpus.txt`: the run's local time, so names sort in run
 /// order and retention can go by name.
 #[must_use]
-pub fn corpus_filename(run: chrono::NaiveDateTime) -> String {
+pub fn corpus_filename(run: jiff::civil::DateTime) -> String {
     stamped(run, SUFFIX)
 }
 
 /// `2026-10-10_143005_phases.txt`: the same stamp as that run's corpus.
 #[must_use]
-pub fn phases_filename(run: chrono::NaiveDateTime) -> String {
+pub fn phases_filename(run: jiff::civil::DateTime) -> String {
     stamped(run, PHASES_SUFFIX)
 }
 
-fn stamped(run: chrono::NaiveDateTime, suffix: &str) -> String {
-    format!("{}{suffix}", run.format("%Y-%m-%d_%H%M%S"))
+fn stamped(run: jiff::civil::DateTime, suffix: &str) -> String {
+    format!("{}{suffix}", run.strftime("%Y-%m-%d_%H%M%S"))
 }
 
 /// Write `header` then `corpus` to `<store>/corpus/<run>_corpus.txt`, creating
@@ -71,7 +71,7 @@ fn stamped(run: chrono::NaiveDateTime, suffix: &str) -> String {
 /// left behind is a disk-space matter, not a lost run.
 pub fn save_corpus(
     store: &Path,
-    run: chrono::NaiveDateTime,
+    run: jiff::civil::DateTime,
     header: &str,
     corpus: &str,
 ) -> Result<PathBuf> {
@@ -87,13 +87,13 @@ pub fn save_corpus(
 /// # Errors
 ///
 /// As [`save_corpus`].
-pub fn save_phases(store: &Path, run: chrono::NaiveDateTime, text: &str) -> Result<PathBuf> {
+pub fn save_phases(store: &Path, run: jiff::civil::DateTime, text: &str) -> Result<PathBuf> {
     save_record(store, run, PHASES_SUFFIX, text)
 }
 
 fn save_record(
     store: &Path,
-    run: chrono::NaiveDateTime,
+    run: jiff::civil::DateTime,
     suffix: &str,
     text: &str,
 ) -> Result<PathBuf> {
@@ -129,9 +129,9 @@ fn prune(dir: &Path, keep: usize, suffix: &str) {
 /// explained from what the engines actually returned. A failure to write it is
 /// reported and never fails the run.
 pub fn record_corpus(
-    run: chrono::NaiveDateTime,
+    run: jiff::civil::DateTime,
     corpus: &str,
-    (d1, d2): (chrono::NaiveDate, chrono::NaiveDate),
+    (d1, d2): (jiff::civil::Date, jiff::civil::Date),
     queries: &[String],
     (in_window, total): (usize, usize),
 ) {
@@ -151,9 +151,9 @@ pub fn record_corpus(
 /// corpus's run stamp. A run that made no call keeps nothing; a failure to
 /// write is reported and never fails the run.
 pub fn record_phases(
-    run: chrono::NaiveDateTime,
+    run: jiff::civil::DateTime,
     log: &crate::ztools::weekend::transcript::PhaseLog,
-    (d1, d2): (chrono::NaiveDate, chrono::NaiveDate),
+    (d1, d2): (jiff::civil::Date, jiff::civil::Date),
     model: &str,
 ) {
     let calls = log.entries().len();

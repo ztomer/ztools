@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, FixedOffset, Utc};
+use jiff::Timestamp;
 
 use super::Tweet;
 use super::browser_bin;
@@ -309,12 +309,12 @@ fn open_timeline(
 fn scroll_collect(
     frame: &camoufox::api::MainFrame,
     state: &Arc<Mutex<CaptureState>>,
-    since_dt: &DateTime<FixedOffset>,
+    since_dt: &Timestamp,
 ) -> (Vec<Tweet>, String) {
     let limits = ScrollLimits::from_env_or_default();
     let mut scroll = ScrollState::default();
     let mut tweets: Vec<Tweet> = Vec::new();
-    let mut oldest: Option<DateTime<FixedOffset>> = None;
+    let mut oldest: Option<Timestamp> = None;
     let mut seen: HashSet<String> = HashSet::new();
     let start = Instant::now();
     let reason = loop {
@@ -417,7 +417,7 @@ pub fn collect_tweets_native(
             return Err(e);
         }
     };
-    let since_dt = resolve_since(since, Utc::now());
+    let since_dt = resolve_since(since, Timestamp::now());
     let (tweets, stop_reason) = scroll_collect(&frame, &state, &since_dt);
     shutdown(sess);
 

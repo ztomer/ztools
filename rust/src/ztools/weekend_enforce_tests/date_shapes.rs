@@ -12,7 +12,7 @@
 use super::support::d;
 use crate::ztools::weekend::{find_dates_in, in_window_count, mentions_window, parse_any_date};
 
-fn window() -> (chrono::NaiveDate, chrono::NaiveDate) {
+fn window() -> (jiff::civil::Date, jiff::civil::Date) {
     (d(2026, 10, 9), d(2026, 10, 12))
 }
 

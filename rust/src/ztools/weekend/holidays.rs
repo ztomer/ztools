@@ -11,7 +11,9 @@
 //! province without a table is a stated failure, never a silent "no holidays",
 //! because a missing table and a holiday-free year look identical in a plan.
 
-use chrono::{Datelike, Duration, NaiveDate, Weekday};
+use jiff::civil::{Date, Weekday};
+
+use super::dates::ymd;
 
 /// A province whose holiday rules are in this table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -23,7 +25,7 @@ pub enum Province {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Holiday {
     pub name: &'static str,
-    pub date: NaiveDate,
+    pub date: Date,
 }
 
 impl Province {
@@ -52,24 +54,29 @@ impl Province {
 
     /// The holiday on `date`, if there is one.
     #[must_use]
-    pub fn holiday_on(self, date: NaiveDate) -> Option<Holiday> {
-        self.holidays(date.year())
+    pub fn holiday_on(self, date: Date) -> Option<Holiday> {
+        self.holidays(i32::from(date.year()))
             .into_iter()
             .find(|h| h.date == date)
     }
 }
 
 /// The `n`th `weekday` of `month` (1-based `n`).
-fn nth_weekday(year: i32, month: u32, weekday: Weekday, n: u32) -> NaiveDate {
-    // Every month of every year in chrono's range has a 1st and at least four
+fn nth_weekday(year: i32, month: u32, weekday: Weekday, n: u32) -> Date {
+    // Every month of every year in jiff's range has a 1st and at least four
     // of each weekday, and the callers ask for n <= 3.
-    NaiveDate::from_weekday_of_month_opt(year, month, weekday, u8::try_from(n).unwrap_or(1))
+    ymd(year, month, 1)
+        .and_then(|first| {
+            first
+                .nth_weekday_of_month(i8::try_from(n).unwrap_or(1), weekday)
+                .ok()
+        })
         .unwrap_or_default()
 }
 
 /// Easter Sunday (Gregorian), by the anonymous Meeus/Jones/Butcher algorithm.
 #[must_use]
-pub fn easter_sunday(year: i32) -> NaiveDate {
+pub fn easter_sunday(year: i32) -> Date {
     // The algorithm's single letters, spelled out: a..m in the published form.
     let golden = year % 19;
     let century = year / 100;
@@ -84,7 +91,7 @@ pub fn easter_sunday(year: i32) -> NaiveDate {
     let weekday_off = (32 + 2 * century_rem + 2 * in_century_q - epact - in_century_r) % 7;
     let shift = (golden + 11 * epact + 22 * weekday_off) / 451;
     let total = epact + weekday_off - 7 * shift + 114;
-    NaiveDate::from_ymd_opt(
+    ymd(
         year,
         u32::try_from(total / 31).unwrap_or(4),
         u32::try_from(total % 31 + 1).unwrap_or(1),
@@ -93,25 +100,25 @@ pub fn easter_sunday(year: i32) -> NaiveDate {
 }
 
 /// Victoria Day: the last Monday strictly before May 25.
-fn victoria_day(year: i32) -> NaiveDate {
-    let may_24 = NaiveDate::from_ymd_opt(year, 5, 24).unwrap_or_default();
-    let back = i64::from(may_24.weekday().num_days_from_monday());
-    may_24 - Duration::days(back)
+fn victoria_day(year: i32) -> Date {
+    let may_24 = ymd(year, 5, 24).unwrap_or_default();
+    let back = i64::from(may_24.weekday().to_monday_zero_offset());
+    may_24 - jiff::Span::new().days(back)
 }
 
 /// A fixed-date holiday falling on a weekend is observed on the next weekday
 /// no other holiday already took (so Christmas on a Saturday and Boxing Day on
 /// a Sunday are observed Monday and Tuesday).
-fn observe(date: NaiveDate, taken: &[NaiveDate]) -> NaiveDate {
+fn observe(date: Date, taken: &[Date]) -> Date {
     let mut day = date;
-    while matches!(day.weekday(), Weekday::Sat | Weekday::Sun) || taken.contains(&day) {
-        day += Duration::days(1);
+    while matches!(day.weekday(), Weekday::Saturday | Weekday::Sunday) || taken.contains(&day) {
+        day += jiff::Span::new().days(1);
     }
     day
 }
 
 fn ontario(year: i32) -> Vec<Holiday> {
-    let fixed = |m, d| NaiveDate::from_ymd_opt(year, m, d).unwrap_or_default();
+    let fixed = |m, d| ymd(year, m, d).unwrap_or_default();
     let christmas = observe(fixed(12, 25), &[]);
     let mut days = vec![
         Holiday {
@@ -120,11 +127,11 @@ fn ontario(year: i32) -> Vec<Holiday> {
         },
         Holiday {
             name: "Family Day",
-            date: nth_weekday(year, 2, Weekday::Mon, 3),
+            date: nth_weekday(year, 2, Weekday::Monday, 3),
         },
         Holiday {
             name: "Good Friday",
-            date: easter_sunday(year) - Duration::days(2),
+            date: easter_sunday(year) - jiff::Span::new().days(2),
         },
         Holiday {
             name: "Victoria Day",
@@ -138,15 +145,15 @@ fn ontario(year: i32) -> Vec<Holiday> {
         // weekend nearly every employer and municipality observes.
         Holiday {
             name: "Civic Holiday",
-            date: nth_weekday(year, 8, Weekday::Mon, 1),
+            date: nth_weekday(year, 8, Weekday::Monday, 1),
         },
         Holiday {
             name: "Labour Day",
-            date: nth_weekday(year, 9, Weekday::Mon, 1),
+            date: nth_weekday(year, 9, Weekday::Monday, 1),
         },
         Holiday {
             name: "Thanksgiving",
-            date: nth_weekday(year, 10, Weekday::Mon, 2),
+            date: nth_weekday(year, 10, Weekday::Monday, 2),
         },
         Holiday {
             name: "Christmas Day",

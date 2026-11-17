@@ -6,7 +6,7 @@
 //! `oldest_seen`) are parameters, so every stop condition is unit-testable.
 //! The live driver (`browser.rs` / Phase 2a-ii) only feeds observations in.
 
-use chrono::{DateTime, FixedOffset, Utc};
+use jiff::{SignedDuration, Timestamp};
 
 use super::Tweet;
 use super::browser_parse::TWITTER_DATE_FORMAT;
@@ -76,7 +76,7 @@ pub struct ScrollObservation {
     /// `window.scrollY` after the scroll, or `None` when unreadable.
     pub offset: Option<f64>,
     /// Oldest tweet collected so far, or `None` when nothing arrived yet.
-    pub oldest_seen: Option<DateTime<FixedOffset>>,
+    pub oldest_seen: Option<Timestamp>,
 }
 
 impl ScrollState {
@@ -90,7 +90,7 @@ impl ScrollState {
     pub fn step(
         &mut self,
         obs: &ScrollObservation,
-        since: &DateTime<FixedOffset>,
+        since: &Timestamp,
         now_secs: f64,
         limits: &ScrollLimits,
     ) -> Option<String> {
@@ -163,15 +163,15 @@ pub fn strip_rt_prefix(text: &str) -> &str {
 /// Unparseable tweets never survive the post-pass (the parser only emits ones
 /// with a `created_at`, but the post-pass must not panic on a bad one).
 #[must_use]
-pub fn parse_created_at(s: &str) -> Option<DateTime<FixedOffset>> {
-    DateTime::parse_from_str(s, TWITTER_DATE_FORMAT).ok()
+pub fn parse_created_at(s: &str) -> Option<Timestamp> {
+    Timestamp::strptime(TWITTER_DATE_FORMAT, s).ok()
 }
 
 /// The collect post-pass from `browser.py`: keep tweets at or after `since`,
 /// drop exact duplicates (`screen_name` + first 80 chars) and content
 /// duplicates (RT-stripped first 100 chars), oldest first.
 #[must_use]
-pub fn collect_dedup(tweets: &[Tweet], since: &DateTime<FixedOffset>) -> Vec<Tweet> {
+pub fn collect_dedup(tweets: &[Tweet], since: &Timestamp) -> Vec<Tweet> {
     use std::collections::HashSet;
     let mut seen_exact: HashSet<(String, String)> = HashSet::new();
     let mut seen_content: HashSet<String> = HashSet::new();
@@ -212,32 +212,39 @@ pub fn collect_dedup(tweets: &[Tweet], since: &DateTime<FixedOffset>) -> Vec<Twe
 /// takes the same 24h default the Python path takes without one. Phase 3 A/B
 /// always passes explicit `--since`, where both sides agree exactly.
 #[must_use]
-pub fn resolve_since(since: Option<&str>, now: DateTime<Utc>) -> DateTime<FixedOffset> {
-    let fallback = now - chrono::Duration::hours(24);
+pub fn resolve_since(since: Option<&str>, now: Timestamp) -> Timestamp {
+    let fallback = now - SignedDuration::from_hours(24);
     let Some(raw) = since.map(str::trim).filter(|s| !s.is_empty()) else {
-        return fallback.fixed_offset();
+        return fallback;
     };
     if let Some(hours) = raw
         .strip_suffix('h')
         .and_then(|n| n.parse::<i64>().ok())
         .filter(|h| *h >= 0)
     {
-        return (now - chrono::Duration::hours(hours)).fixed_offset();
+        return now - SignedDuration::from_hours(hours);
     }
-    if let Ok(dt) = DateTime::parse_from_rfc3339(raw) {
-        return dt;
+    if let Ok(t) = raw.parse::<Timestamp>() {
+        return t;
     }
+    let utc = |naive: jiff::civil::DateTime| {
+        naive
+            .to_zoned_datetime(jiff::tz::TimeZone::UTC)
+            .ok()
+            .map(|z| z.timestamp())
+    };
     for fmt in ["%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"] {
-        if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(raw, fmt) {
-            return naive.and_utc().fixed_offset();
+        if let Some(t) = jiff::civil::DateTime::strptime(fmt, raw).ok().and_then(utc) {
+            return t;
         }
     }
-    if let Ok(date) = chrono::NaiveDate::parse_from_str(raw, "%Y-%m-%d")
-        && let Some(midnight) = date.and_hms_opt(0, 0, 0)
+    if let Some(t) = jiff::civil::Date::strptime("%Y-%m-%d", raw)
+        .ok()
+        .and_then(|date| utc(date.to_datetime(jiff::civil::Time::midnight())))
     {
-        return midnight.and_utc().fixed_offset();
+        return t;
     }
-    fallback.fixed_offset()
+    fallback
 }
 pub const LOGGED_OUT_URL_MARKERS: &[&str] = &["/login", "/signin", "/i/flow/login"];
 pub const LOGGED_OUT_ROOT_URLS: &[&str] =
@@ -272,7 +279,7 @@ pub fn is_logged_out(url: &str, title: &str) -> bool {
 mod tests {
     use super::*;
 
-    fn dt(s: &str) -> DateTime<FixedOffset> {
+    fn dt(s: &str) -> Timestamp {
         parse_created_at(s).unwrap()
     }
 
@@ -445,30 +452,20 @@ mod tests {
 
     #[test]
     fn resolve_since_matches_python_branches() {
-        use chrono::TimeZone;
-        let now = Utc.with_ymd_and_hms(2026, 9, 13, 12, 0, 0).unwrap();
+        let at = |s: &str| s.parse::<Timestamp>().unwrap();
+        let now = at("2026-09-13T12:00:00Z");
+        assert_eq!(resolve_since(Some("12h"), now), at("2026-09-13T00:00:00Z"));
         assert_eq!(
-            resolve_since(Some("12h"), now),
-            Utc.with_ymd_and_hms(2026, 9, 13, 0, 0, 0)
-                .unwrap()
-                .fixed_offset()
-        );
-        assert_eq!(
-            resolve_since(Some("2026-09-10T08:30:00+00:00"), now).to_rfc3339(),
-            "2026-09-10T08:30:00+00:00"
+            resolve_since(Some("2026-09-10T08:30:00+00:00"), now).to_string(),
+            "2026-09-10T08:30:00Z"
         );
         // Naive reads as UTC; date-only is midnight.
         assert_eq!(
-            resolve_since(Some("2026-09-10"), now).to_rfc3339(),
-            "2026-09-10T00:00:00+00:00"
+            resolve_since(Some("2026-09-10"), now).to_string(),
+            "2026-09-10T00:00:00Z"
         );
         // Garbage and None fall back to 24h.
-        assert_eq!(
-            resolve_since(Some("soon"), now),
-            Utc.with_ymd_and_hms(2026, 9, 12, 12, 0, 0)
-                .unwrap()
-                .fixed_offset()
-        );
+        assert_eq!(resolve_since(Some("soon"), now), at("2026-09-12T12:00:00Z"));
         assert_eq!(resolve_since(None, now), resolve_since(Some("24h"), now));
     }
 }

@@ -23,7 +23,7 @@
 //! `fixed_activities` schema the planner never sends, while scoring the json
 //! slot. Their lures, markers and keywords are pinned in `prompts/mod.rs`.
 
-use chrono::NaiveDate;
+use jiff::civil::Date;
 
 /// The town the plan is for, as the planner passes it to its prompts.
 pub const WEEKEND_EVAL_LOCATION: &str = "Vaughan";
@@ -37,8 +37,8 @@ pub const WEEKEND_EVAL_LOCATION: &str = "Vaughan";
 ///
 /// Never: both dates are literal days of April.
 #[must_use]
-pub fn weekend_eval_window() -> (NaiveDate, NaiveDate) {
-    let day = |d| NaiveDate::from_ymd_opt(2026, 4, d).expect("a real April date");
+pub fn weekend_eval_window() -> (Date, Date) {
+    let day = |d| crate::ztools::weekend::dates::ymd(2026, 4, d).expect("a real April date");
     (day(20), day(22))
 }
 

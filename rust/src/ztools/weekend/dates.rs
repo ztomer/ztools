@@ -1,7 +1,7 @@
 //! Calendar-date scanning shared between the weekend enforcer and any
 //! in-window prioritiser. Ported from `lib/dates.py`.
 
-use chrono::{Datelike, NaiveDate};
+use jiff::civil::Date;
 
 /// The days a plan should cover, seen from `today`: Friday to Sunday, or to
 /// Monday when that Monday is a holiday in `province`.
@@ -20,21 +20,18 @@ use chrono::{Datelike, NaiveDate};
 /// plus two days, so the Thanksgiving 2026 plan stopped on Sunday Oct 11 and
 /// never looked at Monday Oct 12 (see `holidays.rs`).
 #[must_use]
-pub fn plan_window(
-    today: NaiveDate,
-    province: super::holidays::Province,
-) -> (NaiveDate, NaiveDate) {
-    let weekday = i64::from(today.weekday().num_days_from_monday());
+pub fn plan_window(today: Date, province: super::holidays::Province) -> (Date, Date) {
+    let weekday = i64::from(today.weekday().to_monday_zero_offset());
     let friday = if weekday == 0 && province.holiday_on(today).is_some() {
-        today - chrono::Duration::days(3)
+        today - jiff::Span::new().days(3)
     } else {
-        today - chrono::Duration::days(weekday - 4)
+        today - jiff::Span::new().days(weekday - 4)
     };
-    let monday = friday + chrono::Duration::days(3);
+    let monday = friday + jiff::Span::new().days(3);
     let end = if province.holiday_on(monday).is_some() {
         monday
     } else {
-        friday + chrono::Duration::days(2)
+        friday + jiff::Span::new().days(2)
     };
     (friday, end)
 }
@@ -180,14 +177,19 @@ fn range_end_day(tokens: &[Token], j: usize) -> Option<u32> {
     (!is_time).then_some(day)
 }
 
-const fn ymd(year: i32, month: u32, day: u32) -> Option<NaiveDate> {
-    NaiveDate::from_ymd_opt(year, month, day)
+/// A calendar date from the wide integers the parsers and callers carry; `None`
+/// for a day that does not exist (or a year beyond jiff's range).
+pub(crate) fn ymd(year: i32, month: u32, day: u32) -> Option<Date> {
+    let y = i16::try_from(year).ok()?;
+    let m = i8::try_from(month).ok()?;
+    let d = i8::try_from(day).ok()?;
+    Date::new(y, m, d).ok()
 }
 
 /// A "Month Day" date at `k`, and the range it opens if one follows:
 /// "Oct 9-12, 2026", "October 9 to 12", "Sept 19 – Oct 31",
 /// "September 9, 2026 to October 28, 2026".
-fn month_first_span(tokens: &[Token], k: usize, year: i32) -> Option<(NaiveDate, NaiveDate)> {
+fn month_first_span(tokens: &[Token], k: usize, year: i32) -> Option<(Date, Date)> {
     let month = month_number(&tokens.get(k)?.text)?;
     let day = day_of(&tokens.get(k + 1)?.text)?;
     let own_year = tokens.get(k + 2).and_then(|t| year_of(&t.text));
@@ -234,7 +236,7 @@ fn month_first_span(tokens: &[Token], k: usize, year: i32) -> Option<(NaiveDate,
 /// Not when the day already belongs to the month BEFORE it: in "Sept 19 - Oct
 /// 31" the 19 is September's, and reading "19 - Oct" as October 19 put a date
 /// in the window that the text never named.
-fn day_first_date(tokens: &[Token], k: usize, year: i32) -> Option<NaiveDate> {
+fn day_first_date(tokens: &[Token], k: usize, year: i32) -> Option<Date> {
     let owned = k
         .checked_sub(1)
         .and_then(|p| tokens.get(p))
@@ -252,7 +254,7 @@ fn day_first_date(tokens: &[Token], k: usize, year: i32) -> Option<NaiveDate> {
 }
 
 /// ISO dates YYYY-MM-DD, each a one-day span.
-fn iso_spans(value: &str, spans: &mut Vec<(NaiveDate, NaiveDate)>) {
+fn iso_spans(value: &str, spans: &mut Vec<(Date, Date)>) {
     let chars: Vec<char> = value.chars().collect();
     for i in 0..chars.len().saturating_sub(9) {
         if chars[i + 4] != '-' || chars[i + 7] != '-' {
@@ -285,7 +287,7 @@ fn iso_spans(value: &str, spans: &mut Vec<(NaiveDate, NaiveDate)>) {
 /// in the text always wins, so a snippet carrying a past year is not silently
 /// promoted into this year's plan window.
 #[must_use]
-pub fn find_date_spans_in(value: &str, year: i32) -> Vec<(NaiveDate, NaiveDate)> {
+pub fn find_date_spans_in(value: &str, year: i32) -> Vec<(Date, Date)> {
     let mut spans = Vec::new();
     if value.is_empty() {
         return spans;
@@ -316,10 +318,10 @@ pub fn find_date_spans_in(value: &str, year: i32) -> Vec<(NaiveDate, NaiveDate)>
 /// cannot drift apart (they already did once: the enforcer read three-letter
 /// stems while the prioritiser matched only full month names).
 #[must_use]
-pub fn find_dates_in(value: &str, year: i32) -> Vec<NaiveDate> {
+pub fn find_dates_in(value: &str, year: i32) -> Vec<Date> {
     let mut found = Vec::new();
     for (first, last) in find_date_spans_in(value, year) {
-        for date in <[NaiveDate; 2]>::from((first, last)) {
+        for date in <[Date; 2]>::from((first, last)) {
             if !found.contains(&date) {
                 found.push(date);
             }
@@ -331,6 +333,6 @@ pub fn find_dates_in(value: &str, year: i32) -> Vec<NaiveDate> {
 /// First explicit date in `value`, or None. Shared with the checker so the
 /// enforcer and the candidate prioritiser cannot drift apart.
 #[must_use]
-pub fn parse_any_date(value: &str, year: i32) -> Option<NaiveDate> {
+pub fn parse_any_date(value: &str, year: i32) -> Option<Date> {
     find_dates_in(value, year).into_iter().next()
 }

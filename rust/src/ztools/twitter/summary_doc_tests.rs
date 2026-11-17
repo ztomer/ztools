@@ -328,7 +328,7 @@ fn the_period_stamp_names_the_real_offset_not_a_literal_utc() {
         .lines()
         .find(|l| l.starts_with("**Period:**"))
         .expect("a Period line");
-    let offset = chrono::Local::now().format("%:z").to_string();
+    let offset = jiff::ZonedDateTime::now().strftime("%:z").to_string();
     assert!(
         line.ends_with(&format!(" {offset}")),
         "the Period stamp must carry the local offset {offset}: {line:?}"

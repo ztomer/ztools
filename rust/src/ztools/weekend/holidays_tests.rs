@@ -7,11 +7,11 @@
 
 use super::*;
 
-fn d(y: i32, m: u32, day: u32) -> NaiveDate {
-    NaiveDate::from_ymd_opt(y, m, day).unwrap()
+fn d(y: i32, m: u32, day: u32) -> Date {
+    crate::ztools::weekend::dates::ymd(y, m, day).unwrap()
 }
 
-fn table(year: i32) -> Vec<(&'static str, NaiveDate)> {
+fn table(year: i32) -> Vec<(&'static str, Date)> {
     Province::Ontario
         .holidays(year)
         .into_iter()
@@ -196,7 +196,7 @@ fn the_plan_window_reaches_a_holiday_monday_and_only_a_holiday_monday() {
         (d(2027, 10, 7), d(2027, 10, 11)),
         (d(2027, 12, 23), d(2027, 12, 27)),
     ] {
-        let friday = thursday + Duration::days(1);
+        let friday = thursday + jiff::Span::new().days(1);
         assert_eq!(plan_window(thursday, on), (friday, monday), "{thursday}");
     }
     // Good Friday is already the window's first day; Easter Monday is not a

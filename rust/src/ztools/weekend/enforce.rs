@@ -13,7 +13,7 @@
 use std::collections::HashSet;
 
 use crate::units::count;
-use chrono::{Datelike, NaiveDate};
+use jiff::civil::Date;
 
 use super::WeekendEvent;
 
@@ -289,8 +289,8 @@ pub fn correct_weather_labels(mut events: Vec<WeekendEvent>) -> (Vec<WeekendEven
 /// plan if it spans the weekend, even though neither of its endpoints falls
 /// inside it. There is one decision, in one place.
 #[must_use]
-pub fn window_overlap(ev: &WeekendEvent, start: NaiveDate, end: NaiveDate) -> Option<bool> {
-    let year = start.year();
+pub fn window_overlap(ev: &WeekendEvent, start: Date, end: Date) -> Option<bool> {
+    let year = i32::from(start.year());
     let first = super::dates::parse_any_date(&ev.start_date, year);
     let last = super::dates::parse_any_date(&ev.end_date, year);
     let (mut first, mut last) = match (first, last) {
@@ -313,8 +313,8 @@ pub fn window_overlap(ev: &WeekendEvent, start: NaiveDate, end: NaiveDate) -> Op
 #[must_use]
 pub fn drop_events_outside_window(
     events: Vec<WeekendEvent>,
-    start: NaiveDate,
-    end: NaiveDate,
+    start: Date,
+    end: Date,
 ) -> (Vec<WeekendEvent>, Vec<String>) {
     let mut kept = Vec::new();
     let mut notes = Vec::new();
@@ -327,7 +327,7 @@ pub fn drop_events_outside_window(
         if overlaps {
             kept.push(ev);
         } else {
-            let year = start.year();
+            let year = i32::from(start.year());
             let starts = super::dates::parse_any_date(&ev.start_date, year);
             let ends = super::dates::parse_any_date(&ev.end_date, year);
             let first = starts.or(ends);
@@ -356,12 +356,12 @@ pub fn drop_events_outside_window(
 /// the representable calendar, which no weekend plan reaches.
 pub fn reconcile_day_with_dates(
     mut events: Vec<WeekendEvent>,
-    start: NaiveDate,
-    end: NaiveDate,
+    start: Date,
+    end: Date,
 ) -> (Vec<WeekendEvent>, Vec<String>) {
     let mut notes = Vec::new();
     for ev in &mut events {
-        let year = start.year();
+        let year = i32::from(start.year());
         let Some(mut first) = super::dates::parse_any_date(&ev.start_date, year) else {
             continue;
         };
@@ -379,8 +379,8 @@ pub fn reconcile_day_with_dates(
         let mut covered = Vec::new();
         let mut cursor = lo;
         while cursor <= hi {
-            covered.push(cursor.format("%A").to_string());
-            cursor = cursor.succ_opt().unwrap();
+            covered.push(cursor.strftime("%A").to_string());
+            cursor = cursor.tomorrow().ok().unwrap();
         }
 
         let stated = ev.day.trim().to_string();

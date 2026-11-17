@@ -60,7 +60,7 @@ brotli = "9"
 # makes a vendor refresh that bumps it a loud build failure rather than a silent
 # version change.
 camoufox = { path = "../vendor/camoufox-rs", version = "0.1.0" }
-chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+jiff = "1.0.0"
 clap = { version = "4", features = ["derive"] }
 comfy-table = "8.0.0"
 ctrlc = "3"

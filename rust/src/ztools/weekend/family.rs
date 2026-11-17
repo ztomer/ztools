@@ -6,16 +6,16 @@
 //! the children were 14, 11 and 6. Ages are now DERIVED from the birthdays on
 //! the plan's first day, so there is no second copy to fall out of date.
 
-use chrono::{Datelike, NaiveDate};
+use jiff::civil::Date;
 
 /// Whole years from `birthday` to `on`, or `None` when `on` is before the
 /// birthday (a child not yet born is a config error, not an age of zero).
 #[must_use]
-pub fn age_on(birthday: NaiveDate, on: NaiveDate) -> Option<u32> {
+pub fn age_on(birthday: Date, on: Date) -> Option<u32> {
     if on < birthday {
         return None;
     }
-    let mut years = on.year() - birthday.year();
+    let mut years = i32::from(on.year()) - i32::from(birthday.year());
     if (on.month(), on.day()) < (birthday.month(), birthday.day()) {
         years -= 1;
     }
@@ -29,7 +29,7 @@ pub fn age_on(birthday: NaiveDate, on: NaiveDate) -> Option<u32> {
 /// When no candidate file has a `[[children]]` array, or an entry's
 /// `birthday` is missing or not `YYYY-MM-DD`. Each is stated: a plan with no
 /// family ages would score every event as fitting nobody, or everybody.
-pub fn load_birthdays(paths: &[String]) -> Result<Vec<NaiveDate>, String> {
+pub fn load_birthdays(paths: &[String]) -> Result<Vec<Date>, String> {
     for raw in paths {
         let path = crate::manifest::expand_tilde(raw);
         let Ok(content) = std::fs::read_to_string(&path) else {
@@ -58,7 +58,7 @@ pub fn load_birthdays(paths: &[String]) -> Result<Vec<NaiveDate>, String> {
                             i + 1
                         )
                     })?;
-                NaiveDate::parse_from_str(raw.trim(), "%Y-%m-%d").map_err(|e| {
+                Date::strptime("%Y-%m-%d", raw.trim()).map_err(|e| {
                     format!(
                         "{}: [[children]] #{} birthday {raw:?} is not YYYY-MM-DD ({e})",
                         path.display(),
@@ -79,7 +79,7 @@ pub fn load_birthdays(paths: &[String]) -> Result<Vec<NaiveDate>, String> {
 /// # Errors
 ///
 /// When the birthdays cannot be loaded, or one is after `on`.
-pub fn family_ages(paths: &[String], on: NaiveDate) -> Result<Vec<u32>, String> {
+pub fn family_ages(paths: &[String], on: Date) -> Result<Vec<u32>, String> {
     let mut ages = load_birthdays(paths)?
         .into_iter()
         .map(|b| age_on(b, on).ok_or_else(|| format!("birthday {b} is after the plan date {on}")))
@@ -101,8 +101,8 @@ pub fn ages_label(ages: &[u32]) -> String {
 mod tests {
     use super::*;
 
-    fn d(y: i32, m: u32, day: u32) -> NaiveDate {
-        NaiveDate::from_ymd_opt(y, m, day).unwrap()
+    fn d(y: i32, m: u32, day: u32) -> Date {
+        crate::ztools::weekend::dates::ymd(y, m, day).unwrap()
     }
 
     #[test]

@@ -201,7 +201,7 @@ impl Night for LiveNight {
     }
 
     fn date(&self) -> String {
-        chrono::Local::now().format("%Y-%m-%d").to_string()
+        jiff::ZonedDateTime::now().strftime("%Y-%m-%d").to_string()
     }
 
     fn free_bytes(&self) -> Option<u64> {

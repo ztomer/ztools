@@ -16,7 +16,7 @@
 //! The region is spelled "near Toronto", never "GTA": every "GTA ..." query on
 //! 2026-10-10 came back about Grand Theft Auto, on Bing and on Brave.
 
-use chrono::NaiveDate;
+use jiff::civil::Date;
 
 use super::seasonal_keywords;
 
@@ -25,25 +25,25 @@ const MUNICIPALITIES: [&str; 4] = ["Vaughan", "Markham", "Richmond Hill", "Toron
 
 /// The window as a listing page writes it: "October 9-12", or "October 30 -
 /// November 1" when it crosses a month.
-fn window_phrase(d1: NaiveDate, d2: NaiveDate) -> String {
-    if d1.format("%B").to_string() == d2.format("%B").to_string() {
+fn window_phrase(d1: Date, d2: Date) -> String {
+    if d1.strftime("%B").to_string() == d2.strftime("%B").to_string() {
         format!(
             "{} {}-{}",
-            d1.format("%B"),
-            d1.format("%-d"),
-            d2.format("%-d")
+            d1.strftime("%B"),
+            d1.strftime("%-d"),
+            d2.strftime("%-d")
         )
     } else {
-        format!("{} - {}", d1.format("%B %-d"), d2.format("%B %-d"))
+        format!("{} - {}", d1.strftime("%B %-d"), d2.strftime("%B %-d"))
     }
 }
 
 /// Search queries for the weekend `d1..=d2`, naming `holiday` when the window
 /// holds one (the province's holiday table decides; see `holidays.rs`).
 #[must_use]
-pub fn build_search_queries(d1: NaiveDate, d2: NaiveDate, holiday: Option<&str>) -> Vec<String> {
-    let month_name = d1.format("%B").to_string();
-    let year = d1.format("%Y").to_string();
+pub fn build_search_queries(d1: Date, d2: Date, holiday: Option<&str>) -> Vec<String> {
+    let month_name = d1.strftime("%B").to_string();
+    let year = d1.strftime("%Y").to_string();
     let window = window_phrase(d1, d2);
     let seasonal = seasonal_keywords(&month_name);
 

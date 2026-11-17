@@ -55,7 +55,10 @@ pub fn clock() -> (f64, String) {
     let at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0.0, |d| d.as_secs_f64());
-    (at, chrono::Local::now().format("%Y-%m-%d").to_string())
+    (
+        at,
+        jiff::ZonedDateTime::now().strftime("%Y-%m-%d").to_string(),
+    )
 }
 
 /// Every path this job reads or writes, under one home.

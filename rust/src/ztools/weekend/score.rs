@@ -29,7 +29,7 @@
 //!
 //! Price is deliberately absent: a price is not a fit, and free is never worse.
 
-use chrono::{Datelike, NaiveDate, Weekday};
+use jiff::civil::{Date, Weekday};
 
 use super::WeekendEvent;
 
@@ -111,12 +111,12 @@ fn fit(label: &str, forecast: Forecast) -> f32 {
 
 /// The forecast day by day, from the fetcher's `YYYY-MM-DD: …` lines. Empty
 /// when the string carries none (a missing forecast, or a bare summary).
-fn daily(weather_str: &str) -> Vec<(NaiveDate, Forecast)> {
+fn daily(weather_str: &str) -> Vec<(Date, Forecast)> {
     weather_str
         .lines()
         .filter_map(|line| {
             let (date, rest) = line.trim().split_once(':')?;
-            let date = NaiveDate::parse_from_str(date.trim(), "%Y-%m-%d").ok()?;
+            let date = Date::strptime("%Y-%m-%d", date.trim()).ok()?;
             Some((date, forecast_of(rest)))
         })
         .collect()
@@ -128,7 +128,7 @@ fn weekday(token: &str) -> Option<Weekday> {
     ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
         .iter()
         .position(|d| *d == prefix)
-        .and_then(|i| Weekday::try_from(u8::try_from(i).ok()?).ok())
+        .and_then(|i| Weekday::from_monday_zero_offset(i8::try_from(i).ok()?).ok())
 }
 
 /// The weekdays `day` names: "Saturday", "Sat & Sun", or a range "Fri-Sun".
@@ -143,7 +143,7 @@ fn weekdays_named(day: &str) -> Vec<Weekday> {
         let mut run = vec![from];
         let mut d = from;
         while d != to {
-            d = d.succ();
+            d = d.next();
             run.push(d);
         }
         return run;
@@ -153,12 +153,12 @@ fn weekdays_named(day: &str) -> Vec<Weekday> {
 
 /// The forecast days a row is on: its dates, else the weekdays it names,
 /// else every day.
-fn row_days(ev: &WeekendEvent, days: &[NaiveDate]) -> Vec<NaiveDate> {
-    let year = days.first().map_or(2026, Datelike::year);
+fn row_days(ev: &WeekendEvent, days: &[Date]) -> Vec<Date> {
+    let year = days.first().map_or(2026, |d| i32::from(d.year()));
     let start = super::dates::parse_any_date(&ev.start_date, year);
     let end = super::dates::parse_any_date(&ev.end_date, year).or(start);
     if let (Some(start), Some(end)) = (start, end) {
-        let on: Vec<NaiveDate> = days
+        let on: Vec<Date> = days
             .iter()
             .copied()
             .filter(|d| (start..=end).contains(d))
@@ -168,7 +168,7 @@ fn row_days(ev: &WeekendEvent, days: &[NaiveDate]) -> Vec<NaiveDate> {
         }
     }
     let named = weekdays_named(&ev.day);
-    let on: Vec<NaiveDate> = days
+    let on: Vec<Date> = days
         .iter()
         .copied()
         .filter(|d| named.contains(&d.weekday()))
@@ -187,7 +187,7 @@ pub fn weather_points(ev: &WeekendEvent, weather_str: &str) -> f32 {
     if days.is_empty() {
         return fit(&label, forecast_of(weather_str));
     }
-    let dates: Vec<NaiveDate> = days.iter().map(|(d, _)| *d).collect();
+    let dates: Vec<Date> = days.iter().map(|(d, _)| *d).collect();
     row_days(ev, &dates)
         .iter()
         .filter_map(|d| days.iter().find(|(day, _)| day == d))

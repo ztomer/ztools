@@ -243,8 +243,8 @@ pub fn run(base_url: &str, model: &str, rows: &[Row], all_pairs: bool) -> Result
         }
         Ok(Record {
             model: model.to_string(),
-            recorded: chrono::Local::now()
-                .format("%Y-%m-%d %H:%M %:z")
+            recorded: jiff::ZonedDateTime::now()
+                .strftime("%Y-%m-%d %H:%M %:z")
                 .to_string(),
             load,
             system: SYSTEM.to_string(),

@@ -170,8 +170,13 @@ skip = [
     { crate = "hashbrown@0.16.1", reason = "rsqlite-vfs (rusqlite's wasm VFS) pins 0.16; the host build resolves 0.17.1 only" },
     { crate = "syn@2.0.119", reason = "jni-macros and jni-sys-macros (Android) and windows-implement and windows-interface (Windows) pin 2.x; no host-triple build compiles them" },
 ]
-# `deny` is empty on purpose. Naming crates that simply do not appear in this
-# graph would be a policy nobody has checked against anything.
+# chrono is unmaintained (RUSTSEC-2026-0543, advisory db 2026-11-17; every
+# version, no patch). Dates are jiff's (EST.CHRONODIRECT) and chrono is banned
+# with no wrapper: nothing here may take it again. goh's shared ruling covers
+# only chrono reached through rmcp, which this graph does not have.
+deny = [
+    { crate = "chrono", reason = "unmaintained (RUSTSEC-2026-0543); dates are jiff's (EST.CHRONODIRECT)" },
+]
 
 # -----------------------------------------------------------------------------
 # [sources] -- every byte of this build comes from crates.io or from this tree.

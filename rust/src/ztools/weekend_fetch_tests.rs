@@ -85,10 +85,10 @@ pub(super) fn sandboxed_config(
     }
 }
 
-pub(super) fn window() -> (chrono::NaiveDate, chrono::NaiveDate) {
+pub(super) fn window() -> (jiff::civil::Date, jiff::civil::Date) {
     (
-        chrono::NaiveDate::parse_from_str("2026-08-07", "%Y-%m-%d").unwrap(),
-        chrono::NaiveDate::parse_from_str("2026-08-09", "%Y-%m-%d").unwrap(),
+        jiff::civil::Date::strptime("%Y-%m-%d", "2026-08-07").unwrap(),
+        jiff::civil::Date::strptime("%Y-%m-%d", "2026-08-09").unwrap(),
     )
 }
 

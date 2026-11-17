@@ -127,16 +127,15 @@ const LLM_EVENTS: &str = r#"{"choices":[{"message":{"content":"{\"transient_even
 /// 9 on any day of the plan window, and the province whose holidays extend it.
 /// Returns the config lines pointing the planner at it.
 fn write_weekend_family(home: &std::path::Path) -> String {
-    let birthday = chrono::Local::now().date_naive()
-        - chrono::Months::new(9 * 12)
-        - chrono::Duration::days(30);
+    let birthday =
+        jiff::ZonedDateTime::now().date() - jiff::Span::new().years(9) - jiff::Span::new().days(30);
     let path = home.join("weekend.toml");
     fs::write(
         &path,
         format!(
             "[location]\ncity = \"Vaughan\"\nprovince = \"ON\"\n\n\
              [[children]]\nbirthday = \"{}\"\n",
-            birthday.format("%Y-%m-%d")
+            birthday.strftime("%Y-%m-%d")
         ),
     )
     .unwrap();

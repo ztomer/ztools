@@ -10,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, FixedOffset};
+use jiff::Timestamp;
 
 use super::Tweet;
 use super::browser_parse;
@@ -197,7 +197,7 @@ pub(crate) fn drain_responses(
     state: &Mutex<CaptureState>,
     seen: &mut HashSet<String>,
     tweets: &mut Vec<Tweet>,
-    oldest: &mut Option<DateTime<FixedOffset>>,
+    oldest: &mut Option<Timestamp>,
 ) {
     let pending: Vec<Captured> = {
         let mut st = state.lock().unwrap();

@@ -15,8 +15,6 @@ use anyhow::{Result, bail};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use chrono::Local;
-
 /// Default directory the twitter summarizer stores its dated summaries in.
 #[must_use]
 pub fn twitter_store_dir() -> PathBuf {
@@ -85,11 +83,11 @@ pub fn newest_dated_plan(directory: &std::path::Path) -> Option<std::path::PathB
 /// — which the status page uses to decide whether a plan is stale — reads the
 /// weekend back out of this name.
 #[must_use]
-pub fn weekend_plan_filename(friday: chrono::NaiveDate, sunday: chrono::NaiveDate) -> String {
+pub fn weekend_plan_filename(friday: jiff::civil::Date, sunday: jiff::civil::Date) -> String {
     format!(
         "weekend_plan_{}_to_{}.md",
-        friday.format("%B_%d"),
-        sunday.format("%B_%d_%Y")
+        friday.strftime("%B_%d"),
+        sunday.strftime("%B_%d_%Y")
     )
 }
 
@@ -100,8 +98,8 @@ pub fn weekend_plan_filename(friday: chrono::NaiveDate, sunday: chrono::NaiveDat
 /// When the directory cannot be created or the file cannot be written.
 pub fn save_weekend_plan(
     dir: &Path,
-    friday: chrono::NaiveDate,
-    sunday: chrono::NaiveDate,
+    friday: jiff::civil::Date,
+    sunday: jiff::civil::Date,
     markdown: &str,
 ) -> Result<PathBuf> {
     std::fs::create_dir_all(dir)?;
@@ -162,9 +160,8 @@ pub fn newest_md(dir: &Path) -> Result<PathBuf> {
 /// a modification time for it.
 pub fn last_updated(path: &Path) -> Result<String> {
     let modified = std::fs::metadata(path)?.modified()?;
-    let dt: chrono::DateTime<Local> =
-        chrono::DateTime::<chrono::Utc>::from(modified).with_timezone(&Local);
-    Ok(dt.format("%Y-%m-%d %H:%M").to_string())
+    let dt = jiff::ZonedDateTime::try_from(modified)?;
+    Ok(dt.strftime("%Y-%m-%d %H:%M").to_string())
 }
 
 /// Read-side entry point for `twitter-summarize --fetch-latest` /
@@ -317,12 +314,14 @@ mod tests {
     fn last_updated_formats_a_known_time() {
         let (_td, d) = dir_with(&[("summary.md", "x")]);
         let path = d.join("summary.md");
-        let t = chrono::NaiveDate::from_ymd_opt(2026, 8, 29)
-            .and_then(|day| day.and_hms_opt(17, 53, 0))
+        let t = crate::ztools::weekend::dates::ymd(2026, 8, 29)
             .unwrap()
-            .and_local_timezone(Local)
+            .at(17, 53, 0, 0)
+            .to_zoned_datetime(jiff::tz::TimeZone::system())
             .unwrap()
-            .into();
+            .timestamp()
+            .try_into()
+            .unwrap();
         std::fs::File::options()
             .write(true)
             .open(&path)
@@ -386,9 +385,8 @@ mod tests {
 
     #[test]
     fn weekend_plan_filename_is_the_python_shape_and_round_trips() {
-        use chrono::NaiveDate;
-        let fri = NaiveDate::from_ymd_opt(2026, 8, 14).unwrap();
-        let sun = NaiveDate::from_ymd_opt(2026, 8, 16).unwrap();
+        let fri = crate::ztools::weekend::dates::ymd(2026, 8, 14).unwrap();
+        let sun = crate::ztools::weekend::dates::ymd(2026, 8, 16).unwrap();
         let name = weekend_plan_filename(fri, sun);
         assert_eq!(name, "weekend_plan_August_14_to_August_16_2026.md");
         // The status page reads the weekend back out of the name.
@@ -397,8 +395,8 @@ mod tests {
             Some((fri, sun))
         );
         // Year boundary keeps Python's shape (year printed once, from Sunday).
-        let fri = NaiveDate::from_ymd_opt(2026, 12, 31).unwrap();
-        let sun = NaiveDate::from_ymd_opt(2027, 1, 2).unwrap();
+        let fri = crate::ztools::weekend::dates::ymd(2026, 12, 31).unwrap();
+        let sun = crate::ztools::weekend::dates::ymd(2027, 1, 2).unwrap();
         assert_eq!(
             weekend_plan_filename(fri, sun),
             "weekend_plan_December_31_to_January_02_2027.md"
@@ -407,11 +405,10 @@ mod tests {
 
     #[test]
     fn save_weekend_plan_creates_the_store_and_the_status_reader_finds_it() {
-        use chrono::NaiveDate;
         let td = tempfile::tempdir().unwrap();
         let store = td.path().join("nested/weekend_plans");
-        let fri = NaiveDate::from_ymd_opt(2026, 9, 18).unwrap();
-        let sun = NaiveDate::from_ymd_opt(2026, 9, 20).unwrap();
+        let fri = crate::ztools::weekend::dates::ymd(2026, 9, 18).unwrap();
+        let sun = crate::ztools::weekend::dates::ymd(2026, 9, 20).unwrap();
         let path = save_weekend_plan(&store, fri, sun, "# plan\n").unwrap();
         assert!(path.ends_with("weekend_plan_September_18_to_September_20_2026.md"));
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "# plan\n");

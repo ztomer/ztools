@@ -11,6 +11,9 @@ they get no GitHub release (`GOH_RELEASE_BACKFILL_FLOOR=v2.2.0`).
 
 ## Unreleased
 
+### Fixed
+- fix(deps): dates move from chrono to jiff 1.0 (`civil::Date` for the weekend planner, `Timestamp` for the twitter collector, `ZonedDateTime` for local stamps), and chrono is banned outright in `rust/deny.toml` `[bans]`, so RUSTSEC-2026-0543 (chrono unmaintained, no patch) leaves the graph and a new direct use is red (EST.CHRONODIRECT).
+
 ### Changed
 - **The push gate's Rust coverage step no longer waits a minute on one test file (CIP.ZTOOLS).**
   `tests/residency_callers.rs` drove a fake server that keeps its model loaded, and the binary

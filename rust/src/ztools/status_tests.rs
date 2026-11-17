@@ -7,7 +7,7 @@ use crate::ztools::weekend::{
     FIXED_SECTION_HEADING, FIXED_TABLE_HEADER, PlanHealth, TABLE_SEPARATOR,
     TRANSIENT_SECTION_HEADING, TRANSIENT_TABLE_HEADER, WeekendEvent, format_weekend_plan,
 };
-use chrono::NaiveDate;
+use jiff::civil::Date;
 
 fn event(
     name: &str,
@@ -89,8 +89,8 @@ fn assert_current_plan_document(plan: &str, has_transient_rows: bool) {
     );
 }
 
-fn d(y: i32, m: u32, day: u32) -> NaiveDate {
-    NaiveDate::from_ymd_opt(y, m, day).unwrap()
+fn d(y: i32, m: u32, day: u32) -> Date {
+    crate::ztools::weekend::dates::ymd(y, m, day).unwrap()
 }
 
 #[test]
@@ -321,8 +321,8 @@ fn a_newer_corpus_record_is_never_read_as_the_plan() {
         .path()
         .join("weekend_plan_October_09_to_October_12_2026.md");
     std::fs::write(&plan, "# plan\n").unwrap();
-    let run = NaiveDate::from_ymd_opt(2026, 10, 10)
-        .and_then(|d| d.and_hms_opt(23, 0, 0))
+    let run = crate::ztools::weekend::dates::ymd(2026, 10, 10)
+        .map(|d| d.at(23, 0, 0, 0))
         .unwrap();
     crate::ztools::store_corpus::save_corpus(td.path(), run, "#", "- corpus").unwrap();
     assert_eq!(

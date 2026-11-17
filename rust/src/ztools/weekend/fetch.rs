@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chrono::{Datelike, NaiveDate};
+use jiff::civil::Date;
 
 use super::WeekendEvent;
 use super::{DemotionPolicy, SearchRecord};
@@ -90,12 +90,12 @@ pub fn clean_search_results(
 /// No province (or no table for it) means no holiday query, never a failure:
 /// the month-wide and window queries still run.
 fn holiday_in_window(
-    d1: NaiveDate,
-    d2: NaiveDate,
+    d1: Date,
+    d2: Date,
     config: &crate::config::ZtoolsConfig,
 ) -> Option<&'static str> {
     let province = super::holidays::load_province(&config.weekend_region_paths).ok()?;
-    d1.iter_days()
+    d1.series(jiff::Span::new().days(1))
         .take_while(|d| *d <= d2)
         .find_map(|d| province.holiday_on(d))
         .map(|h| h.name)
@@ -106,8 +106,8 @@ fn holiday_in_window(
 /// it. The corpus is the ground truth the provenance gate judges extracted
 /// rows against; the health is what the plan says when that corpus is empty.
 fn fetch_events_corpus(
-    run: chrono::NaiveDateTime,
-    (d1, d2): (NaiveDate, NaiveDate),
+    run: jiff::civil::DateTime,
+    (d1, d2): (Date, Date),
     config: &crate::config::ZtoolsConfig,
 ) -> (String, SearchHealth) {
     let queries = build_search_queries(d1, d2, holiday_in_window(d1, d2, config));
@@ -147,7 +147,7 @@ fn fetch_events_corpus(
     if let Some(summary) = health.summary() {
         println!("\u{2192} Search: {summary}");
     }
-    record.record(&record_path, &d1.format("%Y-%m-%d").to_string(), &health);
+    record.record(&record_path, &d1.strftime("%Y-%m-%d").to_string(), &health);
 
     // The scrape results become the corpus through the SAME byte-exact
     // cleaning the Python pipeline applies (title-only dedupe, max_body
@@ -198,10 +198,10 @@ fn fetch_events_corpus(
 /// `weekend_transient_mixed` row), so the json slot's signal-from-noise score
 /// is taken on the one production JSON call that has to filter.
 #[must_use]
-pub fn monolithic_user(corpus: &str, location: &str, d1: NaiveDate, d2: NaiveDate) -> String {
+pub fn monolithic_user(corpus: &str, location: &str, d1: Date, d2: Date) -> String {
     let (d1_str, d2_str) = (
-        d1.format("%Y-%m-%d").to_string(),
-        d2.format("%Y-%m-%d").to_string(),
+        d1.strftime("%Y-%m-%d").to_string(),
+        d2.strftime("%Y-%m-%d").to_string(),
     );
     let activity_rule = super::prompts::ACTIVITY_RULE;
     format!(
@@ -223,12 +223,12 @@ pub fn monolithic_user(corpus: &str, location: &str, d1: NaiveDate, d2: NaiveDat
 fn monolithic_transient(
     corpus: &str,
     location: &str,
-    d1: NaiveDate,
-    d2: NaiveDate,
+    d1: Date,
+    d2: Date,
     config: &crate::config::ZtoolsConfig,
     log: &PhaseLog,
 ) -> Vec<WeekendEvent> {
-    let sys = super::phases::structure_system(d1.year());
+    let sys = super::phases::structure_system(i32::from(d1.year()));
     let prompt = monolithic_user(corpus, location, d1, d2);
     let resp = super::phases::call_llm_json(Some(&sys), &prompt, config);
     log.record(
@@ -258,8 +258,8 @@ fn monolithic_transient(
 /// run's failure, not a printed aside.
 pub fn fetch_duckduckgo_events(
     location: &str,
-    d1: NaiveDate,
-    d2: NaiveDate,
+    d1: Date,
+    d2: Date,
     weather_str: &str,
     ctx: &PlanContext,
     config: &crate::config::ZtoolsConfig,
@@ -281,7 +281,7 @@ pub fn fetch_duckduckgo_events(
 /// As [`fetch_duckduckgo_events`].
 pub fn fetch_duckduckgo_events_at(
     location: &str,
-    (d1, d2): (NaiveDate, NaiveDate),
+    (d1, d2): (Date, Date),
     weather_str: &str,
     ctx: &PlanContext,
     config: &crate::config::ZtoolsConfig,
@@ -293,7 +293,7 @@ pub fn fetch_duckduckgo_events_at(
     };
     // One stamp for the run's records, so its corpus and its model answers
     // pair by name in the store.
-    let run = chrono::Local::now().naive_local();
+    let run = jiff::civil::DateTime::from(jiff::ZonedDateTime::now());
     let (corpus, search) = fetch_events_corpus(run, (d1, d2), config);
     let (model, held) = warm.join().unwrap_or_else(|_| {
         (

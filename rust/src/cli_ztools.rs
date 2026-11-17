@@ -7,7 +7,6 @@
 
 use crate::ztools::autoswitch::canary::Verdict;
 use anyhow::Result;
-use chrono::Local;
 use std::path::{Path, PathBuf};
 
 use crate::config::ZtoolsConfig;
@@ -48,13 +47,11 @@ pub(crate) fn weekend_plan(
     fetch_latest: bool,
     last_updated: bool,
 ) -> Result<()> {
-    use chrono::Datelike;
-
     if fetch_latest || last_updated {
         return crate::ztools::store::weekend_latest(last_updated);
     }
 
-    let now = Local::now().naive_local().date();
+    let now = jiff::ZonedDateTime::now().date();
 
     // The same window `ztools status` checks the stored plan against: Friday
     // to Sunday, or to Monday when the province observes that Monday.
@@ -74,10 +71,11 @@ pub(crate) fn weekend_plan(
         .map_err(anyhow::Error::msg)?;
     let ages_label = crate::ztools::weekend::family::ages_label(&ages);
 
-    let d1 = friday.format("%Y-%m-%d").to_string();
-    let d2 = sunday.format("%Y-%m-%d").to_string();
-    let dates_str = format!("{} to {}", friday.format("%b %d"), sunday.format("%b %d"));
-    let year = friday.year();
+    let d1 = friday.strftime("%Y-%m-%d").to_string();
+    let d2 = sunday.strftime("%Y-%m-%d").to_string();
+    let (from, to) = (friday.strftime("%b %d"), sunday.strftime("%b %d"));
+    let dates_str = format!("{from} to {to}");
+    let year = i32::from(friday.year());
 
     // Weather is needed BEFORE the pipeline: the draft and structure phases
     // condition their suggestions and weather labels on the forecast. The
@@ -187,14 +185,13 @@ fn gate_rows(
     transient: Vec<crate::ztools::weekend::WeekendEvent>,
     corpus: &str,
     config: &ZtoolsConfig,
-    (friday, sunday): (chrono::NaiveDate, chrono::NaiveDate),
+    (friday, sunday): (jiff::civil::Date, jiff::civil::Date),
     ages: &[u32],
     health: &mut crate::ztools::weekend::PlanHealth,
 ) -> (
     Vec<crate::ztools::weekend::WeekendEvent>,
     Vec<crate::ztools::weekend::WeekendEvent>,
 ) {
-    use chrono::Datelike;
     health.provenance.extracted = transient.len();
     let (transient, provenance_notes) =
         crate::ztools::weekend::drop_unsourced_rows(transient, corpus);
@@ -208,7 +205,7 @@ fn gate_rows(
     // gate judges it, so a merged twin's fields reach every later gate.
     let before = transient.len();
     let (transient, twin_notes) =
-        crate::ztools::weekend::merge_duplicate_events(transient, friday.year());
+        crate::ztools::weekend::merge_duplicate_events(transient, i32::from(friday.year()));
     health.provenance.duplicate = before - transient.len();
     for note in &twin_notes {
         println!("→ {note}");

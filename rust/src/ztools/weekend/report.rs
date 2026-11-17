@@ -7,7 +7,7 @@
 //! assert on could disagree, enforcement drifts from the planner it measures —
 //! the project already paid for that once.
 
-use chrono::NaiveDate;
+use jiff::civil::Date;
 use std::collections::HashMap;
 
 /// One `| ... |` row, keyed by its column header.
@@ -103,7 +103,7 @@ pub fn fixed_rows(text: &str) -> Vec<ReportRow> {
 /// Python behaviour, not a Rust mistake, so the port keeps it byte-for-byte —
 /// a fix belongs to the planner's naming, not to this parser reading a name.
 #[must_use]
-pub fn parse_window_from_filename(name: &str) -> Option<(NaiveDate, NaiveDate)> {
+pub fn parse_window_from_filename(name: &str) -> Option<(Date, Date)> {
     let regex =
         regex::Regex::new(r"([A-Z][a-z]+)_(\d{1,2})_to_([A-Z][a-z]+)_(\d{1,2})_(\d{4})").ok()?;
     let caps = regex.captures(name)?;
@@ -114,23 +114,23 @@ pub fn parse_window_from_filename(name: &str) -> Option<(NaiveDate, NaiveDate)> 
         caps.get(4)?.as_str(),
         caps.get(5)?.as_str(),
     );
-    let parse = |month: &str, day: &str, yr: &str| -> Option<NaiveDate> {
+    let parse = |month: &str, day: &str, yr: &str| -> Option<Date> {
         // `%B` is the full month name, exactly as `datetime.strptime(..., "%B %d %Y")`.
-        NaiveDate::parse_from_str(&format!("{month} {day} {yr}"), "%B %d %Y").ok()
+        Date::strptime("%B %d %Y", format!("{month} {day} {yr}")).ok()
     };
     Some((parse(m1, d1, year)?, parse(m2, d2, year)?))
 }
 
 /// Parse an ISO-8601 `2026-09-13` into a date.
 #[must_use]
-pub fn parse_iso_date(value: &str) -> Option<NaiveDate> {
-    NaiveDate::parse_from_str(value, "%Y-%m-%d").ok()
+pub fn parse_iso_date(value: &str) -> Option<Date> {
+    Date::strptime("%Y-%m-%d", value).ok()
 }
 
 /// Format a date as ISO-8601 `2026-09-13`.
 #[must_use]
-pub fn iso_date(date: NaiveDate) -> String {
-    date.format("%Y-%m-%d").to_string()
+pub fn iso_date(date: Date) -> String {
+    date.strftime("%Y-%m-%d").to_string()
 }
 
 #[cfg(test)]
@@ -330,8 +330,8 @@ _Provenance: 3 extracted, 1 unsourced, 1 outside the window, 1 excluded, 0 unsui
         assert_eq!(
             parse_window_from_filename("weekend_plan_August_14_to_August_16_2026.md"),
             Some((
-                NaiveDate::from_ymd_opt(2026, 8, 14).unwrap(),
-                NaiveDate::from_ymd_opt(2026, 8, 16).unwrap(),
+                crate::ztools::weekend::dates::ymd(2026, 8, 14).unwrap(),
+                crate::ztools::weekend::dates::ymd(2026, 8, 16).unwrap(),
             ))
         );
         assert_eq!(
@@ -339,8 +339,8 @@ _Provenance: 3 extracted, 1 unsourced, 1 outside the window, 1 excluded, 0 unsui
             // Both dates use the filename's single year, so this is a start>end
             // tuple -- the known year-boundary quirk, kept to match Python.
             Some((
-                NaiveDate::from_ymd_opt(2027, 12, 31).unwrap(),
-                NaiveDate::from_ymd_opt(2027, 1, 2).unwrap(),
+                crate::ztools::weekend::dates::ymd(2027, 12, 31).unwrap(),
+                crate::ztools::weekend::dates::ymd(2027, 1, 2).unwrap(),
             ))
         );
     }

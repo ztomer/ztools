@@ -158,7 +158,7 @@ pub fn save_historical_results(
     // the model's mean as though it had answered wrong.
     for outcome in run.outcomes.iter().filter(|o| o.was_measured()) {
         entry_model.push(HistoryEntry {
-            date: chrono::Local::now().format("%Y-%m-%d").to_string(),
+            date: jiff::ZonedDateTime::now().strftime("%Y-%m-%d").to_string(),
             timestamp: now.as_secs_f64(),
             task: outcome.task.clone(),
             score: i64::from(outcome.score),

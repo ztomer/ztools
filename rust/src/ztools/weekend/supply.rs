@@ -25,7 +25,7 @@
 //! lines now keep their order and their neighbours; an in-window line among
 //! them is marked where it stands.
 
-use chrono::{Datelike, NaiveDate};
+use jiff::civil::Date;
 
 use super::find_date_spans_in;
 
@@ -44,8 +44,8 @@ pub const IN_WINDOW_MARK: &str = "[THIS WEEKEND]";
 /// patch that is open all Thanksgiving weekend -- was never floated, while
 /// the enforcer would have kept the very row built from it.
 #[must_use]
-pub fn mentions_window(text: &str, start: NaiveDate, end: NaiveDate) -> bool {
-    find_date_spans_in(text, start.year())
+pub fn mentions_window(text: &str, start: Date, end: Date) -> bool {
+    find_date_spans_in(text, i32::from(start.year()))
         .iter()
         .any(|(first, last)| *last >= start && *first <= end)
 }
@@ -65,7 +65,7 @@ pub fn mentions_window(text: &str, start: NaiveDate, end: NaiveDate) -> bool {
 /// candidates is a real situation (evergreen venue listings), and inventing a
 /// marker for it would tell the model something untrue.
 #[must_use]
-pub fn prioritise_in_window(corpus: &str, start: NaiveDate, end: NaiveDate) -> String {
+pub fn prioritise_in_window(corpus: &str, start: Date, end: Date) -> String {
     let mut floated = Vec::new();
     let mut rest = Vec::new();
     let mut marked_any = false;
@@ -95,7 +95,7 @@ pub fn prioritise_in_window(corpus: &str, start: NaiveDate, end: NaiveDate) -> S
 /// plan: 20 candidates of which 0 are in-window is a SUPPLY problem, and it
 /// looks identical to a model problem unless someone counts.
 #[must_use]
-pub fn in_window_count(corpus: &str, start: NaiveDate, end: NaiveDate) -> usize {
+pub fn in_window_count(corpus: &str, start: Date, end: Date) -> usize {
     corpus
         .lines()
         .filter(|l| !l.trim().is_empty() && mentions_window(l, start, end))

@@ -36,8 +36,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use chrono::Local;
-
 /// Opt in: `ZTOOLS_TLS_PROBE=1`. Anything else leaves the machine alone.
 const PROBE_ENV: &str = "ZTOOLS_TLS_PROBE";
 /// Calibration override: an endpoint chosen because it must fail.
@@ -184,9 +182,9 @@ fn live_forecast_over_https_returns_the_weekend_the_planner_asked_for() {
         ztools::weekend::holidays::load_province(&[shipped.to_string_lossy().into_owned()])
             .expect("the shipped weekend config names a supported province");
     let (friday, sunday) =
-        ztools::weekend::plan_window(Local::now().naive_local().date(), province);
-    let dates = [friday, friday + chrono::Duration::days(1), sunday];
-    let iso = dates.map(|d| d.format("%Y-%m-%d").to_string());
+        ztools::weekend::plan_window(jiff::ZonedDateTime::now().date(), province);
+    let dates = [friday, friday + jiff::Span::new().days(1), sunday];
+    let iso = dates.map(|d| d.strftime("%Y-%m-%d").to_string());
 
     let calibrated = calibration.is_some();
     let url_for_print = calibration

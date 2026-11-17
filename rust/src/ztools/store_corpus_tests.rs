@@ -1,8 +1,8 @@
 use super::*;
 
-fn at(day: u32, hour: u32) -> chrono::NaiveDateTime {
-    chrono::NaiveDate::from_ymd_opt(2026, 10, day)
-        .and_then(|d| d.and_hms_opt(hour, 0, 5))
+fn at(day: u32, hour: i8) -> jiff::civil::DateTime {
+    crate::ztools::weekend::dates::ymd(2026, 10, day)
+        .map(|d| d.at(hour, 0, 5, 0))
         .unwrap()
 }
 
@@ -57,8 +57,8 @@ fn only_the_newest_corpora_are_kept() {
 fn the_newest_plan_is_still_the_plan_when_a_corpus_is_newer() {
     let td = tempfile::tempdir().unwrap();
     let store = td.path();
-    let fri = chrono::NaiveDate::from_ymd_opt(2026, 10, 9).unwrap();
-    let mon = chrono::NaiveDate::from_ymd_opt(2026, 10, 12).unwrap();
+    let fri = crate::ztools::weekend::dates::ymd(2026, 10, 9).unwrap();
+    let mon = crate::ztools::weekend::dates::ymd(2026, 10, 12).unwrap();
     let plan = crate::ztools::store::save_weekend_plan(store, fri, mon, "# plan\n").unwrap();
     save_corpus(store, at(10, 23), "#", "- a later corpus").unwrap();
     assert_eq!(crate::ztools::store::newest_md(store).unwrap(), plan);
@@ -72,7 +72,7 @@ fn a_failed_prune_does_not_fail_the_save() {
     let td = tempfile::tempdir().unwrap();
     let store = td.path();
     std::fs::create_dir_all(corpus_dir(store).join("2000-01-01_000000_corpus.txt")).unwrap();
-    for hour in 0..u32::try_from(CORPUS_KEEP).unwrap() {
+    for hour in 0..i8::try_from(CORPUS_KEEP).unwrap() {
         save_corpus(store, at(2, hour), "#", "-").unwrap();
     }
     assert!(
@@ -127,7 +127,7 @@ fn the_phase_transcript_pairs_with_its_corpus_and_is_bounded_separately() {
 #[serial_test::serial]
 fn a_run_with_no_model_call_keeps_no_transcript() {
     let env = crate::test_env::TestEnv::new();
-    let d = chrono::NaiveDate::from_ymd_opt(2026, 10, 9).unwrap();
+    let d = crate::ztools::weekend::dates::ymd(2026, 10, 9).unwrap();
     record_phases(
         at(4, 1),
         &crate::ztools::weekend::PhaseLog::new(),

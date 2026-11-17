@@ -22,8 +22,6 @@
 //! looks identical to this week's unless someone compares its window to the
 //! calendar).
 
-use chrono::Local;
-
 use crate::ztools::weekend::report::{fixed_rows, parse_window_from_filename, transient_rows};
 
 /// Identity reported to the harness.
@@ -41,9 +39,9 @@ fn unknown(summary: &str) -> serde_json::Value {
 /// The Friday-to-Sunday a plan should currently cover — the planner's own
 /// definition, so the two cannot disagree about which weekend is "upcoming".
 fn upcoming_weekend(
-    today: chrono::NaiveDate,
+    today: jiff::civil::Date,
     province: crate::ztools::weekend::holidays::Province,
-) -> (chrono::NaiveDate, chrono::NaiveDate) {
+) -> (jiff::civil::Date, jiff::civil::Date) {
     crate::ztools::weekend::plan_window(today, province)
 }
 
@@ -58,7 +56,7 @@ fn output_dir() -> std::path::PathBuf {
 
 /// Build the status JSON for `today`, reading the newest plan in the store.
 fn build_status(
-    today: chrono::NaiveDate,
+    today: jiff::civil::Date,
     province: crate::ztools::weekend::holidays::Province,
 ) -> serde_json::Value {
     let directory = output_dir();
@@ -85,7 +83,13 @@ fn build_status(
 
     let when = window.map_or_else(
         || "an unreadable date range".to_string(),
-        |(start, end)| format!("{}..{}", start.format("%Y-%m-%d"), end.format("%Y-%m-%d")),
+        |(start, end)| {
+            format!(
+                "{}..{}",
+                start.strftime("%Y-%m-%d"),
+                end.strftime("%Y-%m-%d")
+            )
+        },
     );
 
     let mut items: Vec<serde_json::Value> = Vec::new();
@@ -93,7 +97,7 @@ fn build_status(
     if !covers_upcoming {
         state = "attention";
         items.push(serde_json::json!({
-            "name": format!("plan for {}", wanted_start.format("%Y-%m-%d")),
+            "name": format!("plan for {}", wanted_start.strftime("%Y-%m-%d")),
             "action": "not generated yet",
         }));
     }
@@ -125,7 +129,7 @@ fn build_status(
         let _ = write!(
             summary,
             " (upcoming weekend {} not planned)",
-            wanted_start.format("%Y-%m-%d")
+            wanted_start.strftime("%Y-%m-%d")
         );
     }
 
@@ -133,8 +137,10 @@ fn build_status(
         .and_then(|m| m.modified())
         .ok()
         .map_or_default(|t| {
-            let dt: chrono::DateTime<Local> = t.into();
-            dt.format("%Y-%m-%dT%H:%M:%S%:z").to_string()
+            jiff::ZonedDateTime::try_from(t).map_or_else(
+                |_| String::new(),
+                |dt| dt.strftime("%Y-%m-%dT%H:%M:%S%:z").to_string(),
+            )
         });
 
     serde_json::json!({
@@ -146,10 +152,10 @@ fn build_status(
         "items": items,
         "details": {
             "plan": plan.display().to_string(),
-            "window": window.map(|(s, e)| [s.format("%Y-%m-%d").to_string(), e.format("%Y-%m-%d").to_string()]),
+            "window": window.map(|(s, e)| [s.strftime("%Y-%m-%d").to_string(), e.strftime("%Y-%m-%d").to_string()]),
             "fixed_rows": fixed,
             "transient_rows": transient,
-            "upcoming_weekend": [wanted_start.format("%Y-%m-%d").to_string(), wanted_end.format("%Y-%m-%d").to_string()],
+            "upcoming_weekend": [wanted_start.strftime("%Y-%m-%d").to_string(), wanted_end.strftime("%Y-%m-%d").to_string()],
             "covers_upcoming": covers_upcoming,
             // The plan's own ledger (weekend/health.rs::Provenance); absent
             // for plans written before it existed.
@@ -176,7 +182,7 @@ pub fn run(config: &crate::config::ZtoolsConfig) -> anyhow::Result<()> {
     // is a guess, and a guess is an `unknown`, never a short weekend.
     let status = match crate::ztools::weekend::holidays::load_province(&config.weekend_region_paths)
     {
-        Ok(province) => build_status(Local::now().date_naive(), province),
+        Ok(province) => build_status(jiff::ZonedDateTime::now().date(), province),
         Err(reason) => unknown(&reason),
     };
     println!("{}", serde_json::to_string_pretty(&status)?);

@@ -36,10 +36,10 @@ to do\" articles, and event calendars \u{2014} rather than specific activities a
 attend at a particular time and place.\n\nPer the instructions, I skip directory/guide/calendar/\
 round-up results entirely and never invent an event to fill the list.";
 
-fn window() -> (chrono::NaiveDate, chrono::NaiveDate) {
+fn window() -> (jiff::civil::Date, jiff::civil::Date) {
     (
-        chrono::NaiveDate::from_ymd_opt(2026, 10, 9).unwrap(),
-        chrono::NaiveDate::from_ymd_opt(2026, 10, 12).unwrap(),
+        crate::ztools::weekend::dates::ymd(2026, 10, 9).unwrap(),
+        crate::ztools::weekend::dates::ymd(2026, 10, 12).unwrap(),
     )
 }
 

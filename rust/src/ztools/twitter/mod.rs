@@ -34,7 +34,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use chrono::Local;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
@@ -348,7 +347,9 @@ pub fn run_summary_at(
         handle_model_output(&raw, &sources, cut)
             .map(|answer| Some((answer, release_fault.clone())))
             .map_err(|refusal| {
-                let stamp = Local::now().format("%Y-%m-%d_%H%M%S").to_string();
+                let stamp = jiff::ZonedDateTime::now()
+                    .strftime("%Y-%m-%d_%H%M%S")
+                    .to_string();
                 // The refused answer is kept with the FULL reason in its
                 // header: the banner carries the verdict, this file carries
                 // the finding.
@@ -388,8 +389,8 @@ fn write_summary(
     provenance: &chain::Provenance,
     notes: &str,
 ) -> Result<PathBuf> {
-    let now = Local::now();
-    let filename = format!("{}_summary.md", now.format("%Y-%m-%d_%H%M"));
+    let now = jiff::ZonedDateTime::now();
+    let filename = format!("{}_summary.md", now.strftime("%Y-%m-%d_%H%M"));
     fs::create_dir_all(output_dir)?;
     let out_path = output_dir.join(filename);
 
@@ -406,7 +407,7 @@ fn write_summary(
          {}{}\n",
         // The local clock, labelled with its real offset. It used to carry a
         // literal "UTC" after a LOCAL time, which was wrong by the offset.
-        now.format("%Y-%m-%d %H:%M %:z"),
+        now.strftime("%Y-%m-%d %H:%M %:z"),
         total,
         answer.processed,
         provenance.banner(&answer.repairs),
