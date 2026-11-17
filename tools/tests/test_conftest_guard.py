@@ -23,6 +23,7 @@ from conftest import (
     MACHINE_REACHING_COMMANDS,
     REFUSAL_EXIT,
     _fingerprint,
+    _lock_change_fault,
     _write_mkdir_interposer,
     _write_refuser,
 )
@@ -144,3 +145,36 @@ def test_a_fingerprint_alone_is_blind_to_take_and_release(tmp_path):
         "take-and-release leaves the fingerprint unchanged, so the mkdir "
         "interposer is the only thing closing that hole"
     )
+
+
+class TestALockChangeIsBlamedOnlyWhenItIsOurs:
+    """A peer eval taking or releasing the machine-wide lock mid-suite is not this
+    suite's fault (EST.CHRONODIRECT: two push gates went red on a peer's release)."""
+
+    def test_a_peer_releasing_its_lock_is_not_a_fault(self):
+        before = (True, b"1\nTue Nov 17 18:14:45 2026\nztools eval\n", 1)
+        assert _lock_change_fault(before, (False, None, None)) is None
+
+    def test_a_peer_mid_take_then_gone_is_not_a_fault(self):
+        assert _lock_change_fault((True, None, 1), (False, None, None)) is None
+
+    def test_a_peer_taking_it_is_not_a_fault(self):
+        after = (True, b"1\nTue Nov 17 18:14:45 2026\npeer\n", 2)
+        assert _lock_change_fault((False, None, None), after) is None
+
+    def test_this_process_holding_it_is_a_fault(self):
+        after = (True, f"{os.getpid()}\nnow\nmine\n".encode(), 2)
+        assert "this test process" in _lock_change_fault((False, None, None), after)
+
+    def test_a_child_of_this_process_holding_it_is_a_fault(self):
+        child = subprocess.Popen(["sleep", "30"], stdin=subprocess.DEVNULL)
+        try:
+            after = (True, f"{child.pid}\nnow\nmine\n".encode(), 2)
+            assert "this test process" in _lock_change_fault((False, None, None), after)
+        finally:
+            child.kill()
+            child.wait()
+
+    def test_no_change_is_no_fault(self):
+        same = (True, b"1\nx\ny\n", 5)
+        assert _lock_change_fault(same, same) is None

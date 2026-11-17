@@ -67,6 +67,7 @@ not have.
 """
 
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -173,6 +174,48 @@ def _fingerprint(path):
     return (True, owner, mtime)
 
 
+def _in_our_tree(pid):
+    """Whether PID is this process or one of its descendants (walked up by ppid)."""
+    me = os.getpid()
+    seen = set()
+    while pid > 1 and pid not in seen:
+        if pid == me:
+            return True
+        seen.add(pid)
+        try:
+            out = subprocess.run(
+                ["ps", "-o", "ppid=", "-p", str(pid)],
+                capture_output=True,
+                text=True,
+                check=False,
+                stdin=subprocess.DEVNULL,
+            ).stdout.strip()
+            pid = int(out)
+        except ValueError:
+            return False
+    return False
+
+
+def _lock_change_fault(before, after):
+    """The fault to report when the real lock changed, or None when the change is a peer's.
+
+    A peer eval may take or release the machine-wide lock while a test runs; that is
+    not this suite's doing, and reading it as one sent push gates red on a peer's
+    release. The suite is blamed when the lock is left held by this process or a
+    process it started. A take-and-release by the suite leaves the fingerprint
+    unchanged; the mkdir interposer catches that one.
+    """
+    if after == before or not after[0] or after[1] is None:
+        return None
+    try:
+        pid = int(after[1].split(b"\n", 1)[0])
+    except ValueError:
+        return None
+    if not _in_our_tree(pid):
+        return None
+    return f"the lock is held by this test process or its child (pid {pid}): {before} -> {after}"
+
+
 @pytest.fixture(autouse=True)
 def no_real_server_restart(request, tmp_path, monkeypatch, real_gpu_lock):
     """Prove a `sandboxed_server_script` test really is sandboxed, or fail it.
@@ -220,12 +263,10 @@ def no_real_server_restart(request, tmp_path, monkeypatch, real_gpu_lock):
             f"{lock_log.read_text().strip()}\n"
             "Point ZTOOLS_GPU_LOCK_DIR at tmp_path in the test itself."
         )
-    after = _fingerprint(real_gpu_lock)
-    if after != before:
+    fault = _lock_change_fault(before, _fingerprint(real_gpu_lock))
+    if fault:
         failures.append(
-            f"{request.node.name} changed the machine-wide GPU lock at "
-            f"{real_gpu_lock}: {before} -> {after}. Either the test did it (point "
-            "ZTOOLS_GPU_LOCK_DIR at tmp_path), or a peer eval started or ended "
-            "while this one ran -- re-run the suite when no eval holds the GPU."
+            f"{request.node.name} took the machine-wide GPU lock at {real_gpu_lock}: "
+            f"{fault}. Point ZTOOLS_GPU_LOCK_DIR at tmp_path in the test itself."
         )
     assert not failures, "\n\n".join(failures)
