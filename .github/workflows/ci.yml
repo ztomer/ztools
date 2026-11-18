@@ -30,7 +30,7 @@ permissions:
   contents: read
 
 env:
-  GOH_TAG: v0.139.1
+  GOH_TAG: v0.139.2
 
 jobs:
   gate:
