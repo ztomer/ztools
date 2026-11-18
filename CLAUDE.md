@@ -43,8 +43,8 @@ unpoliced until that suffix list grows, and nothing warns you.
 - Run (what the gate runs — use this before pushing): `tools/gate.sh`
   (= `--full` = `make ci` = the pre-push hook; the bare call IS the full gate since
   ZT.GATEHYG, and only `--staged`, the pre-commit scope, is structural alone): fmt, clippy `-D warnings`, no `#[allow]`, audit, emoji, file length,
-  tests, coverage floor **95** (`GOH_CI_STEPS` in `.gatesrc` →
-  `coverage_gate.sh --lang rust --floor 95 rust`; `Makefile:19` states the same).
+  tests, coverage floor **94.2** (honest count, GOH.SPANFORGIVE; was 95) (`GOH_CI_STEPS` in `.gatesrc` →
+  `coverage_gate.sh --lang rust --floor 94.2 rust`; `Makefile:19` states the same).
 - `tools/tests/` holds the pytest for the shell tooling (`tools/gpu_lock.sh`):
   `python3 -m pytest tools/tests -q`. `tools/*.py` are dev gates, never the product.
   A test that drives `tools/osaurus_one.sh` — the script that stops and SIGKILLs

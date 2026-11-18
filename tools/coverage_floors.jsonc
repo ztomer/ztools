@@ -17,11 +17,12 @@
     "MERGER RUNS IN, which is rust/ (the step's last argument), so it reads src/..., not",
     "rust/src/...: a key the merger cannot match is reported stale and fails the gate.",
     "rust/src/main.rs is not exempt: it measures 6/6.",
+    "honest count (GOH.SPANFORGIVE, owner 2026-11-18 ratchet): file_floor measured 62.3 (rust/src/cli_models.rs, 101/162 = 62.35%), was 74; test back up. The next lowest are cli_ztools_twitter.rs 66.2 and ztools/model_eval_transport.rs 71.4.",
     "MECHANICS. tolerance is 0.0: the comparison is exact, and a tolerance would only hide a",
     "regression. No // comments: the merger reads this with json.load, and an unreadable floors",
     "file is refused (exit 2) since gates_of_heck 22c8d49 -- loud, but still red."
   ],
-  "file_floor": 74.0,
+  "file_floor": 62.3,
   "tolerance": 0.0,
   "exempt": {
     "src/ztools/twitter/native.rs": "8/293 covered: the camoufox collect+login driver. Only a real browser against a live session exercises it, which no test in this repo may launch, so a floor here would be fiction."
